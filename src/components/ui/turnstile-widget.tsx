@@ -141,16 +141,15 @@ export function TurnstileWidget({
     };
   }, [isDev, renderWidget]);
 
+  // Auto-bypass Turnstile in dev mode so login works without real keys
+  useEffect(() => {
+    if (isDev) {
+      onSuccess("dev-turnstile-bypass");
+    }
+  }, [isDev, onSuccess]);
+
   if (isDev) {
-    return (
-      <button
-        type="button"
-        onClick={() => onSuccess("dev-turnstile-bypass")}
-        className={`text-xs text-muted-foreground border border-dashed rounded p-2 text-center cursor-pointer hover:bg-muted/50 ${className || ""}`}
-      >
-        Click to bypass CAPTCHA (dev mode — set NEXT_PUBLIC_TURNSTILE_SITE_KEY to enable)
-      </button>
-    );
+    return null;
   }
 
   return <div ref={containerRef} className={className} />;

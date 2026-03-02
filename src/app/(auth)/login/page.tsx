@@ -42,12 +42,18 @@ export default function LoginPage() {
   }, [toast]);
 
   // Turnstile widget load timeout — show error if it doesn't load in 10s
+  // Skip in dev mode (dummy keys) since the widget auto-bypasses.
+  const isTurnstileDev =
+    !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY === "dummy_site_key";
+
   useEffect(() => {
+    if (isTurnstileDev) return;
     const timer = setTimeout(() => {
       setTurnstileError(true);
     }, 10000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [isTurnstileDev]);
 
   const {
     register,
