@@ -128,11 +128,11 @@
   },
   "lint-staged": {
     "*.{ts,tsx}": [
-      "prettier --write",
-      "eslint --fix --max-warnings=0"
+      "pnpm exec prettier --write",
+      "pnpm exec eslint --fix --max-warnings=0"
     ],
     "*.{json,css,md}": [
-      "prettier --write"
+      "pnpm exec prettier --write"
     ]
   }
 }
