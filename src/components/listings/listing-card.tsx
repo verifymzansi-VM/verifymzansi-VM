@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useCallback, useEffect, useSyncExternalStore, memo } from "react";
+import { useCallback, useSyncExternalStore, memo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Clock, Eye, Heart, Volume2, VolumeX, Maximize2, Play } from "lucide-react";
+import { MapPin, Clock, Eye, Heart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { formatZAR, formatRelativeTime } from "@/lib/utils/format";
+import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import { useVideoVisibility } from "@/hooks/use-video-visibility";
 import type { TrustLevel } from "@/types/enums";
 
 interface ListingCardProps {
@@ -60,75 +60,8 @@ export const ListingCard = memo(function ListingCard({
   featured,
   urgent,
 }: ListingCardProps) {
-  const isVideo = imageUrl ? /\.(mp4|webm|ogg)(\?|$)/i.test(imageUrl) : false;
+  const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
-  const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
-  const { videoRef } = useVideoVisibility(isVideo ? normalizedImageUrl : undefined);
-  const [isMuted, setIsMuted] = useState(true);
-  const [videoReady, setVideoReady] = useState(false);
-
-  // Track when video has loaded enough to show frames
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    const onPlaying = () => setVideoReady(true);
-    el.addEventListener("playing", onPlaying);
-    return () => el.removeEventListener("playing", onPlaying);
-  });
-
-  const handleVideoActivate = useCallback(() => {
-    if (videoRef.current) {
-      if (videoRef.current.paused) videoRef.current.play();
-      setIsMuted(false);
-      videoRef.current.muted = false;
-      try {
-        if (videoRef.current.requestFullscreen) {
-          videoRef.current.requestFullscreen();
-        } else if (
-          (videoRef.current as HTMLVideoElement & { webkitEnterFullscreen?: () => void })
-            .webkitEnterFullscreen
-        ) {
-          (
-            videoRef.current as HTMLVideoElement & { webkitEnterFullscreen?: () => void }
-          ).webkitEnterFullscreen?.();
-        }
-      } catch (err) {
-        console.error("Fullscreen API not supported", err);
-      }
-    }
-  }, [videoRef]);
-
-  const handleVideoClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      handleVideoActivate();
-    },
-    [handleVideoActivate]
-  );
-
-  const handleVideoKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        e.stopPropagation();
-        handleVideoActivate();
-      }
-    },
-    [handleVideoActivate]
-  );
-
-  const toggleMute = useCallback(
-    (e: React.SyntheticEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (videoRef.current) {
-        videoRef.current.muted = !videoRef.current.muted;
-        setIsMuted(videoRef.current.muted);
-      }
-    },
-    [videoRef]
-  );
 
   // Stable callbacks for useSyncExternalStore — avoids re-subscribing every render
   const subscribeFavs = useCallback((cb: () => void) => {
@@ -177,59 +110,12 @@ export const ListingCard = memo(function ListingCard({
         <div className="relative aspect-[4/3] bg-warm-100 dark:bg-warm-800 overflow-hidden">
           {normalizedImageUrl ? (
             isVideo ? (
-              <div className="relative h-full w-full group/video">
-                {/* Poster / cover image — prevents blank space before video loads */}
-                {normalizedPosterUrl ? (
-                  <Image
-                    src={normalizedPosterUrl}
-                    alt={title || "Video cover"}
-                    fill
-                    className={`object-cover absolute inset-0 z-[1] transition-opacity duration-300 ${videoReady ? "opacity-0" : "opacity-100"}`}
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  />
-                ) : !videoReady ? (
-                  <div className="absolute inset-0 z-[1] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800 flex items-center justify-center">
-                    <Play className="h-10 w-10 text-white/60" />
-                  </div>
-                ) : null}
-                <video
-                  ref={videoRef}
-                  preload="none"
-                  loop
-                  muted={isMuted}
-                  playsInline
-                  className={`h-full w-full object-cover transition-all duration-500 group-hover:scale-110 ${!videoReady ? "opacity-0" : "opacity-100"} z-[2] relative`}
-                />
-                <div
-                  role="button"
-                  tabIndex={0}
-                  className="absolute inset-0 z-10 hidden group-hover/video:flex flex-col justify-between p-2 bg-black/20"
-                  onClick={handleVideoClick}
-                  onKeyDown={handleVideoKeyDown}
-                >
-                  <div className="flex justify-end w-full">
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={toggleMute}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          toggleMute(e);
-                        }
-                      }}
-                      className="p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors mt-8"
-                      aria-label={isMuted ? "Unmute" : "Mute"}
-                    >
-                      {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-center flex-1">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110 mb-8">
-                      <Maximize2 className="h-5 w-5" />
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <VideoCardPlayer
+                src={imageUrl}
+                posterUrl={posterUrl}
+                alt={title}
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              />
             ) : (
               <Image
                 src={normalizedImageUrl}
@@ -307,15 +193,6 @@ export const ListingCard = memo(function ListingCard({
           <div className="absolute bottom-2 left-2 h-7 w-7 rounded-full bg-brand-green text-white text-xs font-bold flex items-center justify-center shadow-md border-2 border-white dark:border-warm-800">
             {getSellerInitial(sellerName)}
           </div>
-
-          {/* Play indicator */}
-          {imageUrl && isVideo && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-100 group-hover:opacity-0 transition-opacity duration-300">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white shadow-lg backdrop-blur-sm">
-                <Play className="h-5 w-5 fill-white pr-0.5" />
-              </div>
-            </div>
-          )}
         </div>
 
         <CardContent className="p-3 sm:p-4 space-y-2">

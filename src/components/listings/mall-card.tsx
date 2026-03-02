@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Store, MapPin, Building2, Zap, Volume2, VolumeX, Maximize2, Play } from "lucide-react";
+import { Store, MapPin, Building2, Zap } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useVideoVisibility } from "@/hooks/use-video-visibility";
+import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 
 interface MallCardProps {
@@ -31,52 +30,8 @@ export function MallCard({
   boosted,
 }: MallCardProps) {
   // Video logic
-  const isVideoUrl = (url: string | null | undefined) => {
-    if (!url) return false;
-    return (
-      url
-        .split("?")[0]
-        .toLowerCase()
-        .match(/\.(mp4|webm|ogg)$/) != null
-    );
-  };
   const isVideo = isVideoUrl(coverPhoto);
   const normalizedCoverPhoto = coverPhoto ? normalizeMediaUrl(coverPhoto) : undefined;
-  const { videoRef } = useVideoVisibility(isVideo ? normalizedCoverPhoto : undefined);
-  const [isMuted, setIsMuted] = useState(true);
-
-  const handleVideoClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (videoRef.current) {
-      if (videoRef.current.paused) videoRef.current.play();
-      setIsMuted(false);
-      videoRef.current.muted = false;
-      try {
-        if (videoRef.current.requestFullscreen) {
-          videoRef.current.requestFullscreen();
-        } else if (
-          (videoRef.current as HTMLVideoElement & { webkitEnterFullscreen?: () => void })
-            .webkitEnterFullscreen
-        ) {
-          (
-            videoRef.current as HTMLVideoElement & { webkitEnterFullscreen?: () => void }
-          ).webkitEnterFullscreen?.();
-        }
-      } catch (err) {
-        console.error("Fullscreen API not supported", err);
-      }
-    }
-  };
-
-  const toggleMute = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
-  };
 
   return (
     <Link href={`/mall-shops/${id}`} className="group block h-full">
@@ -85,57 +40,13 @@ export function MallCard({
         <div className="relative h-40 sm:h-48 bg-gradient-to-br from-brand-gold-50 to-brand-gold-100 dark:from-brand-gold-950 dark:to-brand-gold-900 overflow-hidden shrink-0">
           {normalizedCoverPhoto ? (
             isVideo ? (
-              <div className="relative h-full w-full group/video">
-                <video
-                  ref={videoRef}
-                  preload="none"
-                  loop
-                  muted={isMuted}
-                  playsInline
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 z-10 flex sm:hidden flex-col justify-between p-2 bg-black/20">
-                  <div className="flex justify-end w-full">
-                    <button
-                      onClick={toggleMute}
-                      className="p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors mt-8"
-                      aria-label={isMuted ? "Unmute" : "Mute"}
-                    >
-                      {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-center flex-1">
-                    <button
-                      onClick={handleVideoClick}
-                      className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110 mb-8"
-                      aria-label="Play video fullscreen"
-                    >
-                      <Maximize2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-                {/* Desktop: show on hover */}
-                <div className="absolute inset-0 z-10 hidden sm:group-hover/video:flex flex-col justify-between p-2 bg-black/20">
-                  <div className="flex justify-end w-full">
-                    <button
-                      onClick={toggleMute}
-                      className="p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors mt-8"
-                      aria-label={isMuted ? "Unmute" : "Mute"}
-                    >
-                      {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-center flex-1">
-                    <button
-                      onClick={handleVideoClick}
-                      className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110 mb-8"
-                      aria-label="Play video fullscreen"
-                    >
-                      <Maximize2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <VideoCardPlayer
+                src={coverPhoto}
+                alt={name}
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                hoverScale={false}
+                mediaClassName="transition-transform duration-500 group-hover:scale-105"
+              />
             ) : (
               <Image
                 src={normalizedCoverPhoto}
@@ -153,15 +64,6 @@ export function MallCard({
 
           {/* Gradient overlay for readability */}
           <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
-
-          {/* Play indicator */}
-          {coverPhoto && isVideo && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-100 group-hover:opacity-0 transition-opacity duration-300">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white shadow-lg backdrop-blur-sm">
-                <Play className="h-5 w-5 fill-white pr-0.5" />
-              </div>
-            </div>
-          )}
         </div>
 
         <CardContent className="flex-1 p-5 relative flex flex-col">

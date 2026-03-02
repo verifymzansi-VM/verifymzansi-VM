@@ -73,7 +73,28 @@ vi.mock("@/lib/utils/format", () => ({
 }));
 
 vi.mock("@/hooks/use-video-visibility", () => ({
-  useVideoVisibility: () => ({ videoRef: { current: null } }),
+  useVideoVisibility: () => ({ videoRef: { current: null }, reducedMotion: false }),
+}));
+
+vi.mock("@/hooks/use-reduced-motion", () => ({
+  useReducedMotion: () => false,
+}));
+
+vi.mock("@/components/ui/video-card-player", () => ({
+  VideoCardPlayer: ({ src, alt }: { src: string; alt?: string }) => (
+    <div data-testid="video-card-player" data-src={src}>
+      {alt}
+    </div>
+  ),
+  isVideoUrl: (url: string | null | undefined) => {
+    if (!url) return false;
+    return (
+      url
+        .split("?")[0]
+        .toLowerCase()
+        .match(/\.(mp4|webm|ogg)$/) != null
+    );
+  },
 }));
 
 vi.mock("@/types/enums", () => ({

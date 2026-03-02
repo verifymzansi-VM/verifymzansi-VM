@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import { MapPin, Play, Volume2, VolumeX, Maximize2, Zap } from "lucide-react";
+import { MapPin, Play, Zap } from "lucide-react";
 import Image from "next/image";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import { useVideoVisibility } from "@/hooks/use-video-visibility";
+import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 
 interface AreaPreviewCardProps {
   href: string;
@@ -48,64 +47,8 @@ export function AreaPreviewCard({
   accentColor = "green",
   boosted,
 }: AreaPreviewCardProps) {
-  const isVideoUrl = (url: string | undefined) => {
-    if (!url) return false;
-    return (
-      url
-        .split("?")[0]
-        .toLowerCase()
-        .match(/\.(mp4|webm|ogg)$/) != null
-    );
-  };
-
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
-  const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
-  const { videoRef } = useVideoVisibility(isVideo ? normalizedImageUrl : undefined);
-  const [isMuted, setIsMuted] = useState(true);
-  const [videoReady, setVideoReady] = useState(false);
-
-  // Track when video has loaded enough to show frames
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    const onPlaying = () => setVideoReady(true);
-    el.addEventListener("playing", onPlaying);
-    return () => el.removeEventListener("playing", onPlaying);
-  });
-
-  const handleVideoClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (videoRef.current) {
-      if (videoRef.current.paused) videoRef.current.play();
-      setIsMuted(false);
-      videoRef.current.muted = false;
-      try {
-        if (videoRef.current.requestFullscreen) {
-          videoRef.current.requestFullscreen();
-        } else if (
-          (videoRef.current as HTMLVideoElement & { webkitEnterFullscreen?: () => void })
-            .webkitEnterFullscreen
-        ) {
-          (
-            videoRef.current as HTMLVideoElement & { webkitEnterFullscreen?: () => void }
-          ).webkitEnterFullscreen?.();
-        }
-      } catch (err) {
-        console.error("Fullscreen API not supported", err);
-      }
-    }
-  };
-
-  const toggleMute = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
-  };
 
   const formatPrice = (p: number) =>
     new Intl.NumberFormat("en-ZA", {
@@ -123,71 +66,12 @@ export function AreaPreviewCard({
       <div className="relative aspect-[4/3] overflow-hidden bg-warm-100 dark:bg-warm-800">
         {normalizedImageUrl ? (
           isVideo ? (
-            <div className="relative h-full w-full group/video">
-              {/* Poster / cover image — prevents blank space before video loads */}
-              {normalizedPosterUrl ? (
-                <Image
-                  src={normalizedPosterUrl}
-                  alt={title || "Video cover"}
-                  fill
-                  className={`object-cover absolute inset-0 z-[1] transition-opacity duration-300 ${videoReady ? "opacity-0" : "opacity-100"}`}
-                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                />
-              ) : !videoReady ? (
-                <div className="absolute inset-0 z-[1] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800 flex items-center justify-center">
-                  <Play className="h-8 w-8 text-white/60" />
-                </div>
-              ) : null}
-              <video
-                ref={videoRef}
-                preload="none"
-                loop
-                muted={isMuted}
-                playsInline
-                className={`h-full w-full object-cover transition-all duration-500 group-hover:scale-110 ${!videoReady ? "opacity-0" : "opacity-100"} z-[2] relative`}
-              />
-              <div className="absolute inset-0 z-10 flex sm:hidden flex-col justify-between p-2 bg-black/20">
-                <div className="flex justify-end w-full">
-                  <button
-                    onClick={toggleMute}
-                    className="p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
-                    aria-label={isMuted ? "Unmute" : "Mute"}
-                  >
-                    {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                  </button>
-                </div>
-                <div className="flex items-center justify-center flex-1">
-                  <button
-                    onClick={handleVideoClick}
-                    className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
-                    aria-label="Play video fullscreen"
-                  >
-                    <Maximize2 className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-              {/* Desktop: show on hover */}
-              <div className="absolute inset-0 z-10 hidden sm:group-hover/video:flex flex-col justify-between p-2 bg-black/20">
-                <div className="flex justify-end w-full">
-                  <button
-                    onClick={toggleMute}
-                    className="p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
-                    aria-label={isMuted ? "Unmute" : "Mute"}
-                  >
-                    {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                  </button>
-                </div>
-                <div className="flex items-center justify-center flex-1">
-                  <button
-                    onClick={handleVideoClick}
-                    className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
-                    aria-label="Play video fullscreen"
-                  >
-                    <Maximize2 className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
+            <VideoCardPlayer
+              src={imageUrl}
+              posterUrl={posterUrl}
+              alt={title}
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            />
           ) : (
             <Image
               src={normalizedImageUrl}

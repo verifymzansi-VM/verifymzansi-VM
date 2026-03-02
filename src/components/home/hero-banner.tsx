@@ -129,8 +129,11 @@ function MediaRender({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isStopped, setIsStopped] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const isVideo = isVideoUrl(src);
-  const { videoRef } = useVideoVisibility(isVideo && !isStopped ? src : undefined);
+  const { videoRef, reducedMotion: _reducedMotion } = useVideoVisibility(
+    isVideo && !isStopped ? src : undefined
+  );
 
   const togglePlayPause = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -193,9 +196,14 @@ function MediaRender({
     };
   });
 
+  const handleVideoError = () => {
+    setHasError(true);
+    setVideoReady(false);
+  };
+
   if (isVideo) {
-    // Show poster when video hasn't started playing yet, or when stopped
-    const showPoster = posterUrl && (isStopped || !videoReady);
+    // Show poster when video hasn't started playing yet, when stopped, or on error
+    const showPoster = posterUrl && (isStopped || !videoReady || hasError);
 
     return (
       <div className="relative h-full w-full group/video">
@@ -218,13 +226,15 @@ function MediaRender({
         )}
 
         {/* Video element */}
-        {!isStopped && (
+        {!isStopped && !hasError && (
           <video
             ref={videoRef}
             loop
             muted={isMuted}
             playsInline
             preload="none"
+            aria-label={alt ? `${alt} video` : "Hero banner video"}
+            onError={handleVideoError}
             className={cn(
               "object-cover absolute inset-0 w-full h-full",
               showPoster || (!posterUrl && !videoReady) ? "opacity-0" : "opacity-100",
@@ -323,10 +333,7 @@ function MediaRender({
   );
 }
 
-export function HeroBanner({
-  topBusinesses = [],
-  latestListings = [],
-}: HeroBannerProps) {
+export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBannerProps) {
   const [current, setCurrent] = useState(0);
   const [fading, setFading] = useState(false);
   const [query, setQuery] = useState("");
@@ -571,7 +578,8 @@ export function HeroBanner({
                 >
                   {(() => {
                     const Icon =
-                      ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon || Building2;
+                      ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon ||
+                      Building2;
                     return <Icon className="h-2.5 w-2.5" />;
                   })()}
                   {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badge}

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useReducedMotion } from "./use-reduced-motion";
 
 /**
  * Hook that lazily loads and plays a video only when it scrolls into view.
@@ -6,12 +7,15 @@ import { useEffect, useRef } from "react";
  * - The video `src` is NOT set until the element is ≥ 25 % visible, so pages
  *   with many video cards make **zero** video network requests on initial load.
  * - When the element scrolls out of view the video is paused to save bandwidth.
+ * - Respects `prefers-reduced-motion: reduce` — the video `src` is still lazy-
+ *   loaded (so poster-frame extraction works), but auto-play is skipped.
  *
  * @param videoSrc  The video URL. Pass `undefined` when the media is not a video.
- * @returns `{ videoRef }` — attach `videoRef` to the `<video>` element.
+ * @returns `{ videoRef, reducedMotion }` — attach `videoRef` to the `<video>` element.
  */
 export function useVideoVisibility(videoSrc?: string) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const el = videoRef.current;
@@ -24,9 +28,12 @@ export function useVideoVisibility(videoSrc?: string) {
           if (!el.src) {
             el.src = videoSrc;
           }
-          el.play().catch(() => {
-            /* autoplay may be blocked */
-          });
+          // Skip auto-play when user prefers reduced motion
+          if (!reducedMotion) {
+            el.play().catch(() => {
+              /* autoplay may be blocked */
+            });
+          }
         } else {
           el.pause();
         }
@@ -36,7 +43,7 @@ export function useVideoVisibility(videoSrc?: string) {
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [videoSrc]);
+  }, [videoSrc, reducedMotion]);
 
-  return { videoRef };
+  return { videoRef, reducedMotion };
 }

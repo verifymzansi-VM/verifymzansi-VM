@@ -15,9 +15,53 @@ interface UploadOptions {
   allowedTypes?: string[];
   /** Upload area for storage key generation (e.g., "listing", "business") */
   area?: string;
+  /** Maximum video duration in seconds (default: 120 = 2 minutes) */
+  maxDurationSec?: number;
 }
 
 const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+
+/** Max video duration default: 2 minutes */
+const DEFAULT_MAX_DURATION_SEC = 120;
+
+/**
+ * Read video duration client-side using a temporary <video> element.
+ * Returns duration in seconds, or null if metadata cannot be read.
+ */
+function getVideoDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      video.remove();
+    };
+
+    video.addEventListener("loadedmetadata", () => {
+      const duration = video.duration;
+      cleanup();
+      resolve(Number.isFinite(duration) ? duration : null);
+    });
+
+    video.addEventListener("error", () => {
+      cleanup();
+      resolve(null);
+    });
+
+    // Timeout after 10 s — metadata should load nearly instantly from a local blob
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve(null);
+    }, 10_000);
+
+    video.addEventListener("loadedmetadata", () => clearTimeout(timer), { once: true });
+    video.addEventListener("error", () => clearTimeout(timer), { once: true });
+
+    video.src = url;
+  });
+}
 
 /**
  * Upload a file directly to R2 using a presigned URL with real progress tracking.
@@ -72,6 +116,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
     maxSizeMB = 5,
     allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/avif"],
     area = "listing",
+    maxDurationSec = DEFAULT_MAX_DURATION_SEC,
   } = options;
 
   const [state, setState] = useState<UploadState>({
@@ -115,6 +160,27 @@ export function useMediaUpload(options: UploadOptions = {}) {
       setState({ isUploading: true, progress: 0, error: null, url: null });
 
       const isVideo = VIDEO_TYPES.has(file.type);
+
+      // ── Video duration check (client-side) ───────────────
+      if (isVideo) {
+        setState((prev) => ({ ...prev, progress: 1 }));
+        const duration = await getVideoDuration(file);
+        if (duration !== null && duration > maxDurationSec) {
+          const maxMin = Math.floor(maxDurationSec / 60);
+          const maxSec = maxDurationSec % 60;
+          const label =
+            maxMin > 0
+              ? `${maxMin} minute${maxMin > 1 ? "s" : ""}${maxSec > 0 ? ` ${maxSec}s` : ""}`
+              : `${maxDurationSec} seconds`;
+          setState({
+            isUploading: false,
+            progress: 0,
+            error: `Video is too long. Maximum duration is ${label}.`,
+            url: null,
+          });
+          return null;
+        }
+      }
 
       try {
         // ── Video: presigned direct upload to R2 ──────────────
@@ -213,7 +279,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
         return null;
       }
     },
-    [bucket, validate, area]
+    [bucket, validate, area, maxDurationSec]
   );
 
   const reset = useCallback(() => {

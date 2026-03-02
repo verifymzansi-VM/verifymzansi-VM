@@ -52,6 +52,16 @@ const MIME_MAP: Record<string, string> = {
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg"]);
 
 /**
+ * Derive a human-friendly filename from the storage key.
+ * e.g. "media/listing/abc123/17200000-photo.jpg" → "photo.jpg"
+ */
+function deriveFilename(key: string): string {
+  const lastSegment = key.split("/").pop() ?? key;
+  // Strip leading timestamp/UUID prefix (e.g. "17200000-" or "a1b2c3d4-")
+  return lastSegment.replace(/^[\da-f]+-/i, "") || lastSegment;
+}
+
+/**
  * Parse an HTTP Range header like "bytes=0-1023" into start/end numbers.
  * Returns null if the header is missing or malformed.
  */
@@ -164,6 +174,7 @@ export async function GET(
           "Content-Range": `bytes ${start}-${end}/${totalSize}`,
           "Accept-Ranges": "bytes",
           "Cache-Control": "public, max-age=31536000, immutable",
+          "Content-Disposition": `inline; filename="${deriveFilename(key)}"`,
           ...(headResponse.ETag ? { ETag: headResponse.ETag } : {}),
           "X-Content-Type-Options": "nosniff",
         },
@@ -198,6 +209,7 @@ export async function GET(
             : {}),
           "Accept-Ranges": "bytes",
           "Cache-Control": "public, max-age=31536000, immutable",
+          "Content-Disposition": `inline; filename="${deriveFilename(key)}"`,
           ...(response.ETag ? { ETag: response.ETag } : {}),
           "X-Content-Type-Options": "nosniff",
         },
@@ -214,6 +226,7 @@ export async function GET(
         "Content-Type": contentType,
         "Content-Length": String(buffer.length),
         "Cache-Control": "public, max-age=31536000, immutable",
+        "Content-Disposition": `inline; filename="${deriveFilename(key)}"`,
         ...(response.ETag ? { ETag: response.ETag } : {}),
         "X-Content-Type-Options": "nosniff",
       },

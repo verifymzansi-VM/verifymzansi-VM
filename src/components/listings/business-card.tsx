@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Store, MapPin, Volume2, VolumeX, Maximize2, Play, Wrench } from "lucide-react";
+import { Store, MapPin, Wrench } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { Badge } from "@/components/ui/badge";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
-import { BUSINESS_TYPE_LABELS } from "@/types/enums";
-import { useVideoVisibility } from "@/hooks/use-video-visibility";
+import {
+  BUSINESS_TYPE_LABELS,
+  type TrustLevel,
+  type BusinessType,
+  type BusinessCategory,
+} from "@/types/enums";
+import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import type { TrustLevel, BusinessType, BusinessCategory } from "@/types/enums";
 
 interface BusinessCardProps {
   id: string;
@@ -48,53 +51,9 @@ export function BusinessCard({
   const isBoosted = boostUntil && new Date(boostUntil) > new Date();
   const isFeatured = featuredUntil && new Date(featuredUntil) > new Date();
 
-  const isVideoUrl = (url: string | null | undefined) => {
-    if (!url) return false;
-    return (
-      url
-        .split("?")[0]
-        .toLowerCase()
-        .match(/\.(mp4|webm|ogg)$/) != null
-    );
-  };
   const isVideo = isVideoUrl(coverPhoto);
   const normalizedCoverPhoto = coverPhoto ? normalizeMediaUrl(coverPhoto) : undefined;
-  const { videoRef } = useVideoVisibility(isVideo ? normalizedCoverPhoto : undefined);
-  const [isMuted, setIsMuted] = useState(true);
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
-
-  const handleVideoClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (videoRef.current) {
-      if (videoRef.current.paused) videoRef.current.play();
-      setIsMuted(false);
-      videoRef.current.muted = false;
-      try {
-        if (videoRef.current.requestFullscreen) {
-          videoRef.current.requestFullscreen();
-        } else if (
-          (videoRef.current as HTMLVideoElement & { webkitEnterFullscreen?: () => void })
-            .webkitEnterFullscreen
-        ) {
-          (
-            videoRef.current as HTMLVideoElement & { webkitEnterFullscreen?: () => void }
-          ).webkitEnterFullscreen?.();
-        }
-      } catch (err) {
-        console.error("Fullscreen API not supported", err);
-      }
-    }
-  };
-
-  const toggleMute = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
-  };
 
   return (
     <Link href={`/mzansi-business/${id}`} className="group block h-full">
@@ -106,62 +65,13 @@ export function BusinessCard({
         <div className="relative h-32 sm:h-40 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 overflow-hidden shrink-0">
           {normalizedCoverPhoto ? (
             isVideo ? (
-              <div className="relative h-full w-full group/video">
-                <video
-                  ref={videoRef}
-                  preload="none"
-                  loop
-                  muted={isMuted}
-                  playsInline
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                />
-                {/* Mobile: always visible controls */}
-                <div className="absolute inset-0 z-10 flex sm:hidden flex-col justify-between p-2 bg-black/20">
-                  <div className="flex justify-end w-full">
-                    <button
-                      onClick={toggleMute}
-                      className="p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors mt-8"
-                      aria-label={isMuted ? "Unmute" : "Mute"}
-                    >
-                      {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-center flex-1">
-                    <button
-                      onClick={handleVideoClick}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110 mb-6"
-                      aria-label="Play video fullscreen"
-                    >
-                      <Maximize2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-                {/* Desktop: show on hover */}
-                <div className="absolute inset-0 z-10 hidden sm:group-hover/video:flex flex-col justify-between p-2 bg-black/20">
-                  <div className="flex justify-end w-full">
-                    <button
-                      onClick={toggleMute}
-                      className="p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
-                      aria-label={isMuted ? "Unmute" : "Mute"}
-                    >
-                      {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-center flex-1">
-                    <button
-                      onClick={handleVideoClick}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
-                      aria-label="Play video fullscreen"
-                    >
-                      <Maximize2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-                {/* Play icon when not hovered */}
-                <div className="absolute bottom-2 right-2 z-[5] hidden sm:group-hover/video:hidden sm:flex items-center justify-center rounded-full bg-black/50 p-1.5">
-                  <Play className="h-3.5 w-3.5 text-white fill-white" />
-                </div>
-              </div>
+              <VideoCardPlayer
+                src={coverPhoto}
+                alt={businessName}
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                hoverScale={false}
+                mediaClassName="transition-transform duration-500 group-hover:scale-105"
+              />
             ) : (
               <Image
                 src={normalizedCoverPhoto}
@@ -210,9 +120,7 @@ export function BusinessCard({
               variant="outline"
               className="bg-background/80 backdrop-blur-sm text-[10px] font-medium"
             >
-              {businessType === "mobile_service" && (
-                <Wrench className="w-2.5 h-2.5 mr-1" />
-              )}
+              {businessType === "mobile_service" && <Wrench className="w-2.5 h-2.5 mr-1" />}
               {BUSINESS_TYPE_LABELS[businessType]}
             </Badge>
           </div>
