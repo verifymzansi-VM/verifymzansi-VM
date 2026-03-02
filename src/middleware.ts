@@ -137,6 +137,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     "/api/billing",
     "/api/verification",
     "/api/admin",
+    "/api/otp",
   ];
   const needsAuth =
     protectedPrefixesAll.some((p) => pathname.startsWith(p)) ||

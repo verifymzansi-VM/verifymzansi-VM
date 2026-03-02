@@ -148,8 +148,9 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         return { success: true, messageId: "at-accepted-empty-recipients" };
       }
 
-      // Accept both 101 (sent) and 100 (queued) as success
-      const failed = atRecipients.filter((r) => r.statusCode !== 101 && r.statusCode !== 100);
+      // AT success codes: 100 (Processed), 101 (Sent), 102 (Queued)
+      // Anything under 200 is a non-failure state per AT docs
+      const failed = atRecipients.filter((r) => r.statusCode >= 200);
       if (failed.length > 0) {
         log.warn("AT recipients with non-success status", {
           failed: failed.map((f) => ({
