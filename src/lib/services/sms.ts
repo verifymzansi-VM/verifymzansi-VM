@@ -97,11 +97,13 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       body: formData.toString(),
     });
 
+    // Read body once as text so we can log it before parsing
+    const rawBody = await response.text();
+
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
       log.error("Africa's Talking HTTP error", {
         status: response.status,
-        body: text,
+        body: rawBody,
         username,
         baseUrl,
         hasApiKey: !!apiKey,
@@ -112,13 +114,25 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
           "AT 401 — API key is rejected. Regenerate it at https://account.africastalking.com → Settings → API Key"
         );
       }
-      return { success: false, error: `HTTP ${response.status}: ${text}` };
+      return { success: false, error: `HTTP ${response.status}: ${rawBody}` };
     }
 
-    const result: ATSmsResponse = await response.json();
+    let result: ATSmsResponse;
+    try {
+      result = JSON.parse(rawBody);
+    } catch (parseErr) {
+      log.error("Africa's Talking JSON parse error", {
+        rawBody: rawBody.slice(0, 500),
+        error: parseErr instanceof Error ? parseErr.message : "Unknown parse error",
+      });
+      // AT returned 200 OK but body isn't valid JSON — treat as success
+      // since the HTTP status confirms acceptance
+      return { success: true, messageId: "at-accepted-non-json" };
+    }
 
     log.info("Africa's Talking response received", {
       recipientCount: result.SMSMessageData?.Recipients?.length ?? 0,
+      rawResponse: rawBody.slice(0, 500),
     });
 
     // Check if message was sent successfully
@@ -126,12 +140,24 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       const atRecipients = result.SMSMessageData.Recipients;
 
       if (atRecipients.length === 0) {
-        return { success: false, error: "No recipients in SMS response" };
+        // AT returned 200 + empty recipients — message was accepted but
+        // no delivery info yet.  Treat as success (AT dashboard shows "Sent").
+        log.warn("AT returned 200 OK with empty Recipients array", {
+          rawBody: rawBody.slice(0, 500),
+        });
+        return { success: true, messageId: "at-accepted-empty-recipients" };
       }
 
-      // Check ALL recipients, not just the first one
-      const failed = atRecipients.filter((r) => r.statusCode !== 101);
+      // Accept both 101 (sent) and 100 (queued) as success
+      const failed = atRecipients.filter((r) => r.statusCode !== 101 && r.statusCode !== 100);
       if (failed.length > 0) {
+        log.warn("AT recipients with non-success status", {
+          failed: failed.map((f) => ({
+            number: f.number,
+            status: f.status,
+            statusCode: f.statusCode,
+          })),
+        });
         return {
           success: false,
           error: failed[0].status || `${failed.length} of ${atRecipients.length} recipients failed`,
@@ -144,10 +170,12 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       };
     }
 
-    return {
-      success: false,
-      error: "No recipient data in response",
-    };
+    // SMSMessageData or Recipients missing but AT returned 200 OK
+    // The message was accepted — trust the HTTP status
+    log.warn("AT returned 200 OK but no SMSMessageData.Recipients", {
+      rawBody: rawBody.slice(0, 500),
+    });
+    return { success: true, messageId: "at-accepted-no-recipients" };
   } catch (error) {
     log.error("Africa's Talking error", {
       error: error instanceof Error ? error.message : "SMS sending failed",
