@@ -48,7 +48,7 @@ interface ATSmsResponse {
  * @returns Result indicating success or failure
  */
 export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV === "development" && process.env.SMS_MOCK === "true") {
     log.info("Mock SMS sent", { to: Array.isArray(params.to) ? params.to[0] : params.to });
     return {
       success: true,
@@ -99,7 +99,19 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      log.error("Africa's Talking HTTP error", { status: response.status, body: text });
+      log.error("Africa's Talking HTTP error", {
+        status: response.status,
+        body: text,
+        username,
+        baseUrl,
+        hasApiKey: !!apiKey,
+        apiKeyPrefix: apiKey.slice(0, 10) + "...",
+      });
+      if (response.status === 401) {
+        log.error(
+          "AT 401 — API key is rejected. Regenerate it at https://account.africastalking.com → Settings → API Key"
+        );
+      }
       return { success: false, error: `HTTP ${response.status}: ${text}` };
     }
 
