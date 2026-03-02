@@ -1,0 +1,14 @@
+{
+  "SMSMessageData": {
+    "Message": "Sent to 1/1 Total Cost: KES 0.8000",
+    "Recipients": [
+      {
+        "statusCode": 101,
+        "number": "+27821234567",
+        "cost": "KES 0.8000",
+        "status": "Success",
+        "messageId": "ATXid_123"
+      }
+    ]
+  }
+}

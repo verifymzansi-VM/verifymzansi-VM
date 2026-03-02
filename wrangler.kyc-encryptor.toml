@@ -1,0 +1,44 @@
+# ────────────────────────────────────────────────────────────────────────────
+# Cloudflare Worker: KYC Document Encryptor
+#
+# Asynchronous encryption worker triggered via HTTP POST from
+# the Next.js /api/verification/* routes. Streams files from
+# a temporary R2 bucket, encrypts with AES-256-GCM, stores in
+# the private bucket, and updates Supabase kyc_artifacts status.
+#
+# Deploy:
+#   pnpm wrangler deploy -c wrangler.kyc-encryptor.toml
+#
+# Set secrets (once per environment):
+#   pnpm wrangler secret put KYC_ENCRYPTION_KEY -c wrangler.kyc-encryptor.toml
+#   pnpm wrangler secret put SUPABASE_SERVICE_ROLE_KEY -c wrangler.kyc-encryptor.toml
+# ────────────────────────────────────────────────────────────────────────────
+
+name = "verifymzansi-kyc-encryptor"
+main = "workers/kyc-encryptor.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+# Set per-environment via: pnpm wrangler secret put SUPABASE_URL -c wrangler.kyc-encryptor.toml
+SUPABASE_URL = ""
+
+# ────────────────────────────────────────────────────────────────────────────
+# R2 Bucket Bindings
+# ────────────────────────────────────────────────────────────────────────────
+# Temp bucket — receives raw uploads via presigned URL
+[[r2_buckets]]
+binding = "TEMP_BUCKET"
+bucket_name = "verifymzansi-temp"
+
+# Private bucket — stores encrypted KYC artifacts
+[[r2_buckets]]
+binding = "PRIVATE_BUCKET"
+bucket_name = "verifymzansi-private"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Secrets (set via `wrangler secret put`, NOT committed to source)
+# ────────────────────────────────────────────────────────────────────────────
+# KYC_ENCRYPTION_KEY   — 64-char hex string (32 bytes) for AES-256
+# SUPABASE_SERVICE_ROLE_KEY — Supabase service role key for kyc_artifacts PATCH

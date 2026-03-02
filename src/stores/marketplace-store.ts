@@ -1,0 +1,68 @@
+import { create } from "zustand";
+import type { MarketplaceArea } from "@/types/enums";
+
+interface Filters {
+  category?: string;
+  province?: string;
+  city?: string;
+  priceMin?: number;
+  priceMax?: number;
+  condition?: string;
+  sort: "newest" | "price_asc" | "price_desc" | "popular";
+  query?: string;
+  /** Dynamic category-specific attribute filters (matches listing attributes JSON column) */
+  attributes: Record<string, string | boolean | undefined>;
+}
+
+interface MarketplaceState {
+  activeArea: MarketplaceArea;
+  filters: Filters;
+  page: number;
+  isSearching: boolean;
+
+  setActiveArea: (area: MarketplaceArea) => void;
+  setFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
+  setAttribute: (name: string, value: string | boolean | undefined) => void;
+  resetFilters: () => void;
+  setPage: (page: number) => void;
+  setSearching: (searching: boolean) => void;
+}
+
+const defaultFilters: Filters = {
+  sort: "newest",
+  attributes: {},
+};
+
+export const useMarketplaceStore = create<MarketplaceState>((set) => ({
+  activeArea: "MZANSI_MARKET",
+  filters: { ...defaultFilters },
+  page: 1,
+  isSearching: false,
+
+  setActiveArea: (activeArea) => set({ activeArea, filters: { ...defaultFilters }, page: 1 }),
+  setFilter: (key, value) =>
+    set((state) => {
+      const next = { ...state.filters, [key]: value };
+      // Clear attribute filters when category changes
+      if (key === "category") {
+        next.attributes = {};
+        next.condition = undefined;
+      }
+      // Clear city when province changes
+      if (key === "province") {
+        next.city = undefined;
+      }
+      return { filters: next, page: 1 };
+    }),
+  setAttribute: (name, value) =>
+    set((state) => ({
+      filters: {
+        ...state.filters,
+        attributes: { ...state.filters.attributes, [name]: value },
+      },
+      page: 1,
+    })),
+  resetFilters: () => set({ filters: { ...defaultFilters, attributes: {} }, page: 1 }),
+  setPage: (page) => set({ page }),
+  setSearching: (isSearching) => set({ isSearching }),
+}));

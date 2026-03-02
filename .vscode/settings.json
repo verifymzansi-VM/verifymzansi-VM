@@ -1,0 +1,11 @@
+{
+  "sqltools.connections": [],
+  "mssql.ignorePlatformWarning": true,
+  "[sql]": {
+    "editor.defaultFormatter": "mtxr.sqltools"
+  },
+  "sqltools.defaultDialect": "PostgreSQL",
+  "files.associations": {
+    "*.sql": "postgres"
+  }
+}

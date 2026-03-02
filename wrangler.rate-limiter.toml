@@ -1,0 +1,14 @@
+name = "verifymzansi-rate-limiter"
+main = "workers/rate-limiter.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+
+# ────────────────────────────────────────────────────────────────────────────
+# KV Namespace for OTP Rate Limiting
+# ────────────────────────────────────────────────────────────────────────────
+[[kv_namespaces]]
+binding = "OTP_RATE_LIMITS"
+id = "247144b6d9b1406093351378a57c62fa"

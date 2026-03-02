@@ -1,0 +1,464 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { NextRequest } from "next/server";
+
+const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
+  mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
+vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+}));
+
+import { POST, GET } from "@/app/api/promotions/route";
+import { GET as GET_DETAIL, PUT, DELETE } from "@/app/api/promotions/[id]/route";
+
+const VALID_UUID = "00000000-0000-0000-0000-000000000001";
+const USER_ID = "user-0001";
+const VALID_IMAGE = "https://media.verifymzansi.co.za/promotions/photo.jpg";
+
+const VALID_BODY = {
+  title: "Great Deal on Electronics",
+  description:
+    "This is a detailed description of our amazing promotion with at least 20 characters.",
+  promotion_type: "deal",
+  province: "Gauteng",
+  city: "Johannesburg",
+  contact_methods: ["call"],
+  images: [VALID_IMAGE],
+};
+
+function createRequest(url: string, opts: { method?: string; body?: unknown } = {}): NextRequest {
+  return {
+    method: opts.method || "GET",
+    json:
+      opts.body !== undefined
+        ? async () => opts.body
+        : async () => {
+            throw new Error("No body");
+          },
+    headers: { get: vi.fn().mockReturnValue(null) },
+    nextUrl: new URL(url, "http://localhost:3000"),
+  } as unknown as NextRequest;
+}
+
+function mockAuth(user: { id: string; email?: string } | null) {
+  mockCreateClient.mockResolvedValue({
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user },
+        error: user ? null : { message: "Not authenticated" },
+      }),
+    },
+  });
+}
+
+function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {}) {
+  const makeChain = (table: string) => ({
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    or: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    range: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    delete: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    then: vi.fn().mockImplementation((cb: (v: unknown) => void) => {
+      cb({});
+      return Promise.resolve();
+    }),
+    ...(tableOverrides[table] || {}),
+  });
+  mockCreateAdminClient.mockReturnValue({
+    from: vi.fn((table: string) => makeChain(table)),
+  });
+}
+
+describe("POST /api/promotions", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("rejects unauthenticated requests", async () => {
+    mockAuth(null);
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 404 when seller profile not found", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      seller_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 for invalid body", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      seller_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: "sp-1", seller_verification_status: "verified" },
+        }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: { title: "AB" }, // Too short
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toBe("Validation failed");
+  });
+
+  it("creates promotion successfully (201)", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      seller_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: "sp-1", seller_verification_status: "verified" },
+        }),
+      },
+      promotions: {
+        single: vi.fn().mockResolvedValue({ data: { id: VALID_UUID }, error: null }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.promotion.id).toBe(VALID_UUID);
+  });
+
+  it("logs audit event on successful creation", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      seller_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: "sp-1", seller_verification_status: "verified" },
+        }),
+      },
+      promotions: {
+        single: vi.fn().mockResolvedValue({ data: { id: VALID_UUID }, error: null }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    await POST(req);
+    expect(mockLogAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mockLogAuditEvent.mock.calls[0][0].targetType).toBe("promotion");
+  });
+});
+
+describe("GET /api/promotions", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns promotions list", async () => {
+    mockAdmin({
+      promotions: {
+        range: vi.fn().mockResolvedValue({
+          data: [{ id: VALID_UUID, title: "Test" }],
+          count: 1,
+          error: null,
+        }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.promotions).toHaveLength(1);
+    expect(json.total).toBe(1);
+  });
+
+  it("handles pagination params", async () => {
+    mockAdmin({
+      promotions: {
+        range: vi.fn().mockResolvedValue({ data: [], count: 0, error: null }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions?page=2&limit=10");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.page).toBe(2);
+    expect(json.limit).toBe(10);
+  });
+});
+
+describe("GET /api/promotions/[id]", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("rejects invalid UUID", async () => {
+    const req = createRequest("http://localhost:3000/api/promotions/bad-id");
+    const res = await GET_DETAIL(req, { params: Promise.resolve({ id: "bad-id" }) });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 for missing promotion", async () => {
+    mockAdmin({
+      promotions: {
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      },
+    });
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`);
+    const res = await GET_DETAIL(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns live promotion publicly", async () => {
+    mockAdmin({
+      promotions: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: VALID_UUID, status: "live", view_count: 5 },
+          error: null,
+        }),
+        then: vi.fn().mockImplementation((cb: (v: unknown) => void) => {
+          cb({});
+          return Promise.resolve();
+        }),
+      },
+    });
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`);
+    const res = await GET_DETAIL(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.promotion.id).toBe(VALID_UUID);
+  });
+});
+
+describe("PUT /api/promotions/[id]", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("rejects unauthenticated requests", async () => {
+    mockAuth(null);
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "PUT",
+      body: VALID_BODY,
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 404 for missing promotion", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      promotions: {
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      },
+    });
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "PUT",
+      body: VALID_BODY,
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 403 when user does not own the promotion", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      promotions: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: VALID_UUID, seller_id: "different-user", status: "live" },
+        }),
+      },
+    });
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "PUT",
+      body: VALID_BODY,
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(403);
+  });
+
+  it("updates promotion successfully", async () => {
+    mockAuth({ id: USER_ID });
+    // PUT calls from("promotions") twice: once for select, once for update
+    let callCount = 0;
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "promotions") {
+          callCount++;
+          if (callCount === 1) {
+            // First call: ownership check
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: VALID_UUID, seller_id: USER_ID, status: "live" },
+              }),
+            };
+          }
+          // Second call: update
+          return {
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "PUT",
+      body: VALID_BODY,
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+  });
+});
+
+describe("DELETE /api/promotions/[id]", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("rejects unauthenticated requests", async () => {
+    mockAuth(null);
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "DELETE",
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 404 for missing promotion", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      promotions: {
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      },
+    });
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "DELETE",
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 when promotion is not draft or rejected", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      promotions: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: VALID_UUID, seller_id: USER_ID, status: "live" },
+        }),
+      },
+    });
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "DELETE",
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toMatch(/draft or rejected/i);
+  });
+
+  it("deletes draft promotion successfully", async () => {
+    mockAuth({ id: USER_ID });
+    // DELETE calls from("promotions") twice: once for select, once for delete
+    let callCount = 0;
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "promotions") {
+          callCount++;
+          if (callCount === 1) {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: VALID_UUID, seller_id: USER_ID, status: "draft" },
+              }),
+            };
+          }
+          return {
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "DELETE",
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+  });
+
+  it("deletes rejected promotion successfully", async () => {
+    mockAuth({ id: USER_ID });
+    let callCount = 0;
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "promotions") {
+          callCount++;
+          if (callCount === 1) {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: VALID_UUID, seller_id: USER_ID, status: "rejected" },
+              }),
+            };
+          }
+          return {
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "DELETE",
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(200);
+  });
+});

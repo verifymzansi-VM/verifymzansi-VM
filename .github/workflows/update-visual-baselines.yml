@@ -1,0 +1,35 @@
+name: Update Visual Baselines
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate-baselines:
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_TEST_MODE: "1"
+      NEXT_PUBLIC_SUPABASE_URL: ${{ (startsWith(secrets.NEXT_PUBLIC_SUPABASE_URL, 'https://') || startsWith(secrets.NEXT_PUBLIC_SUPABASE_URL, 'http://')) && secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-role-key' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Generate/update Chromium Linux baselines
+        run: pnpm exec playwright test e2e/visual-regression.spec.ts --project=chromium --update-snapshots
+      - name: Commit baselines
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "e2e/visual-regression.spec.ts-snapshots/*-chromium-linux.png"
+          if git diff --cached --quiet; then
+            echo "No baseline changes to commit"
+          else
+            git commit -m "chore: update Chromium Linux visual baselines"
+            git push
+          fi

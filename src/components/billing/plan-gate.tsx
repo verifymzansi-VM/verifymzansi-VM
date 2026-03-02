@@ -1,0 +1,846 @@
+"use client";
+
+import { useState, useEffect, type ReactNode } from "react";
+import Link from "next/link";
+import {
+  ShieldCheck,
+  AlertTriangle,
+  ArrowRight,
+  Loader2,
+  Sparkles,
+  Check,
+  X,
+  Crown,
+  Camera,
+  Video,
+  Zap,
+  Star,
+  Tag,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "@/hooks/use-toast";
+import {
+  PLANS,
+  TRIAL_CONFIG,
+  FREE_POST_CONFIG,
+  type PlanDefinition,
+} from "@/lib/constants/pricing";
+import { getEntitlements } from "@/lib/services/entitlements";
+import type { MarketplaceArea, PlanTier } from "@/types/enums";
+
+interface PlanGateProps {
+  area: MarketplaceArea;
+  children: ReactNode;
+}
+
+interface PlanInfo {
+  tier: PlanTier | "free";
+  isTrial: boolean;
+  trialDaysLeft: number;
+  freePostAvailable: boolean;
+  currentCount: number;
+  maxAllowed: number;
+  maxPhotos: number;
+  videoAllowed: boolean;
+}
+
+const AREA_LABELS: Record<MarketplaceArea, string> = {
+  MZANSI_MARKET: "Mzansi Market",
+  MALL_SHOPS: "Mall Shops",
+  BUSINESS_ADS: "Business Ads",
+};
+
+const AREA_COLORS: Record<MarketplaceArea, string> = {
+  MZANSI_MARKET: "bg-brand-green text-white",
+  MALL_SHOPS: "bg-brand-gold text-amber-950",
+  BUSINESS_ADS: "bg-sky-700 text-white",
+};
+
+const AREA_COUNT_TABLES: Record<MarketplaceArea, string> = {
+  MZANSI_MARKET: "listings",
+  MALL_SHOPS: "storefronts",
+  BUSINESS_ADS: "business_profiles",
+};
+
+const AREA_ITEM_LABELS: Record<MarketplaceArea, string> = {
+  MZANSI_MARKET: "listings",
+  MALL_SHOPS: "storefronts",
+  BUSINESS_ADS: "profiles",
+};
+
+/* ─────────────────────────────────────────────────────────────
+   Inline Plan Card — shows features, limits, and subscribe CTA
+   ───────────────────────────────────────────────────────────── */
+function InlinePlanCard({
+  plan,
+  isPopular,
+  isPremium,
+  onSubscribe,
+  subscribing,
+}: {
+  plan: PlanDefinition;
+  isPopular: boolean;
+  isPremium: boolean;
+  onSubscribe: (plan: PlanDefinition) => void;
+  subscribing: string | null;
+}) {
+  const priceRands = plan.priceCents / 100;
+
+  const itemLabel =
+    plan.area === "MALL_SHOPS"
+      ? "storefronts"
+      : plan.area === "BUSINESS_ADS"
+        ? "profiles"
+        : "listings";
+
+  const maxItems =
+    plan.features.maxListings ?? plan.features.maxStorefronts ?? plan.features.maxProfiles ?? 0;
+
+  return (
+    <Card
+      className={`relative transition-all hover:shadow-md ${
+        isPopular
+          ? "border-brand-green shadow-lg ring-1 ring-brand-green/20"
+          : isPremium
+            ? "border-brand-gold/50"
+            : ""
+      }`}
+    >
+      {isPopular && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <Badge className="bg-brand-green text-white gap-1">
+            <Sparkles className="h-3 w-3" />
+            Best Value
+          </Badge>
+        </div>
+      )}
+      {isPremium && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <Badge className="bg-brand-gold text-amber-950 gap-1">
+            <Crown className="h-3 w-3" />
+            Premium
+          </Badge>
+        </div>
+      )}
+
+      <CardContent className="p-5 pt-6 space-y-4">
+        {/* Plan name + price */}
+        <div className="text-center space-y-1">
+          <h3 className="font-display text-lg font-bold capitalize">{plan.tier}</h3>
+          <div>
+            <span className="font-display text-3xl font-bold">R{priceRands}</span>
+            <span className="text-sm text-muted-foreground">/ 30 days</span>
+          </div>
+        </div>
+
+        {/* Feature list */}
+        <ul className="space-y-2 text-sm">
+          <li className="flex items-center gap-2">
+            <Check className="h-4 w-4 text-brand-green flex-shrink-0" />
+            <span>
+              <strong>{maxItems === -1 ? "Unlimited" : maxItems}</strong> {itemLabel}
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            <Camera className="h-4 w-4 text-brand-green flex-shrink-0" />
+            <span>
+              <strong>{plan.features.maxPhotos}</strong> photos per post
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            {plan.features.videoAllowed ? (
+              <Video className="h-4 w-4 text-brand-green flex-shrink-0" />
+            ) : (
+              <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+            )}
+            <span className={plan.features.videoAllowed ? "" : "text-muted-foreground/60"}>
+              Video uploads
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            {plan.features.boostAllowed ? (
+              <Zap className="h-4 w-4 text-brand-green flex-shrink-0" />
+            ) : (
+              <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+            )}
+            <span className={plan.features.boostAllowed ? "" : "text-muted-foreground/60"}>
+              Boost listings
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            {plan.features.featuredAllowed ? (
+              <Star className="h-4 w-4 text-brand-green flex-shrink-0" />
+            ) : (
+              <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+            )}
+            <span className={plan.features.featuredAllowed ? "" : "text-muted-foreground/60"}>
+              Featured placement
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            {plan.features.urgentAllowed ? (
+              <Tag className="h-4 w-4 text-brand-green flex-shrink-0" />
+            ) : (
+              <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+            )}
+            <span className={plan.features.urgentAllowed ? "" : "text-muted-foreground/60"}>
+              Urgent badge
+            </span>
+          </li>
+        </ul>
+
+        {/* Subscribe button */}
+        <Button
+          className="w-full gap-2"
+          variant={isPopular ? "default" : "outline"}
+          disabled={subscribing !== null}
+          onClick={() => onSubscribe(plan)}
+        >
+          {subscribing === `${plan.area}-${plan.tier}` ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              Choose {plan.tier.charAt(0).toUpperCase() + plan.tier.slice(1)}
+              <ArrowRight className="h-4 w-4" />
+            </>
+          )}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PlanGate — main component
+   ───────────────────────────────────────────────────────────── */
+export function PlanGate({ area, children }: PlanGateProps) {
+  const [loading, setLoading] = useState(true);
+  const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [subscribing, setSubscribing] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function checkEntitlements() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          setError("not_authenticated");
+          setLoading(false);
+          return;
+        }
+
+        // Get seller profile — just check it exists
+        const { data: profile } = await supabase
+          .from("seller_profiles")
+          .select("id, created_at")
+          .eq("user_id", user.id)
+          .single();
+
+        if (!profile) {
+          setError("no_profile");
+          setLoading(false);
+          return;
+        }
+
+        // Get active entitlement for this area from the entitlements table
+        const { data: entitlement } = await supabase
+          .from("entitlements")
+          .select("tier, type, status, started_at, expires_at")
+          .eq("user_id", user.id)
+          .eq("area", area)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const tier = (entitlement?.tier as PlanTier) || null;
+
+        // Check if the user has already used their one-time free post for this area
+        const { data: freePostRow } = await supabase
+          .from("free_posts_used")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("area", area)
+          .maybeSingle();
+
+        const freePostUsed = !!freePostRow;
+        // Free post is available if no paid entitlement AND not yet used
+        const freePostAvailable = !entitlement && !freePostUsed;
+
+        // Legacy trial compat: treat free-post-available as "trial" for rendering
+        const isTrial = freePostAvailable;
+        const trialDaysLeft = freePostAvailable ? FREE_POST_CONFIG.durationDays : 0;
+
+        // Count existing items for this area
+        const table = AREA_COUNT_TABLES[area];
+        const { count } = await supabase
+          .from(table)
+          .select("id", { count: "exact", head: true })
+          .eq("seller_id", user.id)
+          .neq("status", "rejected");
+
+        const currentCount = count ?? 0;
+
+        // Get entitlements for their plan
+        const effectiveTier: PlanTier = tier || TRIAL_CONFIG.tier;
+        const ent = getEntitlements(effectiveTier, area);
+
+        // For free-post users, use free-post-specific limits
+        const maxAllowed = freePostAvailable
+          ? FREE_POST_CONFIG.maxAllowed
+          : tier
+            ? ent.maxAllowed
+            : 0;
+        const maxPhotos = freePostAvailable
+          ? FREE_POST_CONFIG.maxPhotos
+          : tier
+            ? ent.maxPhotos
+            : FREE_POST_CONFIG.maxPhotos;
+
+        setPlanInfo({
+          tier: tier || "free",
+          isTrial,
+          trialDaysLeft,
+          freePostAvailable,
+          currentCount,
+          maxAllowed,
+          maxPhotos,
+          videoAllowed: freePostAvailable
+            ? FREE_POST_CONFIG.videoAllowed
+            : tier
+              ? ent.videoAllowed
+              : false,
+        });
+      } catch {
+        setError("failed");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    checkEntitlements();
+  }, [area]);
+
+  // Handle subscribe — redirect to checkout
+  async function handleSubscribe(plan: PlanDefinition) {
+    const key = `${plan.area}-${plan.tier}`;
+    setSubscribing(key);
+    try {
+      // First fetch the plan ID from the plans table
+      const supabase = createClient();
+      const { data: dbPlan } = await supabase
+        .from("plans")
+        .select("id")
+        .eq("area", plan.area)
+        .eq("tier", plan.tier)
+        .eq("active", true)
+        .single();
+
+      if (!dbPlan) {
+        throw new Error("Plan not available");
+      }
+
+      // Use the checkout API
+      const res = await fetch("/api/billing/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: dbPlan.id, area: plan.area }),
+      });
+      const data = await res.json();
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
+      throw new Error(data.error || "No checkout URL received");
+    } catch (err) {
+      console.error("[PlanGate] Checkout error:", err);
+      // Show user-facing error feedback
+      const errorMessage = err instanceof Error ? err.message : "Could not start checkout";
+      setError("failed");
+      toast({
+        title: "Checkout failed",
+        description: `${errorMessage}. Please try again.`,
+        variant: "destructive",
+      });
+    } finally {
+      setSubscribing(null);
+    }
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin text-brand-green mx-auto" />
+          <p className="text-sm text-muted-foreground">Checking your plan...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Not authenticated
+  if (error === "not_authenticated") {
+    return (
+      <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
+        <CardContent className="p-8 text-center space-y-4">
+          <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
+          <h2 className="font-display text-xl font-bold">Sign In Required</h2>
+          <p className="text-muted-foreground max-w-md mx-auto">
+            You need to be signed in and have a seller profile to post on VerifyMzansi.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button asChild variant="outline">
+              <Link href="/login">Sign In</Link>
+            </Button>
+            <Button asChild className="gap-2">
+              <Link href="/register">
+                Register Free <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // No seller profile
+  if (error === "no_profile") {
+    return (
+      <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
+        <CardContent className="p-8 text-center space-y-4">
+          <ShieldCheck className="h-10 w-10 text-amber-500 mx-auto" />
+          <h2 className="font-display text-xl font-bold">Complete Your Profile</h2>
+          <p className="text-muted-foreground max-w-md mx-auto">
+            Set up your seller profile to start posting on VerifyMzansi. It takes less than 5
+            minutes.
+          </p>
+          <Button asChild className="gap-2">
+            <Link href="/register">
+              Set Up Profile <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Generic error
+  if (error) {
+    return (
+      <Card className="border-destructive/50">
+        <CardContent className="p-8 text-center space-y-4">
+          <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
+          <h2 className="font-display text-xl font-bold">Something Went Wrong</h2>
+          <p className="text-muted-foreground">
+            We couldn&apos;t check your plan. Please try again.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!planInfo) return null;
+
+  // Get plans for this area
+  const areaPlans = PLANS.filter((p) => p.area === area);
+
+  // ── No plan and trial expired → must subscribe ──
+  if (planInfo.tier === "free" && !planInfo.isTrial) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-xl p-6 text-white">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="h-5 w-5" />
+            <h2 className="font-display text-xl font-bold">Choose Your Plan to Start Posting</h2>
+          </div>
+          <p className="text-white/80 text-sm max-w-xl">
+            You&apos;ve used your free post for {AREA_LABELS[area]}. Select a plan below to continue
+            posting. Your plan determines how many photos, videos, and listings you can use.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {areaPlans.map((plan) => (
+            <InlinePlanCard
+              key={`${plan.area}-${plan.tier}`}
+              plan={plan}
+              isPopular={plan.tier === "growth"}
+              isPremium={plan.tier === "pro"}
+              onSubscribe={handleSubscribe}
+              subscribing={subscribing}
+            />
+          ))}
+        </div>
+
+        <p className="text-center text-xs text-muted-foreground">
+          All plans include verification badge • Cancel anytime •{" "}
+          <Link href="/billing" className="text-brand-green underline">
+            View full plan details
+          </Link>
+        </p>
+      </div>
+    );
+  }
+
+  // ── At listing limit → inline upgrade picker ──
+  const isUnlimited = planInfo.maxAllowed === -1;
+  if (!isUnlimited && planInfo.currentCount >= planInfo.maxAllowed) {
+    const tierOrder: Record<string, number> = { basic: 0, starter: 1, growth: 2, pro: 3 };
+    const currentTierOrder = planInfo.isTrial ? -1 : (tierOrder[planInfo.tier] ?? -1);
+    const upgradePlans = areaPlans.filter((p) => tierOrder[p.tier] > currentTierOrder);
+
+    return (
+      <div className="space-y-6">
+        <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-8 w-8 text-amber-500 flex-shrink-0" />
+              <div>
+                <h2 className="font-display text-lg font-bold">Posting Limit Reached</h2>
+                <p className="text-sm text-muted-foreground">
+                  You&apos;ve used{" "}
+                  <strong>
+                    {planInfo.currentCount}/{planInfo.maxAllowed}
+                  </strong>{" "}
+                  {AREA_ITEM_LABELS[area]} on your{" "}
+                  <Badge variant="outline" className="capitalize mx-1 text-xs">
+                    {planInfo.isTrial ? "Free Post" : planInfo.tier}
+                  </Badge>{" "}
+                  plan. Upgrade to post more and unlock premium features.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {upgradePlans.length > 0 && (
+          <div
+            className={`grid grid-cols-1 ${upgradePlans.length >= 2 ? "md:grid-cols-2" : ""} ${upgradePlans.length >= 3 ? "lg:grid-cols-3" : ""} ${upgradePlans.length >= 4 ? "xl:grid-cols-4" : ""} gap-5`}
+          >
+            {upgradePlans.map((plan) => (
+              <InlinePlanCard
+                key={`${plan.area}-${plan.tier}`}
+                plan={plan}
+                isPopular={plan.tier === "growth"}
+                isPremium={plan.tier === "pro"}
+                onSubscribe={handleSubscribe}
+                subscribing={subscribing}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Trial user or no paid plan → show plan picker FIRST, with Continue Trial option ──
+  if (planInfo.isTrial || planInfo.tier === "free") {
+    return (
+      <PlanPickerWithTrial
+        area={area}
+        planInfo={planInfo}
+        areaPlans={areaPlans}
+        onSubscribe={handleSubscribe}
+        subscribing={subscribing}
+      >
+        {children}
+      </PlanPickerWithTrial>
+    );
+  }
+
+  // ── Has paid plan — show plan status bar + form directly ──
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
+        <Badge className={AREA_COLORS[area]}>{AREA_LABELS[area]}</Badge>
+
+        <Badge variant="outline" className="capitalize">
+          {planInfo.tier} Plan
+        </Badge>
+
+        <div className="flex items-center gap-3 text-sm text-muted-foreground ml-auto">
+          <span className="flex items-center gap-1">
+            <Camera className="h-3.5 w-3.5" />
+            {planInfo.maxPhotos} photos
+          </span>
+          {planInfo.videoAllowed && (
+            <span className="flex items-center gap-1 text-brand-green">
+              <Video className="h-3.5 w-3.5" />
+              Video
+            </span>
+          )}
+          <span>
+            {isUnlimited ? (
+              "Unlimited posts"
+            ) : (
+              <>
+                {planInfo.currentCount}/{planInfo.maxAllowed} {AREA_ITEM_LABELS[area]} used
+              </>
+            )}
+          </span>
+        </div>
+      </div>
+
+      {children}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PlanPickerWithTrial — shows plan cards + Continue with Trial
+   ───────────────────────────────────────────────────────────── */
+function PlanPickerWithTrial({
+  area,
+  planInfo,
+  areaPlans,
+  onSubscribe,
+  subscribing,
+  children,
+}: {
+  area: MarketplaceArea;
+  planInfo: PlanInfo;
+  areaPlans: PlanDefinition[];
+  onSubscribe: (plan: PlanDefinition) => void;
+  subscribing: string | null;
+  children: ReactNode;
+}) {
+  const [showForm, setShowForm] = useState(false);
+
+  if (showForm) {
+    return (
+      <div className="space-y-4">
+        {/* Free post status bar */}
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
+          <Badge className={AREA_COLORS[area]}>{AREA_LABELS[area]}</Badge>
+
+          <div className="flex items-center gap-1.5 text-sm">
+            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+            <span className="text-amber-600 dark:text-amber-400 font-medium">
+              Free Post — {FREE_POST_CONFIG.durationDays} days • {FREE_POST_CONFIG.maxPhotos} photos
+              • {FREE_POST_CONFIG.maxVideos} video
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3 text-sm text-muted-foreground ml-auto">
+            <span className="flex items-center gap-1">
+              <Camera className="h-3.5 w-3.5" />
+              {planInfo.maxPhotos} photos
+            </span>
+            <span className="flex items-center gap-1 text-brand-green">
+              <Video className="h-3.5 w-3.5" />1 video
+            </span>
+            <span>
+              {planInfo.currentCount}/{planInfo.maxAllowed} {AREA_ITEM_LABELS[area]} used
+            </span>
+          </div>
+        </div>
+
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Header + Free Post Combined */}
+      {planInfo.isTrial ? (
+        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+            <Sparkles className="w-32 h-32" />
+          </div>
+          <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-6">
+            <div className="flex-1 space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-amber-300" />
+                <h2 className="font-display text-xl font-bold">Choose How You Want to Post</h2>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-normal border-white/30 text-white bg-white/10"
+                  >
+                    One-Time Offer
+                  </Badge>
+                  <p className="font-medium text-amber-200">
+                    1 Free Post Included — {FREE_POST_CONFIG.durationDays} days visibility
+                  </p>
+                </div>
+                <p className="text-white/80 text-sm max-w-xl">
+                  Post once for free. {FREE_POST_CONFIG.maxPhotos} photos •{" "}
+                  {FREE_POST_CONFIG.maxVideos} video • {FREE_POST_CONFIG.durationDays} days • This
+                  offer can only be used once per area
+                </p>
+              </div>
+            </div>
+            <Button
+              className="gap-2 bg-amber-500 hover:bg-amber-600 text-white shadow-sm border-0 whitespace-nowrap mt-2 sm:mt-0"
+              onClick={() => setShowForm(true)}
+            >
+              <ArrowRight className="h-4 w-4" />
+              Use Your Free Post
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-xl p-6 text-white shadow-md">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="h-5 w-5" />
+            <h2 className="font-display text-xl font-bold">Choose How You Want to Post</h2>
+          </div>
+          <p className="text-white/80 text-sm max-w-xl">
+            Subscribe to a 30-day plan for the best value on {AREA_LABELS[area]}.
+          </p>
+        </div>
+      )}
+
+      {/* ── Section 2: Monthly Plans ─── */}
+      <div className="space-y-4">
+        <h3 className="font-display text-lg font-bold flex items-center gap-2">
+          <Crown className="h-5 w-5 text-brand-gold" />
+          Add a Payment Plan
+          <Badge variant="outline" className="text-xs font-normal">
+            Best Value
+          </Badge>
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {areaPlans.map((plan) => (
+            <InlinePlanCard
+              key={`${plan.area}-${plan.tier}`}
+              plan={plan}
+              isPopular={plan.tier === "growth"}
+              isPremium={plan.tier === "pro"}
+              onSubscribe={onSubscribe}
+              subscribing={subscribing}
+            />
+          ))}
+        </div>
+      </div>
+
+      <p className="text-center text-xs text-muted-foreground pt-4">
+        All plans include verification badge • Cancel anytime •{" "}
+        <Link href="/billing" className="text-brand-green underline">
+          View full plan details
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Hook: usePlanMaxPhotos
+   ───────────────────────────────────────────────────────────── */
+export function usePlanMaxPhotos(area: MarketplaceArea): number {
+  const [maxPhotos, setMaxPhotos] = useState(3); // default free tier
+
+  useEffect(() => {
+    async function fetchMaxPhotos() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Check for active entitlement for this area
+        const { data: entitlement } = await supabase
+          .from("entitlements")
+          .select("tier")
+          .eq("user_id", user.id)
+          .eq("area", area)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const tier = (entitlement?.tier as PlanTier) || null;
+        if (tier) {
+          const ent = getEntitlements(tier, area);
+          setMaxPhotos(ent.maxPhotos);
+        } else {
+          // Check if free post is still available
+          const { data: freePostRow } = await supabase
+            .from("free_posts_used")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("area", area)
+            .maybeSingle();
+
+          // Free post available → 5 photos, otherwise default 5
+          setMaxPhotos(freePostRow ? FREE_POST_CONFIG.maxPhotos : FREE_POST_CONFIG.maxPhotos);
+        }
+      } catch {
+        // Keep default
+      }
+    }
+
+    fetchMaxPhotos();
+  }, [area]);
+
+  return maxPhotos;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Hook: usePlanVideoAllowed
+   ───────────────────────────────────────────────────────────── */
+export function usePlanVideoAllowed(area: MarketplaceArea): boolean {
+  const [videoAllowed, setVideoAllowed] = useState(false); // default free tier
+
+  useEffect(() => {
+    async function fetchVideoAllowed() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Check for active entitlement for this area
+        const { data: entitlement } = await supabase
+          .from("entitlements")
+          .select("tier")
+          .eq("user_id", user.id)
+          .eq("area", area)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const tier = (entitlement?.tier as PlanTier) || null;
+        if (tier) {
+          const ent = getEntitlements(tier, area);
+          setVideoAllowed(ent.videoAllowed);
+        } else {
+          // Check if free post is still available (not yet used)
+          const { data: freePostRow } = await supabase
+            .from("free_posts_used")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("area", area)
+            .maybeSingle();
+
+          // Free post includes video; if already used → no video without a plan
+          setVideoAllowed(!freePostRow);
+        }
+      } catch {
+        // Keep default
+      }
+    }
+
+    fetchVideoAllowed();
+  }, [area]);
+
+  return videoAllowed;
+}

@@ -1,0 +1,265 @@
+import type { MarketplaceArea, PlanTier } from "@/types/enums";
+
+/* ── Plan Definitions ────────────────────────────────────── */
+export interface PlanDefinition {
+  area: MarketplaceArea;
+  tier: PlanTier;
+  name: string;
+  priceCents: number;
+  billingFrequency: "30_days";
+  features: {
+    maxListings?: number;
+    maxPhotos: number;
+    maxStorefronts?: number;
+    maxProfiles?: number;
+    maxPostsPerMonth: number;
+    videoAllowed: boolean;
+    maxVideos?: number;
+    boostAllowed: boolean;
+    featuredAllowed: boolean;
+    urgentAllowed: boolean;
+    coverVideoAllowed: boolean;
+  };
+}
+
+export const PLANS: PlanDefinition[] = [
+  // Mzansi Market
+  {
+    area: "MZANSI_MARKET",
+    tier: "basic",
+    name: "Mzansi Market Basic",
+    priceCents: 3000,
+    billingFrequency: "30_days",
+    features: {
+      maxListings: 1,
+      maxPhotos: 5,
+      maxPostsPerMonth: 1,
+      videoAllowed: false,
+      boostAllowed: false,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: false,
+    },
+  },
+  {
+    area: "MZANSI_MARKET",
+    tier: "starter",
+    name: "Mzansi Market Starter",
+    priceCents: 10000,
+    billingFrequency: "30_days",
+    features: {
+      maxListings: 5,
+      maxPhotos: 5,
+      maxPostsPerMonth: 5,
+      videoAllowed: true,
+      maxVideos: 1,
+      boostAllowed: false,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: false,
+    },
+  },
+  {
+    area: "MZANSI_MARKET",
+    tier: "growth",
+    name: "Mzansi Market Growth",
+    priceCents: 25000,
+    billingFrequency: "30_days",
+    features: {
+      maxListings: 15,
+      maxPhotos: 10,
+      maxPostsPerMonth: 15,
+      videoAllowed: true,
+      maxVideos: 3,
+      boostAllowed: true,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: false,
+    },
+  },
+  {
+    area: "MZANSI_MARKET",
+    tier: "pro",
+    name: "Mzansi Market Pro",
+    priceCents: 65000,
+    billingFrequency: "30_days",
+    features: {
+      maxListings: 45, // 3x growth (15 * 3)
+      maxPhotos: 10,
+      maxPostsPerMonth: 45, // 3x growth (15 * 3)
+      videoAllowed: true,
+      maxVideos: 9,
+      boostAllowed: true,
+      featuredAllowed: true,
+      urgentAllowed: true,
+      coverVideoAllowed: false,
+    },
+  },
+  // Mall Shops
+  {
+    area: "MALL_SHOPS",
+    tier: "starter",
+    name: "Mall Shops Starter",
+    priceCents: 20000,
+    billingFrequency: "30_days",
+    features: {
+      maxStorefronts: 1,
+      maxPhotos: 5,
+      maxPostsPerMonth: 5,
+      videoAllowed: true,
+      maxVideos: 1,
+      boostAllowed: false,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: false,
+    },
+  },
+  {
+    area: "MALL_SHOPS",
+    tier: "growth",
+    name: "Mall Shops Growth",
+    priceCents: 50000,
+    billingFrequency: "30_days",
+    features: {
+      maxStorefronts: 3,
+      maxPhotos: 10,
+      maxPostsPerMonth: 15,
+      videoAllowed: true,
+      maxVideos: 3,
+      boostAllowed: true,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: true,
+    },
+  },
+  {
+    area: "MALL_SHOPS",
+    tier: "pro",
+    name: "Mall Shops Pro",
+    priceCents: 120000,
+    billingFrequency: "30_days",
+    features: {
+      maxStorefronts: 9, // 3x growth (3 * 3)
+      maxPhotos: 10,
+      maxPostsPerMonth: 45, // 3x growth (15 * 3)
+      videoAllowed: true,
+      maxVideos: 9,
+      boostAllowed: true,
+      featuredAllowed: true,
+      urgentAllowed: true,
+      coverVideoAllowed: true,
+    },
+  },
+  // Business Ads
+  {
+    area: "BUSINESS_ADS",
+    tier: "starter",
+    name: "Business Ads Starter",
+    priceCents: 15000,
+    billingFrequency: "30_days",
+    features: {
+      maxProfiles: 1,
+      maxPhotos: 5,
+      maxPostsPerMonth: 5,
+      videoAllowed: true,
+      maxVideos: 1,
+      boostAllowed: false,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: false,
+    },
+  },
+  {
+    area: "BUSINESS_ADS",
+    tier: "growth",
+    name: "Business Ads Growth",
+    priceCents: 40000,
+    billingFrequency: "30_days",
+    features: {
+      maxProfiles: 3,
+      maxPhotos: 10,
+      maxPostsPerMonth: 15,
+      videoAllowed: true,
+      maxVideos: 3,
+      boostAllowed: true,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: true,
+    },
+  },
+  {
+    area: "BUSINESS_ADS",
+    tier: "pro",
+    name: "Business Ads Pro",
+    priceCents: 100000,
+    billingFrequency: "30_days",
+    features: {
+      maxProfiles: 9, // 3x growth (3 * 3)
+      maxPhotos: 10,
+      maxPostsPerMonth: 45, // 3x growth (15 * 3)
+      videoAllowed: true,
+      maxVideos: 9,
+      boostAllowed: true,
+      featuredAllowed: true,
+      urgentAllowed: true,
+      coverVideoAllowed: true,
+    },
+  },
+];
+
+/* ── Add-on Prices (cents) ───────────────────────────────── */
+export const ADDON_PRICES = {
+  boost: 1500,
+  featured: 2500,
+  urgent: 1000,
+} as const;
+
+/** How many days a single boost lasts */
+export const BOOST_DURATION_DAYS = 7;
+
+/** How many days a single featured add-on lasts */
+export const FEATURED_DURATION_DAYS = 7;
+
+/** How many days a single urgent add-on lasts */
+export const URGENT_DURATION_DAYS = 7;
+
+/* ── Pay-per-post (Mzansi Market only, cents) ────────────── */
+export const PAY_PER_POST = {
+  "14_days": 2000,
+  "30_days": 3000,
+} as const;
+
+/* ── Trial Config (deprecated — use FREE_POST_CONFIG) ───── */
+export const TRIAL_CONFIG = {
+  durationDays: 30,
+  tier: "starter" as PlanTier,
+  maxListings: 1,
+} as const;
+
+/* ── Free Post Config ────────────────────────────────────── */
+/**
+ * One-time free post per marketplace area.
+ * Each account gets exactly 1 free post in each area.
+ * Once used, the free option disappears permanently for that area.
+ */
+export const FREE_POST_CONFIG = {
+  durationDays: 30,
+  maxPhotos: 5,
+  maxVideos: 1,
+  videoAllowed: true,
+  maxAllowed: 1, // 1 post per area
+} as const;
+
+/**
+ * Get plans for a specific marketplace area.
+ */
+export function getPlansForArea(area: MarketplaceArea): PlanDefinition[] {
+  return PLANS.filter((p) => p.area === area);
+}
+
+/**
+ * Get a specific plan.
+ */
+export function getPlan(area: MarketplaceArea, tier: PlanTier): PlanDefinition | undefined {
+  return PLANS.find((p) => p.area === area && p.tier === tier);
+}

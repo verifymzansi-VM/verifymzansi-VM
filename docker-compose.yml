@@ -1,0 +1,52 @@
+# VerifyMzansi — Docker Compose for local development
+#
+# Usage:
+#   cp .env.example .env     — fill in secrets
+#   docker compose up         — start all services
+#   docker compose up -d      — detached mode
+#   docker compose down -v    — stop and remove volumes
+
+services:
+  app:
+    build:
+      context: .
+      target: dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:?Set SUPABASE_ANON_KEY in .env}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:?Set SUPABASE_SERVICE_ROLE_KEY in .env}
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  supabase-db:
+    image: supabase/postgres:15.6.1.143
+    ports:
+      - "54322:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: postgres
+    volumes:
+      - supabase-db-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # NOTE: Supabase Studio requires supabase-kong, supabase-meta, and
+  # supabase-auth services. Use `npx supabase start` for the full
+  # local Supabase stack, or run Studio separately.
+
+volumes:
+  supabase-db-data:

@@ -1,0 +1,45 @@
+# ────────────────────────────────────────────────────────────────────────────
+# Cloudflare Worker: Data Retention R2 Cleanup
+#
+# Scheduled cron worker that processes the r2_cleanup_queue table.
+# Deletes expired files from the R2 private bucket and logs cleanup
+# to audit_logs via the Supabase REST API.
+#
+# Runs daily at 03:00 UTC. Also exposes an HTTP endpoint for
+# health checks (GET) and manual triggers (POST).
+#
+# Deploy:
+#   pnpm wrangler deploy -c wrangler.retention-cleanup.toml
+#
+# Set secrets (once per environment):
+#   pnpm wrangler secret put SUPABASE_SERVICE_ROLE_KEY -c wrangler.retention-cleanup.toml
+# ────────────────────────────────────────────────────────────────────────────
+
+name = "verifymzansi-retention-cleanup"
+main = "workers/retention-cleanup.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+# Set per-environment via: pnpm wrangler secret put SUPABASE_URL -c wrangler.retention-cleanup.toml
+SUPABASE_URL = ""
+
+# ────────────────────────────────────────────────────────────────────────────
+# R2 Bucket Binding
+# ────────────────────────────────────────────────────────────────────────────
+# Private bucket — worker deletes expired files from here
+[[r2_buckets]]
+binding = "R2_PRIVATE"
+bucket_name = "verifymzansi-private"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Cron Trigger — daily at 03:00 UTC
+# ────────────────────────────────────────────────────────────────────────────
+[triggers]
+crons = ["0 3 * * *"]
+
+# ────────────────────────────────────────────────────────────────────────────
+# Secrets (set via `wrangler secret put`, NOT committed to source)
+# ────────────────────────────────────────────────────────────────────────────
+# SUPABASE_SERVICE_ROLE_KEY — Supabase service role key for REST API calls

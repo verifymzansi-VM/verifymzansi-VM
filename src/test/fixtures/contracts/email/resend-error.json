@@ -1,0 +1,7 @@
+{
+  "data": null,
+  "error": {
+    "name": "validation_error",
+    "message": "Invalid from domain"
+  }
+}

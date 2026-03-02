@@ -1,0 +1,11 @@
+name: verifymzansi-infra
+runtime: nodejs
+description: VerifyMzansi infrastructure (Cloudflare R2, Workers, DNS)
+
+config:
+  cloudflareAccountId:
+    description: Cloudflare account ID
+    secret: false
+  zoneName:
+    description: Domain zone name
+    default: verifymzansi.co.za

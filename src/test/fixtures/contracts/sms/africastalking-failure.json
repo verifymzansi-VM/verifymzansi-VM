@@ -1,0 +1,14 @@
+{
+  "SMSMessageData": {
+    "Message": "Sent to 0/1 Total Cost: KES 0.0000",
+    "Recipients": [
+      {
+        "statusCode": 403,
+        "number": "+27821234567",
+        "cost": "KES 0.0000",
+        "status": "Insufficient balance",
+        "messageId": "ATXid_403"
+      }
+    ]
+  }
+}

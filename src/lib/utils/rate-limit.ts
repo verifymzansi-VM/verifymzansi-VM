@@ -1,0 +1,165 @@
+/**
+ * Generic rate-limit check against the Cloudflare rate-limiter worker.
+ *
+ * Fails open — if the worker is unreachable the request proceeds.
+ */
+
+import { createLogger } from "@/lib/utils/logger";
+
+const logger = createLogger("rate-limit");
+
+// ── In-memory fallback rate limiter ─────────────────────────
+// Used when the Cloudflare rate-limiter worker is unreachable.
+// Provides degraded but functional protection against abuse.
+interface LocalBucket {
+  count: number;
+  expiresAt: number;
+}
+const LOCAL_BUCKETS = new Map<string, LocalBucket>();
+const LOCAL_WINDOW_MS = 60_000; // 1 minute window
+const LOCAL_MAX_REQUESTS = 20; // generous fallback limit
+const LOCAL_MAX_BUCKETS = 5000; // cap memory usage
+
+/** Periodically purge expired buckets to prevent memory bloat. */
+let _lastCleanup = Date.now();
+const CLEANUP_INTERVAL_MS = 120_000; // 2 minutes
+
+function cleanupExpiredBuckets(): void {
+  const now = Date.now();
+  if (now - _lastCleanup < CLEANUP_INTERVAL_MS) return;
+  _lastCleanup = now;
+
+  // Collect keys first to avoid mutating Map during iteration
+  const expiredKeys: string[] = [];
+  for (const [key, bucket] of LOCAL_BUCKETS) {
+    if (bucket.expiresAt <= now) {
+      expiredKeys.push(key);
+    }
+  }
+  for (const key of expiredKeys) {
+    LOCAL_BUCKETS.delete(key);
+  }
+}
+
+/**
+ * In-memory rate limiter for use when the external worker is unavailable
+ * or for endpoints that don't need external rate limiting (e.g. admin routes).
+ */
+export function checkLocalRateLimit(
+  key: string,
+  action: string
+): { limited: boolean; retryAfter?: number } {
+  cleanupExpiredBuckets();
+
+  const bucketKey = `${action}:${key}`;
+  const now = Date.now();
+  const existing = LOCAL_BUCKETS.get(bucketKey);
+
+  if (existing && existing.expiresAt > now) {
+    existing.count++;
+    // LRU: move to end of Map insertion order by re-inserting
+    LOCAL_BUCKETS.delete(bucketKey);
+    LOCAL_BUCKETS.set(bucketKey, existing);
+    if (existing.count > LOCAL_MAX_REQUESTS) {
+      const retryAfter = Math.ceil((existing.expiresAt - now) / 1000);
+      return { limited: true, retryAfter };
+    }
+    return { limited: false };
+  }
+
+  // Evict least-recently-used entries if at capacity
+  if (LOCAL_BUCKETS.size >= LOCAL_MAX_BUCKETS) {
+    const firstKey = LOCAL_BUCKETS.keys().next().value;
+    if (firstKey !== undefined) LOCAL_BUCKETS.delete(firstKey);
+  }
+
+  LOCAL_BUCKETS.set(bucketKey, { count: 1, expiresAt: now + LOCAL_WINDOW_MS });
+  return { limited: false };
+}
+
+interface RateLimitOptions {
+  /** Unique key identifying the client (IP, phone, user ID, etc.) */
+  key: string;
+  /** Action being rate-limited (e.g. "auth:login", "otp:send") */
+  action: string;
+  /** Optional device/session identifier */
+  deviceId?: string;
+}
+
+interface RateLimitResult {
+  limited: boolean;
+  retryAfter?: number;
+}
+
+/**
+ * Check the external rate-limiter worker.
+ *
+ * Returns `{ limited: true, retryAfter }` if the request should be blocked,
+ * or `{ limited: false }` if the request should proceed.
+ *
+ * Fails open: if the worker is unavailable or errors, returns `{ limited: false }`.
+ */
+export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitResult> {
+  const url = process.env.OTP_RATE_LIMITER_URL;
+  if (!url) {
+    return { limited: false };
+  }
+
+  const timeout = Number(process.env.OTP_RATE_LIMITER_TIMEOUT_MS) || 2500;
+  const apiKey = process.env.RATE_LIMITER_API_KEY;
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        phone: opts.key, // worker uses `phone` as the key field
+        action: opts.action,
+        deviceId: opts.deviceId,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+
+    if (res.status === 429) {
+      const data = (await res.json().catch(() => ({}))) as {
+        retryAfter?: number;
+      };
+      logger.warn("Rate limited", { action: opts.action, key: opts.key });
+      return { limited: true, retryAfter: data.retryAfter ?? 60 };
+    }
+
+    return { limited: false };
+  } catch (err) {
+    // Fail degraded — use local in-memory rate limiter as fallback
+    logger.error("Rate limiter worker unreachable, using local fallback", {
+      action: opts.action,
+      error: err instanceof Error ? err.message : "unknown",
+    });
+    return checkLocalRateLimit(opts.key, opts.action);
+  }
+}
+
+/**
+ * Extract client IP from request headers.
+ * Prefers cf-connecting-ip, falls back to x-forwarded-for, then x-real-ip.
+ */
+export function getClientIp(request: Request): string {
+  return (
+    request.headers.get("cf-connecting-ip") ??
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown"
+  );
+}

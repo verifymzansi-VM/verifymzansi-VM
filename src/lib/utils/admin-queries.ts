@@ -1,0 +1,497 @@
+/**
+ * Admin query helpers — shared data-fetching for admin pages.
+ * Uses server-side Supabase client (anon key + user session for RLS).
+ */
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { MarketplaceArea } from "@/types/enums";
+
+// ── Types ────────────────────────────────────────────────────
+
+export interface AdminDashboardStats {
+  totalSellers: number;
+  totalListings: number;
+  openReports: number;
+  pendingVerifications: number;
+  activeSuspensions: number;
+  pendingModeration: number;
+}
+
+export interface AreaStats {
+  pendingFlags: number;
+  highSeverityOverdue: number;
+  actionsToday: Record<string, number>;
+  avgResolutionHours: number | null;
+  pendingContent: number;
+}
+
+export interface PendingVerification {
+  id: string;
+  user_id: string;
+  step_type: string;
+  status: string;
+  created_at: string;
+  risk_level: string | null;
+  risk_score: number | null;
+  auto_status: string | null;
+  seller_display_name: string | null;
+  seller_verification_status: string | null;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actor_id: string;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  area: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+// ── Queries ──────────────────────────────────────────────────
+
+/** Fetch all high-level stats for the admin dashboard */
+export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
+  const supabase = createAdminClient();
+
+  const [
+    { count: totalSellers },
+    { count: totalListings },
+    { count: openReports },
+    { count: pendingVerifications },
+    { count: activeSuspensions },
+    { count: pendingModeration },
+  ] = await Promise.all([
+    supabase.from("seller_profiles").select("*", { count: "exact", head: true }),
+    supabase.from("listings").select("*", { count: "exact", head: true }),
+    supabase.from("reports").select("*", { count: "exact", head: true }).eq("status", "open"),
+    supabase
+      .from("verification_steps")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending"),
+    supabase
+      .from("seller_profiles")
+      .select("*", { count: "exact", head: true })
+      .eq("account_status", "suspended"),
+    supabase
+      .from("listings")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending_moderation"),
+  ]);
+
+  return {
+    totalSellers: totalSellers || 0,
+    totalListings: totalListings || 0,
+    openReports: openReports || 0,
+    pendingVerifications: pendingVerifications || 0,
+    activeSuspensions: activeSuspensions || 0,
+    pendingModeration: pendingModeration || 0,
+  };
+}
+
+/** Get area-specific counts for the 3 area cards on admin home */
+export async function getAreaCardCounts(): Promise<
+  Record<MarketplaceArea, { pendingFlags: number; pendingContent: number }>
+> {
+  const supabase = createAdminClient();
+
+  // Reports counts by area — map target_type to area
+  const { data: openReports } = await supabase
+    .from("reports")
+    .select("target_type")
+    .eq("status", "open");
+
+  // Content pending moderation counts
+  const [{ count: pendingListings }, { count: pendingStorefronts }, { count: pendingBusinesses }] =
+    await Promise.all([
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+      supabase
+        .from("storefronts")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+      supabase
+        .from("business_profiles")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+    ]);
+
+  // Map target_type to area
+  const flagCounts = { MZANSI_MARKET: 0, BUSINESS_ADS: 0, MALL_SHOPS: 0 };
+  for (const r of openReports || []) {
+    if (r.target_type === "listing") flagCounts.MZANSI_MARKET++;
+    if (r.target_type === "business_profile") flagCounts.BUSINESS_ADS++;
+    if (r.target_type === "storefront") flagCounts.MALL_SHOPS++;
+  }
+
+  return {
+    MZANSI_MARKET: {
+      pendingFlags: flagCounts.MZANSI_MARKET,
+      pendingContent: pendingListings || 0,
+    },
+    BUSINESS_ADS: {
+      pendingFlags: flagCounts.BUSINESS_ADS,
+      pendingContent: pendingBusinesses || 0,
+    },
+    MALL_SHOPS: {
+      pendingFlags: flagCounts.MALL_SHOPS,
+      pendingContent: pendingStorefronts || 0,
+    },
+  };
+}
+
+/** Get pending verification steps with seller display name */
+export async function getPendingVerifications(limit = 50): Promise<PendingVerification[]> {
+  const supabase = createAdminClient();
+
+  const { data: steps } = await supabase
+    .from("verification_steps")
+    .select("id, user_id, step_type, status, created_at, risk_level, risk_score, auto_status")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+    .limit(limit);
+
+  if (!steps?.length) return [];
+
+  // Get seller profiles for each user
+
+  const userIds = Array.from(new Set(steps.map((s) => s.user_id))) as string[];
+  const { data: profiles } = await supabase
+    .from("seller_profiles")
+    .select("user_id, display_name, seller_verification_status")
+    .in("user_id", userIds);
+
+  const profileMap = new Map((profiles || []).map((p) => [p.user_id, p] as const));
+
+  return steps.map((s) => {
+    const profile = profileMap.get(s.user_id);
+    return {
+      ...s,
+      seller_display_name: profile?.display_name || null,
+      seller_verification_status: profile?.seller_verification_status || null,
+    };
+  });
+}
+
+/** Get recent audit log entries */
+export async function getRecentActivity(limit = 20, area?: string): Promise<AuditLogEntry[]> {
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("audit_logs")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (area) {
+    query = query.eq("area", area);
+  }
+
+  const { data } = await query;
+  return (data as AuditLogEntry[]) || [];
+}
+
+/** Get open reports for an area with all needed fields */
+export async function getAreaReports(area: MarketplaceArea) {
+  const supabase = createAdminClient();
+
+  // Map area to target_type
+  const targetTypeMap: Record<MarketplaceArea, string> = {
+    MZANSI_MARKET: "listing",
+    BUSINESS_ADS: "business_profile",
+    MALL_SHOPS: "storefront",
+  };
+
+  const { data } = await supabase
+    .from("reports")
+    .select("*")
+    .eq("target_type", targetTypeMap[area])
+    .in("status", ["open", "in_progress"])
+    .order("created_at", { ascending: true })
+    .limit(100);
+
+  return data || [];
+}
+
+/** Get content pending moderation for an area */
+export async function getPendingContent(area: MarketplaceArea) {
+  const supabase = createAdminClient();
+
+  const tableMap: Record<MarketplaceArea, string> = {
+    MZANSI_MARKET: "listings",
+    BUSINESS_ADS: "business_profiles",
+    MALL_SHOPS: "storefronts",
+  };
+
+  const { data } = await supabase
+    .from(tableMap[area])
+    .select("*")
+    .eq("status", "pending_moderation")
+    .order("created_at", { ascending: true })
+    .limit(50);
+
+  return data || [];
+}
+
+// ── Dashboard-specific richer queries ────────────────────────
+
+export interface DashboardKycItem {
+  id: string;
+  user_id: string;
+  step_type: string;
+  status: string;
+  full_name: string | null;
+  dob: string | null;
+  document_type: string | null;
+  location_method: string | null;
+  location_province: string | null;
+  location_city: string | null;
+  submitted_at: string | null;
+  created_at: string;
+  risk_level: string | null;
+  risk_score: number | null;
+  auto_status: string | null;
+  seller_display_name: string | null;
+  seller_verification_status: string | null;
+  seller_account_status: string | null;
+  seller_strikes: number;
+}
+
+/** Get pending KYC steps with full metadata for the dashboard command centre */
+export async function getDashboardKycQueue(limit = 50): Promise<DashboardKycItem[]> {
+  const supabase = createAdminClient();
+
+  const { data: steps } = await supabase
+    .from("verification_steps")
+    .select(
+      "id, user_id, step_type, status, full_name, dob, document_type, location_method, location_province, location_city, submitted_at, created_at, risk_level, risk_score, auto_status"
+    )
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+    .limit(limit);
+
+  if (!steps?.length) return [];
+
+  const userIds = Array.from(new Set(steps.map((s) => s.user_id))) as string[];
+
+  const { data: profiles } = await supabase
+    .from("seller_profiles")
+    .select("user_id, display_name, seller_verification_status, account_status, strikes")
+    .in("user_id", userIds);
+
+  const profileMap = new Map((profiles || []).map((p) => [p.user_id, p] as const));
+
+  return steps.map((s) => {
+    const profile = profileMap.get(s.user_id);
+    return {
+      ...s,
+      seller_display_name: profile?.display_name || null,
+      seller_verification_status: profile?.seller_verification_status || null,
+      seller_account_status: profile?.account_status || null,
+      seller_strikes: profile?.strikes || 0,
+    };
+  });
+}
+
+export interface DashboardReport {
+  id: string;
+  target_id: string;
+  target_type: string;
+  area: string;
+  category: string;
+  severity: "high" | "standard";
+  status: string;
+  description: string | null;
+  reporter_user_id: string | null;
+  created_at: string;
+}
+
+/** Get all open reports across areas, high-severity and oldest first */
+export async function getDashboardReports(limit = 30): Promise<DashboardReport[]> {
+  const supabase = createAdminClient();
+
+  const { data } = await supabase
+    .from("reports")
+    .select(
+      "id, target_id, target_type, area, category, severity, status, description, reporter_user_id, created_at"
+    )
+    .in("status", ["open", "in_progress"])
+    .order("created_at", { ascending: true })
+    .limit(limit);
+
+  // Sort: high severity first, then oldest within same severity
+  const rows = (data as DashboardReport[]) || [];
+  return rows.sort((a, b) => {
+    if (a.severity !== b.severity) {
+      return a.severity === "high" ? -1 : 1;
+    }
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+}
+
+export interface DashboardContentItem {
+  id: string;
+  title: string;
+  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS";
+  areaLabel: string;
+  itemType: string;
+  category: string | null;
+  seller_id: string | null;
+  created_at: string;
+  status: string;
+}
+
+/** Get all pending-moderation content across all three areas */
+export async function getDashboardContentQueue(): Promise<DashboardContentItem[]> {
+  const supabase = createAdminClient();
+
+  const [{ data: pendingListings }, { data: pendingStorefronts }, { data: pendingBusinesses }] =
+    await Promise.all([
+      supabase
+        .from("listings")
+        .select("id, title, status, created_at, category, seller_id")
+        .eq("status", "pending_moderation")
+        .order("created_at", { ascending: true })
+        .limit(30),
+      supabase
+        .from("storefronts")
+        .select("id, mall_name, store_number, status, created_at, category, seller_id")
+        .eq("status", "pending_moderation")
+        .order("created_at", { ascending: true })
+        .limit(30),
+      supabase
+        .from("business_profiles")
+        .select("id, business_name, status, created_at, category, seller_id")
+        .eq("status", "pending_moderation")
+        .order("created_at", { ascending: true })
+        .limit(30),
+    ]);
+
+  return [
+    ...(pendingListings || []).map((l) => ({
+      id: l.id,
+      title: l.title || `Listing ${l.id.slice(0, 8)}`,
+      area: "MZANSI_MARKET" as const,
+      areaLabel: "Mzansi Market",
+      itemType: "Listing",
+      category: l.category || null,
+      seller_id: l.seller_id || null,
+      created_at: l.created_at,
+      status: l.status,
+    })),
+    ...(pendingStorefronts || []).map((s) => ({
+      id: s.id,
+      title: s.mall_name || `Store #${s.store_number}`,
+      area: "MALL_SHOPS" as const,
+      areaLabel: "Mall Shops",
+      itemType: "Storefront",
+      category: s.category || null,
+      seller_id: s.seller_id || null,
+      created_at: s.created_at,
+      status: s.status,
+    })),
+    ...(pendingBusinesses || []).map((b) => ({
+      id: b.id,
+      title: b.business_name || `Business ${b.id.slice(0, 8)}`,
+      area: "BUSINESS_ADS" as const,
+      areaLabel: "Business Ads",
+      itemType: "Business Profile",
+      category: b.category || null,
+      seller_id: b.seller_id || null,
+      created_at: b.created_at,
+      status: b.status,
+    })),
+  ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+}
+
+// ── Verification funnel & extended platform stats ─────────────
+
+export interface VerificationStepCounts {
+  phone: number;
+  id_doc: number;
+  selfie: number;
+  location: number;
+  total: number;
+}
+
+/** Count pending verification steps broken down by step type */
+export async function getVerificationStepCounts(): Promise<VerificationStepCounts> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("verification_steps")
+    .select("step_type")
+    .eq("status", "pending");
+
+  const counts: VerificationStepCounts = { phone: 0, id_doc: 0, selfie: 0, location: 0, total: 0 };
+  for (const row of (data || []) as { step_type: string }[]) {
+    const t = row.step_type;
+    if (t === "phone") counts.phone++;
+    else if (t === "id_doc") counts.id_doc++;
+    else if (t === "selfie") counts.selfie++;
+    else if (t === "location") counts.location++;
+    counts.total++;
+  }
+  return counts;
+}
+
+export interface ExtendedPlatformStats {
+  verifiedSellers: number;
+  bannedSellers: number;
+  liveListings: number;
+  hiddenListings: number;
+}
+
+/** Get extended platform stats beyond the basic dashboard stats */
+export async function getExtendedPlatformStats(): Promise<ExtendedPlatformStats> {
+  const supabase = createAdminClient();
+  const [
+    { count: verifiedSellers },
+    { count: bannedSellers },
+    { count: liveListings },
+    { count: hiddenListings },
+  ] = await Promise.all([
+    supabase
+      .from("seller_profiles")
+      .select("*", { count: "exact", head: true })
+      .eq("seller_verification_status", "verified"),
+    supabase
+      .from("seller_profiles")
+      .select("*", { count: "exact", head: true })
+      .eq("account_status", "banned"),
+    supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
+    supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "hidden"),
+  ]);
+  return {
+    verifiedSellers: verifiedSellers || 0,
+    bannedSellers: bannedSellers || 0,
+    liveListings: liveListings || 0,
+    hiddenListings: hiddenListings || 0,
+  };
+}
+
+/** Count moderation actions taken today, grouped by action type */
+export async function getActionsToday(area?: string): Promise<Record<string, number>> {
+  const supabase = createAdminClient();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  let query = supabase
+    .from("moderation_actions")
+    .select("action")
+    .gte("created_at", todayStart.toISOString());
+
+  if (area) {
+    query = query.eq("area", area);
+  }
+
+  const { data } = await query;
+  const counts: Record<string, number> = {};
+  for (const row of data || []) {
+    const action = (row as { action: string }).action;
+    counts[action] = (counts[action] || 0) + 1;
+  }
+  return counts;
+}

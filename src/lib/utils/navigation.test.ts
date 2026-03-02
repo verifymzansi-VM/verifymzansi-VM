@@ -1,0 +1,50 @@
+import { describe, expect, it } from "vitest";
+import { sanitizeReturnUrl, buildLoginUrl } from "./navigation";
+
+describe("sanitizeReturnUrl", () => {
+  it("allows valid relative paths", () => {
+    expect(sanitizeReturnUrl("/dashboard")).toBe("/dashboard");
+    expect(sanitizeReturnUrl("/billing/checkout")).toBe("/billing/checkout");
+  });
+
+  it("returns /dashboard for null/undefined", () => {
+    expect(sanitizeReturnUrl(null)).toBe("/dashboard");
+    expect(sanitizeReturnUrl(undefined)).toBe("/dashboard");
+  });
+
+  it("blocks protocol-relative URLs (//)", () => {
+    expect(sanitizeReturnUrl("//evil.com")).toBe("/dashboard");
+  });
+
+  it("blocks URLs with protocols", () => {
+    expect(sanitizeReturnUrl("http://evil.com")).toBe("/dashboard");
+    expect(sanitizeReturnUrl("https://evil.com")).toBe("/dashboard");
+  });
+
+  it("blocks javascript: URIs", () => {
+    expect(sanitizeReturnUrl("javascript:alert(1)")).toBe("/dashboard");
+  });
+
+  it("blocks data: URIs", () => {
+    expect(sanitizeReturnUrl("data:text/html,<h1>hi</h1>")).toBe("/dashboard");
+  });
+
+  it("blocks paths not starting with /", () => {
+    expect(sanitizeReturnUrl("evil.com/path")).toBe("/dashboard");
+  });
+});
+
+describe("buildLoginUrl", () => {
+  it("returns /login with no returnUrl", () => {
+    expect(buildLoginUrl()).toBe("/login");
+  });
+
+  it("appends returnUrl parameter", () => {
+    expect(buildLoginUrl("/dashboard")).toBe("/login?returnUrl=%2Fdashboard");
+  });
+
+  it("sanitizes dangerous returnUrls", () => {
+    const result = buildLoginUrl("//evil.com");
+    expect(result).toContain("returnUrl=%2Fdashboard");
+  });
+});

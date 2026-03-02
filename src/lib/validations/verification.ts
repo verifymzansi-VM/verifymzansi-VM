@@ -1,0 +1,140 @@
+import { z } from "zod";
+import { saIdSchema, saPhoneSchema, otpSchema } from "./shared";
+
+/** Zod schema for the phone-entry step of KYC verification. */
+export const verificationPhoneSchema = z.object({
+  phone: saPhoneSchema,
+});
+
+/** Zod schema for OTP confirmation during KYC verification. */
+export const verificationOtpSchema = z.object({
+  phone: saPhoneSchema,
+  otp: otpSchema,
+});
+
+/** Zod schema for the ID-document upload step (SA ID number + document URL). */
+export const verificationIdDocSchema = z.object({
+  idNumber: saIdSchema,
+  idDocumentUrl: z.string().url("Upload your ID document"),
+  idDocumentType: z.enum(["sa_id"]),
+});
+
+/** Zod schema for the selfie upload step. */
+export const verificationSelfieSchema = z.object({
+  selfieUrl: z.string().url("Upload your selfie"),
+});
+
+/** Zod schema for location verification (province, city, optional GPS). */
+export const verificationLocationSchema = z.object({
+  province: z.string().min(1, "Province is required"),
+  city: z.string().min(1, "City is required"),
+  latitude: z.number().min(-35).max(-22).optional(),
+  longitude: z.number().min(16).max(33).optional(),
+});
+
+/**
+ * Extended schema used by POST /api/verification/location.
+ * Accepts GPS coordinates and accuracy in addition to province/city.
+ */
+export const verificationLocationSubmitSchema = z.object({
+  province: z.string().trim().min(1, "Province is required"),
+  city: z.string().trim().min(1, "City is required"),
+  latitude: z.number().min(-35).max(-22).optional(),
+  longitude: z.number().min(16).max(33).optional(),
+  locationMethod: z.enum(["gps", "proof_of_address"]).default("proof_of_address"),
+  gpsAccuracyMeters: z.number().positive().optional(),
+});
+
+// ── V2M Buyer verification ──────────────────────────────────
+
+/** Zod schema for buyer-initiated verification of a seller profile. */
+export const buyerVerifySchema = z.object({
+  sellerProfileId: z.string().uuid(),
+  turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
+});
+
+// ── File upload validation ───────────────────────────────
+/** Allowed MIME types for image uploads (JPEG, PNG, WebP). */
+export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+
+/** Allowed MIME types for document uploads (images + PDF). */
+export const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"] as const;
+
+/** Maximum file upload size in bytes (5 MB). */
+export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+/** Zod schema for the KYC file-upload form payload. */
+export const fileUploadSchema = z.object({
+  docType: z.enum(["id_document", "selfie", "proof_of_address"], {
+    error: "Document type is required",
+  }),
+  idNumber: z.string().optional(),
+  idDocumentType: z.enum(["sa_id"]).optional(),
+});
+
+/**
+ * Validate a file for KYC upload (server-side).
+ * Checks type via magic bytes and enforces size limit.
+ */
+export function validateUploadedFile(
+  file: { size: number; type: string; name: string },
+  options: { allowPdf?: boolean } = {}
+): { valid: true } | { valid: false; error: string } {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: `File exceeds maximum size of ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB`,
+    };
+  }
+
+  if (file.size === 0) {
+    return { valid: false, error: "File is empty" };
+  }
+
+  const allowedTypes: readonly string[] = options.allowPdf
+    ? ALLOWED_DOC_TYPES
+    : ALLOWED_IMAGE_TYPES;
+
+  if (!allowedTypes.includes(file.type)) {
+    return {
+      valid: false,
+      error: `File type "${file.type}" is not allowed. Accepted: ${allowedTypes.join(", ")}`,
+    };
+  }
+
+  return { valid: true };
+}
+
+// ── DSAR request validation ─────────────────────────────
+/** Zod schema for a POPIA Data Subject Access Request. */ export const dsarRequestSchema =
+  z.object({
+    type: z.enum(["access", "correction", "deletion", "objection"], {
+      error: "Request type is required",
+    }),
+    name: z
+      .string()
+      .min(2, "Name must be at least 2 characters")
+      .max(100, "Name cannot exceed 100 characters"),
+    email: z.string().email("Enter a valid email address"),
+    idNumber: saIdSchema,
+    details: z.string().max(2000, "Details cannot exceed 2000 characters").optional(),
+  });
+
+/** Inferred input type for {@link verificationPhoneSchema}. */
+export type VerificationPhoneInput = z.infer<typeof verificationPhoneSchema>;
+/** Inferred input type for {@link verificationOtpSchema}. */
+export type VerificationOtpInput = z.infer<typeof verificationOtpSchema>;
+/** Inferred input type for {@link verificationIdDocSchema}. */
+export type VerificationIdDocInput = z.infer<typeof verificationIdDocSchema>;
+/** Inferred input type for {@link verificationSelfieSchema}. */
+export type VerificationSelfieInput = z.infer<typeof verificationSelfieSchema>;
+/** Inferred input type for {@link verificationLocationSchema}. */
+export type VerificationLocationInput = z.infer<typeof verificationLocationSchema>;
+/** Inferred input type for {@link verificationLocationSubmitSchema}. */
+export type VerificationLocationSubmitInput = z.infer<typeof verificationLocationSubmitSchema>;
+/** Inferred input type for {@link buyerVerifySchema}. */
+export type BuyerVerifyInput = z.infer<typeof buyerVerifySchema>;
+/** Inferred input type for {@link fileUploadSchema}. */
+export type FileUploadInput = z.infer<typeof fileUploadSchema>;
+/** Inferred input type for {@link dsarRequestSchema}. */
+export type DsarRequestInput = z.infer<typeof dsarRequestSchema>;

@@ -1,0 +1,14 @@
+{
+  "provider_ref": "prov_ref_rejected_002",
+  "status": "rejected",
+  "reason": "document_tampered",
+  "scores": {
+    "face_match_score": 0.31,
+    "liveness_score": 0.28,
+    "doc_auth_score": 0.11
+  },
+  "raw_response": {
+    "provider": "mock_kyc",
+    "result_code": "FAIL"
+  }
+}

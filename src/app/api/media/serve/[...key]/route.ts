@@ -1,0 +1,229 @@
+import { type NextRequest, NextResponse } from "next/server";
+import { S3Client, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+
+/**
+ * Media proxy – reads objects from the public R2 bucket and returns them
+ * with long-lived cache headers.  Supports HTTP Range requests for video
+ * seeking and progressive playback.
+ *
+ * URL pattern:  /api/media/serve/<key…>
+ * Example:      /api/media/serve/media/listing/abc123/17200000-xyz.jpg
+ */
+
+// ── Lazy-init R2 client (reuse singleton like storage.ts) ───────────────
+let _client: S3Client | null = null;
+let _configKey: string | null = null;
+
+function getClient(): S3Client {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+
+  if (!accountId || !accessKeyId || !secretAccessKey) {
+    throw new Error("R2 credentials not configured");
+  }
+
+  const ck = `${accountId}:${accessKeyId}`;
+  if (_client && _configKey === ck) return _client;
+
+  _client = new S3Client({
+    region: "auto",
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    credentials: { accessKeyId, secretAccessKey },
+  });
+  _configKey = ck;
+  return _client;
+}
+
+// ── Extension → MIME fallback table ─────────────────────────────────────
+const MIME_MAP: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  avif: "image/avif",
+  svg: "image/svg+xml",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  ogg: "video/ogg",
+};
+
+const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg"]);
+
+/**
+ * Parse an HTTP Range header like "bytes=0-1023" into start/end numbers.
+ * Returns null if the header is missing or malformed.
+ */
+function parseRangeHeader(
+  rangeHeader: string | null,
+  totalSize: number
+): { start: number; end: number } | null {
+  if (!rangeHeader) return null;
+
+  const match = rangeHeader.match(/^bytes=(\d*)-(\d*)$/);
+  if (!match) return null;
+
+  const [, startStr, endStr] = match;
+
+  let start: number;
+  let end: number;
+
+  if (startStr === "" && endStr !== "") {
+    // Suffix range: "bytes=-500" → last 500 bytes
+    const suffix = parseInt(endStr, 10);
+    start = Math.max(0, totalSize - suffix);
+    end = totalSize - 1;
+  } else if (startStr !== "" && endStr === "") {
+    // Open-ended range: "bytes=500-" → from 500 to end
+    start = parseInt(startStr, 10);
+    end = totalSize - 1;
+  } else if (startStr !== "" && endStr !== "") {
+    // Explicit range: "bytes=500-1023"
+    start = parseInt(startStr, 10);
+    end = Math.min(parseInt(endStr, 10), totalSize - 1);
+  } else {
+    return null;
+  }
+
+  if (start > end || start < 0 || start >= totalSize) return null;
+
+  return { start, end };
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ key: string[] }> }
+) {
+  const segments = (await params).key;
+
+  if (!segments || segments.length === 0) {
+    return NextResponse.json({ error: "Missing key" }, { status: 400 });
+  }
+
+  const key = segments.join("/");
+
+  // Security: reject path traversal and null bytes
+  if (key.includes("..") || key.includes("\0") || key.includes("\\")) {
+    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  }
+
+  // ── Conditional GET (If-None-Match) ─────────────────────────────────
+  const ifNoneMatch = request.headers.get("if-none-match");
+  const rangeHeader = request.headers.get("range");
+
+  try {
+    const bucket = process.env.R2_PUBLIC_BUCKET || "verifymzansi-public";
+    const client = getClient();
+    const ext = key.split(".").pop()?.toLowerCase() ?? "";
+    const isVideo = VIDEO_EXTENSIONS.has(ext);
+
+    // ── Video with Range header → 206 Partial Content ─────────────────
+    if (isVideo && rangeHeader) {
+      // HEAD request to get total size
+      const headCommand = new HeadObjectCommand({ Bucket: bucket, Key: key });
+      const headResponse = await client.send(headCommand);
+      const totalSize = headResponse.ContentLength ?? 0;
+
+      if (totalSize === 0) {
+        return new NextResponse(null, { status: 404 });
+      }
+
+      const range = parseRangeHeader(rangeHeader, totalSize);
+      if (!range) {
+        return new NextResponse(null, {
+          status: 416,
+          headers: { "Content-Range": `bytes */${totalSize}` },
+        });
+      }
+
+      const { start, end } = range;
+      const contentLength = end - start + 1;
+      const contentType = headResponse.ContentType || MIME_MAP[ext] || "application/octet-stream";
+
+      // Fetch only the requested range from R2
+      const rangeCommand = new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Range: `bytes=${start}-${end}`,
+      });
+      const rangeResponse = await client.send(rangeCommand);
+
+      if (!rangeResponse.Body) {
+        return new NextResponse(null, { status: 404 });
+      }
+
+      // Stream the response body directly instead of buffering
+      const webStream = rangeResponse.Body.transformToWebStream();
+
+      return new NextResponse(webStream, {
+        status: 206,
+        headers: {
+          "Content-Type": contentType,
+          "Content-Length": String(contentLength),
+          "Content-Range": `bytes ${start}-${end}/${totalSize}`,
+          "Accept-Ranges": "bytes",
+          "Cache-Control": "public, max-age=31536000, immutable",
+          ...(headResponse.ETag ? { ETag: headResponse.ETag } : {}),
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
+
+    // ── Non-range request ─────────────────────────────────────────────
+    const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+    const response = await client.send(command);
+
+    if (!response.Body) {
+      return new NextResponse(null, { status: 404 });
+    }
+
+    // Support 304 Not Modified
+    if (ifNoneMatch && response.ETag && ifNoneMatch === response.ETag) {
+      return new NextResponse(null, { status: 304 });
+    }
+
+    const contentType = response.ContentType || MIME_MAP[ext] || "application/octet-stream";
+
+    // For video files, stream the response and include Accept-Ranges
+    if (isVideo) {
+      const webStream = response.Body.transformToWebStream();
+
+      return new NextResponse(webStream, {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          ...(response.ContentLength != null
+            ? { "Content-Length": String(response.ContentLength) }
+            : {}),
+          "Accept-Ranges": "bytes",
+          "Cache-Control": "public, max-age=31536000, immutable",
+          ...(response.ETag ? { ETag: response.ETag } : {}),
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
+
+    // For non-video files (images), buffer is fine (they're small)
+    const bodyBytes = await response.Body.transformToByteArray();
+    const buffer = Buffer.from(bodyBytes);
+
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": contentType,
+        "Content-Length": String(buffer.length),
+        "Cache-Control": "public, max-age=31536000, immutable",
+        ...(response.ETag ? { ETag: response.ETag } : {}),
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (err: unknown) {
+    // NoSuchKey → 404
+    if (err instanceof Error && err.name === "NoSuchKey") {
+      return new NextResponse(null, { status: 404 });
+    }
+    console.error("Media serve error:", err);
+    return NextResponse.json({ error: "Failed to serve media" }, { status: 500 });
+  }
+}

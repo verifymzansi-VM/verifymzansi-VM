@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+.open-next/
+out/
+coverage/
+
+# Generated
+pnpm-lock.yaml
+*.min.js
+*.min.css
+
+# Playwright
+test-results/
+playwright-report/
+
+# Supabase
+supabase/.temp/

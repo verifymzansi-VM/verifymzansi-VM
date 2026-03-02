@@ -1,0 +1,92 @@
+name = "verifymzansi"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+workers_dev = false
+preview_urls = false
+
+# Main entry point is set by @opennextjs/cloudflare build
+# Do not change unless you modify the build output
+main = ".open-next/worker.js"
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Custom Domain Route
+# ────────────────────────────────────────────────────────────────────────────
+[[routes]]
+pattern = "verifymzansi.com"
+zone_name = "verifymzansi.com"
+custom_domain = true
+
+# ────────────────────────────────────────────────────────────────────────────
+# Public Environment Variables (safe to commit — these are client-visible)
+#
+# ⚠️  NEXT_PUBLIC_* values are embedded in the browser bundle sent to every
+#     user, so they are NOT secret. The Supabase anon key is restricted by
+#     Row Level Security; the Turnstile site key is shown in page HTML.
+#     Real secrets go via `wrangler secret put` (see bottom of file).
+# ────────────────────────────────────────────────────────────────────────────
+[vars]
+ENVIRONMENT = "production"
+NEXT_PUBLIC_APP_URL = "https://verifymzansi.com"
+NEXT_PUBLIC_MEDIA_URL = "https://media.verifymzansi.co.za"
+R2_PUBLIC_URL = "https://media.verifymzansi.co.za"
+NEXT_PUBLIC_SUPABASE_URL = "https://tnygdgormnofpgjknlhr.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRueWdkZ29ybW5vZnBnamtubGhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0OTE3MTYsImV4cCI6MjA4NzA2NzcxNn0.HmPHCahnbYDoT0X8IbCsclCbhg3K2Mr0mlDa8RKFML0"
+NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACio3rXKPmro4jAYN7aVHXTDZnQ"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Durable Objects (required by @opennextjs/cloudflare for ISR/caching)
+# ────────────────────────────────────────────────────────────────────────────
+[durable_objects]
+bindings = [
+  { name = "NEXT_CACHE_DO_QUEUE", class_name = "DOQueueHandler" },
+  { name = "NEXT_TAG_CACHE_DO_SHARDED", class_name = "DOShardedTagCache" },
+  { name = "NEXT_CACHE_PURGE_DO", class_name = "BucketCachePurge" },
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DOQueueHandler", "DOShardedTagCache", "BucketCachePurge"]
+
+# ────────────────────────────────────────────────────────────────────────────
+# KV Namespace for OTP Rate Limiting
+# ────────────────────────────────────────────────────────────────────────────
+[[kv_namespaces]]
+binding = "OTP_RATE_LIMITS"
+id = "247144b6d9b1406093351378a57c62fa"
+
+# ────────────────────────────────────────────────────────────────────────────
+# R2 Bucket Bindings
+# ────────────────────────────────────────────────────────────────────────────
+[[r2_buckets]]
+binding = "PUBLIC_BUCKET"
+bucket_name = "verifymzansi-public"
+
+[[r2_buckets]]
+binding = "PRIVATE_BUCKET"
+bucket_name = "verifymzansi-private"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Server-Side Secrets (set via `pnpm wrangler secret put <NAME>`)
+# NEVER add secret values to [vars] — they appear in build logs.
+# ────────────────────────────────────────────────────────────────────────────
+# Required secrets for this worker:
+#   pnpm wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+#   pnpm wrangler secret put RESEND_API_KEY
+#   pnpm wrangler secret put AFRICASTALKING_API_KEY
+#   pnpm wrangler secret put AFRICASTALKING_USERNAME
+#   pnpm wrangler secret put PAYFAST_MERCHANT_ID
+#   pnpm wrangler secret put PAYFAST_MERCHANT_KEY
+#   pnpm wrangler secret put PAYFAST_PASSPHRASE
+#   pnpm wrangler secret put TURNSTILE_SECRET_KEY
+#   pnpm wrangler secret put KYC_ENCRYPTION_KEY
+#   pnpm wrangler secret put ID_ENCRYPTION_KEY
+#   pnpm wrangler secret put HMAC_SECRET
+#   pnpm wrangler secret put R2_ACCOUNT_ID
+#   pnpm wrangler secret put R2_ACCESS_KEY_ID
+#   pnpm wrangler secret put R2_SECRET_ACCESS_KEY
+#
+# Verify with: pnpm wrangler secret list

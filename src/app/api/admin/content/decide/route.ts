@@ -1,0 +1,175 @@
+import { NextResponse } from "next/server";
+import { parseJsonRequest } from "@/lib/utils/api";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { logAuditEvent } from "@/lib/services/audit";
+import { adminContentDecideSchema } from "@/lib/validations/admin";
+import { createLogger } from "@/lib/utils/logger";
+import { getRoleFromUser, isModeratorOrAdmin, asAdminRole } from "@/lib/auth/roles";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { createNotification } from "@/lib/notifications";
+
+const log = createLogger("AdminContentDecide");
+
+/**
+ * POST /api/admin/content/decide
+ * Approve or reject content pending moderation.
+ */
+export async function POST(request: Request) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!isModeratorOrAdmin(user)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const role = getRoleFromUser(user);
+    const adminRole = asAdminRole(role);
+
+    const rl = checkLocalRateLimit(user.id, "admin:content:decide");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
+    const body = await parseJsonRequest(request);
+    if (!body) {
+      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    }
+    const parsed = adminContentDecideSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+    }
+
+    const { itemId, area, decision, reason } = parsed.data;
+
+    const admin = createAdminClient();
+
+    // Map area to table
+    const tableMap: Record<string, string> = {
+      MZANSI_MARKET: "listings",
+      BUSINESS_ADS: "business_profiles",
+      MALL_SHOPS: "storefronts",
+    };
+
+    const table = tableMap[area];
+    if (!table) {
+      return NextResponse.json({ error: "Invalid area" }, { status: 400 });
+    }
+
+    const newStatus = decision === "approve" ? "live" : "rejected";
+
+    const updatePayload: Record<string, unknown> = { status: newStatus };
+    if (decision === "reject" && reason) {
+      updatePayload.status_reason = reason;
+    } else if (decision === "approve") {
+      updatePayload.status_reason = null;
+    }
+
+    const { data: updatedRows, error: updateError } = await admin
+      .from(table)
+      .update(updatePayload)
+      .eq("id", itemId)
+      .select("id");
+
+    if (updateError) {
+      return NextResponse.json({ error: "Failed to update content status" }, { status: 500 });
+    }
+
+    if (!updatedRows || updatedRows.length === 0) {
+      return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+    }
+
+    const targetType = table.replace(/s$/, "") as string;
+    const actionPrefix =
+      targetType === "listing"
+        ? "listing"
+        : targetType === "business_profile"
+          ? "business_profile"
+          : "storefront";
+    await logAuditEvent({
+      actorId: user.id,
+      actorRole: adminRole || "admin",
+      action: decision === "approve" ? `${actionPrefix}_updated` : `${actionPrefix}_deleted`,
+      targetType,
+      targetId: itemId,
+      metadata: { decision, area, reason },
+    });
+
+    // Notify the seller about the moderation decision
+    try {
+      // Get the seller's user_id and content title
+      const ownerField = table === "listings" ? "seller_id" : "owner_id";
+      const titleField =
+        table === "listings" ? "title" : table === "storefronts" ? "mall_name" : "business_name";
+      const { data: contentItem } = await admin
+        .from(table)
+        .select(`${ownerField}, ${titleField}`)
+        .eq("id", itemId)
+        .single();
+
+      if (contentItem) {
+        const record = contentItem as Record<string, unknown>;
+        const sellerId = record[ownerField] as string;
+        const contentTitle = (record[titleField] as string)?.slice(0, 40) || "your content";
+        const contentLabel =
+          table === "listings"
+            ? "Listing"
+            : table === "storefronts"
+              ? "Storefront"
+              : "Business profile";
+
+        if (decision === "approve") {
+          await createNotification({
+            userId: sellerId,
+            type: "success",
+            title: `${contentLabel} approved!`,
+            message: `"${contentTitle}" is now live and visible to buyers.`,
+            href:
+              table === "listings"
+                ? "/dashboard/listings"
+                : table === "storefronts"
+                  ? "/dashboard/storefronts"
+                  : "/dashboard/business-profiles",
+          });
+        } else {
+          await createNotification({
+            userId: sellerId,
+            type: "error",
+            title: `${contentLabel} rejected`,
+            message: reason
+              ? `"${contentTitle}" was rejected: ${reason.slice(0, 80)}`
+              : `"${contentTitle}" needs changes. Check the rejection reason.`,
+            href:
+              table === "listings"
+                ? "/dashboard/listings"
+                : table === "storefronts"
+                  ? "/dashboard/storefronts"
+                  : "/dashboard/business-profiles",
+          });
+        }
+      }
+    } catch (notifErr) {
+      log.warn("Failed to send notification (non-fatal)", {
+        error: notifErr instanceof Error ? notifErr.message : "Unknown",
+      });
+    }
+
+    return NextResponse.json({ success: true, decision });
+  } catch (err) {
+    log.error("Content decide failed", {
+      error: err instanceof Error ? err.message : "Unknown error",
+    });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

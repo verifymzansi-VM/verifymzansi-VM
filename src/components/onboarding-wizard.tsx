@@ -1,0 +1,163 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  ShieldCheck,
+  UserCircle,
+  Camera,
+  MapPin,
+  CheckCircle2,
+  ArrowRight,
+  ArrowLeft,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+const STEPS = [
+  {
+    id: "welcome",
+    title: "Welcome to VerifyMzansi",
+    description:
+      "South Africa's verification-first marketplace. Let's get you set up to buy and sell with confidence.",
+    icon: ShieldCheck,
+  },
+  {
+    id: "profile",
+    title: "Complete Your Profile",
+    description:
+      "Add your display name and profile picture so buyers know who they're dealing with.",
+    icon: UserCircle,
+    action: "/dashboard/settings",
+  },
+  {
+    id: "verify",
+    title: "Verify Your Identity",
+    description:
+      "Complete KYC verification with your South African ID. This builds trust and unlocks selling privileges.",
+    icon: Camera,
+    action: "/verification",
+  },
+  {
+    id: "location",
+    title: "Set Your Location",
+    description: "Add your province and city so buyers can find listings near them.",
+    icon: MapPin,
+    action: "/dashboard/settings",
+  },
+  {
+    id: "done",
+    title: "You're All Set!",
+    description:
+      "You can now browse the marketplace. Once verified, you'll be able to create listings and start selling.",
+    icon: CheckCircle2,
+    action: "/mzansi-market",
+  },
+] as const;
+
+/**
+ * Guided onboarding wizard for new users.
+ *
+ * Walks through: welcome → profile → KYC verify → location → done.
+ * Each step has a skip/next option and links to the relevant page.
+ */
+export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
+  const [currentStep, setCurrentStep] = useState(0);
+  const router = useRouter();
+  const step = STEPS[currentStep];
+  const isLast = currentStep === STEPS.length - 1;
+  const isFirst = currentStep === 0;
+
+  function handleNext() {
+    if (isLast) {
+      onComplete?.();
+      if ("action" in step && step.action) router.push(step.action);
+      return;
+    }
+    setCurrentStep((s) => s + 1);
+  }
+
+  function handleBack() {
+    if (!isFirst) setCurrentStep((s) => s - 1);
+  }
+
+  function handleGoToAction() {
+    if ("action" in step && step.action) {
+      router.push(step.action);
+    }
+  }
+
+  const Icon = step.icon;
+
+  return (
+    <div className="mx-auto max-w-lg px-4 py-12">
+      {/* Progress indicator */}
+      <div className="mb-8 flex items-center justify-center gap-2">
+        {STEPS.map((_, i) => (
+          <div
+            key={i}
+            className={cn(
+              "h-2 rounded-full transition-all duration-300",
+              i === currentStep
+                ? "w-8 bg-brand-green"
+                : i < currentStep
+                  ? "w-3 bg-brand-green/50"
+                  : "w-3 bg-muted"
+            )}
+          />
+        ))}
+      </div>
+
+      {/* Step content */}
+      <div className="flex flex-col items-center text-center">
+        <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-brand-green/10">
+          <Icon className="h-10 w-10 text-brand-green" />
+        </div>
+
+        <h2 className="text-2xl font-display font-bold">{step.title}</h2>
+        <p className="mt-3 max-w-sm text-muted-foreground">{step.description}</p>
+
+        {/* Action button (for steps with a destination) */}
+        {"action" in step && step.action && !isLast && (
+          <Button variant="outline" className="mt-6" onClick={handleGoToAction}>
+            Go to {step.title.toLowerCase()}
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <div className="mt-10 flex items-center justify-between">
+        <Button
+          variant="ghost"
+          onClick={handleBack}
+          disabled={isFirst}
+          className={cn(isFirst && "invisible")}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+
+        <Button onClick={handleNext} variant={isLast ? "trust-verified" : "default"}>
+          {isLast ? "Start Exploring" : "Next"}
+          {!isLast && <ArrowRight className="ml-2 h-4 w-4" />}
+        </Button>
+      </div>
+
+      {/* Skip link */}
+      {!isLast && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => {
+              onComplete?.();
+              router.push("/dashboard");
+            }}
+            className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+          >
+            Skip onboarding — go to dashboard
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

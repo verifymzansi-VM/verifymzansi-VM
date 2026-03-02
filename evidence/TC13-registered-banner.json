@@ -1,0 +1,4 @@
+{
+  "hasRegisteredBanner": false,
+  "note": "BUG: No visual confirmation on /login?registered=true. User sees no email confirmation prompt."
+}

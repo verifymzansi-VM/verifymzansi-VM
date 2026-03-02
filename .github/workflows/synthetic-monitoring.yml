@@ -1,0 +1,97 @@
+name: Synthetic Monitoring
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check production URL is configured
+        id: check-url
+        run: |
+          if [ -z "$PROD_URL" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "PRODUCTION_APP_URL not set, skipping smoke checks"
+          fi
+        env:
+          PROD_URL: ${{ secrets.PRODUCTION_APP_URL }}
+      - uses: actions/checkout@v4
+        if: steps.check-url.outputs.skip != 'true'
+      - uses: pnpm/action-setup@v4
+        if: steps.check-url.outputs.skip != 'true'
+      - uses: actions/setup-node@v4
+        if: steps.check-url.outputs.skip != 'true'
+        with:
+          node-version: "25"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+        if: steps.check-url.outputs.skip != 'true'
+      - name: Run synthetic smoke checks
+        if: steps.check-url.outputs.skip != 'true'
+        env:
+          SMOKE_BASE_URL: ${{ secrets.PRODUCTION_APP_URL }}
+        run: pnpm run test:smoke
+
+  worker-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check production URL is configured
+        id: check-prod
+        run: |
+          if [ -z "$PROD_URL" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "PRODUCTION_APP_URL not set, skipping worker health checks"
+          fi
+        env:
+          PROD_URL: ${{ secrets.PRODUCTION_APP_URL }}
+
+      - name: Check KYC Encryptor worker health
+        if: steps.check-prod.outputs.skip != 'true'
+        run: |
+          if [ -z "$WORKER_URL" ]; then
+            echo "KYC_ENCRYPTOR_URL not set, skipping"
+            exit 0
+          fi
+          status=$(curl -s -o /dev/null -w '%{http_code}' "$WORKER_URL")
+          if [ "$status" != "200" ]; then
+            echo "::error::KYC Encryptor health check failed (HTTP $status)"
+            exit 1
+          fi
+          echo "KYC Encryptor: healthy"
+        env:
+          WORKER_URL: ${{ secrets.KYC_ENCRYPTOR_URL }}
+
+      - name: Check Rate Limiter worker health
+        if: steps.check-prod.outputs.skip != 'true'
+        run: |
+          if [ -z "$WORKER_URL" ]; then
+            echo "RATE_LIMITER_URL not set, skipping"
+            exit 0
+          fi
+          status=$(curl -s -o /dev/null -w '%{http_code}' "$WORKER_URL")
+          if [ "$status" != "200" ]; then
+            echo "::error::Rate Limiter health check failed (HTTP $status)"
+            exit 1
+          fi
+          echo "Rate Limiter: healthy"
+        env:
+          WORKER_URL: ${{ secrets.RATE_LIMITER_URL }}
+
+      - name: Check Retention Cleanup worker health
+        if: steps.check-prod.outputs.skip != 'true'
+        run: |
+          if [ -z "$WORKER_URL" ]; then
+            echo "RETENTION_CLEANUP_URL not set, skipping"
+            exit 0
+          fi
+          status=$(curl -s -o /dev/null -w '%{http_code}' "$WORKER_URL")
+          if [ "$status" != "200" ]; then
+            echo "::error::Retention Cleanup health check failed (HTTP $status)"
+            exit 1
+          fi
+          echo "Retention Cleanup: healthy"
+        env:
+          WORKER_URL: ${{ secrets.RETENTION_CLEANUP_URL }}

@@ -1,0 +1,125 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { NextRequest } from "next/server";
+
+const { mockCreateClient, mockCreateAdminClient, mockVerifyTurnstile } = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
+  mockVerifyTurnstile: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
+vi.mock("@/lib/utils/turnstile", () => ({ verifyTurnstileToken: mockVerifyTurnstile }));
+vi.mock("@/lib/utils/enum-compat", () => ({
+  mapLegacyReportValues: vi.fn(
+    ({ reason, targetType }: { reason: string; targetType: string }) => ({
+      category: reason,
+      targetType,
+      area: "LISTINGS",
+    })
+  ),
+}));
+vi.mock("@/lib/utils/api", () => ({
+  parseJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }) => {
+    try {
+      return await req.json();
+    } catch {
+      return null;
+    }
+  }),
+}));
+
+import { POST } from "@/app/api/reports/route";
+
+const validBody = {
+  reason: "scam",
+  targetType: "listing",
+  targetId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+  description: "This listing looks very suspicious and may be a scam",
+  turnstileToken: "tok",
+};
+
+function createRequest(body: unknown): NextRequest {
+  return {
+    method: "POST",
+    json: async () => body,
+    headers: { get: vi.fn().mockReturnValue("1.2.3.4") },
+    nextUrl: new URL("http://localhost:3000/api/reports"),
+  } as unknown as NextRequest;
+}
+
+function mockAuth(user: { id: string; email?: string } | null) {
+  mockCreateClient.mockResolvedValue({
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user },
+        error: user ? null : { message: "Not authenticated" },
+      }),
+    },
+  });
+}
+
+function mockAdminInsert(error: unknown = null) {
+  const mockInsert = vi.fn().mockReturnValue({ data: { id: "r1" }, error });
+  mockCreateAdminClient.mockReturnValue({
+    from: vi.fn().mockReturnValue({ insert: mockInsert }),
+  });
+  return mockInsert;
+}
+
+describe("POST /api/reports", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.TURNSTILE_SECRET_KEY;
+    process.env.IP_HASH_SECRET = "test-hash-key";
+  });
+
+  it("returns 400 for invalid JSON", async () => {
+    const req = {
+      method: "POST",
+      json: async () => {
+        throw new Error("bad");
+      },
+      headers: { get: vi.fn().mockReturnValue(null) },
+      nextUrl: new URL("http://localhost:3000/api/reports"),
+    } as unknown as NextRequest;
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for missing required fields", async () => {
+    const res = await POST(createRequest({}));
+    expect(res.status).toBe(400);
+  });
+
+  it("succeeds with valid report data", async () => {
+    mockAuth({ id: "user-1", email: "u@test.com" });
+    mockAdminInsert();
+    mockVerifyTurnstile.mockResolvedValue({ success: true });
+
+    const res = await POST(createRequest(validBody));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+  });
+
+  it("rejects failed Turnstile in production", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "secret";
+    mockVerifyTurnstile.mockResolvedValue({ success: false });
+
+    const res = await POST(createRequest(validBody));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("CAPTCHA");
+  });
+
+  it("hashes IP when IP_HASH_SECRET is available", async () => {
+    process.env.IP_HASH_SECRET = "test-secret";
+    mockAuth({ id: "user-1", email: "u@test.com" });
+    mockAdminInsert();
+
+    const res = await POST(createRequest(validBody));
+    expect(res.status).toBe(200);
+  });
+});

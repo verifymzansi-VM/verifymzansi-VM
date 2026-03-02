@@ -1,0 +1,320 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ══════════════════════════════════════════════════════════════
+   VERIFYMZANSI DESIGN TOKEN SCALE
+   Three interlocking systems:
+   1. Design Token Scale — spacing, type, color, elevation, radius, duration
+   2. Trust/Verification Scale — visual treatment per seller trust level
+   3. Responsive Breakpoint Scale — mobile-first 5-breakpoint grid
+   ══════════════════════════════════════════════════════════════ */
+
+@layer base {
+  /* ── Light Theme (default) ───────────────────────────────── */
+  :root {
+    /* Font variables are injected by next/font in layout.tsx.
+       Fallbacks are defined in tailwind.config.ts fontFamily. */
+
+    --background: 0 0% 100%;
+    --foreground: 30 20% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 30 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 20% 12%;
+
+    --primary: 152 100% 26%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 37 30% 92%;
+    --secondary-foreground: 30 20% 20%;
+
+    --muted: 37 20% 94%;
+    --muted-foreground: 30 12% 38%;
+
+    --accent: 43 100% 55%;
+    --accent-foreground: 30 20% 12%;
+
+    --destructive: 4 73% 53%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 37 20% 88%;
+    --input: 37 20% 88%;
+    --ring: 152 100% 26%;
+
+    --radius: 8px;
+
+    /* Duration scale tokens */
+    --duration-fast: 100ms;
+    --duration-normal: 200ms;
+    --duration-slow: 400ms;
+    --duration-slower: 600ms;
+  }
+
+  /* ── Dark Theme ──────────────────────────────────────────── */
+  .dark {
+    --background: 30 15% 8%;
+    --foreground: 37 20% 92%;
+
+    --card: 30 15% 11%;
+    --card-foreground: 37 20% 92%;
+
+    --popover: 30 15% 11%;
+    --popover-foreground: 37 20% 92%;
+
+    --primary: 152 100% 32%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 12% 18%;
+    --secondary-foreground: 37 20% 88%;
+
+    --muted: 30 10% 16%;
+    --muted-foreground: 37 14% 56%;
+
+    --accent: 43 100% 48%;
+    --accent-foreground: 30 20% 8%;
+
+    --destructive: 4 73% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 10% 20%;
+    --input: 30 10% 20%;
+    --ring: 152 100% 32%;
+  }
+
+  /* ── Base Styles ─────────────────────────────────────────── */
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-feature-settings:
+      "kern" 1,
+      "liga" 1,
+      "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Only use smooth scrolling when the user hasn't opted for reduced motion */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
+  body {
+    @apply bg-background text-foreground font-body;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-display;
+  }
+
+  /* Respect reduced motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TRUST VERIFICATION SCALE — Visual treatment per level
+   Level 0: Unregistered — grey, muted, no badge
+   Level 1: Incomplete — warm neutral, hollow circle
+   Level 2: Pending Review — gold accent, pulsing dot
+   Level 3: Verified — green accent, green shield
+   Level 4: Premium — green+gold dual glow, gold-rimmed shield
+   ══════════════════════════════════════════════════════════════ */
+
+@layer components {
+  /* ── Trust Card Borders ──────────────────────────────────── */
+  .trust-card-0 {
+    @apply border-warm-200;
+  }
+  .trust-card-1 {
+    @apply border-warm-300;
+  }
+  .trust-card-2 {
+    @apply border-brand-gold-300 shadow-trust-pending;
+  }
+  .trust-card-3 {
+    @apply border-brand-green-400 shadow-trust-verified;
+  }
+  .trust-card-4 {
+    @apply shadow-trust-premium border-transparent relative;
+  }
+  .trust-card-4::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, #00833e, #ffb81c);
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* ── Trust Badge Base ────────────────────────────────────── */
+  .trust-badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full;
+  }
+  .trust-badge-0 {
+    @apply trust-badge bg-warm-100 text-warm-500;
+  }
+  .trust-badge-1 {
+    @apply trust-badge bg-warm-200 text-warm-700;
+  }
+  .trust-badge-2 {
+    @apply trust-badge bg-brand-gold-100 text-brand-gold-800;
+  }
+  .trust-badge-3 {
+    @apply trust-badge bg-brand-green-100 text-brand-green-800;
+  }
+  .trust-badge-4 {
+    @apply trust-badge text-brand-green-800;
+    background: linear-gradient(135deg, rgba(0, 131, 62, 0.1), rgba(255, 184, 28, 0.15));
+  }
+
+  /* ── Gradient Backgrounds ────────────────────────────────── */
+  .bg-warm-gradient {
+    background: linear-gradient(135deg, hsl(37 33% 97%) 0%, hsl(37 30% 93%) 100%);
+  }
+
+  .bg-hero-mesh {
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(0, 131, 62, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(255, 184, 28, 0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 100%, rgba(0, 35, 149, 0.04) 0%, transparent 50%),
+      hsl(37 33% 97%);
+  }
+
+  .dark .bg-hero-mesh {
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(0, 131, 62, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(255, 184, 28, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 100%, rgba(0, 35, 149, 0.05) 0%, transparent 50%),
+      hsl(30 15% 8%);
+  }
+
+  /* ── Grain Overlay ───────────────────────────────────────── */
+  .grain-overlay::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ── Skeleton shimmer ────────────────────────────────────── */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted) / 0.5) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    @apply animate-shimmer;
+  }
+
+  /* ── Marketplace area accent chips ───────────────────────── */
+  .area-mzansi-market {
+    @apply bg-brand-green-100 text-brand-green-800 border-brand-green-300;
+  }
+  .area-mall-shops {
+    @apply bg-brand-gold-100 text-brand-gold-800 border-brand-gold-300;
+  }
+  .area-business-ads {
+    @apply bg-brand-blue-100 text-brand-blue-800 border-brand-blue-300;
+  }
+
+  .dark .area-mzansi-market {
+    @apply bg-brand-green-950 text-brand-green-300 border-brand-green-800;
+  }
+  .dark .area-mall-shops {
+    @apply bg-brand-gold-950 text-brand-gold-300 border-brand-gold-800;
+  }
+  .dark .area-business-ads {
+    @apply bg-brand-blue-950 text-brand-blue-300 border-brand-blue-800;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE SCALE UTILITIES
+   Responsive spacing helpers that scale across breakpoints
+   ══════════════════════════════════════════════════════════════ */
+
+@layer components {
+  /* Logo mask — South African flag gradient with PNG mask shape */
+  .logo-mask-light {
+    background: linear-gradient(to right, #000000, #ffb81c, #007749, #001489, #e03c31);
+    -webkit-mask-image: url(/images/logo-white.png);
+    -webkit-mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-image: url(/images/logo-white.png);
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+  }
+
+  .logo-mask-dark {
+    background: linear-gradient(to right, #ffffff, #ffb81c, #007749, #4ca6ff, #ff6b60);
+    -webkit-mask-image: url(/images/logo-white.png);
+    -webkit-mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-image: url(/images/logo-white.png);
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+  }
+}
+
+@layer utilities {
+  .page-padding {
+    @apply px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16;
+  }
+
+  .page-padding-y {
+    @apply py-8 sm:py-10 md:py-12 lg:py-16 xl:py-20;
+  }
+
+  .section-gap {
+    @apply gap-6 sm:gap-8 md:gap-10 lg:gap-12;
+  }
+
+  .container-page {
+    @apply mx-auto w-full max-w-container page-padding;
+  }
+
+  /* Hide scrollbar but keep scroll functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}

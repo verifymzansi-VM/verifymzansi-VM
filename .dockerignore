@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+coverage
+test-results
+playwright-report
+storybook-static
+*.log
+.env*
+e2e/
+docs/
+scripts/
+infra/

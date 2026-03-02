@@ -1,0 +1,110 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment target"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Validate deployment secrets
+        id: check-deploy-secrets
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::warning::Skipping deploy: missing required Supabase secrets."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [[ ! "$NEXT_PUBLIC_SUPABASE_URL" =~ ^https?:// ]]; then
+            echo "::warning::Skipping deploy: NEXT_PUBLIC_SUPABASE_URL must be a valid http(s) URL."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build for Cloudflare
+        if: steps.check-deploy-secrets.outputs.skip != 'true'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
+          NODE_ENV: production
+        run: pnpm run build:cloudflare
+
+      - name: Deploy to Cloudflare
+        if: steps.check-deploy-secrets.outputs.skip != 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec opennextjs-cloudflare deploy
+
+      - name: Deploy Rate Limiter Worker
+        if: steps.check-deploy-secrets.outputs.skip != 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --config wrangler.rate-limiter.toml
+
+      - name: Deploy KYC & Retention Workers
+        if: steps.check-deploy-secrets.outputs.skip != 'true'
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml
+          pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
+
+      - name: Post-deploy health check
+        if: steps.check-deploy-secrets.outputs.skip != 'true'
+        continue-on-error: true
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "APP_URL not set, skipping health check"
+            exit 0
+          fi
+          echo "Waiting for deployment to propagate..."
+          sleep 30
+          HTTP_CODE=$(curl -s -o /tmp/health_body.txt -w "%{http_code}" "${APP_URL}/api/health" 2>/dev/null) || HTTP_CODE="000"
+          BODY=$(cat /tmp/health_body.txt 2>/dev/null || echo "")
+          if [ "$HTTP_CODE" = "000" ]; then
+            echo "::warning::Health check failed: endpoint unreachable"
+          elif [ "$HTTP_CODE" != "200" ]; then
+            echo "::warning::Health check returned HTTP ${HTTP_CODE}: ${BODY:0:200}"
+          else
+            STATUS=$(echo "$BODY" | jq -r '.status' 2>/dev/null) || STATUS=""
+            if [ "$STATUS" = "ok" ]; then
+              echo "Health check passed."
+            else
+              echo "::warning::Health check HTTP 200 but unexpected body: ${BODY:0:200}"
+            fi
+          fi

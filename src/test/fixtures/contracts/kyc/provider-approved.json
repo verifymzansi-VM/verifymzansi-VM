@@ -1,0 +1,17 @@
+{
+  "provider_ref": "prov_ref_approved_001",
+  "status": "approved",
+  "scores": {
+    "face_match_score": 0.98,
+    "liveness_score": 0.94,
+    "doc_auth_score": 0.99
+  },
+  "ocr_payload": {
+    "id_number": "9001015009087",
+    "first_names": "Test User"
+  },
+  "raw_response": {
+    "provider": "mock_kyc",
+    "result_code": "PASS"
+  }
+}
