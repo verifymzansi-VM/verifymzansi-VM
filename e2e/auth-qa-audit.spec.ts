@@ -545,8 +545,8 @@ test.describe("Turnstile Timeout", () => {
     await page.goto("/login");
 
     test.slow(); // This test intentionally waits for a timeout
-    // Wait 11 seconds WITHOUT clicking turnstile bypass
-    await page.waitForTimeout(11000);
+    // Wait 16 seconds WITHOUT clicking turnstile bypass (timeout is 15s)
+    await page.waitForTimeout(16000);
 
     // Check for spurious error message
     const errorVisible = await page
@@ -561,7 +561,7 @@ test.describe("Turnstile Timeout", () => {
         {
           spuriousErrorShown: errorVisible,
           note: errorVisible
-            ? "BUG: 10-second turnstile timeout fires in dev mode even though bypass button is available."
+            ? "BUG: 15-second turnstile timeout fires in dev mode even though bypass button is available."
             : "PASS: No spurious error displayed.",
         },
         null,

@@ -46,16 +46,26 @@ export async function POST(request: NextRequest) {
   }
 
   if (turnstileFullyConfigured) {
-    const captcha = await verifyTurnstileToken({
-      token: parsed.data.turnstileToken,
-      remoteIp: getClientIp(request),
-    });
+    // If the Turnstile widget failed to load on the client, the token will
+    // be "turnstile-unavailable". Allow the request through with a warning
+    // rather than blocking the user entirely — the Turnstile outage is not
+    // the user's fault and rate-limiting still protects the endpoint.
+    if (parsed.data.turnstileToken === "turnstile-unavailable") {
+      log.warn("Turnstile widget failed to load on client — allowing login without CAPTCHA", {
+        ip,
+      });
+    } else {
+      const captcha = await verifyTurnstileToken({
+        token: parsed.data.turnstileToken,
+        remoteIp: getClientIp(request),
+      });
 
-    if (!captcha.success) {
-      return NextResponse.json(
-        { error: captcha.error || "CAPTCHA verification failed" },
-        { status: 400 }
-      );
+      if (!captcha.success) {
+        return NextResponse.json(
+          { error: captcha.error || "CAPTCHA verification failed" },
+          { status: 400 }
+        );
+      }
     }
   } else if (process.env.TURNSTILE_SECRET_KEY) {
     log.warn(

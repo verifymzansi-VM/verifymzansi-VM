@@ -19,6 +19,8 @@ interface TurnstileWidgetProps {
   onExpire?: () => void;
   /** Called on error */
   onError?: (error: string) => void;
+  /** Called when the script/widget is successfully loaded */
+  onLoad?: () => void;
   /** Widget theme */
   theme?: "light" | "dark" | "auto";
   /** Widget size */
@@ -30,14 +32,21 @@ interface TurnstileWidgetProps {
 // Track global script load state
 let scriptLoaded = false;
 let scriptLoading = false;
-const loadCallbacks: (() => void)[] = [];
+let scriptFailed = false;
+const loadCallbacks: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
 
 function loadTurnstileScript(): Promise<void> {
   if (scriptLoaded) return Promise.resolve();
 
-  return new Promise((resolve) => {
+  // If a previous attempt failed, reset so we can retry
+  if (scriptFailed) {
+    scriptFailed = false;
+    scriptLoading = false;
+  }
+
+  return new Promise((resolve, reject) => {
     if (scriptLoading) {
-      loadCallbacks.push(resolve);
+      loadCallbacks.push({ resolve, reject });
       return;
     }
 
@@ -47,16 +56,31 @@ function loadTurnstileScript(): Promise<void> {
     (window as unknown as Record<string, unknown>).__turnstile_onload = () => {
       scriptLoaded = true;
       scriptLoading = false;
+      scriptFailed = false;
       resolve();
-      loadCallbacks.forEach((cb) => cb());
+      loadCallbacks.forEach((cb) => cb.resolve());
       loadCallbacks.length = 0;
     };
+
+    // Remove any previously failed script tag
+    const existing = document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]');
+    if (existing) existing.remove();
 
     const script = document.createElement("script");
     script.src =
       "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=__turnstile_onload&render=explicit";
     script.async = true;
     script.defer = true;
+
+    script.onerror = () => {
+      scriptLoading = false;
+      scriptFailed = true;
+      const err = new Error("Turnstile script failed to load");
+      reject(err);
+      loadCallbacks.forEach((cb) => cb.reject(err));
+      loadCallbacks.length = 0;
+    };
+
     document.head.appendChild(script);
   });
 }
@@ -65,6 +89,7 @@ export function TurnstileWidget({
   onSuccess,
   onExpire,
   onError,
+  onLoad,
   theme = "auto",
   size = "normal",
   className,
@@ -75,10 +100,7 @@ export function TurnstileWidget({
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const isDev = !siteKey || siteKey === "dummy_site_key";
 
-  const renderWidget = useCallback(async () => {
-    if (!siteKey || !containerRef.current) return;
-
-    // Clean up previous widget if re-rendering
+  const cleanupWidget = useCallback(() => {
     if (
       widgetIdRef.current !== null &&
       typeof window !== "undefined" &&
@@ -91,9 +113,22 @@ export function TurnstileWidget({
       } catch {
         // Widget may already be cleaned up
       }
+      widgetIdRef.current = null;
     }
+  }, []);
 
-    await loadTurnstileScript();
+  const renderWidget = useCallback(async () => {
+    if (!siteKey || !containerRef.current) return;
+
+    // Clean up previous widget if re-rendering
+    cleanupWidget();
+
+    try {
+      await loadTurnstileScript();
+    } catch {
+      onError?.("Turnstile script failed to load");
+      return;
+    }
 
     const turnstile = (
       window as unknown as Record<
@@ -104,7 +139,13 @@ export function TurnstileWidget({
       >
     ).turnstile;
 
-    if (!turnstile || !containerRef.current) return;
+    if (!turnstile || !containerRef.current) {
+      onError?.("Turnstile not available after script load");
+      return;
+    }
+
+    // Signal that the widget has loaded
+    onLoad?.();
 
     widgetIdRef.current = turnstile.render(containerRef.current, {
       sitekey: siteKey,
@@ -114,7 +155,7 @@ export function TurnstileWidget({
       "expired-callback": onExpire,
       "error-callback": onError,
     });
-  }, [siteKey, theme, size, onSuccess, onExpire, onError]);
+  }, [siteKey, theme, size, onSuccess, onExpire, onError, onLoad, cleanupWidget]);
 
   // No client-side dev bypass. Server-side bypass in src/lib/utils/turnstile.ts
   // handles dev mode token validation. In dev, show a manual trigger button.
@@ -125,21 +166,9 @@ export function TurnstileWidget({
     renderWidget();
 
     return () => {
-      if (
-        widgetIdRef.current !== null &&
-        typeof window !== "undefined" &&
-        (window as unknown as Record<string, { remove: (id: string) => void }>).turnstile
-      ) {
-        try {
-          (window as unknown as Record<string, { remove: (id: string) => void }>).turnstile.remove(
-            widgetIdRef.current
-          );
-        } catch {
-          // ignore
-        }
-      }
+      cleanupWidget();
     };
-  }, [isDev, renderWidget]);
+  }, [isDev, renderWidget, cleanupWidget]);
 
   // Auto-bypass Turnstile in dev mode so login works without real keys
   useEffect(() => {
@@ -154,3 +183,13 @@ export function TurnstileWidget({
 
   return <div ref={containerRef} className={className} />;
 }
+
+/**
+ * Retry loading the Turnstile widget. This resets the global script state
+ * so a fresh attempt can be made after a failure.
+ */
+TurnstileWidget.retry = () => {
+  scriptFailed = true; // forces reset on next loadTurnstileScript call
+  scriptLoaded = false;
+  scriptLoading = false;
+};

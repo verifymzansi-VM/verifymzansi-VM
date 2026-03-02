@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,9 @@ import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [turnstileError, setTurnstileError] = useState(false);
+  const [turnstileLoaded, setTurnstileLoaded] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -41,19 +44,21 @@ export default function LoginPage() {
     }
   }, [toast]);
 
-  // Turnstile widget load timeout — show error if it doesn't load in 10s
+  // Turnstile widget load timeout — show error if it doesn't load in 15s
   // Skip in dev mode (dummy keys) since the widget auto-bypasses.
   const isTurnstileDev =
     !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
     process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY === "dummy_site_key";
 
   useEffect(() => {
-    if (isTurnstileDev) return;
-    const timer = setTimeout(() => {
+    if (isTurnstileDev || turnstileLoaded) return;
+    timeoutRef.current = setTimeout(() => {
       setTurnstileError(true);
-    }, 10000);
-    return () => clearTimeout(timer);
-  }, [isTurnstileDev]);
+    }, 15000);
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [isTurnstileDev, turnstileLoaded, retryKey]);
 
   const {
     register,
@@ -72,10 +77,34 @@ export default function LoginPage() {
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
       setTurnstileError(false);
+      setTurnstileLoaded(true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setValue("turnstileToken", token, { shouldValidate: true });
     },
     [setValue]
   );
+
+  const handleTurnstileLoad = useCallback(() => {
+    setTurnstileLoaded(true);
+    setTurnstileError(false);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  }, []);
+
+  const handleTurnstileError = useCallback(() => {
+    setTurnstileError(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    // When Turnstile widget errors, set a bypass token so the server
+    // can decide whether to allow the request without CAPTCHA.
+    setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
+  }, [setValue]);
+
+  const handleRetry = useCallback(() => {
+    setTurnstileError(false);
+    setTurnstileLoaded(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
+    TurnstileWidget.retry();
+    setRetryKey((k) => k + 1);
+  }, [setValue]);
 
   async function onSubmit(data: LoginInput) {
     try {
@@ -162,14 +191,27 @@ export default function LoginPage() {
           {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
         </div>
 
-        <TurnstileWidget onSuccess={handleTurnstileSuccess} />
-        {errors.turnstileToken && (
+        <TurnstileWidget
+          key={retryKey}
+          onSuccess={handleTurnstileSuccess}
+          onError={handleTurnstileError}
+          onLoad={handleTurnstileLoad}
+        />
+        {errors.turnstileToken && !turnstileError && (
           <p className="text-xs text-destructive">{errors.turnstileToken.message}</p>
         )}
-        {turnstileError && !errors.turnstileToken && (
-          <p className="text-xs text-destructive">
-            Security verification failed to load. Please refresh the page or check your network.
-          </p>
+        {turnstileError && (
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-destructive">Security verification failed to load.</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="inline-flex items-center gap-1 text-xs font-medium text-brand-green underline hover:text-brand-green/80"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Retry
+            </button>
+          </div>
         )}
 
         <Button type="submit" className="w-full" variant="trust-verified" disabled={isSubmitting}>
