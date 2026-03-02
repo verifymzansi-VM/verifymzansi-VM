@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Calendar, Eye, ArrowLeft, Tag, Phone, MessageCircle } from "lucide-react";
+import { MapPin, Calendar, Eye, ArrowLeft, Tag, Phone, MessageCircle, Building2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +68,17 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
   const trustLevel = seller
     ? computeTrustLevel(seller.seller_verification_status as SellerVerificationStatus)
     : 0;
+
+  // Fetch linked business (if any)
+  const linkedBusiness = promotion.business_id
+    ? (
+        await supabase
+          .from("businesses")
+          .select("id, business_name, logo_url")
+          .eq("id", promotion.business_id)
+          .single()
+      ).data
+    : null;
 
   const photos = (promotion.photos || []) as string[];
   const now = new Date();
@@ -265,6 +276,39 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Linked Business */}
+              {linkedBusiness && (
+                <Card>
+                  <CardContent className="p-5 space-y-3">
+                    <h3 className="font-semibold text-sm text-muted-foreground">From Business</h3>
+                    <Link
+                      href={`/mzansi-business/${linkedBusiness.id}`}
+                      className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                    >
+                      <div className="h-10 w-10 rounded-lg bg-brand-blue/10 flex items-center justify-center shrink-0 overflow-hidden">
+                        {linkedBusiness.logo_url ? (
+                          <Image
+                            src={normalizeMediaUrl(linkedBusiness.logo_url)}
+                            alt={linkedBusiness.business_name}
+                            width={40}
+                            height={40}
+                            className="object-cover"
+                          />
+                        ) : (
+                          <Building2 className="h-5 w-5 text-brand-blue" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {linkedBusiness.business_name}
+                        </p>
+                        <p className="text-xs text-brand-blue">View Business</p>
+                      </div>
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Posted date */}
               <p className="text-xs text-muted-foreground text-center">

@@ -7,7 +7,6 @@ import {
   Smartphone,
   Sofa,
   Briefcase,
-  Store,
   Building2,
   Megaphone,
   ShieldCheck,
@@ -17,8 +16,6 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MarketplacePreviewsSkeleton } from "@/components/home/marketplace-previews-skeleton";
 import { HeroBanner } from "@/components/home/hero-banner";
-import { HomeMallShopsShowcase } from "@/components/home/home-mall-shops-showcase";
-import { HomeBusinessAdsShowcase } from "@/components/home/home-business-ads-showcase";
 import { HomeMzansiMarketShowcase } from "@/components/home/home-mzansi-market-showcase";
 import { createClient } from "@supabase/supabase-js";
 
@@ -40,7 +37,6 @@ export default async function HomePage() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  let premiumShops = null;
   let topBusinesses = null;
   let latestListings = null;
 
@@ -48,19 +44,12 @@ export default async function HomePage() {
     const supabase = createClient(url, anonKey);
 
     // Fetch data for Hero Banner showcases
-    const [shops, businesses, listings] = await Promise.all([
+    const [businesses, listings] = await Promise.all([
       supabase
-        .from("storefronts")
-        .select(
-          "id, mall_name, cover_photo, cover_video, location_city, description, storefront_posts(id, title, type, valid_until)"
-        )
+        .from("businesses")
+        .select("id, business_name, cover_photo, cover_video, description, location_city")
         .eq("status", "live")
-        .order("created_at", { ascending: false })
-        .limit(3),
-      supabase
-        .from("business_profiles")
-        .select("id, business_name, cover_photo, cover_video, about, service_areas")
-        .eq("status", "live")
+        .order("boost_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(3),
       supabase
@@ -75,7 +64,6 @@ export default async function HomePage() {
         .limit(3),
     ]);
 
-    premiumShops = shops.data;
     topBusinesses = businesses.data;
     latestListings = listings.data;
   }
@@ -87,7 +75,6 @@ export default async function HomePage() {
       <main className="flex-1">
         {/* ═══ Hero Banner (rotating promotions + search) ═══ */}
         <HeroBanner
-          premiumShops={premiumShops || []}
           topBusinesses={topBusinesses || []}
           latestListings={latestListings || []}
         />
@@ -95,7 +82,7 @@ export default async function HomePage() {
         {/* ═══ Browse by Category ═══ */}
         <section className="py-5 sm:py-8 border-b border-warm-200 dark:border-warm-800 bg-white dark:bg-warm-950">
           <div className="container-page">
-            <div className="grid grid-cols-3 sm:grid-cols-9 gap-3">
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
               {[
                 {
                   label: "Vehicles",
@@ -140,18 +127,11 @@ export default async function HomePage() {
                   iconColor: "text-green-500",
                 },
                 {
-                  label: "Mall Shops",
-                  icon: Store,
-                  href: "/mall-shops",
-                  iconBg: "bg-amber-100 dark:bg-amber-950",
-                  iconColor: "text-amber-500",
-                },
-                {
-                  label: "Businesses",
+                  label: "Business",
                   icon: Building2,
-                  href: "/business-ads",
-                  iconBg: "bg-purple-100 dark:bg-purple-950",
-                  iconColor: "text-purple-500",
+                  href: "/mzansi-business",
+                  iconBg: "bg-blue-100 dark:bg-blue-950",
+                  iconColor: "text-blue-500",
                 },
                 {
                   label: "Promotions",
@@ -180,15 +160,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* ═══ Distinct Showcases ═══ */}
-        <Suspense fallback={<MarketplacePreviewsSkeleton />}>
-          <HomeMallShopsShowcase />
-        </Suspense>
-
-        <Suspense fallback={<MarketplacePreviewsSkeleton />}>
-          <HomeBusinessAdsShowcase />
-        </Suspense>
-
+        {/* ═══ Marketplace Showcase ═══ */}
         <Suspense fallback={<MarketplacePreviewsSkeleton />}>
           <HomeMzansiMarketShowcase />
         </Suspense>

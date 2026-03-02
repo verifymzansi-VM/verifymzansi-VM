@@ -1,5 +1,5 @@
 export type SeedPlanContractRow = {
-  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS";
+  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS" | "MZANSI_BUSINESS";
   tier: "starter" | "growth" | "pro";
   name: string;
   price_cents: number;
@@ -79,6 +79,30 @@ export const EXPECTED_ACTIVE_PLAN_ROWS: SeedPlanContractRow[] = [
     tier: "pro",
     name: "Mall Shops Pro",
     price_cents: 120000,
+    billing_frequency: "monthly",
+    active: true,
+  },
+  {
+    area: "MZANSI_BUSINESS",
+    tier: "starter",
+    name: "Mzansi Business Starter",
+    price_cents: 15000,
+    billing_frequency: "monthly",
+    active: true,
+  },
+  {
+    area: "MZANSI_BUSINESS",
+    tier: "growth",
+    name: "Mzansi Business Growth",
+    price_cents: 40000,
+    billing_frequency: "monthly",
+    active: true,
+  },
+  {
+    area: "MZANSI_BUSINESS",
+    tier: "pro",
+    name: "Mzansi Business Pro",
+    price_cents: 100000,
     billing_frequency: "monthly",
     active: true,
   },

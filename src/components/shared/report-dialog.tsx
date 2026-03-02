@@ -15,7 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-type TargetType = "listing" | "storefront" | "business_profile";
+type TargetType = "listing" | "business";
 
 interface ReportDialogProps {
   targetId: string;
@@ -146,7 +146,7 @@ export function ReportDialog({
               <DialogTitle>Report {targetName || "Content"}</DialogTitle>
               <DialogDescription>
                 Help keep VerifyMzansi safe. Tell us what&apos;s wrong with this{" "}
-                {targetType === "business_profile" ? "business" : targetType}.
+                {targetType}.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 pt-2">

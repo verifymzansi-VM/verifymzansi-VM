@@ -9,21 +9,20 @@ import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 
-const log = createLogger("BoostStorefront");
+const log = createLogger("BoostBusiness");
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * POST /api/storefronts/[id]/boost
+ * POST /api/businesses/[id]/boost
  *
- * Create a PayFast checkout session to boost a storefront.
+ * Create a PayFast checkout session to boost a business.
  */
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: storefrontId } = await params;
+    const { id: businessId } = await params;
 
-    // Validate UUID format
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_RE.test(storefrontId)) {
-      return NextResponse.json({ error: "Invalid storefront ID" }, { status: 400 });
+    if (!UUID_RE.test(businessId)) {
+      return NextResponse.json({ error: "Invalid business ID" }, { status: 400 });
     }
 
     const supabase = await createClient();
@@ -47,30 +46,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
     }
 
-    const { data: storefront } = await admin
-      .from("storefronts")
-      .select("id, mall_name, status, seller_id, boost_until")
-      .eq("id", storefrontId)
+    const { data: business } = await admin
+      .from("businesses")
+      .select("id, business_name, status, seller_id, boost_until")
+      .eq("id", businessId)
       .maybeSingle();
 
-    if (!storefront) {
-      return NextResponse.json({ error: "Storefront not found" }, { status: 404 });
+    if (!business) {
+      return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
-    if (storefront.seller_id !== user.id) {
-      return NextResponse.json({ error: "You don't own this storefront" }, { status: 403 });
+    if (business.seller_id !== user.id) {
+      return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 
-    if (storefront.status !== "live") {
-      return NextResponse.json({ error: "Only live storefronts can be boosted" }, { status: 400 });
+    if (business.status !== "live") {
+      return NextResponse.json({ error: "Only live businesses can be boosted" }, { status: 400 });
     }
 
-    if (storefront.boost_until && new Date(storefront.boost_until) > new Date()) {
-      return NextResponse.json({ error: "This storefront is already boosted" }, { status: 400 });
+    if (business.boost_until && new Date(business.boost_until) > new Date()) {
+      return NextResponse.json({ error: "This business is already boosted" }, { status: 400 });
     }
 
-    const tier = await getActivePlanTierForArea(user.id, "MALL_SHOPS");
-    const boostCheck = canBoost(tier, "MALL_SHOPS");
+    const tier = await getActivePlanTierForArea(user.id, "MZANSI_BUSINESS");
+    const boostCheck = canBoost(tier, "MZANSI_BUSINESS");
 
     if (!boostCheck.allowed) {
       return NextResponse.json({ error: boostCheck.reason }, { status: 403 });
@@ -82,12 +81,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .from("payments")
       .insert({
         user_id: user.id,
-        area: "MALL_SHOPS",
+        area: "MZANSI_BUSINESS",
         amount_cents: ADDON_PRICES.boost,
         status: "pending",
         payfast_data: {
-          type: "boost_storefront",
-          storefront_id: storefrontId,
+          type: "boost_business",
+          business_id: businessId,
           boost_days: BOOST_DURATION_DAYS,
         },
       })
@@ -114,25 +113,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const checkoutUrl = buildPayFastCheckoutUrl({
       merchantId,
       merchantKey,
-      returnUrl: `${appUrl}/dashboard/storefronts?boosted=${storefrontId}`,
-      cancelUrl: `${appUrl}/dashboard/storefronts`,
+      returnUrl: `${appUrl}/dashboard/businesses?boosted=${businessId}`,
+      cancelUrl: `${appUrl}/dashboard/businesses`,
       notifyUrl,
       paymentId: payment.id,
       amount: amountRands,
-      itemName: `Boost: ${storefront.mall_name}`.slice(0, 100),
-      itemDescription: `${BOOST_DURATION_DAYS}-day storefront boost`,
+      itemName: `Boost: ${business.business_name}`.slice(0, 100),
+      itemDescription: `${BOOST_DURATION_DAYS}-day business boost`,
       emailAddress: user.email || undefined,
     });
 
-    // Audit is best-effort — never block checkout on audit failure
     try {
       await logAuditEvent({
         actorId: user.id,
         actorRole: "seller",
-        action: "storefront_boosted",
-        targetType: "storefront",
-        targetId: storefrontId,
-        area: "MALL_SHOPS",
+        action: "business_boosted",
+        targetType: "business",
+        targetId: businessId,
+        area: "MZANSI_BUSINESS",
         metadata: {
           paymentId: payment.id,
           amount: amountRands,

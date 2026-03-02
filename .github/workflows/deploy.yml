@@ -1,9 +1,11 @@
 name: Deploy
 
 on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [master]
+    types: [completed]
   push:
-    branches:
-      - master
     tags:
       - "v*"
   workflow_dispatch:
@@ -11,10 +13,9 @@ on:
       environment:
         description: "Deployment target"
         required: true
-        default: "staging"
+        default: "production"
         type: choice
         options:
-          - staging
           - production
 
 concurrency:
@@ -22,8 +23,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    # Skip if triggered by CI workflow that failed
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -72,19 +75,22 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.rate-limiter.toml
 
-      - name: Deploy KYC & Retention Workers
+      - name: Deploy KYC Encryptor Worker
         if: steps.check-deploy-secrets.outputs.skip != 'true'
-        continue-on-error: true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml
-          pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
+        run: pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml
+
+      - name: Deploy Retention Cleanup Worker
+        if: steps.check-deploy-secrets.outputs.skip != 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 
       - name: Post-deploy health check
         if: steps.check-deploy-secrets.outputs.skip != 'true'
-        continue-on-error: true
         env:
           APP_URL: ${{ secrets.APP_URL }}
         run: |
@@ -97,9 +103,11 @@ jobs:
           HTTP_CODE=$(curl -s -o /tmp/health_body.txt -w "%{http_code}" "${APP_URL}/api/health" 2>/dev/null) || HTTP_CODE="000"
           BODY=$(cat /tmp/health_body.txt 2>/dev/null || echo "")
           if [ "$HTTP_CODE" = "000" ]; then
-            echo "::warning::Health check failed: endpoint unreachable"
+            echo "::error::Health check failed: endpoint unreachable"
+            exit 1
           elif [ "$HTTP_CODE" != "200" ]; then
-            echo "::warning::Health check returned HTTP ${HTTP_CODE}: ${BODY:0:200}"
+            echo "::error::Health check returned HTTP ${HTTP_CODE}: ${BODY:0:200}"
+            exit 1
           else
             STATUS=$(echo "$BODY" | jq -r '.status' 2>/dev/null) || STATUS=""
             if [ "$STATUS" = "ok" ]; then

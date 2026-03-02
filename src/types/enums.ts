@@ -2,7 +2,7 @@
    SHARED ENUMS — mirrors PostgreSQL enums in the database
    ══════════════════════════════════════════════════════════════ */
 
-export type MarketplaceArea = "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS";
+export type MarketplaceArea = "MZANSI_MARKET" | "MZANSI_BUSINESS" | "BUSINESS_ADS" | "MALL_SHOPS";
 
 export type VerificationStepType = "phone" | "id_doc" | "selfie" | "location";
 
@@ -42,25 +42,39 @@ export type ListingCategory =
   | "home_lifestyle"
   | "jobs_services";
 
-export type MallShopCategory =
-  | "mall_fashion"
-  | "mall_electronics"
-  | "mall_groceries"
-  | "mall_health_beauty"
-  | "mall_home_decor"
-  | "mall_sports_hobbies"
-  | "mall_dining"
-  | "mall_services";
+/* ── Mzansi Business Enums ──────────────────────────────── */
+export type BusinessType =
+  | "mall_store"
+  | "standalone_shop"
+  | "home_business"
+  | "mobile_service"
+  | "online_only"
+  | "market_stall";
 
-export type BusinessAdCategory =
-  | "biz_events"
-  | "biz_government"
-  | "biz_home_trades"
-  | "biz_professional"
-  | "biz_education"
-  | "biz_automotive"
-  | "biz_health"
-  | "biz_general";
+export type BusinessCategory =
+  | "fashion_accessories"
+  | "electronics_tech"
+  | "groceries_essentials"
+  | "health_beauty"
+  | "home_living"
+  | "food_dining"
+  | "trade_maintenance"
+  | "professional_services"
+  | "education_training"
+  | "events_entertainment"
+  | "automotive_transport"
+  | "general_other";
+
+/* ── Promotion Enums ────────────────────────────────────── */
+export type PromotionType = "product" | "service" | "event" | "deal" | "general";
+
+export const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
+  product: "Product",
+  service: "Service",
+  event: "Event",
+  deal: "Deal",
+  general: "General",
+};
 
 export type ContactMethod = "call" | "whatsapp" | "form";
 
@@ -124,12 +138,14 @@ export type TrustLevel = 0 | 1 | 2 | 3 | 4;
 /* ── Marketplace Area Labels ─────────────────────────────── */
 export const AREA_LABELS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "Mzansi Market",
+  MZANSI_BUSINESS: "Mzansi Business",
   BUSINESS_ADS: "Business Ads",
   MALL_SHOPS: "Mall Shops",
 };
 
 export const AREA_SLUGS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "mzansi-market",
+  MZANSI_BUSINESS: "mzansi-business",
   BUSINESS_ADS: "business-ads",
   MALL_SHOPS: "mall-shops",
 };
@@ -143,26 +159,28 @@ export const CATEGORY_LABELS: Record<ListingCategory, string> = {
   jobs_services: "Jobs, Services & Other",
 };
 
-export const MALL_SHOP_CATEGORY_LABELS: Record<MallShopCategory, string> = {
-  mall_fashion: "Fashion & Accessories",
-  mall_electronics: "Electronics & Tech",
-  mall_groceries: "Groceries & Essentials",
-  mall_health_beauty: "Health, Beauty & Wellness",
-  mall_home_decor: "Home, Decor & Furniture",
-  mall_sports_hobbies: "Sports, Toys & Hobbies",
-  mall_dining: "Dining & Food Outlets",
-  mall_services: "Specialty Services",
+export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
+  mall_store: "Mall Store",
+  standalone_shop: "Standalone Shop",
+  home_business: "Home Business",
+  mobile_service: "Mobile Service",
+  online_only: "Online Only",
+  market_stall: "Market Stall",
 };
 
-export const BUSINESS_AD_CATEGORY_LABELS: Record<BusinessAdCategory, string> = {
-  biz_events: "Events & Entertainment",
-  biz_government: "Government & Public Notices",
-  biz_home_trades: "Home & Trade Services",
-  biz_professional: "Professional & Corporate Services",
-  biz_education: "Education & Training",
-  biz_automotive: "Automotive & Transport",
-  biz_health: "Health & Medical Services",
-  biz_general: "General Business & Other",
+export const BUSINESS_CATEGORY_LABELS: Record<BusinessCategory, string> = {
+  fashion_accessories: "Fashion & Accessories",
+  electronics_tech: "Electronics & Tech",
+  groceries_essentials: "Groceries & Essentials",
+  health_beauty: "Health, Beauty & Wellness",
+  home_living: "Home & Living",
+  food_dining: "Food & Dining",
+  trade_maintenance: "Trade & Maintenance",
+  professional_services: "Professional Services",
+  education_training: "Education & Training",
+  events_entertainment: "Events & Entertainment",
+  automotive_transport: "Automotive & Transport",
+  general_other: "General & Other",
 };
 
 export const PLAN_TIER_LABELS: Record<PlanTier, string> = {

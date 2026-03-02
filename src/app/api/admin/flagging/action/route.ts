@@ -78,27 +78,14 @@ export async function POST(request: Request) {
         });
       }
       sellerId = listing?.seller_id || null;
-    } else if (report.target_type === "storefront") {
-      const { data: store, error: storeErr } = await admin
-        .from("storefronts")
-        .select("seller_id")
-        .eq("id", report.target_id)
-        .single();
-      if (storeErr) {
-        log.warn("Target storefront not found", {
-          targetId: report.target_id,
-          error: storeErr.message,
-        });
-      }
-      sellerId = store?.seller_id || null;
-    } else if (report.target_type === "business_profile") {
+    } else if (report.target_type === "storefront" || report.target_type === "business_profile" || report.target_type === "business") {
       const { data: biz, error: bizErr } = await admin
-        .from("business_profiles")
+        .from("businesses")
         .select("seller_id")
         .eq("id", report.target_id)
         .single();
       if (bizErr) {
-        log.warn("Target business profile not found", {
+        log.warn("Target business not found", {
           targetId: report.target_id,
           error: bizErr.message,
         });
@@ -128,8 +115,9 @@ export async function POST(request: Request) {
     } else if (action === "hide") {
       const tableMap: Record<string, string> = {
         listing: "listings",
-        storefront: "storefronts",
-        business_profile: "business_profiles",
+        storefront: "businesses",
+        business_profile: "businesses",
+        business: "businesses",
       };
       const table = tableMap[report.target_type];
       if (table) {
@@ -154,12 +142,7 @@ export async function POST(request: Request) {
         .eq("seller_id", sellerId)
         .eq("status", "live");
       await admin
-        .from("storefronts")
-        .update({ status: "hidden" })
-        .eq("seller_id", sellerId)
-        .eq("status", "live");
-      await admin
-        .from("business_profiles")
+        .from("businesses")
         .update({ status: "hidden" })
         .eq("seller_id", sellerId)
         .eq("status", "live");
@@ -175,8 +158,7 @@ export async function POST(request: Request) {
 
       // Hide all content
       await admin.from("listings").update({ status: "hidden" }).eq("seller_id", sellerId);
-      await admin.from("storefronts").update({ status: "hidden" }).eq("seller_id", sellerId);
-      await admin.from("business_profiles").update({ status: "hidden" }).eq("seller_id", sellerId);
+      await admin.from("businesses").update({ status: "hidden" }).eq("seller_id", sellerId);
     }
 
     // Record moderation action

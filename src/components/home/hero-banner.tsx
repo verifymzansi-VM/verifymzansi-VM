@@ -7,8 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   Search,
   MapPin,
-  Store,
-  Briefcase,
+  Building2,
   ArrowRight,
   ChevronRight,
   ChevronLeft,
@@ -27,19 +26,12 @@ import { PromoVideoSlide } from "./promo-video-slide";
 
 // Map types to their appropriate icon and styling
 const ENTITY_CONFIG = {
-  storefront: {
-    Icon: Store,
-    badgeColor: "bg-amber-700 text-amber-50 border-amber-600 backdrop-blur-md",
-    badge: "Mall Shop",
-    href: "/mall-shops/",
-    cta: "Visit Shop",
-  },
   business: {
-    Icon: Briefcase,
+    Icon: Building2,
     badgeColor: "bg-blue-700 text-blue-50 border-blue-600 backdrop-blur-md",
-    badge: "Verified Business",
-    href: "/business-ads/",
-    cta: "View Profile",
+    badge: "Mzansi Business",
+    href: "/mzansi-business/",
+    cta: "View Business",
   },
   listing: {
     Icon: ShieldCheck,
@@ -56,20 +48,10 @@ interface HeroPromotion {
   valid_until?: string | null;
 }
 
-interface HeroShop {
-  id: string;
-  mall_name: string;
-  description?: string;
-  location_city?: string;
-  cover_video?: string | null;
-  cover_photo?: string | null;
-  storefront_posts?: HeroPromotion[];
-}
-
 interface HeroBusiness {
   id: string;
   business_name: string;
-  about?: string;
+  description?: string;
   location_city?: string;
   cover_video?: string | null;
   cover_photo?: string | null;
@@ -99,7 +81,6 @@ interface HeroSlide {
 }
 
 interface HeroBannerProps {
-  premiumShops?: HeroShop[];
   topBusinesses?: HeroBusiness[];
   latestListings?: HeroListing[];
 }
@@ -343,7 +324,6 @@ function MediaRender({
 }
 
 export function HeroBanner({
-  premiumShops = [],
   topBusinesses = [],
   latestListings = [],
 }: HeroBannerProps) {
@@ -368,33 +348,13 @@ export function HeroBanner({
 
   const slides = useMemo<HeroSlide[]>(() => {
     const combined: HeroSlide[] = [
-      ...premiumShops.map((s) => {
-        const usesVideo = !!s.cover_video;
-        return {
-          type: "storefront" as const,
-          id: s.id,
-          title: s.mall_name,
-          description: s.description || "Premium verified mall shop.",
-          location: extractLocation(s.location_city),
-          mediaUrl: normalizeMediaUrl(
-            s.cover_video || s.cover_photo || "/images/fallbacks/hero-shop.svg"
-          ),
-          posterUrl: usesVideo && s.cover_photo ? normalizeMediaUrl(s.cover_photo) : undefined,
-          promotions:
-            s.storefront_posts?.filter(
-              (p) =>
-                p.type === "special" && (!p.valid_until || new Date(p.valid_until) > new Date())
-            ) || [],
-          price: null,
-        };
-      }),
       ...topBusinesses.map((b) => {
         const usesVideo = !!b.cover_video;
         return {
           type: "business" as const,
           id: b.id,
           title: b.business_name,
-          description: b.about || "Trusted local service provider.",
+          description: b.description || "Trusted local business.",
           location: extractLocation(b.location_city),
           mediaUrl: normalizeMediaUrl(
             b.cover_video || b.cover_photo || "/images/fallbacks/hero-business.svg"
@@ -441,7 +401,7 @@ export function HeroBanner({
     }
 
     return combined;
-  }, [premiumShops, topBusinesses, latestListings]);
+  }, [topBusinesses, latestListings]);
 
   const next = useCallback(
     () => goTo((current + 1) % Math.max(1, slides.length)),
@@ -522,7 +482,7 @@ export function HeroBanner({
                         {(() => {
                           const Icon =
                             ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon ||
-                            Store;
+                            Building2;
                           return <Icon className="h-3 w-3" />;
                         })()}
                         {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badge}
@@ -611,7 +571,7 @@ export function HeroBanner({
                 >
                   {(() => {
                     const Icon =
-                      ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon || Store;
+                      ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon || Building2;
                     return <Icon className="h-2.5 w-2.5" />;
                   })()}
                   {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badge}

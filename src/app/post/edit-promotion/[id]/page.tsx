@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Megaphone, ArrowLeft, Loader2, X } from "lucide-react";
+import { Megaphone, ArrowLeft, Loader2, X, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -49,10 +49,14 @@ export default function EditPromotionPage() {
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
 
+  // Link to Business
+  const [businessId, setBusinessId] = useState("");
+  const [myBusinesses, setMyBusinesses] = useState<{ id: string; business_name: string }[]>([]);
+
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
 
-  // Load existing data
+  // Load existing data and user's businesses
   useEffect(() => {
     async function load() {
       try {
@@ -78,13 +82,28 @@ export default function EditPromotionPage() {
         setExistingImages(p.photos || []);
         setExistingVideos(p.videos || []);
         setVideoThumbnail(p.video_thumbnail || "");
+        setBusinessId(p.business_id || "");
       } catch {
         setError("Failed to load promotion");
       } finally {
         setIsLoading(false);
       }
     }
+
+    async function loadBusinesses() {
+      try {
+        const res = await fetch("/api/businesses?mine=true&limit=50");
+        if (res.ok) {
+          const data = await res.json();
+          setMyBusinesses(data.businesses ?? []);
+        }
+      } catch {
+        // non-critical
+      }
+    }
+
     load();
+    loadBusinesses();
   }, [promotionId]);
 
   function toggleContact(method: string) {
@@ -144,6 +163,7 @@ export default function EditPromotionPage() {
         video_thumbnail: videoThumbnail || undefined,
         start_date: startDate ? new Date(startDate).toISOString() : undefined,
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
+        business_id: businessId || undefined,
       };
 
       const res = await fetch(`/api/promotions/${promotionId}`, {
@@ -250,6 +270,32 @@ export default function EditPromotionPage() {
                   maxLength={100}
                 />
               </div>
+
+              {/* Link to Business */}
+              {myBusinesses.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="business_id" className="flex items-center gap-1.5">
+                    <Building2 className="h-4 w-4 text-brand-blue" />
+                    Link to Business (optional)
+                  </Label>
+                  <select
+                    id="business_id"
+                    className={selectClass}
+                    value={businessId}
+                    onChange={(e) => setBusinessId(e.target.value)}
+                  >
+                    <option value="">No linked business</option>
+                    {myBusinesses.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.business_name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Link this promotion to one of your businesses so it appears on their profile.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">

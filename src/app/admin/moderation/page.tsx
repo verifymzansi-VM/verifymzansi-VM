@@ -22,7 +22,7 @@ export default async function AdminModerationPage() {
   const admin = createAdminClient();
 
   // Fetch all content pending moderation across all areas
-  const [{ data: pendingListings }, { data: pendingStorefronts }, { data: pendingBusinesses }] =
+  const [{ data: pendingListings }, { data: pendingBusinesses }] =
     await Promise.all([
       admin
         .from("listings")
@@ -33,14 +33,8 @@ export default async function AdminModerationPage() {
         .order("created_at", { ascending: true })
         .limit(50),
       admin
-        .from("storefronts")
-        .select("id, mall_name, store_number, status, created_at, seller_id")
-        .eq("status", "pending_moderation")
-        .order("created_at", { ascending: true })
-        .limit(50),
-      admin
-        .from("business_profiles")
-        .select("id, business_name, status, created_at, seller_id")
+        .from("businesses")
+        .select("id, business_name, business_type, status, created_at, seller_id")
         .eq("status", "pending_moderation")
         .order("created_at", { ascending: true })
         .limit(50),
@@ -53,19 +47,12 @@ export default async function AdminModerationPage() {
       areaLabel: "Mzansi Market",
       itemType: "Listing",
     })),
-    ...(pendingStorefronts || []).map((s) => ({
-      ...s,
-      title: s.mall_name || `Store #${s.store_number}`,
-      area: "MALL_SHOPS" as const,
-      areaLabel: "Mall Shops",
-      itemType: "Storefront",
-    })),
     ...(pendingBusinesses || []).map((b) => ({
       ...b,
       title: b.business_name,
-      area: "BUSINESS_ADS" as const,
-      areaLabel: "Business Ads",
-      itemType: "Business Profile",
+      area: "MZANSI_BUSINESS" as const,
+      areaLabel: "Mzansi Business",
+      itemType: "Business",
     })),
   ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 

@@ -199,20 +199,21 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // ── Handle business profile boost ─────────────────────
-      if (meta?.type === "boost_business" && meta?.business_profile_id) {
+      // ── Handle business boost (unified businesses table) ──
+      if (meta?.type === "boost_business" && (meta?.business_id || meta?.business_profile_id)) {
+        const targetId = (meta.business_id || meta.business_profile_id) as string;
         const boostDays =
           typeof meta.boost_days === "number" && meta.boost_days > 0 ? meta.boost_days : 7;
         const boostUntil = new Date(Date.now() + boostDays * 24 * 60 * 60 * 1000).toISOString();
 
         const { error: boostError } = await supabase
-          .from("business_profiles")
+          .from("businesses")
           .update({ boost_until: boostUntil })
-          .eq("id", meta.business_profile_id as string)
+          .eq("id", targetId)
           .eq("seller_id", existingPayment.user_id);
 
         if (boostError) {
-          log.error("Failed to boost business profile", {
+          log.error("Failed to boost business", {
             error: boostError.message,
             paymentId: mPaymentId,
           });
@@ -224,18 +225,18 @@ export async function POST(request: NextRequest) {
           actorId: existingPayment.user_id || SYSTEM_ACTOR_ID,
           actorRole: "seller",
           action: "business_boosted",
-          targetType: "business_profile",
-          targetId: meta.business_profile_id as string,
+          targetType: "business",
+          targetId,
           metadata: { paymentId: mPaymentId, boostDays, boostUntil },
         });
 
-        log.info("Business profile boosted", {
-          businessProfileId: meta.business_profile_id,
+        log.info("Business boosted", {
+          businessId: targetId,
           boostUntil,
         });
       }
 
-      // ── Handle storefront boost ───────────────────────────
+      // ── Handle storefront boost (legacy — kept for in-flight payments) ──
       if (meta?.type === "boost_storefront" && meta?.storefront_id) {
         const boostDays =
           typeof meta.boost_days === "number" && meta.boost_days > 0 ? meta.boost_days : 7;
@@ -342,6 +343,80 @@ export async function POST(request: NextRequest) {
         log.info("Listing marked urgent", {
           listingId: meta.listing_id,
           urgentUntil,
+        });
+      }
+
+      // ── Handle promotion boost add-on ─────────────────────
+      if (meta?.type === "boost_promotion" && meta?.promotion_id) {
+        const boostDays =
+          typeof meta.boost_days === "number" && meta.boost_days > 0 ? meta.boost_days : 7;
+        const boostUntil = new Date(Date.now() + boostDays * 24 * 60 * 60 * 1000).toISOString();
+
+        const { error: boostError } = await supabase
+          .from("promotions")
+          .update({ boost_until: boostUntil })
+          .eq("id", meta.promotion_id as string)
+          .eq("seller_id", existingPayment.user_id);
+
+        if (boostError) {
+          log.error("Failed to boost promotion", {
+            error: boostError.message,
+            paymentId: mPaymentId,
+          });
+          await rollbackPayment(supabase, mPaymentId);
+          return NextResponse.json({ error: "Boost update failed" }, { status: 500 });
+        }
+
+        await logAuditEvent({
+          actorId: existingPayment.user_id || SYSTEM_ACTOR_ID,
+          actorRole: "seller",
+          action: "listing_boosted",
+          targetType: "promotion",
+          targetId: meta.promotion_id as string,
+          metadata: { paymentId: mPaymentId, boostDays, boostUntil },
+        });
+
+        log.info("Promotion boosted", {
+          promotionId: meta.promotion_id,
+          boostUntil,
+        });
+      }
+
+      // ── Handle promotion featured add-on ──────────────────
+      if (meta?.type === "featured_promotion" && meta?.promotion_id) {
+        const featureDays =
+          typeof meta.feature_days === "number" && meta.feature_days > 0 ? meta.feature_days : 7;
+        const featuredUntil = new Date(
+          Date.now() + featureDays * 24 * 60 * 60 * 1000
+        ).toISOString();
+
+        const { error: featuredError } = await supabase
+          .from("promotions")
+          .update({ featured_until: featuredUntil })
+          .eq("id", meta.promotion_id as string)
+          .eq("seller_id", existingPayment.user_id);
+
+        if (featuredError) {
+          log.error("Failed to feature promotion", {
+            error: featuredError.message,
+            paymentId: mPaymentId,
+          });
+          await rollbackPayment(supabase, mPaymentId);
+          return NextResponse.json({ error: "Featured update failed" }, { status: 500 });
+        }
+
+        await logAuditEvent({
+          actorId: existingPayment.user_id || SYSTEM_ACTOR_ID,
+          actorRole: "seller",
+          action: "listing_featured",
+          targetType: "promotion",
+          targetId: meta.promotion_id as string,
+          metadata: { paymentId: mPaymentId, featureDays, featuredUntil },
+        });
+
+        log.info("Promotion featured", {
+          promotionId: meta.promotion_id,
+          featuredUntil,
         });
       }
 

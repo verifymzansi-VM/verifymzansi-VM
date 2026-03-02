@@ -5,8 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   MapPin,
-  Store,
-  Briefcase,
+  Building2,
   ArrowRight,
   ChevronRight,
   ChevronLeft,
@@ -22,18 +21,18 @@ import { cn } from "@/lib/utils";
 
 const ENTITY_CONFIG = {
   storefront: {
-    Icon: Store,
+    Icon: Building2,
     badgeColor: "bg-amber-700 text-amber-50 border-amber-600 backdrop-blur-md",
     badge: "Mall Shop",
-    href: "/mall-shops/",
+    href: "/mzansi-business/",
     cta: "Visit Shop",
   },
   business: {
-    Icon: Briefcase,
+    Icon: Building2,
     badgeColor: "bg-blue-700 text-blue-50 border-blue-600 backdrop-blur-md",
-    badge: "Verified Business",
-    href: "/business-ads/",
-    cta: "View Profile",
+    badge: "Mzansi Business",
+    href: "/mzansi-business/",
+    cta: "View Business",
   },
   listing: {
     Icon: ShieldCheck,
@@ -395,7 +394,7 @@ export function ShowroomHero({
                       {(() => {
                         const Icon =
                           ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon ||
-                          Store;
+                          Building2;
                         return <Icon className="h-3 w-3" />;
                       })()}
                       {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badge}
@@ -485,7 +484,7 @@ export function ShowroomHero({
                 >
                   {(() => {
                     const Icon =
-                      ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon || Store;
+                      ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon || Building2;
                     return <Icon className="h-2.5 w-2.5" />;
                   })()}
                   {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badge}

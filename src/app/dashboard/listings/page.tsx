@@ -71,16 +71,18 @@ export default async function ListingsPage() {
   const expired = listings.filter((l) => l.status === "expired" || l.status === "sold");
   const rejected = listings.filter((l) => l.status === "rejected");
 
-  const [mzansiTier, businessTier, mallTier] = await Promise.all([
+  const [mzansiTier, businessTier, mallTier, mzansiBusinessTier] = await Promise.all([
     getActivePlanTierForArea(user.id, "MZANSI_MARKET"),
     getActivePlanTierForArea(user.id, "BUSINESS_ADS"),
     getActivePlanTierForArea(user.id, "MALL_SHOPS"),
+    getActivePlanTierForArea(user.id, "MZANSI_BUSINESS"),
   ]);
 
   const planTiers: Record<MarketplaceArea, PlanTier> = {
     MZANSI_MARKET: mzansiTier,
     BUSINESS_ADS: businessTier,
     MALL_SHOPS: mallTier,
+    MZANSI_BUSINESS: mzansiBusinessTier,
   };
 
   return (

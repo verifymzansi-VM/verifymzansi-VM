@@ -27,8 +27,7 @@ const REQUIRED_ADDON_ROUTES = [
   ["listings/[id]/boost", "listings/[id]/boost/route.ts"],
   ["listings/[id]/featured", "listings/[id]/featured/route.ts"],
   ["listings/[id]/urgent", "listings/[id]/urgent/route.ts"],
-  ["storefronts/[id]/boost", "storefronts/[id]/boost/route.ts"],
-  ["business-ads/[id]/boost", "business-ads/[id]/boost/route.ts"],
+  ["businesses/[id]/boost", "businesses/[id]/boost/route.ts"],
   ["billing/create-checkout", "billing/create-checkout/route.ts"],
   ["webhooks/payfast", "webhooks/payfast/route.ts"],
 ] as const;
@@ -54,13 +53,8 @@ describe("Addon API route files exist and export POST", () => {
     expect(typeof mod.POST).toBe("function");
   });
 
-  it("storefronts/[id]/boost exports async POST", async () => {
-    const mod = await import("@/app/api/storefronts/[id]/boost/route");
-    expect(typeof mod.POST).toBe("function");
-  });
-
-  it("business-ads/[id]/boost exports async POST", async () => {
-    const mod = await import("@/app/api/business-ads/[id]/boost/route");
+  it("businesses/[id]/boost exports async POST", async () => {
+    const mod = await import("@/app/api/businesses/[id]/boost/route");
     expect(typeof mod.POST).toBe("function");
   });
 

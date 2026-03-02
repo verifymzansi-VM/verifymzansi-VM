@@ -5,8 +5,7 @@ import { useMarketplaceStore } from "@/stores";
 import { Badge } from "@/components/ui/badge";
 import {
   CATEGORIES,
-  MALL_SHOP_CATEGORIES,
-  BUSINESS_AD_CATEGORIES,
+  BUSINESS_CATEGORIES,
 } from "@/lib/constants/categories";
 import {
   DropdownMenu,
@@ -71,7 +70,7 @@ export function ListingGridHeader() {
         <div className="flex flex-wrap items-center gap-1.5">
           {filters.category && (
             <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
-              {[...CATEGORIES, ...MALL_SHOP_CATEGORIES, ...BUSINESS_AD_CATEGORIES].find(
+              {[...CATEGORIES, ...BUSINESS_CATEGORIES].find(
                 (c) => c.value === filters.category
               )?.label || filters.category.replace(/_/g, " ")}
               <X

@@ -12,6 +12,7 @@ export interface PlanDefinition {
     maxPhotos: number;
     maxStorefronts?: number;
     maxProfiles?: number;
+    maxBusinesses?: number;
     maxPostsPerMonth: number;
     videoAllowed: boolean;
     maxVideos?: number;
@@ -95,7 +96,63 @@ export const PLANS: PlanDefinition[] = [
       coverVideoAllowed: false,
     },
   },
-  // Mall Shops
+  // Mzansi Business (unified — replaces Mall Shops + Business Ads)
+  {
+    area: "MZANSI_BUSINESS",
+    tier: "starter",
+    name: "Mzansi Business Starter",
+    priceCents: 15000,
+    billingFrequency: "30_days",
+    features: {
+      maxBusinesses: 1,
+      maxPhotos: 5,
+      maxPostsPerMonth: 5,
+      videoAllowed: true,
+      maxVideos: 1,
+      boostAllowed: false,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: false,
+    },
+  },
+  {
+    area: "MZANSI_BUSINESS",
+    tier: "growth",
+    name: "Mzansi Business Growth",
+    priceCents: 40000,
+    billingFrequency: "30_days",
+    features: {
+      maxBusinesses: 3,
+      maxPhotos: 10,
+      maxPostsPerMonth: 15,
+      videoAllowed: true,
+      maxVideos: 3,
+      boostAllowed: true,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: true,
+    },
+  },
+  {
+    area: "MZANSI_BUSINESS",
+    tier: "pro",
+    name: "Mzansi Business Pro",
+    priceCents: 100000,
+    billingFrequency: "30_days",
+    features: {
+      maxBusinesses: 9,
+      maxPhotos: 10,
+      maxPostsPerMonth: 45,
+      videoAllowed: true,
+      maxVideos: 9,
+      boostAllowed: true,
+      featuredAllowed: true,
+      urgentAllowed: true,
+      coverVideoAllowed: true,
+    },
+  },
+  /** @deprecated Use MZANSI_BUSINESS plans instead */
+  // Mall Shops (legacy)
   {
     area: "MALL_SHOPS",
     tier: "starter",
@@ -150,7 +207,8 @@ export const PLANS: PlanDefinition[] = [
       coverVideoAllowed: true,
     },
   },
-  // Business Ads
+  /** @deprecated Use MZANSI_BUSINESS plans instead */
+  // Business Ads (legacy)
   {
     area: "BUSINESS_ADS",
     tier: "starter",

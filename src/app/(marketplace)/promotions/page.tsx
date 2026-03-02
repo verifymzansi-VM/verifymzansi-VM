@@ -1,13 +1,44 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Megaphone, Flame, Star, Zap, Store, Briefcase, ArrowRight } from "lucide-react";
+import {
+  Megaphone,
+  Flame,
+  Star,
+  Zap,
+  ArrowRight,
+  Calendar,
+  Tag,
+  Wrench,
+  Sparkles,
+  ShoppingBag,
+} from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ListingCard } from "@/components/listings/listing-card";
+import { PromotionCard } from "@/components/listings/promotion-card";
+import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import Link from "next/link";
+import type { SellerVerificationStatus, PromotionType } from "@/types/enums";
 
-/* ---------- row shapes from Supabase queries ---------- */
+export const metadata = {
+  title: "Promotions & Events — Deals, Ads & Events | VerifyMzansi",
+  description:
+    "Discover promoted listings, special deals, events and offers from verified sellers across South Africa.",
+};
+
+export const dynamic = "force-dynamic";
+export const revalidate = 60;
+
+const TYPE_CHIPS: { value: PromotionType | "all"; label: string; icon: React.ElementType }[] = [
+  { value: "all", label: "All", icon: Megaphone },
+  { value: "product", label: "Products", icon: ShoppingBag },
+  { value: "service", label: "Services", icon: Wrench },
+  { value: "event", label: "Events", icon: Calendar },
+  { value: "deal", label: "Deals", icon: Tag },
+  { value: "general", label: "Ads", icon: Sparkles },
+];
+
 interface PromotedListing {
   id: string;
   title: string;
@@ -20,124 +51,127 @@ interface PromotedListing {
   created_at: string;
 }
 
-interface StorefrontPostRow {
-  id: string;
-  title: string;
-  type: string;
-  body: string | null;
-  created_at: string;
-  storefronts: { id: string; mall_name: string }[] | null;
-}
-
-interface BusinessPostRow {
-  id: string;
-  title: string;
-  type: string;
-  body: string | null;
-  created_at: string;
-  business_profiles: { id: string; business_name: string }[] | null;
-}
-
-/** Simple relative-time helper to avoid date-fns dependency */
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-export const metadata = {
-  title: "Promotions — Special Deals & Featured Listings | VerifyMzansi",
-  description:
-    "Discover promoted listings, special deals, events and offers from verified sellers across South Africa.",
-};
-
-export const dynamic = "force-dynamic";
-export const revalidate = 60;
-
-export default async function PromotionsPage() {
+export default async function PromotionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ type?: string }>;
+}) {
+  const params = await searchParams;
   const admin = createAdminClient();
   const now = new Date().toISOString();
+  const activeType = params.type || "all";
 
   // ── Fetch all promoted content in parallel ─────────────────
-  const [featuredRes, urgentRes, boostedRes, storefrontPostsRes, businessPostsRes] =
-    await Promise.all([
-      // Featured listings
-      admin
-        .from("listings")
-        .select(
-          "id, title, price_cents, photos, videos, location_province, location_city, category, created_at, featured_until, area"
-        )
-        .eq("status", "live")
-        .gt("featured_until", now)
-        .order("featured_until", { ascending: false })
-        .limit(12),
+  const [featuredRes, urgentRes, boostedRes, promotionsRes] = await Promise.all([
+    // Featured listings (from Mzansi Market)
+    admin
+      .from("listings")
+      .select(
+        "id, title, price_cents, photos, videos, location_province, location_city, category, created_at, featured_until, area"
+      )
+      .eq("status", "live")
+      .gt("featured_until", now)
+      .order("featured_until", { ascending: false })
+      .limit(12),
 
-      // Urgent listings
-      admin
-        .from("listings")
-        .select(
-          "id, title, price_cents, photos, videos, location_province, location_city, category, created_at, urgent_until, area"
-        )
-        .eq("status", "live")
-        .gt("urgent_until", now)
-        .order("urgent_until", { ascending: false })
-        .limit(12),
+    // Urgent listings
+    admin
+      .from("listings")
+      .select(
+        "id, title, price_cents, photos, videos, location_province, location_city, category, created_at, urgent_until, area"
+      )
+      .eq("status", "live")
+      .gt("urgent_until", now)
+      .order("urgent_until", { ascending: false })
+      .limit(12),
 
-      // Boosted listings
-      admin
-        .from("listings")
-        .select(
-          "id, title, price_cents, photos, videos, location_province, location_city, category, created_at, boost_until, area"
-        )
-        .eq("status", "live")
-        .gt("boost_until", now)
-        .order("boost_until", { ascending: false })
-        .limit(12),
+    // Boosted listings
+    admin
+      .from("listings")
+      .select(
+        "id, title, price_cents, photos, videos, location_province, location_city, category, created_at, boost_until, area"
+      )
+      .eq("status", "live")
+      .gt("boost_until", now)
+      .order("boost_until", { ascending: false })
+      .limit(12),
 
-      // Storefront posts (promotions, events)
-      admin
-        .from("storefront_posts")
-        .select("id, title, body, type, created_at, storefronts:storefront_id(id, mall_name)")
-        .eq("status", "live")
-        .in("type", ["promotion", "event", "special"])
+    // Promotions (unified source — includes migrated storefront_posts + business_posts)
+    (() => {
+      let q = admin
+        .from("promotions")
+        .select(
+          `id, seller_id, business_id, title, description, promotion_type, category,
+           photos, videos, price_cents, price_negotiable, location_province, location_city,
+           start_date, end_date, boost_until, featured_until, view_count, created_at`
+        )
+        .eq("status", "live");
+
+      if (activeType !== "all") {
+        q = q.eq("promotion_type", activeType);
+      }
+
+      return q
+        .order("boost_until", { ascending: false, nullsFirst: false })
+        .order("featured_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
-        .limit(12),
-
-      // Business posts (offers, hiring)
-      admin
-        .from("business_posts")
-        .select(
-          "id, title, body, type, created_at, business_profiles:business_profile_id(id, business_name)"
-        )
-        .eq("status", "live")
-        .in("type", ["offer", "hiring", "case_study"])
-        .order("created_at", { ascending: false })
-        .limit(12),
-    ]);
+        .limit(48);
+    })(),
+  ]);
 
   const featured = (featuredRes.data ?? []) as unknown as PromotedListing[];
   const urgent = (urgentRes.data ?? []) as unknown as PromotedListing[];
   const boosted = (boostedRes.data ?? []) as unknown as PromotedListing[];
-  const storefrontPosts = (storefrontPostsRes.data ?? []) as unknown as StorefrontPostRow[];
-  const businessPosts = (businessPostsRes.data ?? []) as unknown as BusinessPostRow[];
+  const promotions = promotionsRes.data ?? [];
+
+  // Gather seller trust levels for promotions
+  const sellerIds = [...new Set(promotions.map((p) => p.seller_id))];
+  const { data: sellers } = sellerIds.length
+    ? await admin
+        .from("seller_profiles")
+        .select("user_id, display_name, seller_verification_status")
+        .in("user_id", sellerIds)
+    : { data: [] };
+
+  const sellerMap = new Map(
+    (sellers ?? []).map((s) => [
+      s.user_id,
+      {
+        name: s.display_name,
+        trust: computeTrustLevel(
+          (s.seller_verification_status ?? "unverified") as SellerVerificationStatus
+        ),
+      },
+    ])
+  );
+
+  // Gather linked business names
+  const businessIds = [
+    ...new Set(promotions.map((p) => p.business_id).filter(Boolean)),
+  ] as string[];
+  const { data: businesses } = businessIds.length
+    ? await admin
+        .from("businesses")
+        .select("id, business_name")
+        .in("id", businessIds)
+    : { data: [] };
+
+  const businessMap = new Map(
+    (businesses ?? []).map((b) => [b.id, b.business_name])
+  );
 
   const hasContent =
     featured.length > 0 ||
     urgent.length > 0 ||
     boosted.length > 0 ||
-    storefrontPosts.length > 0 ||
-    businessPosts.length > 0;
+    promotions.length > 0;
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-10 max-w-7xl">
       <PageHeader
-        title="Promotions & Deals"
-        description="Special deals, featured listings, events and offers from verified sellers across Mzansi."
-        breadcrumbs={[{ label: "Home", href: "/" }, { label: "Promotions" }]}
+        title="Promotions & Events"
+        description="Deals, promotions, events and offers from verified sellers across Mzansi."
+        breadcrumbs={[{ label: "Home", href: "/" }, { label: "Promotions & Events" }]}
       />
 
       {/* ── Advertise CTA Banner ────────────────────────────── */}
@@ -148,8 +182,8 @@ export default async function PromotionsPage() {
               Want to advertise or promote on VerifyMzansi?
             </h3>
             <p className="text-sm text-muted-foreground">
-              Boost your listings, feature your shop, or run promotions to reach verified buyers
-              across South Africa.
+              Boost your listings, feature your business, or run promotions to reach verified
+              buyers across South Africa.
             </p>
           </div>
           <Button asChild className="shrink-0 gap-1">
@@ -160,6 +194,55 @@ export default async function PromotionsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* ── Browse Events shortcut ──────────────────────────── */}
+      <Link href="/promotions/events">
+        <Card className="border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 hover:shadow-md transition-shadow cursor-pointer">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900">
+                <Calendar className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <h3 className="font-display font-semibold">Browse Events</h3>
+                <p className="text-sm text-muted-foreground">
+                  Upcoming events, gatherings, and happenings near you
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="h-5 w-5 text-muted-foreground" />
+          </CardContent>
+        </Card>
+      </Link>
+
+      {/* ── Type filter chips ───────────────────────────────── */}
+      <div className="flex flex-wrap gap-2">
+        {TYPE_CHIPS.map((chip) => {
+          const isActive = activeType === chip.value;
+          return (
+            <Link
+              key={chip.value}
+              href={
+                chip.value === "all"
+                  ? "/promotions"
+                  : `/promotions?type=${chip.value}`
+              }
+            >
+              <Badge
+                variant={isActive ? "default" : "outline"}
+                className={`cursor-pointer px-3 py-1.5 text-sm gap-1.5 ${
+                  isActive
+                    ? "bg-brand-green hover:bg-brand-green/90 text-white"
+                    : "hover:bg-muted"
+                }`}
+              >
+                <chip.icon className="h-3.5 w-3.5" />
+                {chip.label}
+              </Badge>
+            </Link>
+          );
+        })}
+      </div>
 
       {!hasContent ? (
         <Card>
@@ -175,7 +258,7 @@ export default async function PromotionsPage() {
       ) : (
         <>
           {/* ── Urgent Listings ───────────────────────────────── */}
-          {urgent.length > 0 && (
+          {activeType === "all" && urgent.length > 0 && (
             <section className="space-y-4">
               <div className="flex items-center gap-2">
                 <Zap className="h-5 w-5 text-red-500" />
@@ -185,7 +268,7 @@ export default async function PromotionsPage() {
                 </Badge>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {urgent.map((listing: PromotedListing) => (
+                {urgent.map((listing) => (
                   <ListingCard
                     key={listing.id}
                     id={listing.id}
@@ -204,14 +287,14 @@ export default async function PromotionsPage() {
           )}
 
           {/* ── Featured Listings ─────────────────────────────── */}
-          {featured.length > 0 && (
+          {activeType === "all" && featured.length > 0 && (
             <section className="space-y-4">
               <div className="flex items-center gap-2">
                 <Star className="h-5 w-5 text-yellow-500" />
                 <h2 className="text-xl font-display font-semibold">Featured Listings</h2>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {featured.map((listing: PromotedListing) => (
+                {featured.map((listing) => (
                   <ListingCard
                     key={listing.id}
                     id={listing.id}
@@ -230,14 +313,14 @@ export default async function PromotionsPage() {
           )}
 
           {/* ── Boosted Listings ──────────────────────────────── */}
-          {boosted.length > 0 && (
+          {activeType === "all" && boosted.length > 0 && (
             <section className="space-y-4">
               <div className="flex items-center gap-2">
                 <Flame className="h-5 w-5 text-orange-500" />
                 <h2 className="text-xl font-display font-semibold">Boosted Listings</h2>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {boosted.map((listing: PromotedListing) => (
+                {boosted.map((listing) => (
                   <ListingCard
                     key={listing.id}
                     id={listing.id}
@@ -255,84 +338,67 @@ export default async function PromotionsPage() {
             </section>
           )}
 
-          {/* ── Storefront Promotions ─────────────────────────── */}
-          {storefrontPosts.length > 0 && (
+          {/* ── Promotions & Ads ──────────────────────────────── */}
+          {promotions.length > 0 && (
             <section className="space-y-4">
               <div className="flex items-center gap-2">
-                <Store className="h-5 w-5 text-brand-gold-700" />
-                <h2 className="text-xl font-display font-semibold">Shop Promotions & Events</h2>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {storefrontPosts.map((post: StorefrontPostRow) => (
-                  <Card key={post.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-base line-clamp-2">{post.title}</CardTitle>
-                        <Badge variant="outline" className="shrink-0 capitalize">
-                          {post.type}
-                        </Badge>
-                      </div>
-                      {post.storefronts?.[0] && (
-                        <Link
-                          href={`/mall-shop/${post.storefronts[0].id}`}
-                          className="text-xs text-brand-gold-700 hover:underline"
-                        >
-                          {post.storefronts[0].mall_name}
-                        </Link>
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      {post.body && (
-                        <p className="text-sm text-muted-foreground line-clamp-3">{post.body}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {timeAgo(post.created_at)}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* ── Business Offers & Opportunities ───────────────── */}
-          {businessPosts.length > 0 && (
-            <section className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Briefcase className="h-5 w-5 text-brand-blue" />
+                <Megaphone className="h-5 w-5 text-brand-green" />
                 <h2 className="text-xl font-display font-semibold">
-                  Business Offers & Opportunities
+                  {activeType === "all"
+                    ? "All Promotions & Ads"
+                    : activeType === "event"
+                      ? "Events"
+                      : activeType === "deal"
+                        ? "Deals"
+                        : activeType === "product"
+                          ? "Products"
+                          : activeType === "service"
+                            ? "Services"
+                            : "Ads"}
                 </h2>
+                <Badge variant="secondary">{promotions.length}</Badge>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {businessPosts.map((post: BusinessPostRow) => (
-                  <Card key={post.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-base line-clamp-2">{post.title}</CardTitle>
-                        <Badge variant="outline" className="shrink-0 capitalize">
-                          {post.type?.replace("_", " ")}
-                        </Badge>
-                      </div>
-                      {post.business_profiles?.[0] && (
-                        <Link
-                          href={`/business-ads/${post.business_profiles[0].id}`}
-                          className="text-xs text-brand-blue hover:underline"
-                        >
-                          {post.business_profiles[0].business_name}
-                        </Link>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {promotions.map((promo) => {
+                  const seller = sellerMap.get(promo.seller_id);
+                  const businessName = promo.business_id
+                    ? businessMap.get(promo.business_id)
+                    : undefined;
+                  const nowDate = new Date();
+                  const isBoosted = promo.boost_until
+                    ? new Date(promo.boost_until) > nowDate
+                    : false;
+                  const isFeatured = promo.featured_until
+                    ? new Date(promo.featured_until) > nowDate
+                    : false;
+
+                  return (
+                    <div key={promo.id} className="space-y-1">
+                      <PromotionCard
+                        id={promo.id}
+                        title={promo.title}
+                        price={promo.price_cents}
+                        negotiable={promo.price_negotiable}
+                        imageUrl={promo.photos?.[0] || promo.videos?.[0]}
+                        province={promo.location_province}
+                        city={promo.location_city}
+                        promotionType={promo.promotion_type as PromotionType}
+                        createdAt={promo.created_at}
+                        sellerTrustLevel={seller?.trust}
+                        sellerName={seller?.name}
+                        viewCount={promo.view_count}
+                        boosted={isBoosted}
+                        featured={isFeatured}
+                        endDate={promo.end_date}
+                      />
+                      {businessName && (
+                        <p className="px-2 text-xs text-brand-blue font-medium truncate">
+                          by {businessName}
+                        </p>
                       )}
-                    </CardHeader>
-                    <CardContent>
-                      {post.body && (
-                        <p className="text-sm text-muted-foreground line-clamp-3">{post.body}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {timeAgo(post.created_at)}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}

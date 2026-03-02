@@ -20,7 +20,7 @@ const mockFrom = vi.fn().mockImplementation((table: string) => {
   if (table === "moderation_actions") {
     return { insert: mockInsert };
   }
-  if (table === "listings" || table === "storefronts" || table === "business_profiles") {
+  if (table === "listings" || table === "businesses") {
     return {
       update: mockUpdate,
     };
@@ -83,7 +83,7 @@ describe("enforcement service", () => {
     expect(mockFrom).toHaveBeenCalledWith("seller_profiles");
   });
 
-  it("updates listings, storefronts, and business_profiles to hidden on ban", async () => {
+  it("updates listings and businesses to hidden on ban", async () => {
     await enforceAction({
       sellerId: "seller-2",
       action: "ban",
@@ -92,8 +92,7 @@ describe("enforcement service", () => {
     });
 
     expect(mockFrom).toHaveBeenCalledWith("listings");
-    expect(mockFrom).toHaveBeenCalledWith("storefronts");
-    expect(mockFrom).toHaveBeenCalledWith("business_profiles");
+    expect(mockFrom).toHaveBeenCalledWith("businesses");
   });
 
   it("logs audit event for ban", async () => {

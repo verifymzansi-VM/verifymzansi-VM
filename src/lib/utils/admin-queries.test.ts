@@ -79,7 +79,8 @@ describe("admin-queries", () => {
       const counts = await getAreaCardCounts();
 
       expect(counts.MZANSI_MARKET.pendingFlags).toBe(2);
-      expect(counts.BUSINESS_ADS.pendingFlags).toBe(1);
+      expect(counts.MZANSI_BUSINESS.pendingFlags).toBe(1);
+      expect(counts.BUSINESS_ADS.pendingFlags).toBe(0);
       expect(counts.MALL_SHOPS.pendingFlags).toBe(0);
     });
   });
@@ -163,13 +164,13 @@ describe("admin-queries", () => {
     it("uses correct table for BUSINESS_ADS", async () => {
       mockFrom.mockReturnValue(createChainableMock({ data: [] }));
       await getPendingContent("BUSINESS_ADS");
-      expect(mockFrom).toHaveBeenCalledWith("business_profiles");
+      expect(mockFrom).toHaveBeenCalledWith("businesses");
     });
 
     it("uses correct table for MALL_SHOPS", async () => {
       mockFrom.mockReturnValue(createChainableMock({ data: [] }));
       await getPendingContent("MALL_SHOPS");
-      expect(mockFrom).toHaveBeenCalledWith("storefronts");
+      expect(mockFrom).toHaveBeenCalledWith("businesses");
     });
   });
 

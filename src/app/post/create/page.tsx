@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShoppingBag, Store, Briefcase, ArrowRight, ShieldCheck } from "lucide-react";
+import { ShoppingBag, Building2, Megaphone, ArrowRight, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
@@ -22,22 +22,22 @@ const POST_OPTIONS = [
     badgeColor: "bg-brand-green text-white",
   },
   {
-    title: "Mall Shop Storefront",
+    title: "Mzansi Business",
     description:
-      "Create a branded storefront with multiple products, posts, and promotions. Your digital shop.",
-    icon: Store,
-    href: "/post/create-mall-shop",
-    badge: "Mall Shops",
-    badgeColor: "bg-brand-gold text-amber-950",
+      "Create a professional business profile with services, operating hours, and contact details. Your digital storefront.",
+    icon: Building2,
+    href: "/post/create-business",
+    badge: "Mzansi Business",
+    badgeColor: "bg-brand-blue text-white",
   },
   {
-    title: "Business Ad Profile",
+    title: "Promotion or Event",
     description:
-      "Advertise your business services with a professional profile, service areas, and contact details.",
-    icon: Briefcase,
-    href: "/post/create-business-ad",
-    badge: "Business Ads",
-    badgeColor: "bg-sky-700 text-white",
+      "Advertise your products, services, deals, or events. Link promotions to your business profile.",
+    icon: Megaphone,
+    href: "/post/create-promotion",
+    badge: "Promotions & Events",
+    badgeColor: "bg-purple-700 text-white",
   },
 ];
 

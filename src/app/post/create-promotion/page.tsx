@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Megaphone, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Megaphone, ArrowLeft, ArrowRight, Loader2, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ const selectClass =
 
 export default function CreatePromotionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +42,25 @@ export default function CreatePromotionPage() {
   const [endDate, setEndDate] = useState("");
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
+
+  // Link to Business
+  const [businessId, setBusinessId] = useState(searchParams.get("business_id") || "");
+  const [myBusinesses, setMyBusinesses] = useState<{ id: string; business_name: string }[]>([]);
+
+  useEffect(() => {
+    async function loadBusinesses() {
+      try {
+        const res = await fetch("/api/businesses?mine=true&limit=50");
+        if (res.ok) {
+          const data = await res.json();
+          setMyBusinesses(data.businesses ?? []);
+        }
+      } catch {
+        // non-critical — user simply won't see the dropdown
+      }
+    }
+    loadBusinesses();
+  }, []);
 
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
@@ -94,6 +114,7 @@ export default function CreatePromotionPage() {
         videos: videoUrls,
         start_date: startDate ? new Date(startDate).toISOString() : undefined,
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
+        business_id: businessId || undefined,
       };
 
       const res = await fetch("/api/promotions", {
@@ -213,6 +234,32 @@ export default function CreatePromotionPage() {
                     maxLength={100}
                   />
                 </div>
+
+                {/* Link to Business */}
+                {myBusinesses.length > 0 && (
+                  <div className="space-y-2">
+                    <Label htmlFor="business_id" className="flex items-center gap-1.5">
+                      <Building2 className="h-4 w-4 text-brand-blue" />
+                      Link to Business (optional)
+                    </Label>
+                    <select
+                      id="business_id"
+                      className={selectClass}
+                      value={businessId}
+                      onChange={(e) => setBusinessId(e.target.value)}
+                    >
+                      <option value="">No linked business</option>
+                      {myBusinesses.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.business_name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      Link this promotion to one of your businesses so it appears on their profile.
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex justify-end">
                   <Button

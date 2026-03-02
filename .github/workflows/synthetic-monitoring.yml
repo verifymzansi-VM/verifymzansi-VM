@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.check-url.outputs.skip != 'true'
         with:
-          node-version: "25"
+          node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
         if: steps.check-url.outputs.skip != 'true'

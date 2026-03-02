@@ -10,8 +10,7 @@ import {
   ShieldCheck,
   Plus,
   Megaphone,
-  Store,
-  Briefcase,
+  Building2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,8 +54,7 @@ export default async function DashboardPage() {
     pendingModerationResult,
     expiringListingsResult,
     expiringPromosResult,
-    storefrontCountResult,
-    businessProfileCountResult,
+    businessCountResult,
     recentLeadsResult,
     recentListingChangesResult,
   ] = await Promise.all([
@@ -124,16 +122,11 @@ export default async function DashboardPage() {
       .or(
         `boost_until.gt.${now}.lt.${fortyEightHoursFromNow},featured_until.gt.${now}.lt.${fortyEightHoursFromNow},urgent_until.gt.${now}.lt.${fortyEightHoursFromNow}`
       ),
-    // Storefront count (NEW — for quick actions)
+    // Business count (for quick actions)
     supabase
-      .from("storefronts")
+      .from("businesses")
       .select("*", { count: "exact", head: true })
-      .eq("owner_id", user.id),
-    // Business profile count (NEW — for quick actions)
-    supabase
-      .from("business_profiles")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", user.id),
+      .eq("seller_id", user.id),
     // Recent leads for activity feed
     supabase
       .from("leads")
@@ -162,8 +155,7 @@ export default async function DashboardPage() {
   const pendingModerationCount = pendingModerationResult.count || 0;
   const expiringListingCount = expiringListingsResult.count || 0;
   const expiringPromoCount = expiringPromosResult.count || 0;
-  const storefrontCount = storefrontCountResult.count || 0;
-  const businessProfileCount = businessProfileCountResult.count || 0;
+  const businessCount = businessCountResult.count || 0;
 
   // Fetch total views (depends on listingIds)
   const { count: totalViews } =
@@ -448,12 +440,12 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </Link>
-        <Link href="/dashboard/storefronts">
+        <Link href="/dashboard/businesses">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
             <CardContent className="flex items-center gap-3 py-4">
-              <Store className="h-5 w-5 text-muted-foreground" />
+              <Building2 className="h-5 w-5 text-muted-foreground" />
               <span className="text-sm font-medium">
-                Storefronts{storefrontCount > 0 ? ` (${storefrontCount})` : ""}
+                My Businesses{businessCount > 0 ? ` (${businessCount})` : ""}
               </span>
               <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
             </CardContent>
@@ -462,18 +454,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Secondary Quick Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Link href="/dashboard/business-profiles">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardContent className="flex items-center gap-3 py-4">
-              <Briefcase className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm font-medium">
-                Business Profiles{businessProfileCount > 0 ? ` (${businessProfileCount})` : ""}
-              </span>
-              <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Link href="/dashboard/metrics">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
             <CardContent className="flex items-center gap-3 py-4">

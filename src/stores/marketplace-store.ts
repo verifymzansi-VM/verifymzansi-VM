@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { MarketplaceArea } from "@/types/enums";
+import type { MarketplaceArea, BusinessType, BusinessCategory } from "@/types/enums";
 
 interface Filters {
   category?: string;
@@ -12,6 +12,9 @@ interface Filters {
   query?: string;
   /** Dynamic category-specific attribute filters (matches listing attributes JSON column) */
   attributes: Record<string, string | boolean | undefined>;
+  /** Mzansi Business specific filters */
+  businessType?: BusinessType;
+  businessCategory?: BusinessCategory;
 }
 
 interface MarketplaceState {
@@ -62,7 +65,8 @@ export const useMarketplaceStore = create<MarketplaceState>((set) => ({
       },
       page: 1,
     })),
-  resetFilters: () => set({ filters: { ...defaultFilters, attributes: {} }, page: 1 }),
+  resetFilters: () =>
+    set({ filters: { ...defaultFilters, attributes: {}, businessType: undefined, businessCategory: undefined }, page: 1 }),
   setPage: (page) => set({ page }),
   setSearching: (isSearching) => set({ isSearching }),
 }));

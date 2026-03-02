@@ -80,11 +80,7 @@ export async function enforceAction(params: EnforceParams) {
   if (params.action === "ban") {
     const hideResults = await Promise.all([
       supabase.from("listings").update({ status: "hidden" }).eq("seller_id", params.sellerId),
-      supabase.from("storefronts").update({ status: "hidden" }).eq("seller_id", params.sellerId),
-      supabase
-        .from("business_profiles")
-        .update({ status: "hidden" })
-        .eq("seller_id", params.sellerId),
+      supabase.from("businesses").update({ status: "hidden" }).eq("seller_id", params.sellerId),
     ]);
     const hideErrors = hideResults.filter((r) => r.error);
     if (hideErrors.length > 0) {
@@ -103,12 +99,7 @@ export async function enforceAction(params: EnforceParams) {
         .eq("seller_id", params.sellerId)
         .eq("status", "live"),
       supabase
-        .from("storefronts")
-        .update({ status: "hidden" })
-        .eq("seller_id", params.sellerId)
-        .eq("status", "live"),
-      supabase
-        .from("business_profiles")
+        .from("businesses")
         .update({ status: "hidden" })
         .eq("seller_id", params.sellerId)
         .eq("status", "live"),
@@ -150,13 +141,7 @@ export async function enforceAction(params: EnforceParams) {
         .eq("status", "hidden")
         .gte("updated_at", hiddenSince),
       supabase
-        .from("storefronts")
-        .update({ status: "live" })
-        .eq("seller_id", params.sellerId)
-        .eq("status", "hidden")
-        .gte("updated_at", hiddenSince),
-      supabase
-        .from("business_profiles")
+        .from("businesses")
         .update({ status: "live" })
         .eq("seller_id", params.sellerId)
         .eq("status", "hidden")

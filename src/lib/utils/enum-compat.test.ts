@@ -74,12 +74,12 @@ describe("mapLegacyReportValues", () => {
     expect(result.targetType).toBe("seller_profile");
   });
 
-  it('maps legacy "business" targetType to "business_profile"', () => {
+  it('maps legacy "business" targetType to "business"', () => {
     const result = mapLegacyReportValues({
       reason: "scam",
       targetType: "business",
     });
-    expect(result.targetType).toBe("business_profile");
+    expect(result.targetType).toBe("business");
   });
 
   it("passes through canonical targetType values unchanged", () => {
@@ -90,11 +90,11 @@ describe("mapLegacyReportValues", () => {
       "seller_profile"
     );
     expect(mapLegacyReportValues({ reason: "scam", targetType: "storefront" }).targetType).toBe(
-      "storefront"
+      "business"
     );
     expect(
       mapLegacyReportValues({ reason: "scam", targetType: "business_profile" }).targetType
-    ).toBe("business_profile");
+    ).toBe("business");
   });
 
   it("resolves MarketplaceArea from canonical targetType", () => {
@@ -105,10 +105,10 @@ describe("mapLegacyReportValues", () => {
       "MZANSI_MARKET"
     );
     expect(mapLegacyReportValues({ reason: "scam", targetType: "storefront" }).area).toBe(
-      "MALL_SHOPS"
+      "MZANSI_BUSINESS"
     );
     expect(mapLegacyReportValues({ reason: "scam", targetType: "business" }).area).toBe(
-      "BUSINESS_ADS"
+      "MZANSI_BUSINESS"
     );
   });
 

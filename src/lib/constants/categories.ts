@@ -1,9 +1,8 @@
 import {
-  MALL_SHOP_CATEGORY_LABELS,
-  BUSINESS_AD_CATEGORY_LABELS,
+  BUSINESS_CATEGORY_LABELS,
   type ListingCategory,
-  type MallShopCategory,
-  type BusinessAdCategory,
+  type BusinessCategory,
+  type BusinessType,
 } from "@/types/enums";
 import { getVehicleMakeNames } from "@/lib/constants/sa-vehicles";
 import {
@@ -23,6 +22,10 @@ import {
   GraduationCap,
   Heart,
   Store,
+  Home,
+  MapPin,
+  Globe,
+  ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 
@@ -492,114 +495,131 @@ export function getCategory(value: ListingCategory): CategoryDefinition | undefi
   return CATEGORIES.find((c) => c.value === value);
 }
 
-export const MALL_SHOP_CATEGORIES: {
-  value: MallShopCategory;
+/* ── Mzansi Business Categories (unified) ────────────────── */
+export interface BusinessCategoryDefinition {
+  value: BusinessCategory;
   label: string;
   icon: LucideIcon;
   description: string;
-}[] = [
+}
+
+export const BUSINESS_CATEGORIES: BusinessCategoryDefinition[] = [
   {
-    value: "mall_fashion",
-    label: MALL_SHOP_CATEGORY_LABELS.mall_fashion,
+    value: "fashion_accessories",
+    label: BUSINESS_CATEGORY_LABELS.fashion_accessories,
     icon: Shirt,
-    description: "Clothing, shoes, jewelry, bags.",
+    description: "Clothing, shoes, jewelry, bags, accessories.",
   },
   {
-    value: "mall_electronics",
-    label: MALL_SHOP_CATEGORY_LABELS.mall_electronics,
+    value: "electronics_tech",
+    label: BUSINESS_CATEGORY_LABELS.electronics_tech,
     icon: Smartphone,
     description: "Mobile phones, computers, gaming, tech gadgets.",
   },
   {
-    value: "mall_groceries",
-    label: MALL_SHOP_CATEGORY_LABELS.mall_groceries,
+    value: "groceries_essentials",
+    label: BUSINESS_CATEGORY_LABELS.groceries_essentials,
     icon: ShoppingCart,
     description: "Supermarkets, convenience stores, specialty foods.",
   },
   {
-    value: "mall_health_beauty",
-    label: MALL_SHOP_CATEGORY_LABELS.mall_health_beauty,
+    value: "health_beauty",
+    label: BUSINESS_CATEGORY_LABELS.health_beauty,
     icon: Sparkles,
-    description: "Pharmacies, cosmetics, salons, spas.",
+    description: "Pharmacies, cosmetics, salons, spas, clinics.",
   },
   {
-    value: "mall_home_decor",
-    label: MALL_SHOP_CATEGORY_LABELS.mall_home_decor,
+    value: "home_living",
+    label: BUSINESS_CATEGORY_LABELS.home_living,
     icon: Sofa,
-    description: "Appliances, interior decor, homeware.",
+    description: "Furniture, appliances, interior decor, homeware.",
   },
   {
-    value: "mall_sports_hobbies",
-    label: MALL_SHOP_CATEGORY_LABELS.mall_sports_hobbies,
-    icon: Dumbbell,
-    description: "Athletic gear, outdoor equipment, books, toys.",
-  },
-  {
-    value: "mall_dining",
-    label: MALL_SHOP_CATEGORY_LABELS.mall_dining,
+    value: "food_dining",
+    label: BUSINESS_CATEGORY_LABELS.food_dining,
     icon: Utensils,
-    description: "Restaurants, cafés, fast food, bakeries.",
+    description: "Restaurants, cafés, fast food, bakeries, catering.",
   },
   {
-    value: "mall_services",
-    label: MALL_SHOP_CATEGORY_LABELS.mall_services,
-    icon: Briefcase,
-    description: "Optometrists, banks, travel agents, print shops.",
-  },
-];
-
-export const BUSINESS_AD_CATEGORIES: {
-  value: BusinessAdCategory;
-  label: string;
-  icon: LucideIcon;
-  description: string;
-}[] = [
-  {
-    value: "biz_events",
-    label: BUSINESS_AD_CATEGORY_LABELS.biz_events,
-    icon: CalendarDays,
-    description: "Sports events, music concerts, markets, expos.",
-  },
-  {
-    value: "biz_government",
-    label: BUSINESS_AD_CATEGORY_LABELS.biz_government,
-    icon: Landmark,
-    description: "Municipal announcements, department notices.",
-  },
-  {
-    value: "biz_home_trades",
-    label: BUSINESS_AD_CATEGORY_LABELS.biz_home_trades,
+    value: "trade_maintenance",
+    label: BUSINESS_CATEGORY_LABELS.trade_maintenance,
     icon: Wrench,
-    description: "Plumbers, electricians, builders, cleaning.",
+    description: "Plumbers, electricians, builders, cleaning, repairs.",
   },
   {
-    value: "biz_professional",
-    label: BUSINESS_AD_CATEGORY_LABELS.biz_professional,
+    value: "professional_services",
+    label: BUSINESS_CATEGORY_LABELS.professional_services,
     icon: Briefcase,
     description: "Legal, accounting, marketing, IT, consulting.",
   },
   {
-    value: "biz_education",
-    label: BUSINESS_AD_CATEGORY_LABELS.biz_education,
+    value: "education_training",
+    label: BUSINESS_CATEGORY_LABELS.education_training,
     icon: GraduationCap,
-    description: "Schools, universities, short courses, tutoring.",
+    description: "Schools, tutoring, short courses, universities.",
   },
   {
-    value: "biz_automotive",
-    label: BUSINESS_AD_CATEGORY_LABELS.biz_automotive,
+    value: "events_entertainment",
+    label: BUSINESS_CATEGORY_LABELS.events_entertainment,
+    icon: CalendarDays,
+    description: "Events, concerts, markets, expos, entertainment.",
+  },
+  {
+    value: "automotive_transport",
+    label: BUSINESS_CATEGORY_LABELS.automotive_transport,
     icon: Car,
     description: "Mechanics, panel beaters, logistics, shuttles.",
   },
   {
-    value: "biz_health",
-    label: BUSINESS_AD_CATEGORY_LABELS.biz_health,
-    icon: Heart,
-    description: "Doctors, dentists, clinics, mental health.",
+    value: "general_other",
+    label: BUSINESS_CATEGORY_LABELS.general_other,
+    icon: Store,
+    description: "General retail, notices, or other businesses.",
+  },
+];
+
+export interface BusinessTypeOption {
+  value: BusinessType;
+  label: string;
+  icon: LucideIcon;
+  description: string;
+}
+
+export const BUSINESS_TYPE_OPTIONS: BusinessTypeOption[] = [
+  {
+    value: "mall_store",
+    label: "Mall Store",
+    icon: ShoppingBag,
+    description: "A shop located inside a shopping mall or centre.",
   },
   {
-    value: "biz_general",
-    label: BUSINESS_AD_CATEGORY_LABELS.biz_general,
+    value: "standalone_shop",
+    label: "Standalone Shop",
     icon: Store,
-    description: "Any general retail ads, notices, or other.",
+    description: "A brick-and-mortar shop with its own physical location.",
+  },
+  {
+    value: "home_business",
+    label: "Home Business",
+    icon: Home,
+    description: "A business operating from a residential address.",
+  },
+  {
+    value: "mobile_service",
+    label: "Mobile Service",
+    icon: MapPin,
+    description: "A service provider that travels to clients (plumber, electrician, etc.).",
+  },
+  {
+    value: "online_only",
+    label: "Online Only",
+    icon: Globe,
+    description: "A business with no physical storefront — online or social media only.",
+  },
+  {
+    value: "market_stall",
+    label: "Market Stall",
+    icon: Building2,
+    description: "A stall at a flea market, farmers market, or community market.",
   },
 ];

@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
         contact_methods: data.contact_methods,
         start_date: data.start_date || null,
         end_date: data.end_date || null,
+        business_id: data.business_id || null,
         status: "live",
         published_at: new Date().toISOString(),
       })
@@ -125,6 +126,7 @@ export async function GET(request: NextRequest) {
     const province = searchParams.get("province");
     const city = searchParams.get("city");
     const search = searchParams.get("q");
+    const businessId = searchParams.get("business_id");
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
     const offset = (page - 1) * limit;
@@ -132,13 +134,16 @@ export async function GET(request: NextRequest) {
     let query = admin
       .from("promotions")
       .select(
-        "id, seller_id, title, description, promotion_type, category, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
+        "id, seller_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
         { count: "exact" }
       )
       .eq("status", "live");
 
     if (promotionType) {
       query = query.eq("promotion_type", promotionType);
+    }
+    if (businessId) {
+      query = query.eq("business_id", businessId);
     }
     if (province) {
       query = query.eq("location_province", province);

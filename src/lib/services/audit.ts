@@ -61,7 +61,7 @@ interface AuditLogEntry {
   action: AuditAction;
   targetType?: string;
   targetId?: string;
-  area?: "MZANSI_MARKET" | "MALL_SHOPS" | "BUSINESS_ADS";
+  area?: "MZANSI_MARKET" | "MALL_SHOPS" | "BUSINESS_ADS" | "MZANSI_BUSINESS";
   metadata?: Record<string, unknown>;
 }
 

@@ -105,8 +105,8 @@ function createMockAdminClient(overrides: {
       };
     }
 
-    // Entity tables: listings, storefronts, business_profiles
-    if (["listings", "storefronts", "business_profiles"].includes(table)) {
+    // Entity tables: listings, storefronts, businesses
+    if (["listings", "storefronts", "businesses"].includes(table)) {
       return {
         update: vi.fn().mockImplementation((data: unknown) => {
           mockUpdateFn(table, data);
@@ -580,7 +580,7 @@ describe("POST /api/webhooks/payfast", () => {
       expect(res.status).toBe(200);
 
       const bpUpdateCalls = mockUpdateFn.mock.calls.filter(
-        (call: unknown[]) => call[0] === "business_profiles"
+        (call: unknown[]) => call[0] === "businesses"
       );
       expect(bpUpdateCalls.length).toBeGreaterThanOrEqual(1);
       const [, updateData] = bpUpdateCalls[0];
@@ -589,7 +589,7 @@ describe("POST /api/webhooks/payfast", () => {
       expect(mockLogAuditEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           action: "business_boosted",
-          targetType: "business_profile",
+          targetType: "business",
           targetId: BUSINESS_ID,
         })
       );

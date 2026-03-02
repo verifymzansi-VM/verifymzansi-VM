@@ -11,19 +11,20 @@ import {
 } from "./pricing";
 
 describe("pricing constants", () => {
-  it("defines exactly 10 plans (basic + 3 areas × 3 tiers)", () => {
-    expect(PLANS).toHaveLength(10);
+  it("defines exactly 13 plans (basic + 4 areas × 3 tiers)", () => {
+    expect(PLANS).toHaveLength(13);
   });
 
-  it("covers all three marketplace areas", () => {
+  it("covers all four marketplace areas", () => {
     const areas = Array.from(new Set(PLANS.map((p) => p.area)));
     expect(areas).toContain("MZANSI_MARKET");
+    expect(areas).toContain("MZANSI_BUSINESS");
     expect(areas).toContain("MALL_SHOPS");
     expect(areas).toContain("BUSINESS_ADS");
   });
 
   it("covers all three tiers per area", () => {
-    for (const area of ["MZANSI_MARKET", "MALL_SHOPS", "BUSINESS_ADS"]) {
+    for (const area of ["MZANSI_MARKET", "MZANSI_BUSINESS", "MALL_SHOPS", "BUSINESS_ADS"]) {
       const tiers = PLANS.filter((p) => p.area === area).map((p) => p.tier);
       expect(tiers).toContain("starter");
       expect(tiers).toContain("growth");
@@ -38,7 +39,7 @@ describe("pricing constants", () => {
   });
 
   it("pro plans are the most expensive per area", () => {
-    for (const area of ["MZANSI_MARKET", "MALL_SHOPS", "BUSINESS_ADS"]) {
+    for (const area of ["MZANSI_MARKET", "MZANSI_BUSINESS", "MALL_SHOPS", "BUSINESS_ADS"]) {
       const areaPlans = PLANS.filter((p) => p.area === area);
       const pro = areaPlans.find((p) => p.tier === "pro")!;
       const starter = areaPlans.find((p) => p.tier === "starter")!;
@@ -81,6 +82,7 @@ describe("pricing constants", () => {
 describe("getPlansForArea", () => {
   it("returns correct number of plans for each area", () => {
     expect(getPlansForArea("MZANSI_MARKET")).toHaveLength(4);
+    expect(getPlansForArea("MZANSI_BUSINESS")).toHaveLength(3);
     expect(getPlansForArea("MALL_SHOPS")).toHaveLength(3);
     expect(getPlansForArea("BUSINESS_ADS")).toHaveLength(3);
   });

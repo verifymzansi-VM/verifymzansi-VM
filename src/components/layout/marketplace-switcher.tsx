@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { ShoppingBag, Store, Briefcase, Megaphone } from "lucide-react";
+import { ShoppingBag, Building2, Megaphone } from "lucide-react";
 import type { MarketplaceArea } from "@/types/enums";
 
 interface AreaTab {
@@ -25,24 +25,16 @@ const AREA_TABS: AreaTab[] = [
     activeClass: "border-brand-green text-brand-green bg-brand-green-50 dark:bg-brand-green-950",
   },
   {
-    area: "MALL_SHOPS",
-    label: "Mall Shops",
-    slug: "/mall-shops",
-    icon: Store,
-    iconColor: "text-brand-gold-700 dark:text-brand-gold",
-    activeClass: "border-brand-gold text-brand-gold-700 bg-brand-gold-50 dark:bg-brand-gold-950",
-  },
-  {
-    area: "BUSINESS_ADS",
-    label: "Business Ads",
-    slug: "/business-ads",
-    icon: Briefcase,
+    area: "MZANSI_BUSINESS",
+    label: "Mzansi Business",
+    slug: "/mzansi-business",
+    icon: Building2,
     iconColor: "text-brand-blue",
     activeClass: "border-brand-blue text-brand-blue bg-brand-blue-50 dark:bg-brand-blue-950",
   },
   {
     area: "PROMOTIONS",
-    label: "Promotions",
+    label: "Promotions & Events",
     slug: "/promotions",
     icon: Megaphone,
     iconColor: "text-red-500",

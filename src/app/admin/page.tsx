@@ -10,8 +10,7 @@ import {
   UserX,
   Clock,
   TrendingUp,
-  Store,
-  Briefcase,
+  Building2,
   ShoppingBag,
   UserCheck,
   Ban,
@@ -264,7 +263,7 @@ export default async function AdminPage() {
             </Link>
           </div>
           <p className="text-xs text-muted-foreground">
-            New listings, storefronts, and business profiles waiting for first-time approval before
+            New listings and business profiles waiting for first-time approval before
             going live.
           </p>
           <ModerationQueueClient
@@ -300,7 +299,7 @@ export default async function AdminPage() {
       {/* ── MARKETPLACE AREA BREAKDOWN ───────────────────────── */}
       <section className="space-y-3">
         <SectionHeading>Marketplace Areas</SectionHeading>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <AreaCard
             icon={ShoppingBag}
             label="Mzansi Market"
@@ -309,18 +308,11 @@ export default async function AdminPage() {
             pendingContent={areaCounts.MZANSI_MARKET.pendingContent}
           />
           <AreaCard
-            icon={Briefcase}
-            label="Business Ads"
-            href="/admin/business-ads"
-            pendingFlags={areaCounts.BUSINESS_ADS.pendingFlags}
-            pendingContent={areaCounts.BUSINESS_ADS.pendingContent}
-          />
-          <AreaCard
-            icon={Store}
-            label="Mall Shops"
-            href="/admin/mall-shops"
-            pendingFlags={areaCounts.MALL_SHOPS.pendingFlags}
-            pendingContent={areaCounts.MALL_SHOPS.pendingContent}
+            icon={Building2}
+            label="Mzansi Business"
+            href="/admin/businesses"
+            pendingFlags={areaCounts.MZANSI_BUSINESS.pendingFlags}
+            pendingContent={areaCounts.MZANSI_BUSINESS.pendingContent}
           />
         </div>
       </section>

@@ -103,28 +103,23 @@ export async function getAreaCardCounts(): Promise<
     .eq("status", "open");
 
   // Content pending moderation counts
-  const [{ count: pendingListings }, { count: pendingStorefronts }, { count: pendingBusinesses }] =
+  const [{ count: pendingListings }, { count: pendingMzansiBiz }] =
     await Promise.all([
       supabase
         .from("listings")
         .select("*", { count: "exact", head: true })
         .eq("status", "pending_moderation"),
       supabase
-        .from("storefronts")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending_moderation"),
-      supabase
-        .from("business_profiles")
+        .from("businesses")
         .select("*", { count: "exact", head: true })
         .eq("status", "pending_moderation"),
     ]);
 
   // Map target_type to area
-  const flagCounts = { MZANSI_MARKET: 0, BUSINESS_ADS: 0, MALL_SHOPS: 0 };
+  const flagCounts = { MZANSI_MARKET: 0, BUSINESS_ADS: 0, MALL_SHOPS: 0, MZANSI_BUSINESS: 0 };
   for (const r of openReports || []) {
     if (r.target_type === "listing") flagCounts.MZANSI_MARKET++;
-    if (r.target_type === "business_profile") flagCounts.BUSINESS_ADS++;
-    if (r.target_type === "storefront") flagCounts.MALL_SHOPS++;
+    if (r.target_type === "business_profile" || r.target_type === "storefront" || r.target_type === "business") flagCounts.MZANSI_BUSINESS++;
   }
 
   return {
@@ -134,11 +129,15 @@ export async function getAreaCardCounts(): Promise<
     },
     BUSINESS_ADS: {
       pendingFlags: flagCounts.BUSINESS_ADS,
-      pendingContent: pendingBusinesses || 0,
+      pendingContent: 0,
     },
     MALL_SHOPS: {
       pendingFlags: flagCounts.MALL_SHOPS,
-      pendingContent: pendingStorefronts || 0,
+      pendingContent: 0,
+    },
+    MZANSI_BUSINESS: {
+      pendingFlags: flagCounts.MZANSI_BUSINESS,
+      pendingContent: pendingMzansiBiz || 0,
     },
   };
 }
@@ -201,8 +200,9 @@ export async function getAreaReports(area: MarketplaceArea) {
   // Map area to target_type
   const targetTypeMap: Record<MarketplaceArea, string> = {
     MZANSI_MARKET: "listing",
-    BUSINESS_ADS: "business_profile",
-    MALL_SHOPS: "storefront",
+    BUSINESS_ADS: "business",
+    MALL_SHOPS: "business",
+    MZANSI_BUSINESS: "business",
   };
 
   const { data } = await supabase
@@ -222,8 +222,9 @@ export async function getPendingContent(area: MarketplaceArea) {
 
   const tableMap: Record<MarketplaceArea, string> = {
     MZANSI_MARKET: "listings",
-    BUSINESS_ADS: "business_profiles",
-    MALL_SHOPS: "storefronts",
+    BUSINESS_ADS: "businesses",
+    MALL_SHOPS: "businesses",
+    MZANSI_BUSINESS: "businesses",
   };
 
   const { data } = await supabase
@@ -335,7 +336,7 @@ export async function getDashboardReports(limit = 30): Promise<DashboardReport[]
 export interface DashboardContentItem {
   id: string;
   title: string;
-  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS";
+  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS" | "MZANSI_BUSINESS";
   areaLabel: string;
   itemType: string;
   category: string | null;
@@ -344,11 +345,11 @@ export interface DashboardContentItem {
   status: string;
 }
 
-/** Get all pending-moderation content across all three areas */
+/** Get all pending-moderation content across all areas */
 export async function getDashboardContentQueue(): Promise<DashboardContentItem[]> {
   const supabase = createAdminClient();
 
-  const [{ data: pendingListings }, { data: pendingStorefronts }, { data: pendingBusinesses }] =
+  const [{ data: pendingListings }, { data: pendingBusinesses }] =
     await Promise.all([
       supabase
         .from("listings")
@@ -357,14 +358,8 @@ export async function getDashboardContentQueue(): Promise<DashboardContentItem[]
         .order("created_at", { ascending: true })
         .limit(30),
       supabase
-        .from("storefronts")
-        .select("id, mall_name, store_number, status, created_at, category, seller_id")
-        .eq("status", "pending_moderation")
-        .order("created_at", { ascending: true })
-        .limit(30),
-      supabase
-        .from("business_profiles")
-        .select("id, business_name, status, created_at, category, seller_id")
+        .from("businesses")
+        .select("id, business_name, business_type, status, created_at, category, seller_id")
         .eq("status", "pending_moderation")
         .order("created_at", { ascending: true })
         .limit(30),
@@ -382,23 +377,12 @@ export async function getDashboardContentQueue(): Promise<DashboardContentItem[]
       created_at: l.created_at,
       status: l.status,
     })),
-    ...(pendingStorefronts || []).map((s) => ({
-      id: s.id,
-      title: s.mall_name || `Store #${s.store_number}`,
-      area: "MALL_SHOPS" as const,
-      areaLabel: "Mall Shops",
-      itemType: "Storefront",
-      category: s.category || null,
-      seller_id: s.seller_id || null,
-      created_at: s.created_at,
-      status: s.status,
-    })),
     ...(pendingBusinesses || []).map((b) => ({
       id: b.id,
       title: b.business_name || `Business ${b.id.slice(0, 8)}`,
-      area: "BUSINESS_ADS" as const,
-      areaLabel: "Business Ads",
-      itemType: "Business Profile",
+      area: "MZANSI_BUSINESS" as const,
+      areaLabel: "Mzansi Business",
+      itemType: "Business",
       category: b.category || null,
       seller_id: b.seller_id || null,
       created_at: b.created_at,

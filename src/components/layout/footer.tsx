@@ -34,22 +34,16 @@ export function Footer() {
                 Mzansi Market
               </Link>
               <Link
-                href="/mall-shops"
+                href="/mzansi-business"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                Mall Shops
-              </Link>
-              <Link
-                href="/business-ads"
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Business Ads
+                Mzansi Business
               </Link>
               <Link
                 href="/promotions"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                Promotions & Deals
+                Promotions & Events
               </Link>
             </nav>
           </div>

@@ -30,8 +30,9 @@ import type {
   DsarType,
   DsarStatus,
   BuyerTokenStatus,
-  MallShopCategory,
-  BusinessAdCategory,
+  BusinessType,
+  BusinessCategory,
+  PromotionType,
 } from "./enums";
 
 /* ── Seller Profiles ─────────────────────────────────────── */
@@ -219,85 +220,74 @@ export interface Listing {
   updated_at: string;
 }
 
-/* ── Storefronts (Mall Shops) ────────────────────────────── */
-export interface Storefront {
+/* ── Businesses (Mzansi Business — unified) ────────────── */
+export interface Business {
   id: string;
   seller_id: string;
   area: MarketplaceArea;
+  business_type: BusinessType;
+  business_name: string;
+  slug: string;
+  description: string;
+  category: BusinessCategory;
   logo_url: string | null;
   cover_photo: string | null;
   cover_video: string | null;
-  description: string;
-  mall_name: string;
-  store_number: string;
+  video_thumbnail: string | null;
   location_province: string;
   location_city: string;
-  operating_hours: Record<string, unknown>;
-  phone: string | null;
-  whatsapp: string | null;
-  email: string | null;
-  social_links: Record<string, string> | null;
+  store_number: string | null;
+  mall_id: string | null;
   map_directions: string | null;
-  category: MallShopCategory;
-  status: ListingStatus;
-  entitlement_id: string | null;
-  published_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-/* ── Storefront Posts ────────────────────────────────────── */
-export interface StorefrontPost {
-  id: string;
-  storefront_id: string;
-  seller_id: string;
-  type: "promotion" | "event" | "special" | "announcement";
-  title: string;
-  media: string;
-  description: string | null;
-  valid_until: string | null;
-  status: ListingStatus;
-  created_at: string;
-}
-
-/* ── Business Profiles (Business Ads) ────────────────────── */
-export interface BusinessProfile {
-  id: string;
-  seller_id: string;
-  area: MarketplaceArea;
-  logo_url: string | null;
-  cover_photo: string | null;
-  cover_video: string | null;
-  business_name: string;
-  about: string;
-  services_offered: string[];
-  service_areas: Record<string, unknown>;
-  operating_hours: Record<string, unknown>;
   phone: string | null;
   whatsapp: string | null;
   email: string | null;
   website: string | null;
   social_links: Record<string, string> | null;
-  category: BusinessAdCategory;
+  services_offered: string[];
+  service_areas: Record<string, unknown> | null;
+  operating_hours: Record<string, unknown>;
+  payment_methods_accepted: string[];
+  delivery_options: string[];
   status: ListingStatus;
+  status_reason: string | null;
   entitlement_id: string | null;
+  boost_until: string | null;
+  featured_until: string | null;
   published_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-/* ── Business Posts ──────────────────────────────────────── */
-export interface BusinessPost {
+/* ── Promotions ─────────────────────────────────────────── */
+export interface Promotion {
   id: string;
-  business_profile_id: string;
   seller_id: string;
-  type: "offer" | "hiring" | "case_study" | "special" | "announcement";
+  business_id: string | null;
   title: string;
-  media: string;
-  description: string | null;
-  valid_until: string | null;
+  description: string;
+  promotion_type: PromotionType;
+  category: string | null;
+  photos: string[];
+  videos: string[];
+  video_thumbnail: string | null;
+  price_cents: number | null;
+  price_negotiable: boolean;
+  location_province: string;
+  location_city: string;
+  contact_methods: ContactMethod[];
+  start_date: string | null;
+  end_date: string | null;
   status: ListingStatus;
+  status_reason: string | null;
+  boost_until: string | null;
+  featured_until: string | null;
+  view_count: number;
+  click_count: number;
+  entitlement_id: string | null;
+  published_at: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 /* ── Payments ────────────────────────────────────────────── */
@@ -332,7 +322,7 @@ export interface Invoice {
 export interface Lead {
   id: string;
   target_id: string;
-  target_type: "listing" | "storefront" | "business_profile";
+  target_type: "listing" | "storefront" | "business_profile" | "business";
   seller_id: string;
   buyer_name: string | null;
   buyer_email: string | null;

@@ -5,6 +5,7 @@ import { priceSchema } from "./shared";
  * Zod schema for standalone promotion / advertisement creation and editing.
  * Validates all fields required for a standalone ad that is NOT tied to a
  * listing, storefront, or business profile.
+ * Optionally links to a Mzansi Business via business_id.
  */
 export const promotionSchema = z.object({
   title: z
@@ -51,6 +52,7 @@ export const promotionSchema = z.object({
   video_thumbnail: z.string().url().optional(),
   start_date: z.string().datetime().optional(),
   end_date: z.string().datetime().optional(),
+  business_id: z.string().uuid().optional(),
 });
 
 /** Inferred input type for {@link promotionSchema}. */

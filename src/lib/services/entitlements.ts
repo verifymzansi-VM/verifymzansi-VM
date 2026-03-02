@@ -49,6 +49,8 @@ export function getEntitlements(tier: PlanTier, area: MarketplaceArea): Entitlem
   let maxAllowed = -1;
   if (area === "MZANSI_MARKET") {
     maxAllowed = plan.features.maxListings ?? -1;
+  } else if (area === "MZANSI_BUSINESS") {
+    maxAllowed = plan.features.maxBusinesses ?? -1;
   } else if (area === "MALL_SHOPS") {
     maxAllowed = plan.features.maxStorefronts ?? -1;
   } else if (area === "BUSINESS_ADS") {
@@ -82,11 +84,13 @@ export function canCreateListing(
 
   if (currentCount >= ent.maxAllowed) {
     const itemType =
-      area === "MALL_SHOPS"
-        ? "storefronts"
-        : area === "BUSINESS_ADS"
-          ? "profiles"
-          : "active listings";
+      area === "MZANSI_BUSINESS"
+        ? "businesses"
+        : area === "MALL_SHOPS"
+          ? "storefronts"
+          : area === "BUSINESS_ADS"
+            ? "profiles"
+            : "active listings";
     return {
       allowed: false,
       reason: `Your ${tier} plan allows up to ${ent.maxAllowed} ${itemType}. Upgrade to post more.`,

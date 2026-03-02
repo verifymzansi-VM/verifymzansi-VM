@@ -51,24 +51,28 @@ const AREA_LABELS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "Mzansi Market",
   MALL_SHOPS: "Mall Shops",
   BUSINESS_ADS: "Business Ads",
+  MZANSI_BUSINESS: "Mzansi Business",
 };
 
 const AREA_COLORS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "bg-brand-green text-white",
   MALL_SHOPS: "bg-brand-gold text-amber-950",
   BUSINESS_ADS: "bg-sky-700 text-white",
+  MZANSI_BUSINESS: "bg-brand-blue text-white",
 };
 
 const AREA_COUNT_TABLES: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "listings",
   MALL_SHOPS: "storefronts",
   BUSINESS_ADS: "business_profiles",
+  MZANSI_BUSINESS: "businesses",
 };
 
 const AREA_ITEM_LABELS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "listings",
   MALL_SHOPS: "storefronts",
   BUSINESS_ADS: "profiles",
+  MZANSI_BUSINESS: "businesses",
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -94,10 +98,12 @@ function InlinePlanCard({
       ? "storefronts"
       : plan.area === "BUSINESS_ADS"
         ? "profiles"
-        : "listings";
+        : plan.area === "MZANSI_BUSINESS"
+          ? "businesses"
+          : "listings";
 
   const maxItems =
-    plan.features.maxListings ?? plan.features.maxStorefronts ?? plan.features.maxProfiles ?? 0;
+    plan.features.maxListings ?? plan.features.maxStorefronts ?? plan.features.maxProfiles ?? plan.features.maxBusinesses ?? 0;
 
   return (
     <Card

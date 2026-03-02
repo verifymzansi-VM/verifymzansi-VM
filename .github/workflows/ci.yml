@@ -73,8 +73,7 @@ jobs:
             "api/listings/\\[id\\]/featured" \
             "api/listings/\\[id\\]/urgent" \
             "api/listings/\\[id\\]/boost" \
-            "api/storefronts/\\[id\\]/boost" \
-            "api/business-ads/\\[id\\]/boost" \
+            "api/businesses/\\[id\\]/boost" \
             "api/billing/create-checkout" \
             "api/webhooks/payfast"; do
             if ! find .next/server/app -path "*${route}*" -print -quit 2>/dev/null | grep -q .; then
@@ -240,6 +239,7 @@ jobs:
             SIZE_KB=$(( ${SIZE_BYTES:-0} / 1024 ))
             echo "Largest chunk: ${FILE_NAME} (${SIZE_KB}KB)"
             if [ "${SIZE_KB}" -gt "$BUDGET_KB" ]; then
-              echo "::warning::Largest JS chunk ${FILE_NAME} (${SIZE_KB}KB) exceeds budget (${BUDGET_KB}KB)"
+              echo "::error::Largest JS chunk ${FILE_NAME} (${SIZE_KB}KB) exceeds budget (${BUDGET_KB}KB)"
+              exit 1
             fi
           fi
