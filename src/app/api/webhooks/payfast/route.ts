@@ -4,6 +4,11 @@ import { verifyPayFastSignature, isPayFastIp } from "@/lib/services/payfast";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
+import {
+  BOOST_DURATION_DAYS,
+  FEATURED_DURATION_DAYS,
+  URGENT_DURATION_DAYS,
+} from "@/lib/constants/pricing";
 
 const log = createLogger("PayFastWebhook");
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
@@ -166,7 +171,9 @@ export async function POST(request: NextRequest) {
       const meta = existingPayment.payfast_data as Record<string, unknown> | null;
       if (meta?.type === "boost" && meta?.listing_id) {
         const boostDays =
-          typeof meta.boost_days === "number" && meta.boost_days > 0 ? meta.boost_days : 7;
+          typeof meta.boost_days === "number" && meta.boost_days > 0
+            ? meta.boost_days
+            : BOOST_DURATION_DAYS;
         const boostUntil = new Date(Date.now() + boostDays * 24 * 60 * 60 * 1000).toISOString();
 
         const { error: boostError } = await supabase
@@ -203,7 +210,9 @@ export async function POST(request: NextRequest) {
       if (meta?.type === "boost_business" && (meta?.business_id || meta?.business_profile_id)) {
         const targetId = (meta.business_id || meta.business_profile_id) as string;
         const boostDays =
-          typeof meta.boost_days === "number" && meta.boost_days > 0 ? meta.boost_days : 7;
+          typeof meta.boost_days === "number" && meta.boost_days > 0
+            ? meta.boost_days
+            : BOOST_DURATION_DAYS;
         const boostUntil = new Date(Date.now() + boostDays * 24 * 60 * 60 * 1000).toISOString();
 
         const { error: boostError } = await supabase
@@ -239,7 +248,9 @@ export async function POST(request: NextRequest) {
       // ── Handle storefront boost (legacy — kept for in-flight payments) ──
       if (meta?.type === "boost_storefront" && meta?.storefront_id) {
         const boostDays =
-          typeof meta.boost_days === "number" && meta.boost_days > 0 ? meta.boost_days : 7;
+          typeof meta.boost_days === "number" && meta.boost_days > 0
+            ? meta.boost_days
+            : BOOST_DURATION_DAYS;
         const boostUntil = new Date(Date.now() + boostDays * 24 * 60 * 60 * 1000).toISOString();
 
         const { error: boostError } = await supabase
@@ -275,7 +286,9 @@ export async function POST(request: NextRequest) {
       // ── Handle listing featured add-on ──────────────────────
       if (meta?.type === "featured" && meta?.listing_id) {
         const featureDays =
-          typeof meta.feature_days === "number" && meta.feature_days > 0 ? meta.feature_days : 7;
+          typeof meta.feature_days === "number" && meta.feature_days > 0
+            ? meta.feature_days
+            : FEATURED_DURATION_DAYS;
         const featuredUntil = new Date(
           Date.now() + featureDays * 24 * 60 * 60 * 1000
         ).toISOString();
@@ -313,7 +326,9 @@ export async function POST(request: NextRequest) {
       // ── Handle listing urgent add-on ───────────────────────
       if (meta?.type === "urgent" && meta?.listing_id) {
         const urgentDays =
-          typeof meta.urgent_days === "number" && meta.urgent_days > 0 ? meta.urgent_days : 7;
+          typeof meta.urgent_days === "number" && meta.urgent_days > 0
+            ? meta.urgent_days
+            : URGENT_DURATION_DAYS;
         const urgentUntil = new Date(Date.now() + urgentDays * 24 * 60 * 60 * 1000).toISOString();
 
         const { error: urgentError } = await supabase
@@ -349,7 +364,9 @@ export async function POST(request: NextRequest) {
       // ── Handle promotion boost add-on ─────────────────────
       if (meta?.type === "boost_promotion" && meta?.promotion_id) {
         const boostDays =
-          typeof meta.boost_days === "number" && meta.boost_days > 0 ? meta.boost_days : 7;
+          typeof meta.boost_days === "number" && meta.boost_days > 0
+            ? meta.boost_days
+            : BOOST_DURATION_DAYS;
         const boostUntil = new Date(Date.now() + boostDays * 24 * 60 * 60 * 1000).toISOString();
 
         const { error: boostError } = await supabase
@@ -385,7 +402,9 @@ export async function POST(request: NextRequest) {
       // ── Handle promotion featured add-on ──────────────────
       if (meta?.type === "featured_promotion" && meta?.promotion_id) {
         const featureDays =
-          typeof meta.feature_days === "number" && meta.feature_days > 0 ? meta.feature_days : 7;
+          typeof meta.feature_days === "number" && meta.feature_days > 0
+            ? meta.feature_days
+            : FEATURED_DURATION_DAYS;
         const featuredUntil = new Date(
           Date.now() + featureDays * 24 * 60 * 60 * 1000
         ).toISOString();

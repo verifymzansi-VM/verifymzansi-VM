@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { profileUpdateSchema } from "@/lib/validations/profile";
 
 export default function ProfilePage() {
   const [displayName, setDisplayName] = useState("");
@@ -56,6 +57,26 @@ export default function ProfilePage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+
+    // Client-side validation with Zod schema
+    const result = profileUpdateSchema.safeParse({
+      displayName,
+      bio: bio || undefined,
+      phone: phone || undefined,
+      province: province || undefined,
+      city: city || undefined,
+    });
+
+    if (!result.success) {
+      const firstError = result.error.issues[0];
+      toast({
+        title: "Validation error",
+        description: firstError?.message || "Please check your input",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSaving(true);
     try {
       const supabase = createClient();
@@ -67,11 +88,11 @@ export default function ProfilePage() {
       const { error } = await supabase
         .from("seller_profiles")
         .update({
-          display_name: displayName || null,
-          bio: bio || null,
-          location_province: province || null,
-          location_city: city || null,
-          phone: phone || null,
+          display_name: result.data.displayName || null,
+          bio: result.data.bio || null,
+          location_province: result.data.province || null,
+          location_city: result.data.city || null,
+          phone: result.data.phone || null,
         })
         .eq("user_id", user.id);
 
@@ -118,13 +139,16 @@ export default function ProfilePage() {
         <CardContent>
           <form onSubmit={handleSave} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="displayName">Display Name</Label>
+              <Label htmlFor="displayName">Display Name *</Label>
               <Input
                 id="displayName"
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={(e) => setDisplayName(e.target.value.slice(0, 50))}
                 placeholder="How buyers see your name"
+                maxLength={50}
+                required
               />
+              <p className="text-xs text-muted-foreground">{displayName.length}/50</p>
             </div>
 
             <div className="space-y-2">
@@ -146,7 +170,12 @@ export default function ProfilePage() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="082 000 0000"
+                pattern="^(\+27|0)[6-8][0-9]{8}$"
+                title="Enter a valid SA mobile number (e.g. 071 234 5678)"
               />
+              <p className="text-xs text-muted-foreground">
+                SA mobile format: 0XX XXX XXXX or +27XX XXX XXXX
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

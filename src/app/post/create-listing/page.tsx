@@ -24,7 +24,6 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
-import { createClient } from "@/lib/supabase/client";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { PlanGate, usePlanMaxPhotos, usePlanVideoAllowed } from "@/components/billing/plan-gate";
@@ -170,26 +169,6 @@ export default function CreateListingPage() {
 
     setIsSubmitting(true);
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      const { data: profile } = await supabase
-        .from("seller_profiles")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (!profile) {
-        toast({ title: "Seller profile not found", variant: "destructive" });
-        return;
-      }
-
       // Upload media files
       let photoUrls: string[] = [];
       if (photoFiles.length > 0) {
@@ -230,51 +209,35 @@ export default function CreateListingPage() {
         }
       }
 
-      const { error } = await supabase.from("listings").insert({
-        seller_id: user.id,
-        title,
-        description,
-        price_cents: Math.round(numPrice * 100),
-        price_negotiable: negotiable,
-        category: mapListingCategory(category),
-        attributes: categoryAttributes,
-        location_province: province || null,
-        location_city: city || null,
-        location_suburb: town || null,
-        status: "pending_moderation",
-        area: "MZANSI_MARKET",
-        photos: photoUrls,
-        videos: videoUrls,
-        video_thumbnail: videoThumbnailUrl,
-        contact_methods: contactMethods,
+      // Submit via server-side API route for full validation & entitlement enforcement
+      const res = await fetch("/api/listings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim(),
+          price_zar: numPrice,
+          negotiable,
+          category: mapListingCategory(category),
+          attributes: categoryAttributes,
+          province: province || "",
+          city: city || "",
+          town: town || "",
+          images: photoUrls,
+          videos: videoUrls,
+          videoThumbnail: videoThumbnailUrl,
+          contactMethods,
+        }),
       });
 
-      if (error) {
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         toast({
           title: "Failed to create listing",
-          description: error.message,
+          description: data.error || data.reason || "Something went wrong",
           variant: "destructive",
         });
         return;
-      }
-
-      // Mark free post as used if no active paid entitlement
-      const { data: activeEnt } = await supabase
-        .from("entitlements")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("area", "MZANSI_MARKET")
-        .eq("status", "active")
-        .limit(1)
-        .maybeSingle();
-
-      if (!activeEnt) {
-        await supabase
-          .from("free_posts_used")
-          .upsert(
-            { user_id: user.id, area: "MZANSI_MARKET" as const },
-            { onConflict: "user_id,area" }
-          );
       }
 
       toast({ title: "Listing submitted for review!" });

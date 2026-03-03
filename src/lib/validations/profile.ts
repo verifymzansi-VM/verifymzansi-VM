@@ -1,0 +1,36 @@
+import { z } from "zod";
+import { saPhoneSchema } from "./shared";
+
+/**
+ * Zod schema for seller profile updates.
+ * Validates display name, bio, phone (SA format), province, and city.
+ */
+export const profileUpdateSchema = z.object({
+  displayName: z
+    .string()
+    .trim()
+    .min(2, "Display name must be at least 2 characters")
+    .max(50, "Display name cannot exceed 50 characters"),
+  bio: z.string().trim().max(300, "Bio cannot exceed 300 characters").optional().or(z.literal("")),
+  phone: z.union([saPhoneSchema, z.literal("")]).optional(),
+  province: z.string().max(100, "Province value is too long").optional().or(z.literal("")),
+  city: z.string().max(100, "City value is too long").optional().or(z.literal("")),
+});
+
+/** Inferred type for profile update payloads. */
+export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
+
+/**
+ * Zod schema for settings page display name update.
+ * Validates only the display name field.
+ */
+export const settingsDisplayNameSchema = z.object({
+  displayName: z
+    .string()
+    .trim()
+    .min(2, "Display name must be at least 2 characters")
+    .max(50, "Display name cannot exceed 50 characters"),
+});
+
+/** Inferred type for settings display name update. */
+export type SettingsDisplayNameInput = z.infer<typeof settingsDisplayNameSchema>;

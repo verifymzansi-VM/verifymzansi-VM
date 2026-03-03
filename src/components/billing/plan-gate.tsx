@@ -103,7 +103,11 @@ function InlinePlanCard({
           : "listings";
 
   const maxItems =
-    plan.features.maxListings ?? plan.features.maxStorefronts ?? plan.features.maxProfiles ?? plan.features.maxBusinesses ?? 0;
+    plan.features.maxListings ??
+    plan.features.maxStorefronts ??
+    plan.features.maxProfiles ??
+    plan.features.maxBusinesses ??
+    0;
 
   return (
     <Card
@@ -265,6 +269,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           .eq("user_id", user.id)
           .eq("area", area)
           .eq("status", "active")
+          .gt("expires_at", new Date().toISOString())
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -749,7 +754,7 @@ function PlanPickerWithTrial({
    Hook: usePlanMaxPhotos
    ───────────────────────────────────────────────────────────── */
 export function usePlanMaxPhotos(area: MarketplaceArea): number {
-  const [maxPhotos, setMaxPhotos] = useState(3); // default free tier
+  const [maxPhotos, setMaxPhotos] = useState<number>(FREE_POST_CONFIG.maxPhotos); // default free tier (5)
 
   useEffect(() => {
     async function fetchMaxPhotos() {
@@ -763,10 +768,11 @@ export function usePlanMaxPhotos(area: MarketplaceArea): number {
         // Check for active entitlement for this area
         const { data: entitlement } = await supabase
           .from("entitlements")
-          .select("tier")
+          .select("tier, expires_at")
           .eq("user_id", user.id)
           .eq("area", area)
           .eq("status", "active")
+          .gt("expires_at", new Date().toISOString())
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -776,16 +782,8 @@ export function usePlanMaxPhotos(area: MarketplaceArea): number {
           const ent = getEntitlements(tier, area);
           setMaxPhotos(ent.maxPhotos);
         } else {
-          // Check if free post is still available
-          const { data: freePostRow } = await supabase
-            .from("free_posts_used")
-            .select("id")
-            .eq("user_id", user.id)
-            .eq("area", area)
-            .maybeSingle();
-
-          // Free post available → 5 photos, otherwise default 5
-          setMaxPhotos(freePostRow ? FREE_POST_CONFIG.maxPhotos : FREE_POST_CONFIG.maxPhotos);
+          // No active paid plan — use free post photo limit
+          setMaxPhotos(FREE_POST_CONFIG.maxPhotos);
         }
       } catch {
         // Keep default
@@ -816,10 +814,11 @@ export function usePlanVideoAllowed(area: MarketplaceArea): boolean {
         // Check for active entitlement for this area
         const { data: entitlement } = await supabase
           .from("entitlements")
-          .select("tier")
+          .select("tier, expires_at")
           .eq("user_id", user.id)
           .eq("area", area)
           .eq("status", "active")
+          .gt("expires_at", new Date().toISOString())
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();

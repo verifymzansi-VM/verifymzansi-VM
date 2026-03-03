@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { settingsDisplayNameSchema } from "@/lib/validations/profile";
 
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -26,11 +27,23 @@ export default function SettingsPage() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const displayName = formData.get("displayName") as string;
+      const displayName = ((formData.get("displayName") as string) || "").trim();
+
+      // Validate with Zod schema
+      const result = settingsDisplayNameSchema.safeParse({ displayName });
+      if (!result.success) {
+        const firstError = result.error.issues[0];
+        toast({
+          title: "Validation error",
+          description: firstError?.message || "Please check your input",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const { error } = await supabase
         .from("seller_profiles")
-        .update({ display_name: displayName })
+        .update({ display_name: result.data.displayName })
         .eq("user_id", user.id);
 
       if (error) {
@@ -68,8 +81,16 @@ export default function SettingsPage() {
         <CardContent>
           <form action={handleUpdateProfile} className="space-y-4 max-w-md">
             <div className="space-y-2">
-              <Label htmlFor="displayName">Display name</Label>
-              <Input id="displayName" name="displayName" placeholder="Your name" />
+              <Label htmlFor="displayName">Display name *</Label>
+              <Input
+                id="displayName"
+                name="displayName"
+                placeholder="Your name"
+                maxLength={50}
+                required
+                minLength={2}
+              />
+              <p className="text-xs text-muted-foreground">2–50 characters</p>
             </div>
             <Button
               type="submit"

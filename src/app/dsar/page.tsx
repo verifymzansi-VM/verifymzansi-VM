@@ -32,7 +32,11 @@ export default function DsarPage() {
     const errors: Record<string, string> = {};
 
     if (!name) errors.name = "Full name is required";
+    else if (name.trim().length < 2) errors.name = "Name must be at least 2 characters";
+
     if (!email) errors.email = "Email address is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      errors.email = "Enter a valid email address";
 
     if (!idNumber) {
       errors.idNumber = "SA ID number is required";
@@ -275,7 +279,11 @@ export default function DsarPage() {
                       onExpire={() => setTurnstileToken("")}
                     />
 
-                    <Button type="submit" className="w-full gap-2" disabled={isSubmitting}>
+                    <Button
+                      type="submit"
+                      className="w-full gap-2"
+                      disabled={isSubmitting || !turnstileToken}
+                    >
                       {isSubmitting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (

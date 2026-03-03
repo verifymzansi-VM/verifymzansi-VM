@@ -1,0 +1,210 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { listingSchema } from "@/lib/validations/listing";
+import { logAuditEvent } from "@/lib/services/audit";
+import { getEntitlements } from "@/lib/services/entitlements";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { createLogger } from "@/lib/utils/logger";
+import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import { parseJsonRequest } from "@/lib/utils/api";
+import type { MarketplaceArea, PlanTier } from "@/types/enums";
+
+const log = createLogger("ListingUpdate");
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const AREA: MarketplaceArea = "MZANSI_MARKET";
+
+/**
+ * PUT /api/listings/[id]
+ *
+ * Server-side listing update with full validation, auth, ownership check,
+ * and photo/video limit enforcement.
+ */
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id: listingId } = await params;
+
+    // ── Validate UUID format ─────────────────────────────────
+    if (!UUID_RE.test(listingId)) {
+      return NextResponse.json({ error: "Invalid listing ID" }, { status: 400 });
+    }
+
+    // ── Authenticate ─────────────────────────────────────────
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // ── Rate limit ───────────────────────────────────────────
+    const ip = getClientIp(request);
+    const rl = await checkRateLimit({
+      key: user.id,
+      action: "listing_update",
+      deviceId: ip,
+    });
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later.", retryAfter: rl.retryAfter },
+        { status: 429 }
+      );
+    }
+
+    // ── Parse body ───────────────────────────────────────────
+    const body = await parseJsonRequest(request);
+    if (!body) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    // ── Validate with Zod schema ─────────────────────────────
+    const parsed = listingSchema.safeParse(body);
+    if (!parsed.success) {
+      const firstError = parsed.error.issues[0];
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: firstError?.message || "Invalid listing data",
+          issues: parsed.error.issues.map((i) => ({
+            path: i.path.join("."),
+            message: i.message,
+          })),
+        },
+        { status: 422 }
+      );
+    }
+
+    const data = parsed.data;
+    const admin = createAdminClient();
+
+    // ── Check listing exists and user owns it ────────────────
+    const { data: listing } = await admin
+      .from("listings")
+      .select("id, seller_id, status, area")
+      .eq("id", listingId)
+      .maybeSingle();
+
+    if (!listing) {
+      return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+    }
+
+    if (listing.seller_id !== user.id) {
+      return NextResponse.json(
+        { error: "Forbidden — you do not own this listing" },
+        { status: 403 }
+      );
+    }
+
+    // Prevent editing rejected listings (require resubmission flow)
+    if (listing.status === "rejected") {
+      return NextResponse.json(
+        { error: "Cannot edit a rejected listing. Use the resubmission flow." },
+        { status: 409 }
+      );
+    }
+
+    // ── Enforce photo/video limits based on plan ─────────────
+    // Check if user has a paid entitlement (not expired)
+    const { data: activeEntitlement } = await admin
+      .from("entitlements")
+      .select("tier")
+      .eq("user_id", user.id)
+      .eq("area", AREA)
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const hasPaidPlan = !!activeEntitlement;
+    const activeTier = (activeEntitlement?.tier as string) || null;
+
+    const ent =
+      hasPaidPlan && activeTier
+        ? getEntitlements(activeTier as PlanTier, AREA)
+        : {
+            maxPhotos: FREE_POST_CONFIG.maxPhotos,
+            videoAllowed: FREE_POST_CONFIG.videoAllowed,
+          };
+
+    if (data.images.length > ent.maxPhotos) {
+      return NextResponse.json(
+        {
+          error: `Maximum ${ent.maxPhotos} photos allowed on your plan`,
+        },
+        { status: 422 }
+      );
+    }
+
+    // ── Prepare update record ────────────────────────────────
+    const priceCents = Math.round(data.price_zar * 100);
+
+    const updateRecord = {
+      title: data.title,
+      description: data.description,
+      price_cents: priceCents,
+      price_negotiable: data.negotiable,
+      category: data.category,
+      attributes: "attributes" in data ? data.attributes : {},
+      condition: data.condition || null,
+      location_province: data.province || null,
+      location_city: data.city || null,
+      location_suburb: (body as Record<string, unknown>).town || null,
+      photos: data.images,
+      videos: (body as Record<string, unknown>).videos || [],
+      video_thumbnail: (body as Record<string, unknown>).videoThumbnail || null,
+      contact_methods: (body as Record<string, unknown>).contactMethods || ["call"],
+      // Re-submit for moderation on edit
+      status: listing.status === "live" ? "pending_moderation" : listing.status,
+    };
+
+    // ── Update listing ───────────────────────────────────────
+    const { error: updateError } = await admin
+      .from("listings")
+      .update(updateRecord)
+      .eq("id", listingId)
+      .eq("seller_id", user.id); // Double-check ownership at DB level
+
+    if (updateError) {
+      log.error("Failed to update listing", {
+        error: updateError.message,
+        listingId,
+        userId: user.id,
+      });
+      return NextResponse.json(
+        { error: "Failed to update listing", details: updateError.message },
+        { status: 500 }
+      );
+    }
+
+    // ── Audit log ────────────────────────────────────────────
+    await logAuditEvent({
+      actorId: user.id,
+      actorRole: "seller",
+      action: "listing_updated",
+      targetType: "listing",
+      targetId: listingId,
+      area: AREA,
+      metadata: {
+        category: data.category,
+        priceCents,
+        previousStatus: listing.status,
+      },
+    });
+
+    log.info("Listing updated", {
+      listingId,
+      userId: user.id,
+      category: data.category,
+    });
+
+    return NextResponse.json({ id: listingId, message: "Listing updated successfully" });
+  } catch (err) {
+    log.error("Unexpected error in listing update", {
+      error: err instanceof Error ? err.message : "unknown",
+    });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

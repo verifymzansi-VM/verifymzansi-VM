@@ -6,3 +6,6 @@ export * from "./business";
 export * from "./business-unified";
 export * from "./verification";
 export * from "./contact";
+export * from "./profile";
+export * from "./promotion";
+export * from "./admin";

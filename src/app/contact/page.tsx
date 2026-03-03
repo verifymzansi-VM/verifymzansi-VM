@@ -196,7 +196,7 @@ export default function ContactPage() {
                     <Button
                       type="submit"
                       className="w-full sm:w-auto gap-2"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !turnstileToken}
                     >
                       {isSubmitting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />

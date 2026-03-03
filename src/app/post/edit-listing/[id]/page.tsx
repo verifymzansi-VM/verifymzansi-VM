@@ -125,6 +125,25 @@ export default function EditListingPage() {
       return;
     }
 
+    const numPrice = parseFloat(price);
+    if (isNaN(numPrice) || numPrice < 0) {
+      toast({ title: "Please enter a valid price", variant: "destructive" });
+      return;
+    }
+
+    if (!province) {
+      toast({ title: "Please select a province", variant: "destructive" });
+      return;
+    }
+    if (!city) {
+      toast({ title: "Please select a city", variant: "destructive" });
+      return;
+    }
+    if (contactMethods.length === 0) {
+      toast({ title: "Please select at least one contact method", variant: "destructive" });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const newPhotoUrls = await uploadMedia(newPhotoFiles, "listing");
@@ -137,30 +156,41 @@ export default function EditListingPage() {
         videoThumbnail = newCoverUrls[0];
       }
 
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("listings")
-        .update({
-          title,
-          description,
-          price_cents: Math.round(parseFloat(price) * 100),
-          price_negotiable: negotiable,
+      const allPhotos = [...existingPhotos, ...newPhotoUrls];
+      const allVideos = [...existingVideos, ...newVideoUrls];
+
+      if (allPhotos.length === 0) {
+        toast({ title: "At least one photo is required", variant: "destructive" });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Submit via server-side API route for full validation & ownership check
+      const res = await fetch(`/api/listings/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim(),
+          price_zar: numPrice,
+          negotiable,
           category: mapListingCategory(category),
           attributes: categoryAttributes,
-          location_province: province || null,
-          location_city: city || null,
-          location_suburb: town || null,
-          photos: [...existingPhotos, ...newPhotoUrls],
-          videos: [...existingVideos, ...newVideoUrls],
-          video_thumbnail: videoThumbnail,
-          contact_methods: contactMethods,
-        })
-        .eq("id", id);
+          province: province || "",
+          city: city || "",
+          town: town || "",
+          images: allPhotos,
+          videos: allVideos,
+          videoThumbnail,
+          contactMethods,
+        }),
+      });
 
-      if (error) {
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         toast({
           title: "Failed to update listing",
-          description: error.message,
+          description: data.error || data.reason || "Something went wrong",
           variant: "destructive",
         });
         return;
