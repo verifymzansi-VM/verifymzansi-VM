@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 
 interface DeletePostButtonProps {
   itemId: string;
-  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS";
+  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS" | "PROMOTIONS_EVENTS";
   /** Optional label override (default: "Delete") */
   label?: string;
 }

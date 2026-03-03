@@ -17,6 +17,7 @@ export default function BillingPage() {
   // Group plans by area
   const marketPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_MARKET");
   const businessPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
+  const promotionPlans = PLANS.filter((p: PlanDefinition) => p.area === "PROMOTIONS_EVENTS");
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -64,7 +65,7 @@ export default function BillingPage() {
 
           <Tabs defaultValue="market" className="max-w-5xl mx-auto">
             <div className="flex justify-center mb-8">
-              <TabsList className="grid w-full max-w-2xl grid-cols-2 p-1 h-14 bg-muted/50 rounded-full">
+              <TabsList className="grid w-full max-w-3xl grid-cols-3 p-1 h-14 bg-muted/50 rounded-full">
                 <TabsTrigger
                   value="market"
                   className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
@@ -77,6 +78,12 @@ export default function BillingPage() {
                 >
                   Mzansi Business
                 </TabsTrigger>
+                <TabsTrigger
+                  value="promotions"
+                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  Promotions & Events
+                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -86,6 +93,10 @@ export default function BillingPage() {
 
             <TabsContent value="business" className="mt-0">
               <PlanGrid plans={businessPlans} />
+            </TabsContent>
+
+            <TabsContent value="promotions" className="mt-0">
+              <PlanGrid plans={promotionPlans} />
             </TabsContent>
           </Tabs>
         </div>
@@ -159,6 +170,9 @@ function PlanGrid({ plans }: PlanGridProps) {
                 {plan.features.maxBusinesses !== undefined && (
                   <FeatureItem included text={`${plan.features.maxBusinesses} businesses`} />
                 )}
+                {plan.features.maxPromotions !== undefined && (
+                  <FeatureItem included text={`${plan.features.maxPromotions} promotions`} />
+                )}
                 <FeatureItem
                   included
                   text={`${plan.features.maxPhotos} photos per ${
@@ -166,9 +180,11 @@ function PlanGrid({ plans }: PlanGridProps) {
                       ? "listing"
                       : plan.area === "MZANSI_BUSINESS"
                         ? "business"
-                        : plan.area === "MALL_SHOPS"
-                          ? "storefront"
-                          : "profile"
+                        : plan.area === "PROMOTIONS_EVENTS"
+                          ? "promotion"
+                          : plan.area === "MALL_SHOPS"
+                            ? "storefront"
+                            : "profile"
                   }`}
                 />
                 <FeatureItem
@@ -178,9 +194,11 @@ function PlanGrid({ plans }: PlanGridProps) {
                       ? "listings"
                       : plan.area === "MZANSI_BUSINESS"
                         ? "businesses"
-                        : plan.area === "MALL_SHOPS"
-                          ? "storefronts"
-                          : "profiles"
+                        : plan.area === "PROMOTIONS_EVENTS"
+                          ? "promotions"
+                          : plan.area === "MALL_SHOPS"
+                            ? "storefronts"
+                            : "profiles"
                   }`}
                 />
                 <FeatureItem included={plan.features.featuredAllowed} text="Featured placement" />

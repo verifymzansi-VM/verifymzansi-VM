@@ -13,6 +13,7 @@ export interface PlanDefinition {
     maxStorefronts?: number;
     maxProfiles?: number;
     maxBusinesses?: number;
+    maxPromotions?: number;
     maxPostsPerMonth: number;
     videoAllowed: boolean;
     maxVideos?: number;
@@ -149,6 +150,78 @@ export const PLANS: PlanDefinition[] = [
       featuredAllowed: true,
       urgentAllowed: true,
       coverVideoAllowed: true,
+    },
+  },
+  // Promotions & Events
+  {
+    area: "PROMOTIONS_EVENTS",
+    tier: "basic",
+    name: "Promotions Basic",
+    priceCents: 3000,
+    billingFrequency: "30_days",
+    features: {
+      maxPromotions: 1,
+      maxPhotos: 5,
+      maxPostsPerMonth: 1,
+      videoAllowed: false,
+      boostAllowed: false,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: false,
+    },
+  },
+  {
+    area: "PROMOTIONS_EVENTS",
+    tier: "starter",
+    name: "Promotions Starter",
+    priceCents: 10000,
+    billingFrequency: "30_days",
+    features: {
+      maxPromotions: 5,
+      maxPhotos: 5,
+      maxPostsPerMonth: 5,
+      videoAllowed: true,
+      maxVideos: 1,
+      boostAllowed: false,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: false,
+    },
+  },
+  {
+    area: "PROMOTIONS_EVENTS",
+    tier: "growth",
+    name: "Promotions Growth",
+    priceCents: 25000,
+    billingFrequency: "30_days",
+    features: {
+      maxPromotions: 15,
+      maxPhotos: 10,
+      maxPostsPerMonth: 15,
+      videoAllowed: true,
+      maxVideos: 3,
+      boostAllowed: true,
+      featuredAllowed: false,
+      urgentAllowed: false,
+      coverVideoAllowed: false,
+    },
+  },
+  {
+    area: "PROMOTIONS_EVENTS",
+    tier: "pro",
+    name: "Promotions Pro",
+    priceCents: 65000,
+    billingFrequency: "30_days",
+    features: {
+      maxPromotions: 45,
+      maxPhotos: 10,
+      maxPostsPerMonth: 45,
+      videoAllowed: true,
+      maxVideos: 9,
+      boostAllowed: true,
+      featuredAllowed: true,
+      urgentAllowed: true,
+      coverVideoAllowed: false,
     },
   },
   /** @deprecated Use MZANSI_BUSINESS plans instead */

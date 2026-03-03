@@ -145,7 +145,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         action: "listing_urgent",
         targetType: "listing",
         targetId: listingId,
-        area: area as "MZANSI_MARKET" | "MALL_SHOPS" | "BUSINESS_ADS",
+        area: area as "MZANSI_MARKET" | "MALL_SHOPS" | "BUSINESS_ADS" | "PROMOTIONS_EVENTS",
         metadata: {
           paymentId: payment.id,
           amount: amountRands,

@@ -11,8 +11,8 @@ const log = createLogger("ContentResubmit");
 
 const resubmitSchema = z.object({
   itemId: z.string().uuid("itemId must be a valid UUID"),
-  area: z.enum(["MZANSI_MARKET", "BUSINESS_ADS", "MALL_SHOPS"], {
-    message: "area must be MZANSI_MARKET, BUSINESS_ADS, or MALL_SHOPS",
+  area: z.enum(["MZANSI_MARKET", "BUSINESS_ADS", "MALL_SHOPS", "PROMOTIONS_EVENTS"], {
+    message: "area must be MZANSI_MARKET, BUSINESS_ADS, MALL_SHOPS, or PROMOTIONS_EVENTS",
   }),
 });
 
@@ -20,6 +20,7 @@ const tableMap: Record<string, string> = {
   MZANSI_MARKET: "listings",
   BUSINESS_ADS: "business_profiles",
   MALL_SHOPS: "storefronts",
+  PROMOTIONS_EVENTS: "promotions",
 };
 
 /**

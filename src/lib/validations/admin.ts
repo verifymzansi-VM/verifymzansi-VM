@@ -7,9 +7,13 @@ import { z } from "zod";
 export const adminContentDecideSchema = z
   .object({
     itemId: z.string().uuid("itemId must be a valid UUID"),
-    area: z.enum(["MZANSI_MARKET", "BUSINESS_ADS", "MALL_SHOPS", "MZANSI_BUSINESS"], {
-      message: "area must be MZANSI_MARKET, BUSINESS_ADS, MALL_SHOPS, or MZANSI_BUSINESS",
-    }),
+    area: z.enum(
+      ["MZANSI_MARKET", "BUSINESS_ADS", "MALL_SHOPS", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"],
+      {
+        message:
+          "area must be MZANSI_MARKET, BUSINESS_ADS, MALL_SHOPS, MZANSI_BUSINESS, or PROMOTIONS_EVENTS",
+      }
+    ),
     decision: z.enum(["approve", "reject"], {
       message: "decision must be approve or reject",
     }),

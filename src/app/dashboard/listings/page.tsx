@@ -71,18 +71,21 @@ export default async function ListingsPage() {
   const expired = listings.filter((l) => l.status === "expired" || l.status === "sold");
   const rejected = listings.filter((l) => l.status === "rejected");
 
-  const [mzansiTier, businessTier, mallTier, mzansiBusinessTier] = await Promise.all([
-    getActivePlanTierForArea(user.id, "MZANSI_MARKET"),
-    getActivePlanTierForArea(user.id, "BUSINESS_ADS"),
-    getActivePlanTierForArea(user.id, "MALL_SHOPS"),
-    getActivePlanTierForArea(user.id, "MZANSI_BUSINESS"),
-  ]);
+  const [mzansiTier, businessTier, mallTier, mzansiBusinessTier, promotionsTier] =
+    await Promise.all([
+      getActivePlanTierForArea(user.id, "MZANSI_MARKET"),
+      getActivePlanTierForArea(user.id, "BUSINESS_ADS"),
+      getActivePlanTierForArea(user.id, "MALL_SHOPS"),
+      getActivePlanTierForArea(user.id, "MZANSI_BUSINESS"),
+      getActivePlanTierForArea(user.id, "PROMOTIONS_EVENTS"),
+    ]);
 
   const planTiers: Record<MarketplaceArea, PlanTier> = {
     MZANSI_MARKET: mzansiTier,
     BUSINESS_ADS: businessTier,
     MALL_SHOPS: mallTier,
     MZANSI_BUSINESS: mzansiBusinessTier,
+    PROMOTIONS_EVENTS: promotionsTier,
   };
 
   return (
@@ -234,15 +237,21 @@ function RejectedListingList({ listings }: { listings: BaseListing[] }) {
               <ResubmitButton
                 itemId={listing.id}
                 area={
-                  (listing.area as "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS") ||
-                  "MZANSI_MARKET"
+                  (listing.area as
+                    | "MZANSI_MARKET"
+                    | "BUSINESS_ADS"
+                    | "MALL_SHOPS"
+                    | "PROMOTIONS_EVENTS") || "MZANSI_MARKET"
                 }
               />
               <DeletePostButton
                 itemId={listing.id}
                 area={
-                  (listing.area as "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS") ||
-                  "MZANSI_MARKET"
+                  (listing.area as
+                    | "MZANSI_MARKET"
+                    | "BUSINESS_ADS"
+                    | "MALL_SHOPS"
+                    | "PROMOTIONS_EVENTS") || "MZANSI_MARKET"
                 }
               />
               <p className="text-xs text-muted-foreground">
@@ -372,8 +381,11 @@ function ListingList({
               <DeletePostButton
                 itemId={listing.id}
                 area={
-                  (listing.area as "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS") ||
-                  "MZANSI_MARKET"
+                  (listing.area as
+                    | "MZANSI_MARKET"
+                    | "BUSINESS_ADS"
+                    | "MALL_SHOPS"
+                    | "PROMOTIONS_EVENTS") || "MZANSI_MARKET"
                 }
               />
             </div>

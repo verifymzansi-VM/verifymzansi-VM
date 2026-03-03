@@ -4,14 +4,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { promotionSchema } from "@/lib/validations/promotion";
+import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
+import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
 const log = createLogger("PromotionsCRUD");
+const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
 
 /**
  * POST /api/promotions
  *
  * Create a new standalone promotion / advertisement.
- * Requires authenticated, verified seller.
+ * Requires authenticated, verified seller with a valid entitlement or free post.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -37,6 +41,61 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
     }
 
+    // ── Check entitlement / plan limits ──────────────────────
+    const { data: activeEntitlement } = await admin
+      .from("entitlements")
+      .select("tier")
+      .eq("user_id", user.id)
+      .eq("area", AREA)
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const hasPaidPlan = !!activeEntitlement;
+    const tier = (activeEntitlement?.tier as string) || null;
+
+    // Check free post availability for unpaid users
+    if (!hasPaidPlan) {
+      const { data: freePostRow } = await admin
+        .from("free_posts_used")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("area", AREA)
+        .maybeSingle();
+
+      if (freePostRow) {
+        return NextResponse.json(
+          {
+            error: "Free post already used",
+            reason:
+              "You have already used your free post for Promotions & Events. Subscribe to a plan to post more.",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (hasPaidPlan && tier) {
+      // Paid plan — check promotion count against plan limits
+      const { count } = await admin
+        .from("promotions")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_id", user.id)
+        .neq("status", "rejected");
+
+      const currentCount = count ?? 0;
+      const check = canCreateListing(currentCount, tier as PlanTier, AREA);
+
+      if (!check.allowed) {
+        return NextResponse.json(
+          { error: "Promotion limit reached", reason: check.reason },
+          { status: 403 }
+        );
+      }
+    }
+
     // Parse and validate body
     let body: unknown;
     try {
@@ -54,6 +113,24 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
+
+    // ── Enforce photo/video limits based on plan ─────────────
+    const ent =
+      hasPaidPlan && tier
+        ? getEntitlements(tier as PlanTier, AREA)
+        : {
+            maxPhotos: FREE_POST_CONFIG.maxPhotos,
+            videoAllowed: FREE_POST_CONFIG.videoAllowed,
+          };
+
+    if (data.images.length > ent.maxPhotos) {
+      return NextResponse.json(
+        {
+          error: `Maximum ${ent.maxPhotos} photos allowed on your plan`,
+        },
+        { status: 422 }
+      );
+    }
 
     // Build the promotion row
     const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
@@ -87,6 +164,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create promotion" }, { status: 500 });
     }
 
+    // ── Mark free post as used if no paid entitlement ────────
+    if (!hasPaidPlan) {
+      const { error: freePostError } = await admin
+        .from("free_posts_used")
+        .upsert({ user_id: user.id, area: AREA }, { onConflict: "user_id,area" });
+
+      if (freePostError) {
+        log.error("Failed to mark free post as used", {
+          error: freePostError.message,
+          userId: user.id,
+        });
+      }
+    }
+
     // Audit (best-effort)
     try {
       await logAuditEvent({
@@ -95,7 +186,13 @@ export async function POST(request: NextRequest) {
         action: "listing_created",
         targetType: "promotion",
         targetId: promotion.id,
-        metadata: { promotion_type: data.promotion_type, title: data.title },
+        area: AREA,
+        metadata: {
+          promotion_type: data.promotion_type,
+          title: data.title,
+          hasPaidPlan,
+          tier,
+        },
       });
     } catch (auditErr) {
       log.error("Audit log failed (non-fatal)", {

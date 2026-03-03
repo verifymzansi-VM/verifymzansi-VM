@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 
 interface ResubmitButtonProps {
   itemId: string;
-  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS";
+  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS" | "PROMOTIONS_EVENTS";
   /** Optional label override (default: "Resubmit for Review") */
   label?: string;
 }

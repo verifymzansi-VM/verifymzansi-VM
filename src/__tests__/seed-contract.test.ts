@@ -7,8 +7,8 @@ function isPaidTier(tier: string): tier is "starter" | "growth" | "pro" {
 }
 
 describe("Seed contract alignment", () => {
-  it("defines exactly 12 active subscription plans", () => {
-    expect(EXPECTED_ACTIVE_PLAN_ROWS).toHaveLength(12);
+  it("defines exactly 15 active subscription plans", () => {
+    expect(EXPECTED_ACTIVE_PLAN_ROWS).toHaveLength(15);
   });
 
   it("stays aligned with runtime pricing constants", () => {

@@ -11,20 +11,27 @@ import {
 } from "./pricing";
 
 describe("pricing constants", () => {
-  it("defines exactly 13 plans (basic + 4 areas × 3 tiers)", () => {
-    expect(PLANS).toHaveLength(13);
+  it("defines exactly 17 plans (basic + 5 areas × 3 tiers + 1 extra basic)", () => {
+    expect(PLANS).toHaveLength(17);
   });
 
-  it("covers all four marketplace areas", () => {
+  it("covers all five marketplace areas", () => {
     const areas = Array.from(new Set(PLANS.map((p) => p.area)));
     expect(areas).toContain("MZANSI_MARKET");
     expect(areas).toContain("MZANSI_BUSINESS");
+    expect(areas).toContain("PROMOTIONS_EVENTS");
     expect(areas).toContain("MALL_SHOPS");
     expect(areas).toContain("BUSINESS_ADS");
   });
 
   it("covers all three tiers per area", () => {
-    for (const area of ["MZANSI_MARKET", "MZANSI_BUSINESS", "MALL_SHOPS", "BUSINESS_ADS"]) {
+    for (const area of [
+      "MZANSI_MARKET",
+      "MZANSI_BUSINESS",
+      "PROMOTIONS_EVENTS",
+      "MALL_SHOPS",
+      "BUSINESS_ADS",
+    ]) {
       const tiers = PLANS.filter((p) => p.area === area).map((p) => p.tier);
       expect(tiers).toContain("starter");
       expect(tiers).toContain("growth");
@@ -39,7 +46,13 @@ describe("pricing constants", () => {
   });
 
   it("pro plans are the most expensive per area", () => {
-    for (const area of ["MZANSI_MARKET", "MZANSI_BUSINESS", "MALL_SHOPS", "BUSINESS_ADS"]) {
+    for (const area of [
+      "MZANSI_MARKET",
+      "MZANSI_BUSINESS",
+      "PROMOTIONS_EVENTS",
+      "MALL_SHOPS",
+      "BUSINESS_ADS",
+    ]) {
       const areaPlans = PLANS.filter((p) => p.area === area);
       const pro = areaPlans.find((p) => p.tier === "pro")!;
       const starter = areaPlans.find((p) => p.tier === "starter")!;
@@ -83,6 +96,7 @@ describe("getPlansForArea", () => {
   it("returns correct number of plans for each area", () => {
     expect(getPlansForArea("MZANSI_MARKET")).toHaveLength(4);
     expect(getPlansForArea("MZANSI_BUSINESS")).toHaveLength(3);
+    expect(getPlansForArea("PROMOTIONS_EVENTS")).toHaveLength(4);
     expect(getPlansForArea("MALL_SHOPS")).toHaveLength(3);
     expect(getPlansForArea("BUSINESS_ADS")).toHaveLength(3);
   });

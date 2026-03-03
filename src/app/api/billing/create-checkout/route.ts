@@ -13,7 +13,9 @@ const log = createLogger("Checkout");
 
 const checkoutSchema = z.object({
   planId: z.string().uuid("Invalid plan ID"),
-  area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "BUSINESS_ADS", "MALL_SHOPS"]).optional(),
+  area: z
+    .enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "BUSINESS_ADS", "MALL_SHOPS", "PROMOTIONS_EVENTS"])
+    .optional(),
 });
 
 /**
