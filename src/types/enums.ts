@@ -125,6 +125,7 @@ export const UPLOAD_AREAS = [
   "business",
   "business_logo",
   "business_cover",
+  "promotion",
   "storefront",
   "storefront_logo",
   "storefront_cover",

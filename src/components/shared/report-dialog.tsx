@@ -15,7 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-type TargetType = "listing" | "business";
+type TargetType = "listing" | "business" | "promotion";
 
 interface ReportDialogProps {
   targetId: string;
@@ -145,8 +145,7 @@ export function ReportDialog({
             <DialogHeader>
               <DialogTitle>Report {targetName || "Content"}</DialogTitle>
               <DialogDescription>
-                Help keep VerifyMzansi safe. Tell us what&apos;s wrong with this{" "}
-                {targetType}.
+                Help keep VerifyMzansi safe. Tell us what&apos;s wrong with this {targetType}.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 pt-2">

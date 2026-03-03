@@ -77,8 +77,7 @@ export async function POST(request: NextRequest) {
         start_date: data.start_date || null,
         end_date: data.end_date || null,
         business_id: data.business_id || null,
-        status: "live",
-        published_at: new Date().toISOString(),
+        status: "pending_moderation",
       })
       .select("id")
       .single();

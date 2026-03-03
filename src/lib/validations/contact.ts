@@ -7,7 +7,7 @@ export const contactSellerSchema = z.object({
     .string()
     .min(5, "Message must be at least 5 characters")
     .max(1000, "Message cannot exceed 1000 characters"),
-  contactMethod: z.enum(["in_app", "whatsapp", "call", "form"]).default("in_app"),
+  contactMethod: z.enum(["call", "whatsapp", "form", "in_app"]).default("form"),
   turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
 });
 
@@ -18,9 +18,10 @@ export const contactSellerSchema = z.object({
 export const reportSchema = z.object({
   targetType: z.enum([
     "listing",
+    "business",
+    "promotion",
     "seller",
     "storefront",
-    "business",
     "seller_profile",
     "business_profile",
   ]),

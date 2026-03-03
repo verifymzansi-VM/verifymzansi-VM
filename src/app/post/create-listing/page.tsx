@@ -41,8 +41,8 @@ const STEPS = [
   { label: "Media & Review", icon: Camera, description: "Photos, video & preview" },
 ] as const;
 
-const TITLE_MAX = 100;
-const DESC_MAX = 2000;
+const TITLE_MAX = 120;
+const DESC_MAX = 5000;
 
 const CONTACT_OPTIONS = [
   { id: "call", label: "Phone Call", icon: Phone },

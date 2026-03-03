@@ -83,8 +83,7 @@ export async function POST(request: NextRequest) {
         operating_hours: data.operating_hours,
         payment_methods_accepted: data.payment_methods_accepted,
         delivery_options: data.delivery_options,
-        status: "live",
-        published_at: new Date().toISOString(),
+        status: "pending_moderation",
       })
       .select("id")
       .single();
@@ -213,9 +212,7 @@ export async function GET(request: NextRequest) {
       query = query.eq("mall_id", mallId);
     }
     if (search) {
-      query = query.or(
-        `business_name.ilike.%${search}%,description.ilike.%${search}%`
-      );
+      query = query.or(`business_name.ilike.%${search}%,description.ilike.%${search}%`);
     }
 
     // Order: boosted first, then featured, then newest
