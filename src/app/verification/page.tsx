@@ -447,19 +447,42 @@ export default function VerificationPage() {
     setStep("location");
   }
 
+  /** Upload helper with 1 automatic retry after a 2-second delay. */
+  async function uploadWithRetry(
+    buildFormData: () => FormData,
+    label: string
+  ): Promise<Record<string, unknown>> {
+    const attempt = async () => {
+      const res = await fetch("/api/verification/upload", {
+        method: "POST",
+        body: buildFormData(),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || `Failed to upload ${label}`);
+      return payload;
+    };
+
+    try {
+      return await attempt();
+    } catch {
+      // One automatic retry after 2 s for transient failures
+      await new Promise((r) => setTimeout(r, 2000));
+      return await attempt();
+    }
+  }
+
   async function uploadIdIfNeeded() {
     if (uploadReceipts.id_doc) return;
     if (!idFile) throw new Error("Please add your ID document.");
 
-    const formData = new FormData();
-    formData.append("file", idFile);
-    formData.append("docType", "id_document");
-    formData.append("idNumber", idNumber);
-    formData.append("idDocumentType", "sa_id");
-
-    const res = await fetch("/api/verification/upload", { method: "POST", body: formData });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(payload.error || "Failed to upload ID document");
+    await uploadWithRetry(() => {
+      const fd = new FormData();
+      fd.append("file", idFile);
+      fd.append("docType", "id_document");
+      fd.append("idNumber", idNumber);
+      fd.append("idDocumentType", "sa_id");
+      return fd;
+    }, "ID document");
 
     setUploadReceipts((prev) => ({
       ...prev,
@@ -476,13 +499,12 @@ export default function VerificationPage() {
     if (uploadReceipts.selfie) return;
     if (!selfieFile) throw new Error("Please add your selfie.");
 
-    const formData = new FormData();
-    formData.append("file", selfieFile);
-    formData.append("docType", "selfie");
-
-    const res = await fetch("/api/verification/upload", { method: "POST", body: formData });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(payload.error || "Failed to upload selfie");
+    await uploadWithRetry(() => {
+      const fd = new FormData();
+      fd.append("file", selfieFile);
+      fd.append("docType", "selfie");
+      return fd;
+    }, "selfie");
 
     setUploadReceipts((prev) => ({
       ...prev,

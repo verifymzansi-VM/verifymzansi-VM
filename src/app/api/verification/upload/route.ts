@@ -51,10 +51,29 @@ export async function POST(request: NextRequest) {
     );
 
     if (process.env.NODE_ENV === "production" && !hasStorageSecrets) {
+      log.error("R2 storage secrets are missing in production");
       return NextResponse.json(
-        { error: "Document upload temporarily unavailable" },
+        { error: "Document upload temporarily unavailable", code: "storage_unavailable" },
         { status: 503 }
       );
+    }
+
+    // ── Validate encryption keys upfront ─────────────────────
+    const kycKey = process.env.KYC_ENCRYPTION_KEY;
+    if (!kycKey || kycKey.length !== 64 || !/^[0-9a-fA-F]+$/.test(kycKey)) {
+      log.error("KYC_ENCRYPTION_KEY is missing or malformed", {
+        present: Boolean(kycKey),
+        length: kycKey?.length,
+      });
+      if (!allowDevFallback) {
+        return NextResponse.json(
+          {
+            error: "Document encryption is not configured. Please contact support.",
+            code: "config_missing",
+          },
+          { status: 503 }
+        );
+      }
     }
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
@@ -165,12 +184,27 @@ export async function POST(request: NextRequest) {
       uploadResult = await uploadKycDocument(fileBlob, profile.id, docType);
       uploadedToR2 = true;
     } catch (storageError) {
+      const errMsg = storageError instanceof Error ? storageError.message : "Unknown storage error";
+      const errStack = storageError instanceof Error ? storageError.stack : undefined;
+      const isEncryptionError =
+        errMsg.includes("KYC_ENCRYPTION_KEY") || errMsg.includes("encryption");
+      const isCredentialError =
+        errMsg.includes("R2 credentials") ||
+        errMsg.includes("AccessDenied") ||
+        errMsg.includes("InvalidAccessKeyId");
+
       log.error("Failed to upload KYC document to storage", {
-        error: storageError instanceof Error ? storageError.message : "Unknown storage error",
+        error: errMsg,
+        stack: errStack,
+        category: isEncryptionError ? "encryption" : isCredentialError ? "credentials" : "storage",
       });
 
       if (!allowDevFallback) {
-        return NextResponse.json({ error: "Failed to upload document" }, { status: 500 });
+        const userMessage = isEncryptionError
+          ? "Document encryption failed. Please contact support."
+          : "Failed to upload document. Please try again in a moment.";
+        const code = isEncryptionError ? "encryption_failed" : "storage_failed";
+        return NextResponse.json({ error: userMessage, code }, { status: 500 });
       }
 
       // Local dev fallback when R2 is not configured/reachable.
@@ -345,9 +379,16 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    log.error("Unexpected error", { error: message });
+    const stack = err instanceof Error ? err.stack : undefined;
+    log.error("Unexpected error in verification upload", { error: message, stack });
     return NextResponse.json(
-      { error: process.env.NODE_ENV === "development" ? message : "Failed to upload document" },
+      {
+        error:
+          process.env.NODE_ENV === "development"
+            ? message
+            : "Failed to upload document. Please try again.",
+        code: "unexpected_error",
+      },
       { status: 500 }
     );
   }

@@ -50,12 +50,19 @@ describe("encryption", () => {
       expect(enc1.equals(enc2)).toBe(false);
     });
 
-    it("encrypted output is larger than input (salt + IV + tag overhead)", async () => {
+    it("encrypted output is larger than input (magic + salt + IV + tag overhead)", async () => {
       const plaintext = Buffer.from("Short");
       const encrypted = await encryptData(plaintext);
 
-      // salt(64) + iv(12) + tag(16) + encrypted data = 92 bytes overhead
-      expect(encrypted.length).toBeGreaterThanOrEqual(plaintext.length + 92);
+      // v2: magic(1) + salt(64) + iv(12) + tag(16) + encrypted data = 93 bytes overhead
+      expect(encrypted.length).toBeGreaterThanOrEqual(plaintext.length + 93);
+    });
+
+    it("v2 ciphertext starts with 0x02 magic byte", async () => {
+      const plaintext = Buffer.from("version check");
+      const encrypted = await encryptData(plaintext);
+
+      expect(encrypted[0]).toBe(0x02);
     });
 
     it("throws with tampered ciphertext", async () => {
