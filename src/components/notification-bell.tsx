@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { Bell, Check, CheckCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,34 +20,55 @@ import Link from "next/link";
  * events on the `notifications` table for live updates.
  */
 export function NotificationBell({ userId }: { userId?: string }) {
-  const { notifications, unreadCount, addNotification, markRead, markAllRead, clearAll } =
-    useNotificationStore();
-  const hydratedRef = useRef(false);
+  const {
+    notifications,
+    unreadCount,
+    addNotification,
+    hydrateNotifications,
+    markRead,
+    markAllRead,
+    clearAll,
+  } = useNotificationStore();
+  const hydratedRef = useRef<string | null>(null);
 
-  // Hydrate from API on mount
+  // Hydrate from API on mount (re-runs when userId changes)
   useEffect(() => {
-    if (!userId || hydratedRef.current) return;
-    hydratedRef.current = true;
+    if (!userId || hydratedRef.current === userId) return;
+    hydratedRef.current = userId;
+
+    // Flush previous user's notifications before fetching
+    clearAll();
 
     fetch("/api/notifications?limit=25")
       .then((r) => r.json())
       .then((data) => {
         if (data.notifications && Array.isArray(data.notifications)) {
-          // Load existing notifications into the store (newest first)
-          for (const n of data.notifications.reverse()) {
-            addNotification({
-              type: n.type ?? "info",
-              title: n.title ?? "Notification",
-              message: n.message ?? undefined,
-              href: n.href ?? undefined,
-            });
-          }
+          // Map DB rows → store Notification objects, preserving id + read status
+          const mapped = data.notifications.map((n: Record<string, unknown>) => {
+            const dbId = n.id as string | undefined;
+            if (!dbId) {
+              console.warn(
+                "[NotificationBell] API notification missing 'id'; client-side UUID generated.",
+                { title: n.title }
+              );
+            }
+            return {
+              id: dbId ?? crypto.randomUUID(),
+              type: (n.type as "info" | "success" | "warning" | "error") ?? "info",
+              title: (n.title as string) ?? "Notification",
+              message: (n.message as string) ?? undefined,
+              href: (n.href as string) ?? undefined,
+              read: (n.read as boolean) ?? false,
+              createdAt: (n.created_at as string) ?? new Date().toISOString(),
+            };
+          });
+          hydrateNotifications(mapped);
         }
       })
       .catch(() => {
         // Silently fail — notifications are non-critical
       });
-  }, [userId, addNotification]);
+  }, [userId, hydrateNotifications, clearAll]);
 
   // Subscribe to real-time notifications for the authenticated user
   useRealtime({
@@ -57,14 +78,49 @@ export function NotificationBell({ userId }: { userId?: string }) {
     filterValue: userId,
     enabled: !!userId,
     onEvent: (payload: Record<string, unknown>) => {
+      // Supabase Realtime puts the inserted row in `payload.new`
+      const row = (payload.new ?? payload) as Record<string, unknown>;
       addNotification({
-        type: (payload.type as "info" | "success" | "warning" | "error") ?? "info",
-        title: (payload.title as string) ?? "New notification",
-        message: payload.message as string | undefined,
-        href: payload.href as string | undefined,
+        id: row.id as string | undefined,
+        type: (row.type as "info" | "success" | "warning" | "error") ?? "info",
+        title: (row.title as string) ?? "New notification",
+        message: row.message as string | undefined,
+        href: row.href as string | undefined,
+        createdAt: (row.created_at as string) ?? undefined,
       });
     },
   });
+
+  // ── API-synced action wrappers ─────────────────────────────────────
+  const handleMarkRead = useCallback(
+    (id: string) => {
+      markRead(id);
+      fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      }).catch(() => {});
+    },
+    [markRead]
+  );
+
+  const handleMarkAllRead = useCallback(() => {
+    markAllRead();
+    fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ all: true }),
+    }).catch(() => {});
+  }, [markAllRead]);
+
+  const handleClearAll = useCallback(() => {
+    clearAll();
+    fetch("/api/notifications", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ all: true }),
+    }).catch(() => {});
+  }, [clearAll]);
 
   return (
     <DropdownMenu>
@@ -90,7 +146,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
           <h3 className="text-sm font-semibold">Notifications</h3>
           <div className="flex gap-1">
             {unreadCount > 0 && (
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllRead}>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleMarkAllRead}>
                 <CheckCheck className="mr-1 h-3 w-3" />
                 Mark all read
               </Button>
@@ -100,7 +156,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
                 variant="ghost"
                 size="sm"
                 className="h-7 text-xs text-muted-foreground"
-                onClick={clearAll}
+                onClick={handleClearAll}
               >
                 <Trash2 className="mr-1 h-3 w-3" />
                 Clear
@@ -119,7 +175,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
           <ScrollArea className="max-h-80">
             <ul className="divide-y" aria-label="Notifications">
               {notifications.map((n) => (
-                <NotificationItem key={n.id} notification={n} onRead={markRead} />
+                <NotificationItem key={n.id} notification={n} onRead={handleMarkRead} />
               ))}
             </ul>
           </ScrollArea>

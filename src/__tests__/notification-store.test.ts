@@ -97,4 +97,116 @@ describe("notification-store", () => {
     const { notifications } = useNotificationStore.getState();
     expect(notifications.length).toBeLessThanOrEqual(50);
   });
+
+  // ── Hydration & dedup tests ──────────────────────────────────────
+
+  it("should hydrate notifications preserving id and read status", () => {
+    const { hydrateNotifications } = useNotificationStore.getState();
+    hydrateNotifications([
+      {
+        id: "db-uuid-1",
+        type: "success",
+        title: "Approved",
+        read: true,
+        createdAt: "2026-03-01T10:00:00Z",
+      },
+      {
+        id: "db-uuid-2",
+        type: "warning",
+        title: "Pending",
+        read: false,
+        createdAt: "2026-03-02T12:00:00Z",
+      },
+    ]);
+
+    const { notifications, unreadCount } = useNotificationStore.getState();
+    expect(notifications).toHaveLength(2);
+    expect(notifications[0].id).toBe("db-uuid-1");
+    expect(notifications[0].read).toBe(true);
+    expect(notifications[1].id).toBe("db-uuid-2");
+    expect(notifications[1].read).toBe(false);
+    expect(unreadCount).toBe(1);
+  });
+
+  it("should deduplicate addNotification when id already exists", () => {
+    const { hydrateNotifications, addNotification } = useNotificationStore.getState();
+
+    hydrateNotifications([
+      {
+        id: "existing-uuid",
+        type: "info",
+        title: "Already here",
+        read: false,
+        createdAt: "2026-03-02T12:00:00Z",
+      },
+    ]);
+
+    // Attempt to add a Realtime event with the same id
+    addNotification({
+      id: "existing-uuid",
+      type: "info",
+      title: "Already here",
+    });
+
+    const { notifications } = useNotificationStore.getState();
+    expect(notifications).toHaveLength(1);
+  });
+
+  it("should allow addNotification with a new id after hydration", () => {
+    const { hydrateNotifications, addNotification } = useNotificationStore.getState();
+
+    hydrateNotifications([
+      {
+        id: "hydrated-1",
+        type: "info",
+        title: "Old",
+        read: true,
+        createdAt: "2026-03-01T10:00:00Z",
+      },
+    ]);
+
+    addNotification({
+      id: "realtime-new",
+      type: "success",
+      title: "Fresh",
+    });
+
+    const { notifications, unreadCount } = useNotificationStore.getState();
+    expect(notifications).toHaveLength(2);
+    expect(notifications[0].id).toBe("realtime-new");
+    expect(notifications[0].read).toBe(false);
+    expect(unreadCount).toBe(1);
+  });
+
+  it("should preserve provided createdAt instead of overwriting", () => {
+    const serverTimestamp = "2026-02-15T08:30:00.000Z";
+    const { addNotification } = useNotificationStore.getState();
+
+    addNotification({
+      id: "ts-test-1",
+      type: "info",
+      title: "Server-timestamped",
+      createdAt: serverTimestamp,
+    });
+
+    const { notifications } = useNotificationStore.getState();
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].createdAt).toBe(serverTimestamp);
+  });
+
+  it("should default createdAt to current time when not provided", () => {
+    const before = new Date().toISOString();
+    const { addNotification } = useNotificationStore.getState();
+
+    addNotification({
+      type: "warning",
+      title: "No explicit timestamp",
+    });
+
+    const after = new Date().toISOString();
+    const { notifications } = useNotificationStore.getState();
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].createdAt >= before).toBe(true);
+    expect(notifications[0].createdAt <= after).toBe(true);
+  });
 });
