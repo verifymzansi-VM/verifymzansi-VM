@@ -22,6 +22,8 @@ function featureList(plan: PlanDefinition): string[] {
     items.push(`${f.maxStorefronts} storefront${f.maxStorefronts === 1 ? "" : "s"}`);
   if (f.maxProfiles !== undefined)
     items.push(`${f.maxProfiles} business profile${f.maxProfiles === 1 ? "" : "s"}`);
+  if (f.maxBusinesses !== undefined)
+    items.push(`${f.maxBusinesses} business${f.maxBusinesses === 1 ? "" : "es"}`);
   items.push(`${f.maxPhotos} photos per post`);
   items.push(`${f.maxPostsPerMonth} posts / 30 days`);
   if (f.videoAllowed) items.push("Video uploads");
@@ -95,8 +97,7 @@ function PlanGrid({ plans }: { plans: PlanDefinition[] }) {
 
 export default function PricingPage() {
   const marketPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_MARKET");
-  const mallPlans = PLANS.filter((p: PlanDefinition) => p.area === "MALL_SHOPS");
-  const bizPlans = PLANS.filter((p: PlanDefinition) => p.area === "BUSINESS_ADS");
+  const businessPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -119,22 +120,15 @@ export default function PricingPage() {
             <PlanGrid plans={marketPlans} />
           </section>
 
-          {/* Mall Shops Plans */}
+          {/* Mzansi Business Plans */}
           <section className="space-y-6">
             <div className="flex items-center gap-2">
-              <Badge className="bg-brand-gold text-amber-950">Mall Shops</Badge>
-              <span className="text-sm text-muted-foreground">Storefronts</span>
+              <Badge className="bg-brand-blue text-white">Mzansi Business</Badge>
+              <span className="text-sm text-muted-foreground">
+                Mall shops, storefronts &amp; business profiles
+              </span>
             </div>
-            <PlanGrid plans={mallPlans} />
-          </section>
-
-          {/* Business Ads Plans */}
-          <section className="space-y-6">
-            <div className="flex items-center gap-2">
-              <Badge className="bg-sky-700 text-white">Business Ads</Badge>
-              <span className="text-sm text-muted-foreground">Business profiles</span>
-            </div>
-            <PlanGrid plans={bizPlans} />
+            <PlanGrid plans={businessPlans} />
           </section>
 
           {/* FAQ */}

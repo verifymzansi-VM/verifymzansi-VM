@@ -172,10 +172,27 @@ export default function DsarPage() {
                       <Input
                         id="name"
                         value={name}
-                        onChange={(e) => setName(e.target.value)}
+                        onChange={(e) => {
+                          setName(e.target.value);
+                          if (fieldErrors.name) {
+                            setFieldErrors((prev) => ({ ...prev, name: "" }));
+                          }
+                        }}
                         placeholder="Your full legal name"
                         required
+                        aria-invalid={!!fieldErrors.name}
+                        aria-describedby={fieldErrors.name ? "name-error" : undefined}
                       />
+                      {fieldErrors.name && (
+                        <p
+                          id="name-error"
+                          role="alert"
+                          className="text-sm text-destructive"
+                          data-error="name"
+                        >
+                          {fieldErrors.name}
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -184,10 +201,27 @@ export default function DsarPage() {
                         id="email"
                         type="email"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (fieldErrors.email) {
+                            setFieldErrors((prev) => ({ ...prev, email: "" }));
+                          }
+                        }}
                         placeholder="your@email.com"
                         required
+                        aria-invalid={!!fieldErrors.email}
+                        aria-describedby={fieldErrors.email ? "email-error" : undefined}
                       />
+                      {fieldErrors.email && (
+                        <p
+                          id="email-error"
+                          role="alert"
+                          className="text-sm text-destructive"
+                          data-error="email"
+                        >
+                          {fieldErrors.email}
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-2">

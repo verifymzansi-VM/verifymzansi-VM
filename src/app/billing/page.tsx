@@ -16,8 +16,7 @@ export const metadata = {
 export default function BillingPage() {
   // Group plans by area
   const marketPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_MARKET");
-  const mallPlans = PLANS.filter((p: PlanDefinition) => p.area === "MALL_SHOPS");
-  const bizPlans = PLANS.filter((p: PlanDefinition) => p.area === "BUSINESS_ADS");
+  const businessPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -65,7 +64,7 @@ export default function BillingPage() {
 
           <Tabs defaultValue="market" className="max-w-5xl mx-auto">
             <div className="flex justify-center mb-8">
-              <TabsList className="grid w-full max-w-2xl grid-cols-3 p-1 h-14 bg-muted/50 rounded-full">
+              <TabsList className="grid w-full max-w-2xl grid-cols-2 p-1 h-14 bg-muted/50 rounded-full">
                 <TabsTrigger
                   value="market"
                   className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
@@ -73,16 +72,10 @@ export default function BillingPage() {
                   Mzansi Market
                 </TabsTrigger>
                 <TabsTrigger
-                  value="mall"
+                  value="business"
                   className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
-                  Mall Shops
-                </TabsTrigger>
-                <TabsTrigger
-                  value="biz"
-                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                >
-                  Business Ads
+                  Mzansi Business
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -91,12 +84,8 @@ export default function BillingPage() {
               <PlanGrid plans={marketPlans} />
             </TabsContent>
 
-            <TabsContent value="mall" className="mt-0">
-              <PlanGrid plans={mallPlans} />
-            </TabsContent>
-
-            <TabsContent value="biz" className="mt-0">
-              <PlanGrid plans={bizPlans} />
+            <TabsContent value="business" className="mt-0">
+              <PlanGrid plans={businessPlans} />
             </TabsContent>
           </Tabs>
         </div>
@@ -167,14 +156,19 @@ function PlanGrid({ plans }: PlanGridProps) {
                 {plan.features.maxProfiles !== undefined && (
                   <FeatureItem included text={`${plan.features.maxProfiles} profiles`} />
                 )}
+                {plan.features.maxBusinesses !== undefined && (
+                  <FeatureItem included text={`${plan.features.maxBusinesses} businesses`} />
+                )}
                 <FeatureItem
                   included
                   text={`${plan.features.maxPhotos} photos per ${
                     plan.area === "MZANSI_MARKET"
                       ? "listing"
-                      : plan.area === "MALL_SHOPS"
-                        ? "storefront"
-                        : "profile"
+                      : plan.area === "MZANSI_BUSINESS"
+                        ? "business"
+                        : plan.area === "MALL_SHOPS"
+                          ? "storefront"
+                          : "profile"
                   }`}
                 />
                 <FeatureItem
@@ -182,9 +176,11 @@ function PlanGrid({ plans }: PlanGridProps) {
                   text={`Boost ${
                     plan.area === "MZANSI_MARKET"
                       ? "listings"
-                      : plan.area === "MALL_SHOPS"
-                        ? "storefronts"
-                        : "profiles"
+                      : plan.area === "MZANSI_BUSINESS"
+                        ? "businesses"
+                        : plan.area === "MALL_SHOPS"
+                          ? "storefronts"
+                          : "profiles"
                   }`}
                 />
                 <FeatureItem included={plan.features.featuredAllowed} text="Featured placement" />
