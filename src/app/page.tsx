@@ -74,10 +74,7 @@ export default async function HomePage() {
 
       <main className="flex-1">
         {/* ═══ Hero Banner (rotating promotions + search) ═══ */}
-        <HeroBanner
-          topBusinesses={topBusinesses || []}
-          latestListings={latestListings || []}
-        />
+        <HeroBanner topBusinesses={topBusinesses || []} latestListings={latestListings || []} />
 
         {/* ═══ Browse by Category ═══ */}
         <section className="py-5 sm:py-8 border-b border-warm-200 dark:border-warm-800 bg-white dark:bg-warm-950">

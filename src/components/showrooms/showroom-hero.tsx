@@ -484,7 +484,8 @@ export function ShowroomHero({
                 >
                   {(() => {
                     const Icon =
-                      ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon || Building2;
+                      ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon ||
+                      Building2;
                     return <Icon className="h-2.5 w-2.5" />;
                   })()}
                   {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badge}

@@ -1,7 +1,16 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Calendar, Eye, ArrowLeft, Tag, Phone, MessageCircle, Building2 } from "lucide-react";
+import {
+  MapPin,
+  Calendar,
+  Eye,
+  ArrowLeft,
+  Tag,
+  Phone,
+  MessageCircle,
+  Building2,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

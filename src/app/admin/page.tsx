@@ -263,8 +263,7 @@ export default async function AdminPage() {
             </Link>
           </div>
           <p className="text-xs text-muted-foreground">
-            New listings and business profiles waiting for first-time approval before
-            going live.
+            New listings and business profiles waiting for first-time approval before going live.
           </p>
           <ModerationQueueClient
             items={contentQueue.map((i) => ({

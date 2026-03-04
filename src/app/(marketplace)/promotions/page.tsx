@@ -150,21 +150,13 @@ export default async function PromotionsPage({
     ...new Set(promotions.map((p) => p.business_id).filter(Boolean)),
   ] as string[];
   const { data: businesses } = businessIds.length
-    ? await admin
-        .from("businesses")
-        .select("id, business_name")
-        .in("id", businessIds)
+    ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
     : { data: [] };
 
-  const businessMap = new Map(
-    (businesses ?? []).map((b) => [b.id, b.business_name])
-  );
+  const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
 
   const hasContent =
-    featured.length > 0 ||
-    urgent.length > 0 ||
-    boosted.length > 0 ||
-    promotions.length > 0;
+    featured.length > 0 || urgent.length > 0 || boosted.length > 0 || promotions.length > 0;
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-10 max-w-7xl">
@@ -182,8 +174,8 @@ export default async function PromotionsPage({
               Want to advertise or promote on VerifyMzansi?
             </h3>
             <p className="text-sm text-muted-foreground">
-              Boost your listings, feature your business, or run promotions to reach verified
-              buyers across South Africa.
+              Boost your listings, feature your business, or run promotions to reach verified buyers
+              across South Africa.
             </p>
           </div>
           <Button asChild className="shrink-0 gap-1">
@@ -222,18 +214,12 @@ export default async function PromotionsPage({
           return (
             <Link
               key={chip.value}
-              href={
-                chip.value === "all"
-                  ? "/promotions"
-                  : `/promotions?type=${chip.value}`
-              }
+              href={chip.value === "all" ? "/promotions" : `/promotions?type=${chip.value}`}
             >
               <Badge
                 variant={isActive ? "default" : "outline"}
                 className={`cursor-pointer px-3 py-1.5 text-sm gap-1.5 ${
-                  isActive
-                    ? "bg-brand-green hover:bg-brand-green/90 text-white"
-                    : "hover:bg-muted"
+                  isActive ? "bg-brand-green hover:bg-brand-green/90 text-white" : "hover:bg-muted"
                 }`}
               >
                 <chip.icon className="h-3.5 w-3.5" />

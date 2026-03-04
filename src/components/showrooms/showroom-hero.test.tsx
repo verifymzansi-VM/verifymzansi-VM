@@ -59,7 +59,9 @@ describe("ShowroomHero", () => {
 
     await waitFor(() => {
       const ctas = screen.getAllByRole("link", { name: /visit shop/i });
-      expect(ctas.some((link) => link.getAttribute("href") === "/mzansi-business/store-1")).toBe(true);
+      expect(ctas.some((link) => link.getAttribute("href") === "/mzansi-business/store-1")).toBe(
+        true
+      );
     });
   });
 

@@ -78,7 +78,11 @@ export async function POST(request: Request) {
         });
       }
       sellerId = listing?.seller_id || null;
-    } else if (report.target_type === "storefront" || report.target_type === "business_profile" || report.target_type === "business") {
+    } else if (
+      report.target_type === "storefront" ||
+      report.target_type === "business_profile" ||
+      report.target_type === "business"
+    ) {
       const { data: biz, error: bizErr } = await admin
         .from("businesses")
         .select("seller_id")

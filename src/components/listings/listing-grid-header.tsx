@@ -3,10 +3,7 @@
 import { ArrowUpDown, X } from "lucide-react";
 import { useMarketplaceStore } from "@/stores";
 import { Badge } from "@/components/ui/badge";
-import {
-  CATEGORIES,
-  BUSINESS_CATEGORIES,
-} from "@/lib/constants/categories";
+import { CATEGORIES, BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,9 +67,8 @@ export function ListingGridHeader() {
         <div className="flex flex-wrap items-center gap-1.5">
           {filters.category && (
             <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
-              {[...CATEGORIES, ...BUSINESS_CATEGORIES].find(
-                (c) => c.value === filters.category
-              )?.label || filters.category.replace(/_/g, " ")}
+              {[...CATEGORIES, ...BUSINESS_CATEGORIES].find((c) => c.value === filters.category)
+                ?.label || filters.category.replace(/_/g, " ")}
               <X
                 className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100"
                 onClick={() => setFilter("category", undefined)}

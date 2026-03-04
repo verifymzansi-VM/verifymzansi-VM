@@ -66,7 +66,15 @@ export const useMarketplaceStore = create<MarketplaceState>((set) => ({
       page: 1,
     })),
   resetFilters: () =>
-    set({ filters: { ...defaultFilters, attributes: {}, businessType: undefined, businessCategory: undefined }, page: 1 }),
+    set({
+      filters: {
+        ...defaultFilters,
+        attributes: {},
+        businessType: undefined,
+        businessCategory: undefined,
+      },
+      page: 1,
+    }),
   setPage: (page) => set({ page }),
   setSearching: (isSearching) => set({ isSearching }),
 }));
