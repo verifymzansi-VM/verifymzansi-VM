@@ -81,7 +81,7 @@ export default function ContactPage() {
       <Header />
 
       <main id="main-content" className="flex-1">
-        <div className="container-page py-6 space-y-8">
+        <div className="container-page py-6 space-y-6">
           <PageHeader
             title="Contact Us"
             description="Send us a message and our team will get back to you."
@@ -91,8 +91,8 @@ export default function ContactPage() {
           <div className="mx-auto max-w-2xl">
             {isSubmitted ? (
               <Card>
-                <CardContent className="p-8 text-center space-y-4">
-                  <CheckCircle2 className="h-12 w-12 text-brand-green mx-auto" />
+                <CardContent className="p-6 text-center space-y-3">
+                  <CheckCircle2 className="h-10 w-10 text-brand-green mx-auto" />
                   <h2 className="font-display text-xl font-bold">Message Sent</h2>
                   <p className="text-muted-foreground">
                     Thank you for reaching out! Our team will get back to you at{" "}

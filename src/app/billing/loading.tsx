@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function BillingLoading() {
   return (
-    <div className="container-page py-8 space-y-6">
+    <div className="container-page py-6 space-y-4">
       <div className="space-y-2">
         <Skeleton className="h-8 w-32" />
         <Skeleton className="h-4 w-64" />

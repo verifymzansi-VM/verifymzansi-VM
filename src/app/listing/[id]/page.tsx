@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { MapPin, Calendar, Eye, ArrowLeft } from "lucide-react";
+import { MapPin, Calendar, Eye } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +54,7 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
     .single();
 
   if (!listing) {
-    return { title: "Listing Not Found | VerifyMzansi" };
+    return { title: "Listing Not Found" };
   }
 
   return {
@@ -135,7 +135,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-6">
+        <div className="container-page py-4 space-y-5">
           <PageHeader
             title={listing.title}
             breadcrumbs={[
@@ -313,7 +313,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
           {/* ── Similar Listings ───────────────────────── */}
           {similarItems.length > 0 && (
-            <section className="space-y-4 pt-6">
+            <section className="space-y-4 pt-4">
               <Separator />
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-xl font-semibold">Similar Listings</h2>
@@ -354,14 +354,6 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
               </div>
             </section>
           )}
-
-          <Link
-            href="/mzansi-market"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Mzansi Market
-          </Link>
         </div>
       </main>
 

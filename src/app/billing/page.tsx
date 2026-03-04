@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 export const metadata = {
-  title: "Pricing & Plans | VerifyMzansi",
+  title: "Pricing & Plans",
 };
 
 export default function BillingPage() {
@@ -23,49 +23,43 @@ export default function BillingPage() {
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
       <main className="flex-1 bg-background">
-        <div className="container-page py-12 space-y-16">
-          <div className="text-center max-w-3xl mx-auto space-y-4">
-            <h1 className="text-4xl md:text-5xl font-display font-bold tracking-tight">
+        <div className="container-page py-6 space-y-6">
+          <div className="text-center max-w-3xl mx-auto space-y-2">
+            <h1 className="text-2xl md:text-3xl font-display font-bold tracking-tight">
               Simple, transparent pricing
             </h1>
-            <p className="text-xl text-muted-foreground">
-              Choose the perfect plan for your selling needs. Every plan includes trust badges and
-              verification.
+            <p className="text-base text-muted-foreground">
+              Choose the perfect plan. All plans include trust badges and verification.
             </p>
           </div>
 
           {/* Free Post Banner */}
           <div className="max-w-4xl mx-auto">
-            <Card className="border-brand-green/30 bg-gradient-to-br from-brand-green/10 via-background to-brand-green/5 overflow-hidden">
-              <div className="flex flex-col sm:flex-row items-center justify-between p-6 sm:p-8 gap-6 text-center sm:text-left">
-                <div className="space-y-2">
-                  <Badge className="bg-brand-green/20 text-brand-green hover:bg-brand-green/20 mb-2">
-                    <Gift className="w-3 h-3 mr-1 inline-block" /> New Sellers
-                  </Badge>
-                  <h2 className="font-display text-2xl sm:text-3xl font-bold">
-                    1 Free Post per area — {FREE_POST_CONFIG.durationDays} days
-                  </h2>
-                  <p className="text-muted-foreground text-lg">
-                    {FREE_POST_CONFIG.maxPhotos} photos &bull; {FREE_POST_CONFIG.maxVideos} video
-                    &bull; Full verification badge. No credit card required.
-                  </p>
-                </div>
-                <Button
-                  asChild
-                  size="lg"
-                  className="bg-brand-green hover:bg-brand-green/90 text-white font-semibold shadow-lg whitespace-nowrap"
-                >
-                  <Link href="/register">
-                    Get Started Free <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
+            <div className="flex items-center justify-between py-3 px-5 rounded-lg bg-brand-green/10 border border-brand-green/20">
+              <div className="flex items-center gap-3">
+                <Badge className="bg-brand-green/20 text-brand-green hover:bg-brand-green/20">
+                  <Gift className="w-3 h-3 mr-1 inline-block" /> Free
+                </Badge>
+                <span className="text-sm font-medium">
+                  1 free post per area — {FREE_POST_CONFIG.maxPhotos} photos,{" "}
+                  {FREE_POST_CONFIG.maxVideos} video, {FREE_POST_CONFIG.durationDays} days
+                </span>
               </div>
-            </Card>
+              <Button
+                asChild
+                size="sm"
+                className="bg-brand-green hover:bg-brand-green/90 text-white font-semibold shrink-0"
+              >
+                <Link href="/register">
+                  Get Started <ArrowRight className="ml-1 h-3 w-3" />
+                </Link>
+              </Button>
+            </div>
           </div>
 
           <Tabs defaultValue="market" className="max-w-5xl mx-auto">
-            <div className="flex justify-center mb-8">
-              <TabsList className="grid w-full max-w-3xl grid-cols-3 p-1 h-14 bg-muted/50 rounded-full">
+            <div className="flex justify-center mb-4">
+              <TabsList className="grid w-full max-w-3xl grid-cols-3 p-1 h-10 bg-muted/50 rounded-full">
                 <TabsTrigger
                   value="market"
                   className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
@@ -113,7 +107,7 @@ interface PlanGridProps {
 function PlanGrid({ plans }: PlanGridProps) {
   return (
     <div
-      className={`grid grid-cols-1 md:grid-cols-2 ${plans.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-8`}
+      className={`grid grid-cols-1 md:grid-cols-2 ${plans.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-6`}
     >
       {plans.map((plan: PlanDefinition) => {
         const isPopular = plan.tier === "growth";
@@ -125,7 +119,7 @@ function PlanGrid({ plans }: PlanGridProps) {
             key={`${plan.area}-${plan.tier}`}
             className={`relative flex flex-col ${
               isPopular
-                ? "border-brand-green shadow-xl ring-1 ring-brand-green/20 scale-105 z-10 bg-background"
+                ? "border-brand-green shadow-xl ring-2 ring-brand-green/20 z-10 bg-background"
                 : "border-border/50 shadow-sm"
             }`}
           >

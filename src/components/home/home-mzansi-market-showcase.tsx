@@ -26,7 +26,7 @@ export async function HomeMzansiMarketShowcase() {
   if (items.length === 0) return null;
 
   return (
-    <section className="py-6 sm:py-12 bg-brand-green-50/30 dark:bg-brand-green-950/20">
+    <section className="py-6 sm:py-8 bg-brand-green-50/30 dark:bg-brand-green-950/20">
       <div className="container-page space-y-4 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div className="space-y-1">

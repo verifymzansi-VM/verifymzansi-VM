@@ -399,7 +399,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
   // Loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex items-center justify-center py-12">
         <div className="text-center space-y-3">
           <Loader2 className="h-8 w-8 animate-spin text-brand-green mx-auto" />
           <p className="text-sm text-muted-foreground">Checking your plan...</p>
@@ -412,7 +412,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
   if (error === "not_authenticated") {
     return (
       <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
-        <CardContent className="p-8 text-center space-y-4">
+        <CardContent className="p-6 text-center space-y-3">
           <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
           <h2 className="font-display text-xl font-bold">Sign In Required</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
@@ -437,7 +437,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
   if (error === "no_profile") {
     return (
       <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
-        <CardContent className="p-8 text-center space-y-4">
+        <CardContent className="p-6 text-center space-y-3">
           <ShieldCheck className="h-10 w-10 text-amber-500 mx-auto" />
           <h2 className="font-display text-xl font-bold">Complete Your Profile</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
@@ -458,7 +458,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
   if (error) {
     return (
       <Card className="border-destructive/50">
-        <CardContent className="p-8 text-center space-y-4">
+        <CardContent className="p-6 text-center space-y-3">
           <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
           <h2 className="font-display text-xl font-bold">Something Went Wrong</h2>
           <p className="text-muted-foreground">
@@ -671,7 +671,7 @@ function PlanPickerWithTrial({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header + Free Post Combined */}
       {planInfo.isTrial ? (
         <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">

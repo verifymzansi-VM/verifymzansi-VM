@@ -45,8 +45,8 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
 
   if (!items.length) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <Package className="h-10 w-10 mx-auto mb-3 opacity-50" />
+      <div className="text-center py-8 text-muted-foreground">
+        <Package className="h-8 w-8 mx-auto mb-3 opacity-50" />
         <p className="text-sm">No content pending moderation.</p>
       </div>
     );

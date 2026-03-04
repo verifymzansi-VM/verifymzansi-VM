@@ -1,16 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import {
-  MapPin,
-  Calendar,
-  Eye,
-  ArrowLeft,
-  Tag,
-  Phone,
-  MessageCircle,
-  Building2,
-} from "lucide-react";
+import { MapPin, Calendar, Eye, Tag, Phone, MessageCircle, Building2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +35,7 @@ export async function generateMetadata({ params }: PromotionDetailPageProps): Pr
     .single();
 
   if (!promotion) {
-    return { title: "Promotion Not Found | VerifyMzansi" };
+    return { title: "Promotion Not Found" };
   }
 
   return {
@@ -99,7 +90,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-6 max-w-5xl">
+        <div className="container-page py-4 space-y-5 max-w-5xl">
           <PageHeader
             title={promotion.title}
             breadcrumbs={[
@@ -107,14 +98,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
               { label: "Promotions", href: "/promotions" },
               { label: promotion.title },
             ]}
-          >
-            <Button asChild variant="ghost" size="sm" className="gap-1">
-              <Link href="/promotions">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Promotions
-              </Link>
-            </Button>
-          </PageHeader>
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: Photos + Description */}

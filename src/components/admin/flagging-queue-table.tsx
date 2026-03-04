@@ -128,8 +128,8 @@ export function FlaggingQueueTable({ reports, onActionComplete }: FlaggingQueueT
 
   if (!reports.length) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <Flag className="h-10 w-10 mx-auto mb-3 opacity-50" />
+      <div className="text-center py-8 text-muted-foreground">
+        <Flag className="h-8 w-8 mx-auto mb-3 opacity-50" />
         <p className="text-sm">No open reports for this area.</p>
       </div>
     );

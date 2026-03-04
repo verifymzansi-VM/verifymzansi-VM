@@ -6,7 +6,7 @@ import { EvidenceDeskClient } from "@/components/admin/evidence-desk";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
-  title: "Evidence Desk | Admin | VerifyMzansi",
+  title: "Evidence Desk — Admin",
 };
 
 export default async function EvidenceDeskPage({

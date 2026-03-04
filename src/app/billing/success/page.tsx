@@ -6,7 +6,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 
 export const metadata = {
-  title: "Payment Successful | VerifyMzansi",
+  title: "Payment Successful",
 };
 
 export default function BillingSuccessPage() {
@@ -14,10 +14,10 @@ export default function BillingSuccessPage() {
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
 
-      <main className="flex-1 flex items-center justify-center py-20">
-        <div className="container-page max-w-lg text-center space-y-6">
-          <div className="mx-auto w-16 h-16 rounded-full bg-brand-green/10 flex items-center justify-center">
-            <CheckCircle2 className="h-8 w-8 text-brand-green" />
+      <main className="flex-1 flex items-center justify-center py-12">
+        <div className="container-page max-w-lg text-center space-y-5">
+          <div className="mx-auto w-12 h-12 rounded-full bg-brand-green/10 flex items-center justify-center">
+            <CheckCircle2 className="h-6 w-6 text-brand-green" />
           </div>
 
           <h1 className="font-display text-2xl font-bold">Payment Successful!</h1>

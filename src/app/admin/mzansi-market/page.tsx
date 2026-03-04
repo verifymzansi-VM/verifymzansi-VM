@@ -15,7 +15,7 @@ import { calculateSlaState } from "@/lib/utils/sla";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
-  title: "Mzansi Market | Admin | VerifyMzansi",
+  title: "Mzansi Market — Admin",
 };
 
 export default async function AdminMzansiMarketPage() {

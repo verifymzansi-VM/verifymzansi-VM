@@ -370,7 +370,7 @@ export default function EditBusinessPage() {
       <Header isAuthenticated />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-6 max-w-3xl">
+        <div className="container-page py-4 space-y-4 max-w-3xl">
           <PageHeader
             title="Edit Business"
             breadcrumbs={[
@@ -387,7 +387,7 @@ export default function EditBusinessPage() {
           )}
 
           <Card>
-            <CardContent className="p-6 space-y-6">
+            <CardContent className="p-5 space-y-5">
               {/* Business Type (read-only display) */}
               <div className="space-y-2">
                 <Label>Business Type</Label>
@@ -688,7 +688,7 @@ export default function EditBusinessPage() {
                     {existingLogo && (
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground">Logo</p>
-                        <div className="h-20 w-20 rounded-lg overflow-hidden border">
+                        <div className="h-16 w-16 rounded-lg overflow-hidden border">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={normalizeMediaUrl(existingLogo)}
@@ -701,7 +701,7 @@ export default function EditBusinessPage() {
                     {existingCoverPhoto && (
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground">Cover Photo</p>
-                        <div className="h-20 w-32 rounded-lg overflow-hidden border">
+                        <div className="h-16 w-28 rounded-lg overflow-hidden border">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={normalizeMediaUrl(existingCoverPhoto)}
@@ -714,7 +714,7 @@ export default function EditBusinessPage() {
                     {existingCoverVideo && !removeVideo && (
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground">Promo Video</p>
-                        <div className="h-20 w-32 rounded-lg overflow-hidden border bg-black flex items-center justify-center">
+                        <div className="h-16 w-28 rounded-lg overflow-hidden border bg-black flex items-center justify-center">
                           <Film className="h-6 w-6 text-white/60" />
                         </div>
                         <button
@@ -766,7 +766,7 @@ export default function EditBusinessPage() {
               {/* Upload new media */}
               <div className="space-y-4">
                 <Label className="text-sm font-medium">Upload New Media</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <MediaUpload
                     label="Replace Logo"
                     maxFiles={1}

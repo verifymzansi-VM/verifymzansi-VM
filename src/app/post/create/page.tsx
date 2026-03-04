@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShoppingBag, Building2, Megaphone, ArrowRight, ShieldCheck } from "lucide-react";
+import { ShoppingBag, Building2, Megaphone, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
@@ -7,15 +7,14 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
-  title: "Create a Post | VerifyMzansi",
+  title: "Create a Post",
   description: "Choose what you'd like to post on VerifyMzansi.",
 };
 
 const POST_OPTIONS = [
   {
     title: "Mzansi Market Listing",
-    description:
-      "Sell items like electronics, furniture, cars, and more with classified ads visible to all buyers.",
+    description: "Sell items like electronics, furniture, cars, and more on Mzansi Market.",
     icon: ShoppingBag,
     href: "/post/create-listing",
     badge: "Mzansi Market",
@@ -24,7 +23,7 @@ const POST_OPTIONS = [
   {
     title: "Mzansi Business",
     description:
-      "Create a professional business profile with services, operating hours, and contact details. Your digital storefront.",
+      "Create a professional business profile with services, hours, and contact details.",
     icon: Building2,
     href: "/post/create-business",
     badge: "Mzansi Business",
@@ -32,8 +31,7 @@ const POST_OPTIONS = [
   },
   {
     title: "Promotion or Event",
-    description:
-      "Advertise your products, services, deals, or events. Link promotions to your business profile.",
+    description: "Advertise products, services, deals, or events. Link to your business profile.",
     icon: Megaphone,
     href: "/post/create-promotion",
     badge: "Promotions & Events",
@@ -47,17 +45,12 @@ export default function PostCreatePage() {
       <Header isAuthenticated />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-8">
+        <div className="container-page py-6 space-y-6">
           <PageHeader
             title="Create a Post"
-            description="Choose the type of listing you'd like to create."
+            description="Choose your listing type. Your verified seller status is shown on all posts."
             breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Create Post" }]}
           />
-
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <ShieldCheck className="h-4 w-4 text-brand-green" />
-            <span>Your verified seller status is displayed on all your posts.</span>
-          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {POST_OPTIONS.map((option) => {
@@ -65,7 +58,7 @@ export default function PostCreatePage() {
               return (
                 <Link key={option.href} href={option.href}>
                   <Card className="h-full transition-all hover:shadow-lg hover:border-brand-green/50 cursor-pointer">
-                    <CardContent className="p-6 space-y-4">
+                    <CardContent className="p-5 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="rounded-lg bg-muted p-3">
                           <Icon className="h-6 w-6 text-brand-green" />

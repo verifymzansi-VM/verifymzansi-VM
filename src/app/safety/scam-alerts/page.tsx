@@ -14,7 +14,7 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
-  title: "Scam Alerts — Stay Safe | VerifyMzansi",
+  title: "Scam Alerts",
   description:
     "Learn how to spot and avoid scams on online marketplaces. Stay safe when buying and selling in South Africa.",
 };
@@ -83,7 +83,7 @@ export default function ScamAlertsPage() {
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-8">
+        <div className="container-page py-6 space-y-6">
           <PageHeader
             title="Scam Alerts"
             description="Stay informed about common scams and learn how to protect yourself when buying and selling online in South Africa."

@@ -206,7 +206,7 @@ export default function EditPromotionPage() {
       <Header isAuthenticated />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-6 max-w-3xl">
+        <div className="container-page py-4 space-y-4 max-w-3xl">
           <PageHeader
             title="Edit Promotion"
             breadcrumbs={[
@@ -223,7 +223,7 @@ export default function EditPromotionPage() {
           )}
 
           <Card>
-            <CardContent className="p-6 space-y-6">
+            <CardContent className="p-5 space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="promotion_type">Promotion Type</Label>
                 <select

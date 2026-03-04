@@ -10,7 +10,7 @@ import { isAdmin } from "@/lib/auth/roles";
 import type { DsarCase } from "@/types/database";
 
 export const metadata = {
-  title: "Data Requests | Admin | VerifyMzansi",
+  title: "Data Requests — Admin",
 };
 
 export default async function AdminDSARPage() {
@@ -38,8 +38,8 @@ export default async function AdminDSARPage() {
       />
 
       {!requests?.length ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <FileText className="h-10 w-10 mx-auto mb-3" />
+        <div className="text-center py-10 text-muted-foreground">
+          <FileText className="h-8 w-8 mx-auto mb-3" />
           <p>No DSAR requests pending.</p>
           <p className="text-xs mt-1">
             Requests submitted via <span className="font-medium">/dsar</span> will appear here.

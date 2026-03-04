@@ -5,7 +5,6 @@ import {
   ShieldCheck,
   Phone,
   MessageSquare,
-  ArrowLeft,
   Store,
   Globe,
   Clock,
@@ -54,7 +53,7 @@ export async function generateMetadata({ params }: BusinessDetailPageProps): Pro
     .single();
 
   if (!business) {
-    return { title: "Business Not Found | VerifyMzansi" };
+    return { title: "Business Not Found" };
   }
 
   return {
@@ -107,15 +106,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-6">
-          <Link
-            href="/mzansi-business"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Mzansi Business
-          </Link>
-
+        <div className="container-page py-4 space-y-5">
           {/* Cover Header Area */}
           <div className="relative rounded-2xl overflow-hidden bg-background shadow-sm border">
             {business.cover_photo ? (
@@ -335,8 +326,8 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed bg-muted/30 p-12 text-center">
-                  <Store className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                <div className="rounded-xl border border-dashed bg-muted/30 p-6 text-center">
+                  <Store className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
                   <h4 className="font-medium text-lg mb-1">Promotions & Offers</h4>
                   <p className="text-muted-foreground max-w-sm mx-auto">
                     This business has not posted any promotions or offers yet.

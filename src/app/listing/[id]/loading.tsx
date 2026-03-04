@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ListingLoading() {
   return (
-    <div className="container-page py-6 space-y-6">
+    <div className="container-page py-6 space-y-4">
       {/* Image gallery skeleton */}
       <Skeleton className="h-80 w-full rounded-2xl" />
 

@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AdminLoading() {
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-6">
       {/* Page header skeleton */}
       <div className="space-y-2">
         <Skeleton className="h-8 w-48" />

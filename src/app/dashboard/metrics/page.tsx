@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
-  title: "Metrics | VerifyMzansi",
+  title: "Metrics",
 };
 
 export default async function MetricsPage() {
@@ -112,9 +112,9 @@ export default async function MetricsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-64 flex items-center justify-center text-muted-foreground border rounded-lg">
+          <div className="h-48 flex items-center justify-center text-muted-foreground border rounded-lg">
             <div className="text-center">
-              <BarChart3 className="h-10 w-10 mx-auto mb-3 opacity-50" />
+              <BarChart3 className="h-8 w-8 mx-auto mb-3 opacity-50" />
               <p className="text-sm">Detailed analytics charts coming soon</p>
               <p className="text-xs">Track views, leads, and conversion trends over time</p>
             </div>

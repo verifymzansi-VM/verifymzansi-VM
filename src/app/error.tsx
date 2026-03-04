@@ -16,8 +16,8 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 text-center">
-      <AlertTriangle className="h-12 w-12 text-destructive" />
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">
+      <AlertTriangle className="h-10 w-10 text-destructive" />
       <div className="space-y-2">
         <h1 className="text-2xl font-display font-bold">Something went wrong</h1>
         <p className="text-muted-foreground max-w-md">

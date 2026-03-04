@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { PLANS, FREE_POST_CONFIG, type PlanDefinition } from "@/lib/constants/pricing";
 
 export const metadata = {
-  title: "Pricing | VerifyMzansi",
+  title: "Pricing",
   description:
     "Choose the plan that fits your selling needs on VerifyMzansi. Free and premium options for Mzansi Market, Mall Shops, and Business Ads.",
 };
@@ -98,21 +98,22 @@ function PlanGrid({ plans }: { plans: PlanDefinition[] }) {
 export default function PricingPage() {
   const marketPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_MARKET");
   const businessPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
+  const promotionPlans = PLANS.filter((p: PlanDefinition) => p.area === "PROMOTIONS_EVENTS");
 
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-10 space-y-12">
+        <div className="container-page py-6 space-y-6">
           <PageHeader
             title="Pricing"
-            description={`Get 1 free post per area — ${FREE_POST_CONFIG.maxPhotos} photos, ${FREE_POST_CONFIG.maxVideos} video, visible for ${FREE_POST_CONFIG.durationDays} days. No credit card required. Then choose the plan that fits your selling needs. All plans include verification and trust badges.`}
+            description={`1 free post per area — ${FREE_POST_CONFIG.maxPhotos} photos, ${FREE_POST_CONFIG.maxVideos} video, ${FREE_POST_CONFIG.durationDays} days. No card required. All plans include verification and trust badges.`}
             breadcrumbs={[{ label: "Pricing" }]}
           />
 
           {/* Mzansi Market Plans */}
-          <section className="space-y-6">
+          <section className="space-y-4">
             <div className="flex items-center gap-2">
               <Badge className="bg-brand-green text-white">Mzansi Market</Badge>
               <span className="text-sm text-muted-foreground">Classified ads</span>
@@ -121,25 +122,33 @@ export default function PricingPage() {
           </section>
 
           {/* Mzansi Business Plans */}
-          <section className="space-y-6">
+          <section className="space-y-4">
             <div className="flex items-center gap-2">
               <Badge className="bg-brand-blue text-white">Mzansi Business</Badge>
               <span className="text-sm text-muted-foreground">
-                Mall shops, storefronts &amp; business profiles
+                Storefronts &amp; business profiles
               </span>
             </div>
             <PlanGrid plans={businessPlans} />
           </section>
 
-          {/* FAQ */}
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">
-              Have questions?{" "}
-              <a href="mailto:hello@verifymzansi.co.za" className="text-brand-green underline">
-                Contact us
-              </a>
-            </p>
-          </div>
+          {/* Promotions & Events Plans */}
+          {promotionPlans.length > 0 && (
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-red-600 text-white">Promotions & Events</Badge>
+                <span className="text-sm text-muted-foreground">Deals, ads &amp; events</span>
+              </div>
+              <PlanGrid plans={promotionPlans} />
+            </section>
+          )}
+
+          <p className="text-center text-sm text-muted-foreground">
+            Have questions?{" "}
+            <a href="mailto:hello@verifymzansi.co.za" className="text-brand-green underline">
+              Contact us
+            </a>
+          </p>
         </div>
       </main>
 

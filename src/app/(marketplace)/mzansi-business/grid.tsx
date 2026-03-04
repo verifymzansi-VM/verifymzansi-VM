@@ -21,7 +21,7 @@ export async function MzansiBusinessGrid() {
 
   if (items.length === 0) {
     return (
-      <div className="text-center py-16 text-muted-foreground">
+      <div className="text-center py-10 text-muted-foreground">
         <p className="text-lg font-medium">No businesses yet</p>
         <p className="text-sm mt-1">Be the first to list your business on Mzansi Business.</p>
       </div>

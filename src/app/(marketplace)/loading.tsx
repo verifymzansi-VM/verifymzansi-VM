@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function MarketplaceLoading() {
   return (
-    <div className="container-page py-6 space-y-6">
+    <div className="container-page py-6 space-y-4">
       {/* Hero skeleton */}
       <Skeleton className="h-48 w-full rounded-2xl" />
 

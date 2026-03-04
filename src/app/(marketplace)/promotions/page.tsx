@@ -22,7 +22,7 @@ import Link from "next/link";
 import type { SellerVerificationStatus, PromotionType } from "@/types/enums";
 
 export const metadata = {
-  title: "Promotions & Events — Deals, Ads & Events | VerifyMzansi",
+  title: "Promotions & Events",
   description:
     "Discover promoted listings, special deals, events and offers from verified sellers across South Africa.",
 };
@@ -159,7 +159,7 @@ export default async function PromotionsPage({
     featured.length > 0 || urgent.length > 0 || boosted.length > 0 || promotions.length > 0;
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-10 max-w-7xl">
+    <div className="container mx-auto px-4 py-6 space-y-6 max-w-7xl">
       <PageHeader
         title="Promotions & Events"
         description="Deals, promotions, events and offers from verified sellers across Mzansi."
@@ -167,45 +167,20 @@ export default async function PromotionsPage({
       />
 
       {/* ── Advertise CTA Banner ────────────────────────────── */}
-      <Card className="bg-gradient-to-r from-brand-green/10 to-brand-gold/10 border-brand-green/20">
-        <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h3 className="font-display font-semibold text-lg">
-              Want to advertise or promote on VerifyMzansi?
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Boost your listings, feature your business, or run promotions to reach verified buyers
-              across South Africa.
-            </p>
-          </div>
-          <Button asChild className="shrink-0 gap-1">
-            <Link href="/post/create">
-              Start Advertising
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* ── Browse Events shortcut ──────────────────────────── */}
-      <Link href="/promotions/events">
-        <Card className="border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 hover:shadow-md transition-shadow cursor-pointer">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900">
-                <Calendar className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <h3 className="font-display font-semibold">Browse Events</h3>
-                <p className="text-sm text-muted-foreground">
-                  Upcoming events, gatherings, and happenings near you
-                </p>
-              </div>
-            </div>
-            <ArrowRight className="h-5 w-5 text-muted-foreground" />
-          </CardContent>
-        </Card>
-      </Link>
+      <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-gradient-to-r from-brand-green/10 to-brand-gold/10 border border-brand-green/20">
+        <div>
+          <span className="font-semibold text-sm">Want to advertise on VerifyMzansi?</span>
+          <span className="text-sm text-muted-foreground ml-2 hidden sm:inline">
+            Boost listings, feature your business, or run promotions.
+          </span>
+        </div>
+        <Button asChild size="sm" className="shrink-0 gap-1">
+          <Link href="/post/create">
+            Start Advertising
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </Button>
+      </div>
 
       {/* ── Type filter chips ───────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
@@ -232,12 +207,11 @@ export default async function PromotionsPage({
 
       {!hasContent ? (
         <Card>
-          <CardContent className="p-12 text-center space-y-4">
-            <Megaphone className="h-10 w-10 text-muted-foreground mx-auto" />
+          <CardContent className="p-6 text-center space-y-3">
+            <Megaphone className="h-8 w-8 text-muted-foreground mx-auto" />
             <h3 className="font-display text-lg font-semibold">No active promotions right now</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              When sellers promote their listings, shops, or services, they&apos;ll appear here.
-              Check back soon for deals!
+              Check back soon for deals from verified sellers!
             </p>
           </CardContent>
         </Card>

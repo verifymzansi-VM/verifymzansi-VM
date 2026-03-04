@@ -25,7 +25,7 @@ import { RecentActivity, type ActivityItem } from "@/components/dashboard/recent
 import type { VerificationStepType, VerificationStatus } from "@/types/enums";
 
 export const metadata = {
-  title: "Dashboard | VerifyMzansi",
+  title: "Dashboard",
 };
 
 export default async function DashboardPage() {
@@ -310,7 +310,7 @@ export default async function DashboardPage() {
       </Card>
 
       {/* Stats Grid — all cards are now clickable */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Link href="/dashboard/listings">
           <Card className="hover:shadow-md transition-all cursor-pointer h-full">
             <CardContent className="pt-6">
@@ -384,68 +384,15 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </Link>
-
-        <Link href="/verification">
-          <Card className="hover:shadow-md transition-all cursor-pointer h-full">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-brand-green-50 dark:bg-brand-green-950 text-brand-green">
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold font-display capitalize">{trustLevel}/4</p>
-                  <p className="text-xs text-muted-foreground">Trust Level</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {trustLevel >= 4
-                      ? "Fully verified"
-                      : trustLevel === 3
-                        ? "Verified"
-                        : trustLevel === 2
-                          ? "Under review"
-                          : `${4 - trustLevel} step${4 - trustLevel > 1 ? "s" : ""} remaining`}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
       </div>
 
-      {/* Quick Actions — with counts */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Link href="/dashboard/listings">
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Link href="/post/create">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
             <CardContent className="flex items-center gap-3 py-4">
-              <Package className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm font-medium">Manage Listings</span>
-              {(rejectedListingCount > 0 || pendingModerationCount > 0) && (
-                <span className="ml-auto mr-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
-                  {rejectedListingCount + pendingModerationCount}
-                </span>
-              )}
-              <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/dashboard/promotions">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardContent className="flex items-center gap-3 py-4">
-              <Megaphone className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm font-medium">Manage Promotions</span>
-              <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/dashboard/leads">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardContent className="flex items-center gap-3 py-4">
-              <MessageSquare className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm font-medium">View Leads</span>
-              {unreadLeadCount > 0 && (
-                <span className="ml-auto mr-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[10px] font-bold text-white">
-                  {unreadLeadCount}
-                </span>
-              )}
+              <Plus className="h-5 w-5 text-brand-green" />
+              <span className="text-sm font-medium">Create Post</span>
               <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
             </CardContent>
           </Card>
@@ -455,21 +402,17 @@ export default async function DashboardPage() {
             <CardContent className="flex items-center gap-3 py-4">
               <Building2 className="h-5 w-5 text-muted-foreground" />
               <span className="text-sm font-medium">
-                My Businesses{businessCount > 0 ? ` (${businessCount})` : ""}
+                Businesses{businessCount > 0 ? ` (${businessCount})` : ""}
               </span>
               <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
             </CardContent>
           </Card>
         </Link>
-      </div>
-
-      {/* Secondary Quick Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Link href="/dashboard/metrics">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
             <CardContent className="flex items-center gap-3 py-4">
               <TrendingUp className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm font-medium">View Metrics</span>
+              <span className="text-sm font-medium">Metrics</span>
               <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
             </CardContent>
           </Card>

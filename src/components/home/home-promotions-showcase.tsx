@@ -46,7 +46,7 @@ export async function HomePromotionsShowcase() {
   if (promotions.length === 0) return null;
 
   return (
-    <section className="py-8 sm:py-12 border-b border-warm-200 dark:border-warm-800 bg-gradient-to-b from-red-50/30 to-white dark:from-red-950/10 dark:to-warm-950">
+    <section className="py-6 sm:py-10 bg-gradient-to-b from-red-50/30 to-white dark:from-red-950/10 dark:to-warm-950">
       <div className="container-page space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -87,15 +87,6 @@ export async function HomePromotionsShowcase() {
               endDate={promo.end_date}
             />
           ))}
-        </div>
-
-        <div className="text-center">
-          <Button asChild variant="outline" className="gap-1">
-            <Link href="/post/create-promotion">
-              <Megaphone className="h-4 w-4" />
-              Create Your Ad
-            </Link>
-          </Button>
         </div>
       </div>
     </section>

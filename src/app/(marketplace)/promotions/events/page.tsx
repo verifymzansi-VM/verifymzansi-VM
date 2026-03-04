@@ -1,15 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Calendar, Clock, ArrowLeft } from "lucide-react";
+import { Calendar, Clock } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import Link from "next/link";
 import type { SellerVerificationStatus } from "@/types/enums";
 
 export const metadata = {
-  title: "Events — Upcoming Events & Gatherings | VerifyMzansi",
+  title: "Events",
   description:
     "Discover upcoming events, gatherings, and happenings from verified businesses and sellers across South Africa.",
 };
@@ -73,15 +72,7 @@ export default async function EventsPage() {
   const past = (events ?? []).filter((e) => e.end_date && new Date(e.end_date) < new Date());
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-8 max-w-7xl">
-      <Link
-        href="/promotions"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Promotions & Events
-      </Link>
-
+    <div className="container mx-auto px-4 py-6 space-y-6 max-w-7xl">
       <PageHeader
         title="Events"
         description="Upcoming events, gatherings, and happenings from verified businesses across South Africa."
@@ -166,11 +157,11 @@ export default async function EventsPage() {
         </section>
       ) : (
         <Card>
-          <CardContent className="p-12 text-center space-y-4">
-            <Calendar className="h-10 w-10 text-muted-foreground mx-auto" />
+          <CardContent className="p-6 text-center space-y-3">
+            <Calendar className="h-8 w-8 text-muted-foreground mx-auto" />
             <h3 className="font-display text-lg font-semibold">No upcoming events</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              When businesses and sellers post events, they&apos;ll appear here. Check back soon!
+              Check back soon for events from verified businesses!
             </p>
           </CardContent>
         </Card>

@@ -87,7 +87,7 @@ export default function VerifyBuyerPage() {
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-8">
+        <div className="container-page py-6 space-y-6">
           <PageHeader
             title="Verify a Buyer"
             description="Enter a buyer's verification token to check if they're verified on VerifyMzansi. No login required."

@@ -25,7 +25,7 @@ export async function HomeBusinessShowcase() {
   if (items.length === 0) return null;
 
   return (
-    <section className="py-6 sm:py-12 bg-blue-50/30 dark:bg-blue-950/20 border-y border-blue-100 dark:border-blue-900/50">
+    <section className="py-6 sm:py-8 bg-blue-50/30 dark:bg-blue-950/20">
       <div className="container-page space-y-4 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div className="space-y-1">

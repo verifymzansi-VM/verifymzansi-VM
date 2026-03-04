@@ -1,6 +1,11 @@
 import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
+export const metadata = {
+  title: "Account",
+  description: "Sign in, register, or manage your VerifyMzansi account.",
+};
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
@@ -37,10 +42,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       </div>
 
       {/* Right — auth form */}
-      <div className="flex flex-1 items-center justify-center p-6 sm:p-8 lg:p-12">
+      <div className="flex flex-1 items-center justify-center p-6 sm:p-8 lg:p-10">
         <div className="w-full max-w-md space-y-6">
           {/* Mobile logo */}
-          <div className="lg:hidden text-center mb-8">
+          <div className="lg:hidden text-center mb-4">
             <Link href="/" className="inline-flex items-center gap-2">
               <ShieldCheck className="h-7 w-7 text-brand-green" />
               <span className="font-display text-xl font-bold">

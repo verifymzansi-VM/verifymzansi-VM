@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Loader2,
@@ -10,8 +10,6 @@ import {
   MessageCircle,
   Store,
   MapPin,
-  Search,
-  Building2,
   CreditCard,
   Truck,
   Wrench,
@@ -68,6 +66,20 @@ function generateSlug(name: string): string {
 }
 
 export default function CreateBusinessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <CreateBusinessContent />
+    </Suspense>
+  );
+}
+
+function CreateBusinessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialType = (searchParams.get("type") as BusinessType) || "";
@@ -306,7 +318,7 @@ export default function CreateBusinessPage() {
       <Header isAuthenticated />
 
       <main className="flex-1">
-        <div className="container-page py-8">
+        <div className="container-page py-6">
           <div className="max-w-3xl mx-auto space-y-6">
             <PageHeader
               title="Create a Business"
@@ -326,27 +338,10 @@ export default function CreateBusinessPage() {
                   What is Mzansi Business?
                 </CardTitle>
                 <CardDescription className="text-foreground/80">
-                  Mzansi Business is your professional online presence. Whether you run a mall
-                  store, home business, mobile service, or online shop — create your business
-                  profile and connect with customers across South Africa.
+                  Create your professional business profile and connect with customers across South
+                  Africa.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <ul className="text-sm space-y-2 text-muted-foreground">
-                  <li className="flex items-start gap-2">
-                    <Building2 className="h-4 w-4 mt-0.5 text-brand-blue" /> Showcase your brand
-                    with a dedicated logo, cover media, and description.
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <MapPin className="h-4 w-4 mt-0.5 text-brand-blue" /> Display your location,
-                    operating hours, and service areas.
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <Search className="h-4 w-4 mt-0.5 text-brand-blue" /> Link promotions and offers
-                    directly to your business profile.
-                  </li>
-                </ul>
-              </CardContent>
             </Card>
 
             <PlanGate area="MZANSI_BUSINESS">

@@ -18,7 +18,7 @@ export default function AuthError({
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-md text-center space-y-6">
+      <div className="w-full max-w-md text-center space-y-4">
         <div className="flex justify-center">
           <div className="rounded-full bg-destructive/10 p-3">
             <AlertTriangle className="h-8 w-8 text-destructive" />

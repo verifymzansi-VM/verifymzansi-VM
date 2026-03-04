@@ -15,7 +15,7 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
-  title: "Meeting Safety Checklist | VerifyMzansi",
+  title: "Meeting Safety Checklist",
   description:
     "Your checklist for safe in-person meetups when buying or selling on VerifyMzansi. Stay safe in South Africa.",
 };
@@ -69,7 +69,7 @@ export default function MeetingChecklistPage() {
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-8">
+        <div className="container-page py-6 space-y-6">
           <PageHeader
             title="Meeting Safety Checklist"
             description="Use this checklist every time you meet someone in person for a buy or sell. Your safety comes first."

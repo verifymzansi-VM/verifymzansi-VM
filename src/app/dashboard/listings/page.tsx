@@ -24,7 +24,7 @@ import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import type { PlanTier, MarketplaceArea } from "@/types/enums";
 
 export const metadata = {
-  title: "My Listings | VerifyMzansi",
+  title: "My Listings",
 };
 
 export default async function ListingsPage() {
@@ -36,23 +36,6 @@ export default async function ListingsPage() {
     redirect("/login");
     return null;
   }
-
-  type BaseListing = {
-    id: string;
-    status: string;
-    title?: string;
-    price_cents?: number;
-    category?: string;
-    created_at?: string;
-    area?: string;
-    view_count?: number;
-    photos?: string[];
-    videos?: string[];
-    boost_until?: string | null;
-    featured_until?: string | null;
-    urgent_until?: string | null;
-    status_reason?: string | null;
-  };
 
   let listings: BaseListing[] = [];
   if (user) {
@@ -150,7 +133,7 @@ type BaseListing = {
 function RejectedListingList({ listings }: { listings: BaseListing[] }) {
   if (!listings.length) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
+      <div className="text-center py-8 text-muted-foreground">
         <p>No rejected listings.</p>
       </div>
     );
@@ -197,7 +180,13 @@ function RejectedListingList({ listings }: { listings: BaseListing[] }) {
 
               {/* Actions */}
               <div className="flex items-center gap-1">
-                <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label={`Edit ${listing.title}`}
+                >
                   <Link
                     href={
                       listing.area === "BUSINESS_ADS"
@@ -274,7 +263,7 @@ function ListingList({
 }) {
   if (!listings.length) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
+      <div className="text-center py-8 text-muted-foreground">
         <p>No listings in this category.</p>
       </div>
     );
@@ -365,7 +354,13 @@ function ListingList({
                   })()
                 }
               />
-              <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                aria-label={`Edit ${listing.title}`}
+              >
                 <Link
                   href={
                     listing.area === "BUSINESS_ADS"

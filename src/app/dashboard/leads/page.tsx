@@ -18,7 +18,7 @@ interface LeadRow {
 }
 
 export const metadata = {
-  title: "Leads | VerifyMzansi",
+  title: "Leads",
 };
 
 export default async function LeadsPage() {
@@ -63,8 +63,8 @@ export default async function LeadsPage() {
       />
 
       {!leads?.length ? (
-        <div className="text-center py-16 space-y-3">
-          <MessageSquare className="h-10 w-10 mx-auto text-muted-foreground" />
+        <div className="text-center py-10 space-y-3">
+          <MessageSquare className="h-8 w-8 mx-auto text-muted-foreground" />
           <p className="text-lg font-medium">No leads yet</p>
           <p className="text-sm text-muted-foreground">
             Leads will appear here when buyers contact you about a listing.

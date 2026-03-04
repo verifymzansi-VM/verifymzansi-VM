@@ -925,8 +925,7 @@ export default function VerificationPage() {
                           GPS Location Verification
                         </h4>
                         <p className="text-xs text-muted-foreground">
-                          Allow GPS access to verify your location matches your declared province.
-                          This is the fastest verification method.
+                          Allow GPS to verify your province. Fastest method.
                         </p>
 
                         {gpsStatus === "idle" && (
@@ -999,8 +998,8 @@ export default function VerificationPage() {
                             Proof of Address (Alternative)
                           </h4>
                           <p className="text-xs text-muted-foreground">
-                            Upload a utility bill, bank statement, or government letter showing your
-                            address. This will be reviewed by an admin.
+                            Upload a utility bill, bank statement, or government letter with your
+                            address.
                           </p>
                           <Input
                             type="file"
@@ -1147,9 +1146,9 @@ export default function VerificationPage() {
 
             {step === "complete" && (
               <Card className="border-brand-green/40 bg-brand-green-50/30 dark:bg-brand-green-950/30">
-                <CardContent className="space-y-4 py-12 text-center">
-                  <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full bg-brand-green-100 text-brand-green dark:bg-brand-green-900">
-                    <ShieldCheck className="h-8 w-8" />
+                <CardContent className="space-y-4 py-8 text-center">
+                  <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand-green-100 text-brand-green dark:bg-brand-green-900">
+                    <ShieldCheck className="h-6 w-6" />
                   </div>
                   <h2 className="font-display text-2xl font-bold">Verification Submitted</h2>
                   <p className="mx-auto max-w-sm text-muted-foreground">

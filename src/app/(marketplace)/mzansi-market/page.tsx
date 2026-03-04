@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
-import { ShieldCheck, BadgeCheck, Search } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { TrustStrip } from "@/components/layout/trust-strip";
 import { ListingFilters } from "@/components/listings/listing-filters";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
 import { CategoryStrip } from "@/components/listings/category-strip";
@@ -11,7 +11,7 @@ import { MarketplaceUrlFilterSync } from "./url-filter-sync";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 
 export const metadata = {
-  title: "Mzansi Market — Classified Ads | VerifyMzansi",
+  title: "Mzansi Market",
   description:
     "Browse verified classified ads for property, cars, electronics and more across South Africa.",
 };
@@ -67,27 +67,7 @@ export default async function MzansiMarketPage() {
         fallbackDescription="An exclusive showroom for classified ads. Browse products and items natively listed on Mzansi Market by identity-verified sellers."
       />
 
-      {/* ── Trust Strip ──────────────────────────────────── */}
-      <section className="border-b bg-brand-green-50/50 dark:bg-brand-green-950/30">
-        <div className="container-page py-3">
-          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs sm:text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <ShieldCheck className="h-4 w-4 text-brand-green" />
-              Identity-verified sellers
-            </span>
-            <span className="hidden sm:inline text-border">|</span>
-            <span className="flex items-center gap-1.5">
-              <BadgeCheck className="h-4 w-4 text-brand-green" />
-              Trust-scored profiles
-            </span>
-            <span className="hidden sm:inline text-border">|</span>
-            <span className="flex items-center gap-1.5">
-              <Search className="h-4 w-4 text-brand-green" />
-              Moderated listings
-            </span>
-          </div>
-        </div>
-      </section>
+      <TrustStrip variant="green" />
 
       {/* ── Main Content ─────────────────────────────────── */}
       <div className="container-page py-6 space-y-4">

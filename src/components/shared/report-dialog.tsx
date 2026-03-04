@@ -131,7 +131,7 @@ export function ReportDialog({
       <DialogContent className="sm:max-w-md">
         {submitted ? (
           <div className="text-center py-6 space-y-3">
-            <CheckCircle2 className="h-12 w-12 text-brand-green mx-auto" />
+            <CheckCircle2 className="h-10 w-10 text-brand-green mx-auto" />
             <DialogTitle className="font-display text-xl">Report Submitted</DialogTitle>
             <DialogDescription>
               Thank you. Our moderation team will review this report within 24 hours.

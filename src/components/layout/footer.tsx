@@ -7,8 +7,8 @@ export function Footer() {
 
   return (
     <footer className="border-t bg-warm-50 dark:bg-warm-950">
-      <div className="container-page py-8 sm:py-12">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+      <div className="container-page py-6 sm:py-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Brand */}
           <div className="space-y-3">
             <Link href="/" className="flex items-center gap-2">
@@ -18,8 +18,7 @@ export function Footer() {
               </span>
             </Link>
             <p className="text-sm text-muted-foreground max-w-xs">
-              South Africa&apos;s verification-first marketplace and advertising platform. Buy,
-              sell, and promote with people you can trust.
+              SA&apos;s trusted marketplace. Buy, sell &amp; promote with verified users.
             </p>
           </div>
 
@@ -99,7 +98,7 @@ export function Footer() {
           </div>
         </div>
 
-        <Separator className="my-6 sm:my-8" />
+        <Separator className="my-5 sm:my-6" />
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <p>&copy; {currentYear} VerifyMzansi. All rights reserved.</p>

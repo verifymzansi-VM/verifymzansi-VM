@@ -9,7 +9,7 @@ import type { Report } from "@/types/database";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
-  title: "Reports | Admin | VerifyMzansi",
+  title: "Reports — Admin",
 };
 
 export default async function AdminReportsPage() {
@@ -43,8 +43,8 @@ export default async function AdminReportsPage() {
       </PageHeader>
 
       {!reportsData.length ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <Flag className="h-10 w-10 mx-auto mb-3" />
+        <div className="text-center py-10 text-muted-foreground">
+          <Flag className="h-8 w-8 mx-auto mb-3" />
           <p>No reports to review.</p>
         </div>
       ) : (

@@ -7,18 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
+import { timeAgo, expiresIn } from "@/lib/utils/format";
 import { PROMOTION_TYPE_LABELS, type PromotionType } from "@/types/enums";
-
-/** Simple relative-time helper */
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 interface DashboardListing {
   id: string;
@@ -40,17 +30,8 @@ interface DashboardPromotion {
   created_at: string;
 }
 
-function expiresIn(dateStr: string): string {
-  const diff = new Date(dateStr).getTime() - Date.now();
-  if (diff <= 0) return "expired";
-  const hours = Math.floor(diff / 3_600_000);
-  if (hours < 24) return `${hours}h left`;
-  const days = Math.floor(hours / 24);
-  return `${days}d left`;
-}
-
 export const metadata = {
-  title: "My Promotions | VerifyMzansi",
+  title: "My Promotions",
 };
 
 export default async function MyPromotionsPage() {
@@ -146,12 +127,12 @@ export default async function MyPromotionsPage() {
 
       {totalActive === 0 ? (
         <Card>
-          <CardContent className="p-12 text-center space-y-4">
-            <Megaphone className="h-10 w-10 text-muted-foreground mx-auto" />
+          <CardContent className="p-6 text-center space-y-3">
+            <Megaphone className="h-8 w-8 text-muted-foreground mx-auto" />
             <h3 className="font-display text-lg font-semibold">No active promotions</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Boost, feature, or mark your listings as urgent to get more visibility. You can also
-              create promotions to advertise your products, services, or events.
+              Boost or feature your listings, or create promotions to advertise products, services,
+              or events.
             </p>
             <div className="flex justify-center gap-2">
               <Button asChild variant="outline" size="sm">
@@ -164,7 +145,7 @@ export default async function MyPromotionsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-6">
           {/* ── Urgent Listings ────────────────────────────── */}
           {urgent.length > 0 && (
             <section className="space-y-3">

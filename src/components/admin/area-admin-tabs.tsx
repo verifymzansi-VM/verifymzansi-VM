@@ -178,7 +178,7 @@ export function AreaAdminTabs({
       </TabsContent>
 
       {/* Verification Tab */}
-      <TabsContent value="verification" className="space-y-8">
+      <TabsContent value="verification" className="space-y-6">
         {/* KYC Queue — Global (D-021) */}
         <div>
           <h3 className="text-sm font-semibold mb-4">

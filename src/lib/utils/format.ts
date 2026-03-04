@@ -86,6 +86,33 @@ export function formatRelativeTime(date: Date | string): string {
 }
 
 /**
+ * Compact relative-time string (e.g. "5m ago", "3d ago").
+ * @example timeAgo("2026-03-04T10:00:00Z") → "2h ago"
+ */
+export function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+/**
+ * Human-friendly countdown until a future timestamp.
+ * @example expiresIn("2026-03-05T10:00:00Z") → "23h left"
+ */
+export function expiresIn(dateStr: string): string {
+  const diff = new Date(dateStr).getTime() - Date.now();
+  if (diff <= 0) return "expired";
+  const hours = Math.floor(diff / 3_600_000);
+  if (hours < 24) return `${hours}h left`;
+  const days = Math.floor(hours / 24);
+  return `${days}d left`;
+}
+
+/**
  * Format a South African phone number.
  * @example formatPhone("+27821234567") → "+27 82 123 4567"
  */

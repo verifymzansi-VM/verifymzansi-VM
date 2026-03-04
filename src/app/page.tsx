@@ -163,18 +163,10 @@ export default async function HomePage() {
         </Suspense>
 
         {/* ═══ CTA Section ═══ */}
-        <section className="py-8 sm:py-20 relative overflow-hidden bg-warm-950 dark:bg-black">
-          {/* Decorative background elements */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-[1000px] bg-gradient-to-b from-brand-green/20 via-brand-green/5 to-transparent blur-3xl rounded-t-[100%] pointer-events-none opacity-50"></div>
-          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-overlay pointer-events-none"></div>
-
+        <section className="py-6 sm:py-12 relative overflow-hidden bg-warm-950 dark:bg-black">
           <div className="container-page relative z-10">
-            <div className="bg-gradient-to-br from-warm-900/50 to-warm-950/80 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-10 lg:p-16 text-center shadow-2xl overflow-hidden relative">
-              {/* Card internal glows */}
-              <div className="absolute -top-24 -right-24 w-64 h-64 bg-brand-gold-500/20 blur-[80px] rounded-full pointer-events-none"></div>
-              <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-brand-blue-500/20 blur-[80px] rounded-full pointer-events-none"></div>
-
-              <div className="max-w-3xl mx-auto space-y-8 relative z-10">
+            <div className="bg-gradient-to-br from-warm-900/50 to-warm-950/80 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 text-center shadow-2xl overflow-hidden relative">
+              <div className="max-w-3xl mx-auto space-y-5 relative z-10">
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-brand-green-400 text-sm font-medium">
                   <span className="relative flex h-2 w-2">
                     <span className="absolute inline-flex h-full w-full rounded-full bg-brand-green-400 opacity-50"></span>
@@ -190,16 +182,16 @@ export default async function HomePage() {
                   </span>
                 </h1>
 
-                <p className="text-warm-200 text-lg sm:text-xl max-w-2xl mx-auto">
-                  Get verified in under 5 minutes. Buy, sell, and advertise with trust. Access three
-                  connected marketplaces and reach customers across South Africa.
+                <p className="text-warm-200 text-lg max-w-2xl mx-auto">
+                  Get verified in under 5 minutes. Buy, sell, and advertise with trust across three
+                  connected marketplaces.
                 </p>
 
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                   <Button
                     asChild
                     size="lg"
-                    className="w-full sm:w-auto h-14 px-8 text-lg bg-brand-green hover:bg-brand-green-600 text-white shadow-[0_0_40px_-10px_rgba(22,163,74,0.6)] hover:shadow-[0_0_60px_-15px_rgba(22,163,74,0.8)] transition-all gap-2 rounded-full font-semibold"
+                    className="w-full sm:w-auto h-12 px-8 text-base bg-brand-green hover:bg-brand-green-600 text-white transition-all gap-2 rounded-full font-semibold"
                   >
                     <Link href="/register">
                       <ShieldCheck className="h-5 w-5" />
@@ -210,20 +202,10 @@ export default async function HomePage() {
                     asChild
                     size="lg"
                     variant="outline"
-                    className="w-full sm:w-auto h-14 px-8 text-lg border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/30 rounded-full font-semibold backdrop-blur-sm transition-all"
+                    className="w-full sm:w-auto h-12 px-8 text-base border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/30 rounded-full font-semibold backdrop-blur-sm transition-all"
                   >
                     <Link href="/pricing">View Plans</Link>
                   </Button>
-                </div>
-
-                <div className="pt-6 font-medium text-sm text-warm-400">
-                  Already have an account?{" "}
-                  <Link
-                    href="/login"
-                    className="text-white hover:text-brand-gold-400 transition-colors underline underline-offset-4"
-                  >
-                    Sign in
-                  </Link>
                 </div>
               </div>
             </div>

@@ -9,7 +9,7 @@ import { isAdmin } from "@/lib/auth/roles";
 import type { AuditLogEntry } from "@/lib/utils/admin-queries";
 
 export const metadata = {
-  title: "Audit Log | Admin | VerifyMzansi",
+  title: "Audit Log — Admin",
 };
 
 export default async function AdminAuditLogPage() {
@@ -37,8 +37,8 @@ export default async function AdminAuditLogPage() {
       />
 
       {!logs?.length ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <ScrollText className="h-10 w-10 mx-auto mb-3" />
+        <div className="text-center py-10 text-muted-foreground">
+          <ScrollText className="h-8 w-8 mx-auto mb-3" />
           <p>No audit entries recorded yet.</p>
           <p className="text-xs mt-1">Administrative actions will be logged here automatically.</p>
         </div>

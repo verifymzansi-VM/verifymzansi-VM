@@ -116,7 +116,7 @@ export default function DsarPage() {
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-8">
+        <div className="container-page py-6 space-y-6">
           <PageHeader
             title="Data Subject Access Request"
             description="Exercise your rights under POPIA. Submit a request to access, correct, or delete your personal data held by VerifyMzansi."
@@ -126,8 +126,8 @@ export default function DsarPage() {
           <div className="mx-auto max-w-xl">
             {isSubmitted ? (
               <Card>
-                <CardContent className="p-8 text-center space-y-4">
-                  <CheckCircle2 className="h-12 w-12 text-brand-green mx-auto" />
+                <CardContent className="p-6 text-center space-y-3">
+                  <CheckCircle2 className="h-10 w-10 text-brand-green mx-auto" />
                   <h2 className="font-display text-xl font-bold">Request Submitted</h2>
                   <p className="text-muted-foreground">
                     We&apos;ve received your request and will respond within 30 days as required by

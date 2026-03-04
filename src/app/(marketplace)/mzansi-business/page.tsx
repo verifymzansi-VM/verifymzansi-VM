@@ -1,15 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
-import { ShieldCheck, BadgeCheck, Search } from "lucide-react";
 import { Suspense } from "react";
 import { PageHeader } from "@/components/layout/page-header";
+import { TrustStrip } from "@/components/layout/trust-strip";
 import { BusinessCategoryStrip } from "@/components/listings/business-category-strip";
 import { MzansiBusinessGrid } from "./grid";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 
 export const metadata = {
-  title: "Mzansi Business — Business Directory | VerifyMzansi",
+  title: "Mzansi Business",
   description:
     "Discover verified South African businesses — shops, services, mobile providers, and more on VerifyMzansi.",
 };
@@ -66,27 +66,7 @@ export default async function MzansiBusinessPage() {
         fallbackDescription="Discover verified South African businesses — shops, services, mobile providers, and more."
       />
 
-      {/* ── Trust Strip ──────────────────────────────────── */}
-      <section className="border-b bg-blue-50/50 dark:bg-blue-950/30">
-        <div className="container-page py-3">
-          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs sm:text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <ShieldCheck className="h-4 w-4 text-brand-blue" />
-              Identity-verified sellers
-            </span>
-            <span className="hidden sm:inline text-border">|</span>
-            <span className="flex items-center gap-1.5">
-              <BadgeCheck className="h-4 w-4 text-brand-blue" />
-              Trust-scored profiles
-            </span>
-            <span className="hidden sm:inline text-border">|</span>
-            <span className="flex items-center gap-1.5">
-              <Search className="h-4 w-4 text-brand-blue" />
-              Moderated listings
-            </span>
-          </div>
-        </div>
-      </section>
+      <TrustStrip variant="blue" />
 
       {/* ── Main Content ─────────────────────────────────── */}
       <div className="container-page py-6 space-y-4">

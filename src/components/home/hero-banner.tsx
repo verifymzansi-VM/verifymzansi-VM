@@ -447,7 +447,7 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
       {/* ── Hero Showroom ── */}
       <div className="relative border-b border-warm-200 dark:border-warm-800 overflow-hidden">
         {/* === Image area — clean, no overlay on mobile === */}
-        <div className="relative bg-warm-100 dark:bg-warm-900 aspect-[16/10] sm:aspect-[21/9] overflow-hidden">
+        <div className="relative bg-warm-100 dark:bg-warm-900 aspect-[16/9] sm:aspect-[21/9] overflow-hidden">
           {activeSlide && (
             <>
               <div
@@ -623,7 +623,7 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
 
       {/* ── Search Bar ── */}
       <div className="bg-white dark:bg-warm-900 border-b border-warm-200 dark:border-warm-800 shadow-sm">
-        <div className="container-page py-4">
+        <div className="container-page py-3">
           <div className="flex gap-2 max-w-3xl mx-auto">
             <label className="flex-1 flex items-center gap-2 rounded-lg border border-warm-200 dark:border-warm-700 bg-warm-50 dark:bg-warm-800 px-4 cursor-text">
               <Search className="h-4 w-4 text-muted-foreground shrink-0" />

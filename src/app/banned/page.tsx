@@ -12,13 +12,10 @@ export default function BannedPage() {
     <div className="flex min-h-screen flex-col">
       <Header />
 
-      <main className="flex-1 flex items-center justify-center py-20 overflow-hidden relative">
-        {/* Background ambient glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-red-500/10 blur-[100px] rounded-full pointer-events-none" />
-
-        <div className="container-page max-w-lg text-center space-y-6 relative z-10">
-          <div className="mx-auto w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center shadow-[0_0_30px_-5px_var(--tw-shadow-color)] shadow-destructive/30">
-            <ShieldAlert className="h-10 w-10 text-destructive" />
+      <main className="flex-1 flex items-center justify-center py-12 overflow-hidden relative">
+        <div className="container-page max-w-lg text-center space-y-5 relative z-10">
+          <div className="mx-auto w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center">
+            <ShieldAlert className="h-7 w-7 text-destructive" />
           </div>
 
           <h1 className="font-display text-3xl font-bold tracking-tight text-destructive">
@@ -43,19 +40,19 @@ export default function BannedPage() {
                       >
                         Terms of Service
                       </Link>
-                      . This action was taken after extensive review by our moderation team.
+                      .
                     </p>
                   </div>
                 </div>
 
                 <div className="bg-background/50 rounded-lg p-4 border border-border/50">
-                  <p className="text-sm font-medium mb-3">When your account is banned:</p>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
+                  <p className="text-sm font-medium mb-2">When your account is banned:</p>
+                  <ul className="space-y-1.5 text-sm text-muted-foreground">
                     {[
-                      "All your active listings have been removed",
-                      "Your seller profile is no longer visible",
-                      "You cannot create new listings or storefronts",
-                      "Any active subscriptions have been automatically cancelled",
+                      "All active listings removed",
+                      "Seller profile no longer visible",
+                      "Cannot create new listings",
+                      "Active subscriptions cancelled",
                     ].map((item, i) => (
                       <li key={i}>
                         <div className="flex items-center gap-2">
@@ -67,24 +64,21 @@ export default function BannedPage() {
                   </ul>
                 </div>
 
-                <div className="border-t pt-5">
+                <div className="border-t pt-4">
                   <p className="text-sm text-muted-foreground">
-                    If you believe this was a critical mistake or your account was compromised, you
-                    can appeal by contacting our support team:
+                    Believe this was a mistake? Contact support:
                   </p>
-                  <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 rounded-md bg-muted/50 border border-border">
+                  <div className="inline-flex items-center gap-2 mt-2 px-3 py-1.5 rounded-md bg-muted/50 border border-border">
                     <Mail className="h-4 w-4 text-foreground/70" />
                     <span className="text-sm font-medium">appeals@verifymzansi.co.za</span>
                   </div>
                 </div>
+
+                <Button asChild variant="outline" className="w-full hover:bg-muted">
+                  <Link href="/">Return to Homepage</Link>
+                </Button>
               </CardContent>
             </Card>
-          </div>
-
-          <div>
-            <Button asChild variant="outline" className="mt-4 hover:bg-muted">
-              <Link href="/">Return to Homepage</Link>
-            </Button>
           </div>
         </div>
       </main>

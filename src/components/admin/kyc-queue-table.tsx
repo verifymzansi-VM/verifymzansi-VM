@@ -111,8 +111,8 @@ export function KycQueueTable({
 
   if (!steps.length) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <FileCheck className="h-10 w-10 mx-auto mb-3 opacity-50" />
+      <div className="text-center py-8 text-muted-foreground">
+        <FileCheck className="h-8 w-8 mx-auto mb-3 opacity-50" />
         <p className="text-sm">No pending verification steps.</p>
         <p className="text-xs mt-1">All KYC submissions have been reviewed.</p>
       </div>

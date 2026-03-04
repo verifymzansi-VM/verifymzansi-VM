@@ -264,7 +264,7 @@ export default function CreateListingPage() {
         <CardContent className="space-y-3">
           <div className="flex gap-3">
             {/* Preview image */}
-            <div className="w-20 h-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
+            <div className="w-16 h-16 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
               {previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -326,7 +326,7 @@ export default function CreateListingPage() {
 
       <main className="flex-1">
         <div className="container-page py-6">
-          <div className="max-w-2xl mx-auto space-y-6">
+          <div className="max-w-2xl mx-auto space-y-4">
             <PageHeader
               title="Create Listing"
               description="List an item for sale on Mzansi Market."
@@ -339,7 +339,7 @@ export default function CreateListingPage() {
 
             <PlanGate area="MZANSI_MARKET">
               {/* ── Progress Steps ──────────────────────────────────── */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <div className="flex items-center justify-between">
                   {STEPS.map((s, i) => {
                     const Icon = s.icon;
@@ -463,7 +463,7 @@ export default function CreateListingPage() {
                           </div>
                           <textarea
                             id="description"
-                            className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow"
+                            className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow"
                             value={description}
                             onChange={(e) => setDescription(e.target.value.slice(0, DESC_MAX))}
                             placeholder="Describe your item in detail — condition, reason for selling, what's included..."
@@ -655,7 +655,7 @@ export default function CreateListingPage() {
                         {/* Submit button */}
                         <Button
                           type="submit"
-                          className="w-full h-12 text-base font-semibold"
+                          className="w-full h-10 text-base font-semibold"
                           disabled={isSubmitting}
                           size="lg"
                         >

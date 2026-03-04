@@ -9,7 +9,7 @@ import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 
 export const metadata = {
-  title: "Verification Queue | Admin | VerifyMzansi",
+  title: "Verification Queue — Admin",
 };
 
 export default async function AdminVerificationPage() {

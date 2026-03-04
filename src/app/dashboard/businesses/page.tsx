@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
+import { timeAgo, expiresIn } from "@/lib/utils/format";
 import {
   BUSINESS_TYPE_LABELS,
   BUSINESS_CATEGORY_LABELS,
@@ -15,27 +16,8 @@ import {
 } from "@/types/enums";
 
 export const metadata = {
-  title: "My Businesses | VerifyMzansi",
+  title: "My Businesses",
 };
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function expiresIn(dateStr: string): string {
-  const diff = new Date(dateStr).getTime() - Date.now();
-  if (diff <= 0) return "expired";
-  const hours = Math.floor(diff / 3_600_000);
-  if (hours < 24) return `${hours}h left`;
-  const days = Math.floor(hours / 24);
-  return `${days}d left`;
-}
 
 interface DashboardBusiness {
   id: string;
@@ -86,12 +68,11 @@ export default async function MyBusinessesPage() {
 
       {myBusinesses.length === 0 ? (
         <Card>
-          <CardContent className="p-12 text-center space-y-4">
-            <Building2 className="h-10 w-10 text-muted-foreground mx-auto" />
+          <CardContent className="p-6 text-center space-y-3">
+            <Building2 className="h-8 w-8 text-muted-foreground mx-auto" />
             <h3 className="font-display text-lg font-semibold">No businesses yet</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Create your first Mzansi Business to showcase your brand, connect with customers, and
-              link promotions directly to your business profile.
+              Create your first business to showcase your brand and link promotions.
             </p>
             <Button asChild size="sm">
               <Link href="/post/create-business">Create Business</Link>

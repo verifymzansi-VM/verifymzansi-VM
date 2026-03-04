@@ -20,7 +20,7 @@ import {
 } from "@/components/admin/dashboard-cards";
 
 export const metadata = {
-  title: "Admin Dashboard | VerifyMzansi",
+  title: "Admin Dashboard",
 };
 
 export default async function AdminPage() {

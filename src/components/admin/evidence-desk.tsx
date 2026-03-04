@@ -243,7 +243,7 @@ export function EvidenceDeskClient({
 
       {/* Main content */}
       {loading && (
-        <div className="flex items-center justify-center py-12">
+        <div className="flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       )}
@@ -395,8 +395,8 @@ export function EvidenceDeskClient({
               <EvidenceViewer artifact={selectedArtifact} />
             ) : (
               <Card className="border-warm-200/70">
-                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                  <Eye className="h-10 w-10 text-muted-foreground/30" />
+                <CardContent className="flex flex-col items-center justify-center py-10 text-center">
+                  <Eye className="h-8 w-8 text-muted-foreground/30" />
                   <p className="mt-3 text-sm text-muted-foreground">
                     No artifact selected. Select a step or artifact to view evidence.
                   </p>
@@ -417,8 +417,8 @@ export function EvidenceDeskClient({
 
       {!metadata && !loading && (
         <Card className="border-warm-200/70">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <ShieldCheck className="h-10 w-10 text-muted-foreground/30" />
+          <CardContent className="flex flex-col items-center justify-center py-10 text-center">
+            <ShieldCheck className="h-8 w-8 text-muted-foreground/30" />
             <p className="mt-3 text-sm text-muted-foreground">
               Enter a Step ID or User ID above to load verification evidence.
             </p>

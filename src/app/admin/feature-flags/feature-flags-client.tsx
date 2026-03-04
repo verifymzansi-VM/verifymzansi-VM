@@ -154,8 +154,8 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
   if (flags.length === 0) {
     return (
       <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <ToggleLeft className="h-12 w-12 mb-4" />
+        <CardContent className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+          <ToggleLeft className="h-8 w-8 mb-3" />
           <p className="text-lg font-medium">No feature flags configured</p>
           <p className="text-sm mt-1">
             Add flags via the database migration to start using feature toggles.

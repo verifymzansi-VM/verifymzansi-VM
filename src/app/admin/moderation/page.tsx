@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
-  title: "Moderation Queue | Admin | VerifyMzansi",
+  title: "Moderation Queue — Admin",
 };
 
 export default async function AdminModerationPage() {

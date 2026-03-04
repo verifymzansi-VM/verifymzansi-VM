@@ -107,8 +107,8 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
 
   if (!items.length) {
     return (
-      <div className="text-center py-16 text-muted-foreground">
-        <Package className="h-10 w-10 mx-auto mb-3 opacity-50" />
+      <div className="text-center py-10 text-muted-foreground">
+        <Package className="h-8 w-8 mx-auto mb-3 opacity-50" />
         <p className="text-sm">No content pending moderation.</p>
         <p className="text-xs mt-1">All submissions have been reviewed.</p>
       </div>
@@ -149,7 +149,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={normalizeMediaUrl(item.photos[0])}
-                      alt=""
+                      alt={`${item.title} thumbnail`}
                       className="h-full w-full object-cover"
                     />
                   </div>

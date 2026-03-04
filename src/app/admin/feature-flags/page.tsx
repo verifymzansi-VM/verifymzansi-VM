@@ -6,7 +6,7 @@ import { FeatureFlagsClient } from "./feature-flags-client";
 import { isAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
-  title: "Feature Flags | Admin | VerifyMzansi",
+  title: "Feature Flags — Admin",
 };
 
 export default async function FeatureFlagsPage() {

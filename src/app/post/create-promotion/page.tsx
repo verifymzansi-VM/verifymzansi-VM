@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Megaphone, ArrowLeft, ArrowRight, Loader2, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,20 @@ const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow";
 
 export default function CreatePromotionPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <CreatePromotionContent />
+    </Suspense>
+  );
+}
+
+function CreatePromotionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>(1);
@@ -147,7 +161,7 @@ export default function CreatePromotionPage() {
         <div className="container-page py-6 space-y-6 max-w-3xl">
           <PageHeader
             title="Create a Promotion"
-            description="Advertise anything — products, services, events, or deals. Choose a plan first, then create your post."
+            description="Advertise products, services, events, or deals."
             breadcrumbs={[
               { label: "Dashboard", href: "/dashboard" },
               { label: "Create Post", href: "/post/create" },

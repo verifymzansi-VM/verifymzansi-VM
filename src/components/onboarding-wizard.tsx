@@ -90,9 +90,9 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
   const Icon = step.icon;
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-12">
+    <div className="mx-auto max-w-lg px-4 py-8">
       {/* Progress indicator */}
-      <div className="mb-8 flex items-center justify-center gap-2">
+      <div className="mb-6 flex items-center justify-center gap-2">
         {STEPS.map((_, i) => (
           <div
             key={i}
@@ -110,8 +110,8 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
 
       {/* Step content */}
       <div className="flex flex-col items-center text-center">
-        <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-brand-green/10">
-          <Icon className="h-10 w-10 text-brand-green" />
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-green/10">
+          <Icon className="h-8 w-8 text-brand-green" />
         </div>
 
         <h2 className="text-2xl font-display font-bold">{step.title}</h2>
@@ -127,7 +127,7 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
       </div>
 
       {/* Navigation */}
-      <div className="mt-10 flex items-center justify-between">
+      <div className="mt-6 flex items-center justify-between">
         <Button
           variant="ghost"
           onClick={handleBack}

@@ -242,12 +242,12 @@ export function MzansiMarketGrid() {
     const suggestedCats = CATEGORIES.slice(0, 4);
 
     return (
-      <div className="flex flex-col items-center justify-center py-16 sm:py-20 space-y-5">
-        <div className="rounded-2xl bg-gradient-to-br from-brand-green-50 to-brand-green-100 dark:from-brand-green-950 dark:to-brand-green-900 p-6 shadow-sm">
+      <div className="flex flex-col items-center justify-center py-10 sm:py-12 space-y-4">
+        <div className="rounded-2xl bg-gradient-to-br from-brand-green-50 to-brand-green-100 dark:from-brand-green-950 dark:to-brand-green-900 p-5 shadow-sm">
           {hasQueryError ? (
-            <AlertTriangle className="h-12 w-12 text-brand-green" />
+            <AlertTriangle className="h-10 w-10 text-brand-green" />
           ) : (
-            <PackageOpen className="h-12 w-12 text-brand-green" />
+            <PackageOpen className="h-10 w-10 text-brand-green" />
           )}
         </div>
         <div className="text-center space-y-2 max-w-md">
