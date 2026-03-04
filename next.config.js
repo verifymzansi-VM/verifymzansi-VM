@@ -15,7 +15,7 @@ const nextConfig = {
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRueWdkZ29ybW5vZnBnamtubGhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0OTE3MTYsImV4cCI6MjA4NzA2NzcxNn0.HmPHCahnbYDoT0X8IbCsclCbhg3K2Mr0mlDa8RKFML0",
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY:
-      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAACio3rXKPmro4jAYN7aVHXTDZnQ",
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "1x00000000000000000000AA",
     NEXT_PUBLIC_MEDIA_URL: process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.co.za",
     // Toggle Cloudflare Image Resizing (/cdn-cgi/image/). Set to "false"
     // if Image Resizing is not enabled on the zone — images will still
