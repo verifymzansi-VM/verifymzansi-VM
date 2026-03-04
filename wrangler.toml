@@ -36,6 +36,8 @@ R2_PUBLIC_URL = "https://media.verifymzansi.co.za"
 NEXT_PUBLIC_SUPABASE_URL = "https://tnygdgormnofpgjknlhr.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRueWdkZ29ybW5vZnBnamtubGhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0OTE3MTYsImV4cCI6MjA4NzA2NzcxNn0.HmPHCahnbYDoT0X8IbCsclCbhg3K2Mr0mlDa8RKFML0"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACio3rXKPmro4jAYN7aVHXTDZnQ"
+# Cloudflare Image Resizing toggle — set to "true" once enabled on the zone
+NEXT_PUBLIC_CF_IMAGE_RESIZING = "false"
 
 # ────────────────────────────────────────────────────────────────────────────
 # Durable Objects (required by @opennextjs/cloudflare for ISR/caching)

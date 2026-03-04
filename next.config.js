@@ -17,6 +17,10 @@ const nextConfig = {
     NEXT_PUBLIC_TURNSTILE_SITE_KEY:
       process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAACio3rXKPmro4jAYN7aVHXTDZnQ",
     NEXT_PUBLIC_MEDIA_URL: process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.co.za",
+    // Toggle Cloudflare Image Resizing (/cdn-cgi/image/). Set to "false"
+    // if Image Resizing is not enabled on the zone — images will still
+    // render but without on-the-fly format/size optimisation.
+    NEXT_PUBLIC_CF_IMAGE_RESIZING: process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING || "false",
   },
   images: {
     // Cloudflare Workers/Pages does not support the default Next.js image

@@ -18,11 +18,22 @@ interface ImageLoaderParams {
   quality?: number;
 }
 
+/**
+ * When Cloudflare Image Resizing is disabled on the zone (or during local
+ * development), the `/cdn-cgi/image/` endpoint returns 403/404 and every
+ * image breaks. Toggle via `NEXT_PUBLIC_CF_IMAGE_RESIZING`.
+ */
+const CF_RESIZING_ENABLED = process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING === "true";
+
 export default function cloudflareImageLoader({ src, width, quality }: ImageLoaderParams): string {
+  // If Cloudflare Image Resizing is not available, return the src unchanged
+  // so images still render (unoptimized but functional).
+  if (!CF_RESIZING_ENABLED) {
+    return src;
+  }
+
   // Already an absolute URL (external image) — use Cloudflare's transform endpoint
   if (src.startsWith("http://") || src.startsWith("https://")) {
-    // If the image is from our own media domain or Supabase, we can transform it
-    // via Cloudflare Image Resizing (if enabled). Otherwise return as-is.
     const cfParams = `width=${width},quality=${quality || 75},format=auto`;
     return `/cdn-cgi/image/${cfParams}/${src}`;
   }
