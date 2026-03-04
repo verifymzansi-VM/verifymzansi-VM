@@ -80,7 +80,7 @@ const envSchema = z.object({
   PAYFAST_MERCHANT_ID: z.string().optional(),
   PAYFAST_MERCHANT_KEY: z.string().optional(),
   PAYFAST_PASSPHRASE: z.string().optional(),
-  PAYFAST_SANDBOX: z.string().optional(),
+  PAYFAST_SANDBOX: z.enum(["true", "false", "1", "0"]).optional(),
   PAYFAST_NOTIFY_URL: z.string().url().optional(),
 
   // ── Resend (required for email) ───────────────────────────

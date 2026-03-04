@@ -47,13 +47,22 @@ export async function POST(request: NextRequest) {
 
   if (turnstileFullyConfigured) {
     // If the Turnstile widget failed to load on the client, the token will
-    // be "turnstile-unavailable". Allow the request through with a warning
-    // rather than blocking the user entirely — the Turnstile outage is not
-    // the user's fault and rate-limiting still protects the endpoint.
+    // be "turnstile-unavailable". Apply stricter rate limiting rather than
+    // skipping CAPTCHA entirely, as this token is easily spoofed.
     if (parsed.data.turnstileToken === "turnstile-unavailable") {
-      log.warn("Turnstile widget failed to load on client — allowing login without CAPTCHA", {
+      log.warn("Turnstile widget failed to load on client — applying strict rate limit", {
         ip,
       });
+      const strictCheck = await checkRateLimit({
+        key: `strict:${ip}`,
+        action: "auth:login:nocaptcha",
+      });
+      if (strictCheck.limited) {
+        return NextResponse.json(
+          { error: "Too many login attempts without CAPTCHA. Please try again later." },
+          { status: 429, headers: { "Retry-After": String(strictCheck.retryAfter ?? 120) } }
+        );
+      }
     } else {
       const captcha = await verifyTurnstileToken({
         token: parsed.data.turnstileToken,

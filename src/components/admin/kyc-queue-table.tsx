@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,8 @@ import {
   Eye,
 } from "lucide-react";
 import Link from "next/link";
+import { KycInlinePreview } from "./kyc-inline-preview";
+import { KycPreviewLightbox } from "./kyc-preview-lightbox";
 
 interface VerificationStep {
   id: string;
@@ -38,6 +40,19 @@ interface VerificationStep {
   created_at: string;
   seller_display_name: string | null;
   seller_verification_status: string | null;
+}
+
+interface Artifact {
+  id: string;
+  step_type: string;
+  artifact_kind: string;
+  r2_key: string;
+  content_type: string;
+  file_size_bytes: number;
+  status: string;
+  created_at: string;
+  purge_after: string | null;
+  sha256: string | null;
 }
 
 interface KycQueueTableProps {
@@ -84,6 +99,15 @@ export function KycQueueTable({
   const [reasonNote, setReasonNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Lightbox state for inline document preview
+  const [lightboxStep, setLightboxStep] = useState<VerificationStep | null>(null);
+  const [lightboxArtifact, setLightboxArtifact] = useState<Artifact | null>(null);
+
+  const handlePreviewClick = useCallback((step: VerificationStep, artifact: Artifact) => {
+    setLightboxStep(step);
+    setLightboxArtifact(artifact);
+  }, []);
 
   if (!steps.length) {
     return (
@@ -159,6 +183,13 @@ export function KycQueueTable({
             <Card key={step.id}>
               <CardContent className="py-4">
                 <div className="flex items-center gap-4">
+                  {/* Inline document thumbnail */}
+                  <KycInlinePreview
+                    stepId={step.id}
+                    userId={step.user_id}
+                    stepType={step.step_type}
+                    onClickPreview={(artifact) => handlePreviewClick(step, artifact)}
+                  />
                   <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
                     <StepIcon className="h-5 w-5 text-muted-foreground" />
                   </div>
@@ -329,6 +360,23 @@ export function KycQueueTable({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Document Preview Lightbox */}
+      {lightboxStep && lightboxArtifact && (
+        <KycPreviewLightbox
+          open={!!lightboxStep}
+          onOpenChange={(open) => {
+            if (!open) {
+              setLightboxStep(null);
+              setLightboxArtifact(null);
+            }
+          }}
+          step={lightboxStep}
+          artifact={lightboxArtifact}
+          evidenceDeskEnabled={evidenceDeskEnabled}
+          onDecisionComplete={onDecisionComplete}
+        />
+      )}
     </>
   );
 }

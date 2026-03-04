@@ -89,7 +89,7 @@ export function AttentionBanner({
     });
   }
 
-  if (trustLevel < 4 && trustLevel >= 0) {
+  if (trustLevel <= 1 && trustLevel >= 0) {
     const stepsRemaining = 4 - trustLevel;
     banners.push({
       id: "incomplete-verification",
@@ -99,6 +99,17 @@ export function AttentionBanner({
       description: `${stepsRemaining} step${stepsRemaining > 1 ? "s" : ""} remaining to unlock all features and build buyer trust.`,
       href: "/verification",
       ctaLabel: "Verify Now",
+    });
+  } else if (trustLevel === 2) {
+    banners.push({
+      id: "verification-under-review",
+      variant: "info",
+      icon: Clock,
+      title: "Verification under review",
+      description:
+        "Your documents have been submitted. Our team is reviewing them — this usually takes 24–48 hours.",
+      href: "/verification",
+      ctaLabel: "View Status",
     });
   }
 

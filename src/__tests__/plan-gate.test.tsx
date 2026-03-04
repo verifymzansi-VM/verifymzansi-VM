@@ -123,17 +123,19 @@ describe("PlanGate", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  order: vi.fn().mockReturnValue({
-                    limit: vi.fn().mockReturnValue({
-                      maybeSingle: vi.fn().mockResolvedValue({
-                        data: {
-                          tier: "starter",
-                          type: "subscription",
-                          status: "active",
-                          started_at: new Date().toISOString(),
-                          expires_at: null,
-                        },
-                        error: null,
+                  gt: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockReturnValue({
+                        maybeSingle: vi.fn().mockResolvedValue({
+                          data: {
+                            tier: "starter",
+                            type: "subscription",
+                            status: "active",
+                            started_at: new Date().toISOString(),
+                            expires_at: null,
+                          },
+                          error: null,
+                        }),
                       }),
                     }),
                   }),

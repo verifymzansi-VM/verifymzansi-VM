@@ -11,6 +11,7 @@ import {
   Plus,
   Megaphone,
   Building2,
+  Clock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -120,7 +121,7 @@ export default async function DashboardPage() {
       .eq("seller_id", user.id)
       .eq("status", "live")
       .or(
-        `boost_until.gt.${now}.lt.${fortyEightHoursFromNow},featured_until.gt.${now}.lt.${fortyEightHoursFromNow},urgent_until.gt.${now}.lt.${fortyEightHoursFromNow}`
+        `and(boost_until.gt.${now},boost_until.lt.${fortyEightHoursFromNow}),and(featured_until.gt.${now},featured_until.lt.${fortyEightHoursFromNow}),and(urgent_until.gt.${now},urgent_until.lt.${fortyEightHoursFromNow})`
       ),
     // Business count (for quick actions)
     supabase
@@ -245,7 +246,7 @@ export default async function DashboardPage() {
     pendingModerationCount > 0 ||
     expiringListingCount > 0 ||
     expiringPromoCount > 0 ||
-    trustLevel < 4;
+    trustLevel <= 2;
 
   return (
     <div className="space-y-6">
@@ -292,14 +293,19 @@ export default async function DashboardPage() {
         </CardHeader>
         <CardContent>
           <VerificationProgress steps={verificationProgressSteps} />
-          {trustLevel < 4 && (
+          {trustLevel === 2 ? (
+            <p className="mt-3 text-sm text-muted-foreground flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-amber-500" />
+              Your documents are under review — we&apos;ll update your status within 24–48 hours.
+            </p>
+          ) : trustLevel < 3 ? (
             <Button asChild variant="outline" size="sm" className="mt-3 inline-flex gap-1">
               <Link href="/verification">
                 Increase Trust Level
                 <ArrowRight className="h-3 w-3" />
               </Link>
             </Button>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
@@ -392,7 +398,11 @@ export default async function DashboardPage() {
                   <p className="text-[10px] text-muted-foreground">
                     {trustLevel >= 4
                       ? "Fully verified"
-                      : `${4 - trustLevel} step${4 - trustLevel > 1 ? "s" : ""} remaining`}
+                      : trustLevel === 3
+                        ? "Verified"
+                        : trustLevel === 2
+                          ? "Under review"
+                          : `${4 - trustLevel} step${4 - trustLevel > 1 ? "s" : ""} remaining`}
                   </p>
                 </div>
               </div>

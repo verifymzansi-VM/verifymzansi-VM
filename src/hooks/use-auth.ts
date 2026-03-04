@@ -76,14 +76,10 @@ export function useAuth() {
           role: (session.user.app_metadata?.role as string) || "user",
         });
       } else {
-        // If user was previously authenticated and session was lost, redirect to login.
-        // Use getState() to read the latest store value instead of the stale closure.
-        if (event === "SIGNED_OUT" && useAuthStore.getState().user) {
-          reset();
-          window.location.href = "/login";
-        } else {
-          reset();
-        }
+        // If user was previously authenticated and session was lost, reset store.
+        // Don't redirect here — let signOut() or middleware handle navigation
+        // to avoid race conditions with the explicit signOut callback.
+        reset();
       }
     });
 

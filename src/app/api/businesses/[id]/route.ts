@@ -48,7 +48,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     // Fetch linked promotions
     const { data: promotions } = await admin
       .from("promotions")
-      .select("id, title, promotion_type, photos, price_cents, start_date, end_date, boost_until, created_at")
+      .select(
+        "id, title, promotion_type, photos, price_cents, start_date, end_date, boost_until, created_at"
+      )
       .eq("business_id", id)
       .eq("status", "live")
       .order("boost_until", { ascending: false, nullsFirst: false })
@@ -76,10 +78,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
  *
  * Update a business. Requires authentication and ownership.
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
@@ -157,6 +156,8 @@ export async function PATCH(
         operating_hours: data.operating_hours,
         payment_methods_accepted: data.payment_methods_accepted,
         delivery_options: data.delivery_options,
+        // Re-trigger moderation on edit so changed content is reviewed
+        status: "pending_moderation",
       })
       .eq("id", id)
       .eq("seller_id", user.id);

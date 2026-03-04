@@ -18,7 +18,7 @@ const deleteSchema = z.object({
 
 const tableMap: Record<string, string> = {
   MZANSI_MARKET: "listings",
-  BUSINESS_ADS: "business_profiles",
+  BUSINESS_ADS: "businesses",
   MALL_SHOPS: "storefronts",
   PROMOTIONS_EVENTS: "promotions",
 };

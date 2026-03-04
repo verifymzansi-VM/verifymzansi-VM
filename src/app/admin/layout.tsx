@@ -1,7 +1,7 @@
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getRoleFromUser } from "@/lib/auth/roles";
+import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -11,11 +11,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   } = await supabase.auth.getUser();
 
   // Default to unprivileged role — never grant moderator/admin implicitly.
-  // The middleware (proxy.ts) enforces admin access, but defense-in-depth
-  // ensures unauthenticated users are never treated as moderators.
-  if (!user) {
+  // The middleware enforces admin access, but defense-in-depth ensures
+  // non-admin authenticated users are never shown the admin UI.
+  if (!user || !isModeratorOrAdmin(user)) {
     const { redirect } = await import("next/navigation");
-    redirect("/login");
+    redirect(!user ? "/login" : "/dashboard");
   }
   const role = getRoleFromUser(user) || "viewer";
 

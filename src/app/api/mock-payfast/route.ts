@@ -26,7 +26,18 @@ export async function GET(req: Request) {
   const return_url = url.searchParams.get("return_url");
 
   // Fire webhook in the background to simulate PayFast ITN
-  if (notify_url && isSafeUrl(notify_url)) {
+  // Only allow notify_url pointing to the same origin to prevent SSRF
+  const reqOrigin = new URL(req.url).origin;
+  const isNotifyUrlSafe = (() => {
+    if (!notify_url) return false;
+    try {
+      return new URL(notify_url).origin === reqOrigin;
+    } catch {
+      return false;
+    }
+  })();
+
+  if (notify_url && isNotifyUrlSafe) {
     const data = new URLSearchParams({
       m_payment_id: m_payment_id || "",
       pf_payment_id: "mock_" + Date.now(),

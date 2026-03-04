@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { promisify } from "util";
+import { env } from "@/lib/config/env";
 
 /**
  * KYC Document Encryption Utilities
@@ -39,7 +40,7 @@ const pbkdf2Async = promisify(crypto.pbkdf2);
  * Get or generate encryption key from environment
  */
 function getEncryptionKey(): Buffer {
-  const keyHex = process.env.KYC_ENCRYPTION_KEY;
+  const keyHex = env("KYC_ENCRYPTION_KEY");
 
   if (!keyHex) {
     throw new Error("KYC_ENCRYPTION_KEY not configured");
@@ -129,7 +130,14 @@ export async function decryptData(encryptedData: Buffer): Promise<Buffer> {
   const isV2 = encryptedData[0] === V2_MAGIC;
 
   if (isV2) {
-    return decryptV2(encryptedData);
+    // ~0.39% of legacy v1 files may have 0x02 as their first random salt
+    // byte. Attempt v2 first; if GCM auth fails, fall back to legacy.
+    try {
+      return decryptV2(encryptedData);
+    } catch {
+      // GCM authentication failure — this is likely a legacy v1 file whose
+      // first salt byte happens to be 0x02. Fall through to legacy path.
+    }
   }
 
   // Legacy v1 format — try 600k iterations first, then 100k (worker variant)

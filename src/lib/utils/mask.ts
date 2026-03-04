@@ -17,11 +17,13 @@ export function maskPhone(phone: string): string {
  * @example maskName("Senzo Mthethwa") → "Senzo M."
  */
 export function maskName(name: string): string {
-  const parts = name.trim().split(/\s+/);
+  const trimmed = name.trim();
+  if (!trimmed) return "Anonymous";
+  const parts = trimmed.split(/\s+/);
   if (parts.length <= 1) {
     // Single name: show first char only for privacy
     const single = parts[0];
-    return single.length > 1 ? `${single[0]}***` : single;
+    return single.length > 1 ? `${single[0]}***` : single || "Anonymous";
   }
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
@@ -40,7 +42,8 @@ export function maskIdNumber(idNumber: string): string {
  * @example maskEmail("senzo@example.com") → "s***o@example.com"
  */
 export function maskEmail(email: string): string {
+  if (!email || !email.includes("@")) return "***@***";
   const [local, domain] = email.split("@");
-  if (!domain || local.length < 2) return `***@${domain || "***"}`;
+  if (!domain || !local || local.length < 2) return `***@${domain || "***"}`;
   return `${local[0]}***${local[local.length - 1]}@${domain}`;
 }

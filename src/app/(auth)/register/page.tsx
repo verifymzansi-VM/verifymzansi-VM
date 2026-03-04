@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [turnstileError, setTurnstileError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -40,10 +41,21 @@ export default function RegisterPage() {
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
+      setTurnstileError(null);
       setValue("turnstileToken", token, { shouldValidate: true });
     },
     [setValue]
   );
+
+  const handleTurnstileError = useCallback(() => {
+    setTurnstileError("CAPTCHA verification failed. Please try again.");
+    setValue("turnstileToken", "", { shouldValidate: true });
+  }, [setValue]);
+
+  const handleTurnstileExpire = useCallback(() => {
+    setTurnstileError("CAPTCHA expired. Please verify again.");
+    setValue("turnstileToken", "", { shouldValidate: true });
+  }, [setValue]);
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
   const requirements = [
@@ -209,8 +221,13 @@ export default function RegisterPage() {
           <p className="text-xs text-destructive">{errors.acceptTerms.message}</p>
         )}
 
-        <TurnstileWidget onSuccess={handleTurnstileSuccess} />
-        {errors.turnstileToken && (
+        <TurnstileWidget
+          onSuccess={handleTurnstileSuccess}
+          onError={handleTurnstileError}
+          onExpire={handleTurnstileExpire}
+        />
+        {turnstileError && <p className="text-xs text-destructive">{turnstileError}</p>}
+        {errors.turnstileToken && !turnstileError && (
           <p className="text-xs text-destructive">{errors.turnstileToken.message}</p>
         )}
 

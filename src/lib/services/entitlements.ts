@@ -46,17 +46,29 @@ export function getEntitlements(tier: PlanTier, area: MarketplaceArea): Entitlem
 
   if (!plan) return FREE_ENTITLEMENTS;
 
-  let maxAllowed = -1;
-  if (area === "MZANSI_MARKET") {
-    maxAllowed = plan.features.maxListings ?? -1;
-  } else if (area === "MZANSI_BUSINESS") {
-    maxAllowed = plan.features.maxBusinesses ?? -1;
-  } else if (area === "PROMOTIONS_EVENTS") {
-    maxAllowed = plan.features.maxPromotions ?? -1;
-  } else if (area === "MALL_SHOPS") {
-    maxAllowed = plan.features.maxStorefronts ?? -1;
-  } else if (area === "BUSINESS_ADS") {
-    maxAllowed = plan.features.maxProfiles ?? -1;
+  let maxAllowed: number;
+  switch (area) {
+    case "MZANSI_MARKET":
+      maxAllowed = plan.features.maxListings ?? 0;
+      break;
+    case "MZANSI_BUSINESS":
+      maxAllowed = plan.features.maxBusinesses ?? 0;
+      break;
+    case "PROMOTIONS_EVENTS":
+      maxAllowed = plan.features.maxPromotions ?? 0;
+      break;
+    case "MALL_SHOPS":
+      maxAllowed = plan.features.maxStorefronts ?? 0;
+      break;
+    case "BUSINESS_ADS":
+      maxAllowed = plan.features.maxProfiles ?? 0;
+      break;
+    default: {
+      // Exhaustive check — ensures new MarketplaceArea values cause a
+      // compile-time error instead of silently granting unlimited access.
+      const _exhaustive: never = area;
+      throw new Error(`Unknown marketplace area: ${_exhaustive}`);
+    }
   }
 
   return {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 interface KycStep {
@@ -21,7 +21,8 @@ export function useKycStatus() {
   const [steps, setSteps] = useState<KycStep[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const supabase = createClient();
+  const supabaseRef = useRef(createClient());
+  const supabase = supabaseRef.current;
 
   const fetchStatus = useCallback(async () => {
     setIsLoading(true);

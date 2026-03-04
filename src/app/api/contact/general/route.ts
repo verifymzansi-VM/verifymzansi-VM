@@ -78,10 +78,8 @@ export async function POST(request: NextRequest) {
     });
 
     if (insertError) {
-      // If the table doesn't exist yet, log and return success anyway
-      // (the form still provides a good UX and we don't lose the data intent)
       log.error("Failed to store contact submission", { error: insertError.message });
-      // Fall through — still return success so the user isn't blocked
+      return NextResponse.json({ error: "Failed to submit message" }, { status: 500 });
     }
 
     log.info("Contact form submission received", { name, email: email.slice(0, 3) + "***" });

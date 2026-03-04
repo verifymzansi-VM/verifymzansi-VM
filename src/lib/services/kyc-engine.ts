@@ -115,7 +115,8 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
   if (stepType === "id_doc" && idNumber) {
     const hmacSecret = env("HMAC_SECRET");
     const ZERO_KEY = "0".repeat(64);
-    if (!hmacSecret || hmacSecret === ZERO_KEY) {
+    const CAFEBABE_PLACEHOLDER = "cafebabe".repeat(8);
+    if (!hmacSecret || hmacSecret === ZERO_KEY || hmacSecret === CAFEBABE_PLACEHOLDER) {
       if (process.env.NODE_ENV === "production") {
         throw new Error(
           "HMAC_SECRET is not configured — cannot process KYC artifacts in production"

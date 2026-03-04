@@ -4,6 +4,15 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
+// Stub URL.createObjectURL / revokeObjectURL (jsdom doesn't support blob URLs fully)
+vi.stubGlobal(
+  "URL",
+  Object.assign(globalThis.URL, {
+    createObjectURL: vi.fn(() => "blob:mock/1234"),
+    revokeObjectURL: vi.fn(),
+  })
+);
+
 // Mock XMLHttpRequest for video upload tests
 class MockXHR {
   upload = { addEventListener: vi.fn() };
@@ -16,6 +25,28 @@ class MockXHR {
 vi.stubGlobal(
   "XMLHttpRequest",
   vi.fn(() => new MockXHR())
+);
+
+// Make jsdom video elements fire the error event immediately so getVideoDuration
+// resolves without waiting for the 10 s timeout (jsdom has no media engine).
+const _origCreateElement = document.createElement.bind(document);
+vi.spyOn(document, "createElement").mockImplementation(
+  (...args: Parameters<typeof document.createElement>) => {
+    const el = _origCreateElement(...args);
+    if (args[0] === "video") {
+      const origSet = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src")?.set;
+      Object.defineProperty(el, "src", {
+        set(v: string) {
+          if (origSet) origSet.call(this, v);
+          // Fire error in microtask so event-listeners registered synchronously
+          // after setting src are already attached.
+          queueMicrotask(() => (this as HTMLVideoElement).dispatchEvent(new Event("error")));
+        },
+        configurable: true,
+      });
+    }
+    return el;
+  }
 );
 
 // Dynamic import so mocks are set first

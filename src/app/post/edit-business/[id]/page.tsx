@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { UploadArea, BusinessType } from "@/types/enums";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -74,7 +74,9 @@ export default function EditBusinessPage() {
   const [city, setCity] = useState("");
   const [storeNumber, setStoreNumber] = useState("");
   const [mallId, setMallId] = useState("");
-  const [malls, setMalls] = useState<{ id: string; name: string; location_city: string | null }[]>([]);
+  const [malls, setMalls] = useState<{ id: string; name: string; location_city: string | null }[]>(
+    []
+  );
   const [serviceAreasInput, setServiceAreasInput] = useState("");
 
   // Contact & Social
@@ -272,7 +274,12 @@ export default function EditBusinessPage() {
       // Build service areas
       const serviceAreas =
         businessType === "mobile_service" && serviceAreasInput
-          ? { areas: serviceAreasInput.split(",").map((a) => a.trim()).filter(Boolean) }
+          ? {
+              areas: serviceAreasInput
+                .split(",")
+                .map((a) => a.trim())
+                .filter(Boolean),
+            }
           : undefined;
 
       const body = {
@@ -564,7 +571,9 @@ export default function EditBusinessPage() {
               {/* Social */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="facebook" className="text-xs text-muted-foreground">Facebook</Label>
+                  <Label htmlFor="facebook" className="text-xs text-muted-foreground">
+                    Facebook
+                  </Label>
                   <Input
                     id="facebook"
                     value={socialFacebook}
@@ -572,7 +581,9 @@ export default function EditBusinessPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="instagram" className="text-xs text-muted-foreground">Instagram</Label>
+                  <Label htmlFor="instagram" className="text-xs text-muted-foreground">
+                    Instagram
+                  </Label>
                   <Input
                     id="instagram"
                     value={socialInstagram}
@@ -580,7 +591,9 @@ export default function EditBusinessPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="twitter" className="text-xs text-muted-foreground">X (Twitter)</Label>
+                  <Label htmlFor="twitter" className="text-xs text-muted-foreground">
+                    X (Twitter)
+                  </Label>
                   <Input
                     id="twitter"
                     value={socialTwitter}
@@ -588,7 +601,9 @@ export default function EditBusinessPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="tiktok" className="text-xs text-muted-foreground">TikTok</Label>
+                  <Label htmlFor="tiktok" className="text-xs text-muted-foreground">
+                    TikTok
+                  </Label>
                   <Input
                     id="tiktok"
                     value={socialTiktok}
@@ -602,7 +617,9 @@ export default function EditBusinessPage() {
                 <Label>Operating Hours</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="hoursMonFri" className="text-xs text-muted-foreground">Mon - Fri</Label>
+                    <Label htmlFor="hoursMonFri" className="text-xs text-muted-foreground">
+                      Mon - Fri
+                    </Label>
                     <Input
                       id="hoursMonFri"
                       value={hoursMonFri}
@@ -611,7 +628,9 @@ export default function EditBusinessPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="hoursSat" className="text-xs text-muted-foreground">Saturday</Label>
+                    <Label htmlFor="hoursSat" className="text-xs text-muted-foreground">
+                      Saturday
+                    </Label>
                     <Input
                       id="hoursSat"
                       value={hoursSat}
@@ -620,7 +639,9 @@ export default function EditBusinessPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="hoursSun" className="text-xs text-muted-foreground">Sunday</Label>
+                    <Label htmlFor="hoursSun" className="text-xs text-muted-foreground">
+                      Sunday
+                    </Label>
                     <Input
                       id="hoursSun"
                       value={hoursSun}
@@ -738,7 +759,10 @@ export default function EditBusinessPage() {
                 </Label>
                 <div className="flex flex-wrap gap-3">
                   {PAYMENT_METHOD_OPTIONS.map((option) => (
-                    <label key={option.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <label
+                      key={option.value}
+                      className="flex items-center gap-2 text-sm cursor-pointer"
+                    >
                       <input
                         type="checkbox"
                         checked={paymentMethods.includes(option.value)}
@@ -758,7 +782,10 @@ export default function EditBusinessPage() {
                 </Label>
                 <div className="flex flex-wrap gap-3">
                   {DELIVERY_OPTION_LIST.map((option) => (
-                    <label key={option.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <label
+                      key={option.value}
+                      className="flex items-center gap-2 text-sm cursor-pointer"
+                    >
                       <input
                         type="checkbox"
                         checked={deliveryOptions.includes(option.value)}
@@ -784,11 +811,7 @@ export default function EditBusinessPage() {
                 <Button
                   onClick={handleSubmit}
                   disabled={
-                    isSubmitting ||
-                    businessName.length < 2 ||
-                    !category ||
-                    !province ||
-                    !city
+                    isSubmitting || businessName.length < 2 || !category || !province || !city
                   }
                   className="gap-1"
                 >

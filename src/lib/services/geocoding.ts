@@ -10,6 +10,9 @@ import {
   GPS_ACCURACY_WARN_METERS,
 } from "@/lib/constants/verification";
 import type { LocationConfidence } from "@/types/enums";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("Geocoding");
 
 /**
  * Mapping from Nominatim "state" field to our province names.
@@ -67,10 +70,9 @@ export async function reverseGeocode(lat: number, lon: number): Promise<ReverseG
       return result;
     }
   } catch (err) {
-    console.warn(
-      "[Geocoding] Nominatim request failed, falling back to bounding box:",
-      err instanceof Error ? err.message : "unknown"
-    );
+    log.warn("Nominatim request failed, falling back to bounding box", {
+      error: err instanceof Error ? err.message : "unknown",
+    });
   }
 
   // Fallback: bounding-box check

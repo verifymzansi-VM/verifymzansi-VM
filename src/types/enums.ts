@@ -13,7 +13,7 @@ export type VerificationStepType = "phone" | "id_doc" | "selfie" | "location";
 
 export type VerificationStatus = "pending" | "approved" | "rejected" | "needs_resubmission";
 
-export type SellerVerificationStatus = "incomplete" | "pending_review" | "verified";
+export type SellerVerificationStatus = "incomplete" | "pending_review" | "verified" | "rejected";
 
 export type DocumentType = "sa_id_card" | "sa_id_book" | "sa_passport" | "sa_drivers_license";
 
@@ -81,7 +81,7 @@ export const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
   general: "General",
 };
 
-export type ContactMethod = "call" | "whatsapp" | "form";
+export type ContactMethod = "call" | "whatsapp" | "form" | "in_app";
 
 export type PlanTier = "basic" | "starter" | "growth" | "pro";
 

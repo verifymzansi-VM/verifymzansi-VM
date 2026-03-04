@@ -286,10 +286,15 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
 
       if (profile?.account_status === "suspended") {
         if (profile.suspended_until && new Date(profile.suspended_until) <= new Date()) {
-          await supabase
-            .from("seller_profiles")
-            .update({ account_status: "active", suspended_until: null })
-            .eq("user_id", user.id);
+          try {
+            await supabase
+              .from("seller_profiles")
+              .update({ account_status: "active", suspended_until: null })
+              .eq("user_id", user.id);
+          } catch {
+            // Auto-unsuspend failed — still allow the request so the user
+            // isn't permanently locked out; the next request will retry.
+          }
         } else {
           if (isApiRoute) return NextResponse.json({ error: "Suspended" }, { status: 403 });
           return NextResponse.redirect(new URL("/dashboard", request.url));

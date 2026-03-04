@@ -1,28 +1,36 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { isModeratorOrAdmin } from "@/lib/auth/roles";
 
 /**
  * OTP pipeline health check — verifies env vars, DB table,
  * Web Crypto availability, and admin client connectivity.
  *
+ * Requires admin/moderator authentication.
  * Returns 200 with pass/fail per check.
  * Does NOT expose secret values.
  */
 export async function GET() {
+  // ── Auth guard: require admin/moderator ───────────────────────
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !isModeratorOrAdmin(user)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const checks: Record<string, { ok: boolean; detail?: string }> = {};
 
   try {
     // 1. Environment variables
     checks.supabaseUrl = {
       ok: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      detail: process.env.NEXT_PUBLIC_SUPABASE_URL
-        ? process.env.NEXT_PUBLIC_SUPABASE_URL.substring(0, 30) + "…"
-        : "MISSING",
+      detail: process.env.NEXT_PUBLIC_SUPABASE_URL ? "set" : "MISSING",
     };
     checks.serviceRoleKey = {
       ok: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      detail: process.env.SUPABASE_SERVICE_ROLE_KEY
-        ? `set (${process.env.SUPABASE_SERVICE_ROLE_KEY.length} chars)`
-        : "MISSING",
+      detail: process.env.SUPABASE_SERVICE_ROLE_KEY ? "set" : "MISSING",
     };
     checks.africasTalkingApiKey = {
       ok: !!process.env.AFRICASTALKING_API_KEY,
@@ -30,7 +38,7 @@ export async function GET() {
     };
     checks.africasTalkingUsername = {
       ok: !!process.env.AFRICASTALKING_USERNAME,
-      detail: process.env.AFRICASTALKING_USERNAME ? process.env.AFRICASTALKING_USERNAME : "MISSING",
+      detail: process.env.AFRICASTALKING_USERNAME ? "set" : "MISSING",
     };
 
     // 2. Web Crypto API

@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Calendar, MapPin, Clock, ArrowLeft } from "lucide-react";
+import { Calendar, Clock, ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,7 @@ export default async function EventsPage() {
     )
     .eq("status", "live")
     .eq("promotion_type", "event")
+    .or(`end_date.is.null,end_date.gte.${now}`)
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
     .order("start_date", { ascending: true, nullsFirst: false })
@@ -62,23 +63,14 @@ export default async function EventsPage() {
     ...new Set((events ?? []).map((e) => e.business_id).filter(Boolean)),
   ] as string[];
   const { data: businesses } = businessIds.length
-    ? await admin
-        .from("businesses")
-        .select("id, business_name")
-        .in("id", businessIds)
+    ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
     : { data: [] };
 
-  const businessMap = new Map(
-    (businesses ?? []).map((b) => [b.id, b.business_name])
-  );
+  const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
 
   // Split into upcoming vs past
-  const upcoming = (events ?? []).filter(
-    (e) => !e.end_date || new Date(e.end_date) >= new Date()
-  );
-  const past = (events ?? []).filter(
-    (e) => e.end_date && new Date(e.end_date) < new Date()
-  );
+  const upcoming = (events ?? []).filter((e) => !e.end_date || new Date(e.end_date) >= new Date());
+  const past = (events ?? []).filter((e) => e.end_date && new Date(e.end_date) < new Date());
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8 max-w-7xl">
@@ -118,9 +110,7 @@ export default async function EventsPage() {
                 ? businessMap.get(event.business_id)
                 : undefined;
               const nowDate = new Date();
-              const isBoosted = event.boost_until
-                ? new Date(event.boost_until) > nowDate
-                : false;
+              const isBoosted = event.boost_until ? new Date(event.boost_until) > nowDate : false;
               const isFeatured = event.featured_until
                 ? new Date(event.featured_until) > nowDate
                 : false;
@@ -180,8 +170,7 @@ export default async function EventsPage() {
             <Calendar className="h-10 w-10 text-muted-foreground mx-auto" />
             <h3 className="font-display text-lg font-semibold">No upcoming events</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              When businesses and sellers post events, they&apos;ll appear here. Check back
-              soon!
+              When businesses and sellers post events, they&apos;ll appear here. Check back soon!
             </p>
           </CardContent>
         </Card>

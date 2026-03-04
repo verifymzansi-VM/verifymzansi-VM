@@ -67,7 +67,7 @@ export const priceSchema = z
   .min(0, "Price cannot be negative")
   .max(99_999_999, "Price exceeds maximum")
   .refine(
-    (v) => Math.round(v * 100) === Math.round(v * 100 * 10) / 10,
+    (v) => Number.isFinite(v) && Math.abs(v * 100 - Math.round(v * 100)) < 0.001,
     "Price can have at most 2 decimal places"
   );
 

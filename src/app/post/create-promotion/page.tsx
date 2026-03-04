@@ -187,6 +187,7 @@ export default function CreatePromotionPage() {
                     <Label htmlFor="promotion_type">Promotion Type</Label>
                     <select
                       id="promotion_type"
+                      aria-label="Promotion Type"
                       className={selectClass}
                       value={promotionType}
                       onChange={(e) => setPromotionType(e.target.value as PromotionType)}
@@ -246,6 +247,7 @@ export default function CreatePromotionPage() {
                       </Label>
                       <select
                         id="business_id"
+                        aria-label="Link to Business"
                         className={selectClass}
                         value={businessId}
                         onChange={(e) => setBusinessId(e.target.value)}
@@ -315,6 +317,7 @@ export default function CreatePromotionPage() {
                       <Label htmlFor="province">Province</Label>
                       <select
                         id="province"
+                        aria-label="Province"
                         className={selectClass}
                         value={province}
                         onChange={(e) => {
@@ -334,6 +337,7 @@ export default function CreatePromotionPage() {
                       <Label htmlFor="city">City / Town</Label>
                       <select
                         id="city"
+                        aria-label="City / Town"
                         className={selectClass}
                         value={city}
                         onChange={(e) => setCity(e.target.value)}

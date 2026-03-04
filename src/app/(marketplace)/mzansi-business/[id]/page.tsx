@@ -30,8 +30,12 @@ import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { ShareButton } from "@/components/shared/share-button";
 import { ReportDialog } from "@/components/shared/report-dialog";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import { BUSINESS_TYPE_LABELS, BUSINESS_CATEGORY_LABELS } from "@/types/enums";
-import type { BusinessType, BusinessCategory } from "@/types/enums";
+import {
+  BUSINESS_TYPE_LABELS,
+  BUSINESS_CATEGORY_LABELS,
+  type BusinessType,
+  type BusinessCategory,
+} from "@/types/enums";
 import type { Metadata } from "next";
 
 interface BusinessDetailPageProps {
@@ -198,9 +202,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
             <div className="lg:col-span-2 space-y-6">
               <Card>
                 <CardContent className="p-6 space-y-4">
-                  <h2 className="font-display text-xl font-bold">
-                    About {business.business_name}
-                  </h2>
+                  <h2 className="font-display text-xl font-bold">About {business.business_name}</h2>
                   <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">
                     {business.description || "No description provided."}
                   </p>
@@ -298,9 +300,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
               {/* Linked Promotions */}
               {promotions && promotions.length > 0 ? (
                 <div className="space-y-4">
-                  <h3 className="font-display text-xl font-bold px-1">
-                    Promotions & Offers
-                  </h3>
+                  <h3 className="font-display text-xl font-bold px-1">Promotions & Offers</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {promotions.map((promo) => (
                       <Link key={promo.id} href={`/promotion/${promo.id}`}>

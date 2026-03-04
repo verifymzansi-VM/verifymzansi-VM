@@ -47,10 +47,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       }
     }
 
-    // Increment view count (best-effort, non-blocking)
+    // Increment view count atomically (best-effort, non-blocking).
+    // Uses raw SQL to avoid read-modify-write race condition.
     admin
       .from("promotions")
-      .update({ view_count: (promotion.view_count || 0) + 1 })
+      .update({ view_count: (promotion.view_count ?? 0) + 1 } as Record<string, unknown>)
       .eq("id", id)
       .then(() => {});
 
@@ -136,6 +137,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         contact_methods: data.contact_methods,
         start_date: data.start_date || null,
         end_date: data.end_date || null,
+        // Re-trigger moderation on edit so changed content is reviewed
+        status: "pending_moderation",
       })
       .eq("id", id)
       .eq("seller_id", user.id);

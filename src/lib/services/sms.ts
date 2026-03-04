@@ -95,6 +95,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         apiKey: apiKey,
       },
       body: formData.toString(),
+      signal: AbortSignal.timeout(10_000),
     });
 
     // Read body once as text so we can log it before parsing
@@ -107,7 +108,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         username,
         baseUrl,
         hasApiKey: !!apiKey,
-        apiKeyPrefix: apiKey.slice(0, 10) + "...",
+        apiKeyPrefix: apiKey.slice(0, 4) + "...",
       });
       if (response.status === 401) {
         log.error(
@@ -125,9 +126,8 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         rawBody: rawBody.slice(0, 500),
         error: parseErr instanceof Error ? parseErr.message : "Unknown parse error",
       });
-      // AT returned 200 OK but body isn't valid JSON — treat as success
-      // since the HTTP status confirms acceptance
-      return { success: true, messageId: "at-accepted-non-json" };
+      // AT returned 200 OK but body isn't valid JSON — do not assume success
+      return { success: false, error: "Unexpected response format from SMS provider" };
     }
 
     log.info("Africa's Talking response received", {
@@ -172,11 +172,11 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
     }
 
     // SMSMessageData or Recipients missing but AT returned 200 OK
-    // The message was accepted — trust the HTTP status
+    // Without recipient status data, we cannot confirm delivery — report failure
     log.warn("AT returned 200 OK but no SMSMessageData.Recipients", {
       rawBody: rawBody.slice(0, 500),
     });
-    return { success: true, messageId: "at-accepted-no-recipients" };
+    return { success: false, error: "No recipient data in response" };
   } catch (error) {
     log.error("Africa's Talking error", {
       error: error instanceof Error ? error.message : "SMS sending failed",

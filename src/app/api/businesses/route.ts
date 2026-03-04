@@ -212,7 +212,11 @@ export async function GET(request: NextRequest) {
       query = query.eq("mall_id", mallId);
     }
     if (search) {
-      query = query.or(`business_name.ilike.%${search}%,description.ilike.%${search}%`);
+      // Escape PostgREST special characters to prevent filter injection
+      const safeSearch = search.replace(/[,.()\\/]/g, "");
+      if (safeSearch) {
+        query = query.or(`business_name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
+      }
     }
 
     // Order: boosted first, then featured, then newest

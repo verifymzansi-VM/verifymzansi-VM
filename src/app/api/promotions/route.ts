@@ -248,7 +248,11 @@ export async function GET(request: NextRequest) {
       query = query.eq("location_city", city);
     }
     if (search) {
-      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+      // Escape PostgREST special characters to prevent filter injection
+      const safeSearch = search.replace(/[,.()\\/]/g, "");
+      if (safeSearch) {
+        query = query.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
+      }
     }
 
     // Order: boosted first, then featured, then newest

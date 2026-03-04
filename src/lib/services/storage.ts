@@ -98,9 +98,9 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
 
   await client.send(command);
 
-  // Generate public URL
+  // Generate public URL (trim trailing slash from base to avoid double-slash)
   const publicUrl = process.env.R2_PUBLIC_URL
-    ? `${process.env.R2_PUBLIC_URL}/${params.key}`
+    ? `${process.env.R2_PUBLIC_URL.replace(/\/+$/, "")}/${params.key}`
     : `https://${params.bucket}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${params.key}`;
 
   return { url: publicUrl, key: params.key };

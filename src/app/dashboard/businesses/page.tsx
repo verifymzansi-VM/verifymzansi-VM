@@ -2,15 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import {
-  Building2,
-  Plus,
-  Pencil,
-  Eye,
-  Megaphone,
-  Clock,
-  Store,
-} from "lucide-react";
+import { Building2, Plus, Pencil, Eye, Megaphone, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -82,10 +74,7 @@ export default async function MyBusinessesPage() {
       <PageHeader
         title="My Businesses"
         description="Manage your Mzansi Business listings."
-        breadcrumbs={[
-          { label: "Dashboard", href: "/dashboard" },
-          { label: "Businesses" },
-        ]}
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Businesses" }]}
       >
         <Button asChild size="sm" className="gap-1">
           <Link href="/post/create-business">
@@ -99,13 +88,10 @@ export default async function MyBusinessesPage() {
         <Card>
           <CardContent className="p-12 text-center space-y-4">
             <Building2 className="h-10 w-10 text-muted-foreground mx-auto" />
-            <h3 className="font-display text-lg font-semibold">
-              No businesses yet
-            </h3>
+            <h3 className="font-display text-lg font-semibold">No businesses yet</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Create your first Mzansi Business to showcase your brand, connect
-              with customers, and link promotions directly to your business
-              profile.
+              Create your first Mzansi Business to showcase your brand, connect with customers, and
+              link promotions directly to your business profile.
             </p>
             <Button asChild size="sm">
               <Link href="/post/create-business">Create Business</Link>
@@ -116,10 +102,8 @@ export default async function MyBusinessesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {myBusinesses.map((b) => {
             const now = new Date();
-            const isBoosted =
-              b.boost_until && new Date(b.boost_until) > now;
-            const isFeatured =
-              b.featured_until && new Date(b.featured_until) > now;
+            const isBoosted = b.boost_until && new Date(b.boost_until) > now;
+            const isFeatured = b.featured_until && new Date(b.featured_until) > now;
 
             return (
               <Card key={b.id}>
@@ -134,13 +118,11 @@ export default async function MyBusinessesPage() {
                       </Link>
                       <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                         <span>
-                          {BUSINESS_TYPE_LABELS[b.business_type as BusinessType] ||
-                            b.business_type}
+                          {BUSINESS_TYPE_LABELS[b.business_type as BusinessType] || b.business_type}
                         </span>
                         <span>&middot;</span>
                         <span>
-                          {BUSINESS_CATEGORY_LABELS[b.category as BusinessCategory] ||
-                            b.category}
+                          {BUSINESS_CATEGORY_LABELS[b.category as BusinessCategory] || b.category}
                         </span>
                         <span>&middot;</span>
                         <span>{timeAgo(b.created_at)}</span>
@@ -150,22 +132,13 @@ export default async function MyBusinessesPage() {
                       {b.status === "pending_moderation" && (
                         <Badge variant="secondary">Pending</Badge>
                       )}
-                      {b.status === "draft" && (
-                        <Badge variant="outline">Draft</Badge>
-                      )}
-                      {b.status === "rejected" && (
-                        <Badge variant="destructive">Rejected</Badge>
-                      )}
+                      {b.status === "draft" && <Badge variant="outline">Draft</Badge>}
+                      {b.status === "rejected" && <Badge variant="destructive">Rejected</Badge>}
                       {b.status === "live" && (
-                        <Badge className="bg-brand-green text-white">
-                          Live
-                        </Badge>
+                        <Badge className="bg-brand-green text-white">Live</Badge>
                       )}
                       {isBoosted && (
-                        <Badge
-                          variant="outline"
-                          className="text-orange-600"
-                        >
+                        <Badge variant="outline" className="text-orange-600">
                           Boosted
                         </Badge>
                       )}
@@ -197,38 +170,21 @@ export default async function MyBusinessesPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 pt-1">
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="outline"
-                      className="h-8 gap-1"
-                    >
+                    <Button asChild size="sm" variant="outline" className="h-8 gap-1">
                       <Link href={`/mzansi-business/${b.id}`}>
                         <Eye className="h-3.5 w-3.5" />
                         View
                       </Link>
                     </Button>
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="outline"
-                      className="h-8 gap-1"
-                    >
+                    <Button asChild size="sm" variant="outline" className="h-8 gap-1">
                       <Link href={`/post/edit-business/${b.id}`}>
                         <Pencil className="h-3.5 w-3.5" />
                         Edit
                       </Link>
                     </Button>
                     {b.status === "live" && (
-                      <Button
-                        asChild
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 gap-1"
-                      >
-                        <Link
-                          href={`/post/create-promotion?business_id=${b.id}`}
-                        >
+                      <Button asChild size="sm" variant="ghost" className="h-8 gap-1">
+                        <Link href={`/post/create-promotion?business_id=${b.id}`}>
                           <Megaphone className="h-3.5 w-3.5" />
                           Promote
                         </Link>

@@ -220,15 +220,25 @@ export async function GET(
     const bodyBytes = await response.Body.transformToByteArray();
     const buffer = Buffer.from(bodyBytes);
 
+    // SVG files can contain embedded scripts — force download instead of inline rendering
+    const isSvg = ext === "svg";
+    const disposition = isSvg
+      ? `attachment; filename="${deriveFilename(key)}"`
+      : `inline; filename="${deriveFilename(key)}"`;
+
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": contentType,
         "Content-Length": String(buffer.length),
         "Cache-Control": "public, max-age=31536000, immutable",
-        "Content-Disposition": `inline; filename="${deriveFilename(key)}"`,
+        "Content-Disposition": disposition,
         ...(response.ETag ? { ETag: response.ETag } : {}),
         "X-Content-Type-Options": "nosniff",
+        // Block SVG from executing scripts when served from same-origin
+        ...(isSvg
+          ? { "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" }
+          : {}),
       },
     });
   } catch (err: unknown) {

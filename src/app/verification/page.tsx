@@ -150,6 +150,13 @@ export default function VerificationPage() {
             if (data.completedSteps?.length > 0) {
               setCompletedSteps(data.completedSteps);
             }
+            // If all steps are submitted (approved or pending review), show completion screen
+            const allSubmitted =
+              data.completedSteps?.length + (data.pendingSteps?.length ?? 0) >=
+              (data.requiredSteps?.length ?? 4);
+            if (allSubmitted && data.finalizedAt) {
+              setStep("complete");
+            }
             if (data.phoneVerifiedAt) {
               setPhoneVerified(true);
             }

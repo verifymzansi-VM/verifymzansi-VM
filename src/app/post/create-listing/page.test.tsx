@@ -151,8 +151,8 @@ describe("CreateListingPage", () => {
 
   it("shows character counters for title and description", () => {
     render(<CreateListingPage />);
-    expect(screen.getByText("0/100")).toBeInTheDocument();
-    expect(screen.getByText("0/2000")).toBeInTheDocument();
+    expect(screen.getByText("0/120")).toBeInTheDocument();
+    expect(screen.getByText("0/5000")).toBeInTheDocument();
   });
 
   it("validates step 0 before advancing — missing category", () => {

@@ -24,7 +24,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         } = await supabase.auth.getUser();
         if (!user) return;
 
-        const [unreadLeads, rejectedListings, pendingModeration, verificationSteps] =
+        const [unreadLeads, rejectedListings, pendingModeration, verificationSteps, sellerProfile] =
           await Promise.all([
             supabase
               .from("leads")
@@ -45,14 +45,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               .from("verification_steps")
               .select("status")
               .eq("user_id", user.id)
-              .eq("status", "approved"),
+              .in("status", ["approved", "pending"]),
+            supabase
+              .from("seller_profiles")
+              .select("seller_verification_status")
+              .eq("user_id", user.id)
+              .single(),
           ]);
+
+        const verificationStatus = sellerProfile.data?.seller_verification_status;
+        const allStepsSubmitted = (verificationSteps.data?.length ?? 0) >= 4;
 
         setBadges({
           unreadLeads: unreadLeads.count || 0,
           rejectedListings: rejectedListings.count || 0,
           pendingModeration: pendingModeration.count || 0,
-          incompleteVerification: (verificationSteps.data?.length ?? 0) < 4,
+          incompleteVerification: !allStepsSubmitted && verificationStatus !== "verified",
+          pendingReview:
+            verificationStatus === "pending_review" ||
+            (allStepsSubmitted && verificationStatus !== "verified"),
         });
       } catch {
         // Non-critical — sidebar works fine without badges

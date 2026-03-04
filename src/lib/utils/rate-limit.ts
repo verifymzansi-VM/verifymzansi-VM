@@ -102,7 +102,9 @@ interface RateLimitResult {
 export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitResult> {
   const url = process.env.OTP_RATE_LIMITER_URL;
   if (!url) {
-    return { limited: false };
+    // No external rate-limiter configured — fall back to in-memory limiter
+    // instead of failing open with no protection.
+    return checkLocalRateLimit(opts.key, opts.action);
   }
 
   const timeout = Number(process.env.OTP_RATE_LIMITER_TIMEOUT_MS) || 2500;

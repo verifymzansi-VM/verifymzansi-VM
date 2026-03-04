@@ -2,23 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import {
-  Megaphone,
-  Star,
-  Zap,
-  Flame,
-  Clock,
-  Tag,
-  Building2,
-  Pencil,
-  Plus,
-} from "lucide-react";
+import { Megaphone, Star, Zap, Flame, Clock, Tag, Building2, Pencil, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
-import { PROMOTION_TYPE_LABELS } from "@/types/enums";
-import type { PromotionType } from "@/types/enums";
+import { PROMOTION_TYPE_LABELS, type PromotionType } from "@/types/enums";
 
 /** Simple relative-time helper */
 function timeAgo(dateStr: string): string {
@@ -106,7 +95,9 @@ export default async function MyPromotionsPage() {
     // User's promotions (unified — includes migrated storefront_posts + business_posts)
     admin
       .from("promotions")
-      .select("id, title, promotion_type, business_id, status, boost_until, featured_until, created_at")
+      .select(
+        "id, title, promotion_type, business_id, status, boost_until, featured_until, created_at"
+      )
       .eq("seller_id", user.id)
       .in("status", ["live", "pending_moderation", "draft"])
       .order("created_at", { ascending: false })
@@ -123,18 +114,12 @@ export default async function MyPromotionsPage() {
     ...new Set(myPromotions.map((p) => p.business_id).filter(Boolean)),
   ] as string[];
   const { data: businesses } = businessIds.length
-    ? await admin
-        .from("businesses")
-        .select("id, business_name")
-        .in("id", businessIds)
+    ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
     : { data: [] };
 
-  const businessMap = new Map(
-    (businesses ?? []).map((b) => [b.id, b.business_name])
-  );
+  const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
 
-  const totalActive =
-    boosted.length + featured.length + urgent.length + myPromotions.length;
+  const totalActive = boosted.length + featured.length + urgent.length + myPromotions.length;
 
   return (
     <div className="space-y-6">
@@ -165,8 +150,8 @@ export default async function MyPromotionsPage() {
             <Megaphone className="h-10 w-10 text-muted-foreground mx-auto" />
             <h3 className="font-display text-lg font-semibold">No active promotions</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Boost, feature, or mark your listings as urgent to get more visibility. You can
-              also create promotions to advertise your products, services, or events.
+              Boost, feature, or mark your listings as urgent to get more visibility. You can also
+              create promotions to advertise your products, services, or events.
             </p>
             <div className="flex justify-center gap-2">
               <Button asChild variant="outline" size="sm">
@@ -271,13 +256,9 @@ export default async function MyPromotionsPage() {
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {myPromotions.map((p) => {
-                  const businessName = p.business_id
-                    ? businessMap.get(p.business_id)
-                    : undefined;
-                  const isBoosted =
-                    p.boost_until && new Date(p.boost_until) > new Date();
-                  const isFeatured =
-                    p.featured_until && new Date(p.featured_until) > new Date();
+                  const businessName = p.business_id ? businessMap.get(p.business_id) : undefined;
+                  const isBoosted = p.boost_until && new Date(p.boost_until) > new Date();
+                  const isFeatured = p.featured_until && new Date(p.featured_until) > new Date();
 
                   return (
                     <Card key={p.id}>
@@ -311,9 +292,7 @@ export default async function MyPromotionsPage() {
                           {p.status === "pending_moderation" && (
                             <Badge variant="secondary">Pending</Badge>
                           )}
-                          {p.status === "draft" && (
-                            <Badge variant="outline">Draft</Badge>
-                          )}
+                          {p.status === "draft" && <Badge variant="outline">Draft</Badge>}
                           {isBoosted && (
                             <Badge variant="outline" className="text-orange-600">
                               Boosted

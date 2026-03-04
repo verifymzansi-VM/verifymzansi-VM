@@ -59,13 +59,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid source IP" }, { status: 403 });
     }
 
-    // Verify PayFast signature (skip only when explicit bypass is enabled)
+    // Verify PayFast signature
     const passphrase = env("PAYFAST_PASSPHRASE");
-    const isDevBypass =
-      process.env.NODE_ENV !== "production" &&
-      process.env.ENABLE_DEV_PAYMENT_BYPASS === "true" &&
-      data.signature === "dev_bypass_signature";
-    if (!isDevBypass && !verifyPayFastSignature(data, passphrase)) {
+    if (!verifyPayFastSignature(data, passphrase)) {
       log.warn("Webhook signature verification failed");
       return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
     }

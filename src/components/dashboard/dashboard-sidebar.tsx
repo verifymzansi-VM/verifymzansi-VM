@@ -40,6 +40,7 @@ export interface DashboardSidebarBadges {
   rejectedListings?: number;
   pendingModeration?: number;
   incompleteVerification?: boolean;
+  pendingReview?: boolean;
 }
 
 interface DashboardSidebarProps {
@@ -58,8 +59,8 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
       const total = (badges.rejectedListings ?? 0) + (badges.pendingModeration ?? 0);
       if (total > 0) return { count: total, variant: "destructive" };
     }
-    if (href === "/verification" && badges.incompleteVerification) {
-      return { count: 1, variant: "pending" };
+    if (href === "/verification" && badges.incompleteVerification && !badges.pendingReview) {
+      return { count: 1, variant: "destructive" };
     }
     return null;
   }

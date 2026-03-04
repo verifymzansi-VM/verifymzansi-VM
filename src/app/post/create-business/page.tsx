@@ -31,7 +31,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { MediaUpload } from "@/components/ui/media-upload";
-import { PlanGate, usePlanMaxPhotos } from "@/components/billing/plan-gate";
+import { PlanGate } from "@/components/billing/plan-gate";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 
@@ -83,7 +83,9 @@ export default function CreateBusinessPage() {
   const [city, setCity] = useState("");
   const [storeNumber, setStoreNumber] = useState("");
   const [mallId, setMallId] = useState("");
-  const [malls, setMalls] = useState<{ id: string; name: string; location_city: string | null }[]>([]);
+  const [malls, setMalls] = useState<{ id: string; name: string; location_city: string | null }[]>(
+    []
+  );
   const [serviceAreasInput, setServiceAreasInput] = useState("");
 
   // Contact & Social
@@ -228,7 +230,12 @@ export default function CreateBusinessPage() {
       // Build service areas for mobile_service
       const serviceAreas =
         businessType === "mobile_service" && serviceAreasInput
-          ? { areas: serviceAreasInput.split(",").map((a) => a.trim()).filter(Boolean) }
+          ? {
+              areas: serviceAreasInput
+                .split(",")
+                .map((a) => a.trim())
+                .filter(Boolean),
+            }
           : undefined;
 
       const body = {
@@ -311,16 +318,16 @@ export default function CreateBusinessPage() {
                   What is Mzansi Business?
                 </CardTitle>
                 <CardDescription className="text-foreground/80">
-                  Mzansi Business is your professional online presence. Whether you run a mall store,
-                  home business, mobile service, or online shop — create your business profile and
-                  connect with customers across South Africa.
+                  Mzansi Business is your professional online presence. Whether you run a mall
+                  store, home business, mobile service, or online shop — create your business
+                  profile and connect with customers across South Africa.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ul className="text-sm space-y-2 text-muted-foreground">
                   <li className="flex items-start gap-2">
-                    <Building2 className="h-4 w-4 mt-0.5 text-brand-blue" /> Showcase your brand with
-                    a dedicated logo, cover media, and description.
+                    <Building2 className="h-4 w-4 mt-0.5 text-brand-blue" /> Showcase your brand
+                    with a dedicated logo, cover media, and description.
                   </li>
                   <li className="flex items-start gap-2">
                     <MapPin className="h-4 w-4 mt-0.5 text-brand-blue" /> Display your location,
@@ -364,7 +371,9 @@ export default function CreateBusinessPage() {
                               className={`h-6 w-6 mb-2 ${isSelected ? "text-brand-blue" : "text-muted-foreground"}`}
                             />
                             <p className="font-medium text-sm">{option.label}</p>
-                            <p className="text-xs text-muted-foreground mt-1">{option.description}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {option.description}
+                            </p>
                           </button>
                         );
                       })}
@@ -468,6 +477,7 @@ export default function CreateBusinessPage() {
                           </Label>
                           <select
                             id="category"
+                            aria-label="Category"
                             className={selectClass}
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
@@ -504,6 +514,7 @@ export default function CreateBusinessPage() {
                             </Label>
                             <select
                               id="province"
+                              aria-label="Province"
                               className={selectClass}
                               value={province}
                               onChange={(e) => {
@@ -526,6 +537,7 @@ export default function CreateBusinessPage() {
                             </Label>
                             <select
                               id="city"
+                              aria-label="City / Town"
                               className={selectClass}
                               value={city}
                               onChange={(e) => setCity(e.target.value)}
@@ -566,6 +578,7 @@ export default function CreateBusinessPage() {
                                 <Label htmlFor="mallId">Mall (optional)</Label>
                                 <select
                                   id="mallId"
+                                  aria-label="Mall"
                                   className={selectClass}
                                   value={mallId}
                                   onChange={(e) => setMallId(e.target.value)}
@@ -661,7 +674,10 @@ export default function CreateBusinessPage() {
                           <h4 className="text-sm font-medium">Social Media Links</h4>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                              <Label htmlFor="socialFacebook" className="text-xs text-muted-foreground">
+                              <Label
+                                htmlFor="socialFacebook"
+                                className="text-xs text-muted-foreground"
+                              >
                                 Facebook URL
                               </Label>
                               <Input
@@ -686,7 +702,10 @@ export default function CreateBusinessPage() {
                               />
                             </div>
                             <div className="space-y-1.5">
-                              <Label htmlFor="socialTwitter" className="text-xs text-muted-foreground">
+                              <Label
+                                htmlFor="socialTwitter"
+                                className="text-xs text-muted-foreground"
+                              >
                                 X (Twitter) URL
                               </Label>
                               <Input
@@ -697,7 +716,10 @@ export default function CreateBusinessPage() {
                               />
                             </div>
                             <div className="space-y-1.5">
-                              <Label htmlFor="socialTiktok" className="text-xs text-muted-foreground">
+                              <Label
+                                htmlFor="socialTiktok"
+                                className="text-xs text-muted-foreground"
+                              >
                                 TikTok URL
                               </Label>
                               <Input

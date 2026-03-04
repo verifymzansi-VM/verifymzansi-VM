@@ -74,6 +74,13 @@ vi.mock("lucide-react", () => ({
   CreditCard: () => React.createElement("span", null, "💳"),
   Loader2: () => React.createElement("span", null, "⏳"),
   Eye: () => React.createElement("span", null, "👁"),
+  ImageIcon: () => React.createElement("span", null, "🖼"),
+  FileText: () => React.createElement("span", null, "📃"),
+  AlertTriangle: () => React.createElement("span", null, "⚠"),
+  RefreshCw: () => React.createElement("span", null, "🔄"),
+  ExternalLink: () => React.createElement("span", null, "🔗"),
+  ZoomIn: () => React.createElement("span", null, "🔍"),
+  ZoomOut: () => React.createElement("span", null, "🔎"),
 }));
 
 import { KycQueueTable } from "@/components/admin/kyc-queue-table";

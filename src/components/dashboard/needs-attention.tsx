@@ -111,7 +111,7 @@ export function NeedsAttention({
     });
   }
 
-  if (trustLevel < 4) {
+  if (trustLevel <= 1) {
     items.push({
       count: 4 - trustLevel,
       label: "Steps Left",
@@ -119,6 +119,15 @@ export function NeedsAttention({
       href: "/verification",
       icon: ShieldAlert,
       variant: "warning",
+    });
+  } else if (trustLevel === 2) {
+    items.push({
+      count: 1,
+      label: "Under Review",
+      description: "Verification pending",
+      href: "/verification",
+      icon: Clock,
+      variant: "info",
     });
   }
 

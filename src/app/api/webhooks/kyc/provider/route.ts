@@ -73,10 +73,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
       }
 
-      body = JSON.parse(rawBody);
+      try {
+        body = JSON.parse(rawBody);
+      } catch {
+        return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
+      }
     } else {
       // No secret configured — accept all (development / stub provider)
-      body = await request.json();
+      try {
+        body = await request.json();
+      } catch {
+        return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
+      }
     }
 
     // Normalize payload — adapt per-provider format here
