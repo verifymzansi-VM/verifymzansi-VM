@@ -15,8 +15,15 @@ export function useAuth() {
 
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
+  const fetchedRef = useRef(false);
 
   const fetchUser = useCallback(async () => {
+    // Guard: skip if we already fetched during this component lifecycle.
+    // The Zustand store is shared, so other useAuth() consumers see the
+    // same data without triggering duplicate Supabase round-trips.
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+
     setLoading(true);
     try {
       const {

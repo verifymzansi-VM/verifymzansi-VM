@@ -300,19 +300,19 @@ export function PromoVideoSlide({ className }: { className?: string }) {
       aria-label="VerifyMzansi promotional animation: South Africa's trusted verification-first marketplace with KYC verification, three connected marketplace areas, and POPIA compliance"
       className={`relative w-full h-full overflow-hidden bg-warm-950 ${className || ""}`}
     >
-      {/* Animated gradient blobs */}
+      {/* Animated gradient blobs — hidden on mobile to avoid GPU-intensive blur compositing */}
       <motion.div
-        className="absolute -top-1/4 -left-1/4 w-[60%] h-[60%] rounded-full bg-brand-green/15 blur-[120px]"
+        className="absolute -top-1/4 -left-1/4 w-[60%] h-[60%] rounded-full bg-brand-green/15 blur-[120px] hidden sm:block"
         animate={reducedMotion ? {} : { x: ["0%", "15%", "0%"], y: ["0%", "10%", "0%"] }}
         transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
-        className="absolute -top-1/4 -right-1/4 w-[50%] h-[50%] rounded-full bg-brand-gold/12 blur-[100px]"
+        className="absolute -top-1/4 -right-1/4 w-[50%] h-[50%] rounded-full bg-brand-gold/12 blur-[100px] hidden sm:block"
         animate={reducedMotion ? {} : { x: ["0%", "-10%", "0%"], y: ["0%", "15%", "0%"] }}
         transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
-        className="absolute -bottom-1/4 left-1/4 w-[45%] h-[45%] rounded-full bg-brand-blue/10 blur-[100px]"
+        className="absolute -bottom-1/4 left-1/4 w-[45%] h-[45%] rounded-full bg-brand-blue/10 blur-[100px] hidden sm:block"
         animate={reducedMotion ? {} : { x: ["0%", "12%", "0%"], y: ["0%", "-10%", "0%"] }}
         transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
       />

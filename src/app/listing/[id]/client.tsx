@@ -25,7 +25,14 @@ function VideoThumbnailThumb({ firstPhoto }: { firstPhoto?: string }) {
   return firstPhoto ? (
     <div className="relative w-full h-full">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={firstPhoto} alt="Video thumbnail" className="w-full h-full object-cover" />
+      <img
+        src={firstPhoto}
+        alt="Video thumbnail"
+        className="w-full h-full object-cover"
+        loading="lazy"
+        width={80}
+        height={80}
+      />
       <div className="absolute inset-0 flex items-center justify-center bg-black/30">
         <Play className="h-4 w-4 text-white fill-white" />
       </div>

@@ -19,7 +19,7 @@ export function MobileNav() {
   const unreadCount = useNotificationStore((s) => s.unreadCount);
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 safe-area-inset-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t bg-background safe-area-inset-bottom">
       <div className="flex items-center justify-around h-16 px-2">
         {TABS.map((tab) => {
           const isActive = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);

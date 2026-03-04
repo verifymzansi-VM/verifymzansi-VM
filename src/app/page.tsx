@@ -177,7 +177,7 @@ export default async function HomePage() {
               <div className="max-w-3xl mx-auto space-y-8 relative z-10">
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-brand-green-400 text-sm font-medium">
                   <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-green-400 opacity-75"></span>
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-brand-green-400 opacity-50"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-green-500"></span>
                   </span>
                   Join a growing community of verified users

@@ -189,12 +189,16 @@ export function MzansiMarketGrid() {
     [filters, page]
   );
 
-  // Re-fetch when filters or page change (with stale-request guard)
+  // Re-fetch when filters or page change — debounced to avoid rapid-fire
+  // queries on mobile when users tap through filters quickly.
   useEffect(() => {
     const gen = ++fetchGenRef.current;
-    startTransition(() => {
-      fetchListings(gen);
-    });
+    const timeout = setTimeout(() => {
+      startTransition(() => {
+        fetchListings(gen);
+      });
+    }, 300);
+    return () => clearTimeout(timeout);
   }, [fetchListings]);
 
   /* ── Count active filters ──────────────────────────────── */

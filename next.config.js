@@ -19,11 +19,13 @@ const nextConfig = {
     NEXT_PUBLIC_MEDIA_URL: process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.co.za",
   },
   images: {
-    // Cloudflare Workers does not support the default Next.js image
-    // optimisation endpoint (/_next/image). Setting unoptimized = true
-    // makes <Image> render a plain <img> so photos load correctly via
-    // the /api/media/serve proxy route.
-    unoptimized: true,
+    // Cloudflare Workers/Pages does not support the default Next.js image
+    // optimisation endpoint (/_next/image). Instead of disabling optimisation
+    // entirely, we use a custom loader that routes through Cloudflare Image
+    // Resizing (/cdn-cgi/image/) when available, producing responsive srcSets
+    // with proper width/quality/format negotiation on mobile.
+    loader: "custom",
+    loaderFile: "./src/lib/image-loader.ts",
     remotePatterns: [
       {
         protocol: "https",

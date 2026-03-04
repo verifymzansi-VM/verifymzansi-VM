@@ -190,7 +190,14 @@ export function MediaUpload({
                 </div>
               ) : (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={item.url} alt={item.file.name} className="w-full h-full object-cover" />
+                <img
+                  src={item.url}
+                  alt={item.file.name}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  width={200}
+                  height={200}
+                />
               )}
               <button
                 type="button"

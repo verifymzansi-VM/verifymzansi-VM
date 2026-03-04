@@ -1,26 +1,10 @@
-"use client";
-
 import { Scale, AlertTriangle, ShieldCheck, Mail, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import Link from "next/link";
-import { motion, type Variants } from "framer-motion";
 
 export default function TermsPage() {
-  const container: Variants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 },
-    },
-  };
-
-  const item: Variants = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
-  };
-
   const sections = [
     {
       title: "1. Acceptance of Terms",
@@ -88,12 +72,7 @@ export default function TermsPage() {
         {/* Abstract Header Background */}
         <div className="relative overflow-hidden bg-brand-green-950/20 dark:bg-black py-16 sm:py-24 border-b">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1000px] h-full bg-brand-green-500/10 blur-[100px] rounded-full pointer-events-none" />
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="container-page relative z-10 text-center max-w-3xl space-y-4"
-          >
+          <div className="container-page relative z-10 text-center max-w-3xl space-y-4">
             <h1 className="font-display text-4xl sm:text-5xl font-bold tracking-tight">
               Terms of Service
             </h1>
@@ -101,11 +80,11 @@ export default function TermsPage() {
               Last updated: February 2026. By using VerifyMzansi, you agree to these terms. Please
               read them carefully.
             </p>
-          </motion.div>
+          </div>
         </div>
 
         <div className="container-page py-12 max-w-4xl">
-          <motion.div variants={container} initial="hidden" animate="show" className="space-y-12">
+          <div className="space-y-12">
             {/* Key Points */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               {[
@@ -127,8 +106,8 @@ export default function TermsPage() {
               ].map((point, index) => {
                 const Icon = point.icon;
                 return (
-                  <motion.div variants={item} key={index}>
-                    <Card className="h-full border-border/50 shadow-sm hover:shadow-md transition-shadow bg-background/50 backdrop-blur-sm">
+                  <div key={index}>
+                    <Card className="h-full border-border/50 shadow-sm hover:shadow-md transition-shadow bg-background">
                       <CardContent className="p-6">
                         <div className="h-10 w-10 rounded-full bg-brand-green/10 flex items-center justify-center mb-4">
                           <Icon className="h-5 w-5 text-brand-green" />
@@ -137,7 +116,7 @@ export default function TermsPage() {
                         <p className="text-sm text-muted-foreground">{point.desc}</p>
                       </CardContent>
                     </Card>
-                  </motion.div>
+                  </div>
                 );
               })}
             </div>
@@ -147,7 +126,7 @@ export default function TermsPage() {
             {/* Legal Content */}
             <div className="space-y-10">
               {sections.map((section, index) => (
-                <motion.section variants={item} key={index} className="space-y-4 group">
+                <section key={index} className="space-y-4 group">
                   <h2 className="font-display text-2xl font-bold flex items-center gap-3">
                     <span className="text-brand-green text-xl font-mono" aria-hidden="true">
                       {String(index + 1).padStart(2, "0")}
@@ -170,10 +149,10 @@ export default function TermsPage() {
                       )
                     )}
                   </div>
-                </motion.section>
+                </section>
               ))}
 
-              <motion.section variants={item} className="space-y-4 pt-4">
+              <section className="space-y-4 pt-4">
                 <h2 className="font-display text-2xl font-bold flex items-center gap-3">
                   <span className="text-brand-green text-xl font-mono" aria-hidden="true">
                     07
@@ -204,9 +183,9 @@ export default function TermsPage() {
                     </a>
                   </div>
                 </div>
-              </motion.section>
+              </section>
             </div>
-          </motion.div>
+          </div>
         </div>
       </main>
 

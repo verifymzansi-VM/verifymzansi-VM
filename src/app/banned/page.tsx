@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import Link from "next/link";
-import { motion } from "framer-motion";
 
 export default function BannedPage() {
   return (
@@ -17,35 +16,16 @@ export default function BannedPage() {
         {/* Background ambient glow */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-red-500/10 blur-[100px] rounded-full pointer-events-none" />
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
-          className="container-page max-w-lg text-center space-y-6 relative z-10"
-        >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.2 }}
-            className="mx-auto w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center shadow-[0_0_30px_-5px_var(--tw-shadow-color)] shadow-destructive/30"
-          >
+        <div className="container-page max-w-lg text-center space-y-6 relative z-10">
+          <div className="mx-auto w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center shadow-[0_0_30px_-5px_var(--tw-shadow-color)] shadow-destructive/30">
             <ShieldAlert className="h-10 w-10 text-destructive" />
-          </motion.div>
+          </div>
 
-          <motion.h1
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="font-display text-3xl font-bold tracking-tight text-destructive"
-          >
+          <h1 className="font-display text-3xl font-bold tracking-tight text-destructive">
             Account Suspended
-          </motion.h1>
+          </h1>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
+          <div>
             <Card className="border-destructive/20 shadow-xl overflow-hidden">
               <div className="h-1.5 w-full bg-destructive" />
               <CardContent className="p-6 space-y-5 text-left bg-gradient-to-b from-destructive/5 to-transparent">
@@ -78,15 +58,10 @@ export default function BannedPage() {
                       "Any active subscriptions have been automatically cancelled",
                     ].map((item, i) => (
                       <li key={i}>
-                        <motion.div
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.5 + i * 0.1 }}
-                          className="flex items-center gap-2"
-                        >
+                        <div className="flex items-center gap-2">
                           <div className="h-1.5 w-1.5 rounded-full bg-destructive/50" />
                           {item}
-                        </motion.div>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -104,14 +79,14 @@ export default function BannedPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
 
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }}>
+          <div>
             <Button asChild variant="outline" className="mt-4 hover:bg-muted">
               <Link href="/">Return to Homepage</Link>
             </Button>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       </main>
 
       <Footer />

@@ -267,7 +267,14 @@ export default function CreateListingPage() {
             <div className="w-20 h-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
               {previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  width={80}
+                  height={80}
+                />
               ) : (
                 <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
                   <Camera className="h-5 w-5" />
