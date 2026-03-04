@@ -141,14 +141,14 @@ export default async function HomePage() {
                 <Link
                   key={label}
                   href={href}
-                  className="group flex flex-col items-center gap-2 p-3 rounded-xl border border-transparent hover:border-warm-200 dark:hover:border-warm-700 hover:bg-warm-50 dark:hover:bg-warm-900/50 hover:shadow-sm transition-all duration-300"
+                  className="group flex flex-col items-center gap-2 p-3 rounded-xl border border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-900 hover:shadow-md hover:border-warm-300 dark:hover:border-warm-600 transition-all duration-200"
                 >
                   <div
-                    className={`flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full ${iconBg} ${iconColor} transition-transform duration-300 ease-out group-hover:scale-110 group-hover:shadow-sm`}
+                    className={`flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full ${iconBg} ${iconColor} transition-transform duration-200 group-hover:scale-110`}
                   >
                     <Icon className="h-5 w-5" />
                   </div>
-                  <span className="text-xs font-medium text-center text-foreground leading-tight group-hover:text-brand-green transition-colors">
+                  <span className="text-xs font-medium text-center text-foreground leading-tight">
                     {label}
                   </span>
                 </Link>
@@ -163,33 +163,34 @@ export default async function HomePage() {
         </Suspense>
 
         {/* ═══ CTA Section ═══ */}
-        <section className="py-12 sm:py-24 relative overflow-hidden bg-hero-mesh border-t border-brand-green-100/50 dark:border-brand-green-900/20">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-warm-100/50 dark:to-warm-950/50 pointer-events-none"></div>
-          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.02] mix-blend-overlay pointer-events-none"></div>
+        <section className="py-8 sm:py-20 relative overflow-hidden bg-warm-950 dark:bg-black">
+          {/* Decorative background elements */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-[1000px] bg-gradient-to-b from-brand-green/20 via-brand-green/5 to-transparent blur-3xl rounded-t-[100%] pointer-events-none opacity-50"></div>
+          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-overlay pointer-events-none"></div>
 
           <div className="container-page relative z-10">
-            <div className="bg-white/80 dark:bg-warm-950/80 backdrop-blur-xl border border-warm-200/50 dark:border-warm-800/50 rounded-3xl p-8 sm:p-12 lg:p-16 text-center shadow-xl overflow-hidden relative">
+            <div className="bg-gradient-to-br from-warm-900/50 to-warm-950/80 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-10 lg:p-16 text-center shadow-2xl overflow-hidden relative">
               {/* Card internal glows */}
-              <div className="absolute -top-32 -right-32 w-80 h-80 bg-brand-gold-400/10 blur-[100px] rounded-full pointer-events-none"></div>
-              <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-brand-green-400/10 blur-[100px] rounded-full pointer-events-none"></div>
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-brand-gold-500/20 blur-[80px] rounded-full pointer-events-none"></div>
+              <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-brand-blue-500/20 blur-[80px] rounded-full pointer-events-none"></div>
 
               <div className="max-w-3xl mx-auto space-y-8 relative z-10">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-green-50 dark:bg-brand-green-950/50 border border-brand-green-200 dark:border-brand-green-800/50 text-brand-green-800 dark:text-brand-green-300 text-sm font-medium shadow-sm">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-brand-green-400 opacity-75 animate-ping"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-green-500"></span>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-brand-green-400 text-sm font-medium">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-brand-green-400 opacity-50"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-green-500"></span>
                   </span>
                   Join a growing community of verified users
                 </div>
 
-                <h1 className="font-display text-4xl sm:text-6xl font-bold tracking-tight text-foreground leading-[1.1] sm:leading-[1.1]">
+                <h1 className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.1] sm:leading-[1.1]">
                   Ready to join Mzansi&apos;s most{" "}
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green-500 to-brand-gold-500">
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green-400 to-brand-gold-400">
                     trusted marketplace?
                   </span>
                 </h1>
 
-                <p className="text-muted-foreground text-lg sm:text-xl max-w-2xl mx-auto leading-relaxed">
+                <p className="text-warm-200 text-lg sm:text-xl max-w-2xl mx-auto">
                   Get verified in under 5 minutes. Buy, sell, and advertise with trust. Access three
                   connected marketplaces and reach customers across South Africa.
                 </p>
@@ -198,7 +199,7 @@ export default async function HomePage() {
                   <Button
                     asChild
                     size="lg"
-                    className="w-full sm:w-auto h-14 px-8 text-lg bg-brand-green hover:bg-brand-green-600 text-white shadow-[0_0_20px_-5px_rgba(0,131,62,0.4)] hover:shadow-[0_0_30px_-5px_rgba(0,131,62,0.6)] transition-all gap-2 rounded-full font-semibold"
+                    className="w-full sm:w-auto h-14 px-8 text-lg bg-brand-green hover:bg-brand-green-600 text-white shadow-[0_0_40px_-10px_rgba(22,163,74,0.6)] hover:shadow-[0_0_60px_-15px_rgba(22,163,74,0.8)] transition-all gap-2 rounded-full font-semibold"
                   >
                     <Link href="/register">
                       <ShieldCheck className="h-5 w-5" />
@@ -209,17 +210,17 @@ export default async function HomePage() {
                     asChild
                     size="lg"
                     variant="outline"
-                    className="w-full sm:w-auto h-14 px-8 text-lg border-warm-200 dark:border-warm-700 bg-white/50 dark:bg-warm-900/50 hover:bg-warm-50 dark:hover:bg-warm-800 rounded-full font-semibold backdrop-blur-sm transition-all"
+                    className="w-full sm:w-auto h-14 px-8 text-lg border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/30 rounded-full font-semibold backdrop-blur-sm transition-all"
                   >
                     <Link href="/pricing">View Plans</Link>
                   </Button>
                 </div>
 
-                <div className="pt-8 font-medium text-sm text-muted-foreground">
+                <div className="pt-6 font-medium text-sm text-warm-400">
                   Already have an account?{" "}
                   <Link
                     href="/login"
-                    className="text-foreground hover:text-brand-green transition-colors underline underline-offset-4"
+                    className="text-white hover:text-brand-gold-400 transition-colors underline underline-offset-4"
                   >
                     Sign in
                   </Link>

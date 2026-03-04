@@ -219,7 +219,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <Button type="submit" variant="trust-verified" className="gap-2" disabled={isSaving}>
+            <Button type="submit" className="gap-2" disabled={isSaving}>
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (

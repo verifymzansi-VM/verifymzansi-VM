@@ -312,10 +312,10 @@ export default async function DashboardPage() {
       {/* Stats Grid — all cards are now clickable */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <Link href="/dashboard/listings">
-          <Card className="hover:shadow-md hover:border-brand-green/30 transition-all cursor-pointer h-full group">
+          <Card className="hover:shadow-md transition-all cursor-pointer h-full">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-warm-100 dark:bg-warm-900 border border-warm-200 dark:border-warm-800 text-brand-green group-hover:scale-110 group-hover:bg-brand-green-50 dark:group-hover:bg-brand-green-950/50 transition-all duration-300">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-brand-green-50 dark:bg-brand-green-950 text-brand-green">
                   <Package className="h-5 w-5" />
                 </div>
                 <div>
@@ -328,10 +328,10 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/dashboard/metrics">
-          <Card className="hover:shadow-md hover:border-blue-500/30 transition-all cursor-pointer h-full group">
+          <Card className="hover:shadow-md transition-all cursor-pointer h-full">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-warm-100 dark:bg-warm-900 border border-warm-200 dark:border-warm-800 text-blue-600 group-hover:scale-110 group-hover:bg-blue-50 dark:group-hover:bg-blue-950/50 transition-all duration-300">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600">
                   <Eye className="h-5 w-5" />
                 </div>
                 <div>
@@ -345,13 +345,13 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/dashboard/leads">
-          <Card className="hover:shadow-md hover:border-amber-500/30 transition-all cursor-pointer h-full group">
+          <Card className="hover:shadow-md transition-all cursor-pointer h-full">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-warm-100 dark:bg-warm-900 border border-warm-200 dark:border-warm-800 text-amber-600 relative group-hover:scale-110 group-hover:bg-amber-50 dark:group-hover:bg-amber-950/50 transition-all duration-300">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-600 relative">
                   <MessageSquare className="h-5 w-5" />
                   {unreadLeadCount > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive border-2 border-background px-1 text-[10px] font-bold text-destructive-foreground">
+                    <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
                       {unreadLeadCount > 9 ? "9+" : unreadLeadCount}
                     </span>
                   )}
@@ -367,10 +367,10 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/dashboard/promotions">
-          <Card className="hover:shadow-md hover:border-purple-500/30 transition-all cursor-pointer h-full group">
+          <Card className="hover:shadow-md transition-all cursor-pointer h-full">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-warm-100 dark:bg-warm-900 border border-warm-200 dark:border-warm-800 text-purple-600 group-hover:scale-110 group-hover:bg-purple-50 dark:group-hover:bg-purple-950/50 transition-all duration-300">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-950 text-purple-600">
                   <Megaphone className="h-5 w-5" />
                 </div>
                 <div>
@@ -386,10 +386,10 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/verification">
-          <Card className="hover:shadow-md hover:border-brand-green/30 transition-all cursor-pointer h-full group">
+          <Card className="hover:shadow-md transition-all cursor-pointer h-full">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-warm-100 dark:bg-warm-900 border border-warm-200 dark:border-warm-800 text-brand-green group-hover:scale-110 group-hover:bg-brand-green-50 dark:group-hover:bg-brand-green-950/50 transition-all duration-300">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-brand-green-50 dark:bg-brand-green-950 text-brand-green">
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div>

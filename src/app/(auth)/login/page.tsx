@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Eye, EyeOff, RefreshCw } from "lucide-react";
-import { motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,12 +142,7 @@ export default function LoginPage() {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
-      className="space-y-6"
-    >
+    <div className="space-y-6">
       <div className="space-y-2">
         <h1 className="font-display text-2xl font-bold tracking-tight">Sign in to your account</h1>
         <p className="text-sm text-muted-foreground">
@@ -232,6 +226,6 @@ export default function LoginPage() {
           Register
         </Link>
       </p>
-    </motion.div>
+    </div>
   );
 }
