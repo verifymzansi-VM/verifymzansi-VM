@@ -50,21 +50,27 @@ export async function verifyTurnstileToken(
   // (Bypass without a key is handled above.)
 
   try {
+    // Use form-encoded body — Cloudflare's primary documented format.
+    // JSON was returning HTTP 400 on some Cloudflare Workers runtimes.
+    const form = new URLSearchParams();
+    form.append("secret", secretKey);
+    form.append("response", params.token);
+    if (params.remoteIp) {
+      form.append("remoteip", params.remoteIp);
+    }
+
     const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: JSON.stringify({
-        secret: secretKey,
-        response: params.token,
-        remoteip: params.remoteIp,
-      }),
+      body: form.toString(),
       signal: AbortSignal.timeout(5000),
     });
 
     if (!response.ok) {
-      log.error("Turnstile API returned non-OK status", { status: response.status });
+      const text = await response.text().catch(() => "");
+      log.error("Turnstile API returned non-OK status", { status: response.status, body: text });
       return {
         success: false,
         error: `Turnstile verification request failed (HTTP ${response.status})`,
