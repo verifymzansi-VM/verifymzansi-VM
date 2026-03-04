@@ -100,7 +100,7 @@ export async function POST(request: Request) {
       .from("verification_steps")
       .update(updateData)
       .eq("id", stepId)
-      .in("status", ["pending", "needs_manual_review", "needs_resubmission"])
+      .in("status", ["pending", "needs_resubmission"])
       .select("id");
 
     if (updateError) {
