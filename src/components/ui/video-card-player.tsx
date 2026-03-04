@@ -292,18 +292,16 @@ export function VideoCardPlayer({
             onKeyDown={handleVideoKeyDown}
           >
             <div className="flex justify-end w-full">
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={toggleMute}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") toggleMute(e);
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMute(e);
                 }}
                 className="p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
                 aria-label={isMuted ? "Unmute" : "Mute"}
               >
                 {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              </div>
+              </button>
             </div>
             <div className="flex items-center justify-center flex-1">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110">

@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -149,10 +150,11 @@ function RejectedListingList({ listings }: { listings: BaseListing[] }) {
               {/* Thumbnail */}
               <div className="w-16 h-16 rounded-lg bg-warm-100 dark:bg-warm-800 overflow-hidden flex-shrink-0 opacity-60">
                 {listing.photos?.[0] ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
+                  <Image
                     src={normalizeMediaUrl(listing.photos[0])}
                     alt={listing.title || "Listing thumbnail"}
+                    width={64}
+                    height={64}
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -278,10 +280,11 @@ function ListingList({
             {/* Thumbnail */}
             <div className="w-16 h-16 rounded-lg bg-warm-100 dark:bg-warm-800 overflow-hidden flex-shrink-0">
               {listing.photos?.[0] ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
+                <Image
                   src={normalizeMediaUrl(listing.photos[0])}
                   alt={listing.title || "Listing thumbnail"}
+                  width={64}
+                  height={64}
                   className="w-full h-full object-cover"
                 />
               ) : (

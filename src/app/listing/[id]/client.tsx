@@ -24,14 +24,12 @@ function isVideoUrl(url: string): boolean {
 function VideoThumbnailThumb({ firstPhoto }: { firstPhoto?: string }) {
   return firstPhoto ? (
     <div className="relative w-full h-full">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={firstPhoto}
         alt="Video thumbnail"
-        className="w-full h-full object-cover"
-        loading="lazy"
         width={80}
         height={80}
+        className="w-full h-full object-cover"
       />
       <div className="absolute inset-0 flex items-center justify-center bg-black/30">
         <Play className="h-4 w-4 text-white fill-white" />

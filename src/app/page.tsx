@@ -15,58 +15,15 @@ import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MarketplacePreviewsSkeleton } from "@/components/home/marketplace-previews-skeleton";
-import { HeroBanner } from "@/components/home/hero-banner";
+import { HeroBannerWithData } from "@/components/home/hero-banner-with-data";
+import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
 import { HomeMzansiMarketShowcase } from "@/components/home/home-mzansi-market-showcase";
-import { createClient } from "@supabase/supabase-js";
-
-function isValidHttpUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
 
 /** Revalidate homepage data every 60 seconds (ISR) */
 export const revalidate = 60;
 
 export default async function HomePage() {
-  // Use raw supabase-js client to avoid reading Next.js cookies(),
-  // which would force the route to be dynamic and break ISR fetching.
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  let topBusinesses = null;
-  let latestListings = null;
-
-  if (url && anonKey && isValidHttpUrl(url)) {
-    const supabase = createClient(url, anonKey);
-
-    // Fetch data for Hero Banner showcases
-    const [businesses, listings] = await Promise.all([
-      supabase
-        .from("businesses")
-        .select("id, business_name, cover_photo, cover_video, description, location_city")
-        .eq("status", "live")
-        .order("boost_until", { ascending: false, nullsFirst: false })
-        .order("created_at", { ascending: false })
-        .limit(3),
-      supabase
-        .from("listings")
-        .select(
-          "id, title, description, price_cents, photos, videos, video_thumbnail, location_city, category"
-        )
-        .eq("status", "live")
-        .eq("area", "MZANSI_MARKET")
-        .order("featured", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(3),
-    ]);
-
-    topBusinesses = businesses.data;
-    latestListings = listings.data;
-  }
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://verifymzansi.com";
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -95,7 +52,9 @@ export default async function HomePage() {
 
       <main className="flex-1">
         {/* ═══ Hero Banner (rotating promotions + search) ═══ */}
-        <HeroBanner topBusinesses={topBusinesses || []} latestListings={latestListings || []} />
+        <Suspense fallback={<HeroBannerSkeleton />}>
+          <HeroBannerWithData />
+        </Suspense>
 
         {/* ═══ Browse by Category ═══ */}
         <section className="py-5 sm:py-8 border-b border-warm-200 dark:border-warm-800 bg-white dark:bg-warm-950">

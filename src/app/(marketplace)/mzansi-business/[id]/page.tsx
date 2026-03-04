@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import {
   MapPin,
@@ -129,11 +130,13 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
           <div className="relative rounded-2xl overflow-hidden bg-background shadow-sm border">
             {business.cover_photo ? (
               <div className="aspect-[21/9] md:aspect-[4/1] bg-muted overflow-hidden relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={normalizeMediaUrl(business.cover_photo)}
                   alt={`${business.business_name} Cover`}
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
+                  priority
+                  sizes="100vw"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
               </div>
@@ -147,10 +150,11 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
             <div className="px-6 pb-6 pt-4 flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-8 -mt-16 md:-mt-20 relative z-10 w-full text-center md:text-left mx-auto">
               <div className="h-32 w-32 rounded-2xl bg-white p-2 shadow-xl border overflow-hidden flex-shrink-0">
                 {business.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={normalizeMediaUrl(business.logo_url)}
                     alt={`${business.business_name} Logo`}
+                    width={128}
+                    height={128}
                     className="w-full h-full object-contain rounded-xl"
                   />
                 ) : (
