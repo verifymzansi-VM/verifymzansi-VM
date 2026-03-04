@@ -58,12 +58,12 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
 
   if (!promotion) notFound();
 
-  // Fetch seller profile
+  // Fetch seller profile (maybeSingle — seller account may have been deleted)
   const { data: seller } = await supabase
     .from("seller_profiles")
     .select("display_name, seller_verification_status, location_province, location_city, strikes")
     .eq("user_id", promotion.seller_id)
-    .single();
+    .maybeSingle();
 
   const trustLevel = seller
     ? computeTrustLevel(seller.seller_verification_status as SellerVerificationStatus)
@@ -76,7 +76,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
           .from("businesses")
           .select("id, business_name, logo_url")
           .eq("id", promotion.business_id)
-          .single()
+          .maybeSingle()
       ).data
     : null;
 

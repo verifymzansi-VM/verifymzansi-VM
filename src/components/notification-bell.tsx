@@ -46,12 +46,6 @@ export function NotificationBell({ userId }: { userId?: string }) {
           // Map DB rows → store Notification objects, preserving id + read status
           const mapped = data.notifications.map((n: Record<string, unknown>) => {
             const dbId = n.id as string | undefined;
-            if (!dbId) {
-              console.warn(
-                "[NotificationBell] API notification missing 'id'; client-side UUID generated.",
-                { title: n.title }
-              );
-            }
             return {
               id: dbId ?? crypto.randomUUID(),
               type: (n.type as "info" | "success" | "warning" | "error") ?? "info",

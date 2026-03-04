@@ -61,8 +61,8 @@ export default async function DashboardPage() {
     recentLeadsResult,
     recentListingChangesResult,
   ] = await Promise.all([
-    // Seller profile
-    supabase.from("seller_profiles").select("*").eq("user_id", user.id).single(),
+    // Seller profile (maybeSingle – new users may not have a profile yet)
+    supabase.from("seller_profiles").select("*").eq("user_id", user.id).maybeSingle(),
     // Verification steps
     supabase.from("verification_steps").select("step_type, status").eq("user_id", user.id),
     // Active listings count

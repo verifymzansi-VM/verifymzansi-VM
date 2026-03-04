@@ -75,12 +75,12 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
 
   if (!business) notFound();
 
-  // Fetch seller profile
+  // Fetch seller profile (maybeSingle — seller account may have been deleted)
   const { data: seller } = await supabase
     .from("seller_profiles")
     .select("id, display_name, location_province, location_city, seller_verification_status")
     .eq("user_id", business.seller_id)
-    .single();
+    .maybeSingle();
 
   // Fetch linked promotions
   const { data: promotions } = await supabase

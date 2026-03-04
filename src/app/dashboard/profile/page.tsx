@@ -41,7 +41,7 @@ export default function ProfilePage() {
         .from("seller_profiles")
         .select("*")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (profile) {
         setDisplayName(profile.display_name || "");

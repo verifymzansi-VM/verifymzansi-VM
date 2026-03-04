@@ -52,7 +52,7 @@ export default function EditListingPage() {
   useEffect(() => {
     async function load() {
       const supabase = createClient();
-      const { data } = await supabase.from("listings").select("*").eq("id", id).single();
+      const { data } = await supabase.from("listings").select("*").eq("id", id).maybeSingle();
 
       if (!data) {
         toast({ title: "Listing not found", variant: "destructive" });

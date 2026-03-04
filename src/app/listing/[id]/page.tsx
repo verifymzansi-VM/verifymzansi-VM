@@ -77,14 +77,14 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
   if (!listing) notFound();
 
-  // Fetch seller profile
+  // Fetch seller profile (maybeSingle — seller account may have been deleted)
   const { data: seller } = await supabase
     .from("seller_profiles")
     .select(
       "id, display_name, location_province, location_city, seller_verification_status, phone, masked_phone_public"
     )
     .eq("user_id", listing.seller_id)
-    .single();
+    .maybeSingle();
 
   // Track view
   supabase

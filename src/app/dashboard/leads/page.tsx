@@ -33,7 +33,7 @@ export default async function LeadsPage() {
     .from("seller_profiles")
     .select("id")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
   const { data: leads } = await supabase
     .from("leads")
