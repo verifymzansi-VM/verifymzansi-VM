@@ -16,6 +16,10 @@ import {
   Wrench,
   Plus,
   X,
+  Camera,
+  Film,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -104,11 +108,17 @@ export default function EditBusinessPage() {
   const [existingLogo, setExistingLogo] = useState("");
   const [existingCoverPhoto, setExistingCoverPhoto] = useState("");
   const [existingCoverVideo, setExistingCoverVideo] = useState("");
+  const [existingVideoThumbnail, setExistingVideoThumbnail] = useState("");
+  const [existingGalleryPhotos, setExistingGalleryPhotos] = useState<string[]>([]);
 
   // Media — new files
   const [newLogoFile, setNewLogoFile] = useState<File[]>([]);
   const [newCoverFile, setNewCoverFile] = useState<File[]>([]);
-  const [newCoverThumbnailFile, setNewCoverThumbnailFile] = useState<File[]>([]);
+  const [newGalleryFiles, setNewGalleryFiles] = useState<File[]>([]);
+  const [newPromoVideoFile, setNewPromoVideoFile] = useState<File[]>([]);
+  const [newVideoThumbnailFile, setNewVideoThumbnailFile] = useState<File[]>([]);
+  const [removeGallery, setRemoveGallery] = useState(false);
+  const [removeVideo, setRemoveVideo] = useState(false);
 
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
@@ -141,6 +151,8 @@ export default function EditBusinessPage() {
         setExistingLogo(b.logo_url || "");
         setExistingCoverPhoto(b.cover_photo || "");
         setExistingCoverVideo(b.cover_video || "");
+        setExistingVideoThumbnail(b.video_thumbnail || "");
+        setExistingGalleryPhotos(b.gallery_photos || []);
         setServices(b.services_offered || []);
         setPaymentMethods(b.payment_methods_accepted || []);
         setDeliveryOptions(b.delivery_options || []);
@@ -241,21 +253,32 @@ export default function EditBusinessPage() {
 
       let finalCoverPhoto = existingCoverPhoto;
       let finalCoverVideo = existingCoverVideo;
+      let finalVideoThumbnail = existingVideoThumbnail;
+      let finalGalleryPhotos = existingGalleryPhotos;
+
       if (newCoverFile.length > 0) {
         const urls = await uploadMedia(newCoverFile, "business_cover");
-        const coverIsVideo = newCoverFile[0]?.type.startsWith("video/");
-        if (coverIsVideo && urls[0]) {
-          finalCoverVideo = urls[0];
-          if (newCoverThumbnailFile.length > 0) {
-            const thumbUrls = await uploadMedia(newCoverThumbnailFile, "business_cover");
-            finalCoverPhoto = thumbUrls[0] || "";
-          } else {
-            finalCoverPhoto = "";
-          }
-        } else if (urls[0]) {
-          finalCoverPhoto = urls[0];
-          finalCoverVideo = "";
-        }
+        if (urls[0]) finalCoverPhoto = urls[0];
+      }
+
+      if (removeVideo) {
+        finalCoverVideo = "";
+        finalVideoThumbnail = "";
+      } else if (newPromoVideoFile.length > 0) {
+        const urls = await uploadMedia(newPromoVideoFile, "business_cover");
+        if (urls[0]) finalCoverVideo = urls[0];
+      }
+
+      if (newVideoThumbnailFile.length > 0 && finalCoverVideo) {
+        const thumbUrls = await uploadMedia(newVideoThumbnailFile, "business_cover");
+        if (thumbUrls[0]) finalVideoThumbnail = thumbUrls[0];
+      }
+
+      if (removeGallery) {
+        finalGalleryPhotos = [];
+      } else if (newGalleryFiles.length > 0) {
+        const urls = await uploadMedia(newGalleryFiles, "business_gallery");
+        if (urls.length > 0) finalGalleryPhotos = urls;
       }
 
       // Build social links
@@ -299,6 +322,8 @@ export default function EditBusinessPage() {
         logo_url: finalLogoUrl || undefined,
         cover_photo: finalCoverPhoto || undefined,
         cover_video: finalCoverVideo || undefined,
+        video_thumbnail: finalVideoThumbnail || undefined,
+        gallery_photos: finalGalleryPhotos.length > 0 ? finalGalleryPhotos : [],
         services_offered: services,
         service_areas: serviceAreas,
         operating_hours: operatingHours,
@@ -653,10 +678,13 @@ export default function EditBusinessPage() {
               </div>
 
               {/* Existing Media Preview */}
-              {(existingLogo || existingCoverPhoto) && (
+              {(existingLogo ||
+                existingCoverPhoto ||
+                existingCoverVideo ||
+                existingGalleryPhotos.length > 0) && (
                 <div className="space-y-3">
                   <Label>Current Media</Label>
-                  <div className="flex gap-4">
+                  <div className="flex flex-wrap gap-4">
                     {existingLogo && (
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground">Logo</p>
@@ -672,7 +700,7 @@ export default function EditBusinessPage() {
                     )}
                     {existingCoverPhoto && (
                       <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Cover</p>
+                        <p className="text-xs text-muted-foreground">Cover Photo</p>
                         <div className="h-20 w-32 rounded-lg overflow-hidden border">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
@@ -683,35 +711,175 @@ export default function EditBusinessPage() {
                         </div>
                       </div>
                     )}
+                    {existingCoverVideo && !removeVideo && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Promo Video</p>
+                        <div className="h-20 w-32 rounded-lg overflow-hidden border bg-black flex items-center justify-center">
+                          <Film className="h-6 w-6 text-white/60" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setRemoveVideo(true)}
+                          className="text-xs text-destructive hover:underline"
+                        >
+                          Remove video
+                        </button>
+                      </div>
+                    )}
                   </div>
+                  {/* Existing gallery photos */}
+                  {existingGalleryPhotos.length > 0 && !removeGallery && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Camera className="h-3 w-3" /> Gallery Photos (
+                          {existingGalleryPhotos.length})
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setRemoveGallery(true)}
+                          className="text-xs text-destructive hover:underline"
+                        >
+                          Replace all
+                        </button>
+                      </div>
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {existingGalleryPhotos.map((url, i) => (
+                          <div
+                            key={i}
+                            className="h-16 w-16 rounded-lg overflow-hidden border flex-shrink-0"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={normalizeMediaUrl(url)}
+                              alt={`Gallery ${i + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Upload new media */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <MediaUpload
-                  label="Replace Logo"
-                  maxFiles={1}
-                  files={newLogoFile}
-                  onChange={setNewLogoFile}
-                  accept="image/*"
-                />
-                <MediaUpload
-                  label="Replace Cover (Photo or Video)"
-                  maxFiles={1}
-                  files={newCoverFile}
-                  onChange={setNewCoverFile}
-                />
+              <div className="space-y-4">
+                <Label className="text-sm font-medium">Upload New Media</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <MediaUpload
+                    label="Replace Logo"
+                    maxFiles={1}
+                    files={newLogoFile}
+                    onChange={setNewLogoFile}
+                    accept="image/*"
+                  />
+                  <MediaUpload
+                    label="Replace Cover Photo"
+                    maxFiles={1}
+                    files={newCoverFile}
+                    onChange={setNewCoverFile}
+                    accept="image/*"
+                  />
+                </div>
+
+                {/* Gallery Photos */}
+                <div className="space-y-2">
+                  <MediaUpload
+                    label={
+                      removeGallery || existingGalleryPhotos.length === 0
+                        ? "Profile Photos (up to 5)"
+                        : "Replace Profile Photos (up to 5)"
+                    }
+                    maxFiles={5}
+                    files={newGalleryFiles}
+                    onChange={setNewGalleryFiles}
+                    accept="image/*"
+                  />
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Camera className="h-3 w-3" />
+                    Showcase your products, premises, team, or work. For best results use landscape
+                    photos (at least 800×600px).
+                  </p>
+                  {/* Gallery reorder controls */}
+                  {newGalleryFiles.length > 1 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Order — first photo is featured on cards:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {newGalleryFiles.map((file, idx) => (
+                          <div
+                            key={`${file.name}-${idx}`}
+                            className="flex items-center gap-1 bg-muted rounded-md px-2 py-1 text-xs"
+                          >
+                            <span className="font-medium truncate max-w-[100px]">{file.name}</span>
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => {
+                                const arr = [...newGalleryFiles];
+                                [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+                                setNewGalleryFiles(arr);
+                              }}
+                              className="p-0.5 disabled:opacity-30 hover:bg-background rounded"
+                              aria-label="Move left"
+                            >
+                              <ChevronLeft className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === newGalleryFiles.length - 1}
+                              onClick={() => {
+                                const arr = [...newGalleryFiles];
+                                [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+                                setNewGalleryFiles(arr);
+                              }}
+                              className="p-0.5 disabled:opacity-30 hover:bg-background rounded"
+                              aria-label="Move right"
+                            >
+                              <ChevronRight className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Promo Video */}
+                <div className="space-y-2">
+                  <MediaUpload
+                    label={
+                      removeVideo || !existingCoverVideo
+                        ? "Promo / Intro Video (1 max)"
+                        : "Replace Promo Video"
+                    }
+                    maxFiles={1}
+                    files={newPromoVideoFile}
+                    onChange={(files) => {
+                      setNewPromoVideoFile(files);
+                      if (files.length === 0) setNewVideoThumbnailFile([]);
+                    }}
+                    accept="video/*"
+                  />
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Film className="h-3 w-3" />
+                    Auto-plays muted below your cover on your profile page. Max 50 MB.
+                  </p>
+                </div>
+
+                {/* Video Thumbnail */}
+                {(newPromoVideoFile.length > 0 || (existingCoverVideo && !removeVideo)) && (
+                  <MediaUpload
+                    label="Video Thumbnail (1 max) — Poster shown before video loads"
+                    maxFiles={1}
+                    files={newVideoThumbnailFile}
+                    onChange={setNewVideoThumbnailFile}
+                    accept="image/*"
+                  />
+                )}
               </div>
-              {newCoverFile.length > 0 && newCoverFile[0]?.type.startsWith("video/") && (
-                <MediaUpload
-                  label="Cover Thumbnail (for video)"
-                  maxFiles={1}
-                  files={newCoverThumbnailFile}
-                  onChange={setNewCoverThumbnailFile}
-                  accept="image/*"
-                />
-              )}
 
               {/* Services Offered */}
               <div className="space-y-3">

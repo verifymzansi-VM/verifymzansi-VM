@@ -71,6 +71,12 @@ export const businessSchema = z
     logo_url: z.string().url().optional().or(z.literal("")),
     cover_photo: z.string().url().optional().or(z.literal("")),
     cover_video: z.string().url().optional().or(z.literal("")),
+    video_thumbnail: z.string().url().optional().or(z.literal("")),
+    gallery_photos: z
+      .array(z.string().url())
+      .max(5, "Maximum 5 gallery photos")
+      .optional()
+      .default([]),
 
     // Details
     services_offered: z.array(z.string().max(200)).max(30).optional().default([]),

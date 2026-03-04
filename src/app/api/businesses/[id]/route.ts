@@ -141,6 +141,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         logo_url: data.logo_url || null,
         cover_photo: data.cover_photo || null,
         cover_video: data.cover_video || null,
+        video_thumbnail: data.video_thumbnail || null,
+        gallery_photos: data.gallery_photos || [],
         location_province: data.location_province,
         location_city: data.location_city,
         store_number: data.store_number || null,

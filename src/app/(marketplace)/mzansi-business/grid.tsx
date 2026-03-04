@@ -8,7 +8,7 @@ export async function MzansiBusinessGrid() {
   const { data: businesses } = await supabase
     .from("businesses")
     .select(
-      "id, business_type, business_name, description, cover_photo, logo_url, location_province, location_city, category, boost_until, featured_until, service_areas"
+      "id, business_type, business_name, description, cover_photo, logo_url, gallery_photos, location_province, location_city, category, boost_until, featured_until, service_areas"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS")
@@ -39,6 +39,7 @@ export async function MzansiBusinessGrid() {
           description={b.description}
           coverPhoto={b.cover_photo}
           logoUrl={b.logo_url}
+          galleryPhotos={b.gallery_photos as string[] | null}
           province={b.location_province}
           city={b.location_city}
           category={b.category as BusinessCategory}

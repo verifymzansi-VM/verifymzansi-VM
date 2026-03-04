@@ -68,6 +68,8 @@ export async function POST(request: NextRequest) {
         logo_url: data.logo_url || null,
         cover_photo: data.cover_photo || null,
         cover_video: data.cover_video || null,
+        video_thumbnail: data.video_thumbnail || null,
+        gallery_photos: data.gallery_photos || [],
         location_province: data.location_province,
         location_city: data.location_city,
         store_number: data.store_number || null,
@@ -190,7 +192,7 @@ export async function GET(request: NextRequest) {
     let query = admin
       .from("businesses")
       .select(
-        "id, seller_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
+        "id, seller_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
         { count: "exact" }
       )
       .eq("status", "live")

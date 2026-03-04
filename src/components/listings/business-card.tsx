@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Store, MapPin, Wrench } from "lucide-react";
+import { Store, MapPin, Wrench, Camera } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ interface BusinessCardProps {
   description?: string;
   coverPhoto?: string | null;
   logoUrl?: string | null;
+  galleryPhotos?: string[] | null;
   province: string;
   city: string;
   trustLevel?: TrustLevel;
@@ -39,6 +40,7 @@ export function BusinessCard({
   description,
   coverPhoto,
   logoUrl,
+  galleryPhotos,
   province,
   city,
   trustLevel = 0,
@@ -51,9 +53,13 @@ export function BusinessCard({
   const isBoosted = boostUntil && new Date(boostUntil) > new Date();
   const isFeatured = featuredUntil && new Date(featuredUntil) > new Date();
 
-  const isVideo = isVideoUrl(coverPhoto);
-  const normalizedCoverPhoto = coverPhoto ? normalizeMediaUrl(coverPhoto) : undefined;
+  // Use cover photo, fall back to first gallery photo
+  const displayCover =
+    coverPhoto || (galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos[0] : null);
+  const isVideo = isVideoUrl(displayCover);
+  const normalizedCoverPhoto = displayCover ? normalizeMediaUrl(displayCover) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
+  const photoCount = galleryPhotos?.length ?? 0;
 
   return (
     <Link href={`/mzansi-business/${id}`} className="group block h-full">
@@ -66,7 +72,7 @@ export function BusinessCard({
           {normalizedCoverPhoto ? (
             isVideo ? (
               <VideoCardPlayer
-                src={coverPhoto}
+                src={displayCover}
                 alt={businessName}
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                 hoverScale={false}
@@ -124,6 +130,19 @@ export function BusinessCard({
               {BUSINESS_TYPE_LABELS[businessType]}
             </Badge>
           </div>
+
+          {/* Photo count badge */}
+          {photoCount > 0 && (
+            <div className="absolute bottom-2 right-2">
+              <Badge
+                variant="outline"
+                className="bg-background/80 backdrop-blur-sm text-[10px] font-medium gap-1"
+              >
+                <Camera className="w-2.5 h-2.5" />
+                {photoCount}
+              </Badge>
+            </div>
+          )}
         </div>
 
         <CardContent className="flex-1 p-5 pt-0 relative flex flex-col">

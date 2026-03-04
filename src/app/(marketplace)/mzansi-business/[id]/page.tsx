@@ -29,6 +29,8 @@ import { TrustBadge } from "@/components/trust/trust-badge";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { ShareButton } from "@/components/shared/share-button";
 import { ReportDialog } from "@/components/shared/report-dialog";
+import { BusinessGallery } from "@/components/listings/business-gallery";
+import { BusinessPromoVideo } from "@/components/listings/business-promo-video";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import {
   BUSINESS_TYPE_LABELS,
@@ -98,6 +100,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   const opHours = business.operating_hours as Record<string, string> | null;
   const bType = business.business_type as BusinessType;
   const bCategory = business.category as BusinessCategory;
+  const galleryPhotos = (business.gallery_photos as string[] | null) ?? [];
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
@@ -117,23 +120,12 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
           <div className="relative rounded-2xl overflow-hidden bg-background shadow-sm border">
             {business.cover_photo ? (
               <div className="aspect-[21/9] md:aspect-[4/1] bg-muted overflow-hidden relative">
-                {business.cover_photo.match(/\.(mp4|webm)$/i) ? (
-                  <video
-                    src={normalizeMediaUrl(business.cover_photo)}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={normalizeMediaUrl(business.cover_photo)}
-                    alt={`${business.business_name} Cover`}
-                    className="w-full h-full object-cover"
-                  />
-                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={normalizeMediaUrl(business.cover_photo)}
+                  alt={`${business.business_name} Cover`}
+                  className="w-full h-full object-cover"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
               </div>
             ) : (
@@ -200,6 +192,27 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-6">
+              {/* Promo Video Section */}
+              {business.cover_video && (
+                <BusinessPromoVideo
+                  videoUrl={normalizeMediaUrl(business.cover_video)}
+                  thumbnailUrl={
+                    business.video_thumbnail
+                      ? normalizeMediaUrl(business.video_thumbnail)
+                      : undefined
+                  }
+                  businessName={business.business_name}
+                />
+              )}
+
+              {/* Gallery Photos Section */}
+              {galleryPhotos.length > 0 && (
+                <BusinessGallery
+                  photos={galleryPhotos.map((url: string) => normalizeMediaUrl(url))}
+                  businessName={business.business_name}
+                />
+              )}
+
               <Card>
                 <CardContent className="p-6 space-y-4">
                   <h2 className="font-display text-xl font-bold">About {business.business_name}</h2>

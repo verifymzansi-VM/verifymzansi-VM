@@ -17,6 +17,10 @@ import {
   Wrench,
   Plus,
   X,
+  Camera,
+  Film,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,7 +116,9 @@ export default function CreateBusinessPage() {
   // Media
   const [logoFile, setLogoFile] = useState<File[]>([]);
   const [coverFile, setCoverFile] = useState<File[]>([]);
-  const [coverThumbnailFile, setCoverThumbnailFile] = useState<File[]>([]);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [promoVideoFile, setPromoVideoFile] = useState<File[]>([]);
+  const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
@@ -196,22 +202,22 @@ export default function CreateBusinessPage() {
 
     setIsSubmitting(true);
     try {
-      // Upload media
-      const logoUrls = await uploadMedia(logoFile, "business_logo");
-      const coverUrls = await uploadMedia(coverFile, "business_cover");
+      // Upload media — parallel where possible
+      const [logoUrls, coverUrls, galleryUrls, videoUrls] = await Promise.all([
+        uploadMedia(logoFile, "business_logo"),
+        uploadMedia(coverFile, "business_cover"),
+        uploadMedia(galleryFiles, "business_gallery"),
+        uploadMedia(promoVideoFile, "business_cover"),
+      ]);
 
-      const coverIsVideo = coverFile.length > 0 && coverFile[0]?.type.startsWith("video/");
-      let finalCoverPhoto = coverUrls[0] || null;
-      let finalCoverVideo: string | null = null;
+      const finalCoverPhoto = coverUrls[0] || null;
+      const finalCoverVideo = videoUrls[0] || null;
 
-      if (coverIsVideo && coverUrls[0]) {
-        finalCoverVideo = coverUrls[0];
-        if (coverThumbnailFile.length > 0) {
-          const thumbUrls = await uploadMedia(coverThumbnailFile, "business_cover");
-          finalCoverPhoto = thumbUrls[0] || null;
-        } else {
-          finalCoverPhoto = null;
-        }
+      // Upload video thumbnail only if we have a promo video
+      let finalVideoThumbnail: string | null = null;
+      if (finalCoverVideo && videoThumbnailFile.length > 0) {
+        const thumbUrls = await uploadMedia(videoThumbnailFile, "business_cover");
+        finalVideoThumbnail = thumbUrls[0] || null;
       }
 
       // Build social links
@@ -255,6 +261,8 @@ export default function CreateBusinessPage() {
         logo_url: logoUrls[0] || undefined,
         cover_photo: finalCoverPhoto || undefined,
         cover_video: finalCoverVideo || undefined,
+        video_thumbnail: finalVideoThumbnail || undefined,
+        gallery_photos: galleryUrls.length > 0 ? galleryUrls : undefined,
         services_offered: services.length > 0 ? services : undefined,
         service_areas: serviceAreas,
         operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
@@ -387,9 +395,13 @@ export default function CreateBusinessPage() {
                     <Card>
                       <CardHeader>
                         <CardTitle className="text-lg">Branding & Media</CardTitle>
-                        <CardDescription>Upload your brand assets to stand out.</CardDescription>
+                        <CardDescription>
+                          Upload your brand assets to stand out. High-quality visuals attract more
+                          customers.
+                        </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-6">
+                        {/* Logo & Cover Row */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <MediaUpload
                             label="Business Logo (1 max)"
@@ -399,18 +411,101 @@ export default function CreateBusinessPage() {
                             accept="image/*"
                           />
                           <MediaUpload
-                            label="Cover Media (Video or Photo, 1 max)"
+                            label="Cover Photo (1 max)"
                             maxFiles={1}
                             files={coverFile}
                             onChange={setCoverFile}
+                            accept="image/*"
                           />
                         </div>
-                        {coverFile.length > 0 && coverFile[0]?.type.startsWith("video/") && (
+
+                        {/* Gallery Photos */}
+                        <div className="space-y-2">
                           <MediaUpload
-                            label="Cover Thumbnail Image (1 max) — Shown before video plays"
+                            label="Profile Photos (up to 5)"
+                            maxFiles={5}
+                            files={galleryFiles}
+                            onChange={setGalleryFiles}
+                            accept="image/*"
+                          />
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Camera className="h-3 w-3" />
+                            Showcase your products, premises, team, or work. For best results use
+                            landscape photos (at least 800×600px).
+                          </p>
+                          {/* Gallery reorder controls */}
+                          {galleryFiles.length > 1 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                Drag order — first photo is featured on cards:
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {galleryFiles.map((file, idx) => (
+                                  <div
+                                    key={`${file.name}-${idx}`}
+                                    className="flex items-center gap-1 bg-muted rounded-md px-2 py-1 text-xs"
+                                  >
+                                    <span className="font-medium truncate max-w-[100px]">
+                                      {file.name}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={() => {
+                                        const arr = [...galleryFiles];
+                                        [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+                                        setGalleryFiles(arr);
+                                      }}
+                                      className="p-0.5 disabled:opacity-30 hover:bg-background rounded"
+                                      aria-label="Move left"
+                                    >
+                                      <ChevronLeft className="h-3 w-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={idx === galleryFiles.length - 1}
+                                      onClick={() => {
+                                        const arr = [...galleryFiles];
+                                        [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+                                        setGalleryFiles(arr);
+                                      }}
+                                      className="p-0.5 disabled:opacity-30 hover:bg-background rounded"
+                                      aria-label="Move right"
+                                    >
+                                      <ChevronRight className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Promo Video */}
+                        <div className="space-y-2">
+                          <MediaUpload
+                            label="Promo / Intro Video (1 max)"
                             maxFiles={1}
-                            files={coverThumbnailFile}
-                            onChange={setCoverThumbnailFile}
+                            files={promoVideoFile}
+                            onChange={(files) => {
+                              setPromoVideoFile(files);
+                              if (files.length === 0) setVideoThumbnailFile([]);
+                            }}
+                            accept="video/*"
+                          />
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Film className="h-3 w-3" />
+                            Auto-plays muted below your cover on your profile page. Max 50 MB.
+                          </p>
+                        </div>
+
+                        {/* Video Thumbnail — only when promo video selected */}
+                        {promoVideoFile.length > 0 && (
+                          <MediaUpload
+                            label="Video Thumbnail (1 max) — Poster shown before video loads"
+                            maxFiles={1}
+                            files={videoThumbnailFile}
+                            onChange={setVideoThumbnailFile}
                             accept="image/*"
                           />
                         )}
