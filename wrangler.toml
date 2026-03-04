@@ -88,5 +88,6 @@ bucket_name = "verifymzansi-private"
 #   pnpm wrangler secret put R2_ACCOUNT_ID
 #   pnpm wrangler secret put R2_ACCESS_KEY_ID
 #   pnpm wrangler secret put R2_SECRET_ACCESS_KEY
+#   pnpm wrangler secret put IP_HASH_SECRET
 #
 # Verify with: pnpm wrangler secret list
