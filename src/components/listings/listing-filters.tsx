@@ -213,6 +213,24 @@ export function ListingFilters() {
               <DialogTitle>Filters</DialogTitle>
             </DialogHeader>
             <div className="space-y-5 py-2">
+              {/* Category */}
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <select
+                  aria-label="Category"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={filters.category || ""}
+                  onChange={(e) => setFilter("category", e.target.value || undefined)}
+                >
+                  <option value="">All Categories</option>
+                  {CATEGORIES.map((cat) => (
+                    <option key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Dynamic Category Attributes */}
               {selectedCategory && filterableAttributes.length > 0 && (
                 <div className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-3 space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-300">

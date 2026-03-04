@@ -73,6 +73,24 @@ export function ListingFilterSidebar() {
         />
       </div>
 
+      {/* ── Category ───────────────────────────────── */}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold">Category</Label>
+        <select
+          aria-label="Category"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          value={filters.category || ""}
+          onChange={(e) => setFilter("category", e.target.value || undefined)}
+        >
+          <option value="">All Categories</option>
+          {CATEGORIES.map((cat) => (
+            <option key={cat.value} value={cat.value}>
+              {cat.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* ── Location ────────────────────────────────── */}
       <div className="space-y-2">
         <Label className="text-sm font-semibold">Location</Label>
