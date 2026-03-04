@@ -90,7 +90,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   };
 }
 
-/** Get area-specific counts for the 3 area cards on admin home */
+/** Get area-specific counts for the area cards on admin home */
 export async function getAreaCardCounts(): Promise<
   Record<MarketplaceArea, { pendingFlags: number; pendingContent: number }>
 > {
@@ -103,16 +103,21 @@ export async function getAreaCardCounts(): Promise<
     .eq("status", "open");
 
   // Content pending moderation counts
-  const [{ count: pendingListings }, { count: pendingMzansiBiz }] = await Promise.all([
-    supabase
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending_moderation"),
-    supabase
-      .from("businesses")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending_moderation"),
-  ]);
+  const [{ count: pendingListings }, { count: pendingMzansiBiz }, { count: pendingPromos }] =
+    await Promise.all([
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+      supabase
+        .from("businesses")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+      supabase
+        .from("promotions")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+    ]);
 
   // Map target_type to area
   const flagCounts = {
@@ -152,9 +157,138 @@ export async function getAreaCardCounts(): Promise<
     },
     PROMOTIONS_EVENTS: {
       pendingFlags: flagCounts.PROMOTIONS_EVENTS,
-      pendingContent: 0,
+      pendingContent: pendingPromos || 0,
     },
   };
+}
+
+// ── Dashboard Area Summary ───────────────────────────────────
+
+export interface AreaSummaryStats {
+  totalPosted: number;
+  pendingReview: number;
+  liveCount: number;
+  rejectedCount: number;
+  topCategory: string | null;
+  categoryBreakdown: { category: string; count: number }[];
+}
+
+/** Get per-area summary stats for the dashboard area cards */
+export async function getDashboardAreaSummary(): Promise<
+  Record<"MZANSI_MARKET" | "MZANSI_BUSINESS" | "PROMOTIONS_EVENTS", AreaSummaryStats>
+> {
+  const supabase = createAdminClient();
+
+  // ── Mzansi Market (listings) ────────────────────────────────
+  const [
+    { count: listingsTotal },
+    { count: listingsPending },
+    { count: listingsLive },
+    { count: listingsRejected },
+    { data: listingCategories },
+  ] = await Promise.all([
+    supabase.from("listings").select("*", { count: "exact", head: true }),
+    supabase
+      .from("listings")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending_moderation"),
+    supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
+    supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "rejected"),
+    supabase.from("listings").select("category").eq("status", "live"),
+  ]);
+
+  const listingCatBreakdown = buildCategoryBreakdown(listingCategories || []);
+
+  // ── Mzansi Business (businesses) ────────────────────────────
+  const [
+    { count: bizTotal },
+    { count: bizPending },
+    { count: bizLive },
+    { count: bizRejected },
+    { data: bizCategories },
+  ] = await Promise.all([
+    supabase.from("businesses").select("*", { count: "exact", head: true }),
+    supabase
+      .from("businesses")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending_moderation"),
+    supabase.from("businesses").select("*", { count: "exact", head: true }).eq("status", "live"),
+    supabase
+      .from("businesses")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "rejected"),
+    supabase.from("businesses").select("category").eq("status", "live"),
+  ]);
+
+  const bizCatBreakdown = buildCategoryBreakdown(bizCategories || []);
+
+  // ── Promotions & Events ─────────────────────────────────────
+  const [
+    { count: promoTotal },
+    { count: promoPending },
+    { count: promoLive },
+    { count: promoRejected },
+    { data: promoCategories },
+  ] = await Promise.all([
+    supabase.from("promotions").select("*", { count: "exact", head: true }),
+    supabase
+      .from("promotions")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending_moderation"),
+    supabase.from("promotions").select("*", { count: "exact", head: true }).eq("status", "live"),
+    supabase
+      .from("promotions")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "rejected"),
+    supabase.from("promotions").select("promotion_type").eq("status", "live"),
+  ]);
+
+  const promoCatBreakdown = buildCategoryBreakdown(
+    (promoCategories || []).map((p) => ({
+      category: (p as { promotion_type: string }).promotion_type,
+    }))
+  );
+
+  return {
+    MZANSI_MARKET: {
+      totalPosted: listingsTotal || 0,
+      pendingReview: listingsPending || 0,
+      liveCount: listingsLive || 0,
+      rejectedCount: listingsRejected || 0,
+      topCategory: listingCatBreakdown[0]?.category || null,
+      categoryBreakdown: listingCatBreakdown,
+    },
+    MZANSI_BUSINESS: {
+      totalPosted: bizTotal || 0,
+      pendingReview: bizPending || 0,
+      liveCount: bizLive || 0,
+      rejectedCount: bizRejected || 0,
+      topCategory: bizCatBreakdown[0]?.category || null,
+      categoryBreakdown: bizCatBreakdown,
+    },
+    PROMOTIONS_EVENTS: {
+      totalPosted: promoTotal || 0,
+      pendingReview: promoPending || 0,
+      liveCount: promoLive || 0,
+      rejectedCount: promoRejected || 0,
+      topCategory: promoCatBreakdown[0]?.category || null,
+      categoryBreakdown: promoCatBreakdown,
+    },
+  };
+}
+
+/** Build sorted category breakdown from raw rows with a `category` field */
+function buildCategoryBreakdown(
+  rows: Array<{ category?: string | null }>
+): { category: string; count: number }[] {
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    const cat = row.category || "uncategorized";
+    counts[cat] = (counts[cat] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
 }
 
 /** Get pending verification steps with seller display name */

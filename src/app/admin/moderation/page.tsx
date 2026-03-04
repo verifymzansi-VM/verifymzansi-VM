@@ -22,22 +22,31 @@ export default async function AdminModerationPage() {
   const admin = createAdminClient();
 
   // Fetch all content pending moderation across all areas
-  const [{ data: pendingListings }, { data: pendingBusinesses }] = await Promise.all([
-    admin
-      .from("listings")
-      .select(
-        "id, title, status, created_at, category, seller_id, description, photos, videos, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required"
-      )
-      .eq("status", "pending_moderation")
-      .order("created_at", { ascending: true })
-      .limit(50),
-    admin
-      .from("businesses")
-      .select("id, business_name, business_type, status, created_at, seller_id")
-      .eq("status", "pending_moderation")
-      .order("created_at", { ascending: true })
-      .limit(50),
-  ]);
+  const [{ data: pendingListings }, { data: pendingBusinesses }, { data: pendingPromotions }] =
+    await Promise.all([
+      admin
+        .from("listings")
+        .select(
+          "id, title, status, created_at, category, seller_id, description, photos, videos, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required"
+        )
+        .eq("status", "pending_moderation")
+        .order("created_at", { ascending: true })
+        .limit(50),
+      admin
+        .from("businesses")
+        .select("id, business_name, business_type, status, created_at, seller_id")
+        .eq("status", "pending_moderation")
+        .order("created_at", { ascending: true })
+        .limit(50),
+      admin
+        .from("promotions")
+        .select(
+          "id, title, status, created_at, category, seller_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type"
+        )
+        .eq("status", "pending_moderation")
+        .order("created_at", { ascending: true })
+        .limit(50),
+    ]);
 
   const allItems = [
     ...(pendingListings || []).map((l) => ({
@@ -52,6 +61,12 @@ export default async function AdminModerationPage() {
       area: "MZANSI_BUSINESS" as const,
       areaLabel: "Mzansi Business",
       itemType: "Business",
+    })),
+    ...(pendingPromotions || []).map((p) => ({
+      ...p,
+      area: "PROMOTIONS_EVENTS" as const,
+      areaLabel: "Promotions & Events",
+      itemType: "Promotion",
     })),
   ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 

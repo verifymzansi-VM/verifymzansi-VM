@@ -5,17 +5,17 @@ import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
 import {
   getAdminDashboardStats,
   getDashboardReports,
-  getMyActionsToday,
   getExtendedPlatformStats,
+  getDashboardAreaSummary,
   getAreaCardCounts,
+  getVerificationStepCounts,
 } from "@/lib/utils/admin-queries";
 import { calculateSlaState } from "@/lib/utils/sla";
 import type { ReportSeverity } from "@/types/enums";
 import {
   OverviewStrip,
-  QueueMiniCard,
-  AreaStrip,
-  YourSpace,
+  VerificationCard,
+  AreaDashboardCard,
   AdminControls,
 } from "@/components/admin/dashboard-cards";
 
@@ -35,26 +35,19 @@ export default async function AdminPage() {
 
   const isAdminRole = role === "admin";
 
-  const [stats, reports, myActions, extended, areaCounts] = await Promise.all([
+  const [stats, reports, extended, areaSummary, areaCounts, stepCounts] = await Promise.all([
     getAdminDashboardStats(),
     getDashboardReports(10),
-    getMyActionsToday(user.id),
     isAdminRole ? getExtendedPlatformStats() : Promise.resolve(null),
+    getDashboardAreaSummary(),
     getAreaCardCounts(),
+    getVerificationStepCounts(),
   ]);
 
   // ── Compute health status ──────────────────────────────────
   const breachedReports = reports.filter((r) => {
     const sla = calculateSlaState(r.created_at, r.severity as ReportSeverity);
     return sla.state === "breached";
-  });
-  const atRiskReports = reports.filter((r) => {
-    const sla = calculateSlaState(r.created_at, r.severity as ReportSeverity);
-    return sla.state === "at-risk";
-  });
-  const onTrackReports = reports.filter((r) => {
-    const sla = calculateSlaState(r.created_at, r.severity as ReportSeverity);
-    return sla.state === "on-track";
   });
 
   const healthStatus =
@@ -79,30 +72,8 @@ export default async function AdminPage() {
     { label: "Moderation", value: stats.pendingModeration },
   ];
 
-  // ── Areas data ─────────────────────────────────────────────
-  const areas = [
-    {
-      label: "Mzansi Market",
-      href: "/admin/mzansi-market",
-      flags: areaCounts.MZANSI_MARKET.pendingFlags,
-      pending: areaCounts.MZANSI_MARKET.pendingContent,
-    },
-    {
-      label: "Mzansi Business",
-      href: "/admin/businesses",
-      flags: areaCounts.MZANSI_BUSINESS.pendingFlags,
-      pending: areaCounts.MZANSI_BUSINESS.pendingContent,
-    },
-    {
-      label: "Promotions & Events",
-      href: "/admin/businesses",
-      flags: areaCounts.PROMOTIONS_EVENTS.pendingFlags,
-      pending: areaCounts.PROMOTIONS_EVENTS.pendingContent,
-    },
-  ];
-
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* ── Header ──────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <h1 className="font-display text-xl font-bold tracking-tight">Admin</h1>
@@ -114,51 +85,29 @@ export default async function AdminPage() {
       {/* ── 1. Overview Strip ───────────────────────────────── */}
       <OverviewStrip status={healthStatus} metrics={overviewMetrics} />
 
-      {/* ── 2. Work Queues ──────────────────────────────────── */}
-      <section>
-        <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-          Queues
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <QueueMiniCard
-            label="KYC"
-            count={stats.pendingVerifications}
-            href="/admin/verification"
-            capacity={50}
-          />
-          <QueueMiniCard
-            label="Reports"
-            count={stats.openReports}
-            href="/admin/reports"
-            severityDots={{
-              breached: breachedReports.length,
-              atRisk: atRiskReports.length,
-              onTrack: onTrackReports.length,
-            }}
-          />
-          <QueueMiniCard
-            label="Moderation"
-            count={stats.pendingModeration}
-            href="/admin/moderation"
-            capacity={30}
-          />
-        </div>
-      </section>
+      {/* ── 2. Verification ─────────────────────────────────── */}
+      <VerificationCard pendingVerifications={stats.pendingVerifications} stepCounts={stepCounts} />
 
       {/* ── 3. Marketplace Areas ────────────────────────────── */}
-      <AreaStrip areas={areas} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <AreaDashboardCard
+          area="MZANSI_MARKET"
+          stats={areaSummary.MZANSI_MARKET}
+          flagCount={areaCounts.MZANSI_MARKET.pendingFlags}
+        />
+        <AreaDashboardCard
+          area="MZANSI_BUSINESS"
+          stats={areaSummary.MZANSI_BUSINESS}
+          flagCount={areaCounts.MZANSI_BUSINESS.pendingFlags}
+        />
+        <AreaDashboardCard
+          area="PROMOTIONS_EVENTS"
+          stats={areaSummary.PROMOTIONS_EVENTS}
+          flagCount={areaCounts.PROMOTIONS_EVENTS.pendingFlags}
+        />
+      </div>
 
-      {/* ── 4. Your Space (moderator zone) ──────────────────── */}
-      <YourSpace
-        myActions={myActions}
-        queueCounts={{
-          kyc: stats.pendingVerifications,
-          reports: stats.openReports,
-          moderation: stats.pendingModeration,
-        }}
-      />
-
-      {/* ── 5. Admin Controls (admin only) ──────────────────── */}
+      {/* ── 4. Admin Controls (admin only) ──────────────────── */}
       {isAdminRole && extended && (
         <AdminControls
           enforcementStats={{
