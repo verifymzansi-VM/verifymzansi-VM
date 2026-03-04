@@ -17,7 +17,14 @@ export function FeaturedButton({ listingId, isFeatured, canFeature }: FeaturedBu
 
   if (isFeatured) {
     return (
-      <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Already featured">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        disabled
+        title="Already featured"
+        aria-label="Already featured"
+      >
         <Star className="h-3.5 w-3.5 text-brand-gold fill-brand-gold" />
       </Button>
     );
@@ -31,6 +38,7 @@ export function FeaturedButton({ listingId, isFeatured, canFeature }: FeaturedBu
         className="h-8 w-8"
         disabled
         title="Upgrade to Pro to feature listings"
+        aria-label="Upgrade to Pro to feature listings"
       >
         <Star className="h-3.5 w-3.5 text-muted-foreground" />
       </Button>
@@ -76,6 +84,7 @@ export function FeaturedButton({ listingId, isFeatured, canFeature }: FeaturedBu
       onClick={handleFeatured}
       disabled={loading}
       title="Feature this listing (R25 for 7 days)"
+      aria-label="Feature this listing"
     >
       <Star className={`h-3.5 w-3.5 ${loading ? "animate-pulse" : ""}`} />
     </Button>

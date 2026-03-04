@@ -158,6 +158,7 @@ export function ListingDetailClient({
                 key={i}
                 type="button"
                 onClick={() => setActiveIndex(i)}
+                aria-label={`View image ${i + 1} of ${allMedia.length}`}
                 className={cn(
                   "relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 transition-all duration-200",
                   i === activeIndex

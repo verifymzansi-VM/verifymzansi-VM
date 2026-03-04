@@ -50,6 +50,7 @@ export function DsarActionButtons({ requestId }: DsarActionButtonsProps) {
           className="h-8 w-8 text-brand-green"
           onClick={() => handleDecision("approve")}
           title="Approve &amp; begin processing"
+          aria-label="Approve request"
         >
           <CheckCircle className="h-4 w-4" />
         </Button>
@@ -59,6 +60,7 @@ export function DsarActionButtons({ requestId }: DsarActionButtonsProps) {
           className="h-8 w-8 text-destructive"
           onClick={() => handleDecision("reject")}
           title="Reject request"
+          aria-label="Reject request"
         >
           <XCircle className="h-4 w-4" />
         </Button>

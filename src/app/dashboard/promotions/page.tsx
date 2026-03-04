@@ -285,7 +285,13 @@ export default async function MyPromotionsPage() {
                               Featured
                             </Badge>
                           )}
-                          <Button asChild size="sm" variant="ghost" className="h-8 w-8 p-0">
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0"
+                            aria-label="Edit promotion"
+                          >
                             <Link href={`/post/edit-promotion/${p.id}`}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Link>

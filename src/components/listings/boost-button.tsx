@@ -19,7 +19,14 @@ export function BoostButton({ listingId, isBoosted, canBoost, boostApiPath }: Bo
 
   if (isBoosted) {
     return (
-      <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Already boosted">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        disabled
+        title="Already boosted"
+        aria-label="Already boosted"
+      >
         <Zap className="h-3.5 w-3.5 text-brand-blue fill-brand-blue" />
       </Button>
     );
@@ -33,6 +40,7 @@ export function BoostButton({ listingId, isBoosted, canBoost, boostApiPath }: Bo
         className="h-8 w-8"
         disabled
         title="Upgrade to Growth or Pro to boost"
+        aria-label="Upgrade to Growth or Pro to boost"
       >
         <Zap className="h-3.5 w-3.5 text-muted-foreground" />
       </Button>
@@ -79,6 +87,7 @@ export function BoostButton({ listingId, isBoosted, canBoost, boostApiPath }: Bo
       onClick={handleBoost}
       disabled={loading}
       title="Boost this listing (R15 for 7 days)"
+      aria-label="Boost this listing"
     >
       <Zap className={`h-3.5 w-3.5 ${loading ? "animate-pulse" : ""}`} />
     </Button>

@@ -108,7 +108,10 @@ export function Header({
               {/* User avatar dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="focus:outline-none rounded-full ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                  <button
+                    className="focus:outline-none rounded-full ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    aria-label="Account menu"
+                  >
                     <Avatar className="h-9 w-9 cursor-pointer border-2 border-brand-gold">
                       <AvatarFallback className="bg-brand-gold text-amber-950 text-xs font-bold">
                         {initials}

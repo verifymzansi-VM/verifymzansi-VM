@@ -17,7 +17,14 @@ export function UrgentButton({ listingId, isUrgent, canMarkUrgent }: UrgentButto
 
   if (isUrgent) {
     return (
-      <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Already urgent">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        disabled
+        title="Already urgent"
+        aria-label="Already urgent"
+      >
         <AlertTriangle className="h-3.5 w-3.5 text-red-500 fill-red-500" />
       </Button>
     );
@@ -31,6 +38,7 @@ export function UrgentButton({ listingId, isUrgent, canMarkUrgent }: UrgentButto
         className="h-8 w-8"
         disabled
         title="Upgrade to Pro to mark listings as urgent"
+        aria-label="Upgrade to Pro to mark listings as urgent"
       >
         <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" />
       </Button>
@@ -76,6 +84,7 @@ export function UrgentButton({ listingId, isUrgent, canMarkUrgent }: UrgentButto
       onClick={handleUrgent}
       disabled={loading}
       title="Mark as urgent (R10 for 7 days)"
+      aria-label="Mark as urgent"
     >
       <AlertTriangle className={`h-3.5 w-3.5 ${loading ? "animate-pulse" : ""}`} />
     </Button>

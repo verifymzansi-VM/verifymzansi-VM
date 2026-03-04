@@ -265,6 +265,7 @@ export function KycPreviewLightbox({
                 className="h-7 w-7 p-0"
                 onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
                 title="Zoom out"
+                aria-label="Zoom out"
                 disabled={zoom <= 0.5}
               >
                 <ZoomOut className="h-4 w-4" />
@@ -278,6 +279,7 @@ export function KycPreviewLightbox({
                 className="h-7 w-7 p-0"
                 onClick={() => setZoom((z) => Math.min(3, z + 0.25))}
                 title="Zoom in"
+                aria-label="Zoom in"
                 disabled={zoom >= 3}
               >
                 <ZoomIn className="h-4 w-4" />
