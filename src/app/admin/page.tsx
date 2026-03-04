@@ -1,22 +1,23 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { FileCheck, Flag, Clock, ShieldAlert } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { PageHeader } from "@/components/layout/page-header";
-import { ActivityFeedCard } from "@/components/admin/activity-feed";
-import { DashboardAlerts, QueueCard, StatLine } from "@/components/admin/dashboard-cards";
 import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
 import {
   getAdminDashboardStats,
   getDashboardReports,
-  getRecentActivity,
-  getActionsToday,
+  getMyActionsToday,
   getExtendedPlatformStats,
+  getAreaCardCounts,
 } from "@/lib/utils/admin-queries";
 import { calculateSlaState } from "@/lib/utils/sla";
 import type { ReportSeverity } from "@/types/enums";
+import {
+  OverviewStrip,
+  QueueMiniCard,
+  AreaStrip,
+  YourSpace,
+  AdminControls,
+} from "@/components/admin/dashboard-cards";
 
 export const metadata = {
   title: "Admin Dashboard | VerifyMzansi",
@@ -34,179 +35,139 @@ export default async function AdminPage() {
 
   const isAdminRole = role === "admin";
 
-  // 4-5 lightweight queries (down from 9 heavy ones)
-  const [stats, reports, activity, actionsToday, extended] = await Promise.all([
+  const [stats, reports, myActions, extended, areaCounts] = await Promise.all([
     getAdminDashboardStats(),
     getDashboardReports(10),
-    getRecentActivity(5),
-    getActionsToday(),
+    getMyActionsToday(user.id),
     isAdminRole ? getExtendedPlatformStats() : Promise.resolve(null),
+    getAreaCardCounts(),
   ]);
 
-  // ── Compute alerts ────────────────────────────────────────
-  const highReports = reports.filter((r) => r.severity === "high");
+  // ── Compute health status ──────────────────────────────────
   const breachedReports = reports.filter((r) => {
     const sla = calculateSlaState(r.created_at, r.severity as ReportSeverity);
     return sla.state === "breached";
   });
+  const atRiskReports = reports.filter((r) => {
+    const sla = calculateSlaState(r.created_at, r.severity as ReportSeverity);
+    return sla.state === "at-risk";
+  });
+  const onTrackReports = reports.filter((r) => {
+    const sla = calculateSlaState(r.created_at, r.severity as ReportSeverity);
+    return sla.state === "on-track";
+  });
 
-  const alerts: { message: string; href: string; severity: "critical" | "warning" }[] = [];
+  const healthStatus =
+    breachedReports.length > 0
+      ? "critical"
+      : stats.pendingVerifications >= 30 || stats.openReports > 0 || stats.pendingModeration >= 20
+        ? "warning"
+        : "healthy";
 
-  if (breachedReports.length > 0) {
-    alerts.push({
-      message: `${breachedReports.length} report${breachedReports.length > 1 ? "s" : ""} breached SLA — review immediately`,
-      href: "/admin/reports",
-      severity: "critical",
-    });
-  } else if (highReports.length > 0) {
-    alerts.push({
-      message: `${highReports.length} high-severity report${highReports.length > 1 ? "s" : ""} need urgent review`,
-      href: "/admin/reports",
-      severity: "warning",
-    });
-  }
-
-  if (stats.pendingVerifications >= 30) {
-    alerts.push({
-      message: `${stats.pendingVerifications} KYC submissions queued — consider prioritising`,
-      href: "/admin/verification",
-      severity: "warning",
-    });
-  }
-
-  if (stats.pendingModeration >= 20) {
-    alerts.push({
-      message: `${stats.pendingModeration} items awaiting first-time approval`,
-      href: "/admin/moderation",
-      severity: "warning",
-    });
-  }
-
-  // ── Actions today summary ─────────────────────────────────
-  const totalActions = Object.values(actionsToday).reduce((a, b) => a + b, 0);
-  const actionEntries = Object.entries(actionsToday).filter(([, v]) => v > 0);
-
-  // ── Platform health (admin only) ─────────────────────────
+  // ── Overview metrics ───────────────────────────────────────
   const verifiedPct =
     isAdminRole && extended && stats.totalSellers > 0
       ? Math.round((extended.verifiedSellers / stats.totalSellers) * 100)
-      : 0;
+      : null;
+
+  const overviewMetrics = [
+    { label: "Sellers", value: stats.totalSellers },
+    ...(verifiedPct !== null ? [{ label: "Verified", value: `${verifiedPct}%` }] : []),
+    ...(isAdminRole && extended ? [{ label: "Live", value: extended.liveListings }] : []),
+    { label: "KYC queue", value: stats.pendingVerifications },
+    { label: "Reports", value: stats.openReports },
+    { label: "Moderation", value: stats.pendingModeration },
+  ];
+
+  // ── Areas data ─────────────────────────────────────────────
+  const areas = [
+    {
+      label: "Mzansi Market",
+      href: "/admin/mzansi-market",
+      flags: areaCounts.MZANSI_MARKET.pendingFlags,
+      pending: areaCounts.MZANSI_MARKET.pendingContent,
+    },
+    {
+      label: "Mzansi Business",
+      href: "/admin/businesses",
+      flags: areaCounts.MZANSI_BUSINESS.pendingFlags,
+      pending: areaCounts.MZANSI_BUSINESS.pendingContent,
+    },
+    {
+      label: "Promotions & Events",
+      href: "/admin/businesses",
+      flags: areaCounts.PROMOTIONS_EVENTS.pendingFlags,
+      pending: areaCounts.PROMOTIONS_EVENTS.pendingContent,
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* ── Alerts ──────────────────────────────────────────── */}
-      <DashboardAlerts alerts={alerts} />
-
-      <PageHeader title="Dashboard">
-        <Badge variant={isAdminRole ? "destructive" : "default"}>
+    <div className="space-y-3">
+      {/* ── Header ──────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <h1 className="font-display text-xl font-bold tracking-tight">Admin</h1>
+        <Badge variant={isAdminRole ? "destructive" : "secondary"}>
           {isAdminRole ? "Admin" : "Moderator"}
         </Badge>
-      </PageHeader>
+      </div>
 
-      {/* ── Work Queues ─────────────────────────────────────── */}
+      {/* ── 1. Overview Strip ───────────────────────────────── */}
+      <OverviewStrip status={healthStatus} metrics={overviewMetrics} />
+
+      {/* ── 2. Work Queues ──────────────────────────────────── */}
       <section>
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-          Work Queues
+        <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+          Queues
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <QueueCard
-            icon={FileCheck}
-            label="Pending KYC"
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <QueueMiniCard
+            label="KYC"
             count={stats.pendingVerifications}
             href="/admin/verification"
-            subtitle="Identity submissions"
+            capacity={50}
           />
-          <QueueCard
-            icon={Flag}
-            label="Open Reports"
+          <QueueMiniCard
+            label="Reports"
             count={stats.openReports}
             href="/admin/reports"
-            subtitle={
-              highReports.length > 0 ? `${highReports.length} high-severity` : "No high-severity"
-            }
-            urgent={highReports.length > 0}
+            severityDots={{
+              breached: breachedReports.length,
+              atRisk: atRiskReports.length,
+              onTrack: onTrackReports.length,
+            }}
           />
-          <QueueCard
-            icon={Clock}
-            label="Awaiting Approval"
+          <QueueMiniCard
+            label="Moderation"
             count={stats.pendingModeration}
             href="/admin/moderation"
-            subtitle="New content pending review"
+            capacity={30}
           />
         </div>
       </section>
 
-      {/* ── Platform Health (admin only) ────────────────────── */}
+      {/* ── 3. Marketplace Areas ────────────────────────────── */}
+      <AreaStrip areas={areas} />
+
+      {/* ── 4. Your Space (moderator zone) ──────────────────── */}
+      <YourSpace
+        myActions={myActions}
+        queueCounts={{
+          kyc: stats.pendingVerifications,
+          reports: stats.openReports,
+          moderation: stats.pendingModeration,
+        }}
+      />
+
+      {/* ── 5. Admin Controls (admin only) ──────────────────── */}
       {isAdminRole && extended && (
-        <section>
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-            Platform Health
-          </h2>
-          <Card>
-            <CardContent className="pt-5 pb-4">
-              <StatLine
-                items={[
-                  {
-                    label: "Sellers",
-                    value: `${stats.totalSellers} (${verifiedPct}% verified)`,
-                  },
-                  { label: "Live listings", value: extended.liveListings },
-                  {
-                    label: "Hidden",
-                    value: extended.hiddenListings,
-                    warn: extended.hiddenListings > 0,
-                  },
-                  {
-                    label: "Suspended",
-                    value: stats.activeSuspensions,
-                    warn: stats.activeSuspensions > 0,
-                  },
-                  {
-                    label: "Banned",
-                    value: extended.bannedSellers,
-                    warn: extended.bannedSellers > 0,
-                  },
-                ]}
-              />
-            </CardContent>
-          </Card>
-        </section>
+        <AdminControls
+          enforcementStats={{
+            hidden: extended.hiddenListings,
+            suspended: stats.activeSuspensions,
+            banned: extended.bannedSellers,
+          }}
+        />
       )}
-
-      {/* ── Actions Today + Recent Activity ─────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
-              <ShieldAlert className="h-4 w-4" />
-              Actions Today
-            </h3>
-            {totalActions === 0 ? (
-              <p className="text-sm text-muted-foreground">No actions yet today.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {actionEntries.map(([action, count]) => (
-                  <div key={action} className="flex justify-between text-sm">
-                    <span className="text-muted-foreground capitalize">
-                      {action.replace(/_/g, " ")}
-                    </span>
-                    <span className="font-medium tabular-nums">{count}</span>
-                  </div>
-                ))}
-                <Separator />
-                <div className="flex justify-between text-sm font-semibold">
-                  <span>Total</span>
-                  <span className="tabular-nums">{totalActions}</span>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="lg:col-span-2">
-          <ActivityFeedCard entries={activity} title="Recent Activity" />
-        </div>
-      </div>
     </div>
   );
 }

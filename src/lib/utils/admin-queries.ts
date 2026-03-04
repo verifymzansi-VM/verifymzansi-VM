@@ -495,3 +495,23 @@ export async function getActionsToday(area?: string): Promise<Record<string, num
   }
   return counts;
 }
+
+/** Count moderation actions taken today by a specific user */
+export async function getMyActionsToday(userId: string): Promise<Record<string, number>> {
+  const supabase = createAdminClient();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const { data } = await supabase
+    .from("moderation_actions")
+    .select("action")
+    .eq("actor_id", userId)
+    .gte("created_at", todayStart.toISOString());
+
+  const counts: Record<string, number> = {};
+  for (const row of data || []) {
+    const a = (row as { action: string }).action;
+    counts[a] = (counts[a] || 0) + 1;
+  }
+  return counts;
+}
