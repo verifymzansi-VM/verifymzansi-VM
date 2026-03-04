@@ -16,6 +16,7 @@ import { isModeratorOrAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Mzansi Business — Admin",
+  description: "Manage registered businesses — review, approve, or flag business listings.",
 };
 
 export default async function AdminBusinessesPage() {

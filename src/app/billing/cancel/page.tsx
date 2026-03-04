@@ -7,6 +7,7 @@ import { Footer } from "@/components/layout/footer";
 
 export const metadata = {
   title: "Payment Cancelled",
+  description: "Your payment was cancelled. You can try again from the billing page.",
 };
 
 export default function BillingCancelPage() {

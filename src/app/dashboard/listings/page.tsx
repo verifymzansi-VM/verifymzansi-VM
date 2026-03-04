@@ -25,6 +25,7 @@ import type { PlanTier, MarketplaceArea } from "@/types/enums";
 
 export const metadata = {
   title: "My Listings",
+  description: "Manage your Mzansi Market listings — edit, boost, or remove your ads.",
 };
 
 export default async function ListingsPage() {

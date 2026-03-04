@@ -16,6 +16,7 @@ import { isModeratorOrAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Mzansi Market — Admin",
+  description: "Manage classified listings — review, approve, or remove marketplace ads.",
 };
 
 export default async function AdminMzansiMarketPage() {

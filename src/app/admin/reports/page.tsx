@@ -10,6 +10,7 @@ import { isModeratorOrAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Reports — Admin",
+  description: "Review user-submitted reports on listings, businesses, and users.",
 };
 
 export default async function AdminReportsPage() {

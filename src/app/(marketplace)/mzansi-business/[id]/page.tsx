@@ -101,9 +101,27 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   const bCategory = business.category as BusinessCategory;
   const galleryPhotos = (business.gallery_photos as string[] | null) ?? [];
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: business.business_name,
+    description: business.description?.slice(0, 300),
+    ...(business.cover_photo && { image: business.cover_photo }),
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: business.location_city || undefined,
+      addressRegion: business.location_province || undefined,
+      addressCountry: "ZA",
+    },
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
       <Header />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
 
       <main className="flex-1">
         <div className="container-page py-4 space-y-5">

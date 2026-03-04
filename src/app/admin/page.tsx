@@ -21,6 +21,7 @@ import {
 
 export const metadata = {
   title: "Admin Dashboard",
+  description: "VerifyMzansi admin overview — pending verifications, reports, and platform stats.",
 };
 
 export default async function AdminPage() {

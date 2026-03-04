@@ -10,6 +10,7 @@ import type { AuditLogEntry } from "@/lib/utils/admin-queries";
 
 export const metadata = {
   title: "Audit Log — Admin",
+  description: "Review admin actions, moderation decisions, and system events.",
 };
 
 export default async function AdminAuditLogPage() {

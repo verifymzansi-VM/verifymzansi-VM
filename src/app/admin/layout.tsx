@@ -4,6 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 
+/** Prevent search engines from indexing admin pages */
+export const metadata = {
+  robots: { index: false, follow: false },
+};
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const {

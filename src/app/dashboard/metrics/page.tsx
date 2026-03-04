@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
   title: "Metrics",
+  description: "Track your listing views, leads, and performance metrics on VerifyMzansi.",
 };
 
 export default async function MetricsPage() {

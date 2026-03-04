@@ -26,6 +26,8 @@ import type { VerificationStepType, VerificationStatus } from "@/types/enums";
 
 export const metadata = {
   title: "Dashboard",
+  description:
+    "Your VerifyMzansi dashboard — listings, businesses, verification status, and quick actions.",
 };
 
 export default async function DashboardPage() {

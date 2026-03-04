@@ -11,6 +11,8 @@ import Link from "next/link";
 
 export const metadata = {
   title: "Pricing & Plans",
+  description:
+    "View your current plan, manage billing, and upgrade your VerifyMzansi subscription.",
 };
 
 export default function BillingPage() {

@@ -17,6 +17,7 @@ import {
 
 export const metadata = {
   title: "My Businesses",
+  description: "Manage your registered businesses on VerifyMzansi.",
 };
 
 interface DashboardBusiness {

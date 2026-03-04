@@ -8,6 +8,7 @@ import { isModeratorOrAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Moderation Queue — Admin",
+  description: "Review and moderate flagged content, listings, and user reports.",
 };
 
 export default async function AdminModerationPage() {

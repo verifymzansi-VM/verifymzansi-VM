@@ -7,6 +7,7 @@ import { isAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Feature Flags — Admin",
+  description: "Toggle platform features on or off for gradual rollouts.",
 };
 
 export default async function FeatureFlagsPage() {

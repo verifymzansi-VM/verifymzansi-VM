@@ -32,6 +32,7 @@ interface DashboardPromotion {
 
 export const metadata = {
   title: "My Promotions",
+  description: "Manage your promotions, ads, and event listings on VerifyMzansi.",
 };
 
 export default async function MyPromotionsPage() {

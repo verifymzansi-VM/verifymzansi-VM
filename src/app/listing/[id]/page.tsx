@@ -130,9 +130,28 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   const _allMedia: string[] = [...(listing.photos ?? []), ...(listing.videos ?? [])];
   const sellerInitial = seller?.display_name?.charAt(0)?.toUpperCase() || "S";
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: listing.title,
+    description: listing.description?.slice(0, 300),
+    ...(listing.photos?.[0] && { image: listing.photos[0] }),
+    offers: {
+      "@type": "Offer",
+      priceCurrency: "ZAR",
+      price: listing.price_cents ? (listing.price_cents / 100).toFixed(2) : "0",
+      availability: "https://schema.org/InStock",
+      seller: seller ? { "@type": "Person", name: seller.display_name } : undefined,
+    },
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
 
       <main className="flex-1">
         <div className="container-page py-4 space-y-5">

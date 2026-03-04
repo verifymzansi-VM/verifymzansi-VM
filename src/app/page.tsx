@@ -68,9 +68,30 @@ export default async function HomePage() {
     latestListings = listings.data;
   }
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "VerifyMzansi",
+    url: url || "https://verifymzansi.com",
+    description:
+      "South Africa's verification-first marketplace for classifieds, shops, and business services.",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: `${url || "https://verifymzansi.com"}/mzansi-market?q={search_term_string}`,
+      },
+      "query-input": "required name=search_term_string",
+    },
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
 
       <main className="flex-1">
         {/* ═══ Hero Banner (rotating promotions + search) ═══ */}

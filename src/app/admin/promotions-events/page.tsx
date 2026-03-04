@@ -16,6 +16,7 @@ import { isModeratorOrAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Promotions & Events — Admin",
+  description: "Manage promotions and event ads — approve, flag, or remove.",
 };
 
 export default async function AdminPromotionsEventsPage() {

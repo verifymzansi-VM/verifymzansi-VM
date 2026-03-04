@@ -10,6 +10,7 @@ import { isFeatureEnabled } from "@/lib/services/feature-flags";
 
 export const metadata = {
   title: "Verification Queue — Admin",
+  description: "Review pending identity verification submissions and make approval decisions.",
 };
 
 export default async function AdminVerificationPage() {

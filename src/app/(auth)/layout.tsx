@@ -4,6 +4,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Account",
   description: "Sign in, register, or manage your VerifyMzansi account.",
+  robots: { index: false, follow: false },
 };
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {

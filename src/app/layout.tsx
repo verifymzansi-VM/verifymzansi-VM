@@ -45,12 +45,21 @@ export const metadata: Metadata = {
     title: "VerifyMzansi — SA's Trusted Marketplace",
     description:
       "Buy & sell with people you can trust. South Africa's verification-first marketplace.",
+    images: [
+      {
+        url: "/images/logo.png",
+        width: 512,
+        height: 512,
+        alt: "VerifyMzansi — SA's Trusted Marketplace",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "VerifyMzansi — SA's Trusted Marketplace",
     description:
       "Buy & sell with people you can trust. South Africa's verification-first marketplace.",
+    images: ["/images/logo.png"],
   },
   robots: {
     index: true,

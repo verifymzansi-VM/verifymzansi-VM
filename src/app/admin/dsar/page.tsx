@@ -11,6 +11,7 @@ import type { DsarCase } from "@/types/database";
 
 export const metadata = {
   title: "Data Requests — Admin",
+  description: "Process POPIA data subject access and deletion requests.",
 };
 
 export default async function AdminDSARPage() {

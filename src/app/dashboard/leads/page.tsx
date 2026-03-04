@@ -19,6 +19,7 @@ interface LeadRow {
 
 export const metadata = {
   title: "Leads",
+  description: "View and manage buyer enquiries and leads for your listings.",
 };
 
 export default async function LeadsPage() {

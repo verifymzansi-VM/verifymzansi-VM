@@ -85,9 +85,33 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
   const isBoosted = promotion.boost_until ? new Date(promotion.boost_until) > now : false;
   const isFeatured = promotion.featured_until ? new Date(promotion.featured_until) > now : false;
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: promotion.title,
+    description: promotion.description?.slice(0, 300),
+    ...(photos[0] && { image: photos[0] }),
+    ...(promotion.start_date && { startDate: promotion.start_date }),
+    ...(promotion.end_date && { endDate: promotion.end_date }),
+    ...(promotion.location && {
+      location: { "@type": "Place", name: promotion.location },
+    }),
+    ...(promotion.price_cents && {
+      offers: {
+        "@type": "Offer",
+        priceCurrency: "ZAR",
+        price: (promotion.price_cents / 100).toFixed(2),
+      },
+    }),
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
 
       <main className="flex-1">
         <div className="container-page py-4 space-y-5 max-w-5xl">

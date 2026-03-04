@@ -7,6 +7,7 @@ import { Footer } from "@/components/layout/footer";
 
 export const metadata = {
   title: "Payment Successful",
+  description: "Your VerifyMzansi plan upgrade was successful.",
 };
 
 export default function BillingSuccessPage() {

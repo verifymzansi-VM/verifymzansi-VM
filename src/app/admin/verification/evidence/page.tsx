@@ -7,6 +7,7 @@ import { isModeratorOrAdmin } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Evidence Desk — Admin",
+  description: "Examine uploaded KYC evidence — ID documents, selfies, and location proofs.",
 };
 
 export default async function EvidenceDeskPage({
