@@ -1,4 +1,4 @@
-import { ShieldCheck } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 export const metadata = {
@@ -13,9 +13,15 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* Left — brand panel (hidden on mobile) */}
       <div className="hidden lg:flex lg:w-1/2 bg-hero-mesh items-center justify-center p-12 relative overflow-hidden">
         <div className="relative z-10 max-w-md space-y-6 text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <ShieldCheck className="h-10 w-10 text-brand-green" />
-            <span className="font-display text-3xl font-bold">
+          <Link href="/" className="inline-flex items-center justify-center gap-3 w-full">
+            <Image
+              src="/icons/icon-192.png?v=6"
+              alt="VerifyMzansi Shield"
+              width={48}
+              height={48}
+              className="object-contain drop-shadow-sm"
+            />
+            <span className="font-display text-4xl font-bold tracking-tight">
               Verify<span className="text-brand-green">Mzansi</span>
             </span>
           </Link>
@@ -46,10 +52,16 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="flex flex-1 items-center justify-center p-6 sm:p-8 lg:p-10">
         <div className="w-full max-w-md space-y-4">
           {/* Mobile logo */}
-          <div className="lg:hidden text-center mb-2">
-            <Link href="/" className="inline-flex items-center gap-2">
-              <ShieldCheck className="h-7 w-7 text-brand-green" />
-              <span className="font-display text-xl font-bold">
+          <div className="lg:hidden text-center mb-6">
+            <Link href="/" className="inline-flex items-center justify-center gap-2 w-full">
+              <Image
+                src="/icons/icon-192.png?v=6"
+                alt="VerifyMzansi Shield"
+                width={36}
+                height={36}
+                className="object-contain drop-shadow-sm"
+              />
+              <span className="font-display text-2xl font-bold tracking-tight">
                 Verify<span className="text-brand-green">Mzansi</span>
               </span>
             </Link>
