@@ -76,7 +76,7 @@ export function Header({
         <Link
           href="/"
           aria-label="VerifyMzansi — Home"
-          className="relative flex items-center justify-center h-9 w-28 md:h-12 md:w-44 flex-shrink-0"
+          className="relative flex items-center justify-center h-12 w-36 md:h-14 md:w-52 flex-shrink-0"
         >
           <Image
             src="/images/logo.png"
