@@ -77,9 +77,9 @@ export function Header({
           <Image
             src="/images/logo-transparent.png"
             alt="VerifyMzansi — Verified Business of South Africa"
-            width={240}
-            height={68}
-            className="h-10 w-auto md:h-12"
+            width={280}
+            height={80}
+            className="h-12 w-auto md:h-14 scale-[1.2] md:scale-[1.4] origin-left transition-transform hover:scale-[1.25] md:hover:scale-[1.45]"
             priority
           />
         </Link>
