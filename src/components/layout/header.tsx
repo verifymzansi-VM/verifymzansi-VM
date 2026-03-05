@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect, useCallback } from "react";
 import { Menu, X, ShieldAlert, LayoutDashboard, Settings, LogOut, Sun, Moon } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -77,17 +78,13 @@ export function Header({
           aria-label="VerifyMzansi — Home"
           className="relative flex items-center justify-center h-9 w-28 md:h-12 md:w-44 flex-shrink-0"
         >
-          {/* 
-            South African Flag Colors Mask 
-            Light mode uses a gradient with dark/visible flag colors.
-            Dark mode uses a similar gradient but ensures it pops against black.
-          */}
-
-          {/* Light Mode Logo Background */}
-          <div className="absolute inset-0 dark:hidden logo-mask-light" />
-
-          {/* Dark Mode Logo Background (Brightened flag colors to pop on dark mode) */}
-          <div className="absolute inset-0 hidden dark:block logo-mask-dark" />
+          <Image
+            src="/images/logo.png"
+            alt="VerifyMzansi — Verified Business of South Africa"
+            fill
+            className="object-contain"
+            priority
+          />
         </Link>
 
         {/* Marketplace Switcher — hidden on mobile, shown md+ */}
