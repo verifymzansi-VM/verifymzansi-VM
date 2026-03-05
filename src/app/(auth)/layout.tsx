@@ -13,15 +13,15 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* Left — brand panel (hidden on mobile) */}
       <div className="hidden lg:flex lg:w-1/2 bg-hero-mesh items-center justify-center p-12 relative overflow-hidden">
         <div className="relative z-10 max-w-md space-y-6 text-center">
-          <Link href="/" className="inline-flex items-center justify-center gap-3 w-full">
+          <Link href="/" className="inline-flex items-center justify-center gap-4 w-full">
             <Image
-              src="/icons/icon-192.png?v=6"
+              src="/icons/icon-192.png?v=7"
               alt="VerifyMzansi Shield"
-              width={48}
-              height={48}
-              className="object-contain drop-shadow-sm"
+              width={80}
+              height={80}
+              className="object-contain drop-shadow-md"
             />
-            <span className="font-display text-4xl font-bold tracking-tight">
+            <span className="font-display text-5xl font-bold tracking-tight">
               Verify<span className="text-brand-green">Mzansi</span>
             </span>
           </Link>
@@ -30,7 +30,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <br />
             Buy &amp; sell with people you can trust.
           </p>
-          <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground mt-4">
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-brand-green" />
               4-step verification
@@ -52,16 +52,16 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="flex flex-1 items-center justify-center p-6 sm:p-8 lg:p-10">
         <div className="w-full max-w-md space-y-4">
           {/* Mobile logo */}
-          <div className="lg:hidden text-center mb-6">
-            <Link href="/" className="inline-flex items-center justify-center gap-2 w-full">
+          <div className="lg:hidden text-center mb-8">
+            <Link href="/" className="flex flex-col items-center justify-center gap-3 w-full">
               <Image
-                src="/icons/icon-192.png?v=6"
+                src="/icons/icon-192.png?v=7"
                 alt="VerifyMzansi Shield"
-                width={36}
-                height={36}
-                className="object-contain drop-shadow-sm"
+                width={72}
+                height={72}
+                className="object-contain drop-shadow-md"
               />
-              <span className="font-display text-2xl font-bold tracking-tight">
+              <span className="font-display text-3xl font-bold tracking-tight mt-1">
                 Verify<span className="text-brand-green">Mzansi</span>
               </span>
             </Link>
