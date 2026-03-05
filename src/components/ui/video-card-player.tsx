@@ -297,7 +297,7 @@ export function VideoCardPlayer({
             }}
             role="button"
             tabIndex={0}
-            aria-label={isPlaying ? "Pause video" : "Play video"}
+            aria-label="Toggle video playback"
           >
             <div className="flex justify-end w-full">
               <button
