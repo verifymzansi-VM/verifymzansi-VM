@@ -85,10 +85,7 @@ export default async function HomePage() {
         </Suspense>
 
         {/* ═══ Browse by Category ═══ */}
-        <section
-          aria-label="Browse by category"
-          className="py-5 sm:py-8 border-b border-warm-200 dark:border-warm-800 bg-white dark:bg-warm-950"
-        >
+        <section className="py-5 sm:py-8 border-b border-warm-200 dark:border-warm-800 bg-white dark:bg-warm-950">
           <div className="container-page">
             <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-3">
               {[
@@ -174,10 +171,7 @@ export default async function HomePage() {
         </Suspense>
 
         {/* ═══ CTA Section ═══ */}
-        <section
-          aria-label="Get started"
-          className="py-4 sm:py-6 relative overflow-hidden bg-warm-950 dark:bg-black"
-        >
+        <section className="py-4 sm:py-6 relative overflow-hidden bg-warm-950 dark:bg-black">
           <div className="container-page relative z-10">
             <div className="bg-gradient-to-br from-warm-900/50 to-warm-950/80 backdrop-blur-xl border border-white/10 rounded-2xl p-4 sm:p-5 text-center shadow-2xl overflow-hidden relative">
               <div className="max-w-3xl mx-auto space-y-3 relative z-10">

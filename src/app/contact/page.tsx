@@ -114,12 +114,7 @@ export default function ContactPage() {
                   <CardTitle>Send a Message</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <form
-                    noValidate
-                    data-testid="contact-form"
-                    onSubmit={handleSubmit}
-                    className="space-y-3"
-                  >
+                  <form data-testid="contact-form" onSubmit={handleSubmit} className="space-y-3">
                     <div className="space-y-2">
                       <Label htmlFor="name">Name *</Label>
                       <Input
@@ -133,7 +128,6 @@ export default function ContactPage() {
                         required
                         placeholder="Your full name"
                         autoComplete="name"
-                        autoCapitalize="words"
                         aria-invalid={!!fieldErrors.name}
                         aria-describedby={fieldErrors.name ? "name-error" : undefined}
                       />
@@ -158,8 +152,6 @@ export default function ContactPage() {
                         required
                         placeholder="you@example.com"
                         autoComplete="email"
-                        spellCheck={false}
-                        autoCapitalize="none"
                         aria-invalid={!!fieldErrors.email}
                         aria-describedby={fieldErrors.email ? "email-error" : undefined}
                       />

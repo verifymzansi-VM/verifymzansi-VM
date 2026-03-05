@@ -79,7 +79,7 @@ export default function MeetingChecklistPage() {
           {/* Before Meeting */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle as="h2" className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2">
                 <Badge className="bg-brand-gold text-amber-950 text-xs">Before</Badge>
               </CardTitle>
             </CardHeader>
@@ -103,7 +103,7 @@ export default function MeetingChecklistPage() {
           {/* During & After Meeting */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle as="h2" className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2">
                 <Badge className="bg-brand-green text-white text-xs">During</Badge>
               </CardTitle>
             </CardHeader>

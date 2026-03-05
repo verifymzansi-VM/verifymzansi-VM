@@ -97,13 +97,13 @@ export default function VerifyBuyerPage() {
           <div className="mx-auto max-w-md">
             <Card>
               <CardHeader>
-                <CardTitle as="h2" className="flex items-center gap-2 text-lg">
+                <CardTitle className="flex items-center gap-2 text-lg">
                   <ShieldCheck className="h-5 w-5 text-brand-green" />
                   Buyer Token Check
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <form noValidate onSubmit={handleVerify} className="space-y-3">
+                <form onSubmit={handleVerify} className="space-y-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="token">Buyer Token</Label>
                     <Input
@@ -144,13 +144,11 @@ export default function VerifyBuyerPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Verified since{" "}
-                      <time dateTime={buyerInfo.verifiedAt}>
-                        {new Date(buyerInfo.verifiedAt).toLocaleDateString("en-ZA", {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </time>
+                      {new Date(buyerInfo.verifiedAt).toLocaleDateString("en-ZA", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
                     </p>
                   </div>
                 )}

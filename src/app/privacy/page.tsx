@@ -76,15 +76,7 @@ export default function PrivacyPolicyPage() {
           <div className="space-y-4">
             <div className="space-y-4">
               {sections.map((section, index) => (
-                <section
-                  key={index}
-                  id={section.title
-                    .toLowerCase()
-                    .replace(/^\d+\.\s*/, "")
-                    .replace(/[^a-z0-9]+/g, "-")
-                    .replace(/-$/, "")}
-                  className="space-y-1.5 group"
-                >
+                <section key={index} className="space-y-1.5 group">
                   <h2 className="font-display text-base font-bold flex items-center gap-2">
                     <span className="text-brand-green text-sm font-mono" aria-hidden="true">
                       {String(index + 1).padStart(2, "0")}

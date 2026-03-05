@@ -155,7 +155,7 @@ export default function DsarPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <form noValidate onSubmit={handleSubmit} className="space-y-3">
+                  <form onSubmit={handleSubmit} className="space-y-3">
                     {/* Request Type */}
                     <div className="space-y-2">
                       <Label>Request Type</Label>
@@ -193,7 +193,6 @@ export default function DsarPage() {
                         placeholder="Your full legal name"
                         required
                         autoComplete="name"
-                        autoCapitalize="words"
                         aria-invalid={!!fieldErrors.name}
                         aria-describedby={fieldErrors.name ? "name-error" : undefined}
                       />
@@ -224,8 +223,6 @@ export default function DsarPage() {
                         placeholder="your@email.com"
                         required
                         autoComplete="email"
-                        spellCheck={false}
-                        autoCapitalize="none"
                         aria-invalid={!!fieldErrors.email}
                         aria-describedby={fieldErrors.email ? "email-error" : undefined}
                       />
@@ -255,10 +252,6 @@ export default function DsarPage() {
                         }}
                         placeholder="13-digit SA ID number"
                         maxLength={13}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        spellCheck={false}
-                        autoCapitalize="none"
                         required
                         aria-invalid={!!fieldErrors.idNumber}
                         aria-describedby={fieldErrors.idNumber ? "idNumber-error" : undefined}
