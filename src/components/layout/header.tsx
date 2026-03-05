@@ -73,15 +73,22 @@ export function Header({
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background md:bg-background/95 md:backdrop-blur md:supports-[backdrop-filter]:bg-background/60">
       <div className="container-page flex h-16 items-center justify-between">
-        <Link href="/" aria-label="VerifyMzansi — Home" className="flex items-center flex-shrink-0">
+        <Link
+          href="/"
+          aria-label="VerifyMzansi — Home"
+          className="flex items-center gap-2 sm:gap-3 flex-shrink-0 group"
+        >
           <Image
-            src="/images/logo-transparent.png"
-            alt="VerifyMzansi — Verified Business of South Africa"
-            width={800}
-            height={228}
-            className="w-48 sm:w-56 md:w-64 h-auto object-contain transition-transform hover:scale-105"
+            src="/icons/icon-192.png?v=7"
+            alt=""
+            width={40}
+            height={40}
+            className="w-8 h-8 sm:w-10 sm:h-10 object-contain drop-shadow transition-transform group-hover:scale-110"
             priority
           />
+          <span className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
+            Verify<span className="text-brand-green">Mzansi</span>
+          </span>
         </Link>
 
         {/* Marketplace Switcher — hidden on mobile, shown md+ */}

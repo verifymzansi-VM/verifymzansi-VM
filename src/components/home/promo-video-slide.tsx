@@ -31,18 +31,22 @@ function LogoEntrance({ noMotion }: { noMotion: boolean }) {
       transition={{ duration: noMotion ? 0 : 0.4 }}
     >
       <motion.div
+        className="flex items-center gap-2 sm:gap-3"
         initial={noMotion ? false : { scale: 0.8, filter: "blur(8px)", opacity: 0 }}
         animate={{ scale: 1, filter: "blur(0px)", opacity: 1 }}
         transition={noMotion ? { duration: 0 } : { ...SPRING, duration: 0.8 }}
       >
         <Image
-          src="/images/logo-white.png"
-          alt="VerifyMzansi"
-          width={180}
-          height={60}
-          className="h-12 sm:h-16 w-auto drop-shadow-lg"
+          src="/icons/icon-192.png?v=7"
+          alt=""
+          width={64}
+          height={64}
+          className="w-12 h-12 sm:w-16 sm:h-16 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
           priority
         />
+        <span className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white drop-shadow-md">
+          Verify<span className="text-brand-green-400">Mzansi</span>
+        </span>
       </motion.div>
 
       <motion.p
