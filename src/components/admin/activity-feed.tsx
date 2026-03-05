@@ -55,7 +55,7 @@ function getActionLabel(action: string): string {
 export function ActivityFeed({ entries, emptyMessage }: ActivityFeedProps) {
   if (!entries.length) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
+      <div className="text-center py-6 text-muted-foreground">
         <ScrollText className="h-8 w-8 mx-auto mb-2 opacity-50" />
         <p className="text-sm">{emptyMessage || "No recent activity."}</p>
       </div>

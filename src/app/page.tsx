@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import type { Metadata } from "next";
 import {
   Car,
   Home,
@@ -19,6 +20,17 @@ import { HeroBannerWithData } from "@/components/home/hero-banner-with-data";
 import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
 import { HomeMzansiMarketShowcase } from "@/components/home/home-mzansi-market-showcase";
 
+export const metadata: Metadata = {
+  title: "VerifyMzansi — SA's Trusted Marketplace",
+  description:
+    "Buy & sell with verified sellers. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
+  openGraph: {
+    title: "VerifyMzansi — SA's Trusted Marketplace",
+    description:
+      "Buy & sell with verified sellers. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
+  },
+};
+
 /** Revalidate homepage data every 60 seconds (ISR) */
 export const revalidate = 60;
 
@@ -27,19 +39,35 @@ export default async function HomePage() {
 
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: "VerifyMzansi",
-    url: url || "https://verifymzansi.com",
-    description:
-      "South Africa's verification-first marketplace for classifieds, shops, and business services.",
-    potentialAction: {
-      "@type": "SearchAction",
-      target: {
-        "@type": "EntryPoint",
-        urlTemplate: `${url || "https://verifymzansi.com"}/mzansi-market?q={search_term_string}`,
+    "@graph": [
+      {
+        "@type": "WebSite",
+        name: "VerifyMzansi",
+        url: url || "https://verifymzansi.com",
+        description:
+          "South Africa's verification-first marketplace for classifieds, shops, and business services.",
+        potentialAction: {
+          "@type": "SearchAction",
+          target: {
+            "@type": "EntryPoint",
+            urlTemplate: `${url || "https://verifymzansi.com"}/mzansi-market?q={search_term_string}`,
+          },
+          "query-input": "required name=search_term_string",
+        },
       },
-      "query-input": "required name=search_term_string",
-    },
+      {
+        "@type": "Organization",
+        name: "VerifyMzansi",
+        url: url || "https://verifymzansi.com",
+        logo: `${url || "https://verifymzansi.com"}/icons/icon-512x512.png`,
+        sameAs: [],
+        contactPoint: {
+          "@type": "ContactPoint",
+          email: "hello@verifymzansi.co.za",
+          contactType: "customer support",
+        },
+      },
+    ],
   };
 
   return (
@@ -57,9 +85,12 @@ export default async function HomePage() {
         </Suspense>
 
         {/* ═══ Browse by Category ═══ */}
-        <section className="py-5 sm:py-8 border-b border-warm-200 dark:border-warm-800 bg-white dark:bg-warm-950">
+        <section
+          aria-label="Browse by category"
+          className="py-5 sm:py-8 border-b border-warm-200 dark:border-warm-800 bg-white dark:bg-warm-950"
+        >
           <div className="container-page">
-            <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
+            <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-3">
               {[
                 {
                   label: "Vehicles",
@@ -87,7 +118,7 @@ export default async function HomePage() {
                   icon: Smartphone,
                   href: "/mzansi-market?category=electronics",
                   iconBg: "bg-gray-100 dark:bg-gray-800",
-                  iconColor: "text-gray-500",
+                  iconColor: "text-gray-500 dark:text-gray-400",
                 },
                 {
                   label: "Auto Parts",
@@ -143,31 +174,33 @@ export default async function HomePage() {
         </Suspense>
 
         {/* ═══ CTA Section ═══ */}
-        <section className="py-6 sm:py-12 relative overflow-hidden bg-warm-950 dark:bg-black">
+        <section
+          aria-label="Get started"
+          className="py-4 sm:py-6 relative overflow-hidden bg-warm-950 dark:bg-black"
+        >
           <div className="container-page relative z-10">
-            <div className="bg-gradient-to-br from-warm-900/50 to-warm-950/80 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 text-center shadow-2xl overflow-hidden relative">
-              <div className="max-w-3xl mx-auto space-y-5 relative z-10">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-brand-green-400 text-sm font-medium">
+            <div className="bg-gradient-to-br from-warm-900/50 to-warm-950/80 backdrop-blur-xl border border-white/10 rounded-2xl p-4 sm:p-5 text-center shadow-2xl overflow-hidden relative">
+              <div className="max-w-3xl mx-auto space-y-3 relative z-10">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-brand-green-400 text-xs font-medium">
                   <span className="relative flex h-2 w-2">
                     <span className="absolute inline-flex h-full w-full rounded-full bg-brand-green-400 opacity-50"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-green-500"></span>
                   </span>
-                  Join a growing community of verified users
+                  Join verified users
                 </div>
 
-                <h1 className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.1] sm:leading-[1.1]">
-                  Ready to join Mzansi&apos;s most{" "}
+                <h1 className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-white leading-[1.1]">
+                  Join Mzansi&apos;s{" "}
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green-400 to-brand-gold-400">
-                    trusted marketplace?
+                    Trusted Marketplace
                   </span>
                 </h1>
 
-                <p className="text-warm-200 text-lg max-w-2xl mx-auto">
-                  Get verified in under 5 minutes. Buy, sell, and advertise with trust across three
-                  connected marketplaces.
+                <p className="text-warm-200 text-base max-w-2xl mx-auto">
+                  Get verified in under 5 minutes. Buy, sell, and advertise with trust.
                 </p>
 
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                   <Button
                     asChild
                     size="lg"

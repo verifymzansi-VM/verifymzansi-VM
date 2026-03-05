@@ -184,6 +184,7 @@ function ShowroomMediaRender({
             muted={isMuted}
             playsInline
             preload="metadata"
+            aria-label="Showroom background video"
             className={cn(
               "object-cover absolute inset-0 w-full h-full",
               showPoster || (!posterUrl && !videoReady) ? "opacity-0" : "opacity-100",
@@ -359,7 +360,7 @@ export function ShowroomHero({
     <div className="w-full">
       <div className="relative overflow-hidden w-full">
         {/* === Image area — clean, no overlay on mobile === */}
-        <div className="relative bg-warm-100 dark:bg-warm-900 w-full aspect-[16/10] sm:aspect-[21/9]">
+        <div className="relative bg-warm-100 dark:bg-warm-900 w-full aspect-[16/10] sm:aspect-[3/1]">
           {activeSlide && (
             <>
               <div
@@ -453,18 +454,20 @@ export function ShowroomHero({
                 </div>
                 <div className="flex gap-1 sm:gap-1.5 pointer-events-auto">
                   <button
+                    type="button"
                     onClick={prev}
                     aria-label="Previous slide"
-                    className="rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md border border-white/10 p-1 sm:p-2 text-white transition-all"
+                    className="rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md border border-white/10 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-white transition-all"
                   >
-                    <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <ChevronLeft className="h-4 w-4" />
                   </button>
                   <button
+                    type="button"
                     onClick={next}
                     aria-label="Next slide"
-                    className="rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md border border-white/10 p-1 sm:p-2 text-white transition-all"
+                    className="rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md border border-white/10 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-white transition-all"
                   >
-                    <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
               </div>

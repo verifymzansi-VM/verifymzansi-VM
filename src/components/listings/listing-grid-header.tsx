@@ -70,7 +70,7 @@ export function ListingGridHeader() {
               {[...CATEGORIES, ...BUSINESS_CATEGORIES].find((c) => c.value === filters.category)
                 ?.label || filters.category.replace(/_/g, " ")}
               <X
-                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100"
+                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
                 onClick={() => setFilter("category", undefined)}
               />
             </Badge>
@@ -80,7 +80,7 @@ export function ListingGridHeader() {
               {filters.province}
               {filters.city && ` › ${filters.city}`}
               <X
-                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100"
+                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
                 onClick={() => setFilter("province", undefined)}
               />
             </Badge>
@@ -89,7 +89,7 @@ export function ListingGridHeader() {
             <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
               R{filters.priceMin || 0} – R{filters.priceMax || "∞"}
               <X
-                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100"
+                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
                 onClick={() => {
                   setFilter("priceMin", undefined);
                   setFilter("priceMax", undefined);
@@ -107,13 +107,13 @@ export function ListingGridHeader() {
               >
                 {typeof val === "boolean" ? name.replace(/_/g, " ") : String(val)}
                 <X
-                  className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100"
+                  className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
                   onClick={() => setAttribute(name, undefined)}
                 />
               </Badge>
             ))}
           <button
-            className="text-xs text-muted-foreground hover:text-foreground underline ml-1"
+            className="text-xs text-muted-foreground hover:text-foreground underline ml-1 transition-colors"
             onClick={resetFilters}
           >
             Clear all

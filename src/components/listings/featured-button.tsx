@@ -80,7 +80,7 @@ export function FeaturedButton({ listingId, isFeatured, canFeature }: FeaturedBu
     <Button
       variant="ghost"
       size="icon"
-      className="h-8 w-8 hover:text-brand-gold"
+      className="h-8 w-8 transition-colors hover:text-brand-gold"
       onClick={handleFeatured}
       disabled={loading}
       title="Feature this listing (R25 for 7 days)"

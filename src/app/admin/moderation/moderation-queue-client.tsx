@@ -107,10 +107,9 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
 
   if (!items.length) {
     return (
-      <div className="text-center py-10 text-muted-foreground">
+      <div className="text-center py-6 text-muted-foreground">
         <Package className="h-8 w-8 mx-auto mb-3 opacity-50" />
         <p className="text-sm">No content pending moderation.</p>
-        <p className="text-xs mt-1">All submissions have been reviewed.</p>
       </div>
     );
   }
@@ -251,7 +250,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
             </Button>
             <Button
               size="sm"
-              className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+              className="gap-1.5 bg-brand-green hover:bg-brand-green/90 text-white"
               onClick={() => {
                 if (previewItem) openReview(previewItem, "approve");
               }}

@@ -35,7 +35,7 @@ export default async function AdminReportsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Reports"
-        description="Review and resolve user reports across all areas."
+        description="Review and resolve user reports."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Reports" }]}
       >
         <Badge variant="outline" className="gap-1">
@@ -44,7 +44,7 @@ export default async function AdminReportsPage() {
       </PageHeader>
 
       {!reportsData.length ? (
-        <div className="text-center py-10 text-muted-foreground">
+        <div className="text-center py-6 text-muted-foreground">
           <Flag className="h-8 w-8 mx-auto mb-3" />
           <p>No reports to review.</p>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Send, Loader2, CheckCircle2, Shield } from "lucide-react";
+import { Send, Loader2, CheckCircle2, Shield, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,22 +92,22 @@ export default function DsarPage() {
     {
       value: "access",
       label: "Access My Data",
-      desc: "Request a copy of all personal data we hold about you",
+      desc: "Get a copy of your data",
     },
     {
       value: "correction",
       label: "Correct My Data",
-      desc: "Request correction of inaccurate personal information",
+      desc: "Fix inaccurate information",
     },
     {
       value: "deletion",
       label: "Delete My Data",
-      desc: "Request deletion of your personal data and account",
+      desc: "Delete data and account",
     },
     {
       value: "objection",
       label: "Object to Processing",
-      desc: "Object to how we process your personal information",
+      desc: "Object to data processing",
     },
   ];
 
@@ -116,11 +116,11 @@ export default function DsarPage() {
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-6">
+        <div className="container-page py-4 space-y-4">
           <PageHeader
-            title="Data Subject Access Request"
-            description="Exercise your rights under POPIA. Submit a request to access, correct, or delete your personal data held by VerifyMzansi."
-            breadcrumbs={[{ label: "Data Request (POPIA)" }]}
+            title="Data Access Request"
+            description="Exercise your POPIA data rights."
+            breadcrumbs={[{ label: "POPIA Request" }]}
           />
 
           <div className="mx-auto max-w-xl">
@@ -136,35 +136,43 @@ export default function DsarPage() {
                   <p className="text-xs text-muted-foreground">
                     Reference: DSAR-{Date.now().toString(36).toUpperCase()}
                   </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 mt-2"
+                    onClick={() => (window.location.href = "/dashboard")}
+                  >
+                    <ArrowLeft className="h-4 w-4" /> Back to Dashboard
+                  </Button>
                 </CardContent>
               </Card>
             ) : (
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Shield className="h-5 w-5 text-brand-green" />
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Shield className="h-4 w-4 text-brand-green" />
                     Submit a Request
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-5">
+                  <form noValidate onSubmit={handleSubmit} className="space-y-3">
                     {/* Request Type */}
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       <Label>Request Type</Label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 gap-1.5">
                         {REQUEST_TYPES.map((rt) => (
                           <button
                             key={rt.value}
                             type="button"
                             onClick={() => setRequestType(rt.value)}
-                            className={`rounded-lg border p-3 text-left transition-colors ${
+                            className={`rounded-lg border p-2 text-left transition-colors ${
                               requestType === rt.value
                                 ? "border-brand-green bg-brand-green-50 dark:bg-brand-green-950/30"
                                 : "border-muted hover:border-foreground/20"
                             }`}
                           >
-                            <p className="text-sm font-medium">{rt.label}</p>
-                            <p className="text-xs text-muted-foreground">{rt.desc}</p>
+                            <p className="text-xs font-medium">{rt.label}</p>
+                            <p className="text-[10px] text-muted-foreground">{rt.desc}</p>
                           </button>
                         ))}
                       </div>
@@ -184,6 +192,8 @@ export default function DsarPage() {
                         }}
                         placeholder="Your full legal name"
                         required
+                        autoComplete="name"
+                        autoCapitalize="words"
                         aria-invalid={!!fieldErrors.name}
                         aria-describedby={fieldErrors.name ? "name-error" : undefined}
                       />
@@ -191,7 +201,7 @@ export default function DsarPage() {
                         <p
                           id="name-error"
                           role="alert"
-                          className="text-sm text-destructive"
+                          className="text-xs text-destructive"
                           data-error="name"
                         >
                           {fieldErrors.name}
@@ -213,6 +223,9 @@ export default function DsarPage() {
                         }}
                         placeholder="your@email.com"
                         required
+                        autoComplete="email"
+                        spellCheck={false}
+                        autoCapitalize="none"
                         aria-invalid={!!fieldErrors.email}
                         aria-describedby={fieldErrors.email ? "email-error" : undefined}
                       />
@@ -220,7 +233,7 @@ export default function DsarPage() {
                         <p
                           id="email-error"
                           role="alert"
-                          className="text-sm text-destructive"
+                          className="text-xs text-destructive"
                           data-error="email"
                         >
                           {fieldErrors.email}
@@ -242,6 +255,10 @@ export default function DsarPage() {
                         }}
                         placeholder="13-digit SA ID number"
                         maxLength={13}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        spellCheck={false}
+                        autoCapitalize="none"
                         required
                         aria-invalid={!!fieldErrors.idNumber}
                         aria-describedby={fieldErrors.idNumber ? "idNumber-error" : undefined}
@@ -253,7 +270,7 @@ export default function DsarPage() {
                         <p
                           id="idNumber-error"
                           role="alert"
-                          className="text-sm text-destructive"
+                          className="text-xs text-destructive"
                           data-error="idNumber"
                         >
                           {fieldErrors.idNumber}
@@ -265,10 +282,11 @@ export default function DsarPage() {
                       <Label htmlFor="details">Additional Details</Label>
                       <textarea
                         id="details"
-                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex min-h-[50px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         value={details}
                         onChange={(e) => setDetails(e.target.value)}
-                        placeholder="Any additional information about your request..."
+                        placeholder="Optional details..."
+                        rows={2}
                       />
                     </div>
 

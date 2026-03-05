@@ -164,6 +164,7 @@ export function EvidenceDecisionControls({
             <Label className="text-xs">Reason Code</Label>
             <select
               title="Reason code"
+              aria-label="Reason code"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               value={reasonCode}
               onChange={(e) => setReasonCode(e.target.value)}
@@ -184,6 +185,7 @@ export function EvidenceDecisionControls({
             <Label className="text-xs">Override Reason (required)</Label>
             <select
               title="Override reason code"
+              aria-label="Override reason code"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               value={overrideReasonCode}
               onChange={(e) => setOverrideReasonCode(e.target.value)}
@@ -208,7 +210,7 @@ export function EvidenceDecisionControls({
                   key={i}
                   type="button"
                   onClick={() => setReasonNote(template)}
-                  className="rounded-full border border-warm-200/70 bg-warm-50 px-2 py-0.5 text-[10px] hover:bg-warm-100"
+                  className="rounded-full border border-warm-200/70 dark:border-warm-700/70 bg-warm-50 dark:bg-warm-900 px-2 py-0.5 text-[10px] hover:bg-warm-100 dark:hover:bg-warm-800"
                 >
                   {template.slice(0, 45)}…
                 </button>

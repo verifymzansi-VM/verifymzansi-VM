@@ -265,8 +265,9 @@ export function VideoCardPlayer({
           <div className="absolute inset-0 z-10 flex sm:hidden flex-col justify-between p-2 bg-black/20">
             <div className="flex justify-end w-full">
               <button
+                type="button"
                 onClick={toggleMute}
-                className="p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
+                className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
                 aria-label={isMuted ? "Unmute" : "Mute"}
               >
                 {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
@@ -274,6 +275,7 @@ export function VideoCardPlayer({
             </div>
             <div className="flex items-center justify-center flex-1">
               <button
+                type="button"
                 onClick={handleVideoClick}
                 className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
                 aria-label="Enter fullscreen"
@@ -285,19 +287,26 @@ export function VideoCardPlayer({
 
           {/* Desktop: show on hover */}
           <div
-            role="button"
-            tabIndex={0}
             className="absolute inset-0 z-10 hidden sm:group-hover/video:flex flex-col justify-between p-2 bg-black/20"
             onClick={handleVideoClick}
-            onKeyDown={handleVideoKeyDown}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleVideoClick(e as unknown as React.MouseEvent);
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-label={isPlaying ? "Pause video" : "Play video"}
           >
             <div className="flex justify-end w-full">
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleMute(e);
                 }}
-                className="p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
+                className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
                 aria-label={isMuted ? "Unmute" : "Mute"}
               >
                 {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}

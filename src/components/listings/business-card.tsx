@@ -89,7 +89,7 @@ export function BusinessCard({
             )
           ) : (
             <div className="absolute inset-0 flex items-center justify-center opacity-10">
-              <Store className="w-16 h-16" />
+              <Store className="w-12 h-12" />
             </div>
           )}
 
@@ -147,8 +147,8 @@ export function BusinessCard({
 
         <CardContent className="flex-1 p-5 pt-0 relative flex flex-col">
           {/* Floating Logo/Icon */}
-          <div className="relative -mt-8 mb-4">
-            <div className="w-16 h-16 rounded-xl border-4 border-background bg-background shadow-sm flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105">
+          <div className="relative -mt-7 mb-3">
+            <div className="w-14 h-14 rounded-xl border-4 border-background bg-background shadow-sm flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105">
               {normalizedLogoUrl ? (
                 <Image
                   src={normalizedLogoUrl}
@@ -157,7 +157,7 @@ export function BusinessCard({
                   className="object-cover"
                 />
               ) : (
-                <Store className="h-7 w-7 text-brand-blue" />
+                <Store className="h-6 w-6 text-brand-blue" />
               )}
             </div>
           </div>

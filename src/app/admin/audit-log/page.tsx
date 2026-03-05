@@ -33,15 +33,14 @@ export default async function AdminAuditLogPage() {
     <div className="space-y-6">
       <PageHeader
         title="Audit Log"
-        description="Track administrative actions and system events."
+        description="Track admin actions and system events."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Audit Log" }]}
       />
 
       {!logs?.length ? (
-        <div className="text-center py-10 text-muted-foreground">
+        <div className="text-center py-6 text-muted-foreground">
           <ScrollText className="h-8 w-8 mx-auto mb-3" />
           <p>No audit entries recorded yet.</p>
-          <p className="text-xs mt-1">Administrative actions will be logged here automatically.</p>
         </div>
       ) : (
         <div className="space-y-2">

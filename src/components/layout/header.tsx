@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Menu, X, ShieldAlert, LayoutDashboard, Settings, LogOut, Sun, Moon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,19 @@ export function Header({
         .slice(0, 2)
     : "U";
   const hasAdminAccess = auth.isModerator; // isModerator already includes admin role
+
+  // Close mobile menu on Escape key
+  const handleEscape = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape" && mobileOpen) setMobileOpen(false);
+    },
+    [mobileOpen]
+  );
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [handleEscape]);
 
   async function handleSignOut() {
     await auth.signOut();

@@ -12,6 +12,7 @@ import {
   Megaphone,
   Building2,
   Clock,
+  CreditCard,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -252,7 +253,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={`Welcome back, ${displayName}`}>
+      <PageHeader title={`Welcome back, ${displayName}`} breadcrumbs={[{ label: "Dashboard" }]}>
         <Button asChild variant="trust-verified" size="sm" className="gap-2">
           <Link href="/post/create">
             <Plus className="h-4 w-4" />
@@ -389,16 +390,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Link href="/post/create">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardContent className="flex items-center gap-3 py-4">
-              <Plus className="h-5 w-5 text-brand-green" />
-              <span className="text-sm font-medium">Create Post</span>
-              <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
+      <div className="grid grid-cols-3 gap-3">
         <Link href="/dashboard/businesses">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
             <CardContent className="flex items-center gap-3 py-4">
@@ -422,7 +414,7 @@ export default async function DashboardPage() {
         <Link href="/billing">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
             <CardContent className="flex items-center gap-3 py-4">
-              <TrendingUp className="h-5 w-5 text-muted-foreground" />
+              <CreditCard className="h-5 w-5 text-muted-foreground" />
               <span className="text-sm font-medium">Upgrade Plan</span>
               <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
             </CardContent>

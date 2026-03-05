@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Loader2, CreditCard, AlertCircle } from "lucide-react";
 
 function CheckoutContent() {
@@ -56,11 +57,11 @@ function CheckoutContent() {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center space-y-4">
-        <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+        <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
           {error ? (
-            <AlertCircle className="h-8 w-8 text-destructive" />
+            <AlertCircle className="h-6 w-6 text-destructive" />
           ) : (
-            <CreditCard className="h-8 w-8 text-brand-green" />
+            <CreditCard className="h-6 w-6 text-brand-green" />
           )}
         </div>
         {error ? (
@@ -71,16 +72,14 @@ function CheckoutContent() {
         ) : (
           <>
             <h1 className="font-display text-xl font-bold">Redirecting to PayFast...</h1>
-            <p className="text-sm text-muted-foreground">
-              You&apos;re being redirected to our secure payment partner.
-            </p>
+            <p className="text-sm text-muted-foreground">Redirecting to PayFast...</p>
             <Loader2 className="h-6 w-6 animate-spin mx-auto text-brand-green" />
           </>
         )}
         <p className="text-xs text-muted-foreground">
-          <button onClick={() => router.push("/billing")} className="text-brand-green underline">
+          <Link href="/billing" className="text-brand-green underline">
             Go back to billing
-          </button>
+          </Link>
         </p>
       </div>
     </div>

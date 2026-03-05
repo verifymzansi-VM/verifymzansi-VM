@@ -21,7 +21,11 @@ export function BusinessCategoryStrip({ categoryCounts }: BusinessCategoryStripP
   if (visibleCategories.length === 0) return null;
 
   return (
-    <div className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide snap-x -mx-1 px-1">
+    <div
+      role="group"
+      aria-label="Filter by category"
+      className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide snap-x -mx-1 px-1"
+    >
       {visibleCategories.map((cat) => {
         const Icon = cat.icon;
         const isSelected = filters.businessCategory === cat.value;
@@ -30,6 +34,7 @@ export function BusinessCategoryStrip({ categoryCounts }: BusinessCategoryStripP
           <button
             key={cat.value}
             type="button"
+            aria-pressed={isSelected}
             onClick={() =>
               setFilter(
                 "businessCategory" as keyof typeof filters,

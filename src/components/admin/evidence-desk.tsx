@@ -197,9 +197,9 @@ export function EvidenceDeskClient({
   return (
     <div className="space-y-6">
       {/* Search bar */}
-      <Card className="border-warm-200/70">
+      <Card className="border-warm-200/70 dark:border-warm-700/70">
         <CardContent className="pt-6">
-          <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4">
+          <form noValidate onSubmit={handleSearch} className="flex flex-wrap items-end gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="stepId" className="text-xs">
                 Step ID
@@ -243,7 +243,7 @@ export function EvidenceDeskClient({
 
       {/* Main content */}
       {loading && (
-        <div className="flex items-center justify-center py-8">
+        <div className="flex items-center justify-center py-6">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       )}
@@ -254,7 +254,7 @@ export function EvidenceDeskClient({
           <div className="space-y-4 xl:col-span-1">
             {/* Seller info */}
             {metadata.sellerProfile && (
-              <Card className="border-warm-200/70">
+              <Card className="border-warm-200/70 dark:border-warm-700/70">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium">Seller Profile</CardTitle>
                 </CardHeader>
@@ -276,7 +276,7 @@ export function EvidenceDeskClient({
             )}
 
             {/* Steps list */}
-            <Card className="border-warm-200/70">
+            <Card className="border-warm-200/70 dark:border-warm-700/70">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Verification Steps</CardTitle>
               </CardHeader>
@@ -288,10 +288,10 @@ export function EvidenceDeskClient({
                     <button
                       key={s.id}
                       onClick={() => setSelectedStep(s)}
-                      className={`w-full rounded-md border p-3 text-left text-sm transition-colors hover:bg-warm-50 ${
+                      className={`w-full rounded-md border p-3 text-left text-sm transition-colors hover:bg-warm-50 dark:hover:bg-warm-900 ${
                         selectedStep?.id === s.id
                           ? "border-brand-blue bg-brand-blue/5"
-                          : "border-warm-200/70"
+                          : "border-warm-200/70 dark:border-warm-700/70"
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -339,7 +339,7 @@ export function EvidenceDeskClient({
 
             {/* Risk signals */}
             {metadata.riskSignals.length > 0 && (
-              <Card className="border-warm-200/70">
+              <Card className="border-warm-200/70 dark:border-warm-700/70">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-sm font-medium">
                     <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -351,7 +351,7 @@ export function EvidenceDeskClient({
                     <div
                       key={rs.id}
                       className={`rounded-md border p-2 text-xs ${
-                        RISK_COLORS[rs.severity] ?? "border-warm-200/70"
+                        RISK_COLORS[rs.severity] ?? "border-warm-200/70 dark:border-warm-700/70"
                       }`}
                     >
                       <p className="font-medium capitalize">{rs.signal_type.replace(/_/g, " ")}</p>
@@ -372,7 +372,7 @@ export function EvidenceDeskClient({
           <div className="space-y-4 xl:col-span-2">
             {/* Artifact selector */}
             {metadata.artifacts.length > 1 && (
-              <Card className="border-warm-200/70">
+              <Card className="border-warm-200/70 dark:border-warm-700/70">
                 <CardContent className="flex flex-wrap gap-2 pt-4">
                   {metadata.artifacts.map((a) => (
                     <Button
@@ -394,8 +394,8 @@ export function EvidenceDeskClient({
             {selectedArtifact ? (
               <EvidenceViewer artifact={selectedArtifact} />
             ) : (
-              <Card className="border-warm-200/70">
-                <CardContent className="flex flex-col items-center justify-center py-10 text-center">
+              <Card className="border-warm-200/70 dark:border-warm-700/70">
+                <CardContent className="flex flex-col items-center justify-center py-6 text-center">
                   <Eye className="h-8 w-8 text-muted-foreground/30" />
                   <p className="mt-3 text-sm text-muted-foreground">
                     No artifact selected. Select a step or artifact to view evidence.
@@ -416,8 +416,8 @@ export function EvidenceDeskClient({
       )}
 
       {!metadata && !loading && (
-        <Card className="border-warm-200/70">
-          <CardContent className="flex flex-col items-center justify-center py-10 text-center">
+        <Card className="border-warm-200/70 dark:border-warm-700/70">
+          <CardContent className="flex flex-col items-center justify-center py-6 text-center">
             <ShieldCheck className="h-8 w-8 text-muted-foreground/30" />
             <p className="mt-3 text-sm text-muted-foreground">
               Enter a Step ID or User ID above to load verification evidence.

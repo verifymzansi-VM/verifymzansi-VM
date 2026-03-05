@@ -16,6 +16,8 @@ export interface VideoWithPosterProps extends Omit<
   src: string;
   /** Image URL to show as the cover before the video plays (e.g. first listing photo) */
   posterUrl?: string;
+  /** Alt text for the poster image (defaults to "Video thumbnail") */
+  posterAlt?: string;
   /** Extra class names applied to the outer wrapper div */
   wrapperClassName?: string;
   /** Class names applied to the play-button overlay */
@@ -39,6 +41,7 @@ export interface VideoWithPosterProps extends Omit<
 export function VideoWithPoster({
   src,
   posterUrl,
+  posterAlt = "Video thumbnail",
   wrapperClassName,
   playButtonClassName,
   className,
@@ -95,7 +98,7 @@ export function VideoWithPoster({
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={posterUrl}
-            alt="Video thumbnail"
+            alt={posterAlt}
             className={cn("w-full h-full object-cover", className)}
             draggable={false}
           />
@@ -161,7 +164,7 @@ export function VideoWithPoster({
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={posterUrl}
-          alt="Video thumbnail"
+          alt={posterAlt}
           className={cn("w-full h-full object-cover", className)}
           draggable={false}
         />

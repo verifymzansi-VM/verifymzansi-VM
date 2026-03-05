@@ -60,10 +60,13 @@ export function ListingFilterSidebar() {
   return (
     <div className="sticky top-24 space-y-4 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-thin pr-1">
       {/* ── Search ────────────────────────────────────── */}
-      <div className="relative">
+      <div className="relative" role="search">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
+          type="search"
           placeholder="Search listings..."
+          aria-label="Search listings"
+          enterKeyHint="search"
           className="pl-9"
           value={localQuery}
           onChange={(e) => {
@@ -155,8 +158,10 @@ export function ListingFilterSidebar() {
         <div className="flex items-center gap-2">
           <Input
             type="number"
+            inputMode="decimal"
             min={0}
             placeholder="Min"
+            aria-label="Minimum price"
             className="text-sm"
             value={filters.priceMin || ""}
             onChange={(e) =>
@@ -166,8 +171,10 @@ export function ListingFilterSidebar() {
           <span className="text-muted-foreground text-xs">–</span>
           <Input
             type="number"
+            inputMode="decimal"
             min={0}
             placeholder="Max"
+            aria-label="Maximum price"
             className="text-sm"
             value={filters.priceMax || ""}
             onChange={(e) =>
@@ -295,6 +302,7 @@ function FilterAttributeField({
           </Label>
           <Input
             type="number"
+            inputMode="numeric"
             min={0}
             placeholder={field.placeholder || `Any`}
             className="text-xs h-8"

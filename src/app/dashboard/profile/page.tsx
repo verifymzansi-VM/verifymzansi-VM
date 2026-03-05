@@ -105,7 +105,7 @@ export default function ProfilePage() {
         return;
       }
 
-      toast({ title: "Profile updated!" });
+      toast({ title: "Profile updated!", variant: "success" });
     } catch {
       toast({ title: "Something went wrong", variant: "destructive" });
     } finally {
@@ -115,8 +115,8 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -137,7 +137,7 @@ export default function ProfilePage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSave} className="space-y-4">
+          <form noValidate onSubmit={handleSave} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="displayName">Display Name *</Label>
               <Input

@@ -128,7 +128,7 @@ export function FlaggingQueueTable({ reports, onActionComplete }: FlaggingQueueT
 
   if (!reports.length) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
+      <div className="text-center py-6 text-muted-foreground">
         <Flag className="h-8 w-8 mx-auto mb-3 opacity-50" />
         <p className="text-sm">No open reports for this area.</p>
       </div>
@@ -250,6 +250,7 @@ export function FlaggingQueueTable({ reports, onActionComplete }: FlaggingQueueT
                 <Label className="text-sm font-medium">Duration</Label>
                 <select
                   title="Suspension duration"
+                  aria-label="Suspension duration"
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
                   className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"

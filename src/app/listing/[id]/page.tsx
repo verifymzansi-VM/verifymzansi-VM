@@ -163,7 +163,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
             ]}
           />
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <article className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-6">
               {/* ── Image Gallery ──────────────────────── */}
@@ -179,7 +179,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-baseline gap-2">
                   {listing.price_cents != null && (
-                    <p className="text-3xl font-bold font-display text-brand-green">
+                    <p className="text-2xl font-bold font-display text-brand-green">
                       {formatZAR(listing.price_cents)}
                     </p>
                   )}
@@ -190,7 +190,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
-                    {createdAt}
+                    <time dateTime={listing.created_at}>{createdAt}</time>
                   </span>
                   <span className="flex items-center gap-1">
                     <Eye className="h-4 w-4" />
@@ -225,7 +225,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
                     <Separator />
                     <div className="space-y-3">
                       <h2 className="font-display text-lg font-semibold">Details</h2>
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                         {(() => {
                           const catDef = CATEGORIES.find((c) => c.value === listing.category);
                           const attrEntries = Object.entries(
@@ -248,13 +248,13 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
                             }
                             return (
                               <div key={key} className="flex justify-between gap-2">
-                                <span className="text-muted-foreground capitalize">{label}</span>
-                                <span className="font-medium text-right">{displayValue}</span>
+                                <dt className="text-muted-foreground capitalize">{label}</dt>
+                                <dd className="font-medium text-right">{displayValue}</dd>
                               </div>
                             );
                           });
                         })()}
-                      </div>
+                      </dl>
                     </div>
                   </>
                 )}
@@ -296,7 +296,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
                 <CardContent className="p-6 space-y-4">
                   <h3 className="font-display font-semibold">Seller</h3>
                   <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-full bg-brand-green text-white text-lg font-bold flex items-center justify-center shadow-sm">
+                    <div className="h-10 w-10 rounded-full bg-brand-green text-white text-lg font-bold flex items-center justify-center shadow-sm">
                       {sellerInitial}
                     </div>
                     <div>
@@ -328,11 +328,11 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
                 </CardContent>
               </Card>
             </div>
-          </div>
+          </article>
 
           {/* ── Similar Listings ───────────────────────── */}
           {similarItems.length > 0 && (
-            <section className="space-y-4 pt-4">
+            <section aria-label="Similar listings" className="space-y-4 pt-4">
               <Separator />
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-xl font-semibold">Similar Listings</h2>

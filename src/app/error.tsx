@@ -17,12 +17,11 @@ export default function GlobalError({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">
-      <AlertTriangle className="h-10 w-10 text-destructive" />
-      <div className="space-y-2">
-        <h1 className="text-2xl font-display font-bold">Something went wrong</h1>
-        <p className="text-muted-foreground max-w-md">
-          An unexpected error occurred. Our team has been notified. Please try again or return to
-          the homepage.
+      <AlertTriangle className="h-8 w-8 text-destructive" />
+      <div className="space-y-1.5">
+        <h1 className="text-xl font-display font-bold">Something went wrong</h1>
+        <p className="text-sm text-muted-foreground max-w-md">
+          An unexpected error occurred. Please try again or return to the homepage.
         </p>
         {error.digest && (
           <p className="text-xs text-muted-foreground">Error reference: {error.digest}</p>

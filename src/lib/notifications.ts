@@ -1,4 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("Notifications");
 
 export interface CreateNotificationInput {
   userId: string;
@@ -37,13 +40,13 @@ export async function createNotification(input: CreateNotificationInput): Promis
     });
 
     if (error) {
-      console.error("[createNotification] Failed:", error.message);
+      log.error("createNotification failed", { error: error.message });
       return false;
     }
 
     return true;
   } catch (err) {
-    console.error("[createNotification] Unexpected error:", err);
+    log.error("createNotification unexpected error", { error: String(err) });
     return false;
   }
 }
@@ -68,13 +71,13 @@ export async function createNotifications(inputs: CreateNotificationInput[]): Pr
     );
 
     if (error) {
-      console.error("[createNotifications] Failed:", error.message);
+      log.error("createNotifications failed", { error: error.message });
       return false;
     }
 
     return true;
   } catch (err) {
-    console.error("[createNotifications] Unexpected error:", err);
+    log.error("createNotifications unexpected error", { error: String(err) });
     return false;
   }
 }

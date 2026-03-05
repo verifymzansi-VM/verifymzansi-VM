@@ -65,6 +65,10 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: "/icons/icon-192.png",
+  },
   manifest: "/manifest.json",
 };
 
@@ -104,10 +108,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           disableTransitionOnChange
           nonce={nonce}
         >
-          <div id="main-content">{children}</div>
+          <main id="main-content">{children}</main>
           <Toaster />
           <ServiceWorkerRegistrar />
         </ThemeProvider>
+        <noscript>
+          <div
+            style={{ padding: "2rem", textAlign: "center", fontFamily: "system-ui, sans-serif" }}
+          >
+            <h1>JavaScript Required</h1>
+            <p>
+              VerifyMzansi requires JavaScript to function. Please enable JavaScript in your browser
+              settings and reload the page.
+            </p>
+          </div>
+        </noscript>
       </body>
     </html>
   );

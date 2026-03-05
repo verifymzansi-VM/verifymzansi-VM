@@ -3,10 +3,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
-import { PLANS, FREE_POST_CONFIG, type PlanDefinition } from "@/lib/constants/pricing";
+import { PLANS, type PlanDefinition } from "@/lib/constants/pricing";
 
 export const metadata = {
   title: "Pricing",
@@ -100,52 +101,90 @@ export default function PricingPage() {
   const businessPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
   const promotionPlans = PLANS.filter((p: PlanDefinition) => p.area === "PROMOTIONS_EVENTS");
 
+  const allPlans = [...marketPlans, ...businessPlans, ...promotionPlans];
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "VerifyMzansi Pricing",
+    url: "https://verifymzansi.com/pricing",
+    mainEntity: {
+      "@type": "ItemList",
+      itemListElement: allPlans.map((plan, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        item: {
+          "@type": "Offer",
+          name: `${plan.area.replace(/_/g, " ")} — ${plan.tier}`,
+          priceCurrency: "ZAR",
+          price: (plan.priceCents / 100).toFixed(2),
+          description: `VerifyMzansi ${plan.tier} plan for ${plan.area.replace(/_/g, " ")}`,
+          seller: { "@type": "Organization", name: "VerifyMzansi" },
+        },
+      })),
+    },
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-6">
+        <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Pricing"
-            description={`1 free post per area — ${FREE_POST_CONFIG.maxPhotos} photos, ${FREE_POST_CONFIG.maxVideos} video, ${FREE_POST_CONFIG.durationDays} days. No card required. All plans include verification and trust badges.`}
+            description={`1 free post per area. All plans include verification and trust badges.`}
             breadcrumbs={[{ label: "Pricing" }]}
           />
 
-          {/* Mzansi Market Plans */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Badge className="bg-brand-green text-white">Mzansi Market</Badge>
-              <span className="text-sm text-muted-foreground">Classified ads</span>
+          <Tabs defaultValue="market" className="max-w-5xl mx-auto">
+            <div className="flex justify-center mb-3">
+              <TabsList className="grid w-full max-w-3xl grid-cols-3 p-1 h-9 bg-muted/50 rounded-full">
+                <TabsTrigger
+                  value="market"
+                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  Mzansi Market
+                </TabsTrigger>
+                <TabsTrigger
+                  value="business"
+                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  Mzansi Business
+                </TabsTrigger>
+                <TabsTrigger
+                  value="promotions"
+                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  Promotions & Events
+                </TabsTrigger>
+              </TabsList>
             </div>
-            <PlanGrid plans={marketPlans} />
-          </section>
 
-          {/* Mzansi Business Plans */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Badge className="bg-brand-blue text-white">Mzansi Business</Badge>
-              <span className="text-sm text-muted-foreground">
-                Storefronts &amp; business profiles
-              </span>
-            </div>
-            <PlanGrid plans={businessPlans} />
-          </section>
+            <TabsContent value="market" className="mt-0">
+              <PlanGrid plans={marketPlans} />
+            </TabsContent>
 
-          {/* Promotions & Events Plans */}
-          {promotionPlans.length > 0 && (
-            <section className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Badge className="bg-red-600 text-white">Promotions & Events</Badge>
-                <span className="text-sm text-muted-foreground">Deals, ads &amp; events</span>
-              </div>
-              <PlanGrid plans={promotionPlans} />
-            </section>
-          )}
+            <TabsContent value="business" className="mt-0">
+              <PlanGrid plans={businessPlans} />
+            </TabsContent>
+
+            {promotionPlans.length > 0 && (
+              <TabsContent value="promotions" className="mt-0">
+                <PlanGrid plans={promotionPlans} />
+              </TabsContent>
+            )}
+          </Tabs>
 
           <p className="text-center text-sm text-muted-foreground">
             Have questions?{" "}
-            <a href="mailto:hello@verifymzansi.co.za" className="text-brand-green underline">
+            <a
+              href="mailto:hello@verifymzansi.co.za"
+              className="text-brand-green underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+            >
               Contact us
             </a>
           </p>

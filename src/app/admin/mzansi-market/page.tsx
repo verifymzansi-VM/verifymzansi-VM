@@ -48,7 +48,7 @@ export default async function AdminMzansiMarketPage() {
     <div className="space-y-6">
       <PageHeader
         title="Mzansi Market"
-        description="Manage verification, content moderation, and flagged reports for Mzansi Market."
+        description="Moderation and reports for Mzansi Market."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Mzansi Market" }]}
       >
         <Badge variant="outline">MZANSI_MARKET</Badge>

@@ -79,7 +79,7 @@ export default async function MetricsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Performance Metrics"
-        description="Track how your listings are performing."
+        description="Track your listing performance."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Metrics" }]}
       />
 
@@ -113,11 +113,10 @@ export default async function MetricsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-48 flex items-center justify-center text-muted-foreground border rounded-lg">
+          <div className="h-32 flex items-center justify-center text-muted-foreground border rounded-lg">
             <div className="text-center">
               <BarChart3 className="h-8 w-8 mx-auto mb-3 opacity-50" />
-              <p className="text-sm">Detailed analytics charts coming soon</p>
-              <p className="text-xs">Track views, leads, and conversion trends over time</p>
+              <p className="text-sm">Analytics charts coming soon</p>
             </div>
           </div>
         </CardContent>

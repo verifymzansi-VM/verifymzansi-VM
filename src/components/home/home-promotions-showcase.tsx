@@ -46,8 +46,8 @@ export async function HomePromotionsShowcase() {
   if (promotions.length === 0) return null;
 
   return (
-    <section className="py-6 sm:py-10 bg-gradient-to-b from-red-50/30 to-white dark:from-red-950/10 dark:to-warm-950">
-      <div className="container-page space-y-6">
+    <section className="py-4 sm:py-6 bg-gradient-to-b from-red-50/30 to-white dark:from-red-950/10 dark:to-warm-950">
+      <div className="container-page space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Megaphone className="h-6 w-6 text-red-500" />

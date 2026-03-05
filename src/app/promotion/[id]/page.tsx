@@ -124,13 +124,13 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
             ]}
           />
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <article className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: Photos + Description */}
             <div className="lg:col-span-2 space-y-6">
               {/* Photo gallery */}
               {photos.length > 0 && (
                 <div className="grid grid-cols-1 gap-2">
-                  <div className="relative aspect-[16/9] rounded-lg overflow-hidden bg-warm-100 dark:bg-warm-800">
+                  <div className="relative aspect-[2/1] rounded-lg overflow-hidden bg-warm-100 dark:bg-warm-800">
                     <Image
                       src={normalizeMediaUrl(photos[0])}
                       alt={promotion.title}
@@ -184,52 +184,56 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
               <Card>
                 <CardContent className="p-6 space-y-3">
                   <h2 className="text-lg font-semibold">Details</h2>
-                  <div className="grid grid-cols-2 gap-y-2 text-sm">
-                    <span className="text-muted-foreground">Type</span>
-                    <span className="font-medium">
+                  <dl className="grid grid-cols-2 gap-y-2 text-sm">
+                    <dt className="text-muted-foreground">Type</dt>
+                    <dd className="font-medium">
                       {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] ||
                         promotion.promotion_type}
-                    </span>
+                    </dd>
 
                     {promotion.category && (
                       <>
-                        <span className="text-muted-foreground">Category</span>
-                        <span className="font-medium">{promotion.category}</span>
+                        <dt className="text-muted-foreground">Category</dt>
+                        <dd className="font-medium">{promotion.category}</dd>
                       </>
                     )}
 
-                    <span className="text-muted-foreground">Location</span>
-                    <span className="font-medium flex items-center gap-1">
+                    <dt className="text-muted-foreground">Location</dt>
+                    <dd className="font-medium flex items-center gap-1">
                       <MapPin className="h-3 w-3" />
                       {promotion.location_city}, {promotion.location_province}
-                    </span>
+                    </dd>
 
                     {promotion.start_date && (
                       <>
-                        <span className="text-muted-foreground">Starts</span>
-                        <span className="font-medium flex items-center gap-1">
+                        <dt className="text-muted-foreground">Starts</dt>
+                        <dd className="font-medium flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(promotion.start_date).toLocaleDateString("en-ZA")}
-                        </span>
+                          <time dateTime={promotion.start_date}>
+                            {new Date(promotion.start_date).toLocaleDateString("en-ZA")}
+                          </time>
+                        </dd>
                       </>
                     )}
 
                     {promotion.end_date && (
                       <>
-                        <span className="text-muted-foreground">Ends</span>
-                        <span className="font-medium flex items-center gap-1">
+                        <dt className="text-muted-foreground">Ends</dt>
+                        <dd className="font-medium flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(promotion.end_date).toLocaleDateString("en-ZA")}
-                        </span>
+                          <time dateTime={promotion.end_date}>
+                            {new Date(promotion.end_date).toLocaleDateString("en-ZA")}
+                          </time>
+                        </dd>
                       </>
                     )}
 
-                    <span className="text-muted-foreground">Views</span>
-                    <span className="font-medium flex items-center gap-1">
+                    <dt className="text-muted-foreground">Views</dt>
+                    <dd className="font-medium flex items-center gap-1">
                       <Eye className="h-3 w-3" />
                       {promotion.view_count || 0}
-                    </span>
-                  </div>
+                    </dd>
+                  </dl>
                 </CardContent>
               </Card>
             </div>
@@ -329,10 +333,13 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
 
               {/* Posted date */}
               <p className="text-xs text-muted-foreground text-center">
-                Posted {new Date(promotion.created_at).toLocaleDateString("en-ZA")}
+                Posted{" "}
+                <time dateTime={promotion.created_at}>
+                  {new Date(promotion.created_at).toLocaleDateString("en-ZA")}
+                </time>
               </p>
             </div>
-          </div>
+          </article>
         </div>
       </main>
 

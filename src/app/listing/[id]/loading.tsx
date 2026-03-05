@@ -2,11 +2,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ListingLoading() {
   return (
-    <div className="container-page py-6 space-y-4">
+    <div className="container-page py-6 space-y-4" aria-busy="true" aria-label="Loading">
       {/* Image gallery skeleton */}
-      <Skeleton className="h-80 w-full rounded-2xl" />
+      <Skeleton className="h-64 w-full rounded-2xl" />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Main content */}
         <div className="lg:col-span-2 space-y-4">
           <Skeleton className="h-8 w-3/4" />

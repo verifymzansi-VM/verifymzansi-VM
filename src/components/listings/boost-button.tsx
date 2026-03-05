@@ -83,7 +83,7 @@ export function BoostButton({ listingId, isBoosted, canBoost, boostApiPath }: Bo
     <Button
       variant="ghost"
       size="icon"
-      className="h-8 w-8 hover:text-brand-blue"
+      className="h-8 w-8 transition-colors hover:text-brand-blue"
       onClick={handleBoost}
       disabled={loading}
       title="Boost this listing (R15 for 7 days)"

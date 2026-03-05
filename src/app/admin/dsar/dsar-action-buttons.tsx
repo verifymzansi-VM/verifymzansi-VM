@@ -12,10 +12,12 @@ interface DsarActionButtonsProps {
 export function DsarActionButtons({ requestId }: DsarActionButtonsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleDecision(decision: "approve" | "reject") {
     setError(null);
+    setSubmitting(true);
 
     try {
       const res = await fetch("/api/admin/dsar/decide", {
@@ -34,10 +36,12 @@ export function DsarActionButtons({ requestId }: DsarActionButtonsProps) {
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  if (isPending) {
+  if (isPending || submitting) {
     return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
   }
 

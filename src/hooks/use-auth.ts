@@ -3,7 +3,10 @@
 import { useEffect, useCallback, useRef } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { createClient } from "@/lib/supabase/client";
+import { createLogger } from "@/lib/utils/logger";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+
+const log = createLogger("useAuth");
 
 /**
  * Hook providing current auth user, profile, role, and loading state.
@@ -56,7 +59,9 @@ export function useAuth() {
         setProfile(sellerProfile);
       }
     } catch (err) {
-      console.error("[useAuth] Failed to fetch user:", err instanceof Error ? err.message : err);
+      log.error("Failed to fetch user", {
+        error: err instanceof Error ? err.message : String(err),
+      });
       reset();
     } finally {
       setLoading(false);
@@ -101,7 +106,7 @@ export function useAuth() {
     try {
       await supabase.auth.signOut();
     } catch (err) {
-      console.error("[useAuth] Sign-out failed:", err instanceof Error ? err.message : err);
+      log.error("Sign-out failed", { error: err instanceof Error ? err.message : String(err) });
     }
     reset();
     window.location.href = "/";

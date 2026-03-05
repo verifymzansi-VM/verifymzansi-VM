@@ -1,4 +1,7 @@
 import type enMessages from "./messages/en.json";
+import { createLogger } from "@/lib/utils/logger";
+
+const logger = createLogger("i18n");
 
 /** Supported locales */
 export const locales = ["en", "zu", "af"] as const;
@@ -65,7 +68,7 @@ export function resolveKey(
 
   if (typeof value !== "string") {
     if (process.env.NODE_ENV === "development") {
-      console.warn(`[i18n] Missing translation key: "${key}"`);
+      logger.warn(`Missing translation key: "${key}"`);
     }
     return key;
   }

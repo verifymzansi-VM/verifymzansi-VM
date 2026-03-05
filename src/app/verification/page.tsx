@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
@@ -118,7 +119,7 @@ export default function VerificationPage() {
   }>({});
 
   const { toast } = useToast();
-  const router = useRouter();
+  const _router = useRouter();
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
 
@@ -609,7 +610,7 @@ export default function VerificationPage() {
               breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Verification" }]}
             />
 
-            <Card className="border-warm-200/70 bg-background/95">
+            <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
               <CardContent className="space-y-3 p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">Wizard 2.0 progress</p>
@@ -625,7 +626,7 @@ export default function VerificationPage() {
             </Card>
 
             {step === "phone" && (
-              <Card className="border-warm-200/70 bg-background/95">
+              <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base font-display">
                     <Phone className="h-5 w-5 text-brand-green" />
@@ -661,7 +662,7 @@ export default function VerificationPage() {
                   )}
 
                   {otpSent && !phoneVerified && (
-                    <div className="space-y-3 rounded-md border border-warm-200/70 p-3">
+                    <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
                       {process.env.NODE_ENV === "development" && devOtpHint && (
                         <p className="text-xs text-muted-foreground">
                           Dev OTP: <span className="font-mono font-semibold">{devOtpHint}</span>
@@ -696,7 +697,7 @@ export default function VerificationPage() {
             )}
 
             {step === "id_doc" && (
-              <Card className="border-warm-200/70 bg-background/95">
+              <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base font-display">
                     <FileCheck className="h-5 w-5 text-brand-blue" />
@@ -759,7 +760,7 @@ export default function VerificationPage() {
                   </div>
 
                   {idFile && (
-                    <div className="rounded-md border border-warm-200/70 p-3 text-xs text-muted-foreground">
+                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3 text-xs text-muted-foreground">
                       {idFile.name} ({formatFileSize(idFile.size)})
                     </div>
                   )}
@@ -793,7 +794,7 @@ export default function VerificationPage() {
             )}
 
             {step === "selfie" && (
-              <Card className="border-warm-200/70 bg-background/95">
+              <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base font-display">
                     <Camera className="h-5 w-5 text-brand-gold" />
@@ -820,7 +821,7 @@ export default function VerificationPage() {
                   </div>
 
                   {selfieFile && (
-                    <div className="rounded-md border border-warm-200/70 p-3 text-xs text-muted-foreground">
+                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3 text-xs text-muted-foreground">
                       {selfieFile.name} ({formatFileSize(selfieFile.size)})
                     </div>
                   )}
@@ -855,7 +856,7 @@ export default function VerificationPage() {
 
             {step === "location" && (
               <div className="grid gap-6 lg:grid-cols-5">
-                <Card className="border-warm-200/70 bg-background/95 lg:col-span-3">
+                <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95 lg:col-span-3">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base font-display">
                       <MapPin className="h-5 w-5 text-brand-red" />
@@ -919,7 +920,7 @@ export default function VerificationPage() {
 
                     {/* GPS location capture (v2 flow) */}
                     {useV2Flow && gpsFeatureAvailable && province && city && (
-                      <div className="space-y-3 rounded-md border border-warm-200/70 p-4">
+                      <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-4">
                         <h4 className="flex items-center gap-2 text-sm font-medium">
                           <Navigation className="h-4 w-4 text-brand-blue" />
                           GPS Location Verification
@@ -959,7 +960,7 @@ export default function VerificationPage() {
                                   gpsConfidence === "high"
                                     ? "border-brand-green/30 bg-brand-green-50 text-brand-green-900"
                                     : gpsConfidence === "medium"
-                                      ? "border-yellow-300 bg-yellow-50 text-yellow-900"
+                                      ? "border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-950 text-yellow-900 dark:text-yellow-100"
                                       : "border-destructive/30 bg-destructive/5 text-destructive"
                                 }`}
                               >
@@ -992,7 +993,7 @@ export default function VerificationPage() {
                       (gpsStatus === "denied" ||
                         gpsStatus === "error" ||
                         locationMode === "proof") && (
-                        <div className="space-y-3 rounded-md border border-warm-200/70 p-4">
+                        <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-4">
                           <h4 className="flex items-center gap-2 text-sm font-medium">
                             <Upload className="h-4 w-4 text-brand-gold" />
                             Proof of Address (Alternative)
@@ -1068,12 +1069,12 @@ export default function VerificationPage() {
                   </CardContent>
                 </Card>
 
-                <Card className="border-warm-200/70 bg-background/95 lg:col-span-2">
+                <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95 lg:col-span-2">
                   <CardHeader>
                     <CardTitle className="text-base font-display">Final Review</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <div className="rounded-md border border-warm-200/70 p-3">
+                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
                       <p className="font-medium">Phone</p>
                       {phoneVerified ? (
                         <div className="mt-1 flex items-center gap-1 text-brand-green">
@@ -1088,7 +1089,7 @@ export default function VerificationPage() {
                       )}
                     </div>
 
-                    <div className="rounded-md border border-warm-200/70 p-3">
+                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
                       <p className="font-medium">ID Document</p>
                       {uploadReceipts.id_doc ? (
                         <p className="mt-1 text-muted-foreground">
@@ -1105,7 +1106,7 @@ export default function VerificationPage() {
                       )}
                     </div>
 
-                    <div className="rounded-md border border-warm-200/70 p-3">
+                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
                       <p className="font-medium">Selfie</p>
                       {uploadReceipts.selfie ? (
                         <p className="mt-1 text-muted-foreground">
@@ -1116,7 +1117,7 @@ export default function VerificationPage() {
                       )}
                     </div>
 
-                    <div className="rounded-md border border-warm-200/70 p-3">
+                    <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
                       <p className="font-medium">Location</p>
                       {locationMode === "gps" ? (
                         <div className="mt-1 flex items-center gap-1 text-brand-green">
@@ -1146,21 +1147,19 @@ export default function VerificationPage() {
 
             {step === "complete" && (
               <Card className="border-brand-green/40 bg-brand-green-50/30 dark:bg-brand-green-950/30">
-                <CardContent className="space-y-4 py-8 text-center">
-                  <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand-green-100 text-brand-green dark:bg-brand-green-900">
-                    <ShieldCheck className="h-6 w-6" />
+                <CardContent className="space-y-3 py-6 text-center">
+                  <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-green-100 text-brand-green dark:bg-brand-green-900">
+                    <ShieldCheck className="h-5 w-5" />
                   </div>
-                  <h2 className="font-display text-2xl font-bold">Verification Submitted</h2>
-                  <p className="mx-auto max-w-sm text-muted-foreground">
-                    Your details are in review. We will update your status soon.
+                  <h2 className="font-display text-xl font-bold">Verification Submitted</h2>
+                  <p className="mx-auto max-w-sm text-sm text-muted-foreground">
+                    Your details are under review.
                   </p>
-                  <Button
-                    variant="trust-verified"
-                    onClick={() => router.push("/dashboard")}
-                    className="gap-2"
-                  >
-                    Go to Dashboard
-                    <ArrowRight className="h-4 w-4" />
+                  <Button variant="trust-verified" asChild className="gap-2">
+                    <Link href="/dashboard">
+                      Go to Dashboard
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
                   </Button>
                 </CardContent>
               </Card>

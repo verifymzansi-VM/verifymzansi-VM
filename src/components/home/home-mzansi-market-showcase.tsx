@@ -26,7 +26,7 @@ export async function HomeMzansiMarketShowcase() {
   if (items.length === 0) return null;
 
   return (
-    <section className="py-6 sm:py-8 bg-brand-green-50/30 dark:bg-brand-green-950/20">
+    <section className="py-4 sm:py-6 bg-brand-green-50/30 dark:bg-brand-green-950/20">
       <div className="container-page space-y-4 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div className="space-y-1">
@@ -34,7 +34,7 @@ export async function HomeMzansiMarketShowcase() {
               Latest on Mzansi Market
             </h2>
             <p className="text-muted-foreground text-sm sm:text-base max-w-2xl">
-              Great deals on vehicles, property, electronics, and more from verified individuals.
+              Deals on vehicles, property, electronics & more from verified sellers.
             </p>
           </div>
           <Link href="/mzansi-market" className="shrink-0">

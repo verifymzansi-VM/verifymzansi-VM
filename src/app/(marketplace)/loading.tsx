@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function MarketplaceLoading() {
   return (
-    <div className="space-y-0">
+    <div className="space-y-0" aria-busy="true" aria-label="Loading">
       {/* Showroom hero skeleton — full width */}
       <div className="relative w-full aspect-[21/9] md:aspect-[3/1] bg-warm-100 dark:bg-warm-900">
         <div className="absolute inset-0 flex items-end p-6 md:p-10">
@@ -35,7 +35,7 @@ export default function MarketplaceLoading() {
 
         {/* Grid skeleton */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
+          {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
               className="rounded-xl border border-warm-200 dark:border-warm-700 p-3 space-y-3"

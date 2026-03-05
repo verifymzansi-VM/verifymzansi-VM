@@ -9,12 +9,11 @@ export default function NotFound() {
     <div className="flex min-h-screen flex-col">
       <Header />
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4 text-center">
-        <Search className="h-10 w-10 text-muted-foreground" />
+        <Search className="h-8 w-8 text-muted-foreground" />
         <div className="space-y-2">
-          <h1 className="text-3xl font-display font-bold">404 — Page Not Found</h1>
+          <h1 className="text-2xl font-display font-bold">404 — Page Not Found</h1>
           <p className="text-muted-foreground max-w-md">
-            The page you&apos;re looking for doesn&apos;t exist or has been moved. Try searching the
-            marketplace or head back home.
+            This page doesn&apos;t exist or has been moved.
           </p>
         </div>
         <div className="flex gap-3">

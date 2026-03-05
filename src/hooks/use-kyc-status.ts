@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("useKycStatus");
 
 interface KycStep {
   id: string;
@@ -64,10 +67,9 @@ export function useKycStatus() {
         setStatus(hasPending ? "pending" : "unverified");
       }
     } catch (err) {
-      console.error(
-        "[useKycStatus] Failed to fetch KYC status:",
-        err instanceof Error ? err.message : err
-      );
+      log.error("Failed to fetch KYC status", {
+        error: err instanceof Error ? err.message : String(err),
+      });
       setStatus("unverified");
     } finally {
       setIsLoading(false);

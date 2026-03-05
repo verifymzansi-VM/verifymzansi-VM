@@ -18,38 +18,34 @@ const STEPS = [
   {
     id: "welcome",
     title: "Welcome to VerifyMzansi",
-    description:
-      "South Africa's verification-first marketplace. Let's get you set up to buy and sell with confidence.",
+    description: "SA's trusted marketplace. Let's get you set up.",
     icon: ShieldCheck,
   },
   {
     id: "profile",
     title: "Complete Your Profile",
-    description:
-      "Add your display name and profile picture so buyers know who they're dealing with.",
+    description: "Add your display name and profile picture.",
     icon: UserCircle,
     action: "/dashboard/settings",
   },
   {
     id: "verify",
     title: "Verify Your Identity",
-    description:
-      "Complete KYC verification with your South African ID. This builds trust and unlocks selling privileges.",
+    description: "Verify your SA ID to unlock selling.",
     icon: Camera,
     action: "/verification",
   },
   {
     id: "location",
     title: "Set Your Location",
-    description: "Add your province and city so buyers can find listings near them.",
+    description: "Set your province and city.",
     icon: MapPin,
     action: "/dashboard/settings",
   },
   {
     id: "done",
     title: "You're All Set!",
-    description:
-      "You can now browse the marketplace. Once verified, you'll be able to create listings and start selling.",
+    description: "Browse the marketplace. Verify to start selling.",
     icon: CheckCircle2,
     action: "/mzansi-market",
   },
@@ -90,9 +86,9 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
   const Icon = step.icon;
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-8">
+    <div className="mx-auto max-w-lg px-4 py-6">
       {/* Progress indicator */}
-      <div className="mb-6 flex items-center justify-center gap-2">
+      <div className="mb-4 flex items-center justify-center gap-2">
         {STEPS.map((_, i) => (
           <div
             key={i}
@@ -110,11 +106,11 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
 
       {/* Step content */}
       <div className="flex flex-col items-center text-center">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-green/10">
-          <Icon className="h-8 w-8 text-brand-green" />
+        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-green/10">
+          <Icon className="h-6 w-6 text-brand-green" />
         </div>
 
-        <h2 className="text-2xl font-display font-bold">{step.title}</h2>
+        <h2 className="text-xl font-display font-bold">{step.title}</h2>
         <p className="mt-3 max-w-sm text-muted-foreground">{step.description}</p>
 
         {/* Action button (for steps with a destination) */}

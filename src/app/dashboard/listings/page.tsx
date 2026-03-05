@@ -3,7 +3,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, Eye, Pencil, XCircle } from "lucide-react";
+import { Plus, Eye, Pencil, XCircle, Package } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -77,7 +77,7 @@ export default async function ListingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="My Listings"
-        description="Manage your classified ads across all marketplace areas."
+        description="Manage your marketplace ads."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Listings" }]}
       >
         <Button asChild variant="trust-verified" size="sm" className="gap-2">
@@ -135,8 +135,9 @@ type BaseListing = {
 function RejectedListingList({ listings }: { listings: BaseListing[] }) {
   if (!listings.length) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
-        <p>No rejected listings.</p>
+      <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+        <XCircle className="h-8 w-8 opacity-30" />
+        <p>No rejected listings — keep up the good work!</p>
       </div>
     );
   }
@@ -158,7 +159,7 @@ function RejectedListingList({ listings }: { listings: BaseListing[] }) {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-xs text-warm-400">
+                  <div className="flex items-center justify-center h-full text-xs text-warm-400 dark:text-warm-500">
                     No img
                   </div>
                 )}
@@ -266,8 +267,14 @@ function ListingList({
 }) {
   if (!listings.length) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
+      <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+        <Package className="h-8 w-8 opacity-30" />
         <p>No listings in this category.</p>
+        <Link href="/dashboard/listings/create">
+          <Button size="sm" variant="outline" className="mt-1">
+            <Plus className="h-4 w-4 mr-1" /> Create Listing
+          </Button>
+        </Link>
       </div>
     );
   }
@@ -288,7 +295,7 @@ function ListingList({
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="flex items-center justify-center h-full text-xs text-warm-400">
+                <div className="flex items-center justify-center h-full text-xs text-warm-400 dark:text-warm-500">
                   No img
                 </div>
               )}

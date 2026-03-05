@@ -81,14 +81,10 @@ export default function ContactPage() {
       <Header />
 
       <main id="main-content" className="flex-1">
-        <div className="container-page py-6 space-y-6">
-          <PageHeader
-            title="Contact Us"
-            description="Send us a message and our team will get back to you."
-            breadcrumbs={[{ label: "Contact" }]}
-          />
+        <div className="container-page py-4 space-y-4">
+          <PageHeader title="Contact Us" breadcrumbs={[{ label: "Contact" }]} />
 
-          <div className="mx-auto max-w-2xl">
+          <div className="mx-auto max-w-lg">
             {isSubmitted ? (
               <Card>
                 <CardContent className="p-6 text-center space-y-3">
@@ -118,7 +114,12 @@ export default function ContactPage() {
                   <CardTitle>Send a Message</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <form data-testid="contact-form" onSubmit={handleSubmit} className="space-y-5">
+                  <form
+                    noValidate
+                    data-testid="contact-form"
+                    onSubmit={handleSubmit}
+                    className="space-y-3"
+                  >
                     <div className="space-y-2">
                       <Label htmlFor="name">Name *</Label>
                       <Input
@@ -131,6 +132,8 @@ export default function ContactPage() {
                         }}
                         required
                         placeholder="Your full name"
+                        autoComplete="name"
+                        autoCapitalize="words"
                         aria-invalid={!!fieldErrors.name}
                         aria-describedby={fieldErrors.name ? "name-error" : undefined}
                       />
@@ -154,6 +157,9 @@ export default function ContactPage() {
                         }}
                         required
                         placeholder="you@example.com"
+                        autoComplete="email"
+                        spellCheck={false}
+                        autoCapitalize="none"
                         aria-invalid={!!fieldErrors.email}
                         aria-describedby={fieldErrors.email ? "email-error" : undefined}
                       />
@@ -175,8 +181,8 @@ export default function ContactPage() {
                           if (fieldErrors.message) setFieldErrors((p) => ({ ...p, message: "" }));
                         }}
                         required
-                        rows={5}
-                        className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        rows={3}
+                        className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         placeholder="How can we help?"
                         aria-describedby={fieldErrors.message ? "message-error" : undefined}
                       />

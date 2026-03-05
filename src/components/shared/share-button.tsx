@@ -48,7 +48,7 @@ export function ShareButton({
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
-      toast({ title: "Link copied to clipboard!" });
+      toast({ title: "Link copied to clipboard!", variant: "success" });
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast({

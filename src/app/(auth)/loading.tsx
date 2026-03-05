@@ -2,7 +2,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AuthLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div
+      className="flex min-h-screen items-center justify-center p-4"
+      aria-busy="true"
+      aria-label="Loading"
+    >
       <div className="w-full max-w-md space-y-4">
         <div className="text-center space-y-2">
           <Skeleton className="h-10 w-10 rounded-full mx-auto" />

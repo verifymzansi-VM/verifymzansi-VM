@@ -23,8 +23,8 @@ const LABELS: Record<TrustLevel, string> = {
 };
 
 const COLOR_MAP: Record<TrustLevel, string> = {
-  0: "text-warm-400",
-  1: "text-warm-500",
+  0: "text-warm-400 dark:text-warm-500",
+  1: "text-warm-500 dark:text-warm-400",
   2: "text-brand-gold",
   3: "text-brand-green",
   4: "text-brand-gold",

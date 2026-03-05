@@ -83,4 +83,20 @@ describe("POST /api/auth/login", () => {
     expect(result.error).toBeNull();
     expect(result.data.user.id).toBe("user-1");
   });
+
+  it("should surface email-not-confirmed as a distinct error", async () => {
+    const { mockSignIn } = mockAuth(null);
+    mockSignIn.mockResolvedValue({
+      data: { user: null, session: null },
+      error: { message: "Email not confirmed", status: 400 },
+    });
+
+    const client = await mockCreateClient();
+    const result = await client.auth.signInWithPassword({
+      email: "unconfirmed@test.com",
+      password: "validPass123",
+    });
+    expect(result.error).toBeTruthy();
+    expect(result.error.message).toBe("Email not confirmed");
+  });
 });

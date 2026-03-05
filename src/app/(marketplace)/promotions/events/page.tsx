@@ -75,7 +75,7 @@ export default async function EventsPage() {
     <div className="container mx-auto px-4 py-6 space-y-6 max-w-7xl">
       <PageHeader
         title="Events"
-        description="Upcoming events, gatherings, and happenings from verified businesses across South Africa."
+        description="Upcoming events from verified businesses."
         breadcrumbs={[
           { label: "Home", href: "/" },
           { label: "Promotions & Events", href: "/promotions" },
@@ -130,18 +130,25 @@ export default async function EventsPage() {
                     <div className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
                       <Clock className="h-3 w-3" />
                       <span>
-                        {new Date(event.start_date).toLocaleDateString("en-ZA", {
-                          weekday: "short",
-                          day: "numeric",
-                          month: "short",
-                        })}
-                        {event.end_date &&
-                          event.end_date !== event.start_date &&
-                          ` \u2013 ${new Date(event.end_date).toLocaleDateString("en-ZA", {
+                        <time dateTime={event.start_date}>
+                          {new Date(event.start_date).toLocaleDateString("en-ZA", {
                             weekday: "short",
                             day: "numeric",
                             month: "short",
-                          })}`}
+                          })}
+                        </time>
+                        {event.end_date && event.end_date !== event.start_date && (
+                          <>
+                            {" \u2013 "}
+                            <time dateTime={event.end_date}>
+                              {new Date(event.end_date).toLocaleDateString("en-ZA", {
+                                weekday: "short",
+                                day: "numeric",
+                                month: "short",
+                              })}
+                            </time>
+                          </>
+                        )}
                       </span>
                     </div>
                   )}

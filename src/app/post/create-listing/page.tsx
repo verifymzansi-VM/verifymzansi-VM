@@ -240,7 +240,7 @@ export default function CreateListingPage() {
         return;
       }
 
-      toast({ title: "Listing submitted for review!" });
+      toast({ title: "Listing submitted for review!", variant: "success" });
       router.push("/dashboard/listings");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
@@ -339,19 +339,20 @@ export default function CreateListingPage() {
 
             <PlanGate area="MZANSI_MARKET">
               {/* ── Progress Steps ──────────────────────────────────── */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between">
+              <nav className="mb-4" aria-label="Listing creation steps">
+                <ol className="flex items-center justify-between">
                   {STEPS.map((s, i) => {
                     const Icon = s.icon;
                     const isCompleted = i < step;
                     const isCurrent = i === step;
                     return (
-                      <div key={s.label} className="flex items-center flex-1 last:flex-initial">
+                      <li key={s.label} className="flex items-center flex-1 last:flex-initial">
                         <button
                           type="button"
                           onClick={() => {
                             if (i < step) setStep(i);
                           }}
+                          aria-current={isCurrent ? "step" : undefined}
                           className={cn(
                             "flex items-center gap-2 text-sm font-medium transition-colors",
                             isCurrent && "text-brand-green",
@@ -389,13 +390,14 @@ export default function CreateListingPage() {
                               "flex-1 h-0.5 mx-3 rounded-full transition-colors duration-300",
                               i < step ? "bg-brand-green" : "bg-muted"
                             )}
+                            aria-hidden="true"
                           />
                         )}
-                      </div>
+                      </li>
                     );
                   })}
-                </div>
-              </div>
+                </ol>
+              </nav>
 
               <Card>
                 <CardHeader>
@@ -407,7 +409,7 @@ export default function CreateListingPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-5">
+                  <form noValidate onSubmit={handleSubmit} className="space-y-5">
                     {/* ═══════════════════════════════════════════════════
                                     STEP 0: Details
                        ═══════════════════════════════════════════════════ */}
@@ -489,6 +491,7 @@ export default function CreateListingPage() {
                               <Input
                                 id="price"
                                 type="number"
+                                inputMode="decimal"
                                 min="0"
                                 step="0.01"
                                 value={price}
@@ -500,6 +503,7 @@ export default function CreateListingPage() {
                             </div>
                             <button
                               type="button"
+                              aria-pressed={negotiable}
                               onClick={() => setNegotiable((v) => !v)}
                               className={cn(
                                 "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-all",
@@ -588,7 +592,11 @@ export default function CreateListingPage() {
                         <div className="space-y-3">
                           <Label className="text-base font-semibold">Contact Methods *</Label>
                           <p className="text-xs text-muted-foreground">How can buyers reach you?</p>
-                          <div className="grid grid-cols-3 gap-2">
+                          <div
+                            role="group"
+                            aria-label="Contact methods"
+                            className="grid grid-cols-3 gap-2"
+                          >
                             {CONTACT_OPTIONS.map((opt) => {
                               const Icon = opt.icon;
                               const isSelected = contactMethods.includes(opt.id);
@@ -596,6 +604,7 @@ export default function CreateListingPage() {
                                 <button
                                   key={opt.id}
                                   type="button"
+                                  aria-pressed={isSelected}
                                   onClick={() => toggleContact(opt.id)}
                                   className={cn(
                                     "flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all",

@@ -63,18 +63,14 @@ export default async function MzansiBusinessPage() {
       <ShowroomHero
         slides={slides}
         fallbackTitle="Mzansi Business"
-        fallbackDescription="Discover verified South African businesses — shops, services, mobile providers, and more."
+        fallbackDescription="Discover verified South African businesses and services."
       />
 
       <TrustStrip variant="blue" />
 
       {/* ── Main Content ─────────────────────────────────── */}
       <div className="container-page py-6 space-y-4">
-        <PageHeader
-          title="Mzansi Business"
-          description="Browse verified businesses across South Africa — shops, services, and more."
-          breadcrumbs={[{ label: "Mzansi Business" }]}
-        />
+        <PageHeader title="Mzansi Business" breadcrumbs={[{ label: "Mzansi Business" }]} />
 
         <BusinessCategoryStrip categoryCounts={categoryCounts} />
 

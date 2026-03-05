@@ -37,7 +37,7 @@ export function MallCard({
     <Link href={`/mall-shops/${id}`} className="group block h-full">
       <Card className="h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-brand-gold/20 hover:border-brand-gold/60 flex flex-col">
         {/* Banner Image / Video */}
-        <div className="relative h-40 sm:h-48 bg-gradient-to-br from-brand-gold-50 to-brand-gold-100 dark:from-brand-gold-950 dark:to-brand-gold-900 overflow-hidden shrink-0">
+        <div className="relative h-36 sm:h-40 bg-gradient-to-br from-brand-gold-50 to-brand-gold-100 dark:from-brand-gold-950 dark:to-brand-gold-900 overflow-hidden shrink-0">
           {normalizedCoverPhoto ? (
             isVideo ? (
               <VideoCardPlayer
@@ -58,7 +58,7 @@ export function MallCard({
             )
           ) : (
             <div className="absolute inset-0 flex items-center justify-center opacity-10">
-              <Building2 className="w-16 h-16" />
+              <Building2 className="w-12 h-12" />
             </div>
           )}
 

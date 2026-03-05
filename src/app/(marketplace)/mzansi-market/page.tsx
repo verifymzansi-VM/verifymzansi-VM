@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
 import { PageHeader } from "@/components/layout/page-header";
@@ -10,10 +12,15 @@ import { MzansiMarketGrid } from "./grid";
 import { MarketplaceUrlFilterSync } from "./url-filter-sync";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 
-export const metadata = {
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
+
+export const metadata: Metadata = {
   title: "Mzansi Market",
   description:
     "Browse verified classified ads for property, cars, electronics and more across South Africa.",
+  alternates: {
+    canonical: `${BASE_URL}/mzansi-market`,
+  },
 };
 
 /** Revalidate marketplace data every 60 seconds (ISR) */
@@ -58,24 +65,22 @@ export default async function MzansiMarketPage() {
 
   return (
     <div className="space-y-0">
-      <MarketplaceUrlFilterSync />
+      <Suspense fallback={null}>
+        <MarketplaceUrlFilterSync />
+      </Suspense>
 
       {/* ── Dynamic Showroom Hero ──────────────────────────────────── */}
       <ShowroomHero
         slides={slides}
         fallbackTitle="Mzansi Market Showroom"
-        fallbackDescription="An exclusive showroom for classified ads. Browse products and items natively listed on Mzansi Market by identity-verified sellers."
+        fallbackDescription="Browse classified ads from identity-verified sellers."
       />
 
       <TrustStrip variant="green" />
 
       {/* ── Main Content ─────────────────────────────────── */}
       <div className="container-page py-6 space-y-4">
-        <PageHeader
-          title="Browse Listings"
-          description="Find great deals from verified sellers across South Africa."
-          breadcrumbs={[{ label: "Mzansi Market" }]}
-        />
+        <PageHeader title="Browse Listings" breadcrumbs={[{ label: "Mzansi Market" }]} />
 
         {/* Category pills */}
         <CategoryStrip />

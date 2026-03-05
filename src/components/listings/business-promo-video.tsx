@@ -53,25 +53,27 @@ export function BusinessPromoVideo({
             playsInline
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
-            className="w-full max-h-[480px] object-contain"
+            className="w-full max-h-[400px] object-contain"
             aria-label={`${businessName} promo video`}
           />
 
           {/* Play overlay — shown when paused and no autoplay */}
           {!isPlaying && (
             <button
+              type="button"
               onClick={handlePlay}
               className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity hover:bg-black/40"
               aria-label="Play video"
             >
-              <div className="rounded-full bg-white/90 p-4 shadow-lg">
-                <Play className="h-8 w-8 text-black fill-black" />
+              <div className="rounded-full bg-white/90 p-3 shadow-lg">
+                <Play className="h-6 w-6 text-black fill-black" />
               </div>
             </button>
           )}
 
           {/* Mute/Unmute button */}
           <button
+            type="button"
             onClick={toggleMute}
             className="absolute bottom-3 right-3 rounded-full bg-black/60 p-2 text-white hover:bg-black/80 transition-colors backdrop-blur-sm"
             aria-label={isMuted ? "Unmute" : "Mute"}

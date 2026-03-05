@@ -193,8 +193,13 @@ function CreateBusinessContent() {
       if (!uploadRes.ok) throw new Error("Upload failed");
       const uploadJson = await uploadRes.json();
       return uploadJson.urls || [];
-    } catch (e) {
-      console.error("Upload error:", e);
+    } catch {
+      toast({
+        title: "Some media failed to upload",
+        description:
+          "Your business will be saved without the failed files. You can re-upload them later.",
+        variant: "destructive",
+      });
       return [];
     }
   }
@@ -300,7 +305,7 @@ function CreateBusinessContent() {
         return;
       }
 
-      toast({ title: "Business created successfully!" });
+      toast({ title: "Business created successfully!", variant: "success" });
       router.push("/dashboard/businesses");
     } catch (e: unknown) {
       toast({
@@ -319,7 +324,7 @@ function CreateBusinessContent() {
 
       <main className="flex-1">
         <div className="container-page py-6">
-          <div className="max-w-3xl mx-auto space-y-6">
+          <div className="max-w-3xl mx-auto space-y-5">
             <PageHeader
               title="Create a Business"
               description="Set up your Mzansi Business profile on VerifyMzansi."
@@ -335,17 +340,16 @@ function CreateBusinessContent() {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-brand-blue">
                   <Info className="h-5 w-5" />
-                  What is Mzansi Business?
+                  Mzansi Business Profile
                 </CardTitle>
                 <CardDescription className="text-foreground/80">
-                  Create your professional business profile and connect with customers across South
-                  Africa.
+                  Showcase your brand and connect with customers.
                 </CardDescription>
               </CardHeader>
             </Card>
 
             <PlanGate area="MZANSI_BUSINESS">
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form noValidate onSubmit={handleSubmit} className="space-y-5">
                 {/* 1. Business Type */}
                 <Card>
                   <CardHeader>
@@ -355,7 +359,11 @@ function CreateBusinessContent() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div
+                      role="radiogroup"
+                      aria-label="Business type"
+                      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+                    >
                       {BUSINESS_TYPE_OPTIONS.map((option) => {
                         const Icon = option.icon;
                         const isSelected = businessType === option.value;
@@ -363,6 +371,8 @@ function CreateBusinessContent() {
                           <button
                             key={option.value}
                             type="button"
+                            role="radio"
+                            aria-checked={isSelected}
                             onClick={() => setBusinessType(option.value)}
                             className={`p-4 rounded-lg border-2 text-left transition-all ${
                               isSelected
@@ -390,12 +400,9 @@ function CreateBusinessContent() {
                     <Card>
                       <CardHeader>
                         <CardTitle className="text-lg">Branding & Media</CardTitle>
-                        <CardDescription>
-                          Upload your brand assets to stand out. High-quality visuals attract more
-                          customers.
-                        </CardDescription>
+                        <CardDescription>Upload brand assets to stand out.</CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-6">
+                      <CardContent className="space-y-5">
                         {/* Logo & Cover Row */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <MediaUpload
@@ -713,7 +720,7 @@ function CreateBusinessContent() {
                         <CardTitle className="text-lg">Contact & Social Media</CardTitle>
                         <CardDescription>How customers can reach you.</CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-6">
+                      <CardContent className="space-y-5">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="phone" className="flex items-center gap-2">
@@ -721,6 +728,7 @@ function CreateBusinessContent() {
                             </Label>
                             <Input
                               id="phone"
+                              autoComplete="tel"
                               value={phone}
                               onChange={(e) => setPhone(e.target.value)}
                               placeholder="082 000 0000"
@@ -732,6 +740,7 @@ function CreateBusinessContent() {
                             </Label>
                             <Input
                               id="whatsapp"
+                              autoComplete="tel"
                               value={whatsapp}
                               onChange={(e) => setWhatsapp(e.target.value)}
                               placeholder="082 000 0000"
@@ -744,6 +753,9 @@ function CreateBusinessContent() {
                             <Input
                               id="email"
                               type="email"
+                              autoComplete="email"
+                              spellCheck={false}
+                              autoCapitalize="none"
                               value={email}
                               onChange={(e) => setEmail(e.target.value)}
                               placeholder="contact@business.co.za"
@@ -753,6 +765,7 @@ function CreateBusinessContent() {
                             <Label htmlFor="website">Website</Label>
                             <Input
                               id="website"
+                              autoComplete="url"
                               value={website}
                               onChange={(e) => setWebsite(e.target.value)}
                               placeholder="https://www.yourbusiness.co.za"
@@ -877,7 +890,7 @@ function CreateBusinessContent() {
                           Help customers understand your offering better.
                         </CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-6">
+                      <CardContent className="space-y-5">
                         {/* Services Offered */}
                         <div className="space-y-3">
                           <Label className="flex items-center gap-2">

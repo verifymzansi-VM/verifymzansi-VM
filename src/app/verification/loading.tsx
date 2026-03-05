@@ -2,7 +2,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function VerificationLoading() {
   return (
-    <div className="container-page py-6 space-y-4 max-w-2xl mx-auto">
+    <div
+      className="container-page py-6 space-y-4 max-w-2xl mx-auto"
+      aria-busy="true"
+      aria-label="Loading"
+    >
       <div className="text-center space-y-2">
         <Skeleton className="h-10 w-10 rounded-full mx-auto" />
         <Skeleton className="h-7 w-48 mx-auto" />

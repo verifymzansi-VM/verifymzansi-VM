@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, RefreshCw } from "lucide-react";
+import { Loader2, Eye, EyeOff, RefreshCw, MailCheck, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,45 +20,14 @@ export default function LoginPage() {
   const [turnstileError, setTurnstileError] = useState(false);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [justRegistered, setJustRegistered] = useState(false);
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
+  const [resendingEmail, setResendingEmail] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const { toast } = useToast();
-
-  // Read query params client-side to avoid useSearchParams + Suspense,
-  // ensuring the full form renders on first paint for Playwright assertions.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const error = params.get("error");
-    if (error === "auth_callback_failed") {
-      toast({
-        title: "Authentication failed",
-        description: "Your sign-in link has expired or is invalid. Please try again.",
-        variant: "destructive",
-      });
-    } else if (error === "auth_unavailable") {
-      toast({
-        title: "Service temporarily unavailable",
-        description: "Authentication is currently unavailable. Please try again shortly.",
-        variant: "destructive",
-      });
-    }
-  }, [toast]);
-
-  // Turnstile widget load timeout — show error if it doesn't load in 15s
-  // Skip in dev mode (dummy keys) since the widget auto-bypasses.
-  const isTurnstileDev =
-    !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY === "dummy_site_key";
-
-  useEffect(() => {
-    if (isTurnstileDev || turnstileLoaded) return;
-    timeoutRef.current = setTimeout(() => {
-      setTurnstileError(true);
-    }, 15000);
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, [isTurnstileDev, turnstileLoaded, retryKey]);
 
   const {
     register,
@@ -73,6 +42,57 @@ export default function LoginPage() {
       turnstileToken: "",
     },
   });
+
+  // Read query params client-side to avoid useSearchParams + Suspense,
+  // ensuring the full form renders on first paint for Playwright assertions.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("registered") === "true") {
+      setJustRegistered(true);
+    }
+    if (params.get("confirmed") === "true") {
+      setEmailConfirmed(true);
+    }
+    // Pre-fill email from query param (e.g. after registration redirect)
+    const emailParam = params.get("email");
+    if (emailParam) {
+      setValue("email", emailParam);
+      setRegisteredEmail(emailParam);
+    }
+    const error = params.get("error");
+    if (error === "auth_callback_failed") {
+      toast({
+        title: "Authentication failed",
+        description: "Your sign-in link has expired or is invalid. Please try again.",
+        variant: "destructive",
+      });
+    } else if (error === "auth_unavailable") {
+      toast({
+        title: "Service temporarily unavailable",
+        description: "Authentication is currently unavailable. Please try again shortly.",
+        variant: "destructive",
+      });
+    }
+  }, [toast, setValue]);
+
+  // Turnstile widget load timeout — show error if it doesn't load in 15s.
+  // Skip in dev/test environments where the widget may be slow or unavailable,
+  // and in dev mode (dummy keys) since the widget auto-bypasses.
+  const isTurnstileDev =
+    !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY === "dummy_site_key";
+
+  const skipTurnstileTimeout = isTurnstileDev || process.env.NODE_ENV !== "production";
+
+  useEffect(() => {
+    if (skipTurnstileTimeout || turnstileLoaded) return;
+    timeoutRef.current = setTimeout(() => {
+      setTurnstileError(true);
+    }, 15000);
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [skipTurnstileTimeout, turnstileLoaded, retryKey]);
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
@@ -106,7 +126,42 @@ export default function LoginPage() {
     setRetryKey((k) => k + 1);
   }, [setValue]);
 
+  async function handleResendConfirmation() {
+    const email = document.querySelector<HTMLInputElement>("#email")?.value;
+    if (!email) {
+      toast({
+        title: "Enter your email",
+        description: "Please enter your email address in the field above, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setResendingEmail(true);
+    try {
+      const res = await fetch("/api/auth/resend-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      toast({
+        title: "Confirmation email sent",
+        description: data.message || "Check your inbox for the new confirmation link.",
+        variant: "success",
+      });
+    } catch {
+      toast({
+        title: "Failed to resend",
+        description: "Something went wrong. Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      setResendingEmail(false);
+    }
+  }
+
   async function onSubmit(data: LoginInput) {
+    setEmailNotConfirmed(false);
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -117,6 +172,9 @@ export default function LoginPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        if (response.status === 403) {
+          setEmailNotConfirmed(true);
+        }
         toast({
           title: "Sign in failed",
           description:
@@ -142,15 +200,84 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
+    <div className="space-y-4">
+      {emailConfirmed && (
+        <div className="flex items-start gap-3 rounded-lg border border-brand-green/30 bg-brand-green/5 p-4">
+          <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-green" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">Email confirmed!</p>
+            <p className="text-sm text-muted-foreground">
+              Your email address has been verified. You can now sign in to your account.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {justRegistered && !emailConfirmed && (
+        <div className="flex items-start gap-3 rounded-lg border border-brand-green/30 bg-brand-green/5 p-4">
+          <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-green" />
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">Check your email</p>
+            <p className="text-sm text-muted-foreground">
+              We&apos;ve sent a confirmation link
+              {registeredEmail ? (
+                <>
+                  {" "}
+                  to <strong className="text-foreground">{registeredEmail}</strong>
+                </>
+              ) : (
+                <> to your email address</>
+              )}
+              . Please click the link to verify your account before signing in.
+            </p>
+            <button
+              type="button"
+              onClick={handleResendConfirmation}
+              disabled={resendingEmail}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green underline hover:text-brand-green/80 disabled:opacity-50 disabled:no-underline"
+            >
+              {resendingEmail ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5" />
+              )}
+              Didn&apos;t receive it? Resend
+            </button>
+          </div>
+        </div>
+      )}
+
+      {emailNotConfirmed && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+          <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">Email not confirmed</p>
+            <p className="text-sm text-muted-foreground">
+              Your email address hasn&apos;t been confirmed yet. Check your inbox for the
+              confirmation link, or request a new one.
+            </p>
+            <button
+              type="button"
+              onClick={handleResendConfirmation}
+              disabled={resendingEmail}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green underline hover:text-brand-green/80 disabled:opacity-50 disabled:no-underline"
+            >
+              {resendingEmail ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5" />
+              )}
+              Resend confirmation email
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-1">
         <h1 className="font-display text-2xl font-bold tracking-tight">Sign in to your account</h1>
-        <p className="text-sm text-muted-foreground">
-          Enter your email and password to access your dashboard.
-        </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input
@@ -158,9 +285,17 @@ export default function LoginPage() {
             type="email"
             placeholder="you@example.com"
             autoComplete="email"
+            spellCheck={false}
+            autoCapitalize="none"
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? "email-error" : undefined}
             {...register("email")}
           />
-          {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+          {errors.email && (
+            <p id="email-error" className="text-xs text-destructive" role="alert">
+              {errors.email.message}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -176,6 +311,10 @@ export default function LoginPage() {
               type={showPassword ? "text" : "password"}
               placeholder="••••••••"
               autoComplete="current-password"
+              spellCheck={false}
+              autoCapitalize="none"
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
               {...register("password")}
             />
             <button
@@ -188,7 +327,11 @@ export default function LoginPage() {
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+          {errors.password && (
+            <p id="password-error" className="text-xs text-destructive" role="alert">
+              {errors.password.message}
+            </p>
+          )}
         </div>
 
         <TurnstileWidget

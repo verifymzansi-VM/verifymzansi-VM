@@ -89,6 +89,18 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
+    // Surface a specific message for unconfirmed emails so users know to
+    // check their inbox, while keeping other errors generic to prevent
+    // account enumeration.
+    if (error.message?.toLowerCase().includes("email not confirmed")) {
+      return NextResponse.json(
+        {
+          error:
+            "Please confirm your email address before signing in. Check your inbox for the confirmation link.",
+        },
+        { status: 403 }
+      );
+    }
     return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
   }
 

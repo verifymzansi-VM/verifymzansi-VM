@@ -57,10 +57,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       }
 
       return (
-        <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
-          <AlertTriangle className="h-8 w-8 text-destructive" />
+        <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+          <AlertTriangle className="h-6 w-6 text-destructive" />
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold">Something went wrong</h3>
+            <h3 className="text-base font-semibold">Something went wrong</h3>
             <p className="text-sm text-muted-foreground max-w-md">
               {this.state.error?.message || "An unexpected error occurred."}
             </p>

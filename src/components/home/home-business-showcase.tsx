@@ -25,7 +25,7 @@ export async function HomeBusinessShowcase() {
   if (items.length === 0) return null;
 
   return (
-    <section className="py-6 sm:py-8 bg-blue-50/30 dark:bg-blue-950/20">
+    <section className="py-4 sm:py-6 bg-blue-50/30 dark:bg-blue-950/20">
       <div className="container-page space-y-4 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div className="space-y-1">
@@ -33,7 +33,7 @@ export async function HomeBusinessShowcase() {
               Mzansi Business
             </h2>
             <p className="text-muted-foreground text-sm sm:text-base max-w-2xl">
-              Discover verified South African businesses — shops, services, and more.
+              Verified SA businesses — shops, services & more.
             </p>
           </div>
           <Link href="/mzansi-business" className="shrink-0">

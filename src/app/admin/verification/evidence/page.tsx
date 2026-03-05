@@ -2,8 +2,19 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { PageHeader } from "@/components/layout/page-header";
-import { EvidenceDeskClient } from "@/components/admin/evidence-desk";
+import dynamic from "next/dynamic";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
+
+const EvidenceDeskClient = dynamic(
+  () => import("@/components/admin/evidence-desk").then((m) => m.EvidenceDeskClient),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center py-8">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+      </div>
+    ),
+  }
+);
 
 export const metadata = {
   title: "Evidence Desk — Admin",
@@ -35,7 +46,7 @@ export default async function EvidenceDeskPage({
     <div className="space-y-6">
       <PageHeader
         title="Evidence Desk"
-        description="View and review encrypted KYC evidence for verification decisions."
+        description="Review encrypted KYC evidence."
         breadcrumbs={[
           { label: "Admin", href: "/admin" },
           { label: "Verification", href: "/admin/verification" },

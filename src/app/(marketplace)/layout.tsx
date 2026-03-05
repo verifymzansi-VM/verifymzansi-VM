@@ -1,6 +1,13 @@
+import type { Metadata } from "next";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MobileNav } from "@/components/layout/mobile-nav";
+
+export const metadata: Metadata = {
+  title: "Marketplace",
+  description:
+    "Browse verified listings, businesses, and promotions on VerifyMzansi's marketplace.",
+};
 
 export default function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -68,9 +68,9 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <div className="space-y-6 text-center">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-brand-green-50 dark:bg-brand-green-950 text-brand-green mx-auto">
-          <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="space-y-4 text-center">
+        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-brand-green-50 dark:bg-brand-green-950 text-brand-green mx-auto">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -94,15 +94,15 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
+    <div className="space-y-4">
+      <div className="space-y-1">
         <h1 className="font-display text-2xl font-bold tracking-tight">Forgot your password?</h1>
         <p className="text-sm text-muted-foreground">
           Enter your email and we&apos;ll send you a reset link.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input
@@ -110,9 +110,17 @@ export default function ForgotPasswordPage() {
             type="email"
             placeholder="you@example.com"
             autoComplete="email"
+            spellCheck={false}
+            autoCapitalize="none"
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? "email-error" : undefined}
             {...register("email")}
           />
-          {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+          {errors.email && (
+            <p id="email-error" className="text-xs text-destructive" role="alert">
+              {errors.email.message}
+            </p>
+          )}
         </div>
 
         <TurnstileWidget onSuccess={handleTurnstileSuccess} />

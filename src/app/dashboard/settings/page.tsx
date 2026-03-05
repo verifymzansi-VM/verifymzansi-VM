@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Save } from "lucide-react";
+import Link from "next/link";
+import { Loader2, LogOut, Save } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { settingsDisplayNameSchema } from "@/lib/validations/profile";
 
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -59,6 +61,8 @@ export default function SettingsPage() {
   }
 
   async function handleSignOut() {
+    if (!window.confirm("Are you sure you want to sign out?")) return;
+    setIsSigningOut(true);
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/");
@@ -69,17 +73,19 @@ export default function SettingsPage() {
     <div className="space-y-4">
       <PageHeader
         title="Settings"
-        description="Manage your account and profile."
+        description="Account and profile settings."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Settings" }]}
       />
 
       {/* Profile */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base font-display">Profile</CardTitle>
+          <CardTitle as="h2" className="text-base font-display">
+            Profile
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={handleUpdateProfile} className="space-y-4 max-w-md">
+          <form noValidate action={handleUpdateProfile} className="space-y-4 max-w-md">
             <div className="space-y-2">
               <Label htmlFor="displayName">Display name *</Label>
               <Input
@@ -89,6 +95,8 @@ export default function SettingsPage() {
                 maxLength={50}
                 required
                 minLength={2}
+                autoComplete="name"
+                autoCapitalize="words"
               />
               <p className="text-xs text-muted-foreground">2–50 characters</p>
             </div>
@@ -119,24 +127,28 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Sign out</p>
-              <p className="text-xs text-muted-foreground">
-                Sign out of your account on this device.
-              </p>
+              <p className="text-xs text-muted-foreground">Sign out on this device.</p>
             </div>
-            <Button variant="outline" size="sm" onClick={handleSignOut}>
-              Sign Out
+            <Button variant="outline" size="sm" onClick={handleSignOut} disabled={isSigningOut}>
+              {isSigningOut ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" /> Signing out…
+                </>
+              ) : (
+                <>
+                  <LogOut className="h-4 w-4 mr-1" /> Sign Out
+                </>
+              )}
             </Button>
           </div>
           <Separator />
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Delete account</p>
-              <p className="text-xs text-muted-foreground">
-                Submit a DSAR request to delete all your data (POPIA).
-              </p>
+              <p className="text-xs text-muted-foreground">Delete your data under POPIA.</p>
             </div>
             <Button variant="destructive" size="sm" asChild>
-              <a href="/dsar">Request Deletion</a>
+              <Link href="/dsar">Request Deletion</Link>
             </Button>
           </div>
         </CardContent>

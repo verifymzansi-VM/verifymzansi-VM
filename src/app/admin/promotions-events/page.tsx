@@ -48,7 +48,7 @@ export default async function AdminPromotionsEventsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Promotions & Events"
-        description="Manage content moderation and flagged reports for Promotions & Events."
+        description="Moderation and reports for Promotions & Events."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Promotions & Events" }]}
       >
         <Badge variant="outline">PROMOTIONS_EVENTS</Badge>

@@ -233,7 +233,7 @@ export function MediaUpload({
             }
           }}
           className={cn(
-            "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
+            "border-2 border-dashed rounded-lg p-4 text-center transition-colors",
             disabled ? "opacity-50 cursor-not-allowed border-muted" : "cursor-pointer",
             isDragOver && !disabled
               ? "border-brand-green bg-brand-green/5"
@@ -243,9 +243,9 @@ export function MediaUpload({
           )}
         >
           {accept?.startsWith("video/") ? (
-            <Film className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <Film className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground" />
           ) : (
-            <ImagePlus className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <ImagePlus className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground" />
           )}
           <p className="text-sm font-medium text-muted-foreground">
             {disabled ? "Uploads disabled for your current plan" : "Drag & drop or click to browse"}

@@ -67,13 +67,12 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
+    <div className="space-y-4">
+      <div className="space-y-1">
         <h1 className="font-display text-2xl font-bold tracking-tight">Set a new password</h1>
-        <p className="text-sm text-muted-foreground">Choose a strong password for your account.</p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="password">New password</Label>
           <div className="relative">
@@ -82,6 +81,10 @@ export default function ResetPasswordPage() {
               type={showPassword ? "text" : "password"}
               placeholder="Create a strong password"
               autoComplete="new-password"
+              spellCheck={false}
+              autoCapitalize="none"
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
               {...register("password")}
             />
             <button
@@ -107,7 +110,11 @@ export default function ResetPasswordPage() {
               </span>
             ))}
           </div>
-          {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+          {errors.password && (
+            <p id="password-error" className="text-xs text-destructive" role="alert">
+              {errors.password.message}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -117,10 +124,16 @@ export default function ResetPasswordPage() {
             type="password"
             placeholder="Confirm your password"
             autoComplete="new-password"
+            spellCheck={false}
+            autoCapitalize="none"
+            aria-invalid={!!errors.confirmPassword}
+            aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
             {...register("confirmPassword")}
           />
           {errors.confirmPassword && (
-            <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
+            <p id="confirmPassword-error" className="text-xs text-destructive" role="alert">
+              {errors.confirmPassword.message}
+            </p>
           )}
         </div>
 

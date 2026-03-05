@@ -31,15 +31,19 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 );
 CardHeader.displayName = "CardHeader";
 
-const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, ...props }, ref) => (
-    <h3
-      ref={ref}
-      className={cn("text-2xl font-semibold leading-none tracking-tight font-display", className)}
-      {...props}
-    />
-  )
-);
+const CardTitle = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLHeadingElement> & {
+    /** Semantic heading level — defaults to h3 */
+    as?: "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+  }
+>(({ className, as: Comp = "h3", ...props }, ref) => (
+  <Comp
+    ref={ref as React.Ref<HTMLHeadingElement>}
+    className={cn("text-2xl font-semibold leading-none tracking-tight font-display", className)}
+    {...props}
+  />
+));
 CardTitle.displayName = "CardTitle";
 
 const CardDescription = React.forwardRef<

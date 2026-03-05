@@ -26,7 +26,7 @@ export default async function FeatureFlagsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Feature Flags"
-        description="Toggle features on or off for phased rollouts."
+        description="Toggle features for phased rollouts."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Feature Flags" }]}
       />
 

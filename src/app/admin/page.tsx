@@ -18,6 +18,7 @@ import {
   AreaDashboardCard,
   AdminControls,
 } from "@/components/admin/dashboard-cards";
+import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = {
   title: "Admin Dashboard",
@@ -76,12 +77,11 @@ export default async function AdminPage() {
   return (
     <div className="space-y-4">
       {/* ── Header ──────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold tracking-tight">Admin</h1>
+      <PageHeader title="Admin" breadcrumbs={[{ label: "Admin" }]}>
         <Badge variant={isAdminRole ? "destructive" : "secondary"}>
           {isAdminRole ? "Admin" : "Moderator"}
         </Badge>
-      </div>
+      </PageHeader>
 
       {/* ── 1. Overview Strip ───────────────────────────────── */}
       <OverviewStrip status={healthStatus} metrics={overviewMetrics} />

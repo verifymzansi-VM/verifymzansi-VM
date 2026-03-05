@@ -1,5 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { S3Client, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { createLogger } from "@/lib/utils/logger";
+
+const logger = createLogger("MediaServe");
 
 /**
  * Media proxy – reads objects from the public R2 bucket and returns them
@@ -246,7 +249,7 @@ export async function GET(
     if (err instanceof Error && err.name === "NoSuchKey") {
       return new NextResponse(null, { status: 404 });
     }
-    console.error("Media serve error:", err);
+    logger.error("Media serve error", { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Failed to serve media" }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { Metadata } from "next";
 import {
   Megaphone,
   Flame,
@@ -21,10 +22,15 @@ import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import Link from "next/link";
 import type { SellerVerificationStatus, PromotionType } from "@/types/enums";
 
-export const metadata = {
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
+
+export const metadata: Metadata = {
   title: "Promotions & Events",
   description:
     "Discover promoted listings, special deals, events and offers from verified sellers across South Africa.",
+  alternates: {
+    canonical: `${BASE_URL}/promotions`,
+  },
 };
 
 export const dynamic = "force-dynamic";
@@ -165,22 +171,6 @@ export default async function PromotionsPage({
         description="Deals, promotions, events and offers from verified sellers across Mzansi."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Promotions & Events" }]}
       />
-
-      {/* ── Advertise CTA Banner ────────────────────────────── */}
-      <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-gradient-to-r from-brand-green/10 to-brand-gold/10 border border-brand-green/20">
-        <div>
-          <span className="font-semibold text-sm">Want to advertise on VerifyMzansi?</span>
-          <span className="text-sm text-muted-foreground ml-2 hidden sm:inline">
-            Boost listings, feature your business, or run promotions.
-          </span>
-        </div>
-        <Button asChild size="sm" className="shrink-0 gap-1">
-          <Link href="/post/create">
-            Start Advertising
-            <ArrowRight className="h-3 w-3" />
-          </Link>
-        </Button>
-      </div>
 
       {/* ── Type filter chips ───────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
@@ -364,6 +354,22 @@ export default async function PromotionsPage({
           )}
         </>
       )}
+
+      {/* ── Advertise CTA Banner ────────────────────────────── */}
+      <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-gradient-to-r from-brand-green/10 to-brand-gold/10 border border-brand-green/20">
+        <div>
+          <span className="font-semibold text-sm">Want to advertise on VerifyMzansi?</span>
+          <span className="text-sm text-muted-foreground ml-2 hidden sm:inline">
+            Boost listings, feature your business, or run promotions.
+          </span>
+        </div>
+        <Button asChild size="sm" className="shrink-0 gap-1">
+          <Link href="/post/create">
+            Start Advertising
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </Button>
+      </div>
     </div>
   );
 }

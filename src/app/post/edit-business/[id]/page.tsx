@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 import {
   Loader2,
   ArrowLeft,
@@ -33,6 +34,7 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { useToast } from "@/hooks/use-toast";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 
@@ -59,6 +61,7 @@ export default function EditBusinessPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const businessId = params.id;
+  const { toast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -233,8 +236,13 @@ export default function EditBusinessPage() {
       if (!uploadRes.ok) throw new Error("Upload failed");
       const uploadJson = await uploadRes.json();
       return uploadJson.urls || [];
-    } catch (e) {
-      console.error("Upload error:", e);
+    } catch {
+      toast({
+        title: "Some media failed to upload",
+        description:
+          "Your changes will be saved without the failed files. You can re-upload them later.",
+        variant: "destructive",
+      });
       return [];
     }
   }
@@ -345,6 +353,7 @@ export default function EditBusinessPage() {
         return;
       }
 
+      toast({ title: "Business updated!", variant: "success" });
       router.push("/dashboard/businesses?updated=true");
     } catch {
       setError("Something went wrong. Please try again.");
@@ -442,6 +451,7 @@ export default function EditBusinessPage() {
                 <Label htmlFor="category">Category</Label>
                 <select
                   id="category"
+                  aria-label="Category"
                   className={selectClass}
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
@@ -461,6 +471,7 @@ export default function EditBusinessPage() {
                   <Label htmlFor="province">Province</Label>
                   <select
                     id="province"
+                    aria-label="Province"
                     className={selectClass}
                     value={province}
                     onChange={(e) => {
@@ -480,6 +491,7 @@ export default function EditBusinessPage() {
                   <Label htmlFor="city">City / Town</Label>
                   <select
                     id="city"
+                    aria-label="City / Town"
                     className={selectClass}
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
@@ -513,6 +525,7 @@ export default function EditBusinessPage() {
                     <Label htmlFor="mallId">Mall</Label>
                     <select
                       id="mallId"
+                      aria-label="Mall"
                       className={selectClass}
                       value={mallId}
                       onChange={(e) => setMallId(e.target.value)}
@@ -555,6 +568,7 @@ export default function EditBusinessPage() {
                   </Label>
                   <Input
                     id="phone"
+                    autoComplete="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="082 000 0000"
@@ -566,6 +580,7 @@ export default function EditBusinessPage() {
                   </Label>
                   <Input
                     id="whatsapp"
+                    autoComplete="tel"
                     value={whatsapp}
                     onChange={(e) => setWhatsapp(e.target.value)}
                     placeholder="082 000 0000"
@@ -578,6 +593,9 @@ export default function EditBusinessPage() {
                   <Input
                     id="email"
                     type="email"
+                    autoComplete="email"
+                    spellCheck={false}
+                    autoCapitalize="none"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
@@ -586,6 +604,7 @@ export default function EditBusinessPage() {
                   <Label htmlFor="website">Website</Label>
                   <Input
                     id="website"
+                    autoComplete="url"
                     value={website}
                     onChange={(e) => setWebsite(e.target.value)}
                     placeholder="https://..."
@@ -688,7 +707,7 @@ export default function EditBusinessPage() {
                     {existingLogo && (
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground">Logo</p>
-                        <div className="h-16 w-16 rounded-lg overflow-hidden border">
+                        <div className="h-12 w-12 rounded-lg overflow-hidden border">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={normalizeMediaUrl(existingLogo)}
@@ -747,7 +766,7 @@ export default function EditBusinessPage() {
                         {existingGalleryPhotos.map((url, i) => (
                           <div
                             key={i}
-                            className="h-16 w-16 rounded-lg overflow-hidden border flex-shrink-0"
+                            className="h-12 w-12 rounded-lg overflow-hidden border flex-shrink-0"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
@@ -798,8 +817,7 @@ export default function EditBusinessPage() {
                   />
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <Camera className="h-3 w-3" />
-                    Showcase your products, premises, team, or work. For best results use landscape
-                    photos (at least 800×600px).
+                    Showcase your business. Use landscape photos (800×600px+).
                   </p>
                   {/* Gallery reorder controls */}
                   {newGalleryFiles.length > 1 && (
@@ -865,7 +883,7 @@ export default function EditBusinessPage() {
                   />
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <Film className="h-3 w-3" />
-                    Auto-plays muted below your cover on your profile page. Max 50 MB.
+                    Auto-plays muted on your profile. Max 50 MB.
                   </p>
                 </div>
 
@@ -968,13 +986,11 @@ export default function EditBusinessPage() {
 
               {/* Actions */}
               <div className="flex justify-between pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => router.push("/dashboard/businesses")}
-                  className="gap-1"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Cancel
+                <Button variant="outline" asChild className="gap-1">
+                  <Link href="/dashboard/businesses">
+                    <ArrowLeft className="h-4 w-4" />
+                    Cancel
+                  </Link>
                 </Button>
                 <Button
                   onClick={handleSubmit}

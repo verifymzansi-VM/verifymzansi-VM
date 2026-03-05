@@ -12,28 +12,28 @@ export default function BannedPage() {
     <div className="flex min-h-screen flex-col">
       <Header />
 
-      <main className="flex-1 flex items-center justify-center py-12 overflow-hidden relative">
-        <div className="container-page max-w-lg text-center space-y-5 relative z-10">
-          <div className="mx-auto w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center">
-            <ShieldAlert className="h-7 w-7 text-destructive" />
+      <main className="flex-1 flex items-center justify-center py-4 overflow-hidden relative">
+        <div className="container-page max-w-md text-center space-y-4 relative z-10">
+          <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+            <ShieldAlert className="h-6 w-6 text-destructive" />
           </div>
 
-          <h1 className="font-display text-3xl font-bold tracking-tight text-destructive">
-            Account Suspended
+          <h1 className="font-display text-2xl font-bold tracking-tight text-destructive">
+            Account Banned
           </h1>
 
           <div>
             <Card className="border-destructive/20 shadow-xl overflow-hidden">
               <div className="h-1.5 w-full bg-destructive" />
-              <CardContent className="p-6 space-y-5 text-left bg-gradient-to-b from-destructive/5 to-transparent">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+              <CardContent className="p-4 space-y-3 text-left bg-gradient-to-b from-destructive/5 to-transparent">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold text-lg">
+                    <p className="font-semibold text-base">
                       Your account has been permanently banned
                     </p>
-                    <p className="text-sm text-foreground/80 mt-1.5 leading-relaxed">
-                      Your VerifyMzansi account has been banned due to a severe violation of our{" "}
+                    <p className="text-xs text-foreground/80 mt-1 leading-relaxed">
+                      Due to a severe violation of our{" "}
                       <Link
                         href="/terms"
                         className="text-destructive font-medium underline underline-offset-4 hover:text-destructive/80 transition-colors"
@@ -45,9 +45,9 @@ export default function BannedPage() {
                   </div>
                 </div>
 
-                <div className="bg-background/50 rounded-lg p-4 border border-border/50">
-                  <p className="text-sm font-medium mb-2">When your account is banned:</p>
-                  <ul className="space-y-1.5 text-sm text-muted-foreground">
+                <div className="bg-background/50 rounded-lg p-3 border border-border/50">
+                  <p className="text-xs font-medium mb-1">When your account is banned:</p>
+                  <ul className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
                     {[
                       "All active listings removed",
                       "Seller profile no longer visible",
@@ -64,13 +64,16 @@ export default function BannedPage() {
                   </ul>
                 </div>
 
-                <div className="border-t pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Believe this was a mistake? Contact support:
-                  </p>
-                  <div className="inline-flex items-center gap-2 mt-2 px-3 py-1.5 rounded-md bg-muted/50 border border-border">
-                    <Mail className="h-4 w-4 text-foreground/70" />
-                    <span className="text-sm font-medium">appeals@verifymzansi.co.za</span>
+                <div className="border-t pt-3">
+                  <p className="text-xs text-muted-foreground">Believe this was a mistake?</p>
+                  <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-1 rounded-md bg-muted/50 border border-border">
+                    <Mail className="h-3.5 w-3.5 text-foreground/70" />
+                    <a
+                      href="mailto:appeals@verifymzansi.co.za"
+                      className="text-xs font-medium underline"
+                    >
+                      appeals@verifymzansi.co.za
+                    </a>
                   </div>
                 </div>
 

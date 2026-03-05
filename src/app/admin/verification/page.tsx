@@ -29,7 +29,7 @@ export default async function AdminVerificationPage() {
     <div className="space-y-6">
       <PageHeader
         title="Verification Queue"
-        description="Review and process seller KYC verification requests."
+        description="Review seller KYC verification requests."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Verification" }]}
       >
         <Badge variant="outline" className="gap-1">

@@ -75,7 +75,7 @@ export function ReportsClient({ reports }: ReportsClientProps) {
       )}
 
       {filtered.length === 0 && (
-        <p className="text-center py-8 text-muted-foreground">No reports match this filter.</p>
+        <p className="text-center py-6 text-muted-foreground">No reports match this filter.</p>
       )}
     </div>
   );

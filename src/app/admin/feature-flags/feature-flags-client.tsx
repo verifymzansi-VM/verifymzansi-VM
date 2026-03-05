@@ -96,6 +96,7 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
       toast({
         title: "Flag updated",
         description: `"${key}" set to ${MODE_LABELS[mode]}.`,
+        variant: "success",
       });
 
       router.refresh();
@@ -137,6 +138,7 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
       toast({
         title: `Flag ${enabled ? "enabled" : "disabled"}`,
         description: `"${key}" is now ${enabled ? "ON" : "OFF"}.`,
+        variant: "success",
       });
 
       router.refresh();
@@ -154,12 +156,10 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
   if (flags.length === 0) {
     return (
       <Card>
-        <CardContent className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+        <CardContent className="flex flex-col items-center justify-center py-6 text-muted-foreground">
           <ToggleLeft className="h-8 w-8 mb-3" />
           <p className="text-lg font-medium">No feature flags configured</p>
-          <p className="text-sm mt-1">
-            Add flags via the database migration to start using feature toggles.
-          </p>
+          <p className="text-sm mt-1">Add flags via database migration to enable toggles.</p>
         </CardContent>
       </Card>
     );
@@ -238,10 +238,12 @@ function FlagCard({
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
             Last updated:{" "}
-            {new Date(flag.updated_at).toLocaleString("en-ZA", {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
+            <time dateTime={flag.updated_at}>
+              {new Date(flag.updated_at).toLocaleString("en-ZA", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </time>
             {flag.updated_reason && (
               <span className="ml-2 italic">&mdash; {flag.updated_reason}</span>
             )}

@@ -147,8 +147,8 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
             )}
 
             {/* Logo and Title */}
-            <div className="px-6 pb-6 pt-4 flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-8 -mt-16 md:-mt-20 relative z-10 w-full text-center md:text-left mx-auto">
-              <div className="h-32 w-32 rounded-2xl bg-white p-2 shadow-xl border overflow-hidden flex-shrink-0">
+            <div className="px-6 pb-6 pt-4 flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-8 -mt-12 md:-mt-16 relative z-10 w-full text-center md:text-left mx-auto">
+              <div className="h-24 w-24 rounded-2xl bg-white dark:bg-warm-900 p-2 shadow-xl border overflow-hidden flex-shrink-0">
                 {business.logo_url ? (
                   <Image
                     src={normalizeMediaUrl(business.logo_url)}
@@ -164,7 +164,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                 )}
               </div>
               <div className="flex-1 pt-12 md:pt-0">
-                <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">
+                <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">
                   {business.business_name}
                 </h1>
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-3">
@@ -202,7 +202,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <article className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-6">
               {/* Promo Video Section */}
@@ -330,7 +330,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {promotions.map((promo) => (
                       <Link key={promo.id} href={`/promotion/${promo.id}`}>
-                        <Card className="hover:shadow-md transition-shadow h-full">
+                        <Card className="hover:shadow-md hover:-translate-y-0.5 hover:border-brand-green/30 transition-all h-full">
                           <CardContent className="p-4">
                             <p className="font-medium line-clamp-1">{promo.title}</p>
                             <p className="text-xs text-muted-foreground capitalize mt-1">
@@ -365,7 +365,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                 <CardContent className="p-6 space-y-5">
                   <h3 className="font-display font-bold text-lg">Contact Business</h3>
 
-                  <div className="space-y-3">
+                  <address className="space-y-3 not-italic">
                     {business.phone && (
                       <a
                         href={`tel:${business.phone}`}
@@ -387,17 +387,19 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                       <a
                         href={`https://wa.me/${business.whatsapp.replace(/\D/g, "")}`}
                         target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-3 rounded-lg bg-green-50 hover:bg-green-100 transition-colors border border-green-100"
+                        rel="noopener noreferrer nofollow ugc"
+                        className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950/40 hover:bg-green-100 dark:hover:bg-green-950/60 transition-colors border border-green-100 dark:border-green-800"
                       >
                         <div className="bg-green-500 p-2 rounded-full text-white">
                           <MessageCircle className="h-5 w-5" />
                         </div>
                         <div>
-                          <p className="text-xs text-green-700 font-medium uppercase tracking-wider">
+                          <p className="text-xs text-green-700 dark:text-green-300 font-medium uppercase tracking-wider">
                             WhatsApp
                           </p>
-                          <p className="font-medium text-green-900">{business.whatsapp}</p>
+                          <p className="font-medium text-green-900 dark:text-green-100">
+                            {business.whatsapp}
+                          </p>
                         </div>
                       </a>
                     )}
@@ -429,7 +431,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                         </Button>
                       </a>
                     )}
-                  </div>
+                  </address>
 
                   {socialLinks && Object.keys(socialLinks).length > 0 && (
                     <>
@@ -443,7 +445,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                             <a
                               href={socialLinks.facebook}
                               target="_blank"
-                              rel="noopener noreferrer"
+                              rel="noopener noreferrer nofollow ugc"
                               title="Facebook"
                               className="p-2.5 rounded-full bg-[#1877F2]/10 text-[#1877F2] hover:bg-[#1877F2]/20 transition-colors"
                             >
@@ -454,7 +456,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                             <a
                               href={socialLinks.instagram}
                               target="_blank"
-                              rel="noopener noreferrer"
+                              rel="noopener noreferrer nofollow ugc"
                               title="Instagram"
                               className="p-2.5 rounded-full bg-[#E4405F]/10 text-[#E4405F] hover:bg-[#E4405F]/20 transition-colors"
                             >
@@ -465,7 +467,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                             <a
                               href={socialLinks.twitter}
                               target="_blank"
-                              rel="noopener noreferrer"
+                              rel="noopener noreferrer nofollow ugc"
                               title="Twitter"
                               className="p-2.5 rounded-full bg-black/5 text-black hover:bg-black/10 transition-colors dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
                             >
@@ -476,7 +478,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                             <a
                               href={business.website}
                               target="_blank"
-                              rel="noopener noreferrer"
+                              rel="noopener noreferrer nofollow ugc"
                               title="Website"
                               className="p-2.5 rounded-full bg-muted text-foreground hover:bg-muted/80 transition-colors"
                             >
@@ -500,26 +502,26 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2 text-sm">
+                    <dl className="space-y-2 text-sm">
                       {opHours.Mon_Fri && (
                         <div className="flex justify-between items-center py-1">
-                          <span className="text-muted-foreground">Mon - Fri</span>
-                          <span className="font-medium">{opHours.Mon_Fri}</span>
+                          <dt className="text-muted-foreground">Mon - Fri</dt>
+                          <dd className="font-medium">{opHours.Mon_Fri}</dd>
                         </div>
                       )}
                       {opHours.Sat && (
                         <div className="flex justify-between items-center py-1 border-t">
-                          <span className="text-muted-foreground">Saturday</span>
-                          <span className="font-medium">{opHours.Sat}</span>
+                          <dt className="text-muted-foreground">Saturday</dt>
+                          <dd className="font-medium">{opHours.Sat}</dd>
                         </div>
                       )}
                       {opHours.Sun && (
                         <div className="flex justify-between items-center py-1 border-t">
-                          <span className="text-muted-foreground">Sunday / Holidays</span>
-                          <span className="font-medium">{opHours.Sun}</span>
+                          <dt className="text-muted-foreground">Sunday / Holidays</dt>
+                          <dd className="font-medium">{opHours.Sun}</dd>
                         </div>
                       )}
-                    </div>
+                    </dl>
                   </CardContent>
                 </Card>
               )}
@@ -554,7 +556,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                 />
               </div>
             </div>
-          </div>
+          </article>
         </div>
       </main>
 

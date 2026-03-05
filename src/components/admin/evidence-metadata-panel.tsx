@@ -74,7 +74,7 @@ export function EvidenceMetadataPanel({
     <div className="grid gap-4 md:grid-cols-2">
       {/* Step metadata */}
       {step && (
-        <Card className="border-warm-200/70">
+        <Card className="border-warm-200/70 dark:border-warm-700/70">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <Info className="h-4 w-4 text-muted-foreground" />
@@ -85,13 +85,19 @@ export function EvidenceMetadataPanel({
             <Row label="Step ID" value={step.id} mono />
             <Row label="Type" value={step.step_type.replace("_", " ")} />
             <Row label="Status" value={step.status} />
-            <Row label="Submitted" value={formatDate(step.created_at)} />
+            <Row label="Submitted" value={formatDate(step.created_at)} dateTime={step.created_at} />
             {step.risk_level && <Row label="Risk Level" value={step.risk_level} />}
             {step.risk_score !== null && <Row label="Risk Score" value={String(step.risk_score)} />}
             {step.auto_status && <Row label="Auto Status" value={step.auto_status} />}
             {step.reason_code && <Row label="Reason Code" value={step.reason_code} />}
             {step.reviewed_by && <Row label="Reviewed By" value={step.reviewed_by} mono />}
-            {step.reviewed_at && <Row label="Reviewed At" value={formatDate(step.reviewed_at)} />}
+            {step.reviewed_at && (
+              <Row
+                label="Reviewed At"
+                value={formatDate(step.reviewed_at)}
+                dateTime={step.reviewed_at}
+              />
+            )}
             {step.metadata && Object.keys(step.metadata).length > 0 && (
               <div className="pt-1">
                 <p className="mb-1 font-medium text-muted-foreground">Metadata</p>
@@ -106,7 +112,7 @@ export function EvidenceMetadataPanel({
 
       {/* Artifact metadata */}
       {artifact && (
-        <Card className="border-warm-200/70">
+        <Card className="border-warm-200/70 dark:border-warm-700/70">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <Shield className="h-4 w-4 text-muted-foreground" />
@@ -120,9 +126,17 @@ export function EvidenceMetadataPanel({
             <Row label="MIME" value={artifact.content_type} />
             <Row label="Size" value={formatBytes(artifact.file_size_bytes)} />
             <Row label="Status" value={artifact.status} />
-            <Row label="Uploaded" value={formatDate(artifact.created_at)} />
+            <Row
+              label="Uploaded"
+              value={formatDate(artifact.created_at)}
+              dateTime={artifact.created_at}
+            />
             {artifact.purge_after && (
-              <Row label="Purge After" value={formatDate(artifact.purge_after)} />
+              <Row
+                label="Purge After"
+                value={formatDate(artifact.purge_after)}
+                dateTime={artifact.purge_after}
+              />
             )}
             {artifact.sha256 && <Row label="SHA-256" value={artifact.sha256} mono />}
             <Row label="R2 Key" value={artifact.r2_key} mono />
@@ -132,7 +146,7 @@ export function EvidenceMetadataPanel({
 
       {/* Provider results */}
       {providerResults.length > 0 && (
-        <Card className="border-warm-200/70">
+        <Card className="border-warm-200/70 dark:border-warm-700/70">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <Shield className="h-4 w-4 text-brand-blue" />
@@ -141,7 +155,10 @@ export function EvidenceMetadataPanel({
           </CardHeader>
           <CardContent className="space-y-2">
             {providerResults.map((pr) => (
-              <div key={pr.id} className="rounded-md border border-warm-200/70 p-2 text-xs">
+              <div
+                key={pr.id}
+                className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-2 text-xs"
+              >
                 <div className="flex items-center justify-between">
                   <span className="font-medium">{pr.provider_name}</span>
                   <Badge
@@ -160,7 +177,9 @@ export function EvidenceMetadataPanel({
                 <p className="mt-0.5 text-muted-foreground">
                   {pr.check_type} — Raw: {pr.raw_status}
                 </p>
-                <p className="text-muted-foreground">{formatDate(pr.created_at)}</p>
+                <p className="text-muted-foreground">
+                  <time dateTime={pr.created_at}>{formatDate(pr.created_at)}</time>
+                </p>
               </div>
             ))}
           </CardContent>
@@ -169,7 +188,7 @@ export function EvidenceMetadataPanel({
 
       {/* Access log */}
       {accessLog.length > 0 && (
-        <Card className="border-warm-200/70">
+        <Card className="border-warm-200/70 dark:border-warm-700/70">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <Clock className="h-4 w-4 text-muted-foreground" />
@@ -181,13 +200,15 @@ export function EvidenceMetadataPanel({
               {accessLog.map((log) => (
                 <div
                   key={log.id}
-                  className="flex items-center justify-between border-b border-warm-100 py-1 last:border-0"
+                  className="flex items-center justify-between border-b border-warm-100 dark:border-warm-800 py-1 last:border-0"
                 >
                   <span className="flex items-center gap-1 text-muted-foreground">
                     <User className="h-3 w-3" />
                     {log.actor_id.slice(0, 8)}…
                   </span>
-                  <span className="text-muted-foreground">{formatDate(log.accessed_at)}</span>
+                  <time dateTime={log.accessed_at} className="text-muted-foreground">
+                    {formatDate(log.accessed_at)}
+                  </time>
                 </div>
               ))}
             </div>
@@ -202,11 +223,24 @@ export function EvidenceMetadataPanel({
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Row({
+  label,
+  value,
+  mono,
+  dateTime,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  dateTime?: string;
+}) {
+  const content = dateTime ? <time dateTime={dateTime}>{value}</time> : value;
   return (
     <div className="flex items-start justify-between gap-4">
       <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className={`text-right break-all ${mono ? "font-mono text-[10px]" : ""}`}>{value}</span>
+      <span className={`text-right break-all ${mono ? "font-mono text-[10px]" : ""}`}>
+        {content}
+      </span>
     </div>
   );
 }

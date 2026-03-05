@@ -112,6 +112,7 @@ function MobileFilterAttribute({
           </Label>
           <Input
             type="number"
+            inputMode="numeric"
             min={0}
             placeholder={field.placeholder || "Any"}
             value={(value as string) || ""}
@@ -127,6 +128,7 @@ function MobileFilterAttribute({
           <input
             id={`mobile-filter-${field.name}`}
             type="checkbox"
+            aria-label={field.label}
             className="h-4 w-4 rounded border-input text-brand-green focus:ring-brand-green"
             checked={(value as boolean) || false}
             onChange={(e) => onChange(e.target.checked ? true : undefined)}
@@ -187,10 +189,13 @@ export function ListingFilters() {
     <div className="space-y-3">
       {/* Search bar + filter trigger */}
       <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+        <div className="relative flex-1" role="search">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            type="search"
             placeholder="Search listings..."
+            aria-label="Search listings"
+            enterKeyHint="search"
             className="pl-9"
             value={localQuery}
             onChange={(e) => {
@@ -297,8 +302,10 @@ export function ListingFilters() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
+                    inputMode="decimal"
                     min={0}
                     placeholder="Min"
+                    aria-label="Minimum price"
                     value={filters.priceMin || ""}
                     onChange={(e) =>
                       setFilter("priceMin", e.target.value ? Number(e.target.value) : undefined)
@@ -307,8 +314,10 @@ export function ListingFilters() {
                   <span className="text-muted-foreground">—</span>
                   <Input
                     type="number"
+                    inputMode="decimal"
                     min={0}
                     placeholder="Max"
+                    aria-label="Maximum price"
                     value={filters.priceMax || ""}
                     onChange={(e) =>
                       setFilter("priceMax", e.target.value ? Number(e.target.value) : undefined)

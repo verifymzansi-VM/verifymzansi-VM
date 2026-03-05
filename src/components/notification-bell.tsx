@@ -161,8 +161,8 @@ export function NotificationBell({ userId }: { userId?: string }) {
 
         {/* Notification list */}
         {notifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-sm text-muted-foreground">
-            <Bell className="mb-2 h-8 w-8 opacity-20" />
+          <div className="flex flex-col items-center justify-center py-6 text-sm text-muted-foreground">
+            <Bell className="mb-1.5 h-6 w-6 opacity-20" />
             No notifications yet
           </div>
         ) : (

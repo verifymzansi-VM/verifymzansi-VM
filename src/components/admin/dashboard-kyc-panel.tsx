@@ -243,7 +243,7 @@ export function DashboardKycPanel({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+        <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
           <FileCheck className="h-8 w-8 mb-2 opacity-40" />
           <p className="text-sm">
             {items.length === 0
@@ -293,12 +293,12 @@ export function DashboardKycPanel({
                             variant="outline"
                             className={`text-[10px] ${
                               item.risk_level === "critical"
-                                ? "border-red-300 text-red-700 bg-red-50"
+                                ? "border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950"
                                 : item.risk_level === "high"
-                                  ? "border-orange-300 text-orange-700 bg-orange-50"
+                                  ? "border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950"
                                   : item.risk_level === "medium"
-                                    ? "border-yellow-300 text-yellow-700 bg-yellow-50"
-                                    : "border-green-300 text-green-700 bg-green-50"
+                                    ? "border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-950"
+                                    : "border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950"
                             }`}
                           >
                             {item.risk_level} risk
@@ -325,13 +325,13 @@ export function DashboardKycPanel({
                           {item.dob && (
                             <span>
                               <span className="text-muted-foreground">DOB: </span>
-                              <span className="font-medium">
+                              <time dateTime={item.dob} className="font-medium">
                                 {new Date(item.dob).toLocaleDateString("en-ZA", {
                                   day: "2-digit",
                                   month: "short",
                                   year: "numeric",
                                 })}
-                              </span>
+                              </time>
                             </span>
                           )}
                           {item.document_type && (
@@ -488,6 +488,7 @@ export function DashboardKycPanel({
                 </Label>
                 <select
                   title="Reason code"
+                  aria-label="Reason code"
                   value={reasonCode}
                   onChange={(e) => setReasonCode(e.target.value)}
                   className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"

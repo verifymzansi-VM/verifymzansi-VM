@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
+import { createLogger } from "@/lib/utils/logger";
 
 const PAGE_SIZE = 24;
 
@@ -142,15 +143,11 @@ export function MzansiMarketGrid() {
       const { data, error, count } = await query;
 
       if (error) {
+        const log = createLogger("MzansiMarketGrid");
         if (error.code === "PGRST205") {
-          console.warn("Listing fetch schema cache issue:", error.message, error.code);
+          log.warn("Schema cache issue", { code: error.code, message: error.message });
         } else {
-          console.error(
-            "Listing fetch error:",
-            JSON.stringify(error, null, 2),
-            error.message,
-            error.code
-          );
+          log.error("Listing fetch error", { code: error.code ?? null, message: error.message });
         }
         setFetchError({
           code: error.code ?? null,
@@ -242,16 +239,16 @@ export function MzansiMarketGrid() {
     const suggestedCats = CATEGORIES.slice(0, 4);
 
     return (
-      <div className="flex flex-col items-center justify-center py-10 sm:py-12 space-y-4">
+      <div className="flex flex-col items-center justify-center py-6 sm:py-8 space-y-3">
         <div className="rounded-2xl bg-gradient-to-br from-brand-green-50 to-brand-green-100 dark:from-brand-green-950 dark:to-brand-green-900 p-5 shadow-sm">
           {hasQueryError ? (
-            <AlertTriangle className="h-10 w-10 text-brand-green" />
+            <AlertTriangle className="h-8 w-8 text-brand-green" />
           ) : (
-            <PackageOpen className="h-10 w-10 text-brand-green" />
+            <PackageOpen className="h-8 w-8 text-brand-green" />
           )}
         </div>
         <div className="text-center space-y-2 max-w-md">
-          <p className="text-xl font-display font-semibold">{emptyTitle}</p>
+          <p className="text-lg font-display font-semibold">{emptyTitle}</p>
           <p className="text-sm text-muted-foreground">{emptyBody}</p>
           {hasQueryError && fetchError?.code && (
             <p className="text-xs text-muted-foreground">
@@ -313,7 +310,7 @@ export function MzansiMarketGrid() {
     <div className="space-y-6">
       {/* Result summary */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
           <span className="font-medium text-foreground">{totalCount}</span> listing
           {totalCount !== 1 ? "s" : ""} found
           {activeFilterCount > 0 && (
@@ -348,8 +345,7 @@ export function MzansiMarketGrid() {
           return (
             <div
               key={listing.id}
-              className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms]"
-              style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
+              className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
             >
               <ListingCard
                 id={listing.id}

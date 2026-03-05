@@ -77,7 +77,7 @@ export default async function AdminModerationPage() {
     <div className="space-y-6">
       <PageHeader
         title="Moderation Queue"
-        description="Review and approve content pending moderation across all areas."
+        description="Review and approve pending content."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Moderation" }]}
       >
         <Badge variant="outline" className="gap-1">

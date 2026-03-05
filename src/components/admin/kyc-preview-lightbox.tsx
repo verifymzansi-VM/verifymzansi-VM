@@ -290,11 +290,11 @@ export function KycPreviewLightbox({
 
         {/* Document viewer area */}
         <div
-          className="flex-1 min-h-0 overflow-auto rounded-md border border-warm-200/70 bg-warm-50 evidence-protected"
+          className="flex-1 min-h-0 overflow-auto rounded-md border border-warm-200/70 dark:border-warm-700/70 bg-warm-50 dark:bg-warm-900 evidence-protected"
           onContextMenu={handleContextMenu}
         >
           {loading && (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               <span className="ml-2 text-sm text-muted-foreground">
                 Decrypting and loading document…
@@ -303,7 +303,7 @@ export function KycPreviewLightbox({
           )}
 
           {error && (
-            <div className="flex flex-col items-center justify-center py-10">
+            <div className="flex flex-col items-center justify-center py-6">
               <AlertTriangle className="h-8 w-8 text-destructive/60" />
               <p className="mt-2 text-sm text-destructive">{error}</p>
             </div>
@@ -348,7 +348,7 @@ export function KycPreviewLightbox({
               )}
 
               {!isImage && !isPdf && (
-                <div className="flex flex-col items-center justify-center py-10">
+                <div className="flex flex-col items-center justify-center py-6">
                   <FileText className="h-8 w-8 text-muted-foreground" />
                   <p className="mt-2 text-sm text-muted-foreground">
                     Preview not available for {artifact.content_type}
@@ -371,9 +371,12 @@ export function KycPreviewLightbox({
 
         {/* Purge warning */}
         {artifact.purge_after && (
-          <div className="flex items-center gap-2 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+          <div className="flex items-center gap-2 rounded-md border border-amber-300/60 dark:border-amber-600/30 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            Scheduled for purge: {new Date(artifact.purge_after).toLocaleDateString("en-ZA")}
+            Scheduled for purge:{" "}
+            <time dateTime={artifact.purge_after}>
+              {new Date(artifact.purge_after).toLocaleDateString("en-ZA")}
+            </time>
           </div>
         )}
 
@@ -394,7 +397,7 @@ export function KycPreviewLightbox({
             <Button
               size="sm"
               variant="ghost"
-              className="text-green-600 hover:text-green-700 hover:bg-green-50"
+              className="text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
               onClick={() => {
                 setDeciding(true);
                 setDecision("approved");
@@ -418,7 +421,7 @@ export function KycPreviewLightbox({
             <Button
               size="sm"
               variant="ghost"
-              className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+              className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950"
               onClick={() => {
                 setDeciding(true);
                 setDecision("needs_resubmission");

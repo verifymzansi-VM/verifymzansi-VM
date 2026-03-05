@@ -29,8 +29,19 @@ import {
   Eye,
 } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { KycInlinePreview } from "./kyc-inline-preview";
-import { KycPreviewLightbox } from "./kyc-preview-lightbox";
+
+const KycPreviewLightbox = dynamic(
+  () => import("./kyc-preview-lightbox").then((m) => m.KycPreviewLightbox),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    ),
+  }
+);
 
 interface VerificationStep {
   id: string;
@@ -111,10 +122,9 @@ export function KycQueueTable({
 
   if (!steps.length) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
+      <div className="text-center py-6 text-muted-foreground">
         <FileCheck className="h-8 w-8 mx-auto mb-3 opacity-50" />
         <p className="text-sm">No pending verification steps.</p>
-        <p className="text-xs mt-1">All KYC submissions have been reviewed.</p>
       </div>
     );
   }

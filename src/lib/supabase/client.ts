@@ -1,5 +1,7 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { createLogger } from "@/lib/utils/logger";
 
+const log = createLogger("SupabaseClient");
 let _client: ReturnType<typeof createBrowserClient> | null = null;
 
 function isValidHttpUrl(value: string): boolean {
@@ -41,13 +43,11 @@ export function createClient() {
     // Gracefully degrade instead of crashing the entire app.
     // Auth and data features will be unavailable but the UI remains usable.
     if (typeof window !== "undefined") {
-      console.error(
-        "[Supabase] Browser client: missing or invalid NEXT_PUBLIC_SUPABASE_* env values. Auth and data features will not work."
+      log.error(
+        "Missing or invalid NEXT_PUBLIC_SUPABASE_* env values. Auth and data features will not work."
       );
     } else if (process.env.NODE_ENV !== "production") {
-      console.warn(
-        "[Supabase] Falling back to placeholder browser client during SSR due to missing or invalid NEXT_PUBLIC_SUPABASE_* env values."
-      );
+      log.warn("Falling back to placeholder browser client during SSR due to missing env values.");
     }
     _client = createPlaceholderClient();
     return _client;

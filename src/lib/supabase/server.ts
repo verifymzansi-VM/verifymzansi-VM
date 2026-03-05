@@ -2,6 +2,9 @@ import "server-only";
 
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { createLogger } from "@/lib/utils/logger";
+
+const logger = createLogger("Supabase");
 
 /**
  * Create a Supabase client for use in Server Components and Route Handlers.
@@ -31,7 +34,7 @@ export async function createClient() {
           // The `set` method was called from a Server Component.
           // This can be ignored if you have middleware refreshing sessions.
           if (process.env.NODE_ENV === "development") {
-            console.warn(`[Supabase] Cookie set failed for "${name}":`, e);
+            logger.warn(`Cookie set failed for "${name}"`, { error: String(e) });
           }
         }
       },
@@ -40,7 +43,7 @@ export async function createClient() {
           cookieStore.set({ name, value: "", ...options });
         } catch (e) {
           if (process.env.NODE_ENV === "development") {
-            console.warn(`[Supabase] Cookie remove failed for "${name}":`, e);
+            logger.warn(`Cookie remove failed for "${name}"`, { error: String(e) });
           }
         }
       },

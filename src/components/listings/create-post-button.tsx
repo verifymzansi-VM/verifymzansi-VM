@@ -81,7 +81,7 @@ export function CreatePostButton({ entityId, entityType, isLive }: CreatePostBut
         return;
       }
 
-      toast({ title: "Post created successfully!" });
+      toast({ title: "Post created successfully!", variant: "success" });
       setOpen(false);
       setTitle("");
       setBody("");
@@ -108,7 +108,7 @@ export function CreatePostButton({ entityId, entityType, isLive }: CreatePostBut
         <DialogHeader>
           <DialogTitle>Create a Post</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form noValidate onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="post-type">Type</Label>
             <select

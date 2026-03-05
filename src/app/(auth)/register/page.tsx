@@ -89,7 +89,8 @@ export default function RegisterPage() {
         description: "Check your email to confirm, then start verification.",
         variant: "success",
       });
-      router.push("/login?registered=true");
+      const encodedEmail = encodeURIComponent(data.email);
+      router.push(`/login?registered=true&email=${encodedEmail}`);
     } catch {
       toast({
         title: "Something went wrong",
@@ -101,26 +102,28 @@ export default function RegisterPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
+      <div className="space-y-1">
         <h1 className="font-display text-2xl font-bold tracking-tight">
           Create your seller account
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Join South Africa&apos;s trusted marketplace. Verification starts after sign-up.
-        </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-3">
         <div className="space-y-2">
           <Label htmlFor="displayName">Full name</Label>
           <Input
             id="displayName"
             placeholder="Thabo Mokoena"
             autoComplete="name"
+            autoCapitalize="words"
+            aria-invalid={!!errors.displayName}
+            aria-describedby={errors.displayName ? "displayName-error" : undefined}
             {...register("displayName")}
           />
           {errors.displayName && (
-            <p className="text-xs text-destructive">{errors.displayName.message}</p>
+            <p id="displayName-error" className="text-xs text-destructive" role="alert">
+              {errors.displayName.message}
+            </p>
           )}
         </div>
 
@@ -131,9 +134,17 @@ export default function RegisterPage() {
             type="email"
             placeholder="you@example.com"
             autoComplete="email"
+            spellCheck={false}
+            autoCapitalize="none"
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? "email-error" : undefined}
             {...register("email")}
           />
-          {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+          {errors.email && (
+            <p id="email-error" className="text-xs text-destructive" role="alert">
+              {errors.email.message}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -141,11 +152,18 @@ export default function RegisterPage() {
           <Input
             id="phone"
             type="tel"
+            inputMode="tel"
             placeholder="071 234 5678"
             autoComplete="tel"
+            aria-invalid={!!errors.phone}
+            aria-describedby={errors.phone ? "phone-error" : undefined}
             {...register("phone")}
           />
-          {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
+          {errors.phone && (
+            <p id="phone-error" className="text-xs text-destructive" role="alert">
+              {errors.phone.message}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -156,6 +174,10 @@ export default function RegisterPage() {
               type={showPassword ? "text" : "password"}
               placeholder="Create a strong password"
               autoComplete="new-password"
+              spellCheck={false}
+              autoCapitalize="none"
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
               {...register("password")}
             />
             <button
@@ -182,7 +204,11 @@ export default function RegisterPage() {
               </span>
             ))}
           </div>
-          {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+          {errors.password && (
+            <p id="password-error" className="text-xs text-destructive" role="alert">
+              {errors.password.message}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -192,10 +218,16 @@ export default function RegisterPage() {
             type="password"
             placeholder="Confirm your password"
             autoComplete="new-password"
+            spellCheck={false}
+            autoCapitalize="none"
+            aria-invalid={!!errors.confirmPassword}
+            aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
             {...register("confirmPassword")}
           />
           {errors.confirmPassword && (
-            <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
+            <p id="confirmPassword-error" className="text-xs text-destructive" role="alert">
+              {errors.confirmPassword.message}
+            </p>
           )}
         </div>
 
@@ -203,7 +235,7 @@ export default function RegisterPage() {
           <input
             type="checkbox"
             id="acceptTerms"
-            className="mt-1 rounded border-warm-300"
+            className="mt-1 rounded border-warm-300 dark:border-warm-600"
             {...register("acceptTerms")}
           />
           <Label htmlFor="acceptTerms" className="text-xs text-muted-foreground leading-tight">
@@ -218,7 +250,9 @@ export default function RegisterPage() {
           </Label>
         </div>
         {errors.acceptTerms && (
-          <p className="text-xs text-destructive">{errors.acceptTerms.message}</p>
+          <p className="text-xs text-destructive" role="alert">
+            {errors.acceptTerms.message}
+          </p>
         )}
 
         <TurnstileWidget

@@ -181,7 +181,7 @@ export function ListingContactActions({
             <a
               href={`https://wa.me/${sellerWhatsapp.replace(/\D/g, "")}`}
               target="_blank"
-              rel="noopener noreferrer"
+              rel="noopener noreferrer nofollow ugc"
             >
               <MessageSquare className="h-4 w-4" />
               WhatsApp

@@ -23,32 +23,30 @@ const SCAM_TYPES = [
   {
     icon: CreditCard,
     title: "Advance Payment Scams",
-    description:
-      "Never pay upfront deposits to someone you haven't met. Scammers ask for EFTs or e-wallet transfers before delivering goods.",
+    description: "Never pay upfront deposits before inspecting goods in person.",
     tips: [
       "Pay only on delivery after inspecting the item",
-      "Never transfer money to strangers via Capitec, FNB, or e-wallet",
-      "Use PayFast or secure payment methods when available",
+      "Never transfer money to strangers via EFT or e-wallet",
+      "Use PayFast or secure payment methods",
     ],
   },
   {
     icon: Phone,
     title: "Fake Seller Profiles",
     description:
-      "Look for the VerifyMzansi trust badge. Unverified profiles may use stolen photos and fake identities.",
+      "Look for the VerifyMzansi trust badge. Unverified profiles may use stolen photos.",
     tips: [
-      "Check the seller's verification status and trust score",
-      "Reverse-search profile photos with Google",
+      "Check the seller's verification status",
+      "Reverse-search profile photos",
       "Ask questions only a real seller would know",
     ],
   },
   {
     icon: MapPin,
     title: "Location Bait",
-    description:
-      "Sellers who claim to be local but keep making excuses not to meet in person may be running a scam from another location.",
+    description: "Sellers who keep making excuses not to meet may be running a scam.",
     tips: [
-      "Insist on meeting face-to-face in a public place",
+      "Insist on meeting face-to-face in public",
       "Use our Meeting Safety Checklist",
       "Be wary of sellers who refuse video calls",
     ],
@@ -56,8 +54,7 @@ const SCAM_TYPES = [
   {
     icon: Eye,
     title: "Too Good To Be True",
-    description:
-      "Unusually low prices on phones, cars, or electronics are a classic red flag. If the deal seems too good, it probably is.",
+    description: "Unusually low prices on phones, cars, or electronics are a classic red flag.",
     tips: [
       "Compare prices across multiple listings",
       "Be suspicious of prices 50%+ below market value",
@@ -68,10 +65,10 @@ const SCAM_TYPES = [
     icon: MessageSquare,
     title: "Off-Platform Communication",
     description:
-      "Scammers often ask you to move to WhatsApp, Telegram, or email quickly to avoid platform protections.",
+      "Scammers often ask to move to WhatsApp or Telegram to avoid platform protections.",
     tips: [
-      "Keep communication on VerifyMzansi as long as possible",
-      "Report sellers who insist on off-platform deals",
+      "Keep communication on VerifyMzansi",
+      "Report sellers insisting on off-platform deals",
       "Screenshot conversations as evidence",
     ],
   },
@@ -83,48 +80,46 @@ export default function ScamAlertsPage() {
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-6">
+        <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Scam Alerts"
-            description="Stay informed about common scams and learn how to protect yourself when buying and selling online in South Africa."
+            description="Protect yourself when buying and selling online."
             breadcrumbs={[{ label: "Safety" }, { label: "Scam Alerts" }]}
           />
 
           {/* Warning Banner */}
-          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/50 p-4 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/50 p-3 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="font-semibold text-amber-800 dark:text-amber-200">
+              <p className="font-semibold text-sm text-amber-800 dark:text-amber-200">
                 If you&apos;ve been scammed
               </p>
-              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                Report it to the South African Police Service (SAPS) and file a report on
-                VerifyMzansi. Keep all evidence including screenshots, messages, and payment
-                receipts.
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Report to SAPS and file a report on VerifyMzansi. Keep all evidence.
               </p>
             </div>
           </div>
 
           {/* Scam Types */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {SCAM_TYPES.map((scam) => {
               const Icon = scam.icon;
               return (
-                <Card key={scam.title}>
-                  <CardHeader>
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-destructive/10 p-2">
-                        <Icon className="h-5 w-5 text-destructive" />
+                <Card key={scam.title} className="p-0">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="rounded-md bg-destructive/10 p-1.5">
+                        <Icon className="h-4 w-4 text-destructive" />
                       </div>
-                      <CardTitle className="text-lg">{scam.title}</CardTitle>
+                      <CardTitle className="text-sm">{scam.title}</CardTitle>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-sm text-muted-foreground">{scam.description}</p>
-                    <ul className="space-y-1">
+                  <CardContent className="space-y-2 pt-0">
+                    <p className="text-xs text-muted-foreground">{scam.description}</p>
+                    <ul className="space-y-0.5">
                       {scam.tips.map((tip) => (
-                        <li key={tip} className="text-sm flex items-start gap-2">
-                          <ShieldAlert className="h-3 w-3 mt-1 text-brand-green flex-shrink-0" />
+                        <li key={tip} className="text-xs flex items-start gap-1.5">
+                          <ShieldAlert className="h-3 w-3 mt-0.5 text-brand-green flex-shrink-0" />
                           {tip}
                         </li>
                       ))}
@@ -135,24 +130,22 @@ export default function ScamAlertsPage() {
             })}
           </div>
 
-          {/* Quick Tips */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Badge className="bg-brand-green text-white">Golden Rules</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ol className="space-y-2 list-decimal list-inside text-sm text-muted-foreground">
-                <li>Always deal with verified sellers (look for the green shield)</li>
-                <li>Never pay before you see and inspect the item</li>
-                <li>Meet in public, well-lit places — never at home</li>
-                <li>Tell a friend or family member where you&apos;re going</li>
-                <li>If something feels off, trust your gut and walk away</li>
-                <li>Report suspicious listings immediately</li>
-              </ol>
-            </CardContent>
-          </Card>
+          {/* Golden Rules - inline */}
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="text-xs font-semibold mb-1.5 flex items-center gap-1.5">
+              <Badge className="bg-brand-green text-white text-[10px] px-1.5 py-0">
+                Golden Rules
+              </Badge>
+            </p>
+            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 list-decimal list-inside text-xs text-muted-foreground">
+              <li>Always deal with verified sellers (green shield)</li>
+              <li>Never pay before inspecting the item</li>
+              <li>Meet in public, well-lit places</li>
+              <li>Tell someone where you&apos;re going</li>
+              <li>Trust your gut — walk away if unsure</li>
+              <li>Report suspicious listings immediately</li>
+            </ol>
+          </div>
         </div>
       </main>
 

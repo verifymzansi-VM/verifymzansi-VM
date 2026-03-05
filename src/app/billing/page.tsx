@@ -25,24 +25,24 @@ export default function BillingPage() {
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
       <main className="flex-1 bg-background">
-        <div className="container-page py-6 space-y-6">
-          <div className="text-center max-w-3xl mx-auto space-y-2">
-            <h1 className="text-2xl md:text-3xl font-display font-bold tracking-tight">
+        <div className="container-page py-4 space-y-4">
+          <div className="text-center max-w-3xl mx-auto space-y-1">
+            <h1 className="text-xl md:text-2xl font-display font-bold tracking-tight">
               Simple, transparent pricing
             </h1>
-            <p className="text-base text-muted-foreground">
-              Choose the perfect plan. All plans include trust badges and verification.
+            <p className="text-sm text-muted-foreground">
+              All plans include trust badges and verification.
             </p>
           </div>
 
           {/* Free Post Banner */}
           <div className="max-w-4xl mx-auto">
-            <div className="flex items-center justify-between py-3 px-5 rounded-lg bg-brand-green/10 border border-brand-green/20">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between py-2 px-4 rounded-lg bg-brand-green/10 border border-brand-green/20">
+              <div className="flex items-center gap-2">
                 <Badge className="bg-brand-green/20 text-brand-green hover:bg-brand-green/20">
                   <Gift className="w-3 h-3 mr-1 inline-block" /> Free
                 </Badge>
-                <span className="text-sm font-medium">
+                <span className="text-xs font-medium">
                   1 free post per area — {FREE_POST_CONFIG.maxPhotos} photos,{" "}
                   {FREE_POST_CONFIG.maxVideos} video, {FREE_POST_CONFIG.durationDays} days
                 </span>
@@ -52,16 +52,16 @@ export default function BillingPage() {
                 size="sm"
                 className="bg-brand-green hover:bg-brand-green/90 text-white font-semibold shrink-0"
               >
-                <Link href="/register">
-                  Get Started <ArrowRight className="ml-1 h-3 w-3" />
+                <Link href="/post/create">
+                  Post Free <ArrowRight className="ml-1 h-3 w-3" />
                 </Link>
               </Button>
             </div>
           </div>
 
           <Tabs defaultValue="market" className="max-w-5xl mx-auto">
-            <div className="flex justify-center mb-4">
-              <TabsList className="grid w-full max-w-3xl grid-cols-3 p-1 h-10 bg-muted/50 rounded-full">
+            <div className="flex justify-center mb-3">
+              <TabsList className="grid w-full max-w-3xl grid-cols-3 p-1 h-9 bg-muted/50 rounded-full">
                 <TabsTrigger
                   value="market"
                   className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
@@ -142,7 +142,7 @@ function PlanGrid({ plans }: PlanGridProps) {
               </div>
             )}
 
-            <CardHeader className="text-center pb-6 pt-8">
+            <CardHeader className="text-center pb-6 pt-6">
               <CardTitle className="font-display text-xl capitalize text-muted-foreground font-medium">
                 {plan.tier}
               </CardTitle>
@@ -153,7 +153,7 @@ function PlanGrid({ plans }: PlanGridProps) {
             </CardHeader>
 
             <CardContent className="flex flex-col flex-1">
-              <ul className="space-y-4 flex-1 mb-8">
+              <ul className="space-y-4 flex-1 mb-6">
                 {plan.features.maxListings !== undefined && (
                   <FeatureItem included text={`${plan.features.maxListings} listings`} />
                 )}

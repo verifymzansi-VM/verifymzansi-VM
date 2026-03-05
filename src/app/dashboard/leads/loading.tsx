@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LeadsLoading() {
   return (
-    <div className="space-y-4 p-6">
+    <div className="space-y-4 p-6" aria-busy="true" aria-label="Loading">
       {/* Page header */}
       <div className="space-y-2">
         <Skeleton className="h-8 w-28" />

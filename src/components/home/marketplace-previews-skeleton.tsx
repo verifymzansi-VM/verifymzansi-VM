@@ -1,6 +1,6 @@
 export function MarketplacePreviewsSkeleton() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {Array.from({ length: 3 }).map((_, sectionIdx) => (
         <div key={sectionIdx} className="space-y-4">
           {/* Section header skeleton */}

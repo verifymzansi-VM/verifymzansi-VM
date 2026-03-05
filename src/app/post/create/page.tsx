@@ -14,7 +14,7 @@ export const metadata = {
 const POST_OPTIONS = [
   {
     title: "Mzansi Market Listing",
-    description: "Sell items like electronics, furniture, cars, and more on Mzansi Market.",
+    description: "Sell electronics, cars, furniture, and more.",
     icon: ShoppingBag,
     href: "/post/create-listing",
     badge: "Mzansi Market",
@@ -22,8 +22,7 @@ const POST_OPTIONS = [
   },
   {
     title: "Mzansi Business",
-    description:
-      "Create a professional business profile with services, hours, and contact details.",
+    description: "Professional profile with services, hours, and contacts.",
     icon: Building2,
     href: "/post/create-business",
     badge: "Mzansi Business",
@@ -31,7 +30,7 @@ const POST_OPTIONS = [
   },
   {
     title: "Promotion or Event",
-    description: "Advertise products, services, deals, or events. Link to your business profile.",
+    description: "Advertise deals, events, and promotions.",
     icon: Megaphone,
     href: "/post/create-promotion",
     badge: "Promotions & Events",
@@ -45,14 +44,14 @@ export default function PostCreatePage() {
       <Header isAuthenticated />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-6">
+        <div className="container-page py-6 space-y-4">
           <PageHeader
             title="Create a Post"
-            description="Choose your listing type. Your verified seller status is shown on all posts."
+            description="Choose your listing type."
             breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Create Post" }]}
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {POST_OPTIONS.map((option) => {
               const Icon = option.icon;
               return (
@@ -66,7 +65,7 @@ export default function PostCreatePage() {
                         <Badge className={option.badgeColor}>{option.badge}</Badge>
                       </div>
                       <div className="space-y-2">
-                        <h3 className="font-display text-lg font-semibold">{option.title}</h3>
+                        <h2 className="font-display text-lg font-semibold">{option.title}</h2>
                         <p className="text-sm text-muted-foreground">{option.description}</p>
                       </div>
                       <div className="flex items-center gap-1 text-sm font-medium text-brand-green">

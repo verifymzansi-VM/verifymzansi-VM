@@ -59,12 +59,12 @@ export default async function LeadsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Leads"
-        description="Contact enquiries from potential buyers."
+        description="Buyer enquiries for your listings."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Leads" }]}
       />
 
       {!leads?.length ? (
-        <div className="text-center py-10 space-y-3">
+        <div className="text-center py-6 space-y-3">
           <MessageSquare className="h-8 w-8 mx-auto text-muted-foreground" />
           <p className="text-lg font-medium">No leads yet</p>
           <p className="text-sm text-muted-foreground">

@@ -260,7 +260,7 @@ function CallToAction({ noMotion }: { noMotion: boolean }) {
       </motion.p>
 
       <motion.div
-        className="px-8 py-3 sm:px-10 sm:py-4 rounded-full bg-brand-green text-white font-bold text-base sm:text-lg shadow-[0_0_40px_-10px_rgba(22,163,74,0.6)] animate-pulse-soft"
+        className="px-6 py-2.5 sm:px-8 sm:py-3 rounded-full bg-brand-green text-white font-bold text-base sm:text-lg shadow-[0_0_40px_-10px_rgba(22,163,74,0.6)] animate-pulse-soft"
         initial={noMotion ? false : { opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={noMotion ? { duration: 0 } : { delay: 0.6, ...SPRING }}

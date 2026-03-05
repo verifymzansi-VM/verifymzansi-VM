@@ -48,7 +48,7 @@ export default async function AdminBusinessesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Mzansi Business"
-        description="Manage verification, content moderation, and flagged reports for Mzansi Business."
+        description="Moderation and reports for Mzansi Business."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Mzansi Business" }]}
       >
         <Badge variant="outline">MZANSI_BUSINESS</Badge>

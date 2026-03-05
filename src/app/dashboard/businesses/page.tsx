@@ -71,7 +71,7 @@ export default async function MyBusinessesPage() {
         <Card>
           <CardContent className="p-6 text-center space-y-3">
             <Building2 className="h-8 w-8 text-muted-foreground mx-auto" />
-            <h3 className="font-display text-lg font-semibold">No businesses yet</h3>
+            <h2 className="font-display text-lg font-semibold">No businesses yet</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
               Create your first business to showcase your brand and link promotions.
             </p>

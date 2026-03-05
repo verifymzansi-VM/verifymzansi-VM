@@ -80,7 +80,7 @@ export function UrgentButton({ listingId, isUrgent, canMarkUrgent }: UrgentButto
     <Button
       variant="ghost"
       size="icon"
-      className="h-8 w-8 hover:text-red-500"
+      className="h-8 w-8 transition-colors hover:text-red-500"
       onClick={handleUrgent}
       disabled={loading}
       title="Mark as urgent (R10 for 7 days)"

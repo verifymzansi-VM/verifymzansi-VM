@@ -107,7 +107,7 @@ export default async function MyPromotionsPage() {
     <div className="space-y-6">
       <PageHeader
         title="My Promotions"
-        description="Track your active boosts, featured listings, and promotions."
+        description="Track boosts, features, and promotions."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Promotions" }]}
       >
         <div className="flex gap-2">
@@ -130,10 +130,9 @@ export default async function MyPromotionsPage() {
         <Card>
           <CardContent className="p-6 text-center space-y-3">
             <Megaphone className="h-8 w-8 text-muted-foreground mx-auto" />
-            <h3 className="font-display text-lg font-semibold">No active promotions</h3>
+            <h2 className="font-display text-lg font-semibold">No active promotions</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Boost or feature your listings, or create promotions to advertise products, services,
-              or events.
+              Boost your listings or create promotions to reach more buyers.
             </p>
             <div className="flex justify-center gap-2">
               <Button asChild variant="outline" size="sm">

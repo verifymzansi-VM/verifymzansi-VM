@@ -130,11 +130,11 @@ export function ReportDialog({
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         {submitted ? (
-          <div className="text-center py-6 space-y-3">
-            <CheckCircle2 className="h-10 w-10 text-brand-green mx-auto" />
-            <DialogTitle className="font-display text-xl">Report Submitted</DialogTitle>
+          <div className="text-center py-4 space-y-2">
+            <CheckCircle2 className="h-8 w-8 text-brand-green mx-auto" />
+            <DialogTitle className="font-display text-lg">Report Submitted</DialogTitle>
             <DialogDescription>
-              Thank you. Our moderation team will review this report within 24 hours.
+              Our moderation team will review this within 24 hours.
             </DialogDescription>
             <Button variant="outline" onClick={() => handleOpenChange(false)}>
               Close
@@ -148,7 +148,7 @@ export function ReportDialog({
                 Help keep VerifyMzansi safe. Tell us what&apos;s wrong with this {targetType}.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+            <form noValidate onSubmit={handleSubmit} className="space-y-4 pt-2">
               <div className="space-y-2">
                 <Label>Reason</Label>
                 <div className="grid grid-cols-2 gap-2">

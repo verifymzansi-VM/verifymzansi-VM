@@ -196,7 +196,7 @@ export default function EditListingPage() {
         return;
       }
 
-      toast({ title: "Listing updated!" });
+      toast({ title: "Listing updated!", variant: "success" });
       router.push("/dashboard/listings");
     } catch {
       toast({ title: "Something went wrong", variant: "destructive" });
@@ -239,7 +239,7 @@ export default function EditListingPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-5">
+                <form noValidate onSubmit={handleSubmit} className="space-y-5">
                   {/* ── Category Picker ────────────────────────── */}
                   <CategoryPicker
                     value={category}
@@ -280,6 +280,7 @@ export default function EditListingPage() {
                       <Input
                         id="price"
                         type="number"
+                        inputMode="decimal"
                         min="0"
                         step="0.01"
                         value={price}
@@ -289,6 +290,7 @@ export default function EditListingPage() {
                       />
                       <button
                         type="button"
+                        aria-pressed={negotiable}
                         onClick={() => setNegotiable((v) => !v)}
                         className={cn(
                           "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-all",
@@ -465,7 +467,11 @@ export default function EditListingPage() {
                   <div className="space-y-3">
                     <Label className="text-base font-semibold">Contact Methods *</Label>
                     <p className="text-xs text-muted-foreground">How can buyers reach you?</p>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div
+                      role="group"
+                      aria-label="Contact methods"
+                      className="grid grid-cols-3 gap-2"
+                    >
                       {CONTACT_OPTIONS.map((opt) => {
                         const Icon = opt.icon;
                         const isSelected = contactMethods.includes(opt.id);
@@ -473,6 +479,7 @@ export default function EditListingPage() {
                           <button
                             key={opt.id}
                             type="button"
+                            aria-pressed={isSelected}
                             onClick={() => toggleContact(opt.id)}
                             className={cn(
                               "flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all",

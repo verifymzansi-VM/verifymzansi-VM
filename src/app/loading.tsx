@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function HomeLoading() {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col" aria-busy="true" aria-label="Loading">
       {/* Header placeholder */}
       <div className="h-16 border-b border-warm-200 dark:border-warm-800" />
 

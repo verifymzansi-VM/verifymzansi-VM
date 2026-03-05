@@ -15,23 +15,23 @@ export default function BillingCancelPage() {
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
 
-      <main className="flex-1 flex items-center justify-center py-12">
-        <div className="container-page max-w-lg text-center space-y-5">
+      <main className="flex-1 flex items-center justify-center py-4">
+        <div className="container-page max-w-md text-center space-y-4">
           <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
             <XCircle className="h-6 w-6 text-muted-foreground" />
           </div>
 
-          <h1 className="font-display text-2xl font-bold">Payment Cancelled</h1>
+          <h1 className="font-display text-xl font-bold">Payment Cancelled</h1>
 
           <Card>
-            <CardContent className="p-6 space-y-4">
-              <p className="text-muted-foreground">
-                Your payment was cancelled. No charges were made to your account. You can try again
-                anytime.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                If you experienced any issues during checkout, please contact our support team at{" "}
-                <a href="mailto:support@verifymzansi.co.za" className="text-brand-green underline">
+            <CardContent className="p-4 space-y-3">
+              <p className="text-sm text-muted-foreground">No charges were made to your account.</p>
+              <p className="text-xs text-muted-foreground">
+                Having issues? Contact{" "}
+                <a
+                  href="mailto:support@verifymzansi.co.za"
+                  className="text-brand-green underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                >
                   support@verifymzansi.co.za
                 </a>
               </p>

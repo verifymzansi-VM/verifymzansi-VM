@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { Building2 } from "lucide-react";
 import { BusinessCard } from "@/components/listings/business-card";
 import type { BusinessType, BusinessCategory } from "@/types/enums";
 
@@ -21,7 +22,8 @@ export async function MzansiBusinessGrid() {
 
   if (items.length === 0) {
     return (
-      <div className="text-center py-10 text-muted-foreground">
+      <div className="flex flex-col items-center justify-center text-center py-6 text-muted-foreground">
+        <Building2 className="h-8 w-8 mb-2 opacity-30" />
         <p className="text-lg font-medium">No businesses yet</p>
         <p className="text-sm mt-1">Be the first to list your business on Mzansi Business.</p>
       </div>

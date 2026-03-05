@@ -22,6 +22,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { createLogger } from "@/lib/utils/logger";
+
+const logger = createLogger("PlanGate");
 import {
   PLANS,
   TRIAL_CONFIG,
@@ -382,7 +385,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
 
       throw new Error(data.error || "No checkout URL received");
     } catch (err) {
-      console.error("[PlanGate] Checkout error:", err);
+      logger.error("Checkout error", { error: err instanceof Error ? err.message : String(err) });
       // Show user-facing error feedback
       const errorMessage = err instanceof Error ? err.message : "Could not start checkout";
       setError("failed");
@@ -399,7 +402,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
   // Loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-8">
         <div className="text-center space-y-3">
           <Loader2 className="h-8 w-8 animate-spin text-brand-green mx-auto" />
           <p className="text-sm text-muted-foreground">Checking your plan...</p>
@@ -413,7 +416,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
     return (
       <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
         <CardContent className="p-6 text-center space-y-3">
-          <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
+          <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto" />
           <h2 className="font-display text-xl font-bold">Sign In Required</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
             You need to be signed in and have a seller profile to post on VerifyMzansi.
@@ -438,7 +441,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
     return (
       <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
         <CardContent className="p-6 text-center space-y-3">
-          <ShieldCheck className="h-10 w-10 text-amber-500 mx-auto" />
+          <ShieldCheck className="h-8 w-8 text-amber-500 mx-auto" />
           <h2 className="font-display text-xl font-bold">Complete Your Profile</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
             Set up your seller profile to start posting on VerifyMzansi. It takes less than 5
@@ -459,7 +462,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
     return (
       <Card className="border-destructive/50">
         <CardContent className="p-6 text-center space-y-3">
-          <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
+          <AlertTriangle className="h-8 w-8 text-destructive mx-auto" />
           <h2 className="font-display text-xl font-bold">Something Went Wrong</h2>
           <p className="text-muted-foreground">
             We couldn&apos;t check your plan. Please try again.

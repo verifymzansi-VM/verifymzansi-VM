@@ -126,7 +126,7 @@ export const ListingCard = memo(function ListingCard({
               />
             )
           ) : (
-            <div className="flex items-center justify-center h-full text-warm-400">
+            <div className="flex items-center justify-center h-full text-warm-400 dark:text-warm-500">
               <span className="text-sm">No image</span>
             </div>
           )}
@@ -170,7 +170,7 @@ export const ListingCard = memo(function ListingCard({
                 toggleFavourite(e);
               }
             }}
-            className="absolute top-2 right-2 p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm shadow-sm hover:bg-white dark:hover:bg-black/70 transition-all duration-200 z-10 group/fav"
+            className="absolute top-2 right-2 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm shadow-sm hover:bg-white dark:hover:bg-black/70 transition-all duration-200 z-10 group/fav"
             aria-label={isFavourited ? "Remove from favourites" : "Add to favourites"}
           >
             <Heart

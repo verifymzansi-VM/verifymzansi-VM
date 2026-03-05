@@ -128,7 +128,7 @@ export function AdminSidebar({
             )}
             {collapsed && sIdx > 0 && <div className="mx-3 mb-2 border-t" />}
 
-            <nav className="space-y-0.5 px-2">
+            <nav aria-label="Admin" className="space-y-0.5 px-2">
               {section.items.map((item) => {
                 const isActive =
                   pathname === item.href ||
@@ -139,6 +139,7 @@ export function AdminSidebar({
                   <Link
                     key={item.href}
                     href={item.href}
+                    aria-current={isActive ? "page" : undefined}
                     className={cn(
                       "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                       isActive

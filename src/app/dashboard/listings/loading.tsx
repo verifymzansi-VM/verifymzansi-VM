@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ListingsLoading() {
   return (
-    <div className="space-y-4 p-6">
+    <div className="space-y-4 p-6" aria-busy="true" aria-label="Loading">
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div className="space-y-2">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import {
   CATEGORIES,
   type CategoryDefinition,
@@ -27,6 +27,7 @@ export function CategoryPicker({
   onAttributeChange,
 }: CategoryPickerProps) {
   const [expanded, setExpanded] = useState<ListingCategory | "">(value);
+  const idPrefix = useId();
 
   const selectedCategory = CATEGORIES.find((c) => c.value === expanded);
 
@@ -40,7 +41,11 @@ export function CategoryPicker({
       <Label>Category *</Label>
 
       {/* Category Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div
+        role="radiogroup"
+        aria-label="Category"
+        className="grid grid-cols-2 sm:grid-cols-3 gap-3"
+      >
         {CATEGORIES.map((cat) => {
           const Icon = cat.icon;
           const isSelected = expanded === cat.value;
@@ -49,9 +54,11 @@ export function CategoryPicker({
             <button
               key={cat.value}
               type="button"
+              role="radio"
+              aria-checked={isSelected}
               onClick={() => handleSelect(cat)}
               className={cn(
-                "relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-200",
+                "relative flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all duration-200",
                 "hover:border-brand-green/60 hover:bg-brand-green/5 hover:shadow-sm",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 isSelected
@@ -61,11 +68,11 @@ export function CategoryPicker({
             >
               <div
                 className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                  "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
                   isSelected ? "bg-brand-green text-white" : "bg-muted text-muted-foreground"
                 )}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-4 w-4" />
               </div>
               <span
                 className={cn(
@@ -85,19 +92,20 @@ export function CategoryPicker({
 
       {/* Expanded Attribute Fields */}
       {selectedCategory && selectedCategory.attributeFields.length > 0 && (
-        <div className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-4 space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-300">
+        <div className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-3 space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-300">
           <p className="text-sm font-semibold text-brand-green flex items-center gap-1.5">
             <selectedCategory.icon className="h-4 w-4" />
             {selectedCategory.label} — Details
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {selectedCategory.attributeFields.map((field) => (
               <AttributeInput
                 key={field.name}
                 field={field}
                 value={attributes[field.name] ?? (field.type === "boolean" ? false : "")}
                 allAttributes={attributes}
+                idPrefix={idPrefix}
                 onChange={(val) => {
                   onAttributeChange(field.name, val);
                   // Clear dependent fields when parent changes
@@ -121,12 +129,15 @@ function AttributeInput({
   value,
   allAttributes,
   onChange,
+  idPrefix,
 }: {
   field: AttributeField;
   value: string | boolean;
   allAttributes: Record<string, string | boolean>;
   onChange: (value: string | boolean) => void;
+  idPrefix: string;
 }) {
+  const fieldId = `${idPrefix}-${field.name}`;
   const selectClass =
     "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
@@ -144,11 +155,11 @@ function AttributeInput({
 
       return (
         <div className="space-y-1.5">
-          <Label htmlFor={field.name}>
+          <Label htmlFor={fieldId}>
             {field.label} {field.required && "*"}
           </Label>
           <select
-            id={field.name}
+            id={fieldId}
             aria-label={field.label}
             className={selectClass}
             value={value as string}
@@ -174,14 +185,15 @@ function AttributeInput({
     case "number":
       return (
         <div className="space-y-1.5">
-          <Label htmlFor={field.name}>
+          <Label htmlFor={fieldId}>
             {field.label}
             {field.unit ? ` (${field.unit})` : ""}
             {field.required ? " *" : ""}
           </Label>
           <Input
-            id={field.name}
+            id={fieldId}
             type="number"
+            inputMode="numeric"
             min="0"
             placeholder={field.placeholder}
             value={value as string}
@@ -195,13 +207,14 @@ function AttributeInput({
       return (
         <div className="flex items-center gap-2 self-end pb-1">
           <input
-            id={field.name}
+            id={fieldId}
             type="checkbox"
+            aria-label={field.label}
             className="h-4 w-4 rounded border-input text-brand-green focus:ring-brand-green"
             checked={value as boolean}
             onChange={(e) => onChange(e.target.checked)}
           />
-          <Label htmlFor={field.name} className="cursor-pointer text-sm font-normal">
+          <Label htmlFor={fieldId} className="cursor-pointer text-sm font-normal">
             {field.label}
           </Label>
         </div>
@@ -211,11 +224,11 @@ function AttributeInput({
     default:
       return (
         <div className="space-y-1.5">
-          <Label htmlFor={field.name}>
+          <Label htmlFor={fieldId}>
             {field.label} {field.required && "*"}
           </Label>
           <Input
-            id={field.name}
+            id={fieldId}
             placeholder={field.placeholder}
             value={value as string}
             onChange={(e) => onChange(e.target.value)}

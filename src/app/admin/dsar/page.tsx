@@ -34,17 +34,14 @@ export default async function AdminDSARPage() {
     <div className="space-y-6">
       <PageHeader
         title="Data Requests"
-        description="Manage POPIA data subject access requests."
+        description="Manage POPIA data requests."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Data Requests" }]}
       />
 
       {!requests?.length ? (
-        <div className="text-center py-10 text-muted-foreground">
+        <div className="text-center py-6 text-muted-foreground">
           <FileText className="h-8 w-8 mx-auto mb-3" />
           <p>No DSAR requests pending.</p>
-          <p className="text-xs mt-1">
-            Requests submitted via <span className="font-medium">/dsar</span> will appear here.
-          </p>
         </div>
       ) : (
         <div className="space-y-3">

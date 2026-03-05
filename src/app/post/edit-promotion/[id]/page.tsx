@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 import { Megaphone, ArrowLeft, Loader2, X, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -228,6 +229,7 @@ export default function EditPromotionPage() {
                 <Label htmlFor="promotion_type">Promotion Type</Label>
                 <select
                   id="promotion_type"
+                  aria-label="Promotion Type"
                   className={selectClass}
                   value={promotionType}
                   onChange={(e) => setPromotionType(e.target.value as PromotionType)}
@@ -280,6 +282,7 @@ export default function EditPromotionPage() {
                   </Label>
                   <select
                     id="business_id"
+                    aria-label="Link to Business"
                     className={selectClass}
                     value={businessId}
                     onChange={(e) => setBusinessId(e.target.value)}
@@ -292,7 +295,7 @@ export default function EditPromotionPage() {
                     ))}
                   </select>
                   <p className="text-xs text-muted-foreground">
-                    Link this promotion to one of your businesses so it appears on their profile.
+                    Links this promotion to a business profile.
                   </p>
                 </div>
               )}
@@ -303,6 +306,7 @@ export default function EditPromotionPage() {
                   <Input
                     id="price"
                     type="number"
+                    inputMode="decimal"
                     min="0"
                     step="0.01"
                     value={priceZar}
@@ -327,6 +331,7 @@ export default function EditPromotionPage() {
                   <Label htmlFor="province">Province</Label>
                   <select
                     id="province"
+                    aria-label="Province"
                     className={selectClass}
                     value={province}
                     onChange={(e) => {
@@ -346,6 +351,7 @@ export default function EditPromotionPage() {
                   <Label htmlFor="city">City / Town</Label>
                   <select
                     id="city"
+                    aria-label="City / Town"
                     className={selectClass}
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
@@ -452,13 +458,11 @@ export default function EditPromotionPage() {
               />
 
               <div className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={() => router.push("/dashboard/promotions")}
-                  className="gap-1"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Cancel
+                <Button variant="outline" asChild className="gap-1">
+                  <Link href="/dashboard/promotions">
+                    <ArrowLeft className="h-4 w-4" />
+                    Cancel
+                  </Link>
                 </Button>
                 <Button
                   onClick={handleSubmit}

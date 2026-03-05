@@ -51,6 +51,7 @@ export function BusinessGallery({ photos, businessName }: BusinessGalleryProps) 
           <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 gap-3">
             {photos.map((photo, index) => (
               <button
+                type="button"
                 key={index}
                 onClick={() => openLightbox(index)}
                 className="relative aspect-[4/3] rounded-xl overflow-hidden bg-muted group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -72,6 +73,7 @@ export function BusinessGallery({ photos, businessName }: BusinessGalleryProps) 
           <div className="md:hidden flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-1 px-1 scrollbar-hide">
             {photos.map((photo, index) => (
               <button
+                type="button"
                 key={index}
                 onClick={() => openLightbox(index)}
                 className="relative flex-none w-[70vw] max-w-[280px] aspect-[4/3] rounded-xl overflow-hidden bg-muted snap-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -99,9 +101,10 @@ export function BusinessGallery({ photos, businessName }: BusinessGalleryProps) 
           </DialogTitle>
 
           {lightboxIndex !== null && (
-            <div className="relative flex items-center justify-center min-h-[50vh] max-h-[90vh]">
+            <div className="relative flex items-center justify-center min-h-[40vh] max-h-[85vh]">
               {/* Close button */}
               <button
+                type="button"
                 onClick={closeLightbox}
                 className="absolute top-3 right-3 z-20 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
                 aria-label="Close"
@@ -113,6 +116,7 @@ export function BusinessGallery({ photos, businessName }: BusinessGalleryProps) 
               {photos.length > 1 && (
                 <>
                   <button
+                    type="button"
                     onClick={goPrev}
                     className="absolute left-3 z-20 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
                     aria-label="Previous photo"
@@ -120,6 +124,7 @@ export function BusinessGallery({ photos, businessName }: BusinessGalleryProps) 
                     <ChevronLeft className="h-6 w-6" />
                   </button>
                   <button
+                    type="button"
                     onClick={goNext}
                     className="absolute right-3 z-20 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
                     aria-label="Next photo"
@@ -130,7 +135,7 @@ export function BusinessGallery({ photos, businessName }: BusinessGalleryProps) 
               )}
 
               {/* Image */}
-              <div className="relative w-full h-[80vh]">
+              <div className="relative w-full h-[70vh]">
                 <Image
                   src={photos[lightboxIndex]}
                   alt={`${businessName} photo ${lightboxIndex + 1}`}

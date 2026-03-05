@@ -14,16 +14,20 @@ export default function GlobalError({
 }) {
   return (
     <html lang="en">
-      <body className="flex min-h-screen items-center justify-center bg-white text-gray-900">
+      <body className="flex min-h-screen items-center justify-center bg-white dark:bg-neutral-950 text-gray-900 dark:text-gray-100">
         <div className="max-w-md text-center px-6">
           <h1 className="text-2xl font-bold mb-4">Something went wrong</h1>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
             An unexpected error occurred. Please try refreshing the page.
           </p>
-          {error.digest && <p className="text-xs text-gray-400 mb-4">Error ID: {error.digest}</p>}
+          {error.digest && (
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
+              Error ID: {error.digest}
+            </p>
+          )}
           <button
             onClick={reset}
-            className="rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700 transition-colors"
+            className="rounded-md bg-brand-green px-4 py-2 text-white hover:bg-brand-green/90 transition-colors"
           >
             Try again
           </button>

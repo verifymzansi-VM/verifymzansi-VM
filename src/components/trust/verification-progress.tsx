@@ -25,7 +25,10 @@ export function VerificationProgress({ steps, className }: VerificationProgressP
   const stepMap = new Map(steps.map((s) => [s.type, s.status]));
 
   return (
-    <div className={cn("flex items-center gap-1 sm:gap-2", className)}>
+    <ol
+      className={cn("flex items-center gap-1 sm:gap-2", className)}
+      aria-label="Verification progress"
+    >
       {STEP_ORDER.map((stepType, i) => {
         const status = stepMap.get(stepType);
         const isApproved = status === "approved";
@@ -34,7 +37,11 @@ export function VerificationProgress({ steps, className }: VerificationProgressP
         const isLast = i === STEP_ORDER.length - 1;
 
         return (
-          <div key={stepType} className="flex items-center gap-1 sm:gap-2">
+          <li
+            key={stepType}
+            className="flex items-center gap-1 sm:gap-2"
+            aria-label={`${STEP_LABELS[stepType]}: ${isApproved ? "approved" : isPending ? "pending" : isRejected ? "needs attention" : "not started"}`}
+          >
             {/* Step circle */}
             <div className="flex flex-col items-center gap-1">
               <div
@@ -43,7 +50,8 @@ export function VerificationProgress({ steps, className }: VerificationProgressP
                   isApproved && "border-brand-green bg-brand-green text-white",
                   isPending && "border-brand-gold bg-brand-gold-50 text-brand-gold-800",
                   isRejected && "border-brand-red bg-brand-red-50 text-brand-red-800",
-                  !status && "border-warm-300 bg-warm-50 text-warm-400"
+                  !status &&
+                    "border-warm-300 dark:border-warm-700 bg-warm-50 dark:bg-warm-900 text-warm-400 dark:text-warm-500"
                 )}
               >
                 {isApproved ? <Check className="h-4 w-4" /> : <span>{i + 1}</span>}
@@ -62,9 +70,9 @@ export function VerificationProgress({ steps, className }: VerificationProgressP
                 )}
               />
             )}
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
 }

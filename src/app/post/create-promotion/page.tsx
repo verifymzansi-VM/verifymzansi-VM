@@ -158,7 +158,7 @@ function CreatePromotionContent() {
       <Header isAuthenticated />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-6 max-w-3xl">
+        <div className="container-page py-6 space-y-4 max-w-3xl">
           <PageHeader
             title="Create a Promotion"
             description="Advertise products, services, events, or deals."
@@ -191,7 +191,7 @@ function CreatePromotionContent() {
             {/* Step 1: Type, Title, Description */}
             {step === 1 && (
               <Card>
-                <CardContent className="p-6 space-y-6">
+                <CardContent className="p-5 space-y-5">
                   <div className="flex items-center gap-2 text-lg font-semibold">
                     <Megaphone className="h-5 w-5 text-brand-green" />
                     What are you advertising?
@@ -233,7 +233,7 @@ function CreatePromotionContent() {
                       placeholder="Tell buyers what you're offering, why it's great, and how they can get it..."
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      rows={6}
+                      rows={4}
                       maxLength={5000}
                     />
                     <p className="text-xs text-muted-foreground">
@@ -274,8 +274,7 @@ function CreatePromotionContent() {
                         ))}
                       </select>
                       <p className="text-xs text-muted-foreground">
-                        Link this promotion to one of your businesses so it appears on their
-                        profile.
+                        Links this promotion to a business profile.
                       </p>
                     </div>
                   )}
@@ -297,7 +296,7 @@ function CreatePromotionContent() {
             {/* Step 2: Price, Location, Contact, Dates */}
             {step === 2 && (
               <Card>
-                <CardContent className="p-6 space-y-6">
+                <CardContent className="p-5 space-y-5">
                   <div className="text-lg font-semibold">Pricing, Location & Contact</div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -306,6 +305,7 @@ function CreatePromotionContent() {
                       <Input
                         id="price"
                         type="number"
+                        inputMode="decimal"
                         min="0"
                         step="0.01"
                         placeholder="0.00"
@@ -433,7 +433,7 @@ function CreatePromotionContent() {
             {/* Step 3: Media & Submit */}
             {step === 3 && (
               <Card>
-                <CardContent className="p-6 space-y-6">
+                <CardContent className="p-5 space-y-5">
                   <div className="text-lg font-semibold">Photos & Media</div>
 
                   <MediaUpload

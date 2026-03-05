@@ -153,7 +153,7 @@ export function KycInlinePreview({
   return (
     <div
       ref={containerRef}
-      className="flex-shrink-0 w-[100px] h-[100px] rounded-lg border border-warm-200/70 bg-warm-50 overflow-hidden relative cursor-pointer group"
+      className="flex-shrink-0 w-[100px] h-[100px] rounded-lg border border-warm-200/70 dark:border-warm-700/70 bg-warm-50 dark:bg-warm-900 overflow-hidden relative cursor-pointer group"
       onClick={handleClick}
       onContextMenu={(e) => e.preventDefault()}
       role="button"

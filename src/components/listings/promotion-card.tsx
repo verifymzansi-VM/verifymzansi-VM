@@ -86,8 +86,8 @@ export const PromotionCard = memo(function PromotionCard({
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-warm-400">
-              <Tag className="h-8 w-8" />
+            <div className="flex items-center justify-center h-full text-warm-400 dark:text-warm-500">
+              <Tag className="h-6 w-6" />
             </div>
           )}
 
@@ -156,7 +156,7 @@ export const PromotionCard = memo(function PromotionCard({
           {endDate && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Calendar className="h-3 w-3" />
-              Ends {new Date(endDate).toLocaleDateString("en-ZA")}
+              Ends <time dateTime={endDate}>{new Date(endDate).toLocaleDateString("en-ZA")}</time>
             </div>
           )}
 

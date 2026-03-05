@@ -68,41 +68,47 @@ export default function TermsPage() {
       <Header />
 
       <main className="flex-1 bg-gradient-to-b from-muted/30 to-background">
-        {/* Compact Header */}
-        <div className="bg-brand-green-950/20 dark:bg-black py-8 sm:py-10 border-b">
-          <div className="container-page text-center max-w-3xl space-y-2">
-            <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">
+        <div className="bg-brand-green-950/20 dark:bg-black py-4 sm:py-5 border-b">
+          <div className="container-page text-center max-w-3xl space-y-1">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
               Terms of Service
             </h1>
-            <p className="text-sm sm:text-base text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               Last updated: February 2026 · Governed by South African law
             </p>
           </div>
         </div>
 
-        <div className="container-page py-8 max-w-4xl">
-          <div className="space-y-6">
-            {/* Legal Content */}
-            <div className="space-y-6">
+        <div className="container-page py-4 max-w-4xl">
+          <div className="space-y-4">
+            <div className="space-y-4">
               {sections.map((section, index) => (
-                <section key={index} className="space-y-3 group">
-                  <h2 className="font-display text-xl font-bold flex items-center gap-3">
-                    <span className="text-brand-green text-lg font-mono" aria-hidden="true">
+                <section
+                  key={index}
+                  id={section.title
+                    .toLowerCase()
+                    .replace(/^\d+\.\s*/, "")
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/-$/, "")}
+                  className="space-y-1.5 group"
+                >
+                  <h2 className="font-display text-base font-bold flex items-center gap-2">
+                    <span className="text-brand-green text-sm font-mono" aria-hidden="true">
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     {section.title.replace(/^\d+\.\s*/, "")}
                   </h2>
-                  <div className="space-y-2 pl-8 text-muted-foreground leading-relaxed">
+                  <div className="space-y-1 pl-6 text-muted-foreground leading-snug">
                     {section.content.map((paragraph, pIdx) =>
                       paragraph.startsWith("•") ? (
-                        <div key={pIdx} className="flex gap-2 text-[15px]">
+                        <div key={pIdx} className="flex gap-2 text-[13px]">
                           <span className="text-brand-green mt-0.5" aria-hidden="true">
                             •
                           </span>
                           <span>{paragraph.replace("• ", "")}</span>
                         </div>
                       ) : (
-                        <p key={pIdx} className="text-[15px]">
+                        <p key={pIdx} className="text-[13px]">
                           {paragraph}
                         </p>
                       )
@@ -111,15 +117,15 @@ export default function TermsPage() {
                 </section>
               ))}
 
-              <section className="space-y-3 pt-2">
-                <h2 className="font-display text-xl font-bold flex items-center gap-3">
-                  <span className="text-brand-green text-lg font-mono" aria-hidden="true">
+              <section className="space-y-1.5 pt-1">
+                <h2 className="font-display text-base font-bold flex items-center gap-2">
+                  <span className="text-brand-green text-sm font-mono" aria-hidden="true">
                     07
                   </span>
                   Privacy & Contact
                 </h2>
-                <div className="pl-8 space-y-4">
-                  <p className="text-[15px] text-muted-foreground leading-relaxed">
+                <div className="pl-6 space-y-2">
+                  <p className="text-[13px] text-muted-foreground leading-snug">
                     Your use of VerifyMzansi is also governed by our Privacy Policy.
                   </p>
 

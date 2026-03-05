@@ -447,7 +447,7 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
       {/* ── Hero Showroom ── */}
       <div className="relative border-b border-warm-200 dark:border-warm-800 overflow-hidden">
         {/* === Image area — clean, no overlay on mobile === */}
-        <div className="relative bg-warm-100 dark:bg-warm-900 aspect-[16/9] sm:aspect-[21/9] overflow-hidden">
+        <div className="relative bg-warm-100 dark:bg-warm-900 aspect-[2/1] sm:aspect-[3/1] overflow-hidden">
           {activeSlide && (
             <>
               <div
@@ -548,18 +548,20 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
               </div>
               <div className="flex gap-1 sm:gap-1.5 pointer-events-auto">
                 <button
+                  type="button"
                   onClick={prev}
                   aria-label="Previous slide"
-                  className="rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md border border-white/10 p-1 sm:p-2 text-white transition-all"
+                  className="rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md border border-white/10 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-white transition-all"
                 >
-                  <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={next}
                   aria-label="Next slide"
-                  className="rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md border border-white/10 p-1 sm:p-2 text-white transition-all"
+                  className="rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md border border-white/10 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-white transition-all"
                 >
-                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -628,7 +630,7 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
             <label className="flex-1 flex items-center gap-2 rounded-lg border border-warm-200 dark:border-warm-700 bg-warm-50 dark:bg-warm-800 px-4 cursor-text">
               <Search className="h-4 w-4 text-muted-foreground shrink-0" />
               <input
-                type="text"
+                type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
@@ -638,6 +640,8 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
                   }
                 }}
                 placeholder="What are you looking for?"
+                enterKeyHint="search"
+                aria-label="Search listings"
                 className="flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground text-foreground"
               />
             </label>

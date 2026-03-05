@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("ServiceWorker");
 
 /**
  * Registers the service worker on mount (production only).
@@ -11,7 +14,7 @@ export function ServiceWorkerRegistrar() {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       if (process.env.NODE_ENV === "production") {
         navigator.serviceWorker.register("/sw.js").catch((err) => {
-          console.warn("SW registration failed:", err);
+          log.warn("Registration failed", { error: String(err) });
         });
       } else {
         // In development, unregister any existing service worker
@@ -19,7 +22,7 @@ export function ServiceWorkerRegistrar() {
         navigator.serviceWorker.getRegistrations().then((registrations) => {
           for (let registration of registrations) {
             registration.unregister().catch((err) => {
-              console.warn("SW unregistration failed:", err);
+              log.warn("Unregistration failed", { error: String(err) });
             });
           }
         });

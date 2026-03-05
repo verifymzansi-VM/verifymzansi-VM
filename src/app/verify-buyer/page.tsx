@@ -87,24 +87,24 @@ export default function VerifyBuyerPage() {
       <Header />
 
       <main className="flex-1">
-        <div className="container-page py-6 space-y-6">
+        <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Verify a Buyer"
-            description="Enter a buyer's verification token to check if they're verified on VerifyMzansi. No login required."
+            description="Check if a buyer is verified."
             breadcrumbs={[{ label: "Verify a Buyer" }]}
           />
 
           <div className="mx-auto max-w-md">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
+                <CardTitle as="h2" className="flex items-center gap-2 text-lg">
                   <ShieldCheck className="h-5 w-5 text-brand-green" />
                   Buyer Token Check
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleVerify} className="space-y-4">
-                  <div className="space-y-2">
+                <form noValidate onSubmit={handleVerify} className="space-y-3">
+                  <div className="space-y-1.5">
                     <Label htmlFor="token">Buyer Token</Label>
                     <Input
                       id="token"
@@ -116,8 +116,7 @@ export default function VerifyBuyerPage() {
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Buyers share this token when contacting you. It&apos;s shown on their
-                      VerifyMzansi profile.
+                      Buyers share this token from their profile.
                     </p>
                   </div>
 
@@ -145,49 +144,49 @@ export default function VerifyBuyerPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Verified since{" "}
-                      {new Date(buyerInfo.verifiedAt).toLocaleDateString("en-ZA", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })}
+                      <time dateTime={buyerInfo.verifiedAt}>
+                        {new Date(buyerInfo.verifiedAt).toLocaleDateString("en-ZA", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </time>
                     </p>
                   </div>
                 )}
 
                 {result === "expired" && (
-                  <div className="mt-6 rounded-lg border border-amber-400/40 bg-amber-50 p-4 space-y-2">
+                  <div className="mt-4 rounded-lg border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-1">
                     <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5 text-amber-700" />
-                      <p className="font-semibold text-amber-900">Token Expired</p>
+                      <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                      <p className="font-semibold text-sm text-amber-900 dark:text-amber-200">
+                        Token Expired
+                      </p>
                     </div>
-                    <p className="text-sm text-amber-900/90">
-                      This token has expired. Ask the buyer to generate a fresh token from their
-                      profile.
+                    <p className="text-xs text-amber-900/90 dark:text-amber-100/90">
+                      Ask the buyer to generate a fresh token.
                     </p>
                   </div>
                 )}
 
                 {result === "revoked" && (
-                  <div className="mt-6 rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+                  <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
                     <div className="flex items-center gap-2">
-                      <XCircle className="h-5 w-5 text-destructive" />
-                      <p className="font-semibold text-destructive">Token Revoked</p>
+                      <XCircle className="h-4 w-4 text-destructive" />
+                      <p className="font-semibold text-sm text-destructive">Token Revoked</p>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      This token has been revoked and can no longer be used for verification.
-                    </p>
+                    <p className="text-xs text-muted-foreground">This token has been revoked.</p>
                   </div>
                 )}
 
                 {result === "not_found" && (
-                  <div className="mt-6 rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+                  <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
                     <div className="flex items-center gap-2">
-                      <XCircle className="h-5 w-5 text-destructive" />
-                      <p className="font-semibold text-destructive">Token Not Found</p>
+                      <XCircle className="h-4 w-4 text-destructive" />
+                      <p className="font-semibold text-sm text-destructive">Token Not Found</p>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      This token is not valid. Ask the buyer to share their current verification
-                      token from their VerifyMzansi profile.
+                    <p className="text-xs text-muted-foreground">
+                      Invalid token. Ask the buyer to share their current token.
                     </p>
                   </div>
                 )}

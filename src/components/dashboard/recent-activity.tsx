@@ -71,10 +71,10 @@ export function RecentActivity({ items }: RecentActivityProps) {
           <CardTitle className="text-base font-display">Recent Activity</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-            <Clock className="h-8 w-8 mb-2 opacity-20" />
+          <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
+            <Clock className="h-6 w-6 mb-1.5 opacity-20" />
             <p className="text-sm">No recent activity yet</p>
-            <p className="text-xs mt-1">Activity will appear here as you use the platform</p>
+            <p className="text-xs mt-0.5">Activity appears here as you use the platform</p>
           </div>
         </CardContent>
       </Card>
@@ -110,9 +110,12 @@ export function RecentActivity({ items }: RecentActivityProps) {
                     </p>
                   )}
                 </div>
-                <span className="text-[11px] text-muted-foreground flex-shrink-0 mt-0.5">
+                <time
+                  dateTime={item.timestamp}
+                  className="text-[11px] text-muted-foreground flex-shrink-0 mt-0.5"
+                >
                   {getRelativeTime(item.timestamp)}
-                </span>
+                </time>
               </li>
             );
           })}
