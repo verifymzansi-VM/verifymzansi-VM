@@ -13,13 +13,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* Left — brand panel (hidden on mobile) */}
       <div className="hidden lg:flex lg:w-1/2 bg-hero-mesh items-center justify-center p-12 relative overflow-hidden">
         <div className="relative z-10 max-w-md space-y-6 text-center">
-          <Link href="/" className="inline-flex items-center justify-center gap-4 w-full">
+          <Link href="/" className="flex flex-col items-center justify-center gap-6 w-full">
             <Image
               src="/icons/icon-192.png?v=7"
               alt="VerifyMzansi Shield"
-              width={80}
-              height={80}
-              className="object-contain drop-shadow-md"
+              width={144}
+              height={144}
+              className="object-contain drop-shadow-xl"
             />
             <span className="font-display text-5xl font-bold tracking-tight">
               Verify<span className="text-brand-green">Mzansi</span>
@@ -53,13 +53,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="w-full max-w-md space-y-4">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
-            <Link href="/" className="flex flex-col items-center justify-center gap-3 w-full">
+            <Link href="/" className="flex flex-col items-center justify-center gap-4 w-full">
               <Image
                 src="/icons/icon-192.png?v=7"
                 alt="VerifyMzansi Shield"
-                width={72}
-                height={72}
-                className="object-contain drop-shadow-md"
+                width={96}
+                height={96}
+                className="object-contain drop-shadow-lg"
               />
               <span className="font-display text-3xl font-bold tracking-tight mt-1">
                 Verify<span className="text-brand-green">Mzansi</span>
