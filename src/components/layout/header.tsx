@@ -73,16 +73,13 @@ export function Header({
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background md:bg-background/95 md:backdrop-blur md:supports-[backdrop-filter]:bg-background/60">
       <div className="container-page flex h-16 items-center justify-between">
-        <Link
-          href="/"
-          aria-label="VerifyMzansi — Home"
-          className="relative flex items-center justify-center h-10 w-32 md:h-12 md:w-44 flex-shrink-0"
-        >
+        <Link href="/" aria-label="VerifyMzansi — Home" className="flex items-center flex-shrink-0">
           <Image
             src="/images/logo.png"
             alt="VerifyMzansi — Verified Business of South Africa"
-            fill
-            className="object-contain"
+            width={180}
+            height={48}
+            className="h-10 w-auto md:h-12"
             priority
           />
         </Link>
