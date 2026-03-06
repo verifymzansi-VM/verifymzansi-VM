@@ -27,6 +27,31 @@ jobs:
     runs-on: ubuntu-latest
     # Skip if triggered by CI workflow that failed
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    env:
+      NODE_ENV: production
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
+      AFRICASTALKING_API_KEY: ${{ secrets.AFRICASTALKING_API_KEY }}
+      AFRICASTALKING_USERNAME: ${{ secrets.AFRICASTALKING_USERNAME }}
+      AFRICASTALKING_SENDER_ID: ${{ secrets.AFRICASTALKING_SENDER_ID }}
+      PAYFAST_MERCHANT_ID: ${{ secrets.PAYFAST_MERCHANT_ID }}
+      PAYFAST_MERCHANT_KEY: ${{ secrets.PAYFAST_MERCHANT_KEY }}
+      PAYFAST_PASSPHRASE: ${{ secrets.PAYFAST_PASSPHRASE }}
+      PAYFAST_SANDBOX: "false"
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_PUBLIC_BUCKET: verifymzansi-public
+      R2_PRIVATE_BUCKET: verifymzansi-private
+      KYC_ENCRYPTION_KEY: ${{ secrets.KYC_ENCRYPTION_KEY }}
+      ID_ENCRYPTION_KEY: ${{ secrets.ID_ENCRYPTION_KEY }}
+      HMAC_SECRET: ${{ secrets.HMAC_SECRET }}
+      IP_HASH_SECRET: ${{ secrets.IP_HASH_SECRET }}
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
+      TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -35,74 +60,47 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - name: Validate deployment secrets
-        id: check-deploy-secrets
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "::warning::Skipping deploy: missing required Supabase secrets."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          elif [[ ! "$NEXT_PUBLIC_SUPABASE_URL" =~ ^https?:// ]]; then
-            echo "::warning::Skipping deploy: NEXT_PUBLIC_SUPABASE_URL must be a valid http(s) URL."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
-
+      - name: Validate production launch env
+        run: pnpm exec tsx scripts/validate-launch-env.ts --mode=production
       - name: Build for Cloudflare
-        if: steps.check-deploy-secrets.outputs.skip != 'true'
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
-          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
-          NODE_ENV: production
         run: pnpm run build:cloudflare
 
       - name: Annotate known Cloudflare warning classes
-        if: steps.check-deploy-secrets.outputs.skip != 'true'
         run: |
           echo "::notice::Known warning classes on the current Cloudflare/OpenNext path: Durable Object startup warnings from wrangler.toml, the Next.js 16 middleware deprecation for src/middleware.ts, and generated duplicate-object-key warnings from .open-next/server-functions."
           echo "::notice::Treat new warning patterns outside those classes as actionable."
 
       - name: Deploy to Cloudflare
-        if: steps.check-deploy-secrets.outputs.skip != 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec opennextjs-cloudflare deploy
 
       - name: Deploy Rate Limiter Worker
-        if: steps.check-deploy-secrets.outputs.skip != 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.rate-limiter.toml
 
       - name: Deploy KYC Encryptor Worker
-        if: steps.check-deploy-secrets.outputs.skip != 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml
 
       - name: Deploy Retention Cleanup Worker
-        if: steps.check-deploy-secrets.outputs.skip != 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 
       - name: Post-deploy health check
-        if: steps.check-deploy-secrets.outputs.skip != 'true'
         env:
           APP_URL: ${{ secrets.APP_URL }}
         run: |
           if [ -z "$APP_URL" ]; then
-            echo "APP_URL not set, skipping health check"
-            exit 0
+            echo "::error::APP_URL is required for the post-deploy health check"
+            exit 1
           fi
           echo "Waiting for deployment to propagate..."
           sleep 30
@@ -116,9 +114,12 @@ jobs:
             exit 1
           else
             STATUS=$(echo "$BODY" | jq -r '.status' 2>/dev/null) || STATUS=""
-            if [ "$STATUS" = "ok" ]; then
+            CONFIG_STATUS=$(echo "$BODY" | jq -r '.checks.config.status' 2>/dev/null) || CONFIG_STATUS=""
+            SUPABASE_STATUS=$(echo "$BODY" | jq -r '.checks.supabase.status' 2>/dev/null) || SUPABASE_STATUS=""
+            if [ "$STATUS" = "ok" ] && [ "$CONFIG_STATUS" = "ok" ] && [ "$SUPABASE_STATUS" != "degraded" ]; then
               echo "Health check passed."
             else
-              echo "::warning::Health check HTTP 200 but unexpected body: ${BODY:0:200}"
+              echo "::error::Health check returned a degraded body: ${BODY:0:400}"
+              exit 1
             fi
           fi

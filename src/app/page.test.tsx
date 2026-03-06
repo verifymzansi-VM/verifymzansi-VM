@@ -1,7 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import HomePage from "./page";
-import { createClient } from "@supabase/supabase-js";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -19,10 +18,6 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: vi.fn(),
-}));
-
 vi.mock("@/components/layout/header", () => ({
   Header: () => <header data-testid="header" />,
 }));
@@ -31,45 +26,46 @@ vi.mock("@/components/layout/footer", () => ({
   Footer: () => <footer data-testid="footer" />,
 }));
 
-vi.mock("@/components/home/hero-banner", () => ({
-  HeroBanner: () => <div data-testid="hero-banner" />,
-}));
-
 vi.mock("@/components/home/hero-banner-with-data", () => ({
   HeroBannerWithData: () => <div data-testid="hero-banner-with-data" />,
 }));
 
-vi.mock("@/components/home/home-mall-shops-showcase", () => ({
-  HomeMallShopsShowcase: () => <div data-testid="mall-showcase" />,
+vi.mock("@/components/home/hero-banner-skeleton", () => ({
+  HeroBannerSkeleton: () => <div data-testid="hero-banner-skeleton" />,
 }));
 
-vi.mock("@/components/home/home-business-ads-showcase", () => ({
-  HomeBusinessAdsShowcase: () => <div data-testid="business-showcase" />,
+vi.mock("@/components/home/marketplace-previews-skeleton", () => ({
+  MarketplacePreviewsSkeleton: () => <div data-testid="marketplace-previews-skeleton" />,
 }));
 
 vi.mock("@/components/home/home-mzansi-market-showcase", () => ({
   HomeMzansiMarketShowcase: () => <div data-testid="market-showcase" />,
 }));
 
-function createSupabaseMock() {
-  return {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: [] }),
-    })),
-  };
-}
+vi.mock("@/components/home/home-business-showcase", () => ({
+  HomeBusinessShowcase: () => <div data-testid="business-showcase" />,
+}));
 
-describe("HomePage category links", () => {
+vi.mock("@/components/home/home-promotions-showcase", () => ({
+  HomePromotionsShowcase: () => <div data-testid="promotions-showcase" />,
+}));
+
+describe("HomePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("uses canonical category href values", async () => {
-    vi.mocked(createClient).mockReturnValue(createSupabaseMock() as never);
+  it("renders the current showcase sections", async () => {
+    const ui = await HomePage();
+    render(ui);
 
+    expect(screen.getByTestId("hero-banner-with-data")).toBeInTheDocument();
+    expect(screen.getByTestId("market-showcase")).toBeInTheDocument();
+    expect(screen.getByTestId("business-showcase")).toBeInTheDocument();
+    expect(screen.getByTestId("promotions-showcase")).toBeInTheDocument();
+  });
+
+  it("uses canonical category href values", async () => {
     const ui = await HomePage();
     render(ui);
 
@@ -80,6 +76,10 @@ describe("HomePage category links", () => {
     expect(screen.getByRole("link", { name: "Jobs" })).toHaveAttribute(
       "href",
       "/mzansi-market?category=jobs_services"
+    );
+    expect(screen.getByRole("link", { name: "Business" })).toHaveAttribute(
+      "href",
+      "/mzansi-business"
     );
   });
 });

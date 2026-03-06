@@ -1,16 +1,5 @@
 /* eslint-disable no-console */
 
-/**
- * Pre-launch Preflight Check
- *
- * Validates that every external dependency is reachable and correctly
- * configured before deploying to production.
- *
- * Usage:  npx tsx scripts/preflight-check.ts
- *
- * Exit 0 = all checks pass, Exit 1 = one or more failures.
- */
-
 import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
 import {
@@ -19,14 +8,43 @@ import {
   type SeedPlanContractRow,
 } from "./seed-contract";
 import { verifySupabaseSchema } from "./check-supabase-schema";
+import {
+  validateLaunchConfiguration,
+  type LaunchCheckStatus,
+  type LaunchValidationMode,
+} from "../src/lib/config/launch-validation";
 
 loadEnvConfig(process.cwd());
 
-// ── Env helpers ─────────────────────────────────────────────────────────────
+type CheckResult = {
+  name: string;
+  status: LaunchCheckStatus;
+  detail: string;
+};
+
+const results: CheckResult[] = [];
+
+function parseModeArg(argv: string[]): LaunchValidationMode | undefined {
+  const modeArg = argv.find((arg) => arg.startsWith("--mode="));
+  if (!modeArg) return undefined;
+
+  const rawValue = modeArg.slice("--mode=".length);
+  if (rawValue === "development" || rawValue === "e2e" || rawValue === "production") {
+    return rawValue;
+  }
+
+  throw new Error(`Unsupported preflight mode: ${rawValue}`);
+}
+
+function addResult(name: string, status: LaunchCheckStatus, detail: string): void {
+  results.push({ name, status, detail });
+}
 
 function requireEnv(name: string): string {
   const value = process.env[name];
-  if (!value) throw new Error(`Missing env var: ${name}`);
+  if (!value) {
+    throw new Error(`Missing env var: ${name}`);
+  }
   return value;
 }
 
@@ -34,57 +52,7 @@ function optionalEnv(name: string): string | undefined {
   return process.env[name] || undefined;
 }
 
-// ── Check registry ──────────────────────────────────────────────────────────
-
-type CheckResult = { name: string; ok: boolean; detail: string };
-
-const results: CheckResult[] = [];
-
-function pass(name: string, detail = "OK") {
-  results.push({ name, ok: true, detail });
-}
-
-function fail(name: string, detail: string) {
-  results.push({ name, ok: false, detail });
-}
-
-// ── Individual checks ───────────────────────────────────────────────────────
-
-async function checkRequiredEnvVars() {
-  const REQUIRED = [
-    "NEXT_PUBLIC_SUPABASE_URL",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    "SUPABASE_SERVICE_ROLE_KEY",
-    "NEXT_PUBLIC_APP_URL",
-    "AFRICASTALKING_API_KEY",
-    "AFRICASTALKING_USERNAME",
-    "AFRICASTALKING_SENDER_ID",
-    "PAYFAST_MERCHANT_ID",
-    "PAYFAST_MERCHANT_KEY",
-    "PAYFAST_PASSPHRASE",
-    "RESEND_API_KEY",
-    "R2_ACCOUNT_ID",
-    "R2_ACCESS_KEY_ID",
-    "R2_SECRET_ACCESS_KEY",
-    "R2_PUBLIC_BUCKET",
-    "R2_PRIVATE_BUCKET",
-    "KYC_ENCRYPTION_KEY",
-    "ID_ENCRYPTION_KEY",
-    "HMAC_SECRET",
-    "NEXT_PUBLIC_TURNSTILE_SITE_KEY",
-    "TURNSTILE_SECRET_KEY",
-  ];
-
-  const missing = REQUIRED.filter((k) => !process.env[k]);
-
-  if (missing.length === 0) {
-    pass("Env vars", `All ${REQUIRED.length} required vars present`);
-  } else {
-    fail("Env vars", `Missing: ${missing.join(", ")}`);
-  }
-}
-
-async function checkSupabaseSchema() {
+async function checkSupabaseSchema(): Promise<void> {
   try {
     const result = await verifySupabaseSchema({
       url: requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
@@ -92,300 +60,316 @@ async function checkSupabaseSchema() {
     });
 
     if (result.ok) {
-      pass("Supabase schema", "Required public tables are queryable");
+      addResult("Supabase schema", "pass", "Required public tables are queryable");
       return;
     }
 
     if (result.missingTables.length > 0) {
-      fail(
+      addResult(
         "Supabase schema",
+        "fail",
         `PGRST205 missing tables: ${result.missingTables.join(
           ", "
-        )}. Run 'pnpm db:verify-schema', then apply migrations with 'supabase db push' and reload cache with NOTIFY pgrst, 'reload schema';`
+        )}. Run 'supabase db push' and reload PostgREST schema cache before deploy.`
       );
       return;
     }
 
-    const extra = result.otherErrors
+    const otherErrors = result.otherErrors
       .map((item) => `${item.table} [${item.code}] ${item.message}`)
       .join("; ");
-    fail("Supabase schema", extra || "Unknown schema verification failure");
-  } catch (e: unknown) {
-    fail("Supabase schema", (e as Error).message);
+    addResult("Supabase schema", "fail", otherErrors || "Unknown schema verification failure");
+  } catch (error) {
+    addResult("Supabase schema", "fail", (error as Error).message);
   }
 }
 
-async function checkSupabasePlansSeeded() {
-  try {
-    const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-    const key = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const sb = createClient(url, key, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+async function checkSupabasePlansSeeded(mode: LaunchValidationMode): Promise<void> {
+  if (mode !== "production") {
+    addResult(
+      "Plans seeded",
+      "warn",
+      "Skipped outside production mode. Run 'pnpm preflight:prod' before deploy."
+    );
+    return;
+  }
 
-    const { data, error } = await sb
+  try {
+    const supabase = createClient(
+      requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
+      requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
+      {
+        auth: { autoRefreshToken: false, persistSession: false },
+      }
+    );
+
+    const { data, error } = await supabase
       .from("plans")
       .select("area,tier,name,price_cents,billing_frequency,active")
       .eq("active", true);
 
     if (error) {
-      fail("Plans seeded", error.message);
-    } else {
-      const actualRows = (data ?? []) as SeedPlanContractRow[];
-      const actualByKey = new Map(actualRows.map((row) => [getPlanContractKey(row), row]));
-      const missing = EXPECTED_ACTIVE_PLAN_ROWS.filter(
-        (row) => !actualByKey.has(getPlanContractKey(row))
-      ).map((row) => `${row.area}/${row.tier}`);
-      const mismatched = EXPECTED_ACTIVE_PLAN_ROWS.filter((row) => {
-        const actual = actualByKey.get(getPlanContractKey(row));
-        return (
-          actual &&
-          (actual.name !== row.name ||
-            actual.price_cents !== row.price_cents ||
-            actual.billing_frequency !== row.billing_frequency ||
-            actual.active !== row.active)
-        );
-      }).map((row) => `${row.area}/${row.tier}`);
-      const unexpected = actualRows
-        .filter(
-          (row) =>
-            !EXPECTED_ACTIVE_PLAN_ROWS.some(
-              (expected) => getPlanContractKey(expected) === getPlanContractKey(row)
-            )
-        )
-        .map((row) => `${row.area}/${row.tier}`);
-
-      if (missing.length > 0 || mismatched.length > 0 || unexpected.length > 0) {
-        const details = [
-          missing.length > 0 ? `missing ${missing.join(", ")}` : null,
-          mismatched.length > 0 ? `mismatched ${mismatched.join(", ")}` : null,
-          unexpected.length > 0 ? `unexpected ${unexpected.join(", ")}` : null,
-        ]
-          .filter(Boolean)
-          .join("; ");
-        fail(
-          "Plans seeded",
-          `Expected ${EXPECTED_ACTIVE_PLAN_ROWS.length} active rows matching the runtime plan contract; found ${actualRows.length}. ${details}. Run: npx tsx scripts/seed-production.ts`
-        );
-      } else {
-        pass("Plans seeded", `${actualRows.length} active plans match the runtime plan contract`);
-      }
+      addResult("Plans seeded", "fail", error.message);
+      return;
     }
-  } catch (e: unknown) {
-    fail("Plans seeded", (e as Error).message);
+
+    const actualRows = (data ?? []) as SeedPlanContractRow[];
+    const actualByKey = new Map(actualRows.map((row) => [getPlanContractKey(row), row]));
+    const missing = EXPECTED_ACTIVE_PLAN_ROWS.filter(
+      (row) => !actualByKey.has(getPlanContractKey(row))
+    ).map((row) => `${row.area}/${row.tier}`);
+    const mismatched = EXPECTED_ACTIVE_PLAN_ROWS.filter((row) => {
+      const actual = actualByKey.get(getPlanContractKey(row));
+      return (
+        actual &&
+        (actual.name !== row.name ||
+          actual.price_cents !== row.price_cents ||
+          actual.billing_frequency !== row.billing_frequency ||
+          actual.active !== row.active)
+      );
+    }).map((row) => `${row.area}/${row.tier}`);
+    const unexpected = actualRows
+      .filter(
+        (row) =>
+          !EXPECTED_ACTIVE_PLAN_ROWS.some(
+            (expected) => getPlanContractKey(expected) === getPlanContractKey(row)
+          )
+      )
+      .map((row) => `${row.area}/${row.tier}`);
+
+    if (missing.length > 0 || mismatched.length > 0 || unexpected.length > 0) {
+      const details = [
+        missing.length > 0 ? `missing ${missing.join(", ")}` : null,
+        mismatched.length > 0 ? `mismatched ${mismatched.join(", ")}` : null,
+        unexpected.length > 0 ? `unexpected ${unexpected.join(", ")}` : null,
+      ]
+        .filter(Boolean)
+        .join("; ");
+
+      addResult(
+        "Plans seeded",
+        "fail",
+        `Expected ${EXPECTED_ACTIVE_PLAN_ROWS.length} active runtime plan rows; found ${actualRows.length}. ${details}. Run: pnpm seed:prod`
+      );
+      return;
+    }
+
+    addResult(
+      "Plans seeded",
+      "pass",
+      `${actualRows.length} active plans match the runtime pricing contract`
+    );
+  } catch (error) {
+    addResult("Plans seeded", "fail", (error as Error).message);
   }
 }
 
-async function checkR2Access() {
+async function checkR2Access(mode: LaunchValidationMode): Promise<void> {
+  if (mode !== "production") {
+    addResult("R2", "warn", "Endpoint reachability is only enforced in production mode.");
+    return;
+  }
+
   try {
     const accountId = requireEnv("R2_ACCOUNT_ID");
-    const accessKey = requireEnv("R2_ACCESS_KEY_ID");
-    const secretKey = requireEnv("R2_SECRET_ACCESS_KEY");
     const bucket = requireEnv("R2_PRIVATE_BUCKET");
-
-    // Verify the credentials look plausible
-    if (accountId.length < 10 || accessKey.length < 10 || secretKey.length < 10) {
-      fail("R2", "Credentials look too short — double-check values");
-      return;
-    }
-
-    // Attempt a lightweight HEAD request to verify R2 connectivity
-    try {
-      const endpoint = `https://${accountId}.r2.cloudflarestorage.com/${bucket}`;
-      const res = await fetch(endpoint, {
-        method: "HEAD",
-        signal: AbortSignal.timeout(10_000),
-      });
-      // 403 is expected without proper S3 signing — it confirms the endpoint is reachable
-      if (res.status === 403 || res.status === 200) {
-        pass("R2", `account=${accountId.slice(0, 6)}… bucket=${bucket} (endpoint reachable)`);
-      } else {
-        pass("R2", `account=${accountId.slice(0, 6)}… bucket=${bucket} (status: ${res.status})`);
-      }
-    } catch {
-      // Network error — endpoint unreachable but env vars are present
-      pass("R2", `account=${accountId.slice(0, 6)}… bucket=${bucket} (connectivity check skipped)`);
-    }
-  } catch (e: unknown) {
-    fail("R2", (e as Error).message);
-  }
-}
-
-async function checkPayFast() {
-  try {
-    const merchantId = requireEnv("PAYFAST_MERCHANT_ID");
-    const merchantKey = requireEnv("PAYFAST_MERCHANT_KEY");
-    requireEnv("PAYFAST_PASSPHRASE");
-
-    const sandbox = optionalEnv("PAYFAST_SANDBOX") === "true";
-
-    // PayFast doesn't have a ping endpoint; just validate creds are non-empty
-    if (merchantId.length < 5 || merchantKey.length < 5) {
-      fail("PayFast", "Merchant ID/Key look too short");
-      return;
-    }
-
-    pass("PayFast", `merchant=${merchantId} mode=${sandbox ? "SANDBOX" : "PRODUCTION"}`);
-  } catch (e: unknown) {
-    fail("PayFast", (e as Error).message);
-  }
-}
-
-async function checkAfricasTalking() {
-  try {
-    const username = requireEnv("AFRICASTALKING_USERNAME");
-    const apiKey = requireEnv("AFRICASTALKING_API_KEY");
-    const sender = requireEnv("AFRICASTALKING_SENDER_ID");
-
-    if (username === "sandbox") {
-      pass("Africa's Talking", `SANDBOX mode, sender=${sender}`);
-    } else if (apiKey.length < 20) {
-      fail("Africa's Talking", "API key looks too short for production");
-    } else {
-      pass("Africa's Talking", `user=${username} sender=${sender}`);
-    }
-  } catch (e: unknown) {
-    fail("Africa's Talking", (e as Error).message);
-  }
-}
-
-async function checkResend() {
-  try {
-    const apiKey = requireEnv("RESEND_API_KEY");
-
-    if (!apiKey.startsWith("re_")) {
-      fail("Resend", "API key should start with 're_'");
-      return;
-    }
-
-    // Simple HTTP check — Resend exposes a lightweight domains endpoint
-    const res = await fetch("https://api.resend.com/domains", {
-      headers: { Authorization: `Bearer ${apiKey}` },
+    const endpoint = `https://${accountId}.r2.cloudflarestorage.com/${bucket}`;
+    const response = await fetch(endpoint, {
+      method: "HEAD",
+      signal: AbortSignal.timeout(10_000),
     });
 
-    if (res.ok) {
-      pass("Resend", "API key valid, domains accessible");
-    } else if (res.status === 401) {
-      fail("Resend", "Invalid API key (401)");
-    } else {
-      fail("Resend", `Unexpected status: ${res.status}`);
-    }
-  } catch (e: unknown) {
-    fail("Resend", (e as Error).message);
-  }
-}
-
-async function checkTurnstile() {
-  try {
-    const siteKey = requireEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY");
-    const secret = requireEnv("TURNSTILE_SECRET_KEY");
-
-    if (siteKey.length < 10 || secret.length < 10) {
-      fail("Turnstile", "Site key or secret looks too short");
+    if (response.status === 403 || response.status === 200) {
+      addResult(
+        "R2",
+        "pass",
+        `account=${accountId.slice(0, 6)}... bucket=${bucket} endpoint reachable`
+      );
       return;
     }
 
-    // Verify Turnstile API is reachable with a dummy token
-    try {
-      const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ secret, response: "preflight-dummy-token" }),
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (res.ok) {
-        pass("Turnstile", "Keys present, API reachable");
-      } else {
-        pass("Turnstile", `Keys present, API returned ${res.status}`);
-      }
-    } catch {
-      pass("Turnstile", "Keys present (API connectivity check skipped)");
-    }
-  } catch (e: unknown) {
-    fail("Turnstile", (e as Error).message);
+    addResult("R2", "warn", `Unexpected HEAD status ${response.status} for ${bucket}`);
+  } catch (error) {
+    addResult("R2", "fail", (error as Error).message);
   }
 }
 
-async function checkEncryptionKey() {
+function checkPayFast(mode: LaunchValidationMode): void {
   try {
-    const kycKey = requireEnv("KYC_ENCRYPTION_KEY");
-    const idKey = requireEnv("ID_ENCRYPTION_KEY");
-
-    // Should be a 64-char hex string (256 bits)
-    const isValid = (k: string) => /^[0-9a-fA-F]{64}$/.test(k);
-
-    if (!isValid(kycKey) || !isValid(idKey)) {
-      fail(
-        "Encryption Keys",
-        `Expected 64-char hex string. Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+    const sandbox = optionalEnv("PAYFAST_SANDBOX");
+    if (mode !== "production") {
+      addResult(
+        "PayFast",
+        "warn",
+        `Non-production mode allows PAYFAST_SANDBOX=${sandbox ?? "unset"}`
       );
-    } else {
-      pass(
-        "Encryption Keys",
-        "256-bit keys present. IMPORTANT: Back these up! Loss means permanent data loss."
-      );
+      return;
     }
-  } catch (e: unknown) {
-    fail("Encryption Keys", (e as Error).message);
+
+    const merchantId = requireEnv("PAYFAST_MERCHANT_ID");
+    const merchantKey = requireEnv("PAYFAST_MERCHANT_KEY");
+    const passphrase = requireEnv("PAYFAST_PASSPHRASE");
+
+    if (merchantId.length < 5 || merchantKey.length < 5 || passphrase.length < 3) {
+      addResult("PayFast", "fail", "Merchant credentials look too short for production");
+      return;
+    }
+
+    addResult(
+      "PayFast",
+      "pass",
+      `merchant=${merchantId} sandbox=${sandbox === "true" ? "true" : "false"}`
+    );
+  } catch (error) {
+    addResult("PayFast", "fail", (error as Error).message);
   }
 }
 
-async function checkAppUrl() {
+function checkAfricasTalking(mode: LaunchValidationMode): void {
   try {
-    const appUrl = requireEnv("NEXT_PUBLIC_APP_URL");
+    const username = requireEnv("AFRICASTALKING_USERNAME");
+    const senderId = optionalEnv("AFRICASTALKING_SENDER_ID");
 
-    const url = new URL(appUrl);
-    if (url.protocol !== "https:") {
-      fail("App URL", `Must use HTTPS in production: ${appUrl}`);
-    } else {
-      pass("App URL", appUrl);
+    if (mode !== "production") {
+      addResult(
+        "Africa's Talking",
+        senderId ? "pass" : "warn",
+        senderId
+          ? `user=${username} sender=${senderId}`
+          : "Sender ID is optional locally but required for production SMS delivery"
+      );
+      return;
     }
-  } catch (e: unknown) {
-    fail("App URL", (e as Error).message);
+
+    if (username === "sandbox") {
+      addResult("Africa's Talking", "fail", "Production cannot use the sandbox username");
+      return;
+    }
+
+    addResult(
+      "Africa's Talking",
+      "pass",
+      `user=${username} sender=${requireEnv("AFRICASTALKING_SENDER_ID")}`
+    );
+  } catch (error) {
+    addResult("Africa's Talking", "fail", (error as Error).message);
   }
 }
 
-// ── Runner ──────────────────────────────────────────────────────────────────
+async function checkResend(mode: LaunchValidationMode): Promise<void> {
+  try {
+    const apiKey = requireEnv("RESEND_API_KEY");
+    if (mode !== "production") {
+      addResult(
+        "Resend",
+        "warn",
+        "Live Resend API verification is skipped outside production mode."
+      );
+      return;
+    }
 
-async function main() {
+    const response = await fetch("https://api.resend.com/domains", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (response.ok) {
+      addResult("Resend", "pass", "API key validated against Resend domains endpoint");
+    } else if (response.status === 401) {
+      addResult("Resend", "fail", "Resend rejected the API key with 401");
+    } else {
+      addResult("Resend", "warn", `Resend returned HTTP ${response.status}`);
+    }
+  } catch (error) {
+    addResult("Resend", "fail", (error as Error).message);
+  }
+}
+
+async function checkTurnstile(mode: LaunchValidationMode): Promise<void> {
+  if (mode !== "production") {
+    addResult(
+      "Turnstile",
+      "warn",
+      "Live Turnstile verification is skipped outside production mode."
+    );
+    return;
+  }
+
+  try {
+    const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        secret: requireEnv("TURNSTILE_SECRET_KEY"),
+        response: "preflight-dummy-token",
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (response.ok) {
+      addResult("Turnstile", "pass", "Turnstile endpoint reachable");
+    } else {
+      addResult("Turnstile", "warn", `Turnstile returned HTTP ${response.status}`);
+    }
+  } catch (error) {
+    addResult("Turnstile", "fail", (error as Error).message);
+  }
+}
+
+function appendLaunchChecks(mode: LaunchValidationMode): void {
+  const summary = validateLaunchConfiguration(process.env, { mode });
+  for (const check of summary.checks) {
+    addResult(check.name, check.status, check.detail);
+  }
+}
+
+async function main(): Promise<void> {
+  const mode = parseModeArg(process.argv.slice(2)) ?? "development";
+
   console.log("");
   console.log("╔══════════════════════════════════════════════════╗");
-  console.log("║         VerifyMzansi Pre-Launch Preflight        ║");
+  console.log("║         VerifyMzansi Pre-Launch Preflight       ║");
   console.log("╚══════════════════════════════════════════════════╝");
+  console.log(`Mode: ${mode}`);
   console.log("");
 
-  await checkRequiredEnvVars();
+  appendLaunchChecks(mode);
   await checkSupabaseSchema();
-  await checkSupabasePlansSeeded();
-  await checkR2Access();
-  await checkPayFast();
-  await checkAfricasTalking();
-  await checkResend();
-  await checkTurnstile();
-  await checkEncryptionKey();
-  await checkAppUrl();
+  await checkSupabasePlansSeeded(mode);
+  await checkR2Access(mode);
+  checkPayFast(mode);
+  checkAfricasTalking(mode);
+  await checkResend(mode);
+  await checkTurnstile(mode);
 
-  // Print results
-  const maxName = Math.max(...results.map((r) => r.name.length));
+  const maxName = Math.max(...results.map((result) => result.name.length));
 
-  for (const r of results) {
-    const icon = r.ok ? "✓" : "✗";
-    const pad = r.name.padEnd(maxName);
-    console.log(`  ${icon} ${pad}  ${r.detail}`);
+  for (const result of results) {
+    const icon = result.status === "pass" ? "✓" : result.status === "warn" ? "!" : "✗";
+    const paddedName = result.name.padEnd(maxName);
+    console.log(`  ${icon} ${paddedName}  ${result.detail}`);
   }
 
-  const failures = results.filter((r) => !r.ok);
+  const failures = results.filter((result) => result.status === "fail");
+  const warnings = results.filter((result) => result.status === "warn");
 
   console.log("");
-  if (failures.length === 0) {
-    console.log(`All ${results.length} checks passed. Ready for launch! 🚀`);
-  } else {
-    console.log(`${failures.length} of ${results.length} checks FAILED. Fix before deploying.`);
+  if (failures.length > 0) {
+    console.log(`${failures.length} of ${results.length} checks failed. Fix before deploying.`);
     process.exit(1);
   }
+
+  if (warnings.length > 0) {
+    console.log(
+      `${warnings.length} warning(s) in ${results.length} checks. Clear them before production launch.`
+    );
+    return;
+  }
+
+  console.log(`All ${results.length} checks passed for ${mode} mode.`);
 }
 
-main().catch((err) => {
-  console.error("Preflight script crashed:", err);
+main().catch((error) => {
+  console.error("Preflight script crashed:", error);
   process.exit(1);
 });

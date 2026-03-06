@@ -12,33 +12,53 @@ function spawnPnpm(
 
 const bannedLicensePatterns = [/AGPL/i, /\bGPL-3(\.0)?\b/i, /\bGPL-2(\.0)?\b/i, /BUSL-1\.1/i];
 
-function extractLicenseStrings(value: unknown, bucket: string[]): void {
-  if (typeof value === "string") {
-    bucket.push(value);
-    return;
-  }
-  if (!value || typeof value !== "object") {
-    return;
+function writeInfo(message: string): void {
+  process.stdout.write(`${message}\n`);
+}
+
+function collectDeclaredLicenses(parsed: unknown): string[] {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return [];
   }
 
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      extractLicenseStrings(item, bucket);
+  const bucket = new Set<string>();
+
+  for (const [licenseExpression, packages] of Object.entries(parsed)) {
+    if (licenseExpression && licenseExpression !== "undefined") {
+      bucket.add(licenseExpression);
     }
-    return;
-  }
 
-  for (const [key, itemValue] of Object.entries(value)) {
-    if (typeof itemValue === "string" && key.toLowerCase().includes("license")) {
-      bucket.push(itemValue);
+    if (!Array.isArray(packages)) {
       continue;
     }
-    extractLicenseStrings(itemValue, bucket);
+
+    for (const pkg of packages) {
+      if (!pkg || typeof pkg !== "object") {
+        continue;
+      }
+
+      const candidate = pkg as { license?: unknown; licenses?: unknown };
+      if (typeof candidate.license === "string" && candidate.license.trim()) {
+        bucket.add(candidate.license.trim());
+      }
+      if (typeof candidate.licenses === "string" && candidate.licenses.trim()) {
+        bucket.add(candidate.licenses.trim());
+      }
+      if (Array.isArray(candidate.licenses)) {
+        for (const item of candidate.licenses) {
+          if (typeof item === "string" && item.trim()) {
+            bucket.add(item.trim());
+          }
+        }
+      }
+    }
   }
+
+  return [...bucket];
 }
 
 async function main(): Promise<void> {
-  console.log("Running license policy check...");
+  writeInfo("Running license policy check...");
   const result = spawnPnpm(["licenses", "list", "--json"], {
     encoding: "utf8",
     stdio: "pipe",
@@ -66,10 +86,10 @@ async function main(): Promise<void> {
   const licenses: string[] = [];
   try {
     const parsed = JSON.parse(output) as unknown;
-    extractLicenseStrings(parsed, licenses);
+    licenses.push(...collectDeclaredLicenses(parsed));
   } catch {
     console.warn("Could not parse license output as JSON; passing by command success only.");
-    console.log("License policy check passed.");
+    writeInfo("License policy check passed.");
     return;
   }
 
@@ -78,7 +98,7 @@ async function main(): Promise<void> {
     bannedLicensePatterns.some((pattern) => pattern.test(license))
   );
 
-  console.log(
+  writeInfo(
     `Detected ${uniqueLicenses.length} unique license expression(s): ${uniqueLicenses.join(", ")}`
   );
 
@@ -90,7 +110,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  console.log("License policy check passed.");
+  writeInfo("License policy check passed.");
 }
 
 main().catch((error) => {

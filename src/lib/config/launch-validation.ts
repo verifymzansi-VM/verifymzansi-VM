@@ -1,0 +1,395 @@
+export type LaunchValidationMode = "development" | "e2e" | "production";
+export type LaunchCheckStatus = "pass" | "warn" | "fail";
+
+export type EnvSource = Record<string, string | undefined>;
+
+export interface LaunchValidationCheck {
+  name: string;
+  status: LaunchCheckStatus;
+  detail: string;
+}
+
+export interface LaunchValidationSummary {
+  mode: LaunchValidationMode;
+  checks: LaunchValidationCheck[];
+  errors: LaunchValidationCheck[];
+  warnings: LaunchValidationCheck[];
+  isValid: boolean;
+}
+
+const HEX_PLACEHOLDER = "cafebabe".repeat(8);
+const TRUTHY_VALUES = new Set(["1", "true", "yes", "on"]);
+const DEV_ONLY_FLAGS = [
+  "ENABLE_DEV_PAYMENT_BYPASS",
+  "ENABLE_MOCK_PAYFAST",
+  "DEV_EXPOSE_OTP",
+] as const;
+
+const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
+  development: [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "NEXT_PUBLIC_APP_URL",
+    "AFRICASTALKING_API_KEY",
+    "AFRICASTALKING_USERNAME",
+    "RESEND_API_KEY",
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "KYC_ENCRYPTION_KEY",
+    "ID_ENCRYPTION_KEY",
+    "HMAC_SECRET",
+    "NEXT_PUBLIC_TURNSTILE_SITE_KEY",
+    "TURNSTILE_SECRET_KEY",
+  ],
+  e2e: [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "NEXT_PUBLIC_APP_URL",
+    "AFRICASTALKING_API_KEY",
+    "AFRICASTALKING_USERNAME",
+    "AFRICASTALKING_SENDER_ID",
+    "RESEND_API_KEY",
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "KYC_ENCRYPTION_KEY",
+    "ID_ENCRYPTION_KEY",
+    "HMAC_SECRET",
+    "IP_HASH_SECRET",
+    "NEXT_PUBLIC_TURNSTILE_SITE_KEY",
+    "TURNSTILE_SECRET_KEY",
+  ],
+  production: [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "NEXT_PUBLIC_APP_URL",
+    "AFRICASTALKING_API_KEY",
+    "AFRICASTALKING_USERNAME",
+    "AFRICASTALKING_SENDER_ID",
+    "PAYFAST_MERCHANT_ID",
+    "PAYFAST_MERCHANT_KEY",
+    "PAYFAST_PASSPHRASE",
+    "RESEND_API_KEY",
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "KYC_ENCRYPTION_KEY",
+    "ID_ENCRYPTION_KEY",
+    "HMAC_SECRET",
+    "IP_HASH_SECRET",
+    "NEXT_PUBLIC_TURNSTILE_SITE_KEY",
+    "TURNSTILE_SECRET_KEY",
+  ],
+};
+
+const PRODUCTION_SECRET_KEYS = [
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "R2_ACCESS_KEY_ID",
+  "R2_SECRET_ACCESS_KEY",
+  "KYC_ENCRYPTION_KEY",
+  "ID_ENCRYPTION_KEY",
+  "HMAC_SECRET",
+  "IP_HASH_SECRET",
+  "AFRICASTALKING_API_KEY",
+  "PAYFAST_MERCHANT_ID",
+  "PAYFAST_MERCHANT_KEY",
+  "PAYFAST_PASSPHRASE",
+  "RESEND_API_KEY",
+  "TURNSTILE_SECRET_KEY",
+] as const;
+
+function normalizeMode(value?: string): LaunchValidationMode | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "development" || normalized === "dev" || normalized === "local") {
+    return "development";
+  }
+  if (normalized === "e2e" || normalized === "playwright" || normalized === "test") {
+    return "e2e";
+  }
+  if (normalized === "production" || normalized === "prod" || normalized === "release") {
+    return "production";
+  }
+  return null;
+}
+
+function hasValue(value?: string): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isTruthy(value?: string): boolean {
+  return hasValue(value) && TRUTHY_VALUES.has(value.trim().toLowerCase());
+}
+
+function isHexKey(value?: string): boolean {
+  return hasValue(value) && /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+function isPlaceholderValue(value?: string): boolean {
+  if (!hasValue(value)) return true;
+  const trimmed = value.trim();
+  const lowered = trimmed.toLowerCase();
+  return (
+    trimmed === HEX_PLACEHOLDER ||
+    lowered.startsWith("<set-") ||
+    lowered.startsWith("<your-") ||
+    lowered.startsWith("<replace-") ||
+    lowered.startsWith("changeme") ||
+    lowered.startsWith("replace-me") ||
+    lowered === "your-value-here"
+  );
+}
+
+function addCheck(
+  checks: LaunchValidationCheck[],
+  name: string,
+  status: LaunchCheckStatus,
+  detail: string
+): void {
+  checks.push({ name, status, detail });
+}
+
+export function getRequiredLaunchEnvKeys(mode: LaunchValidationMode): string[] {
+  return [...REQUIRED_BY_MODE[mode]];
+}
+
+export function resolveLaunchValidationMode(env: EnvSource = process.env): LaunchValidationMode {
+  const explicitMode =
+    normalizeMode(env.VERIFYMZANSI_RUNTIME_MODE) ?? normalizeMode(env.VERIFYMZANSI_VALIDATION_MODE);
+  if (explicitMode) {
+    return explicitMode;
+  }
+
+  if (env.PLAYWRIGHT_TEST_MODE === "1") {
+    return "e2e";
+  }
+
+  return env.NODE_ENV === "production" ? "production" : "development";
+}
+
+export function validateLaunchConfiguration(
+  env: EnvSource = process.env,
+  options: { mode?: LaunchValidationMode } = {}
+): LaunchValidationSummary {
+  const mode = options.mode ?? resolveLaunchValidationMode(env);
+  const checks: LaunchValidationCheck[] = [];
+  const missingRequired = getRequiredLaunchEnvKeys(mode).filter((key) => !hasValue(env[key]));
+
+  if (missingRequired.length === 0) {
+    addCheck(
+      checks,
+      "Launch env",
+      "pass",
+      `All ${getRequiredLaunchEnvKeys(mode).length} required ${mode} variables are present`
+    );
+  } else {
+    addCheck(checks, "Launch env", "fail", `Missing: ${missingRequired.join(", ")}`);
+  }
+
+  const appUrl = env.NEXT_PUBLIC_APP_URL;
+  if (!hasValue(appUrl)) {
+    addCheck(checks, "App URL", "fail", "NEXT_PUBLIC_APP_URL is missing");
+  } else {
+    try {
+      const parsed = new URL(appUrl);
+      const isLocalhost =
+        parsed.hostname === "localhost" ||
+        parsed.hostname === "127.0.0.1" ||
+        parsed.hostname === "::1";
+      if (mode === "production") {
+        if (parsed.protocol !== "https:" || isLocalhost) {
+          addCheck(
+            checks,
+            "App URL",
+            "fail",
+            `Production app URL must be public HTTPS. Received: ${appUrl}`
+          );
+        } else {
+          addCheck(checks, "App URL", "pass", appUrl);
+        }
+      } else if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        addCheck(checks, "App URL", "pass", appUrl);
+      } else {
+        addCheck(checks, "App URL", "fail", `Unsupported URL protocol: ${appUrl}`);
+      }
+    } catch {
+      addCheck(checks, "App URL", "fail", `Invalid URL: ${appUrl}`);
+    }
+  }
+
+  const afUsername = env.AFRICASTALKING_USERNAME;
+  const afSenderId = env.AFRICASTALKING_SENDER_ID;
+  if (mode === "production") {
+    if (!hasValue(afSenderId)) {
+      addCheck(
+        checks,
+        "Africa's Talking",
+        "fail",
+        "AFRICASTALKING_SENDER_ID is required in production"
+      );
+    } else if (isPlaceholderValue(afSenderId)) {
+      addCheck(
+        checks,
+        "Africa's Talking",
+        "fail",
+        "AFRICASTALKING_SENDER_ID still contains a placeholder value"
+      );
+    } else if (afUsername === "sandbox") {
+      addCheck(
+        checks,
+        "Africa's Talking",
+        "fail",
+        "AFRICASTALKING_USERNAME is still set to sandbox in production"
+      );
+    } else {
+      addCheck(checks, "Africa's Talking", "pass", `user=${afUsername} sender=${afSenderId}`);
+    }
+  } else if (!hasValue(afSenderId)) {
+    addCheck(
+      checks,
+      "Africa's Talking",
+      "warn",
+      "AFRICASTALKING_SENDER_ID is optional locally but required for production SMS delivery"
+    );
+  } else {
+    addCheck(checks, "Africa's Talking", "pass", `user=${afUsername} sender=${afSenderId}`);
+  }
+
+  const resendKey = env.RESEND_API_KEY;
+  if (!hasValue(resendKey)) {
+    addCheck(checks, "Resend", "fail", "RESEND_API_KEY is missing");
+  } else if (!resendKey.startsWith("re_")) {
+    addCheck(
+      checks,
+      "Resend",
+      mode === "production" ? "fail" : "warn",
+      "RESEND_API_KEY should start with 're_'"
+    );
+  } else {
+    addCheck(checks, "Resend", "pass", "API key format looks valid");
+  }
+
+  const payfastSandbox = env.PAYFAST_SANDBOX;
+  if (mode === "production" && isTruthy(payfastSandbox)) {
+    addCheck(
+      checks,
+      "PayFast",
+      "fail",
+      "PAYFAST_SANDBOX is enabled in production and would route payments to the sandbox gateway"
+    );
+  } else {
+    addCheck(checks, "PayFast", "pass", `sandbox=${isTruthy(payfastSandbox) ? "true" : "false"}`);
+  }
+
+  const r2AccountId = env.R2_ACCOUNT_ID;
+  const r2AccessKey = env.R2_ACCESS_KEY_ID;
+  const r2SecretKey = env.R2_SECRET_ACCESS_KEY;
+  if (
+    hasValue(r2AccountId) &&
+    hasValue(r2AccessKey) &&
+    hasValue(r2SecretKey) &&
+    r2AccountId.length >= 8 &&
+    r2AccessKey.length >= 8 &&
+    r2SecretKey.length >= 8
+  ) {
+    addCheck(checks, "R2 credentials", "pass", "R2 credential values look populated");
+  } else {
+    const status = mode === "production" ? "fail" : "warn";
+    addCheck(
+      checks,
+      "R2 credentials",
+      status,
+      "R2 credentials look incomplete or too short for a real deployment"
+    );
+  }
+
+  if (
+    isHexKey(env.KYC_ENCRYPTION_KEY) &&
+    isHexKey(env.ID_ENCRYPTION_KEY) &&
+    isHexKey(env.HMAC_SECRET)
+  ) {
+    addCheck(checks, "Encryption keys", "pass", "KYC/ID/HMAC keys are 64-char hex values");
+  } else {
+    addCheck(
+      checks,
+      "Encryption keys",
+      "fail",
+      "KYC_ENCRYPTION_KEY, ID_ENCRYPTION_KEY, and HMAC_SECRET must all be 64-char hex values"
+    );
+  }
+
+  const ipHashSecret = env.IP_HASH_SECRET;
+  if (mode === "production" || mode === "e2e") {
+    if (!hasValue(ipHashSecret)) {
+      addCheck(checks, "IP hash secret", "fail", "IP_HASH_SECRET is required for launch paths");
+    } else if (ipHashSecret.length < 32) {
+      addCheck(checks, "IP hash secret", "fail", "IP_HASH_SECRET must be at least 32 characters");
+    } else if (mode === "production" && isPlaceholderValue(ipHashSecret)) {
+      addCheck(checks, "IP hash secret", "fail", "IP_HASH_SECRET still contains a placeholder");
+    } else {
+      addCheck(checks, "IP hash secret", "pass", "IP hashing secret present");
+    }
+  } else if (hasValue(ipHashSecret) && ipHashSecret.length < 32) {
+    addCheck(checks, "IP hash secret", "warn", "IP_HASH_SECRET should be at least 32 characters");
+  } else if (!hasValue(ipHashSecret)) {
+    addCheck(
+      checks,
+      "IP hash secret",
+      "warn",
+      "IP_HASH_SECRET is optional locally but required for production audit privacy"
+    );
+  } else {
+    addCheck(checks, "IP hash secret", "pass", "IP hashing secret present");
+  }
+
+  const turnstileSiteKey = env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const turnstileSecret = env.TURNSTILE_SECRET_KEY;
+  if (hasValue(turnstileSiteKey) && hasValue(turnstileSecret)) {
+    addCheck(checks, "Turnstile", "pass", "Site key and secret are present");
+  } else {
+    addCheck(checks, "Turnstile", "fail", "Turnstile site key and secret are required");
+  }
+
+  const activeDevOnlyFlags = DEV_ONLY_FLAGS.filter((flag) => isTruthy(env[flag]));
+  if (mode === "production" && activeDevOnlyFlags.length > 0) {
+    addCheck(
+      checks,
+      "Dev-only flags",
+      "fail",
+      `Disable before launch: ${activeDevOnlyFlags.join(", ")}`
+    );
+  } else if (activeDevOnlyFlags.length > 0) {
+    addCheck(checks, "Dev-only flags", "warn", `Enabled: ${activeDevOnlyFlags.join(", ")}`);
+  } else {
+    addCheck(checks, "Dev-only flags", "pass", "No dev-only bypass flags enabled");
+  }
+
+  if (mode === "production") {
+    const placeholderSecrets = PRODUCTION_SECRET_KEYS.filter((key) => isPlaceholderValue(env[key]));
+    if (placeholderSecrets.length > 0) {
+      addCheck(
+        checks,
+        "Production secrets",
+        "fail",
+        `Placeholder values detected: ${placeholderSecrets.join(", ")}`
+      );
+    } else {
+      addCheck(checks, "Production secrets", "pass", "No placeholder production secrets detected");
+    }
+  }
+
+  const warnings = checks.filter((check) => check.status === "warn");
+  const errors = checks.filter((check) => check.status === "fail");
+
+  return {
+    mode,
+    checks,
+    errors,
+    warnings,
+    isValid: errors.length === 0,
+  };
+}

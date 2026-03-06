@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  resolveLaunchValidationMode,
+  validateLaunchConfiguration,
+  type LaunchValidationMode,
+} from "./launch-validation";
 
 /**
  * Environment variable validation.
@@ -106,6 +111,11 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+export interface ValidateEnvOptions {
+  mode?: LaunchValidationMode;
+  strict?: boolean;
+}
+
 let _cachedEnv: Env | null = null;
 
 /**
@@ -160,13 +170,48 @@ function _createFallbackEnv(): Env {
  *
  * @throws {Error} with clear messages listing all missing/invalid vars
  */
-export function validateEnv(): Env {
+function formatLaunchValidationFailure(
+  mode: LaunchValidationMode,
+  errors: ReturnType<typeof validateLaunchConfiguration>["errors"]
+): string {
+  const details = errors.map((error) => `  ✗ ${error.name}: ${error.detail}`).join("\n");
+
+  return [
+    "",
+    "══════════════════════════════════════════════════════",
+    "  VerifyMzansi — Launch Configuration Error",
+    "══════════════════════════════════════════════════════",
+    "",
+    `Launch validation mode: ${mode}`,
+    "",
+    details,
+    "",
+    "See README.md and LAUNCH-CHECKLIST.md for the required launch variables.",
+    "══════════════════════════════════════════════════════",
+    "",
+  ].join("\n");
+}
+
+function toEnvSource(env: Env): Record<string, string | undefined> {
+  return Object.fromEntries(
+    Object.entries(env).map(([key, value]) => [
+      key,
+      value === undefined ? undefined : String(value),
+    ])
+  );
+}
+
+export function validateEnv(options: ValidateEnvOptions = {}): Env {
   if (_cachedEnv) return _cachedEnv;
+  const validationMode = options.mode ?? resolveLaunchValidationMode(process.env);
 
   // Skip strict validation when running Next.js build or in CI
   // to allow static pages to compile without production secrets.
   // Critical vars are still verified to catch completely broken deployments.
-  if (process.env.npm_lifecycle_event === "build" || process.env.CI === "true") {
+  if (
+    !options.strict &&
+    (process.env.npm_lifecycle_event === "build" || process.env.CI === "true")
+  ) {
     // Even during build/CI, verify the 3 most critical vars exist
     const critical = [
       "NEXT_PUBLIC_SUPABASE_URL",
@@ -227,67 +272,16 @@ export function validateEnv(): Env {
     throw new Error(message);
   }
 
-  // Production-specific cross-field validations
-  if (result.data.NODE_ENV === "production") {
-    if (!result.data.AFRICASTALKING_SENDER_ID) {
-      throw new Error(
-        "[ENV] AFRICASTALKING_SENDER_ID is required in production so OTP and notification SMS messages use the approved sender ID."
-      );
-    }
-    if (!result.data.NEXT_PUBLIC_APP_URL.startsWith("https://")) {
-      throw new Error(
-        `[ENV] NEXT_PUBLIC_APP_URL must be an https:// URL in production. Received: ${result.data.NEXT_PUBLIC_APP_URL}`
-      );
-    }
-    if (result.data.PAYFAST_SANDBOX === "true") {
-      throw new Error(
-        "[ENV] PAYFAST_SANDBOX is 'true' in production — this will route payments to the sandbox gateway. Set to 'false' or remove it."
-      );
-    }
-    if (result.data.PAYFAST_MERCHANT_ID && !result.data.PAYFAST_PASSPHRASE) {
-      console.warn(
-        "[ENV] WARNING: PAYFAST_PASSPHRASE is not set — billing will fail until PayFast secrets are configured."
-      );
-    }
-    if (!result.data.PAYFAST_MERCHANT_ID || !result.data.PAYFAST_MERCHANT_KEY) {
-      console.warn(
-        "[ENV] WARNING: PayFast credentials not configured — billing features will be unavailable. " +
-          "Set them with: pnpm wrangler secret put PAYFAST_MERCHANT_ID / PAYFAST_MERCHANT_KEY"
-      );
-    }
-    if (!result.data.IP_HASH_SECRET) {
-      console.warn(
-        "[ENV] WARNING: IP_HASH_SECRET is not set — IP addresses in audit logs will use a dev-only fallback hash. Set it for POPIA compliance."
-      );
-    }
+  const launchSummary = validateLaunchConfiguration(toEnvSource(result.data), {
+    mode: validationMode,
+  });
 
-    // Verify server-side secrets are real values, not empty/placeholder fallbacks.
-    // On Cloudflare Workers these must be set via `wrangler secret put`.
-    const productionSecrets = [
-      ["SUPABASE_SERVICE_ROLE_KEY", result.data.SUPABASE_SERVICE_ROLE_KEY],
-      ["RESEND_API_KEY", result.data.RESEND_API_KEY],
-      ["AFRICASTALKING_API_KEY", result.data.AFRICASTALKING_API_KEY],
-      ["TURNSTILE_SECRET_KEY", result.data.TURNSTILE_SECRET_KEY],
-      ["KYC_ENCRYPTION_KEY", result.data.KYC_ENCRYPTION_KEY],
-      ["ID_ENCRYPTION_KEY", result.data.ID_ENCRYPTION_KEY],
-      ["HMAC_SECRET", result.data.HMAC_SECRET],
-    ] as const;
+  if (!launchSummary.isValid) {
+    throw new Error(formatLaunchValidationFailure(validationMode, launchSummary.errors));
+  }
 
-    const missingSecrets = productionSecrets
-      .filter(([, val]) => !val || val === "cafebabe".repeat(8))
-      .map(([name]) => name);
-
-    if (missingSecrets.length > 0) {
-      console.error(
-        `[ENV] CRITICAL: ${missingSecrets.length} server-side secret(s) missing in production: ${missingSecrets.join(", ")}\n` +
-          "Set them with: pnpm wrangler secret put <NAME>\n" +
-          "See wrangler.toml comments for the full list."
-      );
-      throw new Error(
-        `Missing production secrets: ${missingSecrets.join(", ")}. ` +
-          "These must be set as encrypted Wrangler secrets, not as [vars] in wrangler.toml."
-      );
-    }
+  for (const warning of launchSummary.warnings) {
+    console.warn(`[ENV] WARNING: ${warning.name}: ${warning.detail}`);
   }
 
   _cachedEnv = result.data;

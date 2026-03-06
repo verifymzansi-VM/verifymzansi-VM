@@ -1,297 +1,185 @@
-# VerifyMzansi — SA's Trusted Marketplace
+# VerifyMzansi
 
-> Buy & sell with people you can trust. South Africa's verification-first
-> marketplace for classifieds, shops, and business services.
+Verification-first South African marketplace built on Next.js, Supabase, and
+Cloudflare. The main business surface is `Mzansi Business`, with legacy
+`business-ads` and `mall-shops` routes preserved for compatibility.
 
 [![CI](https://github.com/verifymzansi/verifymzansi/actions/workflows/ci.yml/badge.svg)](https://github.com/verifymzansi/verifymzansi/actions/workflows/ci.yml)
 
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Tech Stack](#tech-stack)
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Project Structure](#project-structure)
-- [Environment Variables](#environment-variables)
-- [Scripts](#scripts)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Architecture](#architecture)
-- [Contributing](#contributing)
-- [License](#license)
-
----
-
 ## Overview
 
-VerifyMzansi is a verification-first marketplace platform built for South
-Africa. It features:
+VerifyMzansi combines:
 
-- **Marketplace areas**: Mzansi Market (classifieds), Mzansi Business (primary
-  business surface), legacy Business Ads, legacy Mall Shops, and Promotions &
-  Events
-- **Advertising & Promotions**: The core platform purpose — sellers advertise
-  products, services, and events. Featured listings, urgent flags, boost
-  visibility, storefront posts, and business offers
-- **Promotions discovery**: Dedicated `/promotions` page aggregating all active
-  deals, featured listings, and business offers
-- **KYC verification**: ID validation, liveness checks, and location proof for
-  trusted sellers
-- **POPIA-compliant**: End-to-end encryption for sensitive documents, data
-  subject access requests (DSAR)
-- **Tiered subscriptions**: Starter, Growth, and Pro plans via PayFast (ZAR)
-- **Admin panel**: Content moderation, KYC review, feature flags, audit logs
-- **Mobile-first**: Responsive design optimized for South African mobile users
-
-## Tech Stack
-
-| Layer            | Technology                                                            |
-| ---------------- | --------------------------------------------------------------------- |
-| **Framework**    | Next.js 16 (App Router, Server Components, Server Actions)            |
-| **Language**     | TypeScript (strict mode)                                              |
-| **Styling**      | Tailwind CSS + shadcn/ui + Radix UI primitives                        |
-| **State**        | Zustand (5 stores: auth, marketplace, listings wizard, notifications) |
-| **Database**     | Supabase (PostgreSQL + Auth + Realtime + Storage)                     |
-| **File Storage** | Cloudflare R2 (S3-compatible)                                         |
-| **Hosting**      | Cloudflare Pages via OpenNext                                         |
-| **Workers**      | Cloudflare Workers (KYC encryptor, rate limiter, retention cleanup)   |
-| **Payments**     | PayFast (ZAR)                                                         |
-| **SMS/OTP**      | Africa's Talking                                                      |
-| **Email**        | Resend                                                                |
-| **CAPTCHA**      | Cloudflare Turnstile                                                  |
-| **Testing**      | Vitest + Testing Library + Playwright                                 |
+- `Mzansi Market` for classified listings
+- `Mzansi Business` for verified businesses, shops, and services
+- `Promotions & Events` for deals, campaigns, and business posts
+- KYC, moderation, audit logging, and POPIA-sensitive data handling
+- PayFast billing, Africa's Talking OTP, Resend email, Turnstile CAPTCHA, and
+  Cloudflare R2 file storage
 
 ## Prerequisites
 
-- **Node.js** ≥ 20.0.0 (< 26)
-- **pnpm** ≥ 10.0.0
-- A **Supabase** project (free tier works for development)
-- Cloudflare account (for R2 storage and Workers)
-- Cloudflare **Turnstile** site key and secret key (required for CAPTCHA)
+- Node.js `>=20 <23`
+- pnpm `>=10`
+- Supabase project
+- Cloudflare account for Pages/Workers/R2/Turnstile
+- PayFast, Africa's Talking, and Resend credentials for launch validation
 
-## Quick Start
+## Local Development
+
+Use the development env template, not the production Cloudflare template.
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/verifymzansi/verifymzansi.git
 cd verifymzansi
-
-# 2. Install dependencies
 pnpm install
+cp .env.example .env.local
+```
 
-# 3. Set up environment variables
-cp cloudflare-env-vars.txt .env.local
-# Edit .env.local with your actual keys (see Environment Variables below)
+Generate the encryption secrets and paste them into `.env.local`:
 
-# 4. Generate encryption keys
-node -e "const c=require('crypto'); console.log('KYC_ENCRYPTION_KEY='+c.randomBytes(32).toString('hex')); console.log('ID_ENCRYPTION_KEY='+c.randomBytes(32).toString('hex')); console.log('HMAC_SECRET='+c.randomBytes(32).toString('hex'));"
+```bash
+node -e "const c=require('crypto'); console.log('KYC_ENCRYPTION_KEY='+c.randomBytes(32).toString('hex')); console.log('ID_ENCRYPTION_KEY='+c.randomBytes(32).toString('hex')); console.log('HMAC_SECRET='+c.randomBytes(32).toString('hex')); console.log('IP_HASH_SECRET='+c.randomBytes(32).toString('hex'));"
+```
 
-# 5. Run preflight checks (validates env, schema, connectivity)
+Then run:
+
+```bash
 pnpm preflight
-
-# 6. Run the development server
 pnpm dev
-
-# 7. Open http://localhost:3000
 ```
 
-> **Dev-only environment variables** — The following variables must NEVER be set
-> in production:
->
-> - `ENABLE_DEV_PAYMENT_BYPASS` — Bypasses PayFast payment validation
-> - `ENABLE_MOCK_PAYFAST` — Enables the mock PayFast endpoint
-> - `DEV_EXPOSE_OTP` — Logs OTP codes to the console
+Open `http://localhost:3000`.
 
-## Project Structure
+## Environment Modes
 
-```
-verifymzansi/
-├── src/
-│   ├── app/                    # Next.js App Router pages & API routes
-│   │   ├── (auth)/             # Login, register, password reset
-│   │   ├── (marketplace)/      # Mzansi Market, Business Ads, Mall Shops, Promotions
-│   │   ├── admin/              # Admin panel (moderation, KYC review, flags)
-│   │   ├── dashboard/          # Seller dashboard (listings, promotions, leads, metrics)
-│   │   ├── api/                # 31 API routes
-│   │   └── ...                 # Billing, verification, safety, legal pages
-│   ├── components/             # React components
-│   │   ├── ui/                 # shadcn/ui primitives (Button, Dialog, etc.)
-│   │   ├── layout/             # Header, Footer, navigation
-│   │   ├── admin/              # Admin-specific components
-│   │   ├── listings/           # Listing cards, forms, wizards
-│   │   └── ...                 # billing, home, shared, trust, showrooms
-│   ├── hooks/                  # Custom React hooks
-│   ├── lib/                    # Core business logic
-│   │   ├── auth/               # Role-based access control
-│   │   ├── config/             # Environment validation (Zod)
-│   │   ├── constants/          # Categories, pricing, provinces, trust scale
-│   │   ├── services/           # Business logic (KYC, payments, email, SMS)
-│   │   ├── supabase/           # Supabase client factories (server, client, admin)
-│   │   ├── utils/              # Helpers (encryption, validation, formatting)
-│   │   └── validations/        # Zod schemas for all data models
-│   ├── stores/                 # Zustand state stores
-│   ├── styles/                 # Global CSS
-│   └── types/                  # TypeScript type definitions
-├── e2e/                        # Playwright end-to-end tests
-├── workers/                    # Cloudflare Workers
-├── supabase/                   # Supabase config & migrations
-├── scripts/                    # Build, seed, and utility scripts
-├── docs/                       # Documentation & playbooks
-└── public/                     # Static assets
-```
+### Local dev
 
-## Environment Variables
+- Source template: `.env.example`
+- Expected URL: `http://localhost:3000`
+- `pnpm preflight` runs in development mode by default
+- Production-only requirements such as HTTPS app URLs and a live Africa's
+  Talking sender ID are warnings, not failures
 
-Copy `cloudflare-env-vars.txt` to `.env.local` and populate with your values:
+### Playwright / CI smoke
 
-| Variable                         | Required | Description                                                                           |
-| -------------------------------- | -------- | ------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`       | Yes      | Supabase project URL                                                                  |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | Yes      | Supabase publishable (anon) key                                                       |
-| `SUPABASE_SERVICE_ROLE_KEY`      | Yes      | Supabase service role key (server-only)                                               |
-| `R2_ACCOUNT_ID`                  | Yes      | Cloudflare account ID                                                                 |
-| `R2_ACCESS_KEY_ID`               | Yes      | R2 API access key                                                                     |
-| `R2_SECRET_ACCESS_KEY`           | Yes      | R2 API secret key                                                                     |
-| `KYC_ENCRYPTION_KEY`             | Yes      | 64-char hex key for KYC document encryption                                           |
-| `ID_ENCRYPTION_KEY`              | Yes      | 64-char hex key for ID number encryption                                              |
-| `HMAC_SECRET`                    | Yes      | 64-char hex key for dedup hashing                                                     |
-| `AFRICASTALKING_API_KEY`         | Yes      | Africa's Talking API key for OTP                                                      |
-| `AFRICASTALKING_USERNAME`        | Yes      | Africa's Talking username                                                             |
-| `AFRICASTALKING_SENDER_ID`       | Yes      | Approved production sender ID for SMS                                                 |
-| `PAYFAST_MERCHANT_ID`            | Yes      | PayFast merchant ID                                                                   |
-| `PAYFAST_MERCHANT_KEY`           | Yes      | PayFast merchant key                                                                  |
-| `RESEND_API_KEY`                 | Yes      | Resend email API key                                                                  |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Yes      | Cloudflare Turnstile site key (CAPTCHA)                                               |
-| `TURNSTILE_SECRET_KEY`           | Yes      | Cloudflare Turnstile secret key                                                       |
-| `NEXT_PUBLIC_APP_URL`            | Yes      | Public app URL (`https://verifymzansi.com` in production; localhost only in dev/test) |
-| `ENABLE_DEV_PAYMENT_BYPASS`      | No       | ⚠️ Dev only — bypasses PayFast validation                                             |
-| `ENABLE_MOCK_PAYFAST`            | No       | ⚠️ Dev only — enables mock PayFast endpoint                                           |
-| `DEV_EXPOSE_OTP`                 | No       | ⚠️ Dev only — logs OTP codes to console                                               |
+- Playwright does not depend on your local `.env.local`
+- `playwright.config.ts` starts the app through
+  `scripts/start-playwright-server.cjs`
+- That script injects deterministic e2e-safe env values and sets
+  `VERIFYMZANSI_RUNTIME_MODE=e2e`
+- The app still boots through `next start`, but production-only launch rules are
+  relaxed for that explicit e2e mode
 
-## Scripts
+### Production / Cloudflare
 
-| Script                | Description                        |
-| --------------------- | ---------------------------------- |
-| `pnpm dev`            | Start development server           |
-| `pnpm build`          | Production build                   |
-| `pnpm lint`           | Run ESLint                         |
-| `pnpm typecheck`      | TypeScript type checking           |
-| `pnpm test`           | Run unit tests (Vitest)            |
-| `pnpm test:e2e`       | Run E2E tests (Playwright)         |
-| `pnpm test:coverage`  | Unit tests with coverage report    |
-| `pnpm test:all`       | Unit + E2E tests                   |
-| `pnpm preflight`      | Node version + schema + env checks |
-| `pnpm seed:dev`       | Seed development database          |
-| `pnpm security:audit` | Security audit                     |
-| `pnpm secret-scan`    | Scan for leaked secrets            |
-| `pnpm licenses:check` | Check dependency licenses          |
-| `pnpm format`         | Format code with Prettier          |
-| `pnpm format:check`   | Check formatting without writing   |
+- Source template: `cloudflare-env-vars.txt`
+- Required check: `pnpm validate:launch-env`
+- Full release check: `pnpm preflight:prod`
+- `NEXT_PUBLIC_APP_URL` must be public HTTPS
+- `AFRICASTALKING_SENDER_ID`, `IP_HASH_SECRET`, PayFast production secrets,
+  Turnstile, R2, Resend, and encryption keys must all be populated
+- Sensitive values belong in GitHub Actions secrets and Cloudflare Wrangler
+  secrets, not in committed files
+
+## Key Commands
+
+| Command                                                                                | Purpose                                              |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `pnpm dev`                                                                             | Start the local Next.js dev server                   |
+| `pnpm build`                                                                           | Production Next.js build                             |
+| `pnpm lint`                                                                            | ESLint                                               |
+| `pnpm typecheck`                                                                       | TypeScript typecheck                                 |
+| `pnpm test`                                                                            | Vitest suite                                         |
+| `pnpm test:coverage`                                                                   | Vitest with coverage                                 |
+| `pnpm test:e2e`                                                                        | Full Playwright suite                                |
+| `pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome` | Launch-path smoke coverage                           |
+| `pnpm preflight`                                                                       | Local launch checks with development-mode validation |
+| `pnpm preflight:prod`                                                                  | Production launch checks, including plan seed parity |
+| `pnpm validate:launch-env`                                                             | Fail-fast production env validation                  |
+| `pnpm seed:prod`                                                                       | Sync plan rows and seed staff accounts               |
+| `pnpm security:audit`                                                                  | Dependency vulnerability gate                        |
+| `pnpm secret-scan`                                                                     | Secret leak scan                                     |
+| `pnpm licenses:check`                                                                  | License policy gate                                  |
+| `pnpm build:cloudflare`                                                                | OpenNext Cloudflare build                            |
 
 ## Testing
 
+Run the full launch-relevant suite with:
+
 ```bash
-# Unit tests
+pnpm lint
+pnpm typecheck
 pnpm test
-
-# Unit tests with coverage
 pnpm test:coverage
-
-# E2E tests (requires running dev server)
-pnpm test:e2e
-
-# All tests
-pnpm test:all
+pnpm preflight
+pnpm secret-scan
+pnpm security:audit
+pnpm licenses:check
+pnpm build
+pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome
 ```
 
-**Test structure:**
+Before a production release, also run:
 
-- `src/__tests__/` — Unit and integration tests (Vitest + Testing Library)
-- `e2e/` — End-to-end tests (Playwright)
-- `scripts/test-*.ts` — Contract, smoke, performance, and mutation tests
+```bash
+pnpm validate:launch-env
+pnpm preflight:prod
+```
 
 ## Deployment
 
-VerifyMzansi deploys to Cloudflare Pages via OpenNext:
+Canonical release path: push to `master` and let GitHub Actions deploy from
+Ubuntu.
 
 ```bash
-# Build for Cloudflare
-pnpm build:cloudflare
-
-# Preview locally with Wrangler
-pnpm preview:cloudflare
-
-# Deploy to production (Linux / macOS / WSL only — see note below)
-pnpm deploy
+git push origin master
 ```
 
-> **Windows note:** Local deploys (`pnpm deploy`) fail on native Windows because
-> wrangler writes WASM modules with `?module` query suffixes that are illegal in
-> Windows filenames (e.g. `resvg.wasm?module`). Use one of these alternatives:
->
-> - **Push to `master`** — GitHub Actions deploys automatically via CI
-> - **WSL on ext4** — copy the repo to `~/verifymzansi` and run `pnpm deploy`
->   there, not from `/mnt/c/...`
-> - **Cloudflare Dashboard** — trigger a deploy from the Cloudflare Pages UI
+The deploy workflow now:
 
-### Known Cloudflare Warning Classes
+1. Validates the full production env contract with
+   `scripts/validate-launch-env.ts`
+2. Builds the Cloudflare bundle on Ubuntu
+3. Deploys the Pages app plus supporting Workers
+4. Fails if `/api/health` comes back degraded after deploy
 
-These warnings are currently expected on the supported Cloudflare/OpenNext path
-and should be triaged separately from new build failures:
+### Windows note
 
-- **OpenNext Durable Object startup warnings** — The bindings in `wrangler.toml`
-  for `DOQueueHandler`, `DOShardedTagCache`, and `BucketCachePurge` may trigger
-  startup warnings during build/deploy, but OpenNext documents them as safe to
-  ignore for cache initialization.
-- **Next.js 16 `middleware` deprecation warning** — The app still uses
-  `src/middleware.ts` because the `proxy` replacement is Node runtime only, and
-  this Cloudflare/OpenNext deployment path is not ready to switch without a
-  separate compatibility upgrade.
-- **`duplicate-object-key` warnings in `.open-next/server-functions`** — These
-  come from generated vendor bundle output (currently the Radix/Floating UI
-  chain), not repo-authored application code. Track them through dependency
-  upgrades to `@opennextjs/cloudflare`, `wrangler`, Radix UI, and
-  `@floating-ui/*` rather than editing `.open-next`.
+Local `pnpm build:cloudflare`, `pnpm preview:cloudflare`, and `pnpm deploy` are
+not supported on native Windows because Wrangler/OpenNext emits filenames that
+Windows cannot materialize. Use one of:
 
-Workers are deployed separately:
+- GitHub Actions on `master`
+- Ubuntu
+- WSL on an ext4-backed workspace such as `~/verifymzansi`
 
-```bash
-pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml
-pnpm exec wrangler deploy --config wrangler.rate-limiter.toml
-pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
+Do not run Cloudflare builds from `/mnt/c/...`.
+
+## Project Structure
+
+```text
+src/
+  app/                 Next.js routes, pages, and API handlers
+  components/          UI and marketplace surfaces
+  lib/                 domain logic, config, services, Supabase helpers
+  stores/              Zustand stores
+  test/                shared test setup
+scripts/               seed, preflight, validation, security, and release tooling
+supabase/              migrations and schema assets
+workers/               Cloudflare Workers
+e2e/                   Playwright suites
 ```
 
-## Architecture
+## Launch Notes
 
-```
-┌─────────────┐    ┌──────────────┐    ┌───────────────┐
-│  Cloudflare  │───▶│  Next.js 16  │───▶│   Supabase    │
-│   Pages      │    │  App Router  │    │  PostgreSQL   │
-│  (CDN Edge)  │    │  + Workers   │    │  + Auth       │
-└─────────────┘    └──────────────┘    │  + Realtime   │
-       │                  │             └───────────────┘
-       │                  │
-       ▼                  ▼
-┌─────────────┐    ┌──────────────┐
-│ Cloudflare   │    │   External   │
-│ R2 Storage   │    │   Services   │
-│ (files)      │    │  PayFast     │
-└─────────────┘    │  Africa's T. │
-                   │  Resend      │
-                   └──────────────┘
-```
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
-
-- Branch naming and commit conventions
-- Pull request process
-- Code review checklist
-- Testing requirements
+- `Mzansi Business` is the primary business experience.
+- Legacy public routes remain available for compatibility.
+- Runtime pricing in `src/lib/constants/pricing.ts` is treated as the source of
+  truth for seeded `plans`.
+- `/api/health` now reports config, Supabase, and audit status without exposing
+  secrets.
 
 ## License
 
-Proprietary — All rights reserved.
+Proprietary. All rights reserved.

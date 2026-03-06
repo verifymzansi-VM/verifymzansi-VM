@@ -95,6 +95,8 @@ describe("env config", () => {
         vi.stubEnv(key, value);
       }
       vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("PAYFAST_PASSPHRASE", "prod-passphrase");
+      vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
       delete process.env.AFRICASTALKING_SENDER_ID;
       const mod = await import("./env");
 
@@ -109,10 +111,30 @@ describe("env config", () => {
       }
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("AFRICASTALKING_SENDER_ID", "VerifyMzansi");
+      vi.stubEnv("PAYFAST_PASSPHRASE", "prod-passphrase");
+      vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
       vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
       const mod = await import("./env");
 
-      expect(() => mod.validateEnv()).toThrow("NEXT_PUBLIC_APP_URL must be an https:// URL");
+      expect(() => mod.validateEnv()).toThrow("Production app URL must be public HTTPS");
+    });
+
+    it("allows e2e mode to bypass production-only launch rules", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("VERIFYMZANSI_RUNTIME_MODE", "e2e");
+      vi.stubEnv("PLAYWRIGHT_TEST_MODE", "1");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("PAYFAST_SANDBOX", "true");
+      vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://127.0.0.1:3000");
+      vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
+      const mod = await import("./env");
+
+      expect(mod.validateEnv().NEXT_PUBLIC_APP_URL).toBe("http://127.0.0.1:3000");
     });
   });
 

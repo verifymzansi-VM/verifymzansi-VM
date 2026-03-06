@@ -36,7 +36,9 @@
     "seed:dev": "tsx scripts/seed-development.ts",
     "seed:prod": "tsx scripts/seed-production.ts",
     "db:verify-schema": "tsx scripts/check-supabase-schema.ts",
-    "preflight": "tsx scripts/check-node-version.ts && pnpm run db:verify-schema && tsx scripts/preflight-check.ts",
+    "preflight": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts",
+    "preflight:prod": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts --mode=production",
+    "validate:launch-env": "tsx scripts/validate-launch-env.ts --mode=production",
     "prepare": "husky"
   },
   "dependencies": {

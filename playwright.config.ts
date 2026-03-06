@@ -9,7 +9,7 @@ export default defineConfig({
   reporter: "html",
   timeout: process.env.CI ? 90_000 : 60_000,
   use: {
-    baseURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     navigationTimeout: process.env.CI ? 90_000 : 45_000,
@@ -37,8 +37,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm build && pnpm start",
-    url: "http://localhost:3000",
+    command: "node scripts/start-playwright-server.cjs",
+    url: "http://127.0.0.1:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 180 * 1000,
   },

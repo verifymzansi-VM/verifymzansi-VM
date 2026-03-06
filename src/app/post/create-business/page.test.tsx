@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreateBusinessPage from "./page";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -156,15 +156,17 @@ describe("CreateBusinessPage", () => {
     fillCoreBusinessFields();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    expect(screen.getByText("Street address is required.")).toBeInTheDocument();
-    expect(screen.getByText("Suburb is required.")).toBeInTheDocument();
+    expect(await screen.findByText("Street address is required.")).toBeInTheDocument();
+    expect(await screen.findByText("Suburb is required.")).toBeInTheDocument();
 
     await selectBusinessType(/Online Only/i);
 
-    expect(screen.getByLabelText(/Primary order channel/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Street address/i)).not.toBeInTheDocument();
-    expect(screen.queryByText("Street address is required.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Suburb is required.")).not.toBeInTheDocument();
+    expect(await screen.findByLabelText(/Primary order channel/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/Street address/i)).not.toBeInTheDocument();
+      expect(screen.queryByText("Street address is required.")).not.toBeInTheDocument();
+      expect(screen.queryByText("Suburb is required.")).not.toBeInTheDocument();
+    });
   });
 
   it("requires store number for mall stores on step 1", async () => {

@@ -35,6 +35,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 // ---------- Build plan rows from constants ----------
 
 type PlanRow = {
+  id?: string;
   area: string;
   tier: string;
   name: string;
@@ -44,7 +45,7 @@ type PlanRow = {
   active: boolean;
 };
 
-function buildPlanRows(): PlanRow[] {
+export function buildPlanRows(): PlanRow[] {
   const featureByKey = new Map(
     PLANS.map((plan) => [`${plan.area}:${plan.tier}`, plan.features] as const)
   );
@@ -58,6 +59,38 @@ function buildPlanRows(): PlanRow[] {
     features: featureByKey.get(`${plan.area}:${plan.tier}`) ?? {},
     active: plan.active,
   }));
+}
+
+async function deactivateUnexpectedPlans(expectedPlans: PlanRow[]) {
+  const expectedKeys = new Set(expectedPlans.map((plan) => `${plan.area}:${plan.tier}`));
+  const { data, error } = await supabase.from("plans").select("id,area,tier,active");
+
+  if (error) {
+    console.error("Failed to inspect existing plans before cleanup:", error);
+    return false;
+  }
+
+  const unexpectedActiveIds = (data ?? [])
+    .filter((row) => row.active && !expectedKeys.has(`${row.area}:${row.tier}`))
+    .map((row) => row.id);
+
+  if (unexpectedActiveIds.length === 0) {
+    console.log("  ✓ No unexpected active plans required cleanup");
+    return true;
+  }
+
+  const { error: deactivateError } = await supabase
+    .from("plans")
+    .update({ active: false })
+    .in("id", unexpectedActiveIds);
+
+  if (deactivateError) {
+    console.error("Failed to deactivate unexpected active plans:", deactivateError);
+    return false;
+  }
+
+  console.log(`  ✓ Deactivated ${unexpectedActiveIds.length} unexpected active plan row(s)`);
+  return true;
 }
 
 // ---------- Seeding Functions ----------
@@ -76,7 +109,12 @@ async function seedPlans() {
     return false;
   }
 
-  console.log(`  ✓ ${plans.length} subscription plans seeded from runtime pricing constants`);
+  const cleanupOk = await deactivateUnexpectedPlans(plans);
+  if (!cleanupOk) {
+    return false;
+  }
+
+  console.log(`  ✓ ${plans.length} subscription plans synced from runtime pricing constants`);
   return true;
 }
 

@@ -1,18 +1,50 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getLaunchHealthSnapshot } from "@/lib/health/launch-health";
+
+vi.mock("@/lib/health/launch-health", () => ({
+  getLaunchHealthSnapshot: vi.fn(),
+}));
 
 describe("Health route", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-  it("should return 200 with correct shape", async () => {
-    // Health check routes should return { status: "ok" }
+  it("returns HTTP 200 when the launch snapshot is healthy", async () => {
+    vi.mocked(getLaunchHealthSnapshot).mockResolvedValue({
+      status: "ok",
+      mode: "production",
+      timestamp: "2026-03-06T00:00:00.000Z",
+      checks: {
+        config: { status: "ok", errorCount: 0, warningCount: 0 },
+        supabase: { status: "ok", detail: "Supabase query probe succeeded" },
+        audit: { status: "ok", failureCount: 0 },
+      },
+    });
+
     const { GET } = await import("@/app/api/health/route");
+    const response = await GET();
 
-    if (GET) {
-      const res = await GET();
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body).toHaveProperty("status");
-      expect(body.status).toBe("ok");
-    }
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ status: "ok" });
+  });
+
+  it("returns HTTP 503 when the launch snapshot is degraded", async () => {
+    vi.mocked(getLaunchHealthSnapshot).mockResolvedValue({
+      status: "degraded",
+      mode: "production",
+      timestamp: "2026-03-06T00:00:00.000Z",
+      checks: {
+        config: { status: "degraded", errorCount: 1, warningCount: 0, failedChecks: ["App URL"] },
+        supabase: { status: "degraded", detail: "Supabase launch probe failed" },
+        audit: { status: "ok", failureCount: 0 },
+      },
+    });
+
+    const { GET } = await import("@/app/api/health/route");
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ status: "degraded" });
   });
 });
