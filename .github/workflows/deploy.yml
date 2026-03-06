@@ -61,6 +61,12 @@ jobs:
           NODE_ENV: production
         run: pnpm run build:cloudflare
 
+      - name: Annotate known Cloudflare warning classes
+        if: steps.check-deploy-secrets.outputs.skip != 'true'
+        run: |
+          echo "::notice::Known warning classes on the current Cloudflare/OpenNext path: Durable Object startup warnings from wrangler.toml, the Next.js 16 middleware deprecation for src/middleware.ts, and generated duplicate-object-key warnings from .open-next/server-functions."
+          echo "::notice::Treat new warning patterns outside those classes as actionable."
+
       - name: Deploy to Cloudflare
         if: steps.check-deploy-secrets.outputs.skip != 'true'
         env:

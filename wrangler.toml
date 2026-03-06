@@ -41,6 +41,10 @@ NEXT_PUBLIC_CF_IMAGE_RESIZING = "false"
 
 # ────────────────────────────────────────────────────────────────────────────
 # Durable Objects (required by @opennextjs/cloudflare for ISR/caching)
+# Wrangler/workerd may warn during local startup or deploy validation that
+# these classes are not exported yet. OpenNext documents this as expected for
+# cache setup; do not remove or rename these bindings unless the adapter docs
+# change.
 # ────────────────────────────────────────────────────────────────────────────
 [durable_objects]
 bindings = [

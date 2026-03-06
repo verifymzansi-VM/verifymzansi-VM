@@ -319,8 +319,9 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
  * Delegates to routeRequest() for auth/routing, then wraps
  * the response with security headers (CSP nonce, HSTS, etc.).
  *
- * Cloudflare/OpenNext does not yet support Next.js 16 Node proxy runtime,
- * so this app intentionally stays on the Edge middleware convention.
+ * TODO(cloudflare-next16): Move this to `proxy.ts` only after the
+ * Cloudflare/OpenNext adapter supports the Next.js 16 Node proxy runtime.
+ * Until then, keep the middleware convention despite the deprecation warning.
  */
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const routeResponse = await routeRequest(request);

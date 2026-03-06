@@ -233,6 +233,25 @@ pnpm deploy
 > - **WSL** — run `pnpm deploy` from a WSL terminal
 > - **Cloudflare Dashboard** — trigger a deploy from the Cloudflare Pages UI
 
+### Known Cloudflare Warning Classes
+
+These warnings are currently expected on the supported Cloudflare/OpenNext path
+and should be triaged separately from new build failures:
+
+- **OpenNext Durable Object startup warnings** — The bindings in `wrangler.toml`
+  for `DOQueueHandler`, `DOShardedTagCache`, and `BucketCachePurge` may trigger
+  startup warnings during build/deploy, but OpenNext documents them as safe to
+  ignore for cache initialization.
+- **Next.js 16 `middleware` deprecation warning** — The app still uses
+  `src/middleware.ts` because the `proxy` replacement is Node runtime only, and
+  this Cloudflare/OpenNext deployment path is not ready to switch without a
+  separate compatibility upgrade.
+- **`duplicate-object-key` warnings in `.open-next/server-functions`** — These
+  come from generated vendor bundle output (currently the Radix/Floating UI
+  chain), not repo-authored application code. Track them through dependency
+  upgrades to `@opennextjs/cloudflare`, `wrangler`, Radix UI, and
+  `@floating-ui/*` rather than editing `.open-next`.
+
 Workers are deployed separately:
 
 ```bash
