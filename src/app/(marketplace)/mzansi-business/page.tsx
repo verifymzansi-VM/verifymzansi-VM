@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { BusinessCategoryStrip } from "@/components/listings/business-category-strip";
 import { MzansiBusinessGrid } from "./grid";
+import { MzansiBusinessFilterSync } from "./filter-sync";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 
@@ -32,18 +33,33 @@ export default async function MzansiBusinessPage() {
     .order("created_at", { ascending: false })
     .limit(5);
 
-  const slides: ShowroomSlide[] = (topBusinesses ?? []).map((b) => ({
-    type: "storefront",
-    id: b.id,
-    title: b.business_name,
-    description: b.description || "Verified South African business.",
-    location: b.location_city || b.location_province || "South Africa",
-    mediaUrl: normalizeMediaUrl(
-      b.cover_video ||
-        b.cover_photo ||
-        "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1600&q=80"
-    ),
-  }));
+  const slides: ShowroomSlide[] =
+    topBusinesses && topBusinesses.length > 0
+      ? topBusinesses.map((b) => ({
+          type: "storefront",
+          id: b.id,
+          title: b.business_name,
+          description: b.description || "Verified South African business.",
+          location: b.location_city || b.location_province || "South Africa",
+          mediaUrl: normalizeMediaUrl(
+            b.cover_video ||
+              b.cover_photo ||
+              "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1600&q=80"
+          ),
+        }))
+      : [
+          {
+            id: "mzansi-business-empty",
+            type: "business",
+            title: "Mzansi Business",
+            description: "Discover verified South African businesses and services.",
+            location: "South Africa",
+            mediaUrl: "/images/fallbacks/hero-shop.svg",
+            hrefOverride: "/post/create-business",
+            ctaLabelOverride: "List Your Business",
+            badgeLabelOverride: "Mzansi Business",
+          },
+        ];
 
   // Fetch category counts for auto-hiding empty categories
   const { data: allLive } = await supabase
@@ -59,6 +75,8 @@ export default async function MzansiBusinessPage() {
 
   return (
     <div className="space-y-0">
+      <MzansiBusinessFilterSync />
+
       {/* ── Dynamic Showroom Hero ──────────────────────────────────── */}
       <ShowroomHero
         slides={slides}

@@ -65,6 +65,33 @@ describe("ShowroomHero", () => {
     });
   });
 
+  it("prefers slide CTA overrides when provided", async () => {
+    render(
+      <ShowroomHero
+        slides={[
+          {
+            id: "business-empty",
+            type: "business",
+            title: "Mzansi Business",
+            description: "Discover verified South African businesses and services.",
+            location: "South Africa",
+            mediaUrl: "/images/fallbacks/hero-shop.svg",
+            hrefOverride: "/post/create-business",
+            ctaLabelOverride: "List Your Business",
+            badgeLabelOverride: "Mzansi Business",
+          },
+        ]}
+      />
+    );
+
+    await waitFor(() => {
+      const ctas = screen.getAllByRole("link", { name: /list your business/i });
+      expect(ctas.some((link) => link.getAttribute("href") === "/post/create-business")).toBe(true);
+    });
+
+    expect(screen.getAllByText("Mzansi Business").length).toBeGreaterThan(0);
+  });
+
   it("renders placeholder content when slides are empty", async () => {
     render(<ShowroomHero slides={[]} />);
 

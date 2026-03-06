@@ -189,46 +189,62 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
     const offset = (page - 1) * limit;
 
-    let query = admin
-      .from("businesses")
-      .select(
-        "id, seller_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
-        { count: "exact" }
-      )
-      .eq("status", "live")
-      .eq("area", "MZANSI_BUSINESS");
+    const primarySelect =
+      "id, seller_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at";
+    const fallbackSelect =
+      "id, seller_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at";
 
-    if (businessType) {
-      query = query.eq("business_type", businessType);
-    }
-    if (category) {
-      query = query.eq("category", category);
-    }
-    if (province) {
-      query = query.eq("location_province", province);
-    }
-    if (city) {
-      query = query.eq("location_city", city);
-    }
-    if (mallId) {
-      query = query.eq("mall_id", mallId);
-    }
-    if (search) {
-      // Escape PostgREST special characters to prevent filter injection
-      const safeSearch = search.replace(/[,.()\\/]/g, "");
-      if (safeSearch) {
-        query = query.or(`business_name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
+    const buildQuery = (selectClause: string) => {
+      let query = admin
+        .from("businesses")
+        .select(selectClause, { count: "exact" })
+        .eq("status", "live")
+        .eq("area", "MZANSI_BUSINESS");
+
+      if (businessType) {
+        query = query.eq("business_type", businessType);
       }
+      if (category) {
+        query = query.eq("category", category);
+      }
+      if (province) {
+        query = query.eq("location_province", province);
+      }
+      if (city) {
+        query = query.eq("location_city", city);
+      }
+      if (mallId) {
+        query = query.eq("mall_id", mallId);
+      }
+      if (search) {
+        // Escape PostgREST special characters to prevent filter injection
+        const safeSearch = search.replace(/[,.()\\/]/g, "");
+        if (safeSearch) {
+          query = query.or(`business_name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
+        }
+      }
+
+      return query
+        .order("boost_until", { ascending: false, nullsFirst: false })
+        .order("featured_until", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+    };
+
+    const primaryResult = await buildQuery(primarySelect);
+    let businesses = (primaryResult.data ?? []) as unknown[];
+    let count = primaryResult.count;
+    let error = primaryResult.error;
+
+    if (error?.message?.includes("gallery_photos")) {
+      const fallbackResult = await buildQuery(fallbackSelect);
+      businesses = ((fallbackResult.data ?? []) as unknown[]).map((business) => ({
+        ...(business as Record<string, unknown>),
+        gallery_photos: null,
+      }));
+      count = fallbackResult.count;
+      error = fallbackResult.error;
     }
-
-    // Order: boosted first, then featured, then newest
-    query = query
-      .order("boost_until", { ascending: false, nullsFirst: false })
-      .order("featured_until", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    const { data: businesses, count, error } = await query;
 
     if (error) {
       log.error("Failed to fetch businesses", { error: error.message });

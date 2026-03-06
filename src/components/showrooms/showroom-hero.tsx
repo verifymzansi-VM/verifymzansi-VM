@@ -53,6 +53,9 @@ export interface ShowroomSlide {
   posterUrl?: string;
   price?: number | null;
   promotions?: Record<string, unknown>[];
+  hrefOverride?: string;
+  ctaLabelOverride?: string;
+  badgeLabelOverride?: string;
 }
 
 interface ShowroomHeroProps {
@@ -347,6 +350,14 @@ export function ShowroomHero({
   }, [slides.length]);
 
   const activeSlide = slides[current] || null;
+  const activeConfig = activeSlide
+    ? ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]
+    : undefined;
+  const activeHref =
+    activeSlide && (activeSlide.hrefOverride || `${activeConfig?.href || "/"}${activeSlide.id}`);
+  const activeCta = activeSlide?.ctaLabelOverride || activeConfig?.cta || "View";
+  const activeBadge = activeSlide?.badgeLabelOverride || activeConfig?.badge || "";
+  const ActiveIcon = activeConfig?.Icon || Building2;
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-ZA", {
@@ -392,13 +403,8 @@ export function ShowroomHero({
                     <span
                       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badgeColor || "bg-gray-500 text-white"}`}
                     >
-                      {(() => {
-                        const Icon =
-                          ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon ||
-                          Building2;
-                        return <Icon className="h-3 w-3" />;
-                      })()}
-                      {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badge}
+                      <ActiveIcon className="h-3 w-3" />
+                      {activeBadge}
                     </span>
                     {activeSlide.location && (
                       <span className="flex items-center gap-1 text-white/80 text-xs">
@@ -420,13 +426,13 @@ export function ShowroomHero({
                   </p>
 
                   <Link
-                    href={`${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.href}${activeSlide.id}`}
+                    href={activeHref}
                     className={cn(
                       buttonVariants({ size: "sm" }),
                       "h-10 px-5 text-sm bg-brand-green hover:bg-brand-green-600 text-white font-bold gap-2 rounded-full mt-1"
                     )}
                   >
-                    {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.cta || "View"}
+                    {activeCta}
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
@@ -485,13 +491,8 @@ export function ShowroomHero({
                 <span
                   className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badgeColor || "bg-gray-500 text-white"}`}
                 >
-                  {(() => {
-                    const Icon =
-                      ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon ||
-                      Building2;
-                    return <Icon className="h-2.5 w-2.5" />;
-                  })()}
-                  {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badge}
+                  <ActiveIcon className="h-2.5 w-2.5" />
+                  {activeBadge}
                 </span>
                 {activeSlide.location && (
                   <span className="flex items-center gap-1 text-muted-foreground text-xs">
@@ -515,13 +516,13 @@ export function ShowroomHero({
                   </p>
                 </div>
                 <Link
-                  href={`${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.href}${activeSlide.id}`}
+                  href={activeHref}
                   className={cn(
                     buttonVariants({ size: "sm" }),
                     "shrink-0 h-8 px-3 text-xs bg-brand-green hover:bg-brand-green-600 text-white font-bold gap-1 rounded-full"
                   )}
                 >
-                  {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.cta || "View"}
+                  {activeCta}
                   <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
