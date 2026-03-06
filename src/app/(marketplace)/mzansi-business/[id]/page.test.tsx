@@ -56,7 +56,10 @@ vi.mock("@/components/trust/trust-badge", () => ({
   TrustBadge: () => <span>Trust</span>,
 }));
 
-function buildClient(business: Record<string, unknown>) {
+function buildClient(
+  business: Record<string, unknown>,
+  options?: { mall?: { id: string; name: string } | null }
+) {
   return {
     from: (table: string) => {
       if (table === "businesses") {
@@ -65,6 +68,17 @@ function buildClient(business: Record<string, unknown>) {
             eq: () => ({
               eq: () => ({
                 single: async () => ({ data: business }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "malls") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: options?.mall ?? null,
               }),
             }),
           }),
@@ -200,5 +214,97 @@ describe("BusinessDetailPage", () => {
     );
     expect(screen.getByText("Nationwide")).toBeInTheDocument();
     expect(screen.getByText("Within 2 hours")).toBeInTheDocument();
+  });
+
+  it("renders website-only and TikTok links in the online section", async () => {
+    mockCreateClient.mockResolvedValue(
+      buildClient({
+        id: "business-3",
+        seller_id: "seller-1",
+        business_name: "Nomsa Socials",
+        description: "Find us online.",
+        status: "live",
+        business_type: "standalone_shop",
+        category: "fashion_accessories",
+        cover_photo: null,
+        logo_url: null,
+        cover_video: null,
+        video_thumbnail: null,
+        gallery_photos: [],
+        social_links: { tiktok: "https://www.tiktok.com/@nomsa" },
+        operating_hours: {},
+        services_offered: [],
+        payment_methods_accepted: [],
+        delivery_options: [],
+        service_areas: null,
+        location_city: "Johannesburg",
+        location_province: "Gauteng",
+        phone: null,
+        whatsapp: null,
+        email: null,
+        website: "https://nomsa.example.com",
+        store_number: null,
+        mall_id: null,
+        map_directions: null,
+        business_details: {
+          type: "standalone_shop",
+          street_address: "24 Vilakazi Street",
+          suburb: "Orlando West",
+        },
+      })
+    );
+
+    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-3" }) }));
+
+    expect(screen.getByTitle("Website")).toHaveAttribute("href", "https://nomsa.example.com");
+    expect(screen.getByTitle("TikTok")).toHaveAttribute("href", "https://www.tiktok.com/@nomsa");
+  });
+
+  it("renders the linked mall name for mall stores", async () => {
+    mockCreateClient.mockResolvedValue(
+      buildClient(
+        {
+          id: "business-4",
+          seller_id: "seller-1",
+          business_name: "Mall Style",
+          description: "A mall store.",
+          status: "live",
+          business_type: "mall_store",
+          category: "fashion_accessories",
+          cover_photo: null,
+          logo_url: null,
+          cover_video: null,
+          video_thumbnail: null,
+          gallery_photos: [],
+          social_links: {},
+          operating_hours: {},
+          services_offered: [],
+          payment_methods_accepted: [],
+          delivery_options: [],
+          service_areas: null,
+          location_city: "Johannesburg",
+          location_province: "Gauteng",
+          phone: null,
+          whatsapp: null,
+          email: null,
+          website: null,
+          store_number: "12A",
+          mall_id: "mall-1",
+          map_directions: null,
+          business_details: {
+            type: "mall_store",
+            floor_or_wing: "Upper Level",
+            nearest_entrance: "Entrance 3",
+            parking_notes: "",
+          },
+        },
+        { mall: { id: "mall-1", name: "Maponya Mall" } }
+      )
+    );
+
+    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-4" }) }));
+
+    expect(screen.getByText("Mall")).toBeInTheDocument();
+    expect(screen.getByText("Maponya Mall")).toBeInTheDocument();
   });
 });

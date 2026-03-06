@@ -177,6 +177,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         promotion_type: data.promotion_type,
         category: data.category || null,
         category_key: categoryKey,
+        business_id: data.business_id || null,
         photos: data.images,
         videos: data.videos,
         video_thumbnail: data.video_thumbnail || null,

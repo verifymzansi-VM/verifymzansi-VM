@@ -12,6 +12,7 @@ import {
   Mail,
   Facebook,
   Instagram,
+  Music2,
   Twitter,
   Wrench,
   CreditCard,
@@ -88,6 +89,11 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
 
   if (!business) notFound();
 
+  const linkedMall = business.mall_id
+    ? (await supabase.from("malls").select("id, name").eq("id", business.mall_id).maybeSingle())
+        .data
+    : null;
+
   // Fetch seller profile (maybeSingle — seller account may have been deleted)
   const { data: seller } = await supabase
     .from("seller_profiles")
@@ -117,6 +123,13 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   const businessDetails = business.business_details as BusinessDetails | null;
   const galleryPhotos = (business.gallery_photos as string[] | null) ?? [];
   const serviceAreas = business.service_areas as { areas?: string[] } | null;
+  const hasOnlineLinks = Boolean(
+    socialLinks?.facebook ||
+    socialLinks?.instagram ||
+    socialLinks?.twitter ||
+    socialLinks?.tiktok ||
+    business.website
+  );
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -266,6 +279,12 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                           <div className="flex items-start justify-between gap-4">
                             <span className="text-muted-foreground">Store number</span>
                             <span className="font-medium text-right">{business.store_number}</span>
+                          </div>
+                        )}
+                        {linkedMall?.name && (
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">Mall</span>
+                            <span className="font-medium text-right">{linkedMall.name}</span>
                           </div>
                         )}
                         {businessDetails?.type === "mall_store" &&
@@ -720,7 +739,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                     )}
                   </address>
 
-                  {socialLinks && Object.keys(socialLinks).length > 0 && (
+                  {hasOnlineLinks && (
                     <>
                       <Separator />
                       <div>
@@ -728,9 +747,9 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                           Connect Online
                         </p>
                         <div className="flex gap-2">
-                          {socialLinks.facebook && (
+                          {socialLinks?.facebook && (
                             <a
-                              href={socialLinks.facebook}
+                              href={socialLinks?.facebook}
                               target="_blank"
                               rel="noopener noreferrer nofollow ugc"
                               title="Facebook"
@@ -739,9 +758,9 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                               <Facebook className="h-5 w-5 fill-current" />
                             </a>
                           )}
-                          {socialLinks.instagram && (
+                          {socialLinks?.instagram && (
                             <a
-                              href={socialLinks.instagram}
+                              href={socialLinks?.instagram}
                               target="_blank"
                               rel="noopener noreferrer nofollow ugc"
                               title="Instagram"
@@ -750,15 +769,26 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                               <Instagram className="h-5 w-5" />
                             </a>
                           )}
-                          {socialLinks.twitter && (
+                          {socialLinks?.twitter && (
                             <a
-                              href={socialLinks.twitter}
+                              href={socialLinks?.twitter}
                               target="_blank"
                               rel="noopener noreferrer nofollow ugc"
                               title="Twitter"
                               className="p-2.5 rounded-full bg-black/5 text-black hover:bg-black/10 transition-colors dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
                             >
                               <Twitter className="h-5 w-5 fill-current" />
+                            </a>
+                          )}
+                          {socialLinks?.tiktok && (
+                            <a
+                              href={socialLinks?.tiktok}
+                              target="_blank"
+                              rel="noopener noreferrer nofollow ugc"
+                              title="TikTok"
+                              className="p-2.5 rounded-full bg-black/5 text-foreground hover:bg-black/10 transition-colors dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+                            >
+                              <Music2 className="h-5 w-5" />
                             </a>
                           )}
                           {business.website && (

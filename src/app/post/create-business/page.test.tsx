@@ -87,25 +87,29 @@ describe("CreateBusinessPage", () => {
     global.fetch = vi.fn() as unknown as typeof fetch;
   });
 
-  function completeStepOne() {
-    fireEvent.click(screen.getByRole("radio", { name: /Standalone Shop/i }));
-    fireEvent.change(screen.getByLabelText(/Business Name/i), {
-      target: { value: "Nomsa Fashion" },
+  async function selectBusinessType(name: RegExp) {
+    await act(async () => {
+      fireEvent.click(screen.getByRole("radio", { name }));
     });
-    fireEvent.change(screen.getByLabelText(/URL Slug/i), {
-      target: { value: "nomsa-fashion" },
-    });
-    fireEvent.change(screen.getByLabelText("Category"), {
-      target: { value: "fashion_accessories" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
   }
 
-  function completeStandaloneLocationStep() {
-    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
-    fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
-      target: { value: "Johannesburg" },
+  function fillCoreBusinessFields({
+    businessName = "Nomsa Fashion",
+    slug = "nomsa-fashion",
+    category = "fashion_accessories",
+  } = {}) {
+    fireEvent.change(screen.getByLabelText(/Business Name/i), {
+      target: { value: businessName },
     });
+    fireEvent.change(screen.getByLabelText(/URL Slug/i), {
+      target: { value: slug },
+    });
+    fireEvent.change(screen.getByLabelText("Category"), {
+      target: { value: category },
+    });
+  }
+
+  function fillStandaloneStepOneDetails() {
     fireEvent.change(screen.getByLabelText(/Street address/i), {
       target: { value: "24 Vilakazi Street" },
     });
@@ -114,123 +118,130 @@ describe("CreateBusinessPage", () => {
     });
   }
 
-  it("progresses through the wizard and shows the review step", async () => {
-    render(<CreateBusinessPage />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("radio", { name: /Mall Store/i }));
-    });
-    fireEvent.change(screen.getByLabelText(/Business Name/i), {
-      target: { value: "Mall Biz" },
-    });
-    fireEvent.change(screen.getByLabelText(/URL Slug/i), {
-      target: { value: "mall-biz" },
-    });
-    fireEvent.change(screen.getByLabelText("Category"), {
-      target: { value: "fashion_accessories" },
-    });
+  async function completeStandaloneStepOne() {
+    await selectBusinessType(/Standalone Shop/i);
+    fillCoreBusinessFields();
+    fillStandaloneStepOneDetails();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  }
+
+  function completeLocationStep() {
     fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
     fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
       target: { value: "Johannesburg" },
     });
-    fireEvent.change(screen.getByLabelText(/Store Number/i), {
-      target: { value: "12A" },
-    });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  }
 
-    expect(screen.getByText(/Business review/i)).toBeInTheDocument();
+  it.each([
+    [/Mall Store/i, /Store Number/i],
+    [/Standalone Shop/i, /Street address/i],
+    [/Home Business/i, /Service suburb/i],
+    [/Mobile Service/i, /Service Areas/i],
+    [/Online Only/i, /Primary order channel/i],
+    [/Market Stall/i, /Market name/i],
+  ])("renders type-specific fields immediately on step 1 for %s", async (typeName, fieldLabel) => {
+    render(<CreateBusinessPage />);
+
+    await selectBusinessType(typeName);
+
+    expect(screen.getByLabelText(fieldLabel)).toBeInTheDocument();
+    expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
   });
 
-  it("requires store number for mall stores", async () => {
+  it("switching business types replaces fields and clears stale type-specific errors", async () => {
     render(<CreateBusinessPage />);
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("radio", { name: /Mall Store/i }));
-    });
-    fireEvent.change(screen.getByLabelText(/Business Name/i), {
-      target: { value: "Mall Biz" },
-    });
-    fireEvent.change(screen.getByLabelText(/URL Slug/i), {
-      target: { value: "mall-biz" },
-    });
-    fireEvent.change(screen.getByLabelText("Category"), {
-      target: { value: "fashion_accessories" },
-    });
+    await selectBusinessType(/Standalone Shop/i);
+    fillCoreBusinessFields();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
-    fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
-      target: { value: "Johannesburg" },
-    });
+
+    expect(screen.getByText("Street address is required.")).toBeInTheDocument();
+    expect(screen.getByText("Suburb is required.")).toBeInTheDocument();
+
+    await selectBusinessType(/Online Only/i);
+
+    expect(screen.getByLabelText(/Primary order channel/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Street address/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Street address is required.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Suburb is required.")).not.toBeInTheDocument();
+  });
+
+  it("requires store number for mall stores on step 1", async () => {
+    render(<CreateBusinessPage />);
+
+    await selectBusinessType(/Mall Store/i);
+    fillCoreBusinessFields({ businessName: "Mall Biz", slug: "mall-biz" });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(screen.getByText("Store number is required for mall stores.")).toBeInTheDocument();
+    expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
   });
 
-  it("requires service areas for mobile services", () => {
+  it("requires service areas for mobile services on step 1", async () => {
     render(<CreateBusinessPage />);
 
-    fireEvent.click(screen.getByRole("radio", { name: /Mobile Service/i }));
-    fireEvent.change(screen.getByLabelText(/Business Name/i), {
-      target: { value: "FixFast" },
-    });
-    fireEvent.change(screen.getByLabelText(/URL Slug/i), {
-      target: { value: "fixfast" },
-    });
-    fireEvent.change(screen.getByLabelText("Category"), {
-      target: { value: "trade_maintenance" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
-    fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
-      target: { value: "Johannesburg" },
+    await selectBusinessType(/Mobile Service/i);
+    fillCoreBusinessFields({
+      businessName: "FixFast",
+      slug: "fixfast",
+      category: "trade_maintenance",
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(screen.getByText("Add at least one service area.")).toBeInTheDocument();
+    expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
   });
 
-  it("reveals address details for standalone shops", () => {
+  it("step 2 no longer renders the business type details block", async () => {
     render(<CreateBusinessPage />);
 
-    completeStepOne();
+    await completeStandaloneStepOne();
 
-    expect(screen.getByLabelText(/Street address/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Suburb/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Walk-in policy/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 2 of 3/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Street address/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Walk-in policy/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Province/i)).toBeInTheDocument();
   });
 
-  it("reveals online-only fields and blocks submission without order details", () => {
+  it("progresses through the wizard and shows the review step", async () => {
     render(<CreateBusinessPage />);
 
-    fireEvent.click(screen.getByRole("radio", { name: /Online Only/i }));
-    fireEvent.change(screen.getByLabelText(/Business Name/i), {
-      target: { value: "Mzansi Online" },
-    });
-    fireEvent.change(screen.getByLabelText(/URL Slug/i), {
-      target: { value: "mzansi-online" },
-    });
-    fireEvent.change(screen.getByLabelText("Category"), {
-      target: { value: "electronics_tech" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
-    fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
-      target: { value: "Johannesburg" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await completeStandaloneStepOne();
+    completeLocationStep();
 
-    expect(screen.getByText("Primary order channel is required.")).toBeInTheDocument();
-    expect(screen.getByText("Order URL is required.")).toBeInTheDocument();
-    expect(screen.getByText("Delivery regions is required.")).toBeInTheDocument();
+    expect(screen.getByText(/Business review/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
   });
 
-  it("keeps optional extras collapsed by default on the review step", () => {
+  it("blocks final submit when step-3 optional social URLs are invalid", async () => {
     render(<CreateBusinessPage />);
 
-    completeStepOne();
-    completeStandaloneLocationStep();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    const details = screen.getByText("Optional extras").closest("details");
+    expect(details).not.toHaveAttribute("open");
+
+    fireEvent.click(screen.getByText("Optional extras"));
+    fireEvent.change(screen.getByPlaceholderText("Facebook URL"), {
+      target: { value: "not-a-url" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    expect(screen.getByText("Enter a valid Facebook URL.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Please fix the highlighted fields before submitting.")
+    ).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
+  });
+
+  it("keeps optional extras collapsed by default on the review step", async () => {
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
 
     const details = screen.getByText("Optional extras").closest("details");
     expect(details).not.toHaveAttribute("open");

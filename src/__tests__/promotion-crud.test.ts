@@ -406,6 +406,11 @@ describe("PUT /api/promotions/[id]", () => {
 
   it("updates promotion successfully", async () => {
     mockAuth({ id: USER_ID });
+    const updateSpy = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
     // PUT calls from("promotions") twice: once for select, once for update
     let callCount = 0;
     mockCreateAdminClient.mockReturnValue({
@@ -434,11 +439,7 @@ describe("PUT /api/promotions/[id]", () => {
           }
           // Second call: update
           return {
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({ error: null }),
-              }),
-            }),
+            update: updateSpy,
           };
         }
         return {
@@ -450,12 +451,17 @@ describe("PUT /api/promotions/[id]", () => {
     });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
       method: "PUT",
-      body: VALID_BODY,
+      body: { ...VALID_BODY, business_id: "123e4567-e89b-42d3-a456-426614174000" },
     });
     const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.success).toBe(true);
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        business_id: "123e4567-e89b-42d3-a456-426614174000",
+      })
+    );
   });
 });
 

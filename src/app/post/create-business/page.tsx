@@ -98,6 +98,14 @@ const FIELD_IDS: Record<string, string> = {
   cover_video: "business-cover-video",
 };
 
+const STEP_CONTACT_FIELDS = ["phone", "whatsapp", "email", "website"] as const;
+const STEP_SOCIAL_FIELDS = [
+  "socialFacebook",
+  "socialInstagram",
+  "socialTwitter",
+  "socialTiktok",
+] as const;
+
 function getFieldId(key: string): string | undefined {
   if (FIELD_IDS[key]) return FIELD_IDS[key];
   if (key.startsWith("business_details.")) {
@@ -243,19 +251,22 @@ function CreateBusinessContent() {
   }
 
   function focusFirstError(errors: Record<string, string>, targetStep = step) {
+    const businessDetailKeys = Object.keys(errors).filter((key) =>
+      key.startsWith("business_details.")
+    );
     const orderByStep = [
-      ["business_type", "business_name", "slug", "category"],
       [
-        "location_province",
-        "location_city",
+        "business_type",
         "store_number",
         "service_areas",
-        "phone",
-        "whatsapp",
-        "email",
-        "website",
+        "map_directions",
+        ...businessDetailKeys,
+        "business_name",
+        "slug",
+        "category",
       ],
-      ["logo_url", "cover_photo", "gallery_photos"],
+      ["location_province", "location_city", ...STEP_CONTACT_FIELDS],
+      ["gallery_photos", "cover_video", ...STEP_SOCIAL_FIELDS],
     ][targetStep];
     const firstKey = orderByStep.find((key) => errors[key]) ?? Object.keys(errors)[0];
     const targetId = getFieldId(firstKey);
@@ -318,11 +329,25 @@ function CreateBusinessContent() {
       else if (!/^[a-z0-9-]+$/.test(currentSlug))
         errors.slug = "Use lowercase letters, numbers, and hyphens only.";
       if (!category) errors.category = "Select a category.";
+      for (const [key, message] of Object.entries(businessValidationErrors)) {
+        if (
+          key === "store_number" ||
+          key === "service_areas" ||
+          key === "map_directions" ||
+          key.startsWith("business_details.")
+        ) {
+          errors[key] = message;
+        }
+      }
     }
     if (targetStep === 1) {
       if (!province) errors.location_province = "Select a province.";
       if (!city) errors.location_city = "Select a city.";
-      Object.assign(errors, businessValidationErrors);
+      for (const field of STEP_CONTACT_FIELDS) {
+        if (businessValidationErrors[field]) {
+          errors[field] = businessValidationErrors[field];
+        }
+      }
     }
     if (targetStep === 2) {
       if (galleryFiles.length > maxPhotos) {
@@ -331,7 +356,7 @@ function CreateBusinessContent() {
       if (promoVideoFile.length > 0 && !coverVideoAllowed) {
         errors.cover_video = "Cover video is not available on your current plan.";
       }
-      for (const key of ["socialFacebook", "socialInstagram", "socialTwitter", "socialTiktok"]) {
+      for (const key of STEP_SOCIAL_FIELDS) {
         if (businessValidationErrors[key]) {
           errors[key] = businessValidationErrors[key];
         }
@@ -379,7 +404,7 @@ function CreateBusinessContent() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    const stepErrors = [0, 1].map((index) => validateStep(index));
+    const stepErrors = [0, 1, 2].map((index) => validateStep(index));
     const firstInvalidStep = stepErrors.findIndex((errors) => Object.keys(errors).length > 0);
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
@@ -673,6 +698,43 @@ function CreateBusinessContent() {
                       )}
                     </div>
 
+                    {businessType && businessDetails && (
+                      <BusinessTypeDetailsFields
+                        businessType={businessType}
+                        businessDetails={businessDetails}
+                        onBusinessDetailsChange={(name, value) => {
+                          setBusinessDetails((current) => {
+                            const next = coerceBusinessDetails(
+                              businessType,
+                              current ?? getDefaultBusinessDetails(businessType)
+                            );
+                            return { ...next, [name]: value } as BusinessDetails;
+                          });
+                          clearErrors(`business_details.${name}`);
+                        }}
+                        storeNumber={storeNumber}
+                        onStoreNumberChange={(value) => {
+                          setStoreNumber(value);
+                          clearErrors("store_number");
+                        }}
+                        mallId={mallId}
+                        malls={malls}
+                        onMallIdChange={setMallId}
+                        serviceAreasInput={serviceAreasInput}
+                        onServiceAreasChange={(value) => {
+                          setServiceAreasInput(value);
+                          clearErrors("service_areas");
+                        }}
+                        mapDirections={mapDirections}
+                        onMapDirectionsChange={(value) => {
+                          setMapDirections(value);
+                          clearErrors("map_directions");
+                        }}
+                        fieldErrors={fieldErrors}
+                        selectClassName={SELECT_CLASS}
+                      />
+                    )}
+
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label htmlFor="businessName">Business Name *</Label>
@@ -825,43 +887,6 @@ function CreateBusinessContent() {
                         )}
                       </div>
                     </div>
-
-                    {businessType && businessDetails && (
-                      <BusinessTypeDetailsFields
-                        businessType={businessType}
-                        businessDetails={businessDetails}
-                        onBusinessDetailsChange={(name, value) => {
-                          setBusinessDetails((current) => {
-                            const next = coerceBusinessDetails(
-                              businessType,
-                              current ?? getDefaultBusinessDetails(businessType)
-                            );
-                            return { ...next, [name]: value } as BusinessDetails;
-                          });
-                          clearErrors(`business_details.${name}`);
-                        }}
-                        storeNumber={storeNumber}
-                        onStoreNumberChange={(value) => {
-                          setStoreNumber(value);
-                          clearErrors("store_number");
-                        }}
-                        mallId={mallId}
-                        malls={malls}
-                        onMallIdChange={setMallId}
-                        serviceAreasInput={serviceAreasInput}
-                        onServiceAreasChange={(value) => {
-                          setServiceAreasInput(value);
-                          clearErrors("service_areas");
-                        }}
-                        mapDirections={mapDirections}
-                        onMapDirectionsChange={(value) => {
-                          setMapDirections(value);
-                          clearErrors("map_directions");
-                        }}
-                        fieldErrors={fieldErrors}
-                        selectClassName={SELECT_CLASS}
-                      />
-                    )}
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
