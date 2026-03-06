@@ -16,6 +16,12 @@ import { MediaUpload } from "@/components/ui/media-upload";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { PROMOTION_TYPE_LABELS, type PromotionType } from "@/types/enums";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import {
+  usePlanMaxPhotos,
+  usePlanMaxVideos,
+  usePlanVideoAllowed,
+} from "@/components/billing/plan-gate";
+import { validatePromotionForm } from "@/lib/forms/promotion-form";
 
 const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
 const selectClass =
@@ -56,6 +62,9 @@ export default function EditPromotionPage() {
 
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
+  const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
+  const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
+  const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
 
   // Load existing data and user's businesses
   useEffect(() => {
@@ -122,6 +131,27 @@ export default function EditPromotionPage() {
     setError(null);
 
     try {
+      const validationErrors = validatePromotionForm({
+        priceZar,
+        startDate,
+        endDate,
+        contactMethods,
+      });
+      const totalVideoCount = existingVideos.length + newVideoFiles.length;
+      if (existingImages.length + newPhotoFiles.length > maxPhotos) {
+        validationErrors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
+      }
+      if (!videoAllowed && totalVideoCount > 0) {
+        validationErrors.videos = "Video upload is not available on your current plan.";
+      } else if (totalVideoCount > maxVideos) {
+        validationErrors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
+      }
+      if (Object.keys(validationErrors).length > 0) {
+        setError(Object.values(validationErrors)[0]);
+        setIsSubmitting(false);
+        return;
+      }
+
       // Upload new photos if any
       let newImageUrls: string[] = [];
       if (newPhotoFiles.length > 0) {
@@ -441,8 +471,8 @@ export default function EditPromotionPage() {
 
               {/* Add new photos */}
               <MediaUpload
-                label={`Add Photos (${totalImages}/10)`}
-                maxFiles={Math.max(0, 10 - existingImages.length)}
+                label={`Add Photos (${totalImages}/${maxPhotos})`}
+                maxFiles={Math.max(0, maxPhotos - existingImages.length)}
                 files={newPhotoFiles}
                 onChange={setNewPhotoFiles}
                 accept="image/*"
@@ -450,11 +480,12 @@ export default function EditPromotionPage() {
 
               {/* Add new videos */}
               <MediaUpload
-                label="Add Videos (optional)"
-                maxFiles={Math.max(0, 3 - existingVideos.length)}
+                label={`Add Videos (optional, max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                maxFiles={Math.max(0, maxVideos - existingVideos.length)}
                 files={newVideoFiles}
                 onChange={setNewVideoFiles}
                 accept="video/*"
+                disabled={!videoAllowed}
               />
 
               <div className="flex justify-between">

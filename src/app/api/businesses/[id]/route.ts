@@ -4,6 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { businessSchema } from "@/lib/validations/business-unified";
+import { getEntitlements } from "@/lib/services/entitlements";
+import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import type { PlanTier } from "@/types/enums";
 
 const log = createLogger("BusinessDetail");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -129,6 +132,42 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const data = parsed.data;
+    const { data: activeEntitlement } = await admin
+      .from("entitlements")
+      .select("tier")
+      .eq("user_id", user.id)
+      .eq("area", "MZANSI_BUSINESS")
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const hasPaidPlan = !!activeEntitlement;
+    const activeTier = (activeEntitlement?.tier as string) || null;
+    const ent =
+      hasPaidPlan && activeTier
+        ? getEntitlements(activeTier as PlanTier, "MZANSI_BUSINESS")
+        : {
+            maxPhotos: FREE_POST_CONFIG.maxPhotos,
+            maxVideos: FREE_POST_CONFIG.maxVideos,
+            videoAllowed: FREE_POST_CONFIG.videoAllowed,
+            coverVideoAllowed: false,
+          };
+
+    if ((data.gallery_photos?.length ?? 0) > ent.maxPhotos) {
+      return NextResponse.json(
+        { error: `Maximum ${ent.maxPhotos} gallery photos allowed on your plan` },
+        { status: 422 }
+      );
+    }
+
+    if (data.cover_video && !ent.coverVideoAllowed) {
+      return NextResponse.json(
+        { error: "Cover video is not available on your current plan." },
+        { status: 422 }
+      );
+    }
 
     const { error: updateError } = await admin
       .from("businesses")

@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
         ? getEntitlements(tier as PlanTier, AREA)
         : {
             maxPhotos: FREE_POST_CONFIG.maxPhotos,
+            maxVideos: FREE_POST_CONFIG.maxVideos,
             videoAllowed: FREE_POST_CONFIG.videoAllowed,
           };
 
@@ -128,6 +129,20 @@ export async function POST(request: NextRequest) {
         {
           error: `Maximum ${ent.maxPhotos} photos allowed on your plan`,
         },
+        { status: 422 }
+      );
+    }
+
+    if (data.videos.length > 0 && !ent.videoAllowed) {
+      return NextResponse.json(
+        { error: "Video upload is not available on your current plan." },
+        { status: 422 }
+      );
+    }
+
+    if (data.videos.length > ent.maxVideos) {
+      return NextResponse.json(
+        { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
         { status: 422 }
       );
     }

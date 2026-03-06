@@ -20,6 +20,8 @@ import type { ListingCategory, UploadArea } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { normalizeMediaUrls } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
+import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
+import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 
 export default function EditListingPage() {
   const params = useParams();
@@ -38,6 +40,7 @@ export default function EditListingPage() {
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [existingVideos, setExistingVideos] = useState<string[]>([]);
   const [existingVideoThumbnail, setExistingVideoThumbnail] = useState<string | null>(null);
@@ -91,6 +94,14 @@ export default function EditListingPage() {
   function handleCategoryChange(cat: ListingCategory) {
     setCategory(cat);
     setCategoryAttributes({});
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next.category;
+      Object.keys(next)
+        .filter((key) => key.startsWith("attributes."))
+        .forEach((key) => delete next[key]);
+      return next;
+    });
   }
 
   const CONTACT_OPTIONS = [
@@ -105,6 +116,11 @@ export default function EditListingPage() {
 
   function handleAttributeChange(name: string, value: string | boolean) {
     setCategoryAttributes((prev) => ({ ...prev, [name]: value }));
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next[`attributes.${name}`];
+      return next;
+    });
   }
 
   async function uploadMedia(files: File[], area: UploadArea): Promise<string[]> {
@@ -122,6 +138,17 @@ export default function EditListingPage() {
     e.preventDefault();
     if (!title || !description || !price || !category) {
       toast({ title: "Please fill in all required fields", variant: "destructive" });
+      return;
+    }
+
+    const attributeErrors = validateListingAttributes(category, categoryAttributes);
+    if (Object.keys(attributeErrors).length > 0) {
+      setFieldErrors(attributeErrors);
+      toast({
+        title: "Please fix the highlighted listing details",
+        description: Object.values(attributeErrors)[0],
+        variant: "destructive",
+      });
       return;
     }
 
@@ -146,6 +173,7 @@ export default function EditListingPage() {
 
     setIsSubmitting(true);
     try {
+      const normalizedAttributes = coerceListingAttributes(category, categoryAttributes);
       const newPhotoUrls = await uploadMedia(newPhotoFiles, "listing");
       const newVideoUrls = await uploadMedia(newVideoFile, "listing_video");
       const newCoverUrls = await uploadMedia(newVideoCoverFile, "listing");
@@ -175,7 +203,7 @@ export default function EditListingPage() {
           price_zar: numPrice,
           negotiable,
           category: mapListingCategory(category),
-          attributes: categoryAttributes,
+          attributes: normalizedAttributes,
           province: province || "",
           city: city || "",
           town: town || "",
@@ -188,9 +216,11 @@ export default function EditListingPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        const normalized = normalizeCreatePostError(data, "Something went wrong");
+        setFieldErrors(normalized.fieldErrors);
         toast({
           title: "Failed to update listing",
-          description: data.error || data.reason || "Something went wrong",
+          description: normalized.formError,
           variant: "destructive",
         });
         return;
@@ -246,6 +276,7 @@ export default function EditListingPage() {
                     onChange={handleCategoryChange}
                     attributes={categoryAttributes}
                     onAttributeChange={handleAttributeChange}
+                    errors={fieldErrors}
                   />
 
                   {/* ── Title ──────────────────────────────────── */}

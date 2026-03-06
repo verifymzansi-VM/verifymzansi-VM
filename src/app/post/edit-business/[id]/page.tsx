@@ -37,6 +37,8 @@ import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useToast } from "@/hooks/use-toast";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
+import { usePlanCoverVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
+import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
 
 const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow";
@@ -125,6 +127,8 @@ export default function EditBusinessPage() {
 
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
+  const maxPhotos = usePlanMaxPhotos("MZANSI_BUSINESS");
+  const coverVideoAllowed = usePlanCoverVideoAllowed("MZANSI_BUSINESS");
 
   // Load existing data
   useEffect(() => {
@@ -252,6 +256,32 @@ export default function EditBusinessPage() {
     setError(null);
 
     try {
+      const validationErrors = validateBusinessForm({
+        businessType,
+        storeNumber: storeNumber.trim(),
+        serviceAreasInput,
+        phone: phone.trim(),
+        whatsapp: whatsapp.trim(),
+        email: email.trim(),
+        website: website.trim(),
+        socialFacebook: socialFacebook.trim(),
+        socialInstagram: socialInstagram.trim(),
+        socialTwitter: socialTwitter.trim(),
+        socialTiktok: socialTiktok.trim(),
+      });
+
+      if (newGalleryFiles.length > maxPhotos) {
+        validationErrors.gallery_photos = `You can upload up to ${maxPhotos} profile photos on this plan.`;
+      }
+      if (newPromoVideoFile.length > 0 && !coverVideoAllowed) {
+        validationErrors.cover_video = "Cover video is not available on your current plan.";
+      }
+      if (Object.keys(validationErrors).length > 0) {
+        setError(Object.values(validationErrors)[0]);
+        setIsSubmitting(false);
+        return;
+      }
+
       // Upload new media if provided
       let finalLogoUrl = existingLogo;
       if (newLogoFile.length > 0) {
@@ -306,10 +336,7 @@ export default function EditBusinessPage() {
       const serviceAreas =
         businessType === "mobile_service" && serviceAreasInput
           ? {
-              areas: serviceAreasInput
-                .split(",")
-                .map((a) => a.trim())
-                .filter(Boolean),
+              areas: parseServiceAreas(serviceAreasInput),
             }
           : undefined;
 
@@ -807,10 +834,10 @@ export default function EditBusinessPage() {
                   <MediaUpload
                     label={
                       removeGallery || existingGalleryPhotos.length === 0
-                        ? "Profile Photos (up to 5)"
-                        : "Replace Profile Photos (up to 5)"
+                        ? `Profile Photos (up to ${maxPhotos})`
+                        : `Replace Profile Photos (up to ${maxPhotos})`
                     }
-                    maxFiles={5}
+                    maxFiles={maxPhotos}
                     files={newGalleryFiles}
                     onChange={setNewGalleryFiles}
                     accept="image/*"
@@ -870,7 +897,7 @@ export default function EditBusinessPage() {
                   <MediaUpload
                     label={
                       removeVideo || !existingCoverVideo
-                        ? "Promo / Intro Video (1 max)"
+                        ? `Promo / Intro Video (1 max)${!coverVideoAllowed ? " — Upgrade to unlock" : ""}`
                         : "Replace Promo Video"
                     }
                     maxFiles={1}
@@ -880,6 +907,7 @@ export default function EditBusinessPage() {
                       if (files.length === 0) setNewVideoThumbnailFile([]);
                     }}
                     accept="video/*"
+                    disabled={!coverVideoAllowed}
                   />
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <Film className="h-3 w-3" />

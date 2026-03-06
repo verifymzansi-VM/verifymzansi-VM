@@ -21,11 +21,15 @@ import { useMarketplaceStore } from "@/stores";
 /* ─── Helpers ──────────────────────────────────────────────── */
 
 function numberRangeOptions(field: AttributeField): string[] | null {
-  const countable = ["bedrooms", "bathrooms", "garages", "parking"];
+  const countable = ["bedrooms", "bathrooms", "parking_spots"];
   if (countable.includes(field.name)) {
     return ["1", "2", "3", "4", "5+"];
   }
   return null;
+}
+
+function resolveOption(option: string | { value: string; label: string }) {
+  return typeof option === "string" ? { value: option, label: option } : option;
 }
 
 /* ─── Mobile Attribute Renderer ────────────────────────────── */
@@ -69,11 +73,14 @@ function MobileFilterAttribute({
             <option value="">
               {isDisabled ? `Select ${field.dependsOn} first` : `Any ${field.label.toLowerCase()}`}
             </option>
-            {options.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
+            {options.map((opt) => {
+              const resolved = resolveOption(opt);
+              return (
+                <option key={resolved.value} value={resolved.value}>
+                  {resolved.label}
+                </option>
+              );
+            })}
           </select>
         </div>
       );

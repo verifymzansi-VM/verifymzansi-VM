@@ -9,7 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MediaUpload } from "@/components/ui/media-upload";
-import { PlanGate } from "@/components/billing/plan-gate";
+import {
+  PlanGate,
+  usePlanMaxPhotos,
+  usePlanMaxVideos,
+  usePlanVideoAllowed,
+} from "@/components/billing/plan-gate";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { PROMOTION_TYPE_LABELS, type PromotionType } from "@/types/enums";
 import { cn } from "@/lib/utils";
@@ -20,6 +25,7 @@ import {
 } from "@/components/post/post-form-scaffold";
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 import { useToast } from "@/hooks/use-toast";
+import { validatePromotionForm } from "@/lib/forms/promotion-form";
 
 const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
 const SELECT_CLASS =
@@ -34,9 +40,12 @@ const STEPS: PostFormStep[] = [
 const FIELD_IDS: Record<string, string> = {
   title: "title",
   description: "description",
+  price_zar: "price",
   province: "province",
   city: "city",
   contact_methods: "promotion-contact-methods",
+  start_date: "start_date",
+  end_date: "end_date",
   images: "promotion-images",
   videos: "promotion-videos",
 };
@@ -82,6 +91,9 @@ function CreatePromotionContent() {
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
   const isEvent = promotionType === "event";
+  const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
+  const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
+  const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
 
   // Stable blob URL for the cover photo preview — revoked on change
   const coverPhotoUrl = useMemo(
@@ -147,6 +159,12 @@ function CreatePromotionContent() {
 
   function validateStep(targetStep: number) {
     const errors: Record<string, string> = {};
+    const promotionValidationErrors = validatePromotionForm({
+      priceZar,
+      startDate,
+      endDate,
+      contactMethods,
+    });
     if (targetStep === 0) {
       if (!title.trim()) errors.title = isEvent ? "Enter an event title." : "Enter a title.";
       else if (title.trim().length < 5) errors.title = "Title must be at least 5 characters.";
@@ -159,11 +177,18 @@ function CreatePromotionContent() {
     if (targetStep === 1) {
       if (!province) errors.province = "Select a province.";
       if (!city) errors.city = "Select a city.";
-      if (contactMethods.length === 0)
-        errors.contact_methods = "Choose at least one contact method.";
+      Object.assign(errors, promotionValidationErrors);
     }
     if (targetStep === 2) {
       if (photoFiles.length === 0) errors.images = "Upload at least one photo.";
+      if (photoFiles.length > maxPhotos) {
+        errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
+      }
+      if (!videoAllowed && videoFiles.length > 0) {
+        errors.videos = "Video upload is not available on your current plan.";
+      } else if (videoFiles.length > maxVideos) {
+        errors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
+      }
     }
     return errors;
   }
@@ -437,9 +462,16 @@ function CreatePromotionContent() {
                           min="0"
                           step="0.01"
                           value={priceZar}
-                          onChange={(event) => setPriceZar(event.target.value)}
+                          onChange={(event) => {
+                            setPriceZar(event.target.value);
+                            clearErrors("price_zar");
+                          }}
                           placeholder="0.00"
+                          className={cn(fieldErrors.price_zar && "border-destructive")}
                         />
+                        {fieldErrors.price_zar && (
+                          <p className="text-xs text-destructive">{fieldErrors.price_zar}</p>
+                        )}
                       </div>
                       <div className="flex items-end pb-2">
                         <label className="flex cursor-pointer items-center gap-2 text-sm">
@@ -545,8 +577,15 @@ function CreatePromotionContent() {
                           id="start_date"
                           type="date"
                           value={startDate}
-                          onChange={(event) => setStartDate(event.target.value)}
+                          onChange={(event) => {
+                            setStartDate(event.target.value);
+                            clearErrors("start_date", "end_date");
+                          }}
+                          className={cn(fieldErrors.start_date && "border-destructive")}
                         />
+                        {fieldErrors.start_date && (
+                          <p className="text-xs text-destructive">{fieldErrors.start_date}</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="end_date">
@@ -556,8 +595,15 @@ function CreatePromotionContent() {
                           id="end_date"
                           type="date"
                           value={endDate}
-                          onChange={(event) => setEndDate(event.target.value)}
+                          onChange={(event) => {
+                            setEndDate(event.target.value);
+                            clearErrors("end_date");
+                          }}
+                          className={cn(fieldErrors.end_date && "border-destructive")}
                         />
+                        {fieldErrors.end_date && (
+                          <p className="text-xs text-destructive">{fieldErrors.end_date}</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -567,8 +613,8 @@ function CreatePromotionContent() {
                   <div className="space-y-5">
                     <div id="promotion-images" tabIndex={-1} className="space-y-2 rounded-lg">
                       <MediaUpload
-                        label="Photos (max 10)"
-                        maxFiles={10}
+                        label={`Photos (max ${maxPhotos})`}
+                        maxFiles={maxPhotos}
                         files={photoFiles}
                         onChange={(files) => {
                           setPhotoFiles(files);
@@ -587,8 +633,8 @@ function CreatePromotionContent() {
 
                     <div id="promotion-videos" tabIndex={-1} className="space-y-2 rounded-lg">
                       <MediaUpload
-                        label="Videos (max 3, optional)"
-                        maxFiles={3}
+                        label={`Videos (max ${maxVideos}, optional)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                        maxFiles={Math.max(maxVideos, 1)}
                         files={videoFiles}
                         onChange={(files) => {
                           setVideoFiles(files);
@@ -596,7 +642,11 @@ function CreatePromotionContent() {
                           clearErrors("videos");
                         }}
                         accept="video/*"
+                        disabled={!videoAllowed}
                       />
+                      {fieldErrors.videos && (
+                        <p className="text-xs text-destructive">{fieldErrors.videos}</p>
+                      )}
                     </div>
 
                     {videoFiles.length > 0 && (

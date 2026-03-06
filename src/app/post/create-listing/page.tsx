@@ -24,6 +24,7 @@ import {
   type PostFormStep,
 } from "@/components/post/post-form-scaffold";
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
+import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 
 const STEPS: PostFormStep[] = [
   { label: "Details", icon: FileText, description: "Category, title, and description" },
@@ -42,6 +43,35 @@ const CONTACT_OPTIONS = [
 
 const FIELD_IDS: Record<string, string> = {
   category: "listing-category-field",
+  "attributes.property_type": "listing-attribute-property_type",
+  "attributes.bedrooms": "listing-attribute-bedrooms",
+  "attributes.bathrooms": "listing-attribute-bathrooms",
+  "attributes.size_sqm": "listing-attribute-size_sqm",
+  "attributes.parking_spots": "listing-attribute-parking_spots",
+  "attributes.furnished": "listing-attribute-furnished",
+  "attributes.pets_allowed": "listing-attribute-pets_allowed",
+  "attributes.make": "listing-attribute-make",
+  "attributes.model": "listing-attribute-model",
+  "attributes.year": "listing-attribute-year",
+  "attributes.mileage_km": "listing-attribute-mileage_km",
+  "attributes.transmission": "listing-attribute-transmission",
+  "attributes.fuel_type": "listing-attribute-fuel_type",
+  "attributes.body_type": "listing-attribute-body_type",
+  "attributes.colour": "listing-attribute-colour",
+  "attributes.part_type": "listing-attribute-part_type",
+  "attributes.compatible_make": "listing-attribute-compatible_make",
+  "attributes.compatible_model": "listing-attribute-compatible_model",
+  "attributes.oem_or_aftermarket": "listing-attribute-oem_or_aftermarket",
+  "attributes.brand": "listing-attribute-brand",
+  "attributes.model_name": "listing-attribute-model_name",
+  "attributes.storage_gb": "listing-attribute-storage_gb",
+  "attributes.screen_size_inches": "listing-attribute-screen_size_inches",
+  "attributes.warranty_months": "listing-attribute-warranty_months",
+  "attributes.sub_category": "listing-attribute-sub_category",
+  "attributes.material": "listing-attribute-material",
+  "attributes.job_type": "listing-attribute-job_type",
+  "attributes.remote": "listing-attribute-remote",
+  "attributes.salary_range": "listing-attribute-salary_range",
   title: "title",
   description: "description",
   price_zar: "price",
@@ -139,6 +169,10 @@ export default function CreateListingPage() {
         errors.description = "Description must be at least 20 characters.";
       else if (description.trim().length > DESC_MAX)
         errors.description = `Description must be ${DESC_MAX} characters or fewer.`;
+
+      if (category) {
+        Object.assign(errors, validateListingAttributes(category, categoryAttributes));
+      }
     }
 
     if (targetStep === 1) {
@@ -216,6 +250,9 @@ export default function CreateListingPage() {
     setIsSubmitting(true);
 
     try {
+      const normalizedAttributes = category
+        ? coerceListingAttributes(category, categoryAttributes)
+        : {};
       let photoUrls: string[] = [];
       if (photoFiles.length > 0) {
         const uploadData = new FormData();
@@ -261,7 +298,7 @@ export default function CreateListingPage() {
           price_zar: parseFloat(price),
           negotiable,
           category: mapListingCategory(category),
-          attributes: categoryAttributes,
+          attributes: normalizedAttributes,
           province,
           city,
           town,
@@ -410,6 +447,7 @@ export default function CreateListingPage() {
                         onChange={handleCategoryChange}
                         attributes={categoryAttributes}
                         onAttributeChange={handleAttributeChange}
+                        errors={fieldErrors}
                       />
                     </div>
                     {fieldErrors.category && (

@@ -29,7 +29,11 @@ import { Footer } from "@/components/layout/footer";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { MediaUpload } from "@/components/ui/media-upload";
-import { PlanGate } from "@/components/billing/plan-gate";
+import {
+  PlanGate,
+  usePlanCoverVideoAllowed,
+  usePlanMaxPhotos,
+} from "@/components/billing/plan-gate";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import type { BusinessCategory, BusinessType, UploadArea } from "@/types/enums";
@@ -40,11 +44,10 @@ import {
   type PostFormStep,
 } from "@/components/post/post-form-scaffold";
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
+import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
 
 const SELECT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
-const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
-
 const STEPS: PostFormStep[] = [
   { label: "Details", icon: FileText, description: "Type, name, category, and overview" },
   { label: "Location & Reach", icon: MapPin, description: "Address, contact, and hours" },
@@ -80,6 +83,12 @@ const FIELD_IDS: Record<string, string> = {
   whatsapp: "whatsapp",
   email: "email",
   website: "website",
+  socialFacebook: "socialFacebook",
+  socialInstagram: "socialInstagram",
+  socialTwitter: "socialTwitter",
+  socialTiktok: "socialTiktok",
+  gallery_photos: "business-gallery",
+  cover_video: "business-cover-video",
 };
 
 function generateSlug(name: string): string {
@@ -150,6 +159,8 @@ function CreateBusinessContent() {
   const { toast } = useToast();
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
+  const maxPhotos = usePlanMaxPhotos("MZANSI_BUSINESS");
+  const coverVideoAllowed = usePlanCoverVideoAllowed("MZANSI_BUSINESS");
 
   // Stable blob URLs for logo/cover previews — revoked on change
   const logoPreviewUrl = useMemo(
@@ -257,6 +268,19 @@ function CreateBusinessContent() {
 
   function validateStep(targetStep: number) {
     const errors: Record<string, string> = {};
+    const businessValidationErrors = validateBusinessForm({
+      businessType,
+      storeNumber: storeNumber.trim(),
+      serviceAreasInput,
+      phone: phone.trim(),
+      whatsapp: whatsapp.trim(),
+      email: email.trim(),
+      website: website.trim(),
+      socialFacebook: socialFacebook.trim(),
+      socialInstagram: socialInstagram.trim(),
+      socialTwitter: socialTwitter.trim(),
+      socialTiktok: socialTiktok.trim(),
+    });
     if (targetStep === 0) {
       if (!businessType) errors.business_type = "Choose a business type.";
       if (!businessName.trim()) errors.business_name = "Enter a business name.";
@@ -271,28 +295,18 @@ function CreateBusinessContent() {
     if (targetStep === 1) {
       if (!province) errors.location_province = "Select a province.";
       if (!city) errors.location_city = "Select a city.";
-      if (businessType === "mall_store" && !storeNumber.trim())
-        errors.store_number = "Store number is required for mall stores.";
-      if (
-        businessType === "mobile_service" &&
-        serviceAreasInput
-          .split(",")
-          .map((area) => area.trim())
-          .filter(Boolean).length === 0
-      ) {
-        errors.service_areas = "Add at least one service area.";
+      Object.assign(errors, businessValidationErrors);
+    }
+    if (targetStep === 2) {
+      if (galleryFiles.length > maxPhotos) {
+        errors.gallery_photos = `You can upload up to ${maxPhotos} profile photos on this plan.`;
       }
-      if (phone && !SA_PHONE_REGEX.test(phone))
-        errors.phone = "Enter a valid South African number.";
-      if (whatsapp && !SA_PHONE_REGEX.test(whatsapp))
-        errors.whatsapp = "Enter a valid South African WhatsApp number.";
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-        errors.email = "Enter a valid email address.";
-      if (website) {
-        try {
-          new URL(website);
-        } catch {
-          errors.website = "Enter a valid website URL.";
+      if (promoVideoFile.length > 0 && !coverVideoAllowed) {
+        errors.cover_video = "Cover video is not available on your current plan.";
+      }
+      for (const key of ["socialFacebook", "socialInstagram", "socialTwitter", "socialTiktok"]) {
+        if (businessValidationErrors[key]) {
+          errors[key] = businessValidationErrors[key];
         }
       }
     }
@@ -375,10 +389,7 @@ function CreateBusinessContent() {
       const serviceAreas =
         businessType === "mobile_service"
           ? {
-              areas: serviceAreasInput
-                .split(",")
-                .map((area) => area.trim())
-                .filter(Boolean),
+              areas: parseServiceAreas(serviceAreasInput),
             }
           : undefined;
       const body = {
@@ -1046,12 +1057,15 @@ function CreateBusinessContent() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
+                    <div id="business-gallery" className="space-y-2 rounded-lg">
                       <MediaUpload
-                        label="Profile photos (up to 5)"
-                        maxFiles={5}
+                        label={`Profile photos (up to ${maxPhotos})`}
+                        maxFiles={maxPhotos}
                         files={galleryFiles}
-                        onChange={setGalleryFiles}
+                        onChange={(files) => {
+                          setGalleryFiles(files);
+                          clearErrors("gallery_photos");
+                        }}
                         accept="image/*"
                       />
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1109,23 +1123,31 @@ function CreateBusinessContent() {
                           </div>
                         </div>
                       )}
+                      {fieldErrors.gallery_photos && (
+                        <p className="text-xs text-destructive">{fieldErrors.gallery_photos}</p>
+                      )}
                     </div>
 
-                    <div className="space-y-2">
+                    <div id="business-cover-video" className="space-y-2 rounded-lg">
                       <MediaUpload
-                        label="Promo video (optional)"
+                        label={`Promo video (optional)${!coverVideoAllowed ? " — Upgrade to unlock" : ""}`}
                         maxFiles={1}
                         files={promoVideoFile}
                         onChange={(files) => {
                           setPromoVideoFile(files);
                           if (files.length === 0) setVideoThumbnailFile([]);
+                          clearErrors("cover_video");
                         }}
                         accept="video/*"
+                        disabled={!coverVideoAllowed}
                       />
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Film className="h-3 w-3" />A short intro video works best. Keep it focused
                         and easy to watch on mobile.
                       </p>
+                      {fieldErrors.cover_video && (
+                        <p className="text-xs text-destructive">{fieldErrors.cover_video}</p>
+                      )}
                     </div>
 
                     {promoVideoFile.length > 0 && (
@@ -1147,25 +1169,63 @@ function CreateBusinessContent() {
                           <h3 className="text-sm font-medium">Social Links</h3>
                           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <Input
+                              id="socialFacebook"
                               value={socialFacebook}
-                              onChange={(event) => setSocialFacebook(event.target.value)}
+                              onChange={(event) => {
+                                setSocialFacebook(event.target.value);
+                                clearErrors("socialFacebook");
+                              }}
                               placeholder="Facebook URL"
+                              className={cn(fieldErrors.socialFacebook && "border-destructive")}
                             />
+                            {fieldErrors.socialFacebook && (
+                              <p className="text-xs text-destructive">
+                                {fieldErrors.socialFacebook}
+                              </p>
+                            )}
                             <Input
+                              id="socialInstagram"
                               value={socialInstagram}
-                              onChange={(event) => setSocialInstagram(event.target.value)}
+                              onChange={(event) => {
+                                setSocialInstagram(event.target.value);
+                                clearErrors("socialInstagram");
+                              }}
                               placeholder="Instagram URL"
+                              className={cn(fieldErrors.socialInstagram && "border-destructive")}
                             />
+                            {fieldErrors.socialInstagram && (
+                              <p className="text-xs text-destructive">
+                                {fieldErrors.socialInstagram}
+                              </p>
+                            )}
                             <Input
+                              id="socialTwitter"
                               value={socialTwitter}
-                              onChange={(event) => setSocialTwitter(event.target.value)}
+                              onChange={(event) => {
+                                setSocialTwitter(event.target.value);
+                                clearErrors("socialTwitter");
+                              }}
                               placeholder="X (Twitter) URL"
+                              className={cn(fieldErrors.socialTwitter && "border-destructive")}
                             />
+                            {fieldErrors.socialTwitter && (
+                              <p className="text-xs text-destructive">
+                                {fieldErrors.socialTwitter}
+                              </p>
+                            )}
                             <Input
+                              id="socialTiktok"
                               value={socialTiktok}
-                              onChange={(event) => setSocialTiktok(event.target.value)}
+                              onChange={(event) => {
+                                setSocialTiktok(event.target.value);
+                                clearErrors("socialTiktok");
+                              }}
                               placeholder="TikTok URL"
+                              className={cn(fieldErrors.socialTiktok && "border-destructive")}
                             />
+                            {fieldErrors.socialTiktok && (
+                              <p className="text-xs text-destructive">{fieldErrors.socialTiktok}</p>
+                            )}
                           </div>
                         </div>
 

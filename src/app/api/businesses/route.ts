@@ -4,8 +4,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { businessSchema } from "@/lib/validations/business-unified";
+import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
 const log = createLogger("BusinessesCRUD");
+const AREA: MarketplaceArea = "MZANSI_BUSINESS";
 
 /**
  * POST /api/businesses
@@ -25,6 +30,18 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
+    const ip = getClientIp(request);
+    const rl = await checkRateLimit({
+      key: user.id,
+      action: "business_create",
+      deviceId: ip,
+    });
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later.", retryAfter: rl.retryAfter },
+        { status: 429 }
+      );
+    }
 
     // Check seller profile exists
     const { data: profile } = await admin
@@ -54,12 +71,85 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
+    const { data: activeEntitlement } = await admin
+      .from("entitlements")
+      .select("tier")
+      .eq("user_id", user.id)
+      .eq("area", AREA)
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const hasPaidPlan = !!activeEntitlement;
+    const tier = (activeEntitlement?.tier as string) || null;
+
+    if (!hasPaidPlan) {
+      const { data: freePostRow } = await admin
+        .from("free_posts_used")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("area", AREA)
+        .maybeSingle();
+
+      if (freePostRow) {
+        return NextResponse.json(
+          {
+            error: "Free post already used",
+            reason:
+              "You have already used your free post for Mzansi Business. Subscribe to a plan to post more.",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (hasPaidPlan && tier) {
+      const { count } = await admin
+        .from("businesses")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_id", user.id)
+        .neq("status", "rejected");
+
+      const check = canCreateListing(count ?? 0, tier as PlanTier, AREA);
+      if (!check.allowed) {
+        return NextResponse.json(
+          { error: "Business limit reached", reason: check.reason },
+          { status: 403 }
+        );
+      }
+    }
+
+    const ent =
+      hasPaidPlan && tier
+        ? getEntitlements(tier as PlanTier, AREA)
+        : {
+            maxPhotos: FREE_POST_CONFIG.maxPhotos,
+            maxVideos: FREE_POST_CONFIG.maxVideos,
+            videoAllowed: FREE_POST_CONFIG.videoAllowed,
+            coverVideoAllowed: false,
+          };
+
+    if ((data.gallery_photos?.length ?? 0) > ent.maxPhotos) {
+      return NextResponse.json(
+        { error: `Maximum ${ent.maxPhotos} gallery photos allowed on your plan` },
+        { status: 422 }
+      );
+    }
+
+    if (data.cover_video && !ent.coverVideoAllowed) {
+      return NextResponse.json(
+        { error: "Cover video is not available on your current plan." },
+        { status: 422 }
+      );
+    }
 
     const { data: business, error: insertError } = await admin
       .from("businesses")
       .insert({
         seller_id: user.id,
-        area: "MZANSI_BUSINESS",
+        area: AREA,
         business_type: data.business_type,
         business_name: data.business_name,
         slug: data.slug,
@@ -93,6 +183,19 @@ export async function POST(request: NextRequest) {
     if (insertError || !business) {
       log.error("Failed to create business", { error: insertError?.message });
       return NextResponse.json({ error: "Failed to create business" }, { status: 500 });
+    }
+
+    if (!hasPaidPlan) {
+      const { error: freePostError } = await admin
+        .from("free_posts_used")
+        .upsert({ user_id: user.id, area: AREA }, { onConflict: "user_id,area" });
+
+      if (freePostError) {
+        log.error("Failed to mark free post as used", {
+          error: freePostError.message,
+          userId: user.id,
+        });
+      }
     }
 
     // Audit (best-effort)

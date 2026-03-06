@@ -49,6 +49,8 @@ vi.mock("@/components/layout/page-header", () => ({
 
 vi.mock("@/components/billing/plan-gate", () => ({
   PlanGate: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  usePlanMaxPhotos: () => 5,
+  usePlanCoverVideoAllowed: () => true,
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({

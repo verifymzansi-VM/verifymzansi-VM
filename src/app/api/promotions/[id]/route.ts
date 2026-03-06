@@ -4,6 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { promotionSchema } from "@/lib/validations/promotion";
+import { getEntitlements } from "@/lib/services/entitlements";
+import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import type { PlanTier } from "@/types/enums";
 
 const log = createLogger("PromotionDetail");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -118,6 +121,49 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const data = parsed.data;
+    const { data: activeEntitlement } = await admin
+      .from("entitlements")
+      .select("tier")
+      .eq("user_id", user.id)
+      .eq("area", "PROMOTIONS_EVENTS")
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const hasPaidPlan = !!activeEntitlement;
+    const activeTier = (activeEntitlement?.tier as string) || null;
+    const ent =
+      hasPaidPlan && activeTier
+        ? getEntitlements(activeTier as PlanTier, "PROMOTIONS_EVENTS")
+        : {
+            maxPhotos: FREE_POST_CONFIG.maxPhotos,
+            maxVideos: FREE_POST_CONFIG.maxVideos,
+            videoAllowed: FREE_POST_CONFIG.videoAllowed,
+          };
+
+    if (data.images.length > ent.maxPhotos) {
+      return NextResponse.json(
+        { error: `Maximum ${ent.maxPhotos} photos allowed on your plan` },
+        { status: 422 }
+      );
+    }
+
+    if (data.videos.length > 0 && !ent.videoAllowed) {
+      return NextResponse.json(
+        { error: "Video upload is not available on your current plan." },
+        { status: 422 }
+      );
+    }
+
+    if (data.videos.length > ent.maxVideos) {
+      return NextResponse.json(
+        { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
+        { status: 422 }
+      );
+    }
+
     const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
 
     const { error: updateError } = await admin

@@ -47,6 +47,7 @@ interface PlanInfo {
   currentCount: number;
   maxAllowed: number;
   maxPhotos: number;
+  maxVideos: number;
   videoAllowed: boolean;
 }
 
@@ -327,6 +328,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           : tier
             ? ent.maxPhotos
             : FREE_POST_CONFIG.maxPhotos;
+        const maxVideos = freePostAvailable ? FREE_POST_CONFIG.maxVideos : tier ? ent.maxVideos : 0;
 
         setPlanInfo({
           tier: tier || "free",
@@ -336,6 +338,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           currentCount,
           maxAllowed,
           maxPhotos,
+          maxVideos,
           videoAllowed: freePostAvailable
             ? FREE_POST_CONFIG.videoAllowed
             : tier
@@ -858,4 +861,97 @@ export function usePlanVideoAllowed(area: MarketplaceArea): boolean {
   }, [area]);
 
   return videoAllowed;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Hook: usePlanMaxVideos
+   ───────────────────────────────────────────────────────────── */
+export function usePlanMaxVideos(area: MarketplaceArea): number {
+  const [maxVideos, setMaxVideos] = useState<number>(FREE_POST_CONFIG.maxVideos);
+
+  useEffect(() => {
+    async function fetchMaxVideos() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: entitlement } = await supabase
+          .from("entitlements")
+          .select("tier, expires_at")
+          .eq("user_id", user.id)
+          .eq("area", area)
+          .eq("status", "active")
+          .gt("expires_at", new Date().toISOString())
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const tier = (entitlement?.tier as PlanTier) || null;
+        if (tier) {
+          const ent = getEntitlements(tier, area);
+          setMaxVideos(ent.maxVideos);
+        } else {
+          const { data: freePostRow } = await supabase
+            .from("free_posts_used")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("area", area)
+            .maybeSingle();
+
+          setMaxVideos(freePostRow ? 0 : FREE_POST_CONFIG.maxVideos);
+        }
+      } catch {
+        // Keep default
+      }
+    }
+
+    fetchMaxVideos();
+  }, [area]);
+
+  return maxVideos;
+}
+
+export function usePlanCoverVideoAllowed(area: MarketplaceArea): boolean {
+  const [coverVideoAllowed, setCoverVideoAllowed] = useState(false);
+
+  useEffect(() => {
+    async function fetchCoverVideoAllowed() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: entitlement } = await supabase
+          .from("entitlements")
+          .select("tier, expires_at")
+          .eq("user_id", user.id)
+          .eq("area", area)
+          .eq("status", "active")
+          .gt("expires_at", new Date().toISOString())
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const tier = (entitlement?.tier as PlanTier) || null;
+        if (tier) {
+          const ent = getEntitlements(tier, area);
+          setCoverVideoAllowed(ent.coverVideoAllowed);
+          return;
+        }
+
+        setCoverVideoAllowed(false);
+      } catch {
+        // Keep default
+      }
+    }
+
+    fetchCoverVideoAllowed();
+  }, [area]);
+
+  return coverVideoAllowed;
 }

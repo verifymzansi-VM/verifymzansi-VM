@@ -15,11 +15,15 @@ import { cn } from "@/lib/utils";
 /* ─── Helpers ──────────────────────────────────────────────── */
 
 function numberRangeOptions(field: AttributeField): string[] | null {
-  const bedroom = ["bedrooms", "bathrooms", "garages", "parking"];
+  const bedroom = ["bedrooms", "bathrooms", "parking_spots"];
   if (bedroom.includes(field.name)) {
     return ["1", "2", "3", "4", "5+"];
   }
   return null;
+}
+
+function resolveOption(option: string | { value: string; label: string }) {
+  return typeof option === "string" ? { value: option, label: option } : option;
 }
 
 /* ─── Main Component ───────────────────────────────────────── */
@@ -258,11 +262,14 @@ function FilterAttributeField({
             <option value="">
               {isDisabled ? `Select ${field.dependsOn} first` : `Any ${field.label.toLowerCase()}`}
             </option>
-            {options.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
+            {options.map((opt) => {
+              const resolved = resolveOption(opt);
+              return (
+                <option key={resolved.value} value={resolved.value}>
+                  {resolved.label}
+                </option>
+              );
+            })}
           </select>
         </div>
       );

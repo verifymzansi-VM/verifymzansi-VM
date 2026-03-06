@@ -7,11 +7,13 @@ import type { PlanTier, MarketplaceArea } from "@/types/enums";
 const DEFAULT_ENTITLEMENTS: Entitlements = {
   maxAllowed: 2,
   maxPhotos: 3,
+  maxVideos: 0,
   maxPostsPerMonth: 2,
   videoAllowed: false,
   boostAllowed: false,
   featuredAllowed: false,
   urgentAllowed: false,
+  coverVideoAllowed: false,
 };
 
 /**

@@ -144,14 +144,36 @@ export async function POST(request: NextRequest) {
         ? getEntitlements(tier as PlanTier, AREA)
         : {
             maxPhotos: FREE_POST_CONFIG.maxPhotos,
+            maxVideos: FREE_POST_CONFIG.maxVideos,
             videoAllowed: FREE_POST_CONFIG.videoAllowed,
           };
+
+    const rawVideos = Array.isArray((body as Record<string, unknown>).videos)
+      ? ((body as Record<string, unknown>).videos as unknown[])
+      : [];
+    if (rawVideos.some((video) => typeof video !== "string")) {
+      return NextResponse.json({ error: "Videos must be an array of URLs" }, { status: 422 });
+    }
 
     if (data.images.length > ent.maxPhotos) {
       return NextResponse.json(
         {
           error: `Maximum ${ent.maxPhotos} photos allowed on your plan`,
         },
+        { status: 422 }
+      );
+    }
+
+    if (rawVideos.length > 0 && !ent.videoAllowed) {
+      return NextResponse.json(
+        { error: "Video upload is not available on your current plan." },
+        { status: 422 }
+      );
+    }
+
+    if (rawVideos.length > ent.maxVideos) {
+      return NextResponse.json(
+        { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
         { status: 422 }
       );
     }
@@ -174,7 +196,7 @@ export async function POST(request: NextRequest) {
       status: "pending_moderation",
       area: AREA,
       photos: data.images,
-      videos: (body as Record<string, unknown>).videos || [],
+      videos: rawVideos,
       video_thumbnail: (body as Record<string, unknown>).videoThumbnail || null,
       contact_methods: (body as Record<string, unknown>).contactMethods || ["call"],
     };

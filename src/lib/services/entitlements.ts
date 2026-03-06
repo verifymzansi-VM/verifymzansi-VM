@@ -12,21 +12,25 @@ export interface Entitlements {
    */
   maxAllowed: number;
   maxPhotos: number;
+  maxVideos: number;
   maxPostsPerMonth: number;
   videoAllowed: boolean;
   boostAllowed: boolean;
   featuredAllowed: boolean;
   urgentAllowed: boolean;
+  coverVideoAllowed: boolean;
 }
 
 const FREE_ENTITLEMENTS: Entitlements = {
   maxAllowed: 1,
   maxPhotos: 5,
+  maxVideos: 1,
   maxPostsPerMonth: 1,
   videoAllowed: true,
   boostAllowed: false,
   featuredAllowed: false,
   urgentAllowed: false,
+  coverVideoAllowed: false,
 };
 
 /**
@@ -74,11 +78,13 @@ export function getEntitlements(tier: PlanTier, area: MarketplaceArea): Entitlem
   return {
     maxAllowed,
     maxPhotos: plan.features.maxPhotos,
+    maxVideos: plan.features.maxVideos ?? 0,
     maxPostsPerMonth: plan.features.maxPostsPerMonth,
     videoAllowed: plan.features.videoAllowed,
     boostAllowed: plan.features.boostAllowed,
     featuredAllowed: plan.features.featuredAllowed,
     urgentAllowed: plan.features.urgentAllowed,
+    coverVideoAllowed: plan.features.coverVideoAllowed,
   };
 }
 

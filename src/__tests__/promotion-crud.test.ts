@@ -178,6 +178,108 @@ describe("POST /api/promotions", () => {
     expect(mockLogAuditEvent).toHaveBeenCalledTimes(1);
     expect(mockLogAuditEvent.mock.calls[0][0].targetType).toBe("promotion");
   });
+
+  it("rejects video uploads when the active plan disallows them", async () => {
+    mockAuth({ id: USER_ID });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "seller_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "sp-1", seller_verification_status: "verified" },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "basic" } }),
+          };
+        }
+        if (table === "promotions") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockResolvedValue({ count: 0 }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: { ...VALID_BODY, videos: ["https://media.verifymzansi.co.za/promo.mp4"] },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Video upload is not available on your current plan.",
+    });
+  });
+
+  it("rejects when api callers exceed the plan video count", async () => {
+    mockAuth({ id: USER_ID });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "seller_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "sp-1", seller_verification_status: "verified" },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "starter" } }),
+          };
+        }
+        if (table === "promotions") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockResolvedValue({ count: 0 }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: {
+        ...VALID_BODY,
+        videos: [
+          "https://media.verifymzansi.co.za/promo-1.mp4",
+          "https://media.verifymzansi.co.za/promo-2.mp4",
+        ],
+      },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Maximum 1 videos allowed on your plan",
+    });
+  });
 });
 
 describe("GET /api/promotions", () => {
@@ -308,6 +410,16 @@ describe("PUT /api/promotions/[id]", () => {
     let callCount = 0;
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
         if (table === "promotions") {
           callCount++;
           if (callCount === 1) {

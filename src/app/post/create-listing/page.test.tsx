@@ -54,9 +54,21 @@ vi.mock("@/components/layout/page-header", () => ({
 }));
 
 vi.mock("@/components/listings/category-picker", () => ({
-  CategoryPicker: ({ onChange }: { onChange: (value: string) => void }) => (
+  CategoryPicker: ({
+    onChange,
+    onAttributeChange,
+  }: {
+    onChange: (value: string) => void;
+    onAttributeChange: (name: string, value: string | boolean) => void;
+  }) => (
     <div data-testid="category-picker">
-      <button type="button" onClick={() => onChange("electronics")}>
+      <button
+        type="button"
+        onClick={() => {
+          onChange("electronics");
+          onAttributeChange("brand", "Apple");
+        }}
+      >
         Select Electronics
       </button>
     </div>
