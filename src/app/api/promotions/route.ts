@@ -5,6 +5,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { promotionSchema } from "@/lib/validations/promotion";
 import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
@@ -29,6 +30,18 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
+    const ip = getClientIp(request);
+    const rl = await checkRateLimit({
+      key: user.id,
+      action: "promotion_create",
+      deviceId: ip,
+    });
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later.", retryAfter: rl.retryAfter },
+        { status: 429 }
+      );
+    }
 
     // Check seller profile exists
     const { data: profile } = await admin
