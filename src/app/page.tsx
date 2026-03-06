@@ -37,7 +37,7 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://verifymzansi.com";
+  const url = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -61,7 +61,7 @@ export default async function HomePage() {
         "@type": "Organization",
         name: "VerifyMzansi",
         url: url || "https://verifymzansi.com",
-        logo: `${url || "https://verifymzansi.com"}/icons/icon-512x512.png`,
+        logo: `${url || "https://verifymzansi.com"}/icons/icon-512.png`,
         sameAs: [],
         contactPoint: {
           "@type": "ContactPoint",

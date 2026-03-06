@@ -11,6 +11,14 @@ describe("marketplace query normalization", () => {
     expect(parseMarketplaceFiltersFromSearchParams(params)).toEqual({
       category: "vehicles",
       query: "iphone",
+      province: undefined,
+      city: undefined,
+      condition: undefined,
+      sort: undefined,
+      priceMin: undefined,
+      priceMax: undefined,
+      page: 1,
+      attributes: {},
     });
   });
 

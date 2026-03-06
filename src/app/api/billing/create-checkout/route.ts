@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
     }
 
     const amountRands = plan.price_cents / 100;
-    const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.co.za";
+    const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
     const notifyUrl = env("PAYFAST_NOTIFY_URL") || `${appUrl}/api/webhooks/payfast`;
 
     const checkoutUrl = buildPayFastCheckoutUrl({

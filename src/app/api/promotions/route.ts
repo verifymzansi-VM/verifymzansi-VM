@@ -20,6 +20,13 @@ import { computeTrustLevel } from "@/lib/constants/trust-scale";
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
 
+type PromotionQueryOps = {
+  eq: (column: string, value: unknown) => PromotionQueryOps;
+  gt: (column: string, value: string) => PromotionQueryOps;
+  lt: (column: string, value: string) => PromotionQueryOps;
+  or: (filters: string) => PromotionQueryOps;
+};
+
 function normalizeEventStateParam(value: string | null): PromotionEventState | null {
   if (value === "upcoming" || value === "ongoing" || value === "ended") {
     return value;
@@ -27,25 +34,25 @@ function normalizeEventStateParam(value: string | null): PromotionEventState | n
   return null;
 }
 
-function applyEventStateFilter(
-  query: any,
-  eventState: PromotionEventState,
-  nowIso: string
-) {
+function applyEventStateFilter<T>(query: T, eventState: PromotionEventState, nowIso: string): T {
+  const builder = query as T & PromotionQueryOps;
+
   switch (eventState) {
     case "upcoming":
-      return query.eq("promotion_type", "event").gt("start_date", nowIso);
+      return builder.eq("promotion_type", "event").gt("start_date", nowIso) as T;
     case "ended":
-      return query.eq("promotion_type", "event").lt("end_date", nowIso);
+      return builder.eq("promotion_type", "event").lt("end_date", nowIso) as T;
     case "ongoing":
-      return query.eq("promotion_type", "event").or(
-        [
-          `and(start_date.lte.${nowIso},end_date.gte.${nowIso})`,
-          `and(start_date.is.null,end_date.gte.${nowIso})`,
-          `and(start_date.lte.${nowIso},end_date.is.null)`,
-          "and(start_date.is.null,end_date.is.null)",
-        ].join(",")
-      );
+      return builder
+        .eq("promotion_type", "event")
+        .or(
+          [
+            `and(start_date.lte.${nowIso},end_date.gte.${nowIso})`,
+            `and(start_date.is.null,end_date.gte.${nowIso})`,
+            `and(start_date.lte.${nowIso},end_date.is.null)`,
+            "and(start_date.is.null,end_date.is.null)",
+          ].join(",")
+        ) as T;
     default:
       return query;
   }

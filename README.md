@@ -29,8 +29,9 @@
 VerifyMzansi is a verification-first marketplace platform built for South
 Africa. It features:
 
-- **Three marketplace areas**: Mzansi Market (classifieds), Business Ads, and
-  Mall Shops
+- **Marketplace areas**: Mzansi Market (classifieds), Mzansi Business (primary
+  business surface), legacy Business Ads, legacy Mall Shops, and Promotions &
+  Events
 - **Advertising & Promotions**: The core platform purpose — sellers advertise
   products, services, and events. Featured listings, urgent flags, boost
   visibility, storefront posts, and business offers
@@ -145,28 +146,29 @@ verifymzansi/
 
 Copy `cloudflare-env-vars.txt` to `.env.local` and populate with your values:
 
-| Variable                         | Required | Description                                      |
-| -------------------------------- | -------- | ------------------------------------------------ |
-| `NEXT_PUBLIC_SUPABASE_URL`       | Yes      | Supabase project URL                             |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | Yes      | Supabase publishable (anon) key                  |
-| `SUPABASE_SERVICE_ROLE_KEY`      | Yes      | Supabase service role key (server-only)          |
-| `R2_ACCOUNT_ID`                  | Yes      | Cloudflare account ID                            |
-| `R2_ACCESS_KEY_ID`               | Yes      | R2 API access key                                |
-| `R2_SECRET_ACCESS_KEY`           | Yes      | R2 API secret key                                |
-| `KYC_ENCRYPTION_KEY`             | Yes      | 64-char hex key for KYC document encryption      |
-| `ID_ENCRYPTION_KEY`              | Yes      | 64-char hex key for ID number encryption         |
-| `HMAC_SECRET`                    | Yes      | 64-char hex key for dedup hashing                |
-| `AFRICASTALKING_API_KEY`         | Yes      | Africa's Talking API key for OTP                 |
-| `AFRICASTALKING_USERNAME`        | Yes      | Africa's Talking username                        |
-| `PAYFAST_MERCHANT_ID`            | Yes      | PayFast merchant ID                              |
-| `PAYFAST_MERCHANT_KEY`           | Yes      | PayFast merchant key                             |
-| `RESEND_API_KEY`                 | Yes      | Resend email API key                             |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Yes      | Cloudflare Turnstile site key (CAPTCHA)          |
-| `TURNSTILE_SECRET_KEY`           | Yes      | Cloudflare Turnstile secret key                  |
-| `NEXT_PUBLIC_APP_URL`            | No       | App URL (defaults to `https://verifymzansi.com`) |
-| `ENABLE_DEV_PAYMENT_BYPASS`      | No       | ⚠️ Dev only — bypasses PayFast validation        |
-| `ENABLE_MOCK_PAYFAST`            | No       | ⚠️ Dev only — enables mock PayFast endpoint      |
-| `DEV_EXPOSE_OTP`                 | No       | ⚠️ Dev only — logs OTP codes to console          |
+| Variable                         | Required | Description                                                                           |
+| -------------------------------- | -------- | ------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`       | Yes      | Supabase project URL                                                                  |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | Yes      | Supabase publishable (anon) key                                                       |
+| `SUPABASE_SERVICE_ROLE_KEY`      | Yes      | Supabase service role key (server-only)                                               |
+| `R2_ACCOUNT_ID`                  | Yes      | Cloudflare account ID                                                                 |
+| `R2_ACCESS_KEY_ID`               | Yes      | R2 API access key                                                                     |
+| `R2_SECRET_ACCESS_KEY`           | Yes      | R2 API secret key                                                                     |
+| `KYC_ENCRYPTION_KEY`             | Yes      | 64-char hex key for KYC document encryption                                           |
+| `ID_ENCRYPTION_KEY`              | Yes      | 64-char hex key for ID number encryption                                              |
+| `HMAC_SECRET`                    | Yes      | 64-char hex key for dedup hashing                                                     |
+| `AFRICASTALKING_API_KEY`         | Yes      | Africa's Talking API key for OTP                                                      |
+| `AFRICASTALKING_USERNAME`        | Yes      | Africa's Talking username                                                             |
+| `AFRICASTALKING_SENDER_ID`       | Yes      | Approved production sender ID for SMS                                                 |
+| `PAYFAST_MERCHANT_ID`            | Yes      | PayFast merchant ID                                                                   |
+| `PAYFAST_MERCHANT_KEY`           | Yes      | PayFast merchant key                                                                  |
+| `RESEND_API_KEY`                 | Yes      | Resend email API key                                                                  |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Yes      | Cloudflare Turnstile site key (CAPTCHA)                                               |
+| `TURNSTILE_SECRET_KEY`           | Yes      | Cloudflare Turnstile secret key                                                       |
+| `NEXT_PUBLIC_APP_URL`            | Yes      | Public app URL (`https://verifymzansi.com` in production; localhost only in dev/test) |
+| `ENABLE_DEV_PAYMENT_BYPASS`      | No       | ⚠️ Dev only — bypasses PayFast validation                                             |
+| `ENABLE_MOCK_PAYFAST`            | No       | ⚠️ Dev only — enables mock PayFast endpoint                                           |
+| `DEV_EXPOSE_OTP`                 | No       | ⚠️ Dev only — logs OTP codes to console                                               |
 
 ## Scripts
 
@@ -230,7 +232,8 @@ pnpm deploy
 > Windows filenames (e.g. `resvg.wasm?module`). Use one of these alternatives:
 >
 > - **Push to `master`** — GitHub Actions deploys automatically via CI
-> - **WSL** — run `pnpm deploy` from a WSL terminal
+> - **WSL on ext4** — copy the repo to `~/verifymzansi` and run `pnpm deploy`
+>   there, not from `/mnt/c/...`
 > - **Cloudflare Dashboard** — trigger a deploy from the Cloudflare Pages UI
 
 ### Known Cloudflare Warning Classes

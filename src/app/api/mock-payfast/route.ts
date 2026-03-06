@@ -7,7 +7,14 @@ const log = createLogger("MockPayFast");
 function isSafeUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    const allowedHosts = ["localhost", "127.0.0.1", "verifymzansi.co.za", "www.verifymzansi.co.za"];
+    const allowedHosts = [
+      "localhost",
+      "127.0.0.1",
+      "verifymzansi.com",
+      "www.verifymzansi.com",
+      "verifymzansi.co.za",
+      "www.verifymzansi.co.za",
+    ];
     return allowedHosts.some((h) => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`));
   } catch {
     return url.startsWith("/"); // Allow relative paths

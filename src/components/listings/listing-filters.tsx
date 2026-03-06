@@ -355,7 +355,10 @@ export function ListingFilters() {
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={filters.condition || ""}
                   onChange={(e) =>
-                    setFilter("condition", (e.target.value as typeof filters.condition) || undefined)
+                    setFilter(
+                      "condition",
+                      (e.target.value as typeof filters.condition) || undefined
+                    )
                   }
                 >
                   <option value="">Any condition</option>

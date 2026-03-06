@@ -219,7 +219,7 @@ export function validateEnv(): Env {
       errors,
       "",
       "Copy .env.example to .env and fill in the values.",
-      "See DEPLOYMENT_GUIDE.md for setup instructions.",
+      "See README.md and LAUNCH-CHECKLIST.md for setup instructions.",
       "══════════════════════════════════════════════════════",
       "",
     ].join("\n");
@@ -229,6 +229,16 @@ export function validateEnv(): Env {
 
   // Production-specific cross-field validations
   if (result.data.NODE_ENV === "production") {
+    if (!result.data.AFRICASTALKING_SENDER_ID) {
+      throw new Error(
+        "[ENV] AFRICASTALKING_SENDER_ID is required in production so OTP and notification SMS messages use the approved sender ID."
+      );
+    }
+    if (!result.data.NEXT_PUBLIC_APP_URL.startsWith("https://")) {
+      throw new Error(
+        `[ENV] NEXT_PUBLIC_APP_URL must be an https:// URL in production. Received: ${result.data.NEXT_PUBLIC_APP_URL}`
+      );
+    }
     if (result.data.PAYFAST_SANDBOX === "true") {
       throw new Error(
         "[ENV] PAYFAST_SANDBOX is 'true' in production — this will route payments to the sandbox gateway. Set to 'false' or remove it."

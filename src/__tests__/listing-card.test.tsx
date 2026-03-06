@@ -97,13 +97,17 @@ vi.mock("@/components/ui/video-card-player", () => ({
   },
 }));
 
-vi.mock("@/types/enums", () => ({
-  TrustLevel: {
-    BASIC: "basic",
-    VERIFIED: "verified",
-    TRUSTED: "trusted",
-  },
-}));
+vi.mock(import("@/types/enums"), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    TrustLevel: {
+      BASIC: "basic",
+      VERIFIED: "verified",
+      TRUSTED: "trusted",
+    },
+  };
+});
 
 const { ListingCard } = await import("@/components/listings/listing-card");
 

@@ -14,7 +14,7 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
-import { PROMOTION_TYPE_LABELS, type PromotionType } from "@/types/enums";
+import { PROMOTION_TYPE_LABELS, type BusinessCategory, type PromotionType } from "@/types/enums";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import {
   usePlanMaxPhotos,
@@ -23,7 +23,6 @@ import {
 } from "@/components/billing/plan-gate";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
-import type { BusinessCategory } from "@/types/enums";
 
 const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
 const selectClass =

@@ -14,57 +14,72 @@ import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
 
-function applyBaseMarketFilters(
-  query: any,
+type MarketQueryOps = {
+  eq: (column: string, value: unknown) => MarketQueryOps;
+  gte: (column: string, value: number) => MarketQueryOps;
+  lte: (column: string, value: number) => MarketQueryOps;
+  or: (filters: string) => MarketQueryOps;
+  order: (
+    column: string,
+    options?: { ascending?: boolean; nullsFirst?: boolean }
+  ) => MarketQueryOps;
+};
+
+function applyBaseMarketFilters<T>(
+  query: T,
   filters: ReturnType<typeof parseMarketplaceFiltersFromSearchParams>
-) {
+): T {
+  let builder = query as T & MarketQueryOps;
+
   if (filters.category) {
-    query = query.eq("category", filters.category);
+    builder = builder.eq("category", filters.category) as T & MarketQueryOps;
   }
   if (filters.province) {
-    query = query.eq("location_province", filters.province);
+    builder = builder.eq("location_province", filters.province) as T & MarketQueryOps;
   }
   if (filters.city) {
-    query = query.eq("location_city", filters.city);
+    builder = builder.eq("location_city", filters.city) as T & MarketQueryOps;
   }
   if (filters.priceMin !== undefined) {
-    query = query.gte("price_cents", Math.round(filters.priceMin * 100));
+    builder = builder.gte("price_cents", Math.round(filters.priceMin * 100)) as T & MarketQueryOps;
   }
   if (filters.priceMax !== undefined) {
-    query = query.lte("price_cents", Math.round(filters.priceMax * 100));
+    builder = builder.lte("price_cents", Math.round(filters.priceMax * 100)) as T & MarketQueryOps;
   }
   if (filters.condition) {
-    query = query.eq("condition", filters.condition);
+    builder = builder.eq("condition", filters.condition) as T & MarketQueryOps;
   }
   if (filters.query) {
     const safeSearch = filters.query.replace(/[,.()\\/]/g, "");
     if (safeSearch) {
-      query = query.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
+      builder = builder.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`) as T &
+        MarketQueryOps;
     }
   }
 
   switch (filters.sort) {
     case "price_asc":
-      return query.order("price_cents", { ascending: true }).order("created_at", { ascending: false });
+      return builder
+        .order("price_cents", { ascending: true })
+        .order("created_at", { ascending: false }) as T;
     case "price_desc":
-      return query.order("price_cents", { ascending: false }).order("created_at", { ascending: false });
+      return builder
+        .order("price_cents", { ascending: false })
+        .order("created_at", { ascending: false }) as T;
     case "popular":
-      return query
+      return builder
         .order("featured", { ascending: false })
         .order("boost_until", { ascending: false, nullsFirst: false })
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }) as T;
     case "newest":
     default:
-      return query
+      return builder
         .order("featured", { ascending: false })
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }) as T;
   }
 }
 
-function matchesAttributeFilter(
-  attributeValue: unknown,
-  filterValue: string | boolean
-) {
+function matchesAttributeFilter(attributeValue: unknown, filterValue: string | boolean) {
   if (typeof filterValue === "boolean") {
     return attributeValue === filterValue;
   }
@@ -126,16 +141,27 @@ export async function GET(request: NextRequest) {
 
       while (true) {
         const batchQuery = applyBaseMarketFilters(
-          admin
-            .from("listings")
-            .select(selectClause)
-            .eq("status", "live")
-            .eq("area", AREA),
+          admin.from("listings").select(selectClause).eq("status", "live").eq("area", AREA),
           filters
         ).range(from, from + batchSize - 1);
 
         const { data, error } = await batchQuery;
         if (error) {
+          if (error.code === "PGRST205") {
+            log.warn("Listings schema cache unavailable", {
+              code: error.code,
+              message: error.message,
+            });
+            return NextResponse.json(
+              {
+                error: "Marketplace temporarily unavailable",
+                code: error.code,
+                detail:
+                  "The marketplace database schema is not available yet. Please retry in a moment.",
+              },
+              { status: 503 }
+            );
+          }
           log.error("Failed to fetch listings", { error: error.message });
           return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
         }
@@ -171,6 +197,21 @@ export async function GET(request: NextRequest) {
       const { data, count, error } = await query;
 
       if (error) {
+        if (error.code === "PGRST205") {
+          log.warn("Listings schema cache unavailable", {
+            code: error.code,
+            message: error.message,
+          });
+          return NextResponse.json(
+            {
+              error: "Marketplace temporarily unavailable",
+              code: error.code,
+              detail:
+                "The marketplace database schema is not available yet. Please retry in a moment.",
+            },
+            { status: 503 }
+          );
+        }
         log.error("Failed to fetch listings", { error: error.message });
         return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
       }

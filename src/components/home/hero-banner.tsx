@@ -460,21 +460,15 @@ export function HeroBanner({
     }
 
     return combined;
-  }, [topBusinesses, latestListings]);
+  }, [topBusinesses, latestListings, latestPromotions]);
 
-  const next = useCallback(
-    () => goTo((current + 1) % Math.max(1, slides.length)),
-    [current, goTo, slides.length]
-  );
-  const prev = useCallback(
-    () => goTo((current - 1 + slides.length) % Math.max(1, slides.length)),
-    [current, goTo, slides.length]
-  );
+  const next = () => goTo((current + 1) % Math.max(1, slides.length));
+  const prev = () => goTo((current - 1 + slides.length) % Math.max(1, slides.length));
 
   const nextRef = useRef(next);
   useEffect(() => {
-    nextRef.current = next;
-  }, [next]);
+    nextRef.current = () => goTo((current + 1) % Math.max(1, slides.length));
+  }, [current, goTo, slides.length]);
 
   useEffect(() => {
     if (slides.length <= 1) return;

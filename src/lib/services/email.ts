@@ -29,7 +29,7 @@ function sanitizeAppUrl(url: string | undefined): string {
   const raw = url || "";
   if (raw.startsWith("https://")) return raw;
   if (raw.startsWith("http://localhost")) return raw;
-  return "https://verifymzansi.co.za";
+  return "https://verifymzansi.com";
 }
 
 /**

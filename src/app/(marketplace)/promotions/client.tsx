@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Building2, Calendar, Megaphone, Search, X } from "lucide-react";
@@ -78,7 +78,7 @@ export function PromotionsExplorer() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamKey = searchParams.toString();
-  const [localQuery, setLocalQuery] = useState(searchParams.get("q") || "");
+  const currentSearchParams = useMemo(() => new URLSearchParams(searchParamKey), [searchParamKey]);
   const [response, setResponse] = useState<PromotionsResponse>({
     promotions: [],
     sellers: [],
@@ -90,50 +90,48 @@ export function PromotionsExplorer() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setLocalQuery(searchParams.get("q") || "");
-  }, [searchParamKey, searchParams]);
-
   const filters = useMemo(
     () => ({
-      query: normalizeValue(searchParams.get("q")),
-      type: normalizeValue(searchParams.get("type")) as PromotionType | undefined,
-      category: normalizeValue(searchParams.get("category")) as BusinessCategory | undefined,
-      province: normalizeValue(searchParams.get("province")),
-      city: normalizeValue(searchParams.get("city")),
-      businessId: normalizeValue(searchParams.get("business_id")),
-      eventState: normalizeValue(searchParams.get("event_state")) as PromotionEventState | undefined,
-      page: Math.max(1, parseInt(searchParams.get("page") || "1", 10)),
+      query: normalizeValue(currentSearchParams.get("q")),
+      type: normalizeValue(currentSearchParams.get("type")) as PromotionType | undefined,
+      category: normalizeValue(currentSearchParams.get("category")) as BusinessCategory | undefined,
+      province: normalizeValue(currentSearchParams.get("province")),
+      city: normalizeValue(currentSearchParams.get("city")),
+      businessId: normalizeValue(currentSearchParams.get("business_id")),
+      eventState: normalizeValue(currentSearchParams.get("event_state")) as
+        | PromotionEventState
+        | undefined,
+      page: Math.max(1, parseInt(currentSearchParams.get("page") || "1", 10)),
     }),
-    [searchParamKey, searchParams]
+    [currentSearchParams]
+  );
+
+  const updateFilters = useCallback(
+    (updates: Record<string, string | undefined>, options?: { preservePage?: boolean }) => {
+      const next = new URLSearchParams(searchParamKey);
+
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === undefined || value === "") {
+          next.delete(key);
+        } else {
+          next.set(key, value);
+        }
+      }
+
+      if (!options?.preservePage) {
+        next.delete("page");
+      }
+
+      const nextKey = next.toString();
+      router.replace(nextKey ? `${pathname}?${nextKey}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParamKey]
   );
 
   const cities = filters.province ? getCitiesForProvince(filters.province) : [];
   const debouncedUpdateQuery = useDebouncedCallback((value: string) => {
     updateFilters({ q: value || undefined });
   }, 300);
-
-  function updateFilters(
-    updates: Record<string, string | undefined>,
-    options?: { preservePage?: boolean }
-  ) {
-    const next = new URLSearchParams(searchParams.toString());
-
-    for (const [key, value] of Object.entries(updates)) {
-      if (value === undefined || value === "") {
-        next.delete(key);
-      } else {
-        next.set(key, value);
-      }
-    }
-
-    if (!options?.preservePage) {
-      next.delete("page");
-    }
-
-    const nextKey = next.toString();
-    router.replace(nextKey ? `${pathname}?${nextKey}` : pathname, { scroll: false });
-  }
 
   useEffect(() => {
     let active = true;
@@ -143,7 +141,7 @@ export function PromotionsExplorer() {
       setError(null);
 
       try {
-        const params = new URLSearchParams(searchParams.toString());
+        const params = new URLSearchParams(searchParamKey);
         params.set("limit", "24");
 
         const res = await fetch(`/api/promotions?${params.toString()}`, { cache: "no-store" });
@@ -153,7 +151,14 @@ export function PromotionsExplorer() {
 
         if (!res.ok) {
           setError(payload.error || "Failed to load promotions.");
-          setResponse({ promotions: [], sellers: [], businesses: [], total: 0, page: 1, limit: 24 });
+          setResponse({
+            promotions: [],
+            sellers: [],
+            businesses: [],
+            total: 0,
+            page: 1,
+            limit: 24,
+          });
           setLoading(false);
           return;
         }
@@ -174,14 +179,15 @@ export function PromotionsExplorer() {
     return () => {
       active = false;
     };
-  }, [searchParamKey, searchParams]);
+  }, [searchParamKey]);
 
   const sellerMap = useMemo(
     () => new Map((response.sellers ?? []).map((seller) => [seller.user_id, seller])),
     [response.sellers]
   );
   const businessMap = useMemo(
-    () => new Map((response.businesses ?? []).map((business) => [business.id, business.business_name])),
+    () =>
+      new Map((response.businesses ?? []).map((business) => [business.id, business.business_name])),
     [response.businesses]
   );
   const promotions = response.promotions ?? [];
@@ -205,13 +211,13 @@ export function PromotionsExplorer() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                key={filters.query ?? ""}
                 id="promotion-search"
                 type="search"
                 placeholder="Search promotions, deals, or events"
                 className="pl-9"
-                value={localQuery}
+                defaultValue={filters.query ?? ""}
                 onChange={(event) => {
-                  setLocalQuery(event.target.value);
                   debouncedUpdateQuery(event.target.value);
                 }}
               />
@@ -349,7 +355,10 @@ export function PromotionsExplorer() {
             {filters.query && (
               <Badge variant="secondary" className="gap-1">
                 {filters.query}
-                <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ q: undefined })} />
+                <X
+                  className="h-3 w-3 cursor-pointer"
+                  onClick={() => updateFilters({ q: undefined })}
+                />
               </Badge>
             )}
             {filters.type && (

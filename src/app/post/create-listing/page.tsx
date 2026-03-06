@@ -15,7 +15,7 @@ import { MediaUpload } from "@/components/ui/media-upload";
 import { PlanGate, usePlanMaxPhotos, usePlanVideoAllowed } from "@/components/billing/plan-gate";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { formatZAR } from "@/lib/utils/format";
-import type { ListingCategory } from "@/types/enums";
+import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { cn } from "@/lib/utils";
 import {
@@ -26,7 +26,6 @@ import {
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
-import type { ListingCondition } from "@/types/enums";
 
 const STEPS: PostFormStep[] = [
   { label: "Details", icon: FileText, description: "Category, title, and description" },

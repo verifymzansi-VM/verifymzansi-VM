@@ -50,6 +50,14 @@ interface ListingsResponse {
   page?: number;
   limit?: number;
   error?: string;
+  code?: string;
+  detail?: string;
+}
+
+interface GridFetchError {
+  title: string;
+  body: string;
+  code?: string;
 }
 
 export function MzansiMarketGrid() {
@@ -58,7 +66,7 @@ export function MzansiMarketGrid() {
   const [sellers, setSellers] = useState<Map<string, SellerRow>>(new Map());
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<GridFetchError | null>(null);
   const [, startTransition] = useTransition();
   const fetchGenRef = useRef(0);
 
@@ -91,9 +99,35 @@ export function MzansiMarketGrid() {
         if (gen !== fetchGenRef.current) return;
 
         if (!response.ok) {
-          const message = payload.error || "Failed to load listings.";
-          log.error("Listing fetch error", { status: response.status, message });
-          setFetchError(message);
+          const nextError =
+            payload.code === "PGRST205"
+              ? {
+                  title: payload.error || "Marketplace temporarily unavailable",
+                  body:
+                    payload.detail ||
+                    "The marketplace database schema is not available yet. Please retry in a moment.",
+                  code: payload.code,
+                }
+              : {
+                  title: "Unable to load listings",
+                  body: payload.error || "We could not fetch listings right now. Please try again.",
+                  code: payload.code,
+                };
+
+          if (payload.code === "PGRST205") {
+            log.warn("Listing fetch schema cache unavailable", {
+              status: response.status,
+              code: payload.code,
+            });
+          } else {
+            log.error("Listing fetch error", {
+              status: response.status,
+              message: nextError.body,
+              code: payload.code,
+            });
+          }
+
+          setFetchError(nextError);
           setListings([]);
           setSellers(new Map());
           setTotalCount(0);
@@ -111,7 +145,10 @@ export function MzansiMarketGrid() {
 
         const message = error instanceof Error ? error.message : "Failed to load listings.";
         log.error("Listing fetch threw", { message });
-        setFetchError(message);
+        setFetchError({
+          title: "Unable to load listings",
+          body: "We could not fetch listings right now. Please try again.",
+        });
         setListings([]);
         setSellers(new Map());
         setTotalCount(0);
@@ -150,13 +187,13 @@ export function MzansiMarketGrid() {
   if (listings.length === 0) {
     const hasFilters = activeFilterCount > 0 && !fetchError;
     const hasQueryError = Boolean(fetchError);
-    const emptyTitle = hasQueryError
-      ? "Unable to load listings"
+    const emptyTitle = fetchError?.title
+      ? fetchError.title
       : hasFilters
         ? "No listings match your filters"
         : "No listings yet";
-    const emptyBody = hasQueryError
-      ? "We could not fetch listings right now. Please try again."
+    const emptyBody = fetchError?.body
+      ? fetchError.body
       : hasFilters
         ? "Try adjusting your search or filters to find what you're looking for."
         : "Be the first to post a verified ad on Mzansi Market.";
@@ -174,6 +211,11 @@ export function MzansiMarketGrid() {
         <div className="text-center space-y-2 max-w-md">
           <p className="text-lg font-display font-semibold">{emptyTitle}</p>
           <p className="text-sm text-muted-foreground">{emptyBody}</p>
+          {fetchError?.code && (
+            <Badge variant="outline" className="font-mono text-[10px]">
+              {fetchError.code}
+            </Badge>
+          )}
         </div>
 
         {hasFilters && (

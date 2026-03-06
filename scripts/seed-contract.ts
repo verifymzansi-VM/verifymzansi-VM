@@ -1,136 +1,25 @@
+import { PLANS } from "../src/lib/constants/pricing";
+import type { MarketplaceArea, PlanTier } from "../src/types/enums";
+
 export type SeedPlanContractRow = {
-  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS" | "MZANSI_BUSINESS" | "PROMOTIONS_EVENTS";
-  tier: "starter" | "growth" | "pro";
+  area: MarketplaceArea;
+  tier: PlanTier;
   name: string;
   price_cents: number;
-  billing_frequency: "monthly";
+  billing_frequency: "30_days";
   active: true;
 };
 
-export const SEED_CONTRACT_VERSION = "2026-02-24";
+export const SEED_CONTRACT_VERSION = "2026-03-06";
 
-export const EXPECTED_ACTIVE_PLAN_ROWS: SeedPlanContractRow[] = [
-  {
-    area: "MZANSI_MARKET",
-    tier: "starter",
-    name: "Mzansi Market Starter",
-    price_cents: 10000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "MZANSI_MARKET",
-    tier: "growth",
-    name: "Mzansi Market Growth",
-    price_cents: 25000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "MZANSI_MARKET",
-    tier: "pro",
-    name: "Mzansi Market Pro",
-    price_cents: 65000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "BUSINESS_ADS",
-    tier: "starter",
-    name: "Business Ads Starter",
-    price_cents: 15000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "BUSINESS_ADS",
-    tier: "growth",
-    name: "Business Ads Growth",
-    price_cents: 40000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "BUSINESS_ADS",
-    tier: "pro",
-    name: "Business Ads Pro",
-    price_cents: 100000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "MALL_SHOPS",
-    tier: "starter",
-    name: "Mall Shops Starter",
-    price_cents: 20000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "MALL_SHOPS",
-    tier: "growth",
-    name: "Mall Shops Growth",
-    price_cents: 50000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "MALL_SHOPS",
-    tier: "pro",
-    name: "Mall Shops Pro",
-    price_cents: 120000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "MZANSI_BUSINESS",
-    tier: "starter",
-    name: "Mzansi Business Starter",
-    price_cents: 15000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "MZANSI_BUSINESS",
-    tier: "growth",
-    name: "Mzansi Business Growth",
-    price_cents: 40000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "MZANSI_BUSINESS",
-    tier: "pro",
-    name: "Mzansi Business Pro",
-    price_cents: 100000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "PROMOTIONS_EVENTS",
-    tier: "starter",
-    name: "Promotions Starter",
-    price_cents: 10000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "PROMOTIONS_EVENTS",
-    tier: "growth",
-    name: "Promotions Growth",
-    price_cents: 25000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-  {
-    area: "PROMOTIONS_EVENTS",
-    tier: "pro",
-    name: "Promotions Pro",
-    price_cents: 65000,
-    billing_frequency: "monthly",
-    active: true,
-  },
-];
+export const EXPECTED_ACTIVE_PLAN_ROWS: SeedPlanContractRow[] = PLANS.map((plan) => ({
+  area: plan.area,
+  tier: plan.tier,
+  name: plan.name,
+  price_cents: plan.priceCents,
+  billing_frequency: plan.billingFrequency,
+  active: true,
+}));
 
 export const EXPECTED_FEATURE_FLAG_KEYS = [
   "kyc_v2_flow",

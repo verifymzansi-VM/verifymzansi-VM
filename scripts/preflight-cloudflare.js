@@ -43,17 +43,13 @@ if (platform === "win32") {
 ║                                                              ║
 ║  Use one of these alternatives:                              ║
 ║                                                              ║
-║  1. WSL 2 (recommended):                                     ║
+║  1. WSL 2 on an ext4 workspace (recommended):                ║
 ║     wsl -d Ubuntu                                            ║
-║     cd /mnt/c/Users/.../verifymzansi                         ║
+║     rsync -a --delete /mnt/c/Users/.../verifymzansi/ ~/verifymzansi/ ║
+║     cd ~/verifymzansi                                        ║
 ║     pnpm build:cloudflare                                    ║
 ║                                                              ║
-║  2. Run an elevated PowerShell (Run as Administrator)        ║
-║                                                              ║
-║  3. Enable Developer Mode in Windows Settings:               ║
-║     Settings → Update & Security → For Developers            ║
-║     → Developer Mode → ON                                    ║
-║     (allows symlink creation without elevation)              ║
+║  2. Push to master and let GitHub Actions deploy on Ubuntu   ║
 ║                                                              ║
 ║  CI/CD deploys on ubuntu-latest — no action needed there.    ║
 ║                                                              ║

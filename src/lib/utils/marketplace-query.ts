@@ -163,8 +163,7 @@ export function parseMarketplaceFiltersFromSearchParams(
     const value = normalizeParamValue(rawValue);
     if (!value) return;
 
-    attributes[key.slice(5)] =
-      value === "true" ? true : value === "false" ? false : value;
+    attributes[key.slice(5)] = value === "true" ? true : value === "false" ? false : value;
   });
 
   const sort = normalizeParamValue(searchParams.get("sort"));
@@ -175,9 +174,7 @@ export function parseMarketplaceFiltersFromSearchParams(
     province: normalizeParamValue(searchParams.get("province")),
     city: normalizeParamValue(searchParams.get("city")),
     condition: normalizeMarketplaceConditionParam(searchParams.get("condition")),
-    sort: VALID_MARKET_SORTS.has(sort as MarketSort)
-      ? (sort as MarketSort)
-      : undefined,
+    sort: VALID_MARKET_SORTS.has(sort as MarketSort) ? (sort as MarketSort) : undefined,
     priceMin: normalizeNumberParam(searchParams.get("minPrice")),
     priceMax: normalizeNumberParam(searchParams.get("maxPrice")),
     page: normalizeIntegerParam(searchParams.get("page")) ?? 1,

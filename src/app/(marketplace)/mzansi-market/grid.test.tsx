@@ -2,13 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MzansiMarketGrid } from "./grid";
 
-const { createClientMock, useMarketplaceStoreMock } = vi.hoisted(() => ({
-  createClientMock: vi.fn(),
+const { useMarketplaceStoreMock, fetchMock } = vi.hoisted(() => ({
   useMarketplaceStoreMock: vi.fn(),
-}));
-
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: createClientMock,
+  fetchMock: vi.fn(),
 }));
 
 vi.mock("@/stores", () => ({
@@ -19,49 +15,10 @@ vi.mock("@/components/listings/listing-skeleton", () => ({
   ListingGridSkeleton: () => <div data-testid="listing-skeleton" />,
 }));
 
-type QueryResult = {
-  data: Record<string, unknown>[] | null;
-  error: { code?: string | null; message?: string | null } | null;
-  count?: number | null;
-};
-
-function createListingsQuery(result: QueryResult) {
-  const query = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    gte: vi.fn().mockReturnThis(),
-    lte: vi.fn().mockReturnThis(),
-    ilike: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    range: vi.fn().mockResolvedValue({
-      data: result.data,
-      error: result.error,
-      count: result.count ?? null,
-    }),
-  };
-
-  return query;
-}
-
-function createSupabaseClientMock(queryResult: QueryResult) {
-  const listingsQuery = createListingsQuery(queryResult);
-  const sellerQuery = {
-    select: vi.fn().mockReturnThis(),
-    in: vi.fn().mockResolvedValue({ data: [] }),
-  };
-
-  return {
-    from: vi.fn().mockImplementation((table: string) => {
-      if (table === "listings") return listingsQuery;
-      if (table === "seller_profiles") return sellerQuery;
-      return sellerQuery;
-    }),
-  };
-}
-
 describe("MzansiMarketGrid", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("fetch", fetchMock);
     useMarketplaceStoreMock.mockReturnValue({
       filters: {
         category: undefined,
@@ -76,6 +33,7 @@ describe("MzansiMarketGrid", () => {
       },
       page: 1,
       setPage: vi.fn(),
+      resetFilters: vi.fn(),
     });
   });
 
@@ -83,15 +41,15 @@ describe("MzansiMarketGrid", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    createClientMock.mockReturnValue(
-      createSupabaseClientMock({
-        data: null,
-        error: {
-          code: "PGRST205",
-          message: "Could not find the table 'public.listings' in the schema cache",
-        },
-      }) as never
-    );
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({
+        error: "Marketplace temporarily unavailable",
+        code: "PGRST205",
+        detail: "The marketplace database schema is not available yet. Please retry in a moment.",
+      }),
+    });
 
     render(<MzansiMarketGrid />);
 
@@ -114,13 +72,17 @@ describe("MzansiMarketGrid", () => {
   });
 
   it("keeps the normal empty state when query succeeds with no rows", async () => {
-    createClientMock.mockReturnValue(
-      createSupabaseClientMock({
-        data: [],
-        error: null,
-        count: 0,
-      }) as never
-    );
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        listings: [],
+        sellers: [],
+        total: 0,
+        page: 1,
+        limit: 24,
+      }),
+    });
 
     render(<MzansiMarketGrid />);
 

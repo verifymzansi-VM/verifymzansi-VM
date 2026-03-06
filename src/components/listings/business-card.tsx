@@ -58,7 +58,9 @@ export function BusinessCard({
   const isFeatured = featuredUntil && new Date(featuredUntil) > new Date();
 
   const displayCover =
-    coverVideo || coverPhoto || (galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos[0] : null);
+    coverVideo ||
+    coverPhoto ||
+    (galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos[0] : null);
   const isVideo = isVideoUrl(displayCover);
   const normalizedCoverPhoto = displayCover ? normalizeMediaUrl(displayCover) : undefined;
   const normalizedPosterUrl = videoThumbnail

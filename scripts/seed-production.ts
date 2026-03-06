@@ -1,8 +1,10 @@
+/* eslint-disable no-console */
+
 /**
  * Production Data Seeding Script
  *
  * Seeds the production database with:
- * - Subscription plans (3 areas × 3 tiers) — prices sourced from pricing.ts constants
+ * - Subscription plans from the runtime pricing catalog
  * - Initial admin user
  * - Initial moderator user
  *
@@ -15,47 +17,8 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { PLANS } from "../src/lib/constants/pricing";
 import { EXPECTED_ACTIVE_PLAN_ROWS } from "./seed-contract";
-
-/** Structured features matching the schema JSONB format used by entitlement checks. */
-const PLAN_FEATURES: Record<string, Record<string, object>> = {
-  MZANSI_MARKET: {
-    starter: {
-      listings_per_month: 5,
-      photos_per_listing: 5,
-      video_per_listing: false,
-      boost: false,
-      featured: false,
-      urgent: false,
-    },
-    growth: {
-      listings_per_month: 15,
-      photos_per_listing: 10,
-      video_per_listing: true,
-      boost: true,
-      featured: false,
-      urgent: false,
-    },
-    pro: {
-      listings_per_month: -1,
-      photos_per_listing: 10,
-      video_per_listing: true,
-      boost: true,
-      featured: true,
-      urgent: true,
-    },
-  },
-  MALL_SHOPS: {
-    starter: { storefronts: 1, posts_per_month: 4, cover_video: false },
-    growth: { storefronts: 3, posts_per_month: 12, cover_video: true },
-    pro: { storefronts: -1, posts_per_month: -1, cover_video: true },
-  },
-  BUSINESS_ADS: {
-    starter: { profiles: 1, posts_per_month: 4, cover_video: false },
-    growth: { profiles: 3, posts_per_month: 12, cover_video: true },
-    pro: { profiles: -1, posts_per_month: -1, cover_video: true },
-  },
-};
 
 // ---------------------------------------------------------------------------
 
@@ -82,13 +45,17 @@ type PlanRow = {
 };
 
 function buildPlanRows(): PlanRow[] {
+  const featureByKey = new Map(
+    PLANS.map((plan) => [`${plan.area}:${plan.tier}`, plan.features] as const)
+  );
+
   return EXPECTED_ACTIVE_PLAN_ROWS.map((plan) => ({
     area: plan.area,
     tier: plan.tier,
     name: plan.name,
     price_cents: plan.price_cents,
     billing_frequency: plan.billing_frequency,
-    features: PLAN_FEATURES[plan.area][plan.tier],
+    features: featureByKey.get(`${plan.area}:${plan.tier}`) ?? {},
     active: plan.active,
   }));
 }
@@ -109,7 +76,7 @@ async function seedPlans() {
     return false;
   }
 
-  console.log(`  ✓ ${plans.length} subscription plans seeded (3 areas × 3 tiers)`);
+  console.log(`  ✓ ${plans.length} subscription plans seeded from runtime pricing constants`);
   return true;
 }
 

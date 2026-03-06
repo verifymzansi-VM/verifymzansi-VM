@@ -16,7 +16,7 @@ import {
   usePlanVideoAllowed,
 } from "@/components/billing/plan-gate";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
-import { PROMOTION_TYPE_LABELS, type PromotionType } from "@/types/enums";
+import { PROMOTION_TYPE_LABELS, type BusinessCategory, type PromotionType } from "@/types/enums";
 import { cn } from "@/lib/utils";
 import {
   PostFormFooter,
@@ -27,7 +27,6 @@ import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 import { useToast } from "@/hooks/use-toast";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
-import type { BusinessCategory } from "@/types/enums";
 
 const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
 const SELECT_CLASS =

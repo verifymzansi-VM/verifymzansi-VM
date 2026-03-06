@@ -87,6 +87,33 @@ describe("env config", () => {
 
       expect(() => mod.validateEnv()).toThrow();
     });
+
+    it("requires AFRICASTALKING_SENDER_ID in production", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("NODE_ENV", "production");
+      delete process.env.AFRICASTALKING_SENDER_ID;
+      const mod = await import("./env");
+
+      expect(() => mod.validateEnv()).toThrow("AFRICASTALKING_SENDER_ID is required in production");
+    });
+
+    it("requires NEXT_PUBLIC_APP_URL to use https in production", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VerifyMzansi");
+      vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+      const mod = await import("./env");
+
+      expect(() => mod.validateEnv()).toThrow("NEXT_PUBLIC_APP_URL must be an https:// URL");
+    });
   });
 
   describe("env helper", () => {

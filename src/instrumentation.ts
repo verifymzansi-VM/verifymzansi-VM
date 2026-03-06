@@ -1,6 +1,4 @@
 export async function register() {
-  if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { validateEnv } = await import("./lib/config/env");
-    validateEnv();
-  }
+  const { validateEnv } = await import("./lib/config/env");
+  validateEnv();
 }

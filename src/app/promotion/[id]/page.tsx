@@ -176,20 +176,22 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
                   </div>
                   {(leadVideo ? photos.length > 0 : photos.length > 1) && (
                     <div className="grid grid-cols-4 gap-2">
-                      {(leadVideo ? photos : photos.slice(1)).slice(0, 4).map((photo: string, i: number) => (
-                        <div
-                          key={i}
-                          className="relative aspect-square rounded-lg overflow-hidden bg-warm-100 dark:bg-warm-800"
-                        >
-                          <Image
-                            src={normalizeMediaUrl(photo)}
-                            alt={`${promotion.title} photo ${i + 2}`}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 640px) 25vw, 16vw"
-                          />
-                        </div>
-                      ))}
+                      {(leadVideo ? photos : photos.slice(1))
+                        .slice(0, 4)
+                        .map((photo: string, i: number) => (
+                          <div
+                            key={i}
+                            className="relative aspect-square rounded-lg overflow-hidden bg-warm-100 dark:bg-warm-800"
+                          >
+                            <Image
+                              src={normalizeMediaUrl(photo)}
+                              alt={`${promotion.title} photo ${i + 2}`}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 640px) 25vw, 16vw"
+                            />
+                          </div>
+                        ))}
                     </div>
                   )}
                   {(leadVideo ? videos.length > 1 : videos.length > 0) && (

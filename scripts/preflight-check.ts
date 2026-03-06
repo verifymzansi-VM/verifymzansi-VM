@@ -1,3 +1,5 @@
+/* eslint-disable no-console */
+
 /**
  * Pre-launch Preflight Check
  *
@@ -11,6 +13,11 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
+import {
+  EXPECTED_ACTIVE_PLAN_ROWS,
+  getPlanContractKey,
+  type SeedPlanContractRow,
+} from "./seed-contract";
 import { verifySupabaseSchema } from "./check-supabase-schema";
 
 loadEnvConfig(process.cwd());
@@ -116,17 +123,53 @@ async function checkSupabasePlansSeeded() {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data, error } = await sb.from("plans").select("id").eq("active", true);
+    const { data, error } = await sb
+      .from("plans")
+      .select("area,tier,name,price_cents,billing_frequency,active")
+      .eq("active", true);
 
     if (error) {
       fail("Plans seeded", error.message);
-    } else if (!data || data.length < 9) {
-      fail(
-        "Plans seeded",
-        `Expected ≥9 rows, found ${data?.length ?? 0}. Run: npx tsx scripts/seed-production.ts`
-      );
     } else {
-      pass("Plans seeded", `${data.length} active plans`);
+      const actualRows = (data ?? []) as SeedPlanContractRow[];
+      const actualByKey = new Map(actualRows.map((row) => [getPlanContractKey(row), row]));
+      const missing = EXPECTED_ACTIVE_PLAN_ROWS.filter(
+        (row) => !actualByKey.has(getPlanContractKey(row))
+      ).map((row) => `${row.area}/${row.tier}`);
+      const mismatched = EXPECTED_ACTIVE_PLAN_ROWS.filter((row) => {
+        const actual = actualByKey.get(getPlanContractKey(row));
+        return (
+          actual &&
+          (actual.name !== row.name ||
+            actual.price_cents !== row.price_cents ||
+            actual.billing_frequency !== row.billing_frequency ||
+            actual.active !== row.active)
+        );
+      }).map((row) => `${row.area}/${row.tier}`);
+      const unexpected = actualRows
+        .filter(
+          (row) =>
+            !EXPECTED_ACTIVE_PLAN_ROWS.some(
+              (expected) => getPlanContractKey(expected) === getPlanContractKey(row)
+            )
+        )
+        .map((row) => `${row.area}/${row.tier}`);
+
+      if (missing.length > 0 || mismatched.length > 0 || unexpected.length > 0) {
+        const details = [
+          missing.length > 0 ? `missing ${missing.join(", ")}` : null,
+          mismatched.length > 0 ? `mismatched ${mismatched.join(", ")}` : null,
+          unexpected.length > 0 ? `unexpected ${unexpected.join(", ")}` : null,
+        ]
+          .filter(Boolean)
+          .join("; ");
+        fail(
+          "Plans seeded",
+          `Expected ${EXPECTED_ACTIVE_PLAN_ROWS.length} active rows matching the runtime plan contract; found ${actualRows.length}. ${details}. Run: npx tsx scripts/seed-production.ts`
+        );
+      } else {
+        pass("Plans seeded", `${actualRows.length} active plans match the runtime plan contract`);
+      }
     }
   } catch (e: unknown) {
     fail("Plans seeded", (e as Error).message);
