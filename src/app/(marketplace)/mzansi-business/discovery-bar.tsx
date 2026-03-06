@@ -8,10 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { useMarketplaceStore } from "@/stores";
-import {
-  BUSINESS_CATEGORIES,
-  BUSINESS_TYPE_OPTIONS,
-} from "@/lib/constants/categories";
+import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 
 interface MallOption {
@@ -48,7 +45,7 @@ export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
 
   return (
     <section className="space-y-4 rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))]">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_repeat(5,minmax(0,1fr))]">
         <div className="space-y-1.5">
           <Label htmlFor="business-search">Search</Label>
           <div className="relative">
@@ -68,6 +65,31 @@ export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
         </div>
 
         <div className="space-y-1.5">
+          <Label htmlFor="business-category">Category</Label>
+          <select
+            id="business-category"
+            aria-label="Category"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            value={filters.businessCategory || ""}
+            onChange={(event) =>
+              setFilter(
+                "businessCategory",
+                event.target.value
+                  ? (event.target.value as typeof filters.businessCategory)
+                  : undefined
+              )
+            }
+          >
+            <option value="">All categories</option>
+            {BUSINESS_CATEGORIES.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
           <Label htmlFor="business-type">Type</Label>
           <select
             id="business-type"
@@ -75,7 +97,10 @@ export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             value={filters.businessType || ""}
             onChange={(event) =>
-              setFilter("businessType", event.target.value ? (event.target.value as typeof filters.businessType) : undefined)
+              setFilter(
+                "businessType",
+                event.target.value ? (event.target.value as typeof filters.businessType) : undefined
+              )
             }
           >
             <option value="">All types</option>
@@ -179,7 +204,10 @@ export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
             <Badge variant="secondary" className="gap-1">
               {filters.province}
               {filters.city && `, ${filters.city}`}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => setFilter("province", undefined)} />
+              <X
+                className="h-3 w-3 cursor-pointer"
+                onClick={() => setFilter("province", undefined)}
+              />
             </Badge>
           )}
           {filters.mall && (
