@@ -7,10 +7,49 @@ import { promotionSchema } from "@/lib/validations/promotion";
 import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
-import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import {
+  type MarketplaceArea,
+  type SellerVerificationStatus,
+  type PlanTier,
+  type PromotionEventState,
+} from "@/types/enums";
+import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
+import { normalizeBusinessCategoryParam } from "@/lib/utils/marketplace-query";
+import { computeTrustLevel } from "@/lib/constants/trust-scale";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
+
+function normalizeEventStateParam(value: string | null): PromotionEventState | null {
+  if (value === "upcoming" || value === "ongoing" || value === "ended") {
+    return value;
+  }
+  return null;
+}
+
+function applyEventStateFilter(
+  query: any,
+  eventState: PromotionEventState,
+  nowIso: string
+) {
+  switch (eventState) {
+    case "upcoming":
+      return query.eq("promotion_type", "event").gt("start_date", nowIso);
+    case "ended":
+      return query.eq("promotion_type", "event").lt("end_date", nowIso);
+    case "ongoing":
+      return query.eq("promotion_type", "event").or(
+        [
+          `and(start_date.lte.${nowIso},end_date.gte.${nowIso})`,
+          `and(start_date.is.null,end_date.gte.${nowIso})`,
+          `and(start_date.lte.${nowIso},end_date.is.null)`,
+          "and(start_date.is.null,end_date.is.null)",
+        ].join(",")
+      );
+    default:
+      return query;
+  }
+}
 
 /**
  * POST /api/promotions
@@ -126,6 +165,8 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
+    const categoryKey =
+      data.category_key ?? inferPromotionCategoryKey(data.category, data.promotion_type);
 
     // ── Enforce photo/video limits based on plan ─────────────
     const ent =
@@ -171,6 +212,7 @@ export async function POST(request: NextRequest) {
         description: data.description,
         promotion_type: data.promotion_type,
         category: data.category || null,
+        category_key: categoryKey,
         photos: data.images,
         videos: data.videos,
         video_thumbnail: data.video_thumbnail || null,
@@ -247,18 +289,21 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl;
 
     const promotionType = searchParams.get("type");
+    const categoryKey = normalizeBusinessCategoryParam(searchParams.get("category"));
     const province = searchParams.get("province");
     const city = searchParams.get("city");
     const search = searchParams.get("q");
     const businessId = searchParams.get("business_id");
+    const eventState = normalizeEventStateParam(searchParams.get("event_state"));
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
     const offset = (page - 1) * limit;
+    const nowIso = new Date().toISOString();
 
     let query = admin
       .from("promotions")
       .select(
-        "id, seller_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
+        "id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
         { count: "exact" }
       )
       .eq("status", "live");
@@ -268,6 +313,9 @@ export async function GET(request: NextRequest) {
     }
     if (businessId) {
       query = query.eq("business_id", businessId);
+    }
+    if (categoryKey) {
+      query = query.eq("category_key", categoryKey);
     }
     if (province) {
       query = query.eq("location_province", province);
@@ -281,6 +329,9 @@ export async function GET(request: NextRequest) {
       if (safeSearch) {
         query = query.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
       }
+    }
+    if (eventState) {
+      query = applyEventStateFilter(query, eventState, nowIso);
     }
 
     // Order: boosted first, then featured, then newest
@@ -297,8 +348,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch promotions" }, { status: 500 });
     }
 
+    const sellerIds = Array.from(
+      new Set((promotions ?? []).map((promotion) => promotion.seller_id).filter(Boolean))
+    );
+    const businessIds = Array.from(
+      new Set((promotions ?? []).map((promotion) => promotion.business_id).filter(Boolean))
+    ) as string[];
+
+    const { data: sellers } = sellerIds.length
+      ? await admin
+          .from("seller_profiles")
+          .select("user_id, display_name, seller_verification_status")
+          .in("user_id", sellerIds)
+      : { data: [] };
+    const { data: businesses } = businessIds.length
+      ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
+      : { data: [] };
+
     return NextResponse.json({
       promotions: promotions ?? [],
+      sellers:
+        sellers?.map((seller) => ({
+          user_id: seller.user_id,
+          display_name: seller.display_name,
+          trust: computeTrustLevel(
+            (seller.seller_verification_status ?? "unverified") as SellerVerificationStatus
+          ),
+        })) ?? [],
+      businesses: businesses ?? [],
       total: count ?? 0,
       page,
       limit,

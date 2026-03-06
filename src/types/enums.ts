@@ -47,6 +47,8 @@ export type ListingCategory =
   | "home_lifestyle"
   | "jobs_services";
 
+export type ListingCondition = "new" | "like_new" | "good" | "fair" | "for_parts";
+
 /* ── Mzansi Business Enums ──────────────────────────────── */
 export type BusinessType =
   | "mall_store"
@@ -72,6 +74,7 @@ export type BusinessCategory =
 
 /* ── Promotion Enums ────────────────────────────────────── */
 export type PromotionType = "product" | "service" | "event" | "deal" | "general";
+export type PromotionEventState = "upcoming" | "ongoing" | "ended";
 
 export const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
   product: "Product",
@@ -79,6 +82,12 @@ export const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
   event: "Event",
   deal: "Deal",
   general: "General",
+};
+
+export const PROMOTION_EVENT_STATE_LABELS: Record<PromotionEventState, string> = {
+  upcoming: "Upcoming",
+  ongoing: "Ongoing",
+  ended: "Ended",
 };
 
 export type ContactMethod = "call" | "whatsapp" | "form" | "in_app";
@@ -166,6 +175,14 @@ export const CATEGORY_LABELS: Record<ListingCategory, string> = {
   electronics: "Electronics & Tech",
   home_lifestyle: "Home & Lifestyle",
   jobs_services: "Jobs, Services & Other",
+};
+
+export const LISTING_CONDITION_LABELS: Record<ListingCondition, string> = {
+  new: "New",
+  like_new: "Like New",
+  good: "Good",
+  fair: "Fair",
+  for_parts: "For Parts",
 };
 
 export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {

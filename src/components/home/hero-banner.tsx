@@ -8,6 +8,7 @@ import {
   Search,
   MapPin,
   Building2,
+  Megaphone,
   ArrowRight,
   ChevronRight,
   ChevronLeft,
@@ -33,6 +34,13 @@ const ENTITY_CONFIG = {
     href: "/mzansi-business/",
     cta: "View Business",
   },
+  promotion: {
+    Icon: Megaphone,
+    badgeColor: "bg-orange-700 text-orange-50 border-orange-600 backdrop-blur-md",
+    badge: "Promotions & Events",
+    href: "/promotion/",
+    cta: "View Promotion",
+  },
   listing: {
     Icon: ShieldCheck,
     badgeColor: "bg-emerald-700 text-emerald-50 border-emerald-600 backdrop-blur-md",
@@ -55,6 +63,7 @@ interface HeroBusiness {
   location_city?: string;
   cover_video?: string | null;
   cover_photo?: string | null;
+  video_thumbnail?: string | null;
 }
 
 interface HeroListing {
@@ -66,6 +75,17 @@ interface HeroListing {
   photos?: string[];
   price_cents?: number | null;
   video_thumbnail?: string | null;
+}
+
+interface HeroPromotionRecord {
+  id: string;
+  title: string;
+  description?: string;
+  location_city?: string;
+  videos?: string[];
+  photos?: string[];
+  video_thumbnail?: string | null;
+  price_cents?: number | null;
 }
 
 interface HeroSlide {
@@ -83,6 +103,7 @@ interface HeroSlide {
 interface HeroBannerProps {
   topBusinesses?: HeroBusiness[];
   latestListings?: HeroListing[];
+  latestPromotions?: HeroPromotionRecord[];
 }
 
 /** Check if a URL points to a video file (by extension). */
@@ -333,10 +354,15 @@ function MediaRender({
   );
 }
 
-export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBannerProps) {
+export function HeroBanner({
+  topBusinesses = [],
+  latestListings = [],
+  latestPromotions = [],
+}: HeroBannerProps) {
   const [current, setCurrent] = useState(0);
   const [fading, setFading] = useState(false);
   const [query, setQuery] = useState("");
+  const [searchArea, setSearchArea] = useState<"market" | "business" | "promotions">("market");
   const router = useRouter();
 
   const goTo = useCallback(
@@ -366,7 +392,10 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
           mediaUrl: normalizeMediaUrl(
             b.cover_video || b.cover_photo || "/images/fallbacks/hero-business.svg"
           ),
-          posterUrl: usesVideo && b.cover_photo ? normalizeMediaUrl(b.cover_photo) : undefined,
+          posterUrl:
+            usesVideo && (b.video_thumbnail || b.cover_photo)
+              ? normalizeMediaUrl(b.video_thumbnail || b.cover_photo || "")
+              : undefined,
           promotions: [],
           price: null,
         };
@@ -390,6 +419,29 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
           posterUrl: usesVideo && posterSrc ? normalizeMediaUrl(posterSrc) : undefined,
           promotions: [],
           price: l.price_cents ? l.price_cents / 100 : null,
+        };
+      }),
+      ...latestPromotions.map((promotion) => {
+        const usesVideo = !!(promotion.videos && promotion.videos.length > 0);
+        const posterSrc =
+          promotion.video_thumbnail ||
+          (promotion.photos && promotion.photos.length > 0 ? promotion.photos[0] : "");
+        return {
+          type: "promotion" as const,
+          id: promotion.id,
+          title: promotion.title,
+          description: promotion.description || "Latest promotion from a verified seller.",
+          location: promotion.location_city || "South Africa",
+          mediaUrl: normalizeMediaUrl(
+            usesVideo
+              ? promotion.videos![0]
+              : promotion.photos && promotion.photos.length > 0
+                ? promotion.photos[0]
+                : "/images/fallbacks/hero-listing.svg"
+          ),
+          posterUrl: usesVideo && posterSrc ? normalizeMediaUrl(posterSrc) : undefined,
+          promotions: [],
+          price: promotion.price_cents ? promotion.price_cents / 100 : null,
         };
       }),
     ];
@@ -440,6 +492,17 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
       currency: "ZAR",
       maximumFractionDigits: 0,
     }).format(price);
+  };
+
+  const handleSearch = () => {
+    const path =
+      searchArea === "business"
+        ? "/mzansi-business"
+        : searchArea === "promotions"
+          ? "/promotions"
+          : "/mzansi-market";
+
+    router.push(`${path}${query ? `?q=${encodeURIComponent(query)}` : ""}`);
   };
 
   return (
@@ -627,6 +690,19 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
       <div className="bg-white dark:bg-warm-900 border-b border-warm-200 dark:border-warm-800 shadow-sm">
         <div className="container-page py-3">
           <div className="flex gap-2 max-w-3xl mx-auto">
+            <select
+              aria-label="Search area"
+              className="h-[50px] min-w-[132px] rounded-lg border border-warm-200 bg-warm-50 px-3 text-sm text-foreground dark:border-warm-700 dark:bg-warm-800"
+              value={searchArea}
+              onChange={(event) =>
+                setSearchArea(event.target.value as "market" | "business" | "promotions")
+              }
+            >
+              <option value="market">Mzansi Market</option>
+              <option value="business">Mzansi Business</option>
+              <option value="promotions">Promotions & Events</option>
+            </select>
+
             <label className="flex-1 flex items-center gap-2 rounded-lg border border-warm-200 dark:border-warm-700 bg-warm-50 dark:bg-warm-800 px-4 cursor-text">
               <Search className="h-4 w-4 text-muted-foreground shrink-0" />
               <input
@@ -636,7 +712,7 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    router.push(`/mzansi-market${query ? `?q=${encodeURIComponent(query)}` : ""}`);
+                    handleSearch();
                   }
                 }}
                 placeholder="What are you looking for?"
@@ -653,9 +729,7 @@ export function HeroBanner({ topBusinesses = [], latestListings = [] }: HeroBann
 
             <Button
               className="bg-brand-green hover:bg-brand-green/90 text-white px-6 h-full font-semibold"
-              onClick={() =>
-                router.push(`/mzansi-market${query ? `?q=${encodeURIComponent(query)}` : ""}`)
-              }
+              onClick={handleSearch}
             >
               Search
             </Button>

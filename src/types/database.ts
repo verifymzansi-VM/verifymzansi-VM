@@ -14,6 +14,7 @@ import type {
   ArtifactKind,
   ListingStatus,
   ListingCategory,
+  ListingCondition,
   ContactMethod,
   PlanTier,
   EntitlementType,
@@ -193,6 +194,7 @@ export interface Listing {
   seller_id: string;
   area: MarketplaceArea;
   category: ListingCategory;
+  condition: ListingCondition | null;
   title: string;
   description: string;
   photos: string[];
@@ -234,6 +236,7 @@ export interface Business {
   cover_photo: string | null;
   cover_video: string | null;
   video_thumbnail: string | null;
+  gallery_photos: string[] | null;
   location_province: string;
   location_city: string;
   store_number: string | null;
@@ -268,6 +271,7 @@ export interface Promotion {
   description: string;
   promotion_type: PromotionType;
   category: string | null;
+  category_key: BusinessCategory | null;
   photos: string[];
   videos: string[];
   video_thumbnail: string | null;

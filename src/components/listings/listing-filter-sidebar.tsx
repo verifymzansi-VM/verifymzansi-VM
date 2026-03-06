@@ -11,6 +11,7 @@ import { getModelsForMake } from "@/lib/constants/sa-vehicles";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { useMarketplaceStore } from "@/stores";
 import { cn } from "@/lib/utils";
+import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 
 /* ─── Helpers ──────────────────────────────────────────────── */
 
@@ -49,7 +50,7 @@ export function ListingFilterSidebar() {
 
   const filterableAttributes =
     selectedCategory?.attributeFields.filter(
-      (f) => f.type === "select" || f.type === "boolean" || f.type === "number"
+      (f) => f.type === "select" || f.type === "boolean" || f.type === "number" || f.type === "text"
     ) ?? [];
 
   const hasActiveFilters =
@@ -59,6 +60,7 @@ export function ListingFilterSidebar() {
     filters.priceMin ||
     filters.priceMax ||
     filters.condition ||
+    filters.query ||
     Object.values(filters.attributes).some((v) => v !== undefined && v !== "");
 
   return (
@@ -192,19 +194,21 @@ export function ListingFilterSidebar() {
       <div className="space-y-2">
         <Label className="text-sm font-semibold">Condition</Label>
         <div className="flex gap-2">
-          {["New", "Used", "Refurbished"].map((cond) => (
+          {LISTING_CONDITIONS.map((cond) => (
             <button
-              key={cond}
+              key={cond.value}
               type="button"
-              onClick={() => setFilter("condition", filters.condition === cond ? undefined : cond)}
+              onClick={() =>
+                setFilter("condition", filters.condition === cond.value ? undefined : cond.value)
+              }
               className={cn(
                 "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
-                filters.condition === cond
+                filters.condition === cond.value
                   ? "border-brand-green bg-brand-green/10 text-brand-green"
                   : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
               )}
             >
-              {cond}
+              {cond.label}
             </button>
           ))}
         </div>

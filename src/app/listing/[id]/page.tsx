@@ -17,12 +17,14 @@ import { CATEGORIES } from "@/lib/constants/categories";
 import { ListingDetailClient } from "./client";
 import { ListingContactActions } from "./listing-contact-actions";
 import type { Metadata } from "next";
+import { getListingConditionLabel } from "@/lib/constants/listing-condition";
 
 interface SimilarListingRow {
   id: string;
   title: string;
   price_cents: number | null;
   price_negotiable: boolean;
+  condition: string | null;
   photos: string[];
   location_province: string;
   location_city: string;
@@ -96,7 +98,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   const { data: similarListings } = await supabase
     .from("listings")
     .select(
-      "id, title, price_cents, price_negotiable, photos, location_province, location_city, category, attributes, created_at, boost_until, featured, seller_id"
+      "id, title, price_cents, price_negotiable, condition, photos, location_province, location_city, category, attributes, created_at, boost_until, featured, seller_id"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_MARKET")
@@ -206,9 +208,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
                     {listing.category.replace(/_/g, " ")}
                   </Badge>
                 )}
-                {listing.attributes?.condition && (
+                {listing.condition && (
                   <Badge variant="outline" className="capitalize">
-                    {listing.attributes.condition.replace(/_/g, " ")}
+                    {getListingConditionLabel(listing.condition)}
                   </Badge>
                 )}
                 {listing.contact_methods?.map((m: string) => (
@@ -361,7 +363,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
                       province={item.location_province}
                       city={item.location_city}
                       category={item.category}
-                      condition={item.attributes?.condition as string | undefined}
+                      condition={item.condition ?? undefined}
                       createdAt={item.created_at}
                       sellerTrustLevel={itemTrust}
                       sellerName={itemSeller?.display_name}

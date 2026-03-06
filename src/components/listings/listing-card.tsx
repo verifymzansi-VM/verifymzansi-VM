@@ -11,6 +11,7 @@ import { formatZAR, formatRelativeTime } from "@/lib/utils/format";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { TrustLevel } from "@/types/enums";
+import { getListingConditionLabel } from "@/lib/constants/listing-condition";
 
 interface ListingCardProps {
   id: string;
@@ -155,7 +156,7 @@ export const ListingCard = memo(function ListingCard({
                 variant="secondary"
                 className="text-[10px] backdrop-blur-sm bg-white/80 dark:bg-black/50"
               >
-                {condition.replaceAll("_", " ")}
+                {getListingConditionLabel(condition)}
               </Badge>
             )}
           </div>

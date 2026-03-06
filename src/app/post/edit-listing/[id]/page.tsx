@@ -16,12 +16,13 @@ import { createClient } from "@/lib/supabase/client";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
-import type { ListingCategory, UploadArea } from "@/types/enums";
+import type { ListingCategory, ListingCondition, UploadArea } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { normalizeMediaUrls } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
+import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 
 export default function EditListingPage() {
   const params = useParams();
@@ -30,6 +31,7 @@ export default function EditListingPage() {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState<ListingCategory | "">("");
+  const [condition, setCondition] = useState<ListingCondition | "">("");
   const [categoryAttributes, setCategoryAttributes] = useState<Record<string, string | boolean>>(
     {}
   );
@@ -67,6 +69,13 @@ export default function EditListingPage() {
       setDescription(data.description || "");
       setPrice(data.price_cents ? (data.price_cents / 100).toString() : "");
       setCategory((data.category as ListingCategory) || "");
+      setCondition(
+        ((data.condition as ListingCondition | null) ??
+          ((data.attributes as Record<string, unknown> | null)?.condition as
+            | ListingCondition
+            | undefined) ??
+          "") as ListingCondition | ""
+      );
       setCategoryAttributes((data.attributes as Record<string, string | boolean>) || {});
       setProvince(data.location_province || "");
       setCity(data.location_city || "");
@@ -203,6 +212,7 @@ export default function EditListingPage() {
           price_zar: numPrice,
           negotiable,
           category: mapListingCategory(category),
+          condition: condition || undefined,
           attributes: normalizedAttributes,
           province: province || "",
           city: city || "",
@@ -278,6 +288,24 @@ export default function EditListingPage() {
                     onAttributeChange={handleAttributeChange}
                     errors={fieldErrors}
                   />
+
+                  <div className="space-y-2">
+                    <Label htmlFor="condition">Condition</Label>
+                    <select
+                      id="condition"
+                      aria-label="Condition"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={condition}
+                      onChange={(e) => setCondition(e.target.value as ListingCondition | "")}
+                    >
+                      <option value="">Condition not specified</option>
+                      {LISTING_CONDITIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                   {/* ── Title ──────────────────────────────────── */}
                   <div className="space-y-2">

@@ -9,9 +9,201 @@ import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { parseJsonRequest } from "@/lib/utils/api";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
+
+function applyBaseMarketFilters(
+  query: any,
+  filters: ReturnType<typeof parseMarketplaceFiltersFromSearchParams>
+) {
+  if (filters.category) {
+    query = query.eq("category", filters.category);
+  }
+  if (filters.province) {
+    query = query.eq("location_province", filters.province);
+  }
+  if (filters.city) {
+    query = query.eq("location_city", filters.city);
+  }
+  if (filters.priceMin !== undefined) {
+    query = query.gte("price_cents", Math.round(filters.priceMin * 100));
+  }
+  if (filters.priceMax !== undefined) {
+    query = query.lte("price_cents", Math.round(filters.priceMax * 100));
+  }
+  if (filters.condition) {
+    query = query.eq("condition", filters.condition);
+  }
+  if (filters.query) {
+    const safeSearch = filters.query.replace(/[,.()\\/]/g, "");
+    if (safeSearch) {
+      query = query.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
+    }
+  }
+
+  switch (filters.sort) {
+    case "price_asc":
+      return query.order("price_cents", { ascending: true }).order("created_at", { ascending: false });
+    case "price_desc":
+      return query.order("price_cents", { ascending: false }).order("created_at", { ascending: false });
+    case "popular":
+      return query
+        .order("featured", { ascending: false })
+        .order("boost_until", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false });
+    case "newest":
+    default:
+      return query
+        .order("featured", { ascending: false })
+        .order("created_at", { ascending: false });
+  }
+}
+
+function matchesAttributeFilter(
+  attributeValue: unknown,
+  filterValue: string | boolean
+) {
+  if (typeof filterValue === "boolean") {
+    return attributeValue === filterValue;
+  }
+
+  if (attributeValue === null || attributeValue === undefined) {
+    return false;
+  }
+
+  if (typeof attributeValue === "number") {
+    if (filterValue.endsWith("+")) {
+      const minimum = Number(filterValue.slice(0, -1));
+      return Number.isFinite(minimum) && attributeValue >= minimum;
+    }
+
+    const parsed = Number(filterValue);
+    return Number.isFinite(parsed) ? attributeValue === parsed : false;
+  }
+
+  if (typeof attributeValue === "boolean") {
+    return String(attributeValue) === filterValue;
+  }
+
+  return String(attributeValue).toLowerCase().includes(filterValue.toLowerCase());
+}
+
+function matchesAttributeFilters(
+  attributes: Record<string, unknown> | null | undefined,
+  filters: Record<string, string | boolean>
+) {
+  return Object.entries(filters).every(([key, value]) =>
+    matchesAttributeFilter(attributes?.[key], value)
+  );
+}
+
+/**
+ * GET /api/listings
+ *
+ * Public listing discovery endpoint for Mzansi Market with filtering and pagination.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const admin = createAdminClient();
+    const filters = parseMarketplaceFiltersFromSearchParams(request.nextUrl.searchParams);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(request.nextUrl.searchParams.get("limit") || "24", 10))
+    );
+    const offset = (filters.page - 1) * limit;
+    const selectClause =
+      "id, seller_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured";
+    const hasAttributeFilters = Object.keys(filters.attributes).length > 0;
+
+    let listings: Record<string, unknown>[] = [];
+    let total = 0;
+
+    if (hasAttributeFilters) {
+      const batchSize = 500;
+      let from = 0;
+
+      while (true) {
+        const batchQuery = applyBaseMarketFilters(
+          admin
+            .from("listings")
+            .select(selectClause)
+            .eq("status", "live")
+            .eq("area", AREA),
+          filters
+        ).range(from, from + batchSize - 1);
+
+        const { data, error } = await batchQuery;
+        if (error) {
+          log.error("Failed to fetch listings", { error: error.message });
+          return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
+        }
+
+        const batch = (data ?? []) as Record<string, unknown>[];
+        listings.push(...batch);
+
+        if (batch.length < batchSize) {
+          break;
+        }
+
+        from += batchSize;
+      }
+
+      listings = listings.filter((listing) =>
+        matchesAttributeFilters(
+          (listing.attributes as Record<string, unknown> | null | undefined) ?? {},
+          filters.attributes
+        )
+      );
+      total = listings.length;
+      listings = listings.slice(offset, offset + limit);
+    } else {
+      const query = applyBaseMarketFilters(
+        admin
+          .from("listings")
+          .select(selectClause, { count: "exact" })
+          .eq("status", "live")
+          .eq("area", AREA),
+        filters
+      ).range(offset, offset + limit - 1);
+
+      const { data, count, error } = await query;
+
+      if (error) {
+        log.error("Failed to fetch listings", { error: error.message });
+        return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
+      }
+
+      listings = (data ?? []) as Record<string, unknown>[];
+      total = count ?? 0;
+    }
+
+    const sellerIds = Array.from(
+      new Set(listings.map((listing) => String(listing.seller_id)).filter(Boolean))
+    );
+
+    const { data: sellers } = sellerIds.length
+      ? await admin
+          .from("seller_profiles")
+          .select("user_id, display_name, seller_verification_status")
+          .in("user_id", sellerIds)
+      : { data: [] as Array<Record<string, unknown>> };
+
+    return NextResponse.json({
+      listings,
+      sellers: sellers ?? [],
+      total,
+      page: filters.page,
+      limit,
+    });
+  } catch (err) {
+    log.error("Unexpected error in listing fetch", {
+      error: err instanceof Error ? err.message : "unknown",
+    });
+    return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
+  }
+}
 
 /**
  * POST /api/listings

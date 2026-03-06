@@ -19,6 +19,8 @@ import { MarketplacePreviewsSkeleton } from "@/components/home/marketplace-previ
 import { HeroBannerWithData } from "@/components/home/hero-banner-with-data";
 import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
 import { HomeMzansiMarketShowcase } from "@/components/home/home-mzansi-market-showcase";
+import { HomeBusinessShowcase } from "@/components/home/home-business-showcase";
+import { HomePromotionsShowcase } from "@/components/home/home-promotions-showcase";
 
 export const metadata: Metadata = {
   title: "VerifyMzansi — SA's Trusted Marketplace",
@@ -168,6 +170,14 @@ export default async function HomePage() {
         {/* ═══ Marketplace Showcase ═══ */}
         <Suspense fallback={<MarketplacePreviewsSkeleton />}>
           <HomeMzansiMarketShowcase />
+        </Suspense>
+
+        <Suspense fallback={<MarketplacePreviewsSkeleton />}>
+          <HomeBusinessShowcase />
+        </Suspense>
+
+        <Suspense fallback={<MarketplacePreviewsSkeleton />}>
+          <HomePromotionsShowcase />
         </Suspense>
 
         {/* ═══ CTA Section ═══ */}

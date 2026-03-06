@@ -3,7 +3,8 @@ import { Megaphone, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { createClient } from "@supabase/supabase-js";
-import type { PromotionType } from "@/types/enums";
+import type { BusinessCategory, PromotionType } from "@/types/enums";
+import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 
 interface PromotionRow {
   id: string;
@@ -11,6 +12,10 @@ interface PromotionRow {
   price_cents: number | null;
   price_negotiable: boolean;
   photos: string[] | null;
+  videos: string[] | null;
+  video_thumbnail: string | null;
+  category: string | null;
+  category_key: BusinessCategory | null;
   location_province: string;
   location_city: string;
   promotion_type: string;
@@ -33,7 +38,7 @@ export async function HomePromotionsShowcase() {
   const { data } = await supabase
     .from("promotions")
     .select(
-      "id, title, price_cents, price_negotiable, photos, location_province, location_city, promotion_type, view_count, boost_until, featured_until, end_date, created_at"
+      "id, title, price_cents, price_negotiable, category, category_key, photos, videos, video_thumbnail, location_province, location_city, promotion_type, view_count, boost_until, featured_until, end_date, created_at"
     )
     .eq("status", "live")
     .order("boost_until", { ascending: false, nullsFirst: false })
@@ -74,7 +79,9 @@ export async function HomePromotionsShowcase() {
               title={promo.title}
               price={promo.price_cents}
               negotiable={promo.price_negotiable}
-              imageUrl={promo.photos?.[0]}
+              imageUrl={promo.videos?.[0] || promo.photos?.[0]}
+              posterUrl={promo.video_thumbnail || promo.photos?.[0] || undefined}
+              categoryLabel={getPromotionCategoryDisplayLabel(promo.category_key, promo.category)}
               province={promo.location_province}
               city={promo.location_city}
               promotionType={promo.promotion_type as PromotionType}

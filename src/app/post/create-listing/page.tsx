@@ -25,6 +25,8 @@ import {
 } from "@/components/post/post-form-scaffold";
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
+import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
+import type { ListingCondition } from "@/types/enums";
 
 const STEPS: PostFormStep[] = [
   { label: "Details", icon: FileText, description: "Category, title, and description" },
@@ -89,6 +91,7 @@ export default function CreateListingPage() {
   const [price, setPrice] = useState("");
   const [negotiable, setNegotiable] = useState(false);
   const [category, setCategory] = useState<ListingCategory | "">("");
+  const [condition, setCondition] = useState<ListingCondition | "">("");
   const [categoryAttributes, setCategoryAttributes] = useState<Record<string, string | boolean>>(
     {}
   );
@@ -298,6 +301,7 @@ export default function CreateListingPage() {
           price_zar: parseFloat(price),
           negotiable,
           category: mapListingCategory(category),
+          condition: condition || undefined,
           attributes: normalizedAttributes,
           province,
           city,
@@ -387,6 +391,11 @@ export default function CreateListingPage() {
                 {category.replace(/_/g, " ")}
               </Badge>
             )}
+            {condition && (
+              <Badge variant="outline" className="text-[10px]">
+                {LISTING_CONDITIONS.find((item) => item.value === condition)?.label || condition}
+              </Badge>
+            )}
             {contactMethods.map((method) => (
               <Badge key={method} variant="outline" className="text-[10px] capitalize">
                 {method}
@@ -453,6 +462,29 @@ export default function CreateListingPage() {
                     {fieldErrors.category && (
                       <p className="text-xs text-destructive">{fieldErrors.category}</p>
                     )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="condition">Condition</Label>
+                      <select
+                        id="condition"
+                        aria-label="Condition"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        value={condition}
+                        onChange={(event) =>
+                          setCondition(event.target.value as ListingCondition | "")
+                        }
+                      >
+                        <option value="">Condition not specified</option>
+                        {LISTING_CONDITIONS.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground">
+                        Optional, but recommended for buyers comparing similar listings.
+                      </p>
+                    </div>
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">

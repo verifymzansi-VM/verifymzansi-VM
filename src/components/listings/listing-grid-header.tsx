@@ -4,6 +4,7 @@ import { ArrowUpDown, X } from "lucide-react";
 import { useMarketplaceStore } from "@/stores";
 import { Badge } from "@/components/ui/badge";
 import { CATEGORIES, BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import { getListingConditionLabel } from "@/lib/constants/listing-condition";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +25,7 @@ export function ListingGridHeader() {
     sortOptions.find((o) => o.value === filters.sort)?.label || "Recently posted";
 
   const hasActiveFilters =
+    filters.query ||
     filters.category ||
     filters.province ||
     filters.city ||
@@ -65,6 +67,15 @@ export function ListingGridHeader() {
       {/* Active filter chips */}
       {hasActiveFilters && (
         <div className="flex flex-wrap items-center gap-1.5">
+          {filters.query && (
+            <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
+              {filters.query}
+              <X
+                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+                onClick={() => setFilter("query", undefined)}
+              />
+            </Badge>
+          )}
           {filters.category && (
             <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
               {[...CATEGORIES, ...BUSINESS_CATEGORIES].find((c) => c.value === filters.category)
@@ -82,6 +93,15 @@ export function ListingGridHeader() {
               <X
                 className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
                 onClick={() => setFilter("province", undefined)}
+              />
+            </Badge>
+          )}
+          {filters.condition && (
+            <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
+              {getListingConditionLabel(filters.condition)}
+              <X
+                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+                onClick={() => setFilter("condition", undefined)}
               />
             </Badge>
           )}

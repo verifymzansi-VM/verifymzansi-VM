@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback, useTransition, useRef } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { ListingCard } from "@/components/listings/listing-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import type { SellerVerificationStatus } from "@/types/enums";
+import type { ListingCondition, SellerVerificationStatus } from "@/types/enums";
 import { useMarketplaceStore } from "@/stores";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { PackageOpen, Plus, AlertTriangle } from "lucide-react";
@@ -12,19 +11,22 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/constants/categories";
-import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { createLogger } from "@/lib/utils/logger";
+import { serializeMarketplaceFiltersToSearchParams } from "@/lib/utils/marketplace-query";
 
 const PAGE_SIZE = 24;
+const log = createLogger("MzansiMarketGrid");
 
 interface ListingRow {
   id: string;
   title: string;
+  description: string | null;
   price_cents: number | null;
   price_negotiable: boolean;
   location_province: string;
   location_city: string;
   category: string;
+  condition: ListingCondition | null;
   attributes: Record<string, unknown>;
   created_at: string;
   photos: string[];
@@ -41,164 +43,95 @@ interface SellerRow {
   seller_verification_status: string;
 }
 
+interface ListingsResponse {
+  listings?: ListingRow[];
+  sellers?: SellerRow[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  error?: string;
+}
+
 export function MzansiMarketGrid() {
-  const { filters, page, setPage } = useMarketplaceStore();
+  const { filters, page, setPage, resetFilters } = useMarketplaceStore();
   const [listings, setListings] = useState<ListingRow[]>([]);
   const [sellers, setSellers] = useState<Map<string, SellerRow>>(new Map());
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<{
-    code: string | null;
-    message: string | null;
-  } | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const fetchGenRef = useRef(0);
 
   const fetchListings = useCallback(
     async (gen: number) => {
       setLoading(true);
-      const supabase = createClient();
 
-      /* ── Build the query ─────────────────────────────────────── */
-      let query = supabase
-        .from("listings")
-        .select(
-          `id, title, price_cents, price_negotiable, location_province,
-         location_city, category, attributes, created_at, photos, videos,
-         video_thumbnail, boost_until, featured, seller_id`,
-          { count: "exact" }
-        )
-        .eq("status", "live")
-        .eq("area", "MZANSI_MARKET");
+      const params = serializeMarketplaceFiltersToSearchParams(
+        {
+          category: filters.category,
+          query: filters.query,
+          province: filters.province,
+          city: filters.city,
+          condition: filters.condition,
+          sort: filters.sort,
+          priceMin: filters.priceMin,
+          priceMax: filters.priceMax,
+          attributes: filters.attributes,
+        },
+        page
+      );
+      params.set("limit", String(PAGE_SIZE));
 
-      // Category filter
-      if (filters.category) {
-        query = query.eq("category", mapListingCategory(filters.category));
-      }
-
-      // Province filter
-      if (filters.province) {
-        query = query.eq("location_province", filters.province);
-      }
-
-      // City filter
-      if (filters.city) {
-        query = query.eq("location_city", filters.city);
-      }
-
-      // Price range (values in ZAR from UI → convert to cents for DB)
-      if (filters.priceMin) {
-        query = query.gte("price_cents", filters.priceMin * 100);
-      }
-      if (filters.priceMax) {
-        query = query.lte("price_cents", filters.priceMax * 100);
-      }
-
-      // Condition filter (stored in attributes JSON)
-      if (filters.condition) {
-        query = query.eq("attributes->>condition", filters.condition);
-      }
-
-      // Text search
-      if (filters.query?.trim()) {
-        query = query.ilike("title", `%${filters.query.trim()}%`);
-      }
-
-      // Dynamic attribute filters
-      for (const [key, val] of Object.entries(filters.attributes)) {
-        if (val !== undefined && val !== "") {
-          if (typeof val === "boolean") {
-            query = query.eq(`attributes->>${key}`, String(val));
-          } else {
-            query = query.eq(`attributes->>${key}`, val);
-          }
-        }
-      }
-
-      // Sorting
-      switch (filters.sort) {
-        case "price_asc":
-          query = query.order("price_cents", { ascending: true });
-          break;
-        case "price_desc":
-          query = query.order("price_cents", { ascending: false });
-          break;
-        case "popular":
-          query = query
-            .order("featured", { ascending: false })
-            .order("boost_until", { ascending: false, nullsFirst: false });
-          break;
-        case "newest":
-        default:
-          query = query
-            .order("featured", { ascending: false })
-            .order("created_at", { ascending: false });
-          break;
-      }
-
-      // Pagination
-      const from = (page - 1) * PAGE_SIZE;
-      query = query.range(from, from + PAGE_SIZE - 1);
-
-      const { data, error, count } = await query;
-
-      if (error) {
-        const log = createLogger("MzansiMarketGrid");
-        if (error.code === "PGRST205") {
-          log.warn("Schema cache issue", { code: error.code, message: error.message });
-        } else {
-          log.error("Listing fetch error", { code: error.code ?? null, message: error.message });
-        }
-        setFetchError({
-          code: error.code ?? null,
-          message: error.message ?? "Failed to load listings.",
+      try {
+        const response = await fetch(`/api/listings?${params.toString()}`, {
+          cache: "no-store",
         });
+        const payload = (await response.json()) as ListingsResponse;
+
+        if (gen !== fetchGenRef.current) return;
+
+        if (!response.ok) {
+          const message = payload.error || "Failed to load listings.";
+          log.error("Listing fetch error", { status: response.status, message });
+          setFetchError(message);
+          setListings([]);
+          setSellers(new Map());
+          setTotalCount(0);
+          setLoading(false);
+          return;
+        }
+
+        setFetchError(null);
+        setListings(payload.listings ?? []);
+        setSellers(new Map((payload.sellers ?? []).map((seller) => [seller.user_id, seller])));
+        setTotalCount(payload.total ?? 0);
+        setLoading(false);
+      } catch (error) {
+        if (gen !== fetchGenRef.current) return;
+
+        const message = error instanceof Error ? error.message : "Failed to load listings.";
+        log.error("Listing fetch threw", { message });
+        setFetchError(message);
         setListings([]);
+        setSellers(new Map());
         setTotalCount(0);
         setLoading(false);
-        return;
       }
-
-      const items = data ?? [];
-
-      // Guard: if a newer fetch has started, discard this stale result
-      if (gen !== fetchGenRef.current) return;
-
-      setFetchError(null);
-      setTotalCount(count ?? 0);
-
-      /* ── Batch-fetch seller profiles ─────────────────────────── */
-      if (items.length > 0) {
-        const sellerIds = Array.from(new Set(items.map((l: ListingRow) => l.seller_id)));
-        const { data: sellerData } = await supabase
-          .from("seller_profiles")
-          .select("user_id, display_name, seller_verification_status")
-          .in("user_id", sellerIds);
-
-        setSellers(new Map((sellerData ?? []).map((s: SellerRow) => [s.user_id, s] as const)));
-      } else {
-        setSellers(new Map());
-      }
-
-      setListings(items);
-      setLoading(false);
     },
     [filters, page]
   );
 
-  // Re-fetch when filters or page change — debounced to avoid rapid-fire
-  // queries on mobile when users tap through filters quickly.
   useEffect(() => {
     const gen = ++fetchGenRef.current;
     const timeout = setTimeout(() => {
       startTransition(() => {
-        fetchListings(gen);
+        void fetchListings(gen);
       });
     }, 300);
+
     return () => clearTimeout(timeout);
   }, [fetchListings]);
 
-  /* ── Count active filters ──────────────────────────────── */
   const activeFilterCount = [
     filters.category,
     filters.province,
@@ -207,35 +140,26 @@ export function MzansiMarketGrid() {
     filters.priceMax,
     filters.condition,
     filters.query,
-    ...Object.values(filters.attributes).filter((v) => v !== undefined && v !== ""),
+    ...Object.values(filters.attributes).filter((value) => value !== undefined && value !== ""),
   ].filter(Boolean).length;
 
-  /* ── Loading state ──────────────────────────────────────── */
   if (loading) {
     return <ListingGridSkeleton />;
   }
 
-  /* ── Empty state ────────────────────────────────────────── */
   if (listings.length === 0) {
     const hasFilters = activeFilterCount > 0 && !fetchError;
-    const isSchemaCacheError = fetchError?.code === "PGRST205";
     const hasQueryError = Boolean(fetchError);
-    const emptyTitle = isSchemaCacheError
-      ? "Marketplace temporarily unavailable"
-      : hasQueryError
-        ? "Unable to load listings"
-        : hasFilters
-          ? "No listings match your filters"
-          : "No listings yet";
-    const emptyBody = isSchemaCacheError
-      ? "The marketplace database schema is not available yet. Please retry in a moment."
-      : hasQueryError
-        ? "We could not fetch listings right now. Please try again."
-        : hasFilters
-          ? "Try adjusting your search or filters to find what you're looking for."
-          : "Be the first to post a verified ad on Mzansi Market.";
-
-    // Pick 4 random suggested categories
+    const emptyTitle = hasQueryError
+      ? "Unable to load listings"
+      : hasFilters
+        ? "No listings match your filters"
+        : "No listings yet";
+    const emptyBody = hasQueryError
+      ? "We could not fetch listings right now. Please try again."
+      : hasFilters
+        ? "Try adjusting your search or filters to find what you're looking for."
+        : "Be the first to post a verified ad on Mzansi Market.";
     const suggestedCats = CATEGORIES.slice(0, 4);
 
     return (
@@ -250,14 +174,8 @@ export function MzansiMarketGrid() {
         <div className="text-center space-y-2 max-w-md">
           <p className="text-lg font-display font-semibold">{emptyTitle}</p>
           <p className="text-sm text-muted-foreground">{emptyBody}</p>
-          {hasQueryError && fetchError?.code && (
-            <p className="text-xs text-muted-foreground">
-              Error code: <span className="font-mono">{fetchError.code}</span>
-            </p>
-          )}
         </div>
 
-        {/* Category suggestions when filters active */}
         {hasFilters && (
           <div className="flex flex-wrap items-center justify-center gap-2">
             <span className="text-xs text-muted-foreground mr-1">Try:</span>
@@ -283,11 +201,17 @@ export function MzansiMarketGrid() {
             onClick={() =>
               startTransition(() => {
                 const gen = ++fetchGenRef.current;
-                fetchListings(gen);
+                void fetchListings(gen);
               })
             }
           >
             Retry
+          </Button>
+        )}
+
+        {hasFilters && (
+          <Button variant="outline" onClick={resetFilters}>
+            Clear Filters
           </Button>
         )}
 
@@ -303,12 +227,10 @@ export function MzansiMarketGrid() {
     );
   }
 
-  /* ── Grid with pagination ───────────────────────────────── */
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
     <div className="space-y-6">
-      {/* Result summary */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
           <span className="font-medium text-foreground">{totalCount}</span> listing
@@ -322,12 +244,9 @@ export function MzansiMarketGrid() {
         </p>
       </div>
 
-      {/* Listing cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {listings.map((listing, index) => {
-          const videoUrl =
-            listing.videos?.[0] ||
-            listing.photos?.find((url: string) => url.match(/\.(mp4|webm|ogg)(\?.*)?$/i));
+          const videoUrl = listing.videos?.[0];
           const displayUrl = videoUrl || listing.photos?.[0];
           const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
           const seller = sellers.get(listing.seller_id);
@@ -337,10 +256,6 @@ export function MzansiMarketGrid() {
           const isBoosted = listing.boost_until
             ? new Date(listing.boost_until) > new Date()
             : false;
-
-          // Check if listing is new (within 24 hours)
-          const _isNew =
-            new Date().getTime() - new Date(listing.created_at).getTime() < 24 * 60 * 60 * 1000;
 
           return (
             <div
@@ -357,7 +272,7 @@ export function MzansiMarketGrid() {
                 province={listing.location_province}
                 city={listing.location_city}
                 category={listing.category}
-                condition={listing.attributes?.condition as string | undefined}
+                condition={listing.condition ?? undefined}
                 createdAt={listing.created_at}
                 sellerTrustLevel={trustLevel}
                 sellerName={seller?.display_name}
@@ -369,7 +284,6 @@ export function MzansiMarketGrid() {
         })}
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 pt-4">
           <Button
@@ -381,7 +295,6 @@ export function MzansiMarketGrid() {
             Previous
           </Button>
 
-          {/* Page numbers */}
           <div className="flex items-center gap-1">
             {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
               const pageNum =

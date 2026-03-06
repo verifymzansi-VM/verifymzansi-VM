@@ -7,6 +7,7 @@ import { promotionSchema } from "@/lib/validations/promotion";
 import { getEntitlements } from "@/lib/services/entitlements";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import type { PlanTier } from "@/types/enums";
+import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
 
 const log = createLogger("PromotionDetail");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -121,6 +122,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const data = parsed.data;
+    const categoryKey =
+      data.category_key ?? inferPromotionCategoryKey(data.category, data.promotion_type);
     const { data: activeEntitlement } = await admin
       .from("entitlements")
       .select("tier")
@@ -173,6 +176,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         description: data.description,
         promotion_type: data.promotion_type,
         category: data.category || null,
+        category_key: categoryKey,
         photos: data.images,
         videos: data.videos,
         video_thumbnail: data.video_thumbnail || null,

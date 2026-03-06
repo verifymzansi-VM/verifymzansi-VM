@@ -22,6 +22,8 @@ import {
   usePlanVideoAllowed,
 } from "@/components/billing/plan-gate";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
+import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import type { BusinessCategory } from "@/types/enums";
 
 const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
 const selectClass =
@@ -41,6 +43,7 @@ export default function EditPromotionPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
+  const [categoryKey, setCategoryKey] = useState<BusinessCategory | "">("");
   const [priceZar, setPriceZar] = useState("");
   const [negotiable, setNegotiable] = useState(false);
   const [province, setProvince] = useState("");
@@ -82,6 +85,7 @@ export default function EditPromotionPage() {
         setTitle(p.title || "");
         setDescription(p.description || "");
         setCategory(p.category || "");
+        setCategoryKey((p.category_key as BusinessCategory | null) || "");
         setPriceZar(p.price_cents ? (p.price_cents / 100).toString() : "");
         setNegotiable(p.price_negotiable || false);
         setProvince(p.location_province || "");
@@ -184,6 +188,7 @@ export default function EditPromotionPage() {
         description,
         promotion_type: promotionType,
         category: category || undefined,
+        category_key: categoryKey || undefined,
         price_zar: priceZar ? parseFloat(priceZar) : undefined,
         negotiable,
         province,
@@ -291,6 +296,24 @@ export default function EditPromotionPage() {
                   rows={6}
                   maxLength={5000}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="category_key">Category</Label>
+                <select
+                  id="category_key"
+                  aria-label="Canonical category"
+                  className={selectClass}
+                  value={categoryKey}
+                  onChange={(e) => setCategoryKey(e.target.value as BusinessCategory | "")}
+                >
+                  <option value="">General & Other</option>
+                  {BUSINESS_CATEGORIES.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-2">

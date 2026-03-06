@@ -20,6 +20,7 @@ import {
   type PromotionType,
 } from "@/types/enums";
 import type { Metadata } from "next";
+import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 
 interface PromotionDetailPageProps {
   params: Promise<{ id: string }>;
@@ -84,10 +85,17 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
 
   const photos = (promotion.photos || []) as string[];
   const videos = (promotion.videos || []) as string[];
+  const leadVideo = videos[0];
+  const leadPhoto = photos[0];
+  const leadPoster = promotion.video_thumbnail || leadPhoto || undefined;
   const contactMethods = (promotion.contact_methods || []) as string[];
   const now = new Date();
   const isBoosted = promotion.boost_until ? new Date(promotion.boost_until) > now : false;
   const isFeatured = promotion.featured_until ? new Date(promotion.featured_until) > now : false;
+  const categoryLabel = getPromotionCategoryDisplayLabel(
+    promotion.category_key,
+    promotion.category
+  );
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -135,14 +143,27 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
               {(photos.length > 0 || videos.length > 0) && (
                 <div className="grid grid-cols-1 gap-2">
                   <div className="relative aspect-[2/1] rounded-lg overflow-hidden bg-warm-100 dark:bg-warm-800">
-                    <Image
-                      src={normalizeMediaUrl(photos[0] || "/images/placeholder.png")}
-                      alt={promotion.title}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 1024px) 100vw, 66vw"
-                      priority
-                    />
+                    {leadVideo ? (
+                      <video
+                        src={normalizeMediaUrl(leadVideo)}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        poster={leadPoster ? normalizeMediaUrl(leadPoster) : undefined}
+                        className="h-full w-full object-contain bg-black"
+                      >
+                        <track kind="captions" />
+                      </video>
+                    ) : (
+                      <Image
+                        src={normalizeMediaUrl(leadPhoto || "/images/placeholder.png")}
+                        alt={promotion.title}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 1024px) 100vw, 66vw"
+                        priority
+                      />
+                    )}
                     <div className="absolute top-3 left-3 flex gap-1">
                       {isFeatured && (
                         <Badge className="bg-brand-gold text-amber-950">Featured</Badge>
@@ -153,9 +174,9 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
                       </Badge>
                     </div>
                   </div>
-                  {photos.length > 1 && (
+                  {(leadVideo ? photos.length > 0 : photos.length > 1) && (
                     <div className="grid grid-cols-4 gap-2">
-                      {photos.slice(1, 5).map((photo: string, i: number) => (
+                      {(leadVideo ? photos : photos.slice(1)).slice(0, 4).map((photo: string, i: number) => (
                         <div
                           key={i}
                           className="relative aspect-square rounded-lg overflow-hidden bg-warm-100 dark:bg-warm-800"
@@ -171,9 +192,9 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
                       ))}
                     </div>
                   )}
-                  {videos.length > 0 && (
+                  {(leadVideo ? videos.length > 1 : videos.length > 0) && (
                     <div className="grid grid-cols-1 gap-2">
-                      {videos.map((videoUrl: string, i: number) => (
+                      {(leadVideo ? videos.slice(1) : videos).map((videoUrl: string, i: number) => (
                         <div
                           key={i}
                           className="relative aspect-video rounded-lg overflow-hidden bg-black"
@@ -183,7 +204,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
                             controls
                             playsInline
                             preload="metadata"
-                            poster={photos[0] ? normalizeMediaUrl(photos[0]) : undefined}
+                            poster={leadPoster ? normalizeMediaUrl(leadPoster) : undefined}
                             className="w-full h-full object-contain"
                           >
                             <track kind="captions" />
@@ -216,10 +237,10 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
                         promotion.promotion_type}
                     </dd>
 
-                    {promotion.category && (
+                    {categoryLabel && (
                       <>
                         <dt className="text-muted-foreground">Category</dt>
-                        <dd className="font-medium">{promotion.category}</dd>
+                        <dd className="font-medium">{categoryLabel}</dd>
                       </>
                     )}
 

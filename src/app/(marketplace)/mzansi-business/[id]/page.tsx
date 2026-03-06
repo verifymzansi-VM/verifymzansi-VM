@@ -31,6 +31,7 @@ import { ShareButton } from "@/components/shared/share-button";
 import { ReportDialog } from "@/components/shared/report-dialog";
 import { BusinessGallery } from "@/components/listings/business-gallery";
 import { BusinessPromoVideo } from "@/components/listings/business-promo-video";
+import { PromotionCard } from "@/components/listings/promotion-card";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import {
   BUSINESS_TYPE_LABELS,
@@ -39,6 +40,7 @@ import {
   type BusinessCategory,
 } from "@/types/enums";
 import type { Metadata } from "next";
+import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 
 interface BusinessDetailPageProps {
   params: Promise<{ id: string }>;
@@ -86,7 +88,9 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   // Fetch linked promotions
   const { data: promotions } = await supabase
     .from("promotions")
-    .select("id, title, promotion_type, photos, price_cents, start_date, end_date, created_at")
+    .select(
+      "id, title, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, boost_until, featured_until, view_count, start_date, end_date, created_at"
+    )
     .eq("business_id", id)
     .eq("status", "live")
     .order("created_at", { ascending: false })
@@ -329,21 +333,29 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                   <h3 className="font-display text-xl font-bold px-1">Promotions & Offers</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {promotions.map((promo) => (
-                      <Link key={promo.id} href={`/promotion/${promo.id}`}>
-                        <Card className="hover:shadow-md hover:-translate-y-0.5 hover:border-brand-green/30 transition-all h-full">
-                          <CardContent className="p-4">
-                            <p className="font-medium line-clamp-1">{promo.title}</p>
-                            <p className="text-xs text-muted-foreground capitalize mt-1">
-                              {promo.promotion_type}
-                            </p>
-                            {promo.price_cents != null && (
-                              <p className="text-sm font-semibold mt-2">
-                                R{(promo.price_cents / 100).toFixed(2)}
-                              </p>
-                            )}
-                          </CardContent>
-                        </Card>
-                      </Link>
+                      <PromotionCard
+                        key={promo.id}
+                        id={promo.id}
+                        title={promo.title}
+                        price={promo.price_cents}
+                        negotiable={promo.price_negotiable}
+                        imageUrl={promo.videos?.[0] || promo.photos?.[0]}
+                        posterUrl={promo.video_thumbnail || promo.photos?.[0] || undefined}
+                        categoryLabel={getPromotionCategoryDisplayLabel(
+                          promo.category_key,
+                          promo.category
+                        )}
+                        province={promo.location_province}
+                        city={promo.location_city}
+                        promotionType={promo.promotion_type}
+                        createdAt={promo.created_at}
+                        viewCount={promo.view_count}
+                        boosted={promo.boost_until ? new Date(promo.boost_until) > new Date() : false}
+                        featured={
+                          promo.featured_until ? new Date(promo.featured_until) > new Date() : false
+                        }
+                        endDate={promo.end_date}
+                      />
                     ))}
                   </div>
                 </div>

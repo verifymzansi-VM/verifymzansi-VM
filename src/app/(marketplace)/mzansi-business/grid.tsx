@@ -19,6 +19,8 @@ interface BusinessRow {
   business_name: string;
   description: string | null;
   cover_photo: string | null;
+  cover_video: string | null;
+  video_thumbnail: string | null;
   logo_url: string | null;
   gallery_photos: string[] | null;
   location_province: string;
@@ -59,8 +61,24 @@ export function MzansiBusinessGrid() {
         params.set("category", filters.businessCategory);
       }
 
+      if (filters.query) {
+        params.set("q", filters.query);
+      }
+
       if (filters.businessType) {
         params.set("type", filters.businessType);
+      }
+
+      if (filters.province) {
+        params.set("province", filters.province);
+      }
+
+      if (filters.city) {
+        params.set("city", filters.city);
+      }
+
+      if (filters.mall) {
+        params.set("mall", filters.mall);
       }
 
       try {
@@ -100,7 +118,15 @@ export function MzansiBusinessGrid() {
         setLoading(false);
       }
     },
-    [filters.businessCategory, filters.businessType, page]
+    [
+      filters.businessCategory,
+      filters.businessType,
+      filters.query,
+      filters.province,
+      filters.city,
+      filters.mall,
+      page,
+    ]
   );
 
   useEffect(() => {
@@ -110,7 +136,14 @@ export function MzansiBusinessGrid() {
     });
   }, [fetchBusinesses]);
 
-  const activeFilterCount = [filters.businessCategory, filters.businessType].filter(Boolean).length;
+  const activeFilterCount = [
+    filters.businessCategory,
+    filters.businessType,
+    filters.query,
+    filters.province,
+    filters.city,
+    filters.mall,
+  ].filter(Boolean).length;
 
   const handleRetry = () => {
     startTransition(() => {
@@ -205,6 +238,8 @@ export function MzansiBusinessGrid() {
               businessType={business.business_type}
               description={business.description ?? undefined}
               coverPhoto={business.cover_photo}
+              coverVideo={business.cover_video}
+              videoThumbnail={business.video_thumbnail}
               logoUrl={business.logo_url}
               galleryPhotos={business.gallery_photos}
               province={business.location_province}

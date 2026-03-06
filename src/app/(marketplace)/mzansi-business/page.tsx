@@ -8,6 +8,7 @@ import { MzansiBusinessGrid } from "./grid";
 import { MzansiBusinessFilterSync } from "./filter-sync";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { BusinessDiscoveryBar } from "./discovery-bar";
 
 export const metadata = {
   title: "Mzansi Business",
@@ -25,7 +26,7 @@ export default async function MzansiBusinessPage() {
   const { data: topBusinesses } = await supabase
     .from("businesses")
     .select(
-      "id, business_name, description, cover_photo, cover_video, location_province, location_city, boost_until"
+      "id, business_name, description, cover_photo, cover_video, video_thumbnail, location_province, location_city, boost_until"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS")
@@ -36,7 +37,7 @@ export default async function MzansiBusinessPage() {
   const slides: ShowroomSlide[] =
     topBusinesses && topBusinesses.length > 0
       ? topBusinesses.map((b) => ({
-          type: "storefront",
+          type: "business",
           id: b.id,
           title: b.business_name,
           description: b.description || "Verified South African business.",
@@ -46,6 +47,11 @@ export default async function MzansiBusinessPage() {
               b.cover_photo ||
               "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1600&q=80"
           ),
+          posterUrl: b.video_thumbnail
+            ? normalizeMediaUrl(b.video_thumbnail)
+            : b.cover_photo
+              ? normalizeMediaUrl(b.cover_photo)
+              : undefined,
         }))
       : [
           {
@@ -68,6 +74,8 @@ export default async function MzansiBusinessPage() {
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS");
 
+  const { data: malls } = await supabase.from("malls").select("id, name").order("name");
+
   const categoryCounts: Record<string, number> = {};
   for (const b of allLive ?? []) {
     categoryCounts[b.category] = (categoryCounts[b.category] || 0) + 1;
@@ -89,6 +97,8 @@ export default async function MzansiBusinessPage() {
       {/* ── Main Content ─────────────────────────────────── */}
       <div className="container-page py-6 space-y-4">
         <PageHeader title="Mzansi Business" breadcrumbs={[{ label: "Mzansi Business" }]} />
+
+        <BusinessDiscoveryBar malls={malls ?? []} />
 
         <BusinessCategoryStrip categoryCounts={categoryCounts} />
 

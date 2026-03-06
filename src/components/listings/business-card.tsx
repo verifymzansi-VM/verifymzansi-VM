@@ -22,6 +22,8 @@ interface BusinessCardProps {
   businessType: BusinessType;
   description?: string;
   coverPhoto?: string | null;
+  coverVideo?: string | null;
+  videoThumbnail?: string | null;
   logoUrl?: string | null;
   galleryPhotos?: string[] | null;
   province: string;
@@ -39,6 +41,8 @@ export function BusinessCard({
   businessType,
   description,
   coverPhoto,
+  coverVideo,
+  videoThumbnail,
   logoUrl,
   galleryPhotos,
   province,
@@ -53,11 +57,17 @@ export function BusinessCard({
   const isBoosted = boostUntil && new Date(boostUntil) > new Date();
   const isFeatured = featuredUntil && new Date(featuredUntil) > new Date();
 
-  // Use cover photo, fall back to first gallery photo
   const displayCover =
-    coverPhoto || (galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos[0] : null);
+    coverVideo || coverPhoto || (galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos[0] : null);
   const isVideo = isVideoUrl(displayCover);
   const normalizedCoverPhoto = displayCover ? normalizeMediaUrl(displayCover) : undefined;
+  const normalizedPosterUrl = videoThumbnail
+    ? normalizeMediaUrl(videoThumbnail)
+    : coverPhoto
+      ? normalizeMediaUrl(coverPhoto)
+      : galleryPhotos && galleryPhotos.length > 0
+        ? normalizeMediaUrl(galleryPhotos[0])
+        : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
   const photoCount = galleryPhotos?.length ?? 0;
 
@@ -73,6 +83,7 @@ export function BusinessCard({
             isVideo ? (
               <VideoCardPlayer
                 src={displayCover}
+                posterUrl={normalizedPosterUrl}
                 alt={businessName}
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                 hoverScale={false}

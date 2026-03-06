@@ -17,6 +17,7 @@ import { CATEGORIES, type AttributeField } from "@/lib/constants/categories";
 import { getModelsForMake } from "@/lib/constants/sa-vehicles";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { useMarketplaceStore } from "@/stores";
+import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 
 /* ─── Helpers ──────────────────────────────────────────────── */
 
@@ -149,6 +150,19 @@ function MobileFilterAttribute({
         </div>
       );
 
+    case "text":
+      return (
+        <div className="space-y-1.5">
+          <Label className="text-sm">{field.label}</Label>
+          <Input
+            type="text"
+            placeholder={field.placeholder || `Any ${field.label.toLowerCase()}`}
+            value={(value as string) || ""}
+            onChange={(e) => onChange(e.target.value || undefined)}
+          />
+        </div>
+      );
+
     default:
       return null;
   }
@@ -163,7 +177,7 @@ export function ListingFilters() {
 
   const filterableAttributes =
     selectedCategory?.attributeFields.filter(
-      (f) => f.type === "select" || f.type === "boolean" || f.type === "number"
+      (f) => f.type === "select" || f.type === "boolean" || f.type === "number" || f.type === "text"
     ) ?? [];
 
   // Debounced search: local state for instant keystroke feedback,
@@ -190,6 +204,7 @@ export function ListingFilters() {
     filters.priceMin ||
     filters.priceMax ||
     filters.condition ||
+    filters.query ||
     Object.values(filters.attributes).some((v) => v !== undefined && v !== "");
 
   return (
@@ -331,6 +346,25 @@ export function ListingFilters() {
                     }
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Condition</Label>
+                <select
+                  aria-label="Condition"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={filters.condition || ""}
+                  onChange={(e) =>
+                    setFilter("condition", (e.target.value as typeof filters.condition) || undefined)
+                  }
+                >
+                  <option value="">Any condition</option>
+                  {LISTING_CONDITIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="flex gap-2">

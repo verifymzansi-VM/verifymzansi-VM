@@ -13,7 +13,7 @@ export async function HomeBusinessShowcase() {
   const { data: businesses } = await supabase
     .from("businesses")
     .select(
-      "id, business_name, cover_photo, location_province, location_city, description, boost_until, business_type"
+      "id, business_name, cover_photo, cover_video, video_thumbnail, location_province, location_city, description, boost_until, business_type"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS")
@@ -49,11 +49,13 @@ export async function HomeBusinessShowcase() {
             <AreaPreviewCard
               key={b.id}
               href={`/mzansi-business/${b.id}`}
-              imageUrl={b.cover_photo}
+              imageUrl={b.cover_video || b.cover_photo}
+              posterUrl={b.video_thumbnail || b.cover_photo || undefined}
               title={b.business_name}
               description={b.description}
               city={b.location_city ?? "South Africa"}
               provinceCode={provinceCode(b.location_province ?? "ZA")}
+              hasVideo={!!b.cover_video}
               accentColor="blue"
             />
           ))}

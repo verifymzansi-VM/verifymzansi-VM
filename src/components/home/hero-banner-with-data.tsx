@@ -20,14 +20,17 @@ export async function HeroBannerWithData() {
 
   let topBusinesses = null;
   let latestListings = null;
+  let latestPromotions = null;
 
   if (url && anonKey && isValidHttpUrl(url)) {
     const supabase = createClient(url, anonKey);
 
-    const [businesses, listings] = await Promise.all([
+    const [businesses, listings, promotions] = await Promise.all([
       supabase
         .from("businesses")
-        .select("id, business_name, cover_photo, cover_video, description, location_city")
+        .select(
+          "id, business_name, cover_photo, cover_video, video_thumbnail, description, location_city"
+        )
         .eq("status", "live")
         .order("boost_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
@@ -42,11 +45,28 @@ export async function HeroBannerWithData() {
         .order("featured", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(3),
+      supabase
+        .from("promotions")
+        .select(
+          "id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, location_city, price_cents"
+        )
+        .eq("status", "live")
+        .order("boost_until", { ascending: false, nullsFirst: false })
+        .order("featured_until", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(3),
     ]);
 
     topBusinesses = businesses.data;
     latestListings = listings.data;
+    latestPromotions = promotions.data;
   }
 
-  return <HeroBanner topBusinesses={topBusinesses || []} latestListings={latestListings || []} />;
+  return (
+    <HeroBanner
+      topBusinesses={topBusinesses || []}
+      latestListings={latestListings || []}
+      latestPromotions={latestPromotions || []}
+    />
+  );
 }

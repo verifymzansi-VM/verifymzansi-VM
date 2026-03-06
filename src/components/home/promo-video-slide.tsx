@@ -126,14 +126,14 @@ function MarketplaceShowcase({ noMotion }: { noMotion: boolean }) {
     },
     {
       icon: Store,
-      label: "Mall Shops",
-      desc: "Storefronts",
+      label: "Mzansi Business",
+      desc: "Businesses",
       color: "bg-brand-gold/20 text-brand-gold-400 border-brand-gold/30",
     },
     {
       icon: Briefcase,
-      label: "Business Ads",
-      desc: "Profiles",
+      label: "Promotions & Events",
+      desc: "Campaigns",
       color: "bg-brand-blue/20 text-brand-blue-400 border-brand-blue/30",
     },
   ];

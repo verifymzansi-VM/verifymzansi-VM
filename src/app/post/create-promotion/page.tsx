@@ -26,6 +26,8 @@ import {
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 import { useToast } from "@/hooks/use-toast";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
+import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import type { BusinessCategory } from "@/types/enums";
 
 const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
 const SELECT_CLASS =
@@ -76,6 +78,7 @@ function CreatePromotionContent() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
+  const [categoryKey, setCategoryKey] = useState<BusinessCategory | "">("");
   const [priceZar, setPriceZar] = useState("");
   const [negotiable, setNegotiable] = useState(false);
   const [province, setProvince] = useState("");
@@ -248,6 +251,7 @@ function CreatePromotionContent() {
         description: description.trim(),
         promotion_type: promotionType,
         category: category || undefined,
+        category_key: categoryKey || undefined,
         price_zar: priceZar ? parseFloat(priceZar) : undefined,
         negotiable,
         province,
@@ -408,6 +412,26 @@ function CreatePromotionContent() {
                       {fieldErrors.description && (
                         <p className="text-xs text-destructive">{fieldErrors.description}</p>
                       )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="category_key">Category</Label>
+                      <select
+                        id="category_key"
+                        aria-label="Canonical category"
+                        className={SELECT_CLASS}
+                        value={categoryKey}
+                        onChange={(event) =>
+                          setCategoryKey(event.target.value as BusinessCategory | "")
+                        }
+                      >
+                        <option value="">General & Other</option>
+                        {BUSINESS_CATEGORIES.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div className="space-y-2">

@@ -1,5 +1,21 @@
 import { z } from "zod";
 import { priceSchema } from "./shared";
+import type { BusinessCategory } from "@/types/enums";
+
+const BUSINESS_CATEGORY_VALUES = [
+  "fashion_accessories",
+  "electronics_tech",
+  "groceries_essentials",
+  "health_beauty",
+  "home_living",
+  "food_dining",
+  "trade_maintenance",
+  "professional_services",
+  "education_training",
+  "events_entertainment",
+  "automotive_transport",
+  "general_other",
+] as const satisfies readonly BusinessCategory[];
 
 /**
  * Zod schema for standalone promotion / advertisement creation and editing.
@@ -18,6 +34,7 @@ export const promotionSchema = z.object({
     .max(5000, "Description cannot exceed 5000 characters"),
   promotion_type: z.enum(["product", "service", "event", "deal", "general"]),
   category: z.string().max(100).optional(),
+  category_key: z.enum(BUSINESS_CATEGORY_VALUES).optional(),
   price_zar: priceSchema.optional(),
   negotiable: z.boolean().default(false),
   province: z.string().min(1, "Province is required"),

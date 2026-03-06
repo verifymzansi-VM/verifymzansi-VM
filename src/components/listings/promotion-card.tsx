@@ -10,6 +10,7 @@ import { TrustBadge } from "@/components/trust/trust-badge";
 import { formatZAR, formatRelativeTime } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { TrustLevel, PromotionType } from "@/types/enums";
+import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 
 interface PromotionCardProps {
   id: string;
@@ -17,6 +18,8 @@ interface PromotionCardProps {
   price: number | null;
   negotiable?: boolean;
   imageUrl?: string;
+  posterUrl?: string;
+  categoryLabel?: string;
   province: string;
   city: string;
   promotionType: PromotionType;
@@ -56,6 +59,8 @@ export const PromotionCard = memo(function PromotionCard({
   price,
   negotiable,
   imageUrl,
+  posterUrl,
+  categoryLabel,
   province,
   city,
   promotionType,
@@ -68,6 +73,8 @@ export const PromotionCard = memo(function PromotionCard({
   endDate,
 }: PromotionCardProps) {
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
+  const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
+  const imageIsVideo = isVideoUrl(imageUrl);
 
   return (
     <Link href={`/promotion/${id}`} className="group block">
@@ -78,13 +85,22 @@ export const PromotionCard = memo(function PromotionCard({
         {/* Image */}
         <div className="relative aspect-[4/3] bg-warm-100 dark:bg-warm-800 overflow-hidden">
           {normalizedImageUrl ? (
-            <Image
-              src={normalizedImageUrl}
-              alt={title}
-              fill
-              className="object-cover transition-transform duration-500 group-hover:scale-110"
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-            />
+            imageIsVideo ? (
+              <VideoCardPlayer
+                src={imageUrl}
+                posterUrl={normalizedPosterUrl}
+                alt={title}
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              />
+            ) : (
+              <Image
+                src={normalizedImageUrl}
+                alt={title}
+                fill
+                className="object-cover transition-transform duration-500 group-hover:scale-110"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              />
+            )
           ) : (
             <div className="flex items-center justify-center h-full text-warm-400 dark:text-warm-500">
               <Tag className="h-6 w-6" />
@@ -139,6 +155,10 @@ export const PromotionCard = memo(function PromotionCard({
           <h3 className="font-medium text-sm line-clamp-2 group-hover:text-brand-green transition-colors duration-200">
             {title}
           </h3>
+
+          {categoryLabel && (
+            <p className="text-xs text-muted-foreground line-clamp-1">{categoryLabel}</p>
+          )}
 
           {/* Meta */}
           <div className="flex items-center justify-between text-xs text-muted-foreground">

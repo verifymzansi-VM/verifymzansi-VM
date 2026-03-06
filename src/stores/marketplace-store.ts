@@ -1,5 +1,10 @@
 import { create } from "zustand";
-import type { MarketplaceArea, BusinessType, BusinessCategory } from "@/types/enums";
+import type {
+  MarketplaceArea,
+  BusinessType,
+  BusinessCategory,
+  ListingCondition,
+} from "@/types/enums";
 
 interface Filters {
   category?: string;
@@ -7,7 +12,7 @@ interface Filters {
   city?: string;
   priceMin?: number;
   priceMax?: number;
-  condition?: string;
+  condition?: ListingCondition;
   sort: "newest" | "price_asc" | "price_desc" | "popular";
   query?: string;
   /** Dynamic category-specific attribute filters (matches listing attributes JSON column) */
@@ -15,6 +20,7 @@ interface Filters {
   /** Mzansi Business specific filters */
   businessType?: BusinessType;
   businessCategory?: BusinessCategory;
+  mall?: string;
 }
 
 interface MarketplaceState {
@@ -24,6 +30,7 @@ interface MarketplaceState {
   isSearching: boolean;
 
   setActiveArea: (area: MarketplaceArea) => void;
+  hydrateFilters: (area: MarketplaceArea, filters: Partial<Filters>, page?: number) => void;
   setFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
   setAttribute: (name: string, value: string | boolean | undefined) => void;
   resetFilters: () => void;
@@ -43,6 +50,16 @@ export const useMarketplaceStore = create<MarketplaceState>((set) => ({
   isSearching: false,
 
   setActiveArea: (activeArea) => set({ activeArea, filters: { ...defaultFilters }, page: 1 }),
+  hydrateFilters: (activeArea, filters, page = 1) =>
+    set({
+      activeArea,
+      filters: {
+        ...defaultFilters,
+        ...filters,
+        attributes: filters.attributes ?? {},
+      },
+      page,
+    }),
   setFilter: (key, value) =>
     set((state) => {
       const next = { ...state.filters, [key]: value };
@@ -72,6 +89,7 @@ export const useMarketplaceStore = create<MarketplaceState>((set) => ({
         attributes: {},
         businessType: undefined,
         businessCategory: undefined,
+        mall: undefined,
       },
       page: 1,
     }),
