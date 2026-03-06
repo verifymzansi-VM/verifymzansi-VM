@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ShoppingBag, Building2, Megaphone, ArrowRight } from "lucide-react";
+import { ShoppingBag, Building2, Megaphone, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export const metadata = {
   title: "Create a Post",
@@ -14,7 +15,7 @@ export const metadata = {
 const POST_OPTIONS = [
   {
     title: "Mzansi Market Listing",
-    description: "Sell electronics, cars, furniture, and more.",
+    description: "Best for products, vehicles, property, and everyday listings.",
     icon: ShoppingBag,
     href: "/post/create-listing",
     badge: "Mzansi Market",
@@ -22,19 +23,19 @@ const POST_OPTIONS = [
   },
   {
     title: "Mzansi Business",
-    description: "Professional profile with services, hours, and contacts.",
+    description: "Best for a business profile with services, hours, and contacts.",
     icon: Building2,
     href: "/post/create-business",
     badge: "Mzansi Business",
     badgeColor: "bg-brand-blue text-white",
   },
   {
-    title: "Promotion or Event",
-    description: "Advertise deals, events, and promotions.",
+    title: "Promotions & Events",
+    description: "Best for offers, launches, campaigns, and upcoming events.",
     icon: Megaphone,
     href: "/post/create-promotion",
     badge: "Promotions & Events",
-    badgeColor: "bg-purple-700 text-white",
+    badgeColor: "bg-amber-600 text-white",
   },
 ];
 
@@ -47,20 +48,42 @@ export default function PostCreatePage() {
         <div className="container-page py-6 space-y-4">
           <PageHeader
             title="Create a Post"
-            description="Choose your listing type."
+            description="Choose the right area, complete 3 quick steps, and submit for review."
             breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Create Post" }]}
           />
+
+          <Alert
+            variant="info"
+            hideIcon
+            className="border-foreground/10 bg-muted/40 text-foreground"
+          >
+            <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <div>
+              <AlertTitle>How posting works</AlertTitle>
+              <AlertDescription>
+                Pick your area, complete the guided form, and submit your post for review.
+              </AlertDescription>
+            </div>
+          </Alert>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {POST_OPTIONS.map((option) => {
               const Icon = option.icon;
               return (
                 <Link key={option.href} href={option.href}>
-                  <Card className="h-full transition-all hover:shadow-lg hover:border-brand-green/50 cursor-pointer">
+                  <Card className="h-full cursor-pointer transition-all hover:border-brand-green/50 hover:shadow-lg">
                     <CardContent className="p-5 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="rounded-lg bg-muted p-3">
-                          <Icon className="h-6 w-6 text-brand-green" />
+                          <Icon
+                            className={`h-6 w-6 ${
+                              option.badge === "Mzansi Business"
+                                ? "text-brand-blue"
+                                : option.badge === "Promotions & Events"
+                                  ? "text-amber-600"
+                                  : "text-brand-green"
+                            }`}
+                          />
                         </div>
                         <Badge className={option.badgeColor}>{option.badge}</Badge>
                       </div>

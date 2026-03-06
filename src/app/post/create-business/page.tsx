@@ -1,44 +1,55 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Loader2,
-  Info,
-  Phone,
-  Mail,
-  MessageCircle,
-  Store,
-  MapPin,
-  CreditCard,
-  Truck,
-  Wrench,
-  Plus,
-  X,
+  Building2,
   Camera,
-  Film,
   ChevronLeft,
   ChevronRight,
+  CreditCard,
+  FileText,
+  Film,
+  Globe,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Phone,
+  Plus,
+  Store,
+  Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { UploadArea, BusinessType } from "@/types/enums";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { PlanGate } from "@/components/billing/plan-gate";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
+import type { BusinessCategory, BusinessType, UploadArea } from "@/types/enums";
+import { cn } from "@/lib/utils";
+import {
+  PostFormFooter,
+  PostFormScaffold,
+  type PostFormStep,
+} from "@/components/post/post-form-scaffold";
+import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 
-const selectClass =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow";
+const SELECT_CLASS =
+  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
+
+const STEPS: PostFormStep[] = [
+  { label: "Details", icon: FileText, description: "Type, name, category, and overview" },
+  { label: "Location & Reach", icon: MapPin, description: "Address, contact, and hours" },
+  { label: "Media & Review", icon: Camera, description: "Media, extras, and final review" },
+];
 
 const PAYMENT_METHOD_OPTIONS = [
   { value: "cash", label: "Cash" },
@@ -50,11 +61,26 @@ const PAYMENT_METHOD_OPTIONS = [
 ];
 
 const DELIVERY_OPTIONS = [
-  { value: "in_store", label: "In-Store / Walk-in" },
+  { value: "in_store", label: "In-store / Walk-in" },
   { value: "delivery", label: "Delivery" },
   { value: "collection", label: "Collection" },
   { value: "nationwide", label: "Nationwide Shipping" },
 ];
+
+const FIELD_IDS: Record<string, string> = {
+  business_type: "business-type-group",
+  business_name: "businessName",
+  slug: "slug",
+  category: "category",
+  location_province: "province",
+  location_city: "city",
+  store_number: "storeNumber",
+  service_areas: "serviceAreas",
+  phone: "phone",
+  whatsapp: "whatsapp",
+  email: "email",
+  website: "website",
+};
 
 function generateSlug(name: string): string {
   return name
@@ -70,7 +96,7 @@ export default function CreateBusinessPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <Camera className="h-8 w-8 animate-pulse text-muted-foreground" />
         </div>
       }
     >
@@ -83,18 +109,13 @@ function CreateBusinessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialType = (searchParams.get("type") as BusinessType) || "";
-
-  // Business Type
+  const [step, setStep] = useState(0);
   const [businessType, setBusinessType] = useState<BusinessType | "">(initialType);
-
-  // Basic Info
   const [businessName, setBusinessName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugManual, setSlugManual] = useState(false);
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("");
-
-  // Location
+  const [category, setCategory] = useState<BusinessCategory | "">("");
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [storeNumber, setStoreNumber] = useState("");
@@ -103,41 +124,33 @@ function CreateBusinessContent() {
     []
   );
   const [serviceAreasInput, setServiceAreasInput] = useState("");
-
-  // Contact & Social
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
+  const [hoursMonFri, setHoursMonFri] = useState("");
+  const [hoursSat, setHoursSat] = useState("");
+  const [hoursSun, setHoursSun] = useState("");
   const [socialFacebook, setSocialFacebook] = useState("");
   const [socialInstagram, setSocialInstagram] = useState("");
   const [socialTwitter, setSocialTwitter] = useState("");
   const [socialTiktok, setSocialTiktok] = useState("");
-
-  // Operating Hours
-  const [hoursMonFri, setHoursMonFri] = useState("");
-  const [hoursSat, setHoursSat] = useState("");
-  const [hoursSun, setHoursSun] = useState("");
-
-  // Services & Additional
   const [servicesInput, setServicesInput] = useState("");
   const [services, setServices] = useState<string[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [deliveryOptions, setDeliveryOptions] = useState<string[]>([]);
-
-  // Media
   const [logoFile, setLogoFile] = useState<File[]>([]);
   const [coverFile, setCoverFile] = useState<File[]>([]);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [promoVideoFile, setPromoVideoFile] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const { toast } = useToast();
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
 
-  // Fetch malls for mall_store type
   useEffect(() => {
     if (businessType === "mall_store") {
       async function fetchMalls() {
@@ -152,35 +165,116 @@ function CreateBusinessContent() {
     }
   }, [businessType]);
 
-  // Auto-generate slug from business name
   useEffect(() => {
     if (!slugManual && businessName) {
       setSlug(generateSlug(businessName));
     }
   }, [businessName, slugManual]);
 
+  function clearErrors(...keys: string[]) {
+    setFormError(null);
+    if (keys.length === 0) {
+      setFieldErrors({});
+      return;
+    }
+    setFieldErrors((current) => {
+      const next = { ...current };
+      for (const key of keys) delete next[key];
+      return next;
+    });
+  }
+
+  function focusFirstError(errors: Record<string, string>, targetStep = step) {
+    const orderByStep = [
+      ["business_type", "business_name", "slug", "category"],
+      [
+        "location_province",
+        "location_city",
+        "store_number",
+        "service_areas",
+        "phone",
+        "whatsapp",
+        "email",
+        "website",
+      ],
+      ["logo_url", "cover_photo", "gallery_photos"],
+    ][targetStep];
+    const firstKey = orderByStep.find((key) => errors[key]) ?? Object.keys(errors)[0];
+    const targetId = FIELD_IDS[firstKey];
+    if (!targetId) return;
+    requestAnimationFrame(() => {
+      const element = document.getElementById(targetId);
+      element?.focus();
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
   function addService() {
     const trimmed = servicesInput.trim();
     if (trimmed && !services.includes(trimmed) && services.length < 30) {
-      setServices((prev) => [...prev, trimmed]);
+      setServices((current) => [...current, trimmed]);
       setServicesInput("");
     }
   }
 
   function removeService(index: number) {
-    setServices((prev) => prev.filter((_, i) => i !== index));
+    setServices((current) => current.filter((_, itemIndex) => itemIndex !== index));
   }
 
   function togglePaymentMethod(method: string) {
-    setPaymentMethods((prev) =>
-      prev.includes(method) ? prev.filter((m) => m !== method) : [...prev, method]
+    setPaymentMethods((current) =>
+      current.includes(method) ? current.filter((item) => item !== method) : [...current, method]
     );
   }
 
   function toggleDeliveryOption(option: string) {
-    setDeliveryOptions((prev) =>
-      prev.includes(option) ? prev.filter((o) => o !== option) : [...prev, option]
+    setDeliveryOptions((current) =>
+      current.includes(option) ? current.filter((item) => item !== option) : [...current, option]
     );
+  }
+
+  function validateStep(targetStep: number) {
+    const errors: Record<string, string> = {};
+    if (targetStep === 0) {
+      if (!businessType) errors.business_type = "Choose a business type.";
+      if (!businessName.trim()) errors.business_name = "Enter a business name.";
+      else if (businessName.trim().length < 2)
+        errors.business_name = "Business name must be at least 2 characters.";
+      const currentSlug = (slug || generateSlug(businessName)).trim();
+      if (!currentSlug) errors.slug = "Enter a valid URL slug.";
+      else if (!/^[a-z0-9-]+$/.test(currentSlug))
+        errors.slug = "Use lowercase letters, numbers, and hyphens only.";
+      if (!category) errors.category = "Select a category.";
+    }
+    if (targetStep === 1) {
+      if (!province) errors.location_province = "Select a province.";
+      if (!city) errors.location_city = "Select a city.";
+      if (businessType === "mall_store" && !storeNumber.trim())
+        errors.store_number = "Store number is required for mall stores.";
+      if (
+        businessType === "mobile_service" &&
+        serviceAreasInput
+          .split(",")
+          .map((area) => area.trim())
+          .filter(Boolean).length === 0
+      ) {
+        errors.service_areas = "Add at least one service area.";
+      }
+      if (phone && !SA_PHONE_REGEX.test(phone))
+        errors.phone = "Enter a valid South African number.";
+      if (whatsapp && !SA_PHONE_REGEX.test(whatsapp))
+        errors.whatsapp = "Enter a valid South African WhatsApp number.";
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        errors.email = "Enter a valid email address.";
+      if (website) {
+        try {
+          new URL(website);
+        } catch {
+          errors.website = "Enter a valid website URL.";
+        }
+      }
+    }
+    return errors;
   }
 
   async function uploadMedia(files: File[], area: UploadArea): Promise<string[]> {
@@ -188,85 +282,89 @@ function CreateBusinessContent() {
     try {
       const uploadData = new FormData();
       uploadData.append("area", area);
-      files.forEach((f) => uploadData.append("files", f));
+      files.forEach((file) => uploadData.append("files", file));
       const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
       if (!uploadRes.ok) throw new Error("Upload failed");
       const uploadJson = await uploadRes.json();
       return uploadJson.urls || [];
     } catch {
       toast({
-        title: "Some media failed to upload",
-        description:
-          "Your business will be saved without the failed files. You can re-upload them later.",
+        title: "Some media was skipped",
+        description: "You can add the failed files later after your business is created.",
         variant: "destructive",
       });
       return [];
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (!businessType || !businessName || !category || !province || !city) {
-      toast({ title: "Please fill in all required fields", variant: "destructive" });
+  function goNext() {
+    const errors = validateStep(step);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors((current) => ({ ...current, ...errors }));
+      setFormError("Please fix the highlighted fields before continuing.");
+      focusFirstError(errors);
       return;
     }
+    clearErrors();
+    setStep((current) => Math.min(current + 1, STEPS.length - 1));
+  }
 
-    if (businessType === "mall_store" && !storeNumber) {
-      toast({ title: "Store number is required for mall stores", variant: "destructive" });
+  function goBack() {
+    clearErrors();
+    setStep((current) => Math.max(current - 1, 0));
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const stepErrors = [0, 1].map((index) => validateStep(index));
+    const firstInvalidStep = stepErrors.findIndex((errors) => Object.keys(errors).length > 0);
+    if (firstInvalidStep !== -1) {
+      setStep(firstInvalidStep);
+      setFieldErrors(stepErrors[firstInvalidStep]);
+      setFormError("Please fix the highlighted fields before submitting.");
+      focusFirstError(stepErrors[firstInvalidStep], firstInvalidStep);
       return;
     }
-
+    clearErrors();
     setIsSubmitting(true);
     try {
-      // Upload media — parallel where possible
       const [logoUrls, coverUrls, galleryUrls, videoUrls] = await Promise.all([
         uploadMedia(logoFile, "business_logo"),
         uploadMedia(coverFile, "business_cover"),
         uploadMedia(galleryFiles, "business_gallery"),
         uploadMedia(promoVideoFile, "business_cover"),
       ]);
-
       const finalCoverPhoto = coverUrls[0] || null;
       const finalCoverVideo = videoUrls[0] || null;
-
-      // Upload video thumbnail only if we have a promo video
       let finalVideoThumbnail: string | null = null;
       if (finalCoverVideo && videoThumbnailFile.length > 0) {
         const thumbUrls = await uploadMedia(videoThumbnailFile, "business_cover");
         finalVideoThumbnail = thumbUrls[0] || null;
       }
-
-      // Build social links
       const socialLinks: Record<string, string> = {};
       if (socialFacebook) socialLinks.facebook = socialFacebook;
       if (socialInstagram) socialLinks.instagram = socialInstagram;
       if (socialTwitter) socialLinks.twitter = socialTwitter;
       if (socialTiktok) socialLinks.tiktok = socialTiktok;
-
-      // Build operating hours
       const operatingHours: Record<string, string> = {};
       if (hoursMonFri) operatingHours.Mon_Fri = hoursMonFri;
       if (hoursSat) operatingHours.Sat = hoursSat;
       if (hoursSun) operatingHours.Sun = hoursSun;
-
-      // Build service areas for mobile_service
       const serviceAreas =
-        businessType === "mobile_service" && serviceAreasInput
+        businessType === "mobile_service"
           ? {
               areas: serviceAreasInput
                 .split(",")
-                .map((a) => a.trim())
+                .map((area) => area.trim())
                 .filter(Boolean),
             }
           : undefined;
-
       const body = {
-        business_name: businessName,
-        slug: slug || generateSlug(businessName),
+        business_name: businessName.trim(),
+        slug: (slug || generateSlug(businessName)).trim(),
         business_type: businessType,
         category,
-        description,
+        description: description.trim(),
         location_province: province,
         location_city: city,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
@@ -287,611 +385,672 @@ function CreateBusinessContent() {
         delivery_options: deliveryOptions.length > 0 ? deliveryOptions : undefined,
         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
       };
-
       const res = await fetch("/api/businesses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-
-      const data = await res.json();
-
+      const payload = await res.json().catch(() => null);
       if (!res.ok) {
-        toast({
-          title: "Failed to create business",
-          description: data.error || "Please check your inputs and try again.",
-          variant: "destructive",
-        });
+        const normalized = normalizeCreatePostError(payload, "Failed to create business.");
+        setFieldErrors(normalized.fieldErrors);
+        setFormError(normalized.formError);
+        focusFirstError(normalized.fieldErrors);
         return;
       }
-
-      toast({ title: "Business created successfully!", variant: "success" });
+      toast({ title: "Business submitted for review.", variant: "success" });
       router.push("/dashboard/businesses");
-    } catch (e: unknown) {
-      toast({
-        title: "Something went wrong",
-        description: e instanceof Error ? e.message : "Unknown error",
-        variant: "destructive",
-      });
+    } catch (error: unknown) {
+      setFormError(error instanceof Error ? error.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  function renderReview() {
+    const selectedType = BUSINESS_TYPE_OPTIONS.find((option) => option.value === businessType);
+    const selectedCategory = BUSINESS_CATEGORIES.find((option) => option.value === category);
+    const serviceAreas = serviceAreasInput
+      .split(",")
+      .map((area) => area.trim())
+      .filter(Boolean);
+    return (
+      <div className="rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <Building2 className="h-4 w-4" />
+          Business review
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Business</p>
+            <p className="font-display text-base font-semibold">
+              {businessName || "Your business name"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {selectedType?.label || "Business type not selected"}
+            </p>
+            {selectedCategory && (
+              <Badge variant="secondary" className="mt-1">
+                {selectedCategory.label}
+              </Badge>
+            )}
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Reach</p>
+            <p className="text-sm text-foreground">
+              {[city, province].filter(Boolean).join(", ") || "Location not set"}
+            </p>
+            {businessType === "mall_store" && storeNumber && (
+              <p className="text-sm text-muted-foreground">Store number: {storeNumber}</p>
+            )}
+            {businessType === "mobile_service" && serviceAreas.length > 0 && (
+              <p className="text-sm text-muted-foreground">
+                Service areas: {serviceAreas.join(", ")}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Contact</p>
+            <p className="text-sm text-muted-foreground">
+              {[phone && "Phone", whatsapp && "WhatsApp", email && "Email", website && "Website"]
+                .filter(Boolean)
+                .join(", ") || "No contact channels added yet"}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Media</p>
+            <p className="text-sm text-muted-foreground">
+              {logoFile.length} logo, {coverFile.length} cover, {galleryFiles.length} gallery
+              photos, {promoVideoFile.length} video
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
       <Header isAuthenticated />
-
       <main className="flex-1">
         <div className="container-page py-6">
-          <div className="max-w-3xl mx-auto space-y-5">
-            <PageHeader
-              title="Create a Business"
-              description="Set up your Mzansi Business profile on VerifyMzansi."
-              breadcrumbs={[
-                { label: "Dashboard", href: "/dashboard" },
-                { label: "Create Post", href: "/post/create" },
-                { label: "Business" },
-              ]}
-            />
-
-            {/* Info Card */}
-            <Card className="border-brand-blue/50 bg-brand-blue/5">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-brand-blue">
-                  <Info className="h-5 w-5" />
-                  Mzansi Business Profile
-                </CardTitle>
-                <CardDescription className="text-foreground/80">
-                  Showcase your brand and connect with customers.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <PlanGate area="MZANSI_BUSINESS">
-              <form noValidate onSubmit={handleSubmit} className="space-y-5">
-                {/* 1. Business Type */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Business Type</CardTitle>
-                    <CardDescription>
-                      What kind of business are you? This helps buyers find you.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div
-                      role="radiogroup"
-                      aria-label="Business type"
-                      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
-                    >
-                      {BUSINESS_TYPE_OPTIONS.map((option) => {
-                        const Icon = option.icon;
-                        const isSelected = businessType === option.value;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            role="radio"
-                            aria-checked={isSelected}
-                            onClick={() => setBusinessType(option.value)}
-                            className={`p-4 rounded-lg border-2 text-left transition-all ${
-                              isSelected
-                                ? "border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20"
-                                : "border-border hover:border-brand-blue/30"
-                            }`}
-                          >
-                            <Icon
-                              className={`h-6 w-6 mb-2 ${isSelected ? "text-brand-blue" : "text-muted-foreground"}`}
-                            />
-                            <p className="font-medium text-sm">{option.label}</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {option.description}
-                            </p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {businessType && (
-                  <>
-                    {/* 2. Branding & Media */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">Branding & Media</CardTitle>
-                        <CardDescription>Upload brand assets to stand out.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        {/* Logo & Cover Row */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <MediaUpload
-                            label="Business Logo (1 max)"
-                            maxFiles={1}
-                            files={logoFile}
-                            onChange={setLogoFile}
-                            accept="image/*"
-                          />
-                          <MediaUpload
-                            label="Cover Photo (1 max)"
-                            maxFiles={1}
-                            files={coverFile}
-                            onChange={setCoverFile}
-                            accept="image/*"
-                          />
-                        </div>
-
-                        {/* Gallery Photos */}
-                        <div className="space-y-2">
-                          <MediaUpload
-                            label="Profile Photos (up to 5)"
-                            maxFiles={5}
-                            files={galleryFiles}
-                            onChange={setGalleryFiles}
-                            accept="image/*"
-                          />
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Camera className="h-3 w-3" />
-                            Showcase your products, premises, team, or work. For best results use
-                            landscape photos (at least 800×600px).
-                          </p>
-                          {/* Gallery reorder controls */}
-                          {galleryFiles.length > 1 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">
-                                Drag order — first photo is featured on cards:
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {galleryFiles.map((file, idx) => (
-                                  <div
-                                    key={`${file.name}-${idx}`}
-                                    className="flex items-center gap-1 bg-muted rounded-md px-2 py-1 text-xs"
-                                  >
-                                    <span className="font-medium truncate max-w-[100px]">
-                                      {file.name}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      disabled={idx === 0}
-                                      onClick={() => {
-                                        const arr = [...galleryFiles];
-                                        [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
-                                        setGalleryFiles(arr);
-                                      }}
-                                      className="p-0.5 disabled:opacity-30 hover:bg-background rounded"
-                                      aria-label="Move left"
-                                    >
-                                      <ChevronLeft className="h-3 w-3" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={idx === galleryFiles.length - 1}
-                                      onClick={() => {
-                                        const arr = [...galleryFiles];
-                                        [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
-                                        setGalleryFiles(arr);
-                                      }}
-                                      className="p-0.5 disabled:opacity-30 hover:bg-background rounded"
-                                      aria-label="Move right"
-                                    >
-                                      <ChevronRight className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Promo Video */}
-                        <div className="space-y-2">
-                          <MediaUpload
-                            label="Promo / Intro Video (1 max)"
-                            maxFiles={1}
-                            files={promoVideoFile}
-                            onChange={(files) => {
-                              setPromoVideoFile(files);
-                              if (files.length === 0) setVideoThumbnailFile([]);
-                            }}
-                            accept="video/*"
-                          />
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Film className="h-3 w-3" />
-                            Auto-plays muted below your cover on your profile page. Max 50 MB.
-                          </p>
-                        </div>
-
-                        {/* Video Thumbnail — only when promo video selected */}
-                        {promoVideoFile.length > 0 && (
-                          <MediaUpload
-                            label="Video Thumbnail (1 max) — Poster shown before video loads"
-                            maxFiles={1}
-                            files={videoThumbnailFile}
-                            onChange={setVideoThumbnailFile}
-                            accept="image/*"
-                          />
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    {/* 3. Basic Information */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">Basic Information</CardTitle>
-                        <CardDescription>Tell customers about your business.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        <div className="space-y-2">
-                          <Label htmlFor="businessName">
-                            Business Name <span className="text-destructive">*</span>
-                          </Label>
-                          <Input
-                            id="businessName"
-                            value={businessName}
-                            onChange={(e) => setBusinessName(e.target.value)}
-                            placeholder="e.g. Nomsa's Fashion Boutique"
-                            maxLength={100}
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="slug">
-                            URL Slug <span className="text-destructive">*</span>
-                          </Label>
-                          <Input
-                            id="slug"
-                            value={slug}
-                            onChange={(e) => {
-                              setSlugManual(true);
-                              setSlug(generateSlug(e.target.value));
-                            }}
-                            placeholder="your-business-name"
-                            maxLength={60}
-                            required
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Only lowercase letters, numbers, and hyphens. Auto-generated from your
-                            business name.
-                          </p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="description">About Your Business</Label>
-                          <Textarea
-                            id="description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Describe your business, what you offer, and why customers should choose you..."
-                            rows={5}
-                            maxLength={3000}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="category">
-                            Category <span className="text-destructive">*</span>
-                          </Label>
-                          <select
-                            id="category"
-                            aria-label="Category"
-                            className={selectClass}
-                            value={category}
-                            onChange={(e) => setCategory(e.target.value)}
-                            required
-                          >
-                            <option value="">Select a category...</option>
-                            {BUSINESS_CATEGORIES.map((cat) => (
-                              <option key={cat.value} value={cat.value}>
-                                {cat.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* 4. Location */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">Location</CardTitle>
-                        <CardDescription>
-                          {businessType === "mobile_service"
-                            ? "Where are you based and where do you serve?"
-                            : businessType === "online_only"
-                              ? "Where is your business registered?"
-                              : "Where can customers find you?"}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="province">
-                              Province <span className="text-destructive">*</span>
-                            </Label>
-                            <select
-                              id="province"
-                              aria-label="Province"
-                              className={selectClass}
-                              value={province}
-                              onChange={(e) => {
-                                setProvince(e.target.value);
-                                setCity("");
+          <PlanGate area="MZANSI_BUSINESS">
+            <form noValidate onSubmit={handleSubmit}>
+              <PostFormScaffold
+                title="Create a Mzansi Business Profile"
+                description="Set up a clear, professional business profile that helps customers trust and contact you."
+                breadcrumbs={[
+                  { label: "Dashboard", href: "/dashboard" },
+                  { label: "Create Post", href: "/post/create" },
+                  { label: "Mzansi Business" },
+                ]}
+                badgeLabel="Mzansi Business"
+                badgeClassName="bg-brand-blue text-white"
+                guideDescription="Choose your business type, add the key details customers need, and submit your profile for review."
+                steps={STEPS}
+                currentStep={step}
+                error={formError}
+                footer={
+                  <PostFormFooter
+                    currentStep={step}
+                    totalSteps={STEPS.length}
+                    onBack={goBack}
+                    onNext={goNext}
+                    submitDisabled={isSubmitting}
+                    isSubmitting={isSubmitting}
+                    submittingLabel="Submitting..."
+                  />
+                }
+              >
+                {step === 0 && (
+                  <div className="space-y-5">
+                    <div id="business-type-group" tabIndex={-1} className="space-y-3">
+                      <Label>Business Type *</Label>
+                      <div
+                        role="radiogroup"
+                        aria-label="Business type"
+                        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                      >
+                        {BUSINESS_TYPE_OPTIONS.map((option) => {
+                          const Icon = option.icon;
+                          const isSelected = businessType === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={isSelected}
+                              onClick={() => {
+                                setBusinessType(option.value);
+                                if (option.value !== "mall_store") {
+                                  setStoreNumber("");
+                                  setMallId("");
+                                }
+                                if (option.value !== "mobile_service") {
+                                  setServiceAreasInput("");
+                                }
+                                clearErrors("business_type", "store_number", "service_areas");
                               }}
-                              required
+                              className={cn(
+                                "rounded-xl border-2 p-4 text-left transition-all",
+                                isSelected
+                                  ? "border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20"
+                                  : "border-border hover:border-brand-blue/30"
+                              )}
                             >
-                              <option value="">Select province...</option>
-                              {provinces.map((p) => (
-                                <option key={p} value={p}>
-                                  {p}
-                                </option>
-                              ))}
-                            </select>
+                              <Icon
+                                className={cn(
+                                  "mb-2 h-6 w-6",
+                                  isSelected ? "text-brand-blue" : "text-muted-foreground"
+                                )}
+                              />
+                              <p className="text-sm font-medium">{option.label}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {option.description}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {fieldErrors.business_type && (
+                        <p className="text-xs text-destructive">{fieldErrors.business_type}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="businessName">Business Name *</Label>
+                        <span className="text-xs text-muted-foreground">
+                          {businessName.length}/100
+                        </span>
+                      </div>
+                      <Input
+                        id="businessName"
+                        value={businessName}
+                        onChange={(event) => {
+                          setBusinessName(event.target.value);
+                          clearErrors("business_name", "slug");
+                        }}
+                        placeholder="e.g. Nomsa's Fashion Boutique"
+                        maxLength={100}
+                        aria-invalid={!!fieldErrors.business_name}
+                        className={cn(fieldErrors.business_name && "border-destructive")}
+                      />
+                      {fieldErrors.business_name && (
+                        <p className="text-xs text-destructive">{fieldErrors.business_name}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="slug">URL Slug *</Label>
+                      <Input
+                        id="slug"
+                        value={slug}
+                        onChange={(event) => {
+                          setSlugManual(true);
+                          setSlug(generateSlug(event.target.value));
+                          clearErrors("slug");
+                        }}
+                        placeholder="your-business-name"
+                        maxLength={60}
+                        aria-invalid={!!fieldErrors.slug}
+                        className={cn(fieldErrors.slug && "border-destructive")}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Keep it short and readable. We use lowercase letters, numbers, and hyphens
+                        only.
+                      </p>
+                      {fieldErrors.slug && (
+                        <p className="text-xs text-destructive">{fieldErrors.slug}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Category *</Label>
+                      <select
+                        id="category"
+                        aria-label="Category"
+                        className={cn(SELECT_CLASS, fieldErrors.category && "border-destructive")}
+                        value={category}
+                        onChange={(event) => {
+                          setCategory(event.target.value as BusinessCategory);
+                          clearErrors("category");
+                        }}
+                      >
+                        <option value="">Select a category</option>
+                        {BUSINESS_CATEGORIES.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                      {fieldErrors.category && (
+                        <p className="text-xs text-destructive">{fieldErrors.category}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="description">About Your Business</Label>
+                        <span className="text-xs text-muted-foreground">
+                          {description.length}/3000
+                        </span>
+                      </div>
+                      <Textarea
+                        id="description"
+                        value={description}
+                        onChange={(event) => setDescription(event.target.value)}
+                        placeholder="Describe what you offer, who you help, and what makes your business reliable."
+                        rows={5}
+                        maxLength={3000}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {step === 1 && (
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="province">Province *</Label>
+                        <select
+                          id="province"
+                          aria-label="Province"
+                          className={cn(
+                            SELECT_CLASS,
+                            fieldErrors.location_province && "border-destructive"
+                          )}
+                          value={province}
+                          onChange={(event) => {
+                            setProvince(event.target.value);
+                            setCity("");
+                            clearErrors("location_province", "location_city");
+                          }}
+                        >
+                          <option value="">Select province</option>
+                          {provinces.map((provinceName) => (
+                            <option key={provinceName} value={provinceName}>
+                              {provinceName}
+                            </option>
+                          ))}
+                        </select>
+                        {fieldErrors.location_province && (
+                          <p className="text-xs text-destructive">
+                            {fieldErrors.location_province}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="city">City / Town *</Label>
+                        <select
+                          id="city"
+                          aria-label="City / Town"
+                          className={cn(
+                            SELECT_CLASS,
+                            fieldErrors.location_city && "border-destructive"
+                          )}
+                          value={city}
+                          onChange={(event) => {
+                            setCity(event.target.value);
+                            clearErrors("location_city");
+                          }}
+                          disabled={!province}
+                        >
+                          <option value="">Select city</option>
+                          {cities.map((cityName) => (
+                            <option key={cityName} value={cityName}>
+                              {cityName}
+                            </option>
+                          ))}
+                        </select>
+                        {fieldErrors.location_city && (
+                          <p className="text-xs text-destructive">{fieldErrors.location_city}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {businessType === "mall_store" && (
+                      <div className="space-y-4 rounded-xl border bg-muted/40 p-4">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Store className="h-4 w-4 text-brand-blue" />
+                          Mall store details
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="storeNumber">Store Number *</Label>
+                            <Input
+                              id="storeNumber"
+                              value={storeNumber}
+                              onChange={(event) => {
+                                setStoreNumber(event.target.value);
+                                clearErrors("store_number");
+                              }}
+                              placeholder="e.g. Store 42, Ground Floor"
+                              maxLength={20}
+                              className={cn(fieldErrors.store_number && "border-destructive")}
+                            />
+                            {fieldErrors.store_number && (
+                              <p className="text-xs text-destructive">{fieldErrors.store_number}</p>
+                            )}
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="city">
-                              City / Town <span className="text-destructive">*</span>
-                            </Label>
+                            <Label htmlFor="mallId">Mall (optional)</Label>
                             <select
-                              id="city"
-                              aria-label="City / Town"
-                              className={selectClass}
-                              value={city}
-                              onChange={(e) => setCity(e.target.value)}
-                              disabled={!province}
-                              required
+                              id="mallId"
+                              aria-label="Mall"
+                              className={SELECT_CLASS}
+                              value={mallId}
+                              onChange={(event) => setMallId(event.target.value)}
                             >
-                              <option value="">Select city...</option>
-                              {cities.map((c) => (
-                                <option key={c} value={c}>
-                                  {c}
+                              <option value="">Independent / Not in a mall</option>
+                              {malls.map((mall) => (
+                                <option key={mall.id} value={mall.id}>
+                                  {mall.name}
+                                  {mall.location_city ? ` (${mall.location_city})` : ""}
                                 </option>
                               ))}
                             </select>
                           </div>
                         </div>
+                      </div>
+                    )}
 
-                        {/* Mall Store specific fields */}
-                        {businessType === "mall_store" && (
-                          <div className="space-y-4 p-4 bg-muted/50 border rounded-lg">
-                            <h4 className="text-sm font-semibold flex items-center gap-2">
-                              <Store className="h-4 w-4 text-brand-blue" /> Mall Store Details
-                            </h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="storeNumber">
-                                  Store Number <span className="text-destructive">*</span>
-                                </Label>
-                                <Input
-                                  id="storeNumber"
-                                  value={storeNumber}
-                                  onChange={(e) => setStoreNumber(e.target.value)}
-                                  placeholder="e.g. Store 42, Ground Floor"
-                                  maxLength={20}
-                                  required
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="mallId">Mall (optional)</Label>
-                                <select
-                                  id="mallId"
-                                  aria-label="Mall"
-                                  className={selectClass}
-                                  value={mallId}
-                                  onChange={(e) => setMallId(e.target.value)}
+                    {businessType === "mobile_service" && (
+                      <div className="space-y-2 rounded-xl border bg-muted/40 p-4">
+                        <Label htmlFor="serviceAreas" className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-brand-blue" />
+                          Service Areas *
+                        </Label>
+                        <Input
+                          id="serviceAreas"
+                          value={serviceAreasInput}
+                          onChange={(event) => {
+                            setServiceAreasInput(event.target.value);
+                            clearErrors("service_areas");
+                          }}
+                          placeholder="e.g. Sandton, Randburg, Fourways, Midrand"
+                          className={cn(fieldErrors.service_areas && "border-destructive")}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Separate areas with commas so customers know where you operate.
+                        </p>
+                        {fieldErrors.service_areas && (
+                          <p className="text-xs text-destructive">{fieldErrors.service_areas}</p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="phone" className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          Phone Number
+                        </Label>
+                        <Input
+                          id="phone"
+                          autoComplete="tel"
+                          value={phone}
+                          onChange={(event) => {
+                            setPhone(event.target.value);
+                            clearErrors("phone");
+                          }}
+                          placeholder="082 000 0000"
+                          className={cn(fieldErrors.phone && "border-destructive")}
+                        />
+                        {fieldErrors.phone && (
+                          <p className="text-xs text-destructive">{fieldErrors.phone}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="whatsapp" className="flex items-center gap-2">
+                          <MessageCircle className="h-4 w-4 text-green-600" />
+                          WhatsApp
+                        </Label>
+                        <Input
+                          id="whatsapp"
+                          autoComplete="tel"
+                          value={whatsapp}
+                          onChange={(event) => {
+                            setWhatsapp(event.target.value);
+                            clearErrors("whatsapp");
+                          }}
+                          placeholder="082 000 0000"
+                          className={cn(fieldErrors.whatsapp && "border-destructive")}
+                        />
+                        {fieldErrors.whatsapp && (
+                          <p className="text-xs text-destructive">{fieldErrors.whatsapp}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="email" className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          Email Address
+                        </Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          autoComplete="email"
+                          value={email}
+                          onChange={(event) => {
+                            setEmail(event.target.value);
+                            clearErrors("email");
+                          }}
+                          placeholder="contact@business.co.za"
+                          className={cn(fieldErrors.email && "border-destructive")}
+                        />
+                        {fieldErrors.email && (
+                          <p className="text-xs text-destructive">{fieldErrors.email}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="website" className="flex items-center gap-2">
+                          <Globe className="h-4 w-4 text-muted-foreground" />
+                          Website
+                        </Label>
+                        <Input
+                          id="website"
+                          autoComplete="url"
+                          value={website}
+                          onChange={(event) => {
+                            setWebsite(event.target.value);
+                            clearErrors("website");
+                          }}
+                          placeholder="https://www.yourbusiness.co.za"
+                          className={cn(fieldErrors.website && "border-destructive")}
+                        />
+                        {fieldErrors.website && (
+                          <p className="text-xs text-destructive">{fieldErrors.website}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold">Operating Hours</Label>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="hoursMonFri" className="text-xs text-muted-foreground">
+                            Mon - Fri
+                          </Label>
+                          <Input
+                            id="hoursMonFri"
+                            value={hoursMonFri}
+                            onChange={(event) => setHoursMonFri(event.target.value)}
+                            placeholder="e.g. 09:00 - 17:00"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="hoursSat" className="text-xs text-muted-foreground">
+                            Saturday
+                          </Label>
+                          <Input
+                            id="hoursSat"
+                            value={hoursSat}
+                            onChange={(event) => setHoursSat(event.target.value)}
+                            placeholder="e.g. 09:00 - 14:00"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="hoursSun" className="text-xs text-muted-foreground">
+                            Sunday / Public Holidays
+                          </Label>
+                          <Input
+                            id="hoursSun"
+                            value={hoursSun}
+                            onChange={(event) => setHoursSun(event.target.value)}
+                            placeholder="e.g. Closed"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {step === 2 && (
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                      <MediaUpload
+                        label="Business logo (optional)"
+                        maxFiles={1}
+                        files={logoFile}
+                        onChange={setLogoFile}
+                        accept="image/*"
+                      />
+                      <MediaUpload
+                        label="Cover photo (optional)"
+                        maxFiles={1}
+                        files={coverFile}
+                        onChange={setCoverFile}
+                        accept="image/*"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <MediaUpload
+                        label="Profile photos (up to 5)"
+                        maxFiles={5}
+                        files={galleryFiles}
+                        onChange={setGalleryFiles}
+                        accept="image/*"
+                      />
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Camera className="h-3 w-3" />
+                        Use clear photos of your products, team, premises, or completed work.
+                      </p>
+                      {galleryFiles.length > 1 && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Reorder photos. The first image appears on cards.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {galleryFiles.map((file, index) => (
+                              <div
+                                key={`${file.name}-${index}`}
+                                className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs"
+                              >
+                                <span className="max-w-[100px] truncate font-medium">
+                                  {file.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={index === 0}
+                                  onClick={() => {
+                                    const reordered = [...galleryFiles];
+                                    [reordered[index - 1], reordered[index]] = [
+                                      reordered[index],
+                                      reordered[index - 1],
+                                    ];
+                                    setGalleryFiles(reordered);
+                                  }}
+                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
+                                  aria-label="Move photo left"
                                 >
-                                  <option value="">Independent / Not in a mall</option>
-                                  {malls.map((m) => (
-                                    <option key={m.id} value={m.id}>
-                                      {m.name}
-                                      {m.location_city ? ` (${m.location_city})` : ""}
-                                    </option>
-                                  ))}
-                                </select>
+                                  <ChevronLeft className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={index === galleryFiles.length - 1}
+                                  onClick={() => {
+                                    const reordered = [...galleryFiles];
+                                    [reordered[index], reordered[index + 1]] = [
+                                      reordered[index + 1],
+                                      reordered[index],
+                                    ];
+                                    setGalleryFiles(reordered);
+                                  }}
+                                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
+                                  aria-label="Move photo right"
+                                >
+                                  <ChevronRight className="h-3 w-3" />
+                                </button>
                               </div>
-                            </div>
+                            ))}
                           </div>
-                        )}
+                        </div>
+                      )}
+                    </div>
 
-                        {/* Mobile Service specific fields */}
-                        {businessType === "mobile_service" && (
-                          <div className="space-y-2 p-4 bg-muted/50 border rounded-lg">
-                            <Label htmlFor="serviceAreas" className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4 text-brand-blue" />
-                              Service Areas <span className="text-destructive">*</span>
-                            </Label>
-                            <Input
-                              id="serviceAreas"
-                              value={serviceAreasInput}
-                              onChange={(e) => setServiceAreasInput(e.target.value)}
-                              placeholder="e.g. Sandton, Randburg, Fourways, Midrand"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Comma-separated list of areas you serve.
-                            </p>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
+                    <div className="space-y-2">
+                      <MediaUpload
+                        label="Promo video (optional)"
+                        maxFiles={1}
+                        files={promoVideoFile}
+                        onChange={(files) => {
+                          setPromoVideoFile(files);
+                          if (files.length === 0) setVideoThumbnailFile([]);
+                        }}
+                        accept="video/*"
+                      />
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Film className="h-3 w-3" />A short intro video works best. Keep it focused
+                        and easy to watch on mobile.
+                      </p>
+                    </div>
 
-                    {/* 5. Contact & Social */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">Contact & Social Media</CardTitle>
-                        <CardDescription>How customers can reach you.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="phone" className="flex items-center gap-2">
-                              <Phone className="w-4 h-4 text-muted-foreground" /> Phone Number
-                            </Label>
+                    {promoVideoFile.length > 0 && (
+                      <MediaUpload
+                        label="Video thumbnail (optional)"
+                        maxFiles={1}
+                        files={videoThumbnailFile}
+                        onChange={setVideoThumbnailFile}
+                        accept="image/*"
+                      />
+                    )}
+
+                    <details className="rounded-xl border bg-muted/30 p-4">
+                      <summary className="cursor-pointer list-none font-medium">
+                        Optional extras
+                      </summary>
+                      <div className="mt-4 space-y-5">
+                        <div className="space-y-3">
+                          <h3 className="text-sm font-medium">Social Links</h3>
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <Input
-                              id="phone"
-                              autoComplete="tel"
-                              value={phone}
-                              onChange={(e) => setPhone(e.target.value)}
-                              placeholder="082 000 0000"
+                              value={socialFacebook}
+                              onChange={(event) => setSocialFacebook(event.target.value)}
+                              placeholder="Facebook URL"
                             />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="whatsapp" className="flex items-center gap-2">
-                              <MessageCircle className="w-4 h-4 text-green-600" /> WhatsApp
-                            </Label>
                             <Input
-                              id="whatsapp"
-                              autoComplete="tel"
-                              value={whatsapp}
-                              onChange={(e) => setWhatsapp(e.target.value)}
-                              placeholder="082 000 0000"
+                              value={socialInstagram}
+                              onChange={(event) => setSocialInstagram(event.target.value)}
+                              placeholder="Instagram URL"
                             />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="email" className="flex items-center gap-2">
-                              <Mail className="w-4 h-4 text-muted-foreground" /> Email Address
-                            </Label>
                             <Input
-                              id="email"
-                              type="email"
-                              autoComplete="email"
-                              spellCheck={false}
-                              autoCapitalize="none"
-                              value={email}
-                              onChange={(e) => setEmail(e.target.value)}
-                              placeholder="contact@business.co.za"
+                              value={socialTwitter}
+                              onChange={(event) => setSocialTwitter(event.target.value)}
+                              placeholder="X (Twitter) URL"
                             />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="website">Website</Label>
                             <Input
-                              id="website"
-                              autoComplete="url"
-                              value={website}
-                              onChange={(e) => setWebsite(e.target.value)}
-                              placeholder="https://www.yourbusiness.co.za"
+                              value={socialTiktok}
+                              onChange={(event) => setSocialTiktok(event.target.value)}
+                              placeholder="TikTok URL"
                             />
                           </div>
                         </div>
 
-                        <div className="space-y-3 pt-2">
-                          <h4 className="text-sm font-medium">Social Media Links</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <Label
-                                htmlFor="socialFacebook"
-                                className="text-xs text-muted-foreground"
-                              >
-                                Facebook URL
-                              </Label>
-                              <Input
-                                id="socialFacebook"
-                                value={socialFacebook}
-                                onChange={(e) => setSocialFacebook(e.target.value)}
-                                placeholder="https://facebook.com/yourbusiness"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label
-                                htmlFor="socialInstagram"
-                                className="text-xs text-muted-foreground"
-                              >
-                                Instagram URL
-                              </Label>
-                              <Input
-                                id="socialInstagram"
-                                value={socialInstagram}
-                                onChange={(e) => setSocialInstagram(e.target.value)}
-                                placeholder="https://instagram.com/yourbusiness"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label
-                                htmlFor="socialTwitter"
-                                className="text-xs text-muted-foreground"
-                              >
-                                X (Twitter) URL
-                              </Label>
-                              <Input
-                                id="socialTwitter"
-                                value={socialTwitter}
-                                onChange={(e) => setSocialTwitter(e.target.value)}
-                                placeholder="https://x.com/yourbusiness"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label
-                                htmlFor="socialTiktok"
-                                className="text-xs text-muted-foreground"
-                              >
-                                TikTok URL
-                              </Label>
-                              <Input
-                                id="socialTiktok"
-                                value={socialTiktok}
-                                onChange={(e) => setSocialTiktok(e.target.value)}
-                                placeholder="https://tiktok.com/@yourbusiness"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* 6. Operating Hours */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">Operating Hours</CardTitle>
-                        <CardDescription>When are you available?</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="hoursMonFri" className="text-xs text-muted-foreground">
-                              Mon - Fri
-                            </Label>
-                            <Input
-                              id="hoursMonFri"
-                              value={hoursMonFri}
-                              onChange={(e) => setHoursMonFri(e.target.value)}
-                              placeholder="e.g. 09:00 - 17:00"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="hoursSat" className="text-xs text-muted-foreground">
-                              Saturday
-                            </Label>
-                            <Input
-                              id="hoursSat"
-                              value={hoursSat}
-                              onChange={(e) => setHoursSat(e.target.value)}
-                              placeholder="e.g. 09:00 - 14:00"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="hoursSun" className="text-xs text-muted-foreground">
-                              Sunday / Public Holidays
-                            </Label>
-                            <Input
-                              id="hoursSun"
-                              value={hoursSun}
-                              onChange={(e) => setHoursSun(e.target.value)}
-                              placeholder="e.g. Closed"
-                            />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* 7. Additional Details */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">Additional Details</CardTitle>
-                        <CardDescription>
-                          Help customers understand your offering better.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        {/* Services Offered */}
                         <div className="space-y-3">
                           <Label className="flex items-center gap-2">
                             <Wrench className="h-4 w-4 text-muted-foreground" />
@@ -900,12 +1059,12 @@ function CreateBusinessContent() {
                           <div className="flex gap-2">
                             <Input
                               value={servicesInput}
-                              onChange={(e) => setServicesInput(e.target.value)}
+                              onChange={(event) => setServicesInput(event.target.value)}
                               placeholder="Type a service and press Add"
                               maxLength={200}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
                                   addService();
                                 }
                               }}
@@ -916,22 +1075,20 @@ function CreateBusinessContent() {
                           </div>
                           {services.length > 0 && (
                             <div className="flex flex-wrap gap-2">
-                              {services.map((service, i) => (
+                              {services.map((service, index) => (
                                 <Badge
-                                  key={i}
+                                  key={service}
                                   variant="secondary"
-                                  className="gap-1 cursor-pointer"
-                                  onClick={() => removeService(i)}
+                                  className="cursor-pointer gap-1"
+                                  onClick={() => removeService(index)}
                                 >
                                   {service}
-                                  <X className="h-3 w-3" />
                                 </Badge>
                               ))}
                             </div>
                           )}
                         </div>
 
-                        {/* Payment Methods */}
                         <div className="space-y-3">
                           <Label className="flex items-center gap-2">
                             <CreditCard className="h-4 w-4 text-muted-foreground" />
@@ -941,7 +1098,7 @@ function CreateBusinessContent() {
                             {PAYMENT_METHOD_OPTIONS.map((option) => (
                               <label
                                 key={option.value}
-                                className="flex items-center gap-2 text-sm cursor-pointer"
+                                className="flex cursor-pointer items-center gap-2 text-sm"
                               >
                                 <input
                                   type="checkbox"
@@ -955,17 +1112,16 @@ function CreateBusinessContent() {
                           </div>
                         </div>
 
-                        {/* Delivery Options */}
                         <div className="space-y-3">
                           <Label className="flex items-center gap-2">
-                            <Truck className="h-4 w-4 text-muted-foreground" />
+                            <Store className="h-4 w-4 text-muted-foreground" />
                             Delivery Options
                           </Label>
                           <div className="flex flex-wrap gap-3">
                             {DELIVERY_OPTIONS.map((option) => (
                               <label
                                 key={option.value}
-                                className="flex items-center gap-2 text-sm cursor-pointer"
+                                className="flex cursor-pointer items-center gap-2 text-sm"
                               >
                                 <input
                                   type="checkbox"
@@ -978,29 +1134,17 @@ function CreateBusinessContent() {
                             ))}
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </details>
 
-                    {/* Submit */}
-                    <div className="flex justify-end pt-4">
-                      <Button
-                        type="submit"
-                        size="lg"
-                        className="w-full sm:w-auto px-8"
-                        disabled={isSubmitting}
-                      >
-                        {isSubmitting && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
-                        Submit Business for Review
-                      </Button>
-                    </div>
-                  </>
+                    {renderReview()}
+                  </div>
                 )}
-              </form>
-            </PlanGate>
-          </div>
+              </PostFormScaffold>
+            </form>
+          </PlanGate>
         </div>
       </main>
-
       <Footer />
     </div>
   );
