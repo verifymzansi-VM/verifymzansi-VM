@@ -35,6 +35,10 @@ vi.mock("@/components/home/hero-banner", () => ({
   HeroBanner: () => <div data-testid="hero-banner" />,
 }));
 
+vi.mock("@/components/home/hero-banner-with-data", () => ({
+  HeroBannerWithData: () => <div data-testid="hero-banner-with-data" />,
+}));
+
 vi.mock("@/components/home/home-mall-shops-showcase", () => ({
   HomeMallShopsShowcase: () => <div data-testid="mall-showcase" />,
 }));

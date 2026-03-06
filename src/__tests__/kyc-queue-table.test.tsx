@@ -62,6 +62,9 @@ vi.mock("next/link", () => ({
   default: ({ children, href }: React.PropsWithChildren<{ href: string }>) =>
     React.createElement("a", { href }, children),
 }));
+vi.mock("@/components/admin/kyc-inline-preview", () => ({
+  KycInlinePreview: () => React.createElement("div", { "data-testid": "kyc-inline-preview" }),
+}));
 vi.mock("lucide-react", () => ({
   CheckCircle: () => React.createElement("span", null, "✓"),
   XCircle: () => React.createElement("span", null, "✗"),

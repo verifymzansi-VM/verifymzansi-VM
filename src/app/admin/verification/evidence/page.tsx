@@ -2,19 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { PageHeader } from "@/components/layout/page-header";
-import dynamic from "next/dynamic";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
-
-const EvidenceDeskClient = dynamic(
-  () => import("@/components/admin/evidence-desk").then((m) => m.EvidenceDeskClient),
-  {
-    loading: () => (
-      <div className="flex items-center justify-center py-8">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-      </div>
-    ),
-  }
-);
+import { EvidenceDeskClient } from "@/components/admin/evidence-desk";
 
 export const metadata = {
   title: "Evidence Desk — Admin",

@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -48,6 +48,7 @@ vi.mock("@/components/ui/button", () => ({
   Button: ({
     children,
     onClick,
+    asChild: _asChild,
     ...props
   }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
     children: React.ReactNode;
@@ -123,6 +124,22 @@ const MOCK_ARTIFACT = {
   sha256: "abc123",
 };
 
+async function renderOpenLightbox(
+  props: Partial<React.ComponentProps<typeof KycPreviewLightbox>> = {}
+) {
+  await act(async () => {
+    render(
+      <KycPreviewLightbox
+        open={true}
+        onOpenChange={vi.fn()}
+        step={MOCK_STEP}
+        artifact={MOCK_ARTIFACT}
+        {...props}
+      />
+    );
+  });
+}
+
 // ── Tests ────────────────────────────────────────────────────
 
 describe("KycPreviewLightbox", () => {
@@ -149,14 +166,7 @@ describe("KycPreviewLightbox", () => {
       blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
     });
 
-    render(
-      <KycPreviewLightbox
-        open={true}
-        onOpenChange={vi.fn()}
-        step={MOCK_STEP}
-        artifact={MOCK_ARTIFACT}
-      />
-    );
+    await renderOpenLightbox();
 
     expect(screen.getByTestId("dialog")).toBeDefined();
     expect(screen.getByText(/document preview/i)).toBeDefined();
@@ -176,14 +186,7 @@ describe("KycPreviewLightbox", () => {
       blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
     });
 
-    render(
-      <KycPreviewLightbox
-        open={true}
-        onOpenChange={vi.fn()}
-        step={MOCK_STEP}
-        artifact={MOCK_ARTIFACT}
-      />
-    );
+    await renderOpenLightbox();
 
     expect(screen.getByText("Test Seller")).toBeDefined();
     expect(screen.getByText("ID Document")).toBeDefined();
@@ -195,14 +198,7 @@ describe("KycPreviewLightbox", () => {
       blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
     });
 
-    render(
-      <KycPreviewLightbox
-        open={true}
-        onOpenChange={vi.fn()}
-        step={MOCK_STEP}
-        artifact={MOCK_ARTIFACT}
-      />
-    );
+    await renderOpenLightbox();
 
     await waitFor(() => {
       expect(screen.getByText("Approve")).toBeDefined();
@@ -217,14 +213,7 @@ describe("KycPreviewLightbox", () => {
       blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
     });
 
-    render(
-      <KycPreviewLightbox
-        open={true}
-        onOpenChange={vi.fn()}
-        step={MOCK_STEP}
-        artifact={MOCK_ARTIFACT}
-      />
-    );
+    await renderOpenLightbox();
 
     await waitFor(() => {
       expect(screen.getByText("Approve")).toBeDefined();
@@ -244,14 +233,7 @@ describe("KycPreviewLightbox", () => {
       blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
     });
 
-    render(
-      <KycPreviewLightbox
-        open={true}
-        onOpenChange={vi.fn()}
-        step={MOCK_STEP}
-        artifact={MOCK_ARTIFACT}
-      />
-    );
+    await renderOpenLightbox();
 
     await waitFor(() => {
       expect(screen.getByText("Reject")).toBeDefined();
@@ -280,15 +262,10 @@ describe("KycPreviewLightbox", () => {
         json: () => Promise.resolve({ success: true }),
       });
 
-    render(
-      <KycPreviewLightbox
-        open={true}
-        onOpenChange={onOpenChange}
-        step={MOCK_STEP}
-        artifact={MOCK_ARTIFACT}
-        onDecisionComplete={onDecisionComplete}
-      />
-    );
+    await renderOpenLightbox({
+      onOpenChange,
+      onDecisionComplete,
+    });
 
     await waitFor(() => {
       expect(screen.getByText("Approve")).toBeDefined();
@@ -324,15 +301,7 @@ describe("KycPreviewLightbox", () => {
       blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
     });
 
-    render(
-      <KycPreviewLightbox
-        open={true}
-        onOpenChange={vi.fn()}
-        step={MOCK_STEP}
-        artifact={MOCK_ARTIFACT}
-        evidenceDeskEnabled={true}
-      />
-    );
+    await renderOpenLightbox({ evidenceDeskEnabled: true });
 
     await waitFor(() => {
       expect(screen.getByText("Full Evidence Desk")).toBeDefined();
@@ -345,15 +314,7 @@ describe("KycPreviewLightbox", () => {
       blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
     });
 
-    render(
-      <KycPreviewLightbox
-        open={true}
-        onOpenChange={vi.fn()}
-        step={MOCK_STEP}
-        artifact={MOCK_ARTIFACT}
-        evidenceDeskEnabled={false}
-      />
-    );
+    await renderOpenLightbox({ evidenceDeskEnabled: false });
 
     await waitFor(() => {
       expect(screen.queryByText("Full Evidence Desk")).toBeNull();
@@ -367,14 +328,7 @@ describe("KycPreviewLightbox", () => {
       json: () => Promise.resolve({ error: "Decrypt failed" }),
     });
 
-    render(
-      <KycPreviewLightbox
-        open={true}
-        onOpenChange={vi.fn()}
-        step={MOCK_STEP}
-        artifact={MOCK_ARTIFACT}
-      />
-    );
+    await renderOpenLightbox();
 
     await waitFor(() => {
       expect(screen.getByText("Decrypt failed")).toBeDefined();
@@ -392,14 +346,7 @@ describe("KycPreviewLightbox", () => {
       purge_after: "2026-04-01T00:00:00Z",
     };
 
-    render(
-      <KycPreviewLightbox
-        open={true}
-        onOpenChange={vi.fn()}
-        step={MOCK_STEP}
-        artifact={artifactWithPurge}
-      />
-    );
+    await renderOpenLightbox({ artifact: artifactWithPurge });
 
     await waitFor(() => {
       expect(screen.getByText(/scheduled for purge/i)).toBeDefined();
@@ -412,14 +359,7 @@ describe("KycPreviewLightbox", () => {
       blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
     });
 
-    render(
-      <KycPreviewLightbox
-        open={true}
-        onOpenChange={vi.fn()}
-        step={MOCK_STEP}
-        artifact={MOCK_ARTIFACT}
-      />
-    );
+    await renderOpenLightbox();
 
     expect(screen.getByText(/decrypted server-side/i)).toBeDefined();
   });

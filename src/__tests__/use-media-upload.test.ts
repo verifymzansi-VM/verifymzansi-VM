@@ -15,17 +15,38 @@ vi.stubGlobal(
 
 // Mock XMLHttpRequest for video upload tests
 class MockXHR {
-  upload = { addEventListener: vi.fn() };
-  addEventListener = vi.fn();
+  uploadListeners: Record<string, ((event: ProgressEvent<EventTarget>) => void)[]> = {};
+  listeners: Record<string, (() => void)[]> = {};
+  upload = {
+    addEventListener: (type: string, listener: (event: ProgressEvent<EventTarget>) => void) => {
+      this.uploadListeners[type] ??= [];
+      this.uploadListeners[type].push(listener);
+    },
+  };
+  addEventListener = (type: string, listener: () => void) => {
+    this.listeners[type] ??= [];
+    this.listeners[type].push(listener);
+  };
   open = vi.fn();
   setRequestHeader = vi.fn();
-  send = vi.fn();
+  send = vi.fn(() => {
+    queueMicrotask(() => {
+      for (const listener of this.uploadListeners.progress ?? []) {
+        listener({ lengthComputable: true, loaded: 1, total: 1 } as ProgressEvent<EventTarget>);
+      }
+      for (const listener of this.listeners.load ?? []) {
+        listener();
+      }
+    });
+  });
   status = 200;
 }
-vi.stubGlobal(
-  "XMLHttpRequest",
-  vi.fn(() => new MockXHR())
-);
+
+function MockXMLHttpRequest() {
+  return new MockXHR();
+}
+
+vi.stubGlobal("XMLHttpRequest", MockXMLHttpRequest);
 
 // Make jsdom video elements fire the error event immediately so getVideoDuration
 // resolves without waiting for the 10 s timeout (jsdom has no media engine).
@@ -123,10 +144,10 @@ describe("useMediaUpload", () => {
       })
     );
     const videoFile = new File(["video-data"], "clip.mp4", { type: "video/mp4" });
+    let uploadResult: string | null = null;
 
-    // Start the upload (will call fetch for presigned URL, then XHR for upload)
-    const uploadPromise = act(async () => {
-      await result.current.upload(videoFile);
+    await act(async () => {
+      uploadResult = await result.current.upload(videoFile);
     });
 
     // The first fetch call should be to /api/media/upload-url
@@ -140,7 +161,13 @@ describe("useMediaUpload", () => {
       );
     });
 
-    await uploadPromise;
+    expect(uploadResult).toBe("https://media.verifymzansi.co.za/media/listing/user1/video.mp4");
+    expect(result.current.isUploading).toBe(false);
+    expect(result.current.progress).toBe(100);
+    expect(result.current.error).toBeNull();
+    expect(result.current.url).toBe(
+      "https://media.verifymzansi.co.za/media/listing/user1/video.mp4"
+    );
   });
 
   it("should handle upload failure", async () => {

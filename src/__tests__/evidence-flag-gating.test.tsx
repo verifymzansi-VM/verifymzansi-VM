@@ -47,6 +47,10 @@ vi.mock("@/components/admin/evidence-desk", () => ({
   EvidenceDeskClient: () => <div data-testid="evidence-desk-client">Evidence Desk</div>,
 }));
 
+vi.mock("@/components/admin/kyc-inline-preview", () => ({
+  KycInlinePreview: () => <div data-testid="kyc-inline-preview" />,
+}));
+
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));

@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -43,25 +43,37 @@ Object.defineProperty(OriginalURL, "revokeObjectURL", {
 // Mock IntersectionObserver — immediately triggers visibility
 const mockObserve = vi.fn();
 const mockDisconnect = vi.fn();
+let intersectionCallback: IntersectionObserverCallback | null = null;
+let lastObserver: MockIntersectionObserver | null = null;
 
 class MockIntersectionObserver {
   callback: IntersectionObserverCallback;
   constructor(callback: IntersectionObserverCallback) {
     this.callback = callback;
+    intersectionCallback = callback;
+    lastObserver = this;
   }
   observe = () => {
     mockObserve();
-    // Simulate immediate intersection
-    this.callback(
-      [{ isIntersecting: true } as IntersectionObserverEntry],
-      this as unknown as IntersectionObserver
-    );
   };
   disconnect = mockDisconnect;
   unobserve = vi.fn();
 }
 
 vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+
+async function triggerIntersection(isIntersecting = true) {
+  if (!intersectionCallback || !lastObserver) {
+    throw new Error("IntersectionObserver callback not registered");
+  }
+
+  await act(async () => {
+    intersectionCallback?.(
+      [{ isIntersecting } as IntersectionObserverEntry],
+      lastObserver as unknown as IntersectionObserver
+    );
+  });
+}
 
 const { KycInlinePreview } = await import("@/components/admin/kyc-inline-preview");
 
@@ -94,6 +106,8 @@ const MOCK_METADATA_RESPONSE = {
 describe("KycInlinePreview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    intersectionCallback = null;
+    lastObserver = null;
   });
 
   afterEach(() => {
@@ -122,6 +136,7 @@ describe("KycInlinePreview", () => {
 
     // Should have called IntersectionObserver
     expect(mockObserve).toHaveBeenCalled();
+    await triggerIntersection();
 
     // Wait for metadata + blob fetch
     await waitFor(() => {
@@ -160,6 +175,8 @@ describe("KycInlinePreview", () => {
       />
     );
 
+    await triggerIntersection();
+
     await waitFor(() => {
       expect(screen.getByText(/no document/i)).toBeDefined();
     });
@@ -179,6 +196,8 @@ describe("KycInlinePreview", () => {
         onClickPreview={vi.fn()}
       />
     );
+
+    await triggerIntersection();
 
     await waitFor(() => {
       expect(screen.getByText(/failed to load metadata/i)).toBeDefined();
@@ -205,6 +224,8 @@ describe("KycInlinePreview", () => {
         onClickPreview={onClickPreview}
       />
     );
+
+    await triggerIntersection();
 
     await waitFor(() => {
       expect(mockCreateObjectURL).toHaveBeenCalled();
@@ -241,6 +262,8 @@ describe("KycInlinePreview", () => {
         onClickPreview={vi.fn()}
       />
     );
+
+    await triggerIntersection();
 
     await waitFor(() => {
       expect(mockCreateObjectURL).toHaveBeenCalled();
@@ -281,6 +304,8 @@ describe("KycInlinePreview", () => {
         onClickPreview={vi.fn()}
       />
     );
+
+    await triggerIntersection();
 
     await waitFor(() => {
       expect(mockCreateObjectURL).toHaveBeenCalled();

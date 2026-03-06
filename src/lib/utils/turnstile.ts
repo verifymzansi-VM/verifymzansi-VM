@@ -21,6 +21,31 @@ interface TurnstileVerifyResult {
   hostname?: string;
 }
 
+async function readResponseBody(response: {
+  text?: () => Promise<string>;
+  json?: () => Promise<unknown>;
+}): Promise<string> {
+  if (typeof response.text === "function") {
+    return response.text().catch(() => "");
+  }
+
+  if (typeof response.json === "function") {
+    const data = await response.json().catch(() => undefined);
+    if (typeof data === "string") {
+      return data;
+    }
+    if (data !== undefined) {
+      try {
+        return JSON.stringify(data);
+      } catch {
+        return "";
+      }
+    }
+  }
+
+  return "";
+}
+
 /**
  * Verify a Turnstile token with Cloudflare
  *
@@ -69,7 +94,7 @@ export async function verifyTurnstileToken(
     });
 
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
+      const text = await readResponseBody(response);
       log.error("Turnstile API returned non-OK status", { status: response.status, body: text });
       return {
         success: false,
