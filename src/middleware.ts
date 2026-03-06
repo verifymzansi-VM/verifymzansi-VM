@@ -312,14 +312,17 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   return response;
 }
 
-// ── Next.js proxy entry point ────────────────────────────────
+// ── Next.js middleware entry point ───────────────────────────
 
 /**
- * Edge proxy called by Next.js on every matched request.
+ * Edge middleware called by Next.js on every matched request.
  * Delegates to routeRequest() for auth/routing, then wraps
  * the response with security headers (CSP nonce, HSTS, etc.).
+ *
+ * Cloudflare/OpenNext does not yet support Next.js 16 Node proxy runtime,
+ * so this app intentionally stays on the Edge middleware convention.
  */
-export async function proxy(request: NextRequest): Promise<NextResponse> {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const routeResponse = await routeRequest(request);
   return withSecurityHeaders(request, routeResponse);
 }
