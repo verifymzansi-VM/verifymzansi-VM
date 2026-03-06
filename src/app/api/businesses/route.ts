@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { businessSchema } from "@/lib/validations/business-unified";
+import { toFieldErrorMap } from "@/lib/validations/zod-errors";
 import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
     const parsed = businessSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
+        { error: "Validation failed", details: toFieldErrorMap(parsed.error) },
         { status: 400 }
       );
     }
@@ -172,6 +173,7 @@ export async function POST(request: NextRequest) {
         social_links: data.social_links || null,
         services_offered: data.services_offered,
         service_areas: data.service_areas || null,
+        business_details: data.business_details || null,
         operating_hours: data.operating_hours,
         payment_methods_accepted: data.payment_methods_accepted,
         delivery_options: data.delivery_options,

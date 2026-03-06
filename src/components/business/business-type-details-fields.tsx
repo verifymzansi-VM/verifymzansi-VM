@@ -1,0 +1,274 @@
+"use client";
+
+import { cn } from "@/lib/utils";
+import {
+  BUSINESS_DETAILS_SECTIONS,
+  stringifyListValue,
+  type BusinessDetailsFieldConfig,
+} from "@/lib/forms/business-type-details";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import type { BusinessDetails } from "@/types/business-details";
+import type { BusinessType } from "@/types/enums";
+
+interface MallOption {
+  id: string;
+  name: string;
+  location_city: string | null;
+}
+
+interface BusinessTypeDetailsFieldsProps {
+  businessType: BusinessType;
+  businessDetails: BusinessDetails;
+  onBusinessDetailsChange: (name: string, value: unknown) => void;
+  storeNumber: string;
+  onStoreNumberChange: (value: string) => void;
+  mallId: string;
+  malls: MallOption[];
+  onMallIdChange: (value: string) => void;
+  serviceAreasInput: string;
+  onServiceAreasChange: (value: string) => void;
+  mapDirections: string;
+  onMapDirectionsChange: (value: string) => void;
+  fieldErrors: Record<string, string>;
+  selectClassName: string;
+}
+
+function renderFieldValue(value: unknown, field: BusinessDetailsFieldConfig): string {
+  if (field.kind === "list") return stringifyListValue(value);
+  if (field.kind === "number") return typeof value === "number" ? String(value) : "";
+  if (typeof value === "string") return value;
+  return "";
+}
+
+export function BusinessTypeDetailsFields({
+  businessType,
+  businessDetails,
+  onBusinessDetailsChange,
+  storeNumber,
+  onStoreNumberChange,
+  mallId,
+  malls,
+  onMallIdChange,
+  serviceAreasInput,
+  onServiceAreasChange,
+  mapDirections,
+  onMapDirectionsChange,
+  fieldErrors,
+  selectClassName,
+}: BusinessTypeDetailsFieldsProps) {
+  const section = BUSINESS_DETAILS_SECTIONS[businessType];
+
+  return (
+    <div className="space-y-4 rounded-xl border bg-muted/40 p-4">
+      <div className="space-y-1">
+        <h3 className="text-sm font-medium">{section.title}</h3>
+        <p className="text-xs text-muted-foreground">{section.description}</p>
+      </div>
+
+      {businessType === "mall_store" && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="storeNumber">Store Number *</Label>
+            <Input
+              id="storeNumber"
+              value={storeNumber}
+              onChange={(event) => onStoreNumberChange(event.target.value)}
+              placeholder="e.g. Store 42, Ground Floor"
+              maxLength={20}
+              className={cn(fieldErrors.store_number && "border-destructive")}
+            />
+            {fieldErrors.store_number && (
+              <p className="text-xs text-destructive">{fieldErrors.store_number}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mallId">Mall (optional)</Label>
+            <select
+              id="mallId"
+              aria-label="Mall"
+              className={selectClassName}
+              value={mallId}
+              onChange={(event) => onMallIdChange(event.target.value)}
+            >
+              <option value="">Independent / Not in a mall</option>
+              {malls.map((mall) => (
+                <option key={mall.id} value={mall.id}>
+                  {mall.name}
+                  {mall.location_city ? ` (${mall.location_city})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {businessType === "mobile_service" && (
+        <div className="space-y-2">
+          <Label htmlFor="serviceAreas">Service Areas *</Label>
+          <Input
+            id="serviceAreas"
+            value={serviceAreasInput}
+            onChange={(event) => onServiceAreasChange(event.target.value)}
+            placeholder="e.g. Sandton, Randburg, Fourways, Midrand"
+            className={cn(fieldErrors.service_areas && "border-destructive")}
+          />
+          <p className="text-xs text-muted-foreground">
+            Separate areas with commas so customers know where you operate.
+          </p>
+          {fieldErrors.service_areas && (
+            <p className="text-xs text-destructive">{fieldErrors.service_areas}</p>
+          )}
+        </div>
+      )}
+
+      {["mall_store", "standalone_shop", "home_business", "market_stall"].includes(
+        businessType
+      ) && (
+        <div className="space-y-2">
+          <Label htmlFor="mapDirections">Map directions URL</Label>
+          <Input
+            id="mapDirections"
+            value={mapDirections}
+            onChange={(event) => onMapDirectionsChange(event.target.value)}
+            placeholder="https://maps.google.com/..."
+            className={cn(fieldErrors.map_directions && "border-destructive")}
+          />
+          <p className="text-xs text-muted-foreground">
+            Add a shareable maps link for customers who need navigation help.
+          </p>
+          {fieldErrors.map_directions && (
+            <p className="text-xs text-destructive">{fieldErrors.map_directions}</p>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {section.fields.map((field) => {
+          const path = `business_details.${field.name}`;
+          const error = fieldErrors[path];
+          const value = (businessDetails as unknown as Record<string, unknown>)[field.name];
+          const isWide = field.kind === "textarea" || field.kind === "list";
+
+          if (field.kind === "checkbox") {
+            return (
+              <label
+                key={field.name}
+                htmlFor={`business-detail-${field.name}`}
+                className="flex items-center gap-3 rounded-lg border bg-background px-3 py-3 text-sm"
+              >
+                <input
+                  id={`business-detail-${field.name}`}
+                  type="checkbox"
+                  checked={Boolean(value)}
+                  onChange={(event) => onBusinessDetailsChange(field.name, event.target.checked)}
+                  className="rounded"
+                />
+                <span>{field.label}</span>
+              </label>
+            );
+          }
+
+          if (field.kind === "select") {
+            return (
+              <div key={field.name} className="space-y-2">
+                <Label htmlFor={`business-detail-${field.name}`}>
+                  {field.label}
+                  {field.required ? " *" : ""}
+                </Label>
+                <select
+                  id={`business-detail-${field.name}`}
+                  aria-label={field.label}
+                  className={cn(selectClassName, error && "border-destructive")}
+                  value={typeof value === "string" ? value : ""}
+                  onChange={(event) =>
+                    onBusinessDetailsChange(field.name, event.target.value || undefined)
+                  }
+                >
+                  <option value="">Select an option</option>
+                  {field.options?.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {field.description && (
+                  <p className="text-xs text-muted-foreground">{field.description}</p>
+                )}
+                {error && <p className="text-xs text-destructive">{error}</p>}
+              </div>
+            );
+          }
+
+          if (field.kind === "textarea") {
+            return (
+              <div key={field.name} className="space-y-2 sm:col-span-2">
+                <Label htmlFor={`business-detail-${field.name}`}>
+                  {field.label}
+                  {field.required ? " *" : ""}
+                </Label>
+                <Textarea
+                  id={`business-detail-${field.name}`}
+                  value={renderFieldValue(value, field)}
+                  onChange={(event) => onBusinessDetailsChange(field.name, event.target.value)}
+                  placeholder={field.placeholder}
+                  rows={3}
+                  className={cn(error && "border-destructive")}
+                />
+                {field.description && (
+                  <p className="text-xs text-muted-foreground">{field.description}</p>
+                )}
+                {error && <p className="text-xs text-destructive">{error}</p>}
+              </div>
+            );
+          }
+
+          return (
+            <div key={field.name} className={cn("space-y-2", isWide && "sm:col-span-2")}>
+              <Label htmlFor={`business-detail-${field.name}`}>
+                {field.label}
+                {field.required ? " *" : ""}
+              </Label>
+              <Input
+                id={`business-detail-${field.name}`}
+                type={field.kind === "number" ? "number" : field.kind === "url" ? "url" : "text"}
+                inputMode={field.kind === "number" ? "numeric" : undefined}
+                min={field.kind === "number" ? field.min : undefined}
+                step={field.kind === "number" ? field.step : undefined}
+                value={renderFieldValue(value, field)}
+                onChange={(event) => {
+                  if (field.kind === "number") {
+                    const nextValue = event.target.value;
+                    onBusinessDetailsChange(
+                      field.name,
+                      nextValue === "" ? undefined : Number(nextValue)
+                    );
+                    return;
+                  }
+                  if (field.kind === "list") {
+                    onBusinessDetailsChange(
+                      field.name,
+                      event.target.value
+                        .split(",")
+                        .map((item) => item.trim())
+                        .filter(Boolean)
+                    );
+                    return;
+                  }
+                  onBusinessDetailsChange(field.name, event.target.value);
+                }}
+                placeholder={field.placeholder}
+                className={cn(error && "border-destructive")}
+              />
+              {field.description && (
+                <p className="text-xs text-muted-foreground">{field.description}</p>
+              )}
+              {error && <p className="text-xs text-destructive">{error}</p>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

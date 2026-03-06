@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
-import Link from "next/link";
 import {
   MapPin,
   ShieldCheck,
@@ -41,10 +40,21 @@ import {
 } from "@/types/enums";
 import type { Metadata } from "next";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
+import {
+  PRIMARY_ORDER_CHANNEL_LABELS,
+  WALK_IN_POLICY_LABELS,
+} from "@/lib/forms/business-type-details";
+import type { BusinessDetails } from "@/types/business-details";
 
 interface BusinessDetailPageProps {
   params: Promise<{ id: string }>;
 }
+
+const zarCurrency = new Intl.NumberFormat("en-ZA", {
+  style: "currency",
+  currency: "ZAR",
+  maximumFractionDigits: 0,
+});
 
 export async function generateMetadata({ params }: BusinessDetailPageProps): Promise<Metadata> {
   const { id } = await params;
@@ -104,7 +114,9 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   const opHours = business.operating_hours as Record<string, string> | null;
   const bType = business.business_type as BusinessType;
   const bCategory = business.category as BusinessCategory;
+  const businessDetails = business.business_details as BusinessDetails | null;
   const galleryPhotos = (business.gallery_photos as string[] | null) ?? [];
+  const serviceAreas = business.service_areas as { areas?: string[] } | null;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -239,6 +251,267 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                 </CardContent>
               </Card>
 
+              {(businessDetails ||
+                business.store_number ||
+                business.map_directions ||
+                serviceAreas) && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Business Details</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    {bType === "mall_store" && (
+                      <>
+                        {business.store_number && (
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">Store number</span>
+                            <span className="font-medium text-right">{business.store_number}</span>
+                          </div>
+                        )}
+                        {businessDetails?.type === "mall_store" &&
+                          businessDetails.floor_or_wing && (
+                            <div className="flex items-start justify-between gap-4">
+                              <span className="text-muted-foreground">Floor / wing</span>
+                              <span className="font-medium text-right">
+                                {businessDetails.floor_or_wing}
+                              </span>
+                            </div>
+                          )}
+                        {businessDetails?.type === "mall_store" &&
+                          businessDetails.nearest_entrance && (
+                            <div className="flex items-start justify-between gap-4">
+                              <span className="text-muted-foreground">Nearest entrance</span>
+                              <span className="font-medium text-right">
+                                {businessDetails.nearest_entrance}
+                              </span>
+                            </div>
+                          )}
+                        {businessDetails?.type === "mall_store" &&
+                          businessDetails.parking_notes && (
+                            <div className="space-y-1">
+                              <p className="text-muted-foreground">Parking notes</p>
+                              <p className="font-medium">{businessDetails.parking_notes}</p>
+                            </div>
+                          )}
+                        {business.map_directions && (
+                          <Button asChild variant="outline" className="w-full gap-2">
+                            <a
+                              href={business.map_directions}
+                              target="_blank"
+                              rel="noopener noreferrer nofollow"
+                            >
+                              <MapPin className="h-4 w-4" />
+                              Open Map Directions
+                            </a>
+                          </Button>
+                        )}
+                      </>
+                    )}
+
+                    {bType === "standalone_shop" && businessDetails?.type === "standalone_shop" && (
+                      <>
+                        <div className="flex items-start justify-between gap-4">
+                          <span className="text-muted-foreground">Street address</span>
+                          <span className="font-medium text-right">
+                            {businessDetails.street_address}
+                          </span>
+                        </div>
+                        <div className="flex items-start justify-between gap-4">
+                          <span className="text-muted-foreground">Suburb</span>
+                          <span className="font-medium text-right">{businessDetails.suburb}</span>
+                        </div>
+                        {businessDetails.landmark && (
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">Landmark</span>
+                            <span className="font-medium text-right">
+                              {businessDetails.landmark}
+                            </span>
+                          </div>
+                        )}
+                        {businessDetails.walk_in_policy && (
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">Walk-in policy</span>
+                            <span className="font-medium text-right">
+                              {WALK_IN_POLICY_LABELS[businessDetails.walk_in_policy]}
+                            </span>
+                          </div>
+                        )}
+                        {business.map_directions && (
+                          <Button asChild variant="outline" className="w-full gap-2">
+                            <a
+                              href={business.map_directions}
+                              target="_blank"
+                              rel="noopener noreferrer nofollow"
+                            >
+                              <MapPin className="h-4 w-4" />
+                              Open Map Directions
+                            </a>
+                          </Button>
+                        )}
+                      </>
+                    )}
+
+                    {bType === "home_business" && businessDetails?.type === "home_business" && (
+                      <>
+                        <div className="flex items-start justify-between gap-4">
+                          <span className="text-muted-foreground">Service suburb</span>
+                          <span className="font-medium text-right">
+                            {businessDetails.service_suburb}
+                          </span>
+                        </div>
+                        <div className="flex items-start justify-between gap-4">
+                          <span className="text-muted-foreground">Appointment required</span>
+                          <span className="font-medium text-right">
+                            {businessDetails.appointment_required ? "Yes" : "No"}
+                          </span>
+                        </div>
+                        <div className="flex items-start justify-between gap-4">
+                          <span className="text-muted-foreground">Customer pickup</span>
+                          <span className="font-medium text-right">
+                            {businessDetails.customer_pickup_allowed
+                              ? "Available"
+                              : "Not available"}
+                          </span>
+                        </div>
+                        {businessDetails.visitor_notes && (
+                          <div className="space-y-1">
+                            <p className="text-muted-foreground">Visitor notes</p>
+                            <p className="font-medium">{businessDetails.visitor_notes}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {bType === "mobile_service" && businessDetails?.type === "mobile_service" && (
+                      <>
+                        {serviceAreas?.areas && serviceAreas.areas.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-muted-foreground">Service areas</p>
+                            <div className="flex flex-wrap gap-2">
+                              {serviceAreas.areas.map((area) => (
+                                <Badge key={area} variant="secondary">
+                                  {area}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {typeof businessDetails.travel_radius_km === "number" && (
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">Travel radius</span>
+                            <span className="font-medium text-right">
+                              {businessDetails.travel_radius_km} km
+                            </span>
+                          </div>
+                        )}
+                        {typeof businessDetails.callout_fee_from === "number" && (
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">Callout fee from</span>
+                            <span className="font-medium text-right">
+                              {zarCurrency.format(businessDetails.callout_fee_from)}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between gap-4">
+                          <span className="text-muted-foreground">Emergency callouts</span>
+                          <span className="font-medium text-right">
+                            {businessDetails.emergency_callouts ? "Available" : "Not available"}
+                          </span>
+                        </div>
+                      </>
+                    )}
+
+                    {bType === "online_only" && businessDetails?.type === "online_only" && (
+                      <>
+                        {businessDetails.primary_order_channel && (
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">Primary order channel</span>
+                            <span className="font-medium text-right">
+                              {PRIMARY_ORDER_CHANNEL_LABELS[businessDetails.primary_order_channel]}
+                            </span>
+                          </div>
+                        )}
+                        <Button asChild variant="outline" className="w-full gap-2">
+                          <a
+                            href={businessDetails.order_url}
+                            target="_blank"
+                            rel="noopener noreferrer nofollow"
+                          >
+                            <Globe className="h-4 w-4" />
+                            Order Online
+                          </a>
+                        </Button>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Delivery regions</p>
+                          <div className="flex flex-wrap gap-2">
+                            {businessDetails.delivery_regions.map((region) => (
+                              <Badge key={region} variant="secondary">
+                                {region}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                        {businessDetails.support_response_time && (
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">Support response time</span>
+                            <span className="font-medium text-right">
+                              {businessDetails.support_response_time}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {bType === "market_stall" && businessDetails?.type === "market_stall" && (
+                      <>
+                        <div className="flex items-start justify-between gap-4">
+                          <span className="text-muted-foreground">Market name</span>
+                          <span className="font-medium text-right">
+                            {businessDetails.market_name}
+                          </span>
+                        </div>
+                        {businessDetails.stall_label && (
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">Stall label</span>
+                            <span className="font-medium text-right">
+                              {businessDetails.stall_label}
+                            </span>
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Trading days</p>
+                          <div className="flex flex-wrap gap-2">
+                            {businessDetails.trading_days.map((day) => (
+                              <Badge key={day} variant="secondary">
+                                {day}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-start justify-between gap-4">
+                          <span className="text-muted-foreground">Trading hours</span>
+                          <span className="font-medium text-right">
+                            {businessDetails.trading_hours}
+                          </span>
+                        </div>
+                        {business.map_directions && (
+                          <Button asChild variant="outline" className="w-full gap-2">
+                            <a
+                              href={business.map_directions}
+                              target="_blank"
+                              rel="noopener noreferrer nofollow"
+                            >
+                              <MapPin className="h-4 w-4" />
+                              Open Map Directions
+                            </a>
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Services Offered */}
               {business.services_offered && business.services_offered.length > 0 && (
                 <Card>
@@ -350,7 +623,9 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
                         promotionType={promo.promotion_type}
                         createdAt={promo.created_at}
                         viewCount={promo.view_count}
-                        boosted={promo.boost_until ? new Date(promo.boost_until) > new Date() : false}
+                        boosted={
+                          promo.boost_until ? new Date(promo.boost_until) > new Date() : false
+                        }
                         featured={
                           promo.featured_until ? new Date(promo.featured_until) > new Date() : false
                         }

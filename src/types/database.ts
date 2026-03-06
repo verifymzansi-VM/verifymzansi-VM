@@ -35,6 +35,7 @@ import type {
   BusinessCategory,
   PromotionType,
 } from "./enums";
+import type { BusinessDetails } from "./business-details";
 
 /* ── Seller Profiles ─────────────────────────────────────── */
 export interface SellerProfile {
@@ -249,6 +250,7 @@ export interface Business {
   social_links: Record<string, string> | null;
   services_offered: string[];
   service_areas: Record<string, unknown> | null;
+  business_details: BusinessDetails | null;
   operating_hours: Record<string, unknown>;
   payment_methods_accepted: string[];
   delivery_options: string[];

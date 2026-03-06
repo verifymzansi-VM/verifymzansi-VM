@@ -45,6 +45,12 @@ import {
 } from "@/components/post/post-form-scaffold";
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
+import {
+  coerceBusinessDetails,
+  getDefaultBusinessDetails,
+} from "@/lib/forms/business-type-details";
+import { BusinessTypeDetailsFields } from "@/components/business/business-type-details-fields";
+import type { BusinessDetails } from "@/types/business-details";
 
 const SELECT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
@@ -79,6 +85,7 @@ const FIELD_IDS: Record<string, string> = {
   location_city: "city",
   store_number: "storeNumber",
   service_areas: "serviceAreas",
+  map_directions: "mapDirections",
   phone: "phone",
   whatsapp: "whatsapp",
   email: "email",
@@ -90,6 +97,14 @@ const FIELD_IDS: Record<string, string> = {
   gallery_photos: "business-gallery",
   cover_video: "business-cover-video",
 };
+
+function getFieldId(key: string): string | undefined {
+  if (FIELD_IDS[key]) return FIELD_IDS[key];
+  if (key.startsWith("business_details.")) {
+    return `business-detail-${key.split(".")[1]}`;
+  }
+  return undefined;
+}
 
 function generateSlug(name: string): string {
   return name
@@ -120,6 +135,9 @@ function CreateBusinessContent() {
   const initialType = (searchParams.get("type") as BusinessType) || "";
   const [step, setStep] = useState(0);
   const [businessType, setBusinessType] = useState<BusinessType | "">(initialType);
+  const [businessDetails, setBusinessDetails] = useState<BusinessDetails | null>(
+    initialType ? getDefaultBusinessDetails(initialType) : null
+  );
   const [businessName, setBusinessName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugManual, setSlugManual] = useState(false);
@@ -133,6 +151,7 @@ function CreateBusinessContent() {
     []
   );
   const [serviceAreasInput, setServiceAreasInput] = useState("");
+  const [mapDirections, setMapDirections] = useState("");
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
@@ -217,6 +236,12 @@ function CreateBusinessContent() {
     });
   }
 
+  function clearErrorPrefix(prefix: string) {
+    setFieldErrors((current) =>
+      Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(prefix)))
+    );
+  }
+
   function focusFirstError(errors: Record<string, string>, targetStep = step) {
     const orderByStep = [
       ["business_type", "business_name", "slug", "category"],
@@ -233,7 +258,7 @@ function CreateBusinessContent() {
       ["logo_url", "cover_photo", "gallery_photos"],
     ][targetStep];
     const firstKey = orderByStep.find((key) => errors[key]) ?? Object.keys(errors)[0];
-    const targetId = FIELD_IDS[firstKey];
+    const targetId = getFieldId(firstKey);
     if (!targetId) return;
     requestAnimationFrame(() => {
       const element = document.getElementById(targetId);
@@ -270,8 +295,10 @@ function CreateBusinessContent() {
     const errors: Record<string, string> = {};
     const businessValidationErrors = validateBusinessForm({
       businessType,
+      businessDetails,
       storeNumber: storeNumber.trim(),
       serviceAreasInput,
+      mapDirections: mapDirections.trim(),
       phone: phone.trim(),
       whatsapp: whatsapp.trim(),
       email: email.trim(),
@@ -402,6 +429,7 @@ function CreateBusinessContent() {
         location_city: city,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
         mall_id: businessType === "mall_store" && mallId ? mallId : undefined,
+        map_directions: mapDirections || undefined,
         phone: phone || undefined,
         whatsapp: whatsapp || undefined,
         email: email || undefined,
@@ -413,6 +441,9 @@ function CreateBusinessContent() {
         gallery_photos: galleryUrls.length > 0 ? galleryUrls : undefined,
         services_offered: services.length > 0 ? services : undefined,
         service_areas: serviceAreas,
+        business_details: businessType
+          ? coerceBusinessDetails(businessType, businessDetails)
+          : undefined,
         operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
         payment_methods_accepted: paymentMethods.length > 0 ? paymentMethods : undefined,
         delivery_options: deliveryOptions.length > 0 ? deliveryOptions : undefined,
@@ -590,6 +621,7 @@ function CreateBusinessContent() {
                               aria-checked={isSelected ? "true" : "false"}
                               onClick={() => {
                                 setBusinessType(option.value);
+                                setBusinessDetails(getDefaultBusinessDetails(option.value));
                                 if (option.value !== "mall_store") {
                                   setStoreNumber("");
                                   setMallId("");
@@ -597,7 +629,23 @@ function CreateBusinessContent() {
                                 if (option.value !== "mobile_service") {
                                   setServiceAreasInput("");
                                 }
-                                clearErrors("business_type", "store_number", "service_areas");
+                                if (
+                                  ![
+                                    "mall_store",
+                                    "standalone_shop",
+                                    "home_business",
+                                    "market_stall",
+                                  ].includes(option.value)
+                                ) {
+                                  setMapDirections("");
+                                }
+                                clearErrors(
+                                  "business_type",
+                                  "store_number",
+                                  "service_areas",
+                                  "map_directions"
+                                );
+                                clearErrorPrefix("business_details.");
                               }}
                               className={cn(
                                 "rounded-xl border-2 p-4 text-left transition-all",
@@ -778,75 +826,41 @@ function CreateBusinessContent() {
                       </div>
                     </div>
 
-                    {businessType === "mall_store" && (
-                      <div className="space-y-4 rounded-xl border bg-muted/40 p-4">
-                        <div className="flex items-center gap-2 text-sm font-medium">
-                          <Store className="h-4 w-4 text-brand-blue" />
-                          Mall store details
-                        </div>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label htmlFor="storeNumber">Store Number *</Label>
-                            <Input
-                              id="storeNumber"
-                              value={storeNumber}
-                              onChange={(event) => {
-                                setStoreNumber(event.target.value);
-                                clearErrors("store_number");
-                              }}
-                              placeholder="e.g. Store 42, Ground Floor"
-                              maxLength={20}
-                              className={cn(fieldErrors.store_number && "border-destructive")}
-                            />
-                            {fieldErrors.store_number && (
-                              <p className="text-xs text-destructive">{fieldErrors.store_number}</p>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="mallId">Mall (optional)</Label>
-                            <select
-                              id="mallId"
-                              aria-label="Mall"
-                              className={SELECT_CLASS}
-                              value={mallId}
-                              onChange={(event) => setMallId(event.target.value)}
-                            >
-                              <option value="">Independent / Not in a mall</option>
-                              {malls.map((mall) => (
-                                <option key={mall.id} value={mall.id}>
-                                  {mall.name}
-                                  {mall.location_city ? ` (${mall.location_city})` : ""}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {businessType === "mobile_service" && (
-                      <div className="space-y-2 rounded-xl border bg-muted/40 p-4">
-                        <Label htmlFor="serviceAreas" className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-brand-blue" />
-                          Service Areas *
-                        </Label>
-                        <Input
-                          id="serviceAreas"
-                          value={serviceAreasInput}
-                          onChange={(event) => {
-                            setServiceAreasInput(event.target.value);
-                            clearErrors("service_areas");
-                          }}
-                          placeholder="e.g. Sandton, Randburg, Fourways, Midrand"
-                          className={cn(fieldErrors.service_areas && "border-destructive")}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Separate areas with commas so customers know where you operate.
-                        </p>
-                        {fieldErrors.service_areas && (
-                          <p className="text-xs text-destructive">{fieldErrors.service_areas}</p>
-                        )}
-                      </div>
+                    {businessType && businessDetails && (
+                      <BusinessTypeDetailsFields
+                        businessType={businessType}
+                        businessDetails={businessDetails}
+                        onBusinessDetailsChange={(name, value) => {
+                          setBusinessDetails((current) => {
+                            const next = coerceBusinessDetails(
+                              businessType,
+                              current ?? getDefaultBusinessDetails(businessType)
+                            );
+                            return { ...next, [name]: value } as BusinessDetails;
+                          });
+                          clearErrors(`business_details.${name}`);
+                        }}
+                        storeNumber={storeNumber}
+                        onStoreNumberChange={(value) => {
+                          setStoreNumber(value);
+                          clearErrors("store_number");
+                        }}
+                        mallId={mallId}
+                        malls={malls}
+                        onMallIdChange={setMallId}
+                        serviceAreasInput={serviceAreasInput}
+                        onServiceAreasChange={(value) => {
+                          setServiceAreasInput(value);
+                          clearErrors("service_areas");
+                        }}
+                        mapDirections={mapDirections}
+                        onMapDirectionsChange={(value) => {
+                          setMapDirections(value);
+                          clearErrors("map_directions");
+                        }}
+                        fieldErrors={fieldErrors}
+                        selectClassName={SELECT_CLASS}
+                      />
                     )}
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -9,8 +9,6 @@ import {
   Phone,
   Mail,
   MessageCircle,
-  Store,
-  MapPin,
   Building2,
   CreditCard,
   Truck,
@@ -39,6 +37,12 @@ import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provi
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { usePlanCoverVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
+import {
+  coerceBusinessDetails,
+  getDefaultBusinessDetails,
+} from "@/lib/forms/business-type-details";
+import { BusinessTypeDetailsFields } from "@/components/business/business-type-details-fields";
+import type { BusinessDetails } from "@/types/business-details";
 
 const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow";
@@ -68,9 +72,13 @@ export default function EditBusinessPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Business Type
   const [businessType, setBusinessType] = useState<BusinessType>("standalone_shop");
+  const [businessDetails, setBusinessDetails] = useState<BusinessDetails>(
+    getDefaultBusinessDetails("standalone_shop")
+  );
 
   // Basic Info
   const [businessName, setBusinessName] = useState("");
@@ -87,6 +95,7 @@ export default function EditBusinessPage() {
     []
   );
   const [serviceAreasInput, setServiceAreasInput] = useState("");
+  const [mapDirections, setMapDirections] = useState("");
 
   // Contact & Social
   const [phone, setPhone] = useState("");
@@ -151,10 +160,14 @@ export default function EditBusinessPage() {
         setCity(b.location_city || "");
         setStoreNumber(b.store_number || "");
         setMallId(b.mall_id || "");
+        setMapDirections(b.map_directions || "");
         setPhone(b.phone || "");
         setWhatsapp(b.whatsapp || "");
         setEmail(b.email || "");
         setWebsite(b.website || "");
+        setBusinessDetails(
+          coerceBusinessDetails(b.business_type || "standalone_shop", b.business_details)
+        );
         setExistingLogo(b.logo_url || "");
         setExistingCoverPhoto(b.cover_photo || "");
         setExistingCoverVideo(b.cover_video || "");
@@ -205,6 +218,19 @@ export default function EditBusinessPage() {
     load();
     fetchMalls();
   }, [businessId]);
+
+  function clearErrors(...keys: string[]) {
+    setError(null);
+    if (keys.length === 0) {
+      setFieldErrors({});
+      return;
+    }
+    setFieldErrors((current) => {
+      const next = { ...current };
+      for (const key of keys) delete next[key];
+      return next;
+    });
+  }
 
   function addService() {
     const trimmed = servicesInput.trim();
@@ -258,8 +284,10 @@ export default function EditBusinessPage() {
     try {
       const validationErrors = validateBusinessForm({
         businessType,
+        businessDetails,
         storeNumber: storeNumber.trim(),
         serviceAreasInput,
+        mapDirections: mapDirections.trim(),
         phone: phone.trim(),
         whatsapp: whatsapp.trim(),
         email: email.trim(),
@@ -277,10 +305,12 @@ export default function EditBusinessPage() {
         validationErrors.cover_video = "Cover video is not available on your current plan.";
       }
       if (Object.keys(validationErrors).length > 0) {
+        setFieldErrors(validationErrors);
         setError(Object.values(validationErrors)[0]);
         setIsSubmitting(false);
         return;
       }
+      setFieldErrors({});
 
       // Upload new media if provided
       let finalLogoUrl = existingLogo;
@@ -350,6 +380,7 @@ export default function EditBusinessPage() {
         location_city: city,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
         mall_id: businessType === "mall_store" && mallId ? mallId : undefined,
+        map_directions: mapDirections || undefined,
         phone: phone || undefined,
         whatsapp: whatsapp || undefined,
         email: email || undefined,
@@ -361,6 +392,7 @@ export default function EditBusinessPage() {
         gallery_photos: finalGalleryPhotos.length > 0 ? finalGalleryPhotos : [],
         services_offered: services,
         service_areas: serviceAreas,
+        business_details: coerceBusinessDetails(businessType, businessDetails),
         operating_hours: operatingHours,
         payment_methods_accepted: paymentMethods,
         delivery_options: deliveryOptions,
@@ -376,6 +408,11 @@ export default function EditBusinessPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        setFieldErrors(
+          data?.details && typeof data.details === "object"
+            ? (data.details as Record<string, string>)
+            : {}
+        );
         setError(data.error || "Failed to update business");
         return;
       }
@@ -534,58 +571,36 @@ export default function EditBusinessPage() {
                 </div>
               </div>
 
-              {/* Mall Store specific */}
-              {businessType === "mall_store" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/50 border rounded-lg">
-                  <div className="space-y-2">
-                    <Label htmlFor="storeNumber" className="flex items-center gap-1.5">
-                      <Store className="h-4 w-4 text-brand-blue" /> Store Number
-                    </Label>
-                    <Input
-                      id="storeNumber"
-                      value={storeNumber}
-                      onChange={(e) => setStoreNumber(e.target.value)}
-                      maxLength={20}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="mallId">Mall</Label>
-                    <select
-                      id="mallId"
-                      aria-label="Mall"
-                      className={selectClass}
-                      value={mallId}
-                      onChange={(e) => setMallId(e.target.value)}
-                    >
-                      <option value="">Independent / Not in a mall</option>
-                      {malls.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                          {m.location_city ? ` (${m.location_city})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {/* Mobile Service specific */}
-              {businessType === "mobile_service" && (
-                <div className="space-y-2 p-4 bg-muted/50 border rounded-lg">
-                  <Label htmlFor="serviceAreas" className="flex items-center gap-1.5">
-                    <MapPin className="h-4 w-4 text-brand-blue" /> Service Areas
-                  </Label>
-                  <Input
-                    id="serviceAreas"
-                    value={serviceAreasInput}
-                    onChange={(e) => setServiceAreasInput(e.target.value)}
-                    placeholder="e.g. Sandton, Randburg, Fourways"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Comma-separated list of areas you serve.
-                  </p>
-                </div>
-              )}
+              <BusinessTypeDetailsFields
+                businessType={businessType}
+                businessDetails={businessDetails}
+                onBusinessDetailsChange={(name, value) => {
+                  setBusinessDetails(
+                    (current) => ({ ...current, [name]: value }) as BusinessDetails
+                  );
+                  clearErrors(`business_details.${name}`);
+                }}
+                storeNumber={storeNumber}
+                onStoreNumberChange={(value) => {
+                  setStoreNumber(value);
+                  clearErrors("store_number");
+                }}
+                mallId={mallId}
+                malls={malls}
+                onMallIdChange={setMallId}
+                serviceAreasInput={serviceAreasInput}
+                onServiceAreasChange={(value) => {
+                  setServiceAreasInput(value);
+                  clearErrors("service_areas");
+                }}
+                mapDirections={mapDirections}
+                onMapDirectionsChange={(value) => {
+                  setMapDirections(value);
+                  clearErrors("map_directions");
+                }}
+                fieldErrors={fieldErrors}
+                selectClassName={selectClass}
+              />
 
               {/* Contact */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

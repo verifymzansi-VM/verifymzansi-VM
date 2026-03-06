@@ -32,6 +32,12 @@ const VALID_BODY = {
   description: "A valid business profile description.",
   location_province: "Gauteng",
   location_city: "Johannesburg",
+  business_details: {
+    type: "standalone_shop",
+    street_address: "24 Vilakazi Street",
+    suburb: "Orlando West",
+    walk_in_policy: "walk_ins_welcome",
+  },
   gallery_photos: ["https://media.verifymzansi.co.za/business/photo-1.jpg"],
 };
 
@@ -138,5 +144,66 @@ describe("POST /api/businesses", () => {
     await expect(res.json()).resolves.toMatchObject({
       error: "Cover video is not available on your current plan.",
     });
+  });
+
+  it("persists business_details on successful create", async () => {
+    const insertSpy = vi.fn().mockReturnThis();
+    const selectSpy = vi.fn().mockReturnThis();
+    const singleSpy = vi.fn().mockResolvedValue({ data: { id: "business-1" }, error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "seller_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "seller-1" } }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "growth" } }),
+          };
+        }
+        if (table === "businesses") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockResolvedValue({ count: 0 }),
+            insert: insertSpy,
+            single: singleSpy,
+          };
+        }
+        return {
+          select: selectSpy,
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    insertSpy.mockImplementation(() => ({
+      select: () => ({
+        single: singleSpy,
+      }),
+    }));
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(201);
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        business_details: expect.objectContaining({
+          type: "standalone_shop",
+          street_address: "24 Vilakazi Street",
+          suburb: "Orlando West",
+        }),
+      })
+    );
   });
 });

@@ -101,17 +101,45 @@ describe("CreateBusinessPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
   }
 
-  it("progresses through the wizard and shows the review step", () => {
-    render(<CreateBusinessPage />);
-
-    completeStepOne();
+  function completeStandaloneLocationStep() {
     fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
     fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
       target: { value: "Johannesburg" },
     });
+    fireEvent.change(screen.getByLabelText(/Street address/i), {
+      target: { value: "24 Vilakazi Street" },
+    });
+    fireEvent.change(screen.getByLabelText(/Suburb/i), {
+      target: { value: "Orlando West" },
+    });
+  }
+
+  it("progresses through the wizard and shows the review step", async () => {
+    render(<CreateBusinessPage />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("radio", { name: /Mall Store/i }));
+    });
+    fireEvent.change(screen.getByLabelText(/Business Name/i), {
+      target: { value: "Mall Biz" },
+    });
+    fireEvent.change(screen.getByLabelText(/URL Slug/i), {
+      target: { value: "mall-biz" },
+    });
+    fireEvent.change(screen.getByLabelText("Category"), {
+      target: { value: "fashion_accessories" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.change(screen.getByLabelText(/Store Number/i), {
+      target: { value: "12A" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    expect(screen.getByText("Business review")).toBeInTheDocument();
+    expect(screen.getByText(/Business review/i)).toBeInTheDocument();
   });
 
   it("requires store number for mall stores", async () => {
@@ -162,14 +190,46 @@ describe("CreateBusinessPage", () => {
     expect(screen.getByText("Add at least one service area.")).toBeInTheDocument();
   });
 
-  it("keeps optional extras collapsed by default on the review step", () => {
+  it("reveals address details for standalone shops", () => {
     render(<CreateBusinessPage />);
 
     completeStepOne();
+
+    expect(screen.getByLabelText(/Street address/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Suburb/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Walk-in policy/i)).toBeInTheDocument();
+  });
+
+  it("reveals online-only fields and blocks submission without order details", () => {
+    render(<CreateBusinessPage />);
+
+    fireEvent.click(screen.getByRole("radio", { name: /Online Only/i }));
+    fireEvent.change(screen.getByLabelText(/Business Name/i), {
+      target: { value: "Mzansi Online" },
+    });
+    fireEvent.change(screen.getByLabelText(/URL Slug/i), {
+      target: { value: "mzansi-online" },
+    });
+    fireEvent.change(screen.getByLabelText("Category"), {
+      target: { value: "electronics_tech" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
     fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
       target: { value: "Johannesburg" },
     });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Primary order channel is required.")).toBeInTheDocument();
+    expect(screen.getByText("Order URL is required.")).toBeInTheDocument();
+    expect(screen.getByText("Delivery regions is required.")).toBeInTheDocument();
+  });
+
+  it("keeps optional extras collapsed by default on the review step", () => {
+    render(<CreateBusinessPage />);
+
+    completeStepOne();
+    completeStandaloneLocationStep();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     const details = screen.getByText("Optional extras").closest("details");
