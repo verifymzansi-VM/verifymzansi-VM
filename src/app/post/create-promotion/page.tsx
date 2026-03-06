@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Building2, Camera, FileText, MapPin, Megaphone } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,18 @@ function CreatePromotionContent() {
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
   const isEvent = promotionType === "event";
+
+  // Stable blob URL for the cover photo preview — revoked on change
+  const coverPhotoUrl = useMemo(
+    () => (photoFiles.length > 0 ? URL.createObjectURL(photoFiles[0]) : null),
+    [photoFiles]
+  );
+  useEffect(
+    () => () => {
+      if (coverPhotoUrl) URL.revokeObjectURL(coverPhotoUrl);
+    },
+    [coverPhotoUrl]
+  );
 
   useEffect(() => {
     async function loadBusinesses() {
@@ -564,6 +576,10 @@ function CreatePromotionContent() {
                         }}
                         accept="image/*"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Your first photo becomes the promotion&apos;s cover image in cards and
+                        feeds.
+                      </p>
                       {fieldErrors.images && (
                         <p className="text-xs text-destructive">{fieldErrors.images}</p>
                       )}
@@ -593,11 +609,43 @@ function CreatePromotionContent() {
                       />
                     )}
 
-                    <div className="rounded-xl border border-dashed border-amber-600/30 bg-amber-50/70 p-4 text-sm">
+                    <div className="rounded-xl border border-dashed border-amber-600/30 bg-amber-50/70 p-4 text-sm dark:bg-amber-950/20">
                       <div className="mb-3 flex items-center gap-2 font-medium text-muted-foreground">
                         <Megaphone className="h-4 w-4" />
-                        Review
+                        Preview
                       </div>
+
+                      {/* Visual card preview */}
+                      <div className="mb-4 overflow-hidden rounded-lg border bg-background shadow-sm">
+                        <div className="aspect-[16/9] bg-muted flex items-center justify-center">
+                          {coverPhotoUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={coverPhotoUrl}
+                              alt="Promotion preview"
+                              className="w-full h-full object-cover"
+                              width={400}
+                              height={225}
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                              <Camera className="h-6 w-6" />
+                              <span className="text-xs">Your cover photo will appear here</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-3 space-y-1">
+                          <p className="font-display text-sm font-semibold truncate">
+                            {title || "Your promotion title"}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {PROMOTION_TYPE_LABELS[promotionType]}
+                            {city ? ` · ${city}` : ""}
+                            {province ? `, ${province}` : ""}
+                          </p>
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-2 text-muted-foreground">
                         <span>Type:</span>
                         <span className="font-medium text-foreground">

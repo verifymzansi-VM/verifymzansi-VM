@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Building2,
@@ -150,6 +150,28 @@ function CreateBusinessContent() {
   const { toast } = useToast();
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
+
+  // Stable blob URLs for logo/cover previews — revoked on change
+  const logoPreviewUrl = useMemo(
+    () => (logoFile.length > 0 ? URL.createObjectURL(logoFile[0]) : null),
+    [logoFile]
+  );
+  const coverPreviewUrl = useMemo(
+    () => (coverFile.length > 0 ? URL.createObjectURL(coverFile[0]) : null),
+    [coverFile]
+  );
+  useEffect(
+    () => () => {
+      if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+    },
+    [logoPreviewUrl]
+  );
+  useEffect(
+    () => () => {
+      if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
+    },
+    [coverPreviewUrl]
+  );
 
   useEffect(() => {
     if (businessType === "mall_store") {
@@ -457,12 +479,47 @@ function CreateBusinessContent() {
                 .join(", ") || "No contact channels added yet"}
             </p>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Media</p>
             <p className="text-sm text-muted-foreground">
               {logoFile.length} logo, {coverFile.length} cover, {galleryFiles.length} gallery
               photos, {promoVideoFile.length} video
             </p>
+            {/* Mini visual preview of logo + cover placement */}
+            {(logoFile.length > 0 || coverFile.length > 0) && (
+              <div className="relative rounded-lg overflow-hidden border bg-muted">
+                <div className="aspect-[4/1] bg-gradient-to-r from-brand-blue/20 to-brand-blue/5 flex items-center justify-center">
+                  {coverPreviewUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={coverPreviewUrl}
+                      alt="Cover preview"
+                      className="w-full h-full object-cover"
+                      width={400}
+                      height={100}
+                    />
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground">No cover</span>
+                  )}
+                </div>
+                <div className="absolute bottom-1 left-2 h-8 w-8 rounded-md bg-white dark:bg-warm-900 p-0.5 shadow border overflow-hidden">
+                  {logoPreviewUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={logoPreviewUrl}
+                      alt="Logo preview"
+                      className="w-full h-full object-contain rounded"
+                      width={32}
+                      height={32}
+                    />
+                  ) : (
+                    <div className="w-full h-full rounded bg-muted flex items-center justify-center">
+                      <Store className="h-3 w-3 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -519,7 +576,7 @@ function CreateBusinessContent() {
                               key={option.value}
                               type="button"
                               role="radio"
-                              aria-checked={isSelected}
+                              aria-checked={isSelected ? "true" : "false"}
                               onClick={() => {
                                 setBusinessType(option.value);
                                 if (option.value !== "mall_store") {
@@ -912,20 +969,81 @@ function CreateBusinessContent() {
                 {step === 2 && (
                   <div className="space-y-5">
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                      <MediaUpload
-                        label="Business logo (optional)"
-                        maxFiles={1}
-                        files={logoFile}
-                        onChange={setLogoFile}
-                        accept="image/*"
-                      />
-                      <MediaUpload
-                        label="Cover photo (optional)"
-                        maxFiles={1}
-                        files={coverFile}
-                        onChange={setCoverFile}
-                        accept="image/*"
-                      />
+                      <div className="space-y-2">
+                        <MediaUpload
+                          label="Business logo (optional)"
+                          maxFiles={1}
+                          files={logoFile}
+                          onChange={setLogoFile}
+                          accept="image/*"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Square icon (96×96) shown beside your business name on cards and search
+                          results.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <MediaUpload
+                          label="Cover photo (optional)"
+                          maxFiles={1}
+                          files={coverFile}
+                          onChange={setCoverFile}
+                          accept="image/*"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Wide banner displayed at the top of your business page. Recommended size:
+                          1200×400.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Visual placement preview */}
+                    <div className="rounded-xl border border-dashed border-brand-blue/20 bg-brand-blue/5 p-4 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        How your logo and cover will appear:
+                      </p>
+                      <div className="relative rounded-lg overflow-hidden border bg-muted">
+                        {/* Cover preview */}
+                        <div className="aspect-[4/1] bg-gradient-to-r from-brand-blue/30 to-brand-blue/10 flex items-center justify-center">
+                          {coverPreviewUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={coverPreviewUrl}
+                              alt="Cover preview"
+                              className="w-full h-full object-cover"
+                              width={600}
+                              height={150}
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Cover photo area</span>
+                          )}
+                        </div>
+                        {/* Logo overlay */}
+                        <div className="absolute bottom-2 left-4 h-12 w-12 rounded-lg bg-white dark:bg-warm-900 p-1 shadow-md border overflow-hidden">
+                          {logoPreviewUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={logoPreviewUrl}
+                              alt="Logo preview"
+                              className="w-full h-full object-contain rounded-md"
+                              width={48}
+                              height={48}
+                            />
+                          ) : (
+                            <div className="w-full h-full rounded-md bg-muted flex items-center justify-center">
+                              <Store className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-4 text-[10px] text-muted-foreground">
+                        <span>
+                          ← <strong>Logo</strong> (small square icon)
+                        </span>
+                        <span>
+                          ↑ <strong>Cover</strong> (wide banner behind logo)
+                        </span>
+                      </div>
                     </div>
 
                     <div className="space-y-2">

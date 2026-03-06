@@ -510,7 +510,7 @@ export default function CreateListingPage() {
 
                         <button
                           type="button"
-                          aria-pressed={negotiable}
+                          aria-pressed={negotiable ? "true" : "false"}
                           onClick={() => setNegotiable((current) => !current)}
                           className={cn(
                             "rounded-md border px-3 py-2 text-sm font-medium transition-all",
@@ -623,7 +623,7 @@ export default function CreateListingPage() {
                             <button
                               key={option.id}
                               type="button"
-                              aria-pressed={isSelected}
+                              aria-pressed={isSelected ? "true" : "false"}
                               onClick={() => toggleContact(option.id)}
                               className={cn(
                                 "flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all",
@@ -659,6 +659,10 @@ export default function CreateListingPage() {
                         }}
                         accept="image/*"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Your first photo will be the main image on your listing card and search
+                        results.
+                      </p>
                       {fieldErrors.images && (
                         <p className="text-xs text-destructive">{fieldErrors.images}</p>
                       )}

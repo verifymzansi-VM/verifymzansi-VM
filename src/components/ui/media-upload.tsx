@@ -199,6 +199,11 @@ export function MediaUpload({
                   height={200}
                 />
               )}
+              {idx === 0 && previews.length > 1 && (
+                <span className="absolute bottom-1 left-1 rounded bg-brand-green/90 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm">
+                  Main
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => removeFile(idx)}

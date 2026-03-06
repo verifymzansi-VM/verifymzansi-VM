@@ -101,7 +101,7 @@ export const ListingCard = memo(function ListingCard({
   const listingIsNew = isNew(createdAt);
 
   return (
-    <Link href={`/mzansi-market/${id}`} className="group block">
+    <Link href={`/listing/${id}`} className="group block">
       <Card
         className="overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-brand-green/30"
         trustLevel={sellerTrustLevel}

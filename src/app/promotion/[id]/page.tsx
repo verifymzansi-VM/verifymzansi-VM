@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Calendar, Eye, Tag, Phone, MessageCircle, Building2 } from "lucide-react";
+import { MapPin, Calendar, Eye, Building2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { PromotionContactActions } from "./promotion-contact-actions";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
@@ -61,7 +61,9 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
   // Fetch seller profile (maybeSingle — seller account may have been deleted)
   const { data: seller } = await supabase
     .from("seller_profiles")
-    .select("display_name, seller_verification_status, location_province, location_city, strikes")
+    .select(
+      "display_name, seller_verification_status, phone, masked_phone_public, location_province, location_city, strikes"
+    )
     .eq("user_id", promotion.seller_id)
     .maybeSingle();
 
@@ -81,6 +83,8 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
     : null;
 
   const photos = (promotion.photos || []) as string[];
+  const videos = (promotion.videos || []) as string[];
+  const contactMethods = (promotion.contact_methods || []) as string[];
   const now = new Date();
   const isBoosted = promotion.boost_until ? new Date(promotion.boost_until) > now : false;
   const isFeatured = promotion.featured_until ? new Date(promotion.featured_until) > now : false;
@@ -127,12 +131,12 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
           <article className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: Photos + Description */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Photo gallery */}
-              {photos.length > 0 && (
+              {/* Photo & Video gallery */}
+              {(photos.length > 0 || videos.length > 0) && (
                 <div className="grid grid-cols-1 gap-2">
                   <div className="relative aspect-[2/1] rounded-lg overflow-hidden bg-warm-100 dark:bg-warm-800">
                     <Image
-                      src={normalizeMediaUrl(photos[0])}
+                      src={normalizeMediaUrl(photos[0] || "/images/placeholder.png")}
                       alt={promotion.title}
                       fill
                       className="object-cover"
@@ -163,6 +167,27 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
                             className="object-cover"
                             sizes="(max-width: 640px) 25vw, 16vw"
                           />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {videos.length > 0 && (
+                    <div className="grid grid-cols-1 gap-2">
+                      {videos.map((videoUrl: string, i: number) => (
+                        <div
+                          key={i}
+                          className="relative aspect-video rounded-lg overflow-hidden bg-black"
+                        >
+                          <video
+                            src={normalizeMediaUrl(videoUrl)}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            poster={photos[0] ? normalizeMediaUrl(photos[0]) : undefined}
+                            className="w-full h-full object-contain"
+                          >
+                            <track kind="captions" />
+                          </video>
                         </div>
                       ))}
                     </div>
@@ -274,27 +299,16 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
 
                   <Separator />
 
-                  {/* Contact buttons */}
-                  <div className="space-y-2">
-                    {(promotion.contact_methods as string[])?.includes("call") && (
-                      <Button variant="outline" className="w-full gap-2">
-                        <Phone className="h-4 w-4" />
-                        Call Seller
-                      </Button>
-                    )}
-                    {(promotion.contact_methods as string[])?.includes("whatsapp") && (
-                      <Button variant="outline" className="w-full gap-2">
-                        <MessageCircle className="h-4 w-4" />
-                        WhatsApp
-                      </Button>
-                    )}
-                    {(promotion.contact_methods as string[])?.includes("form") && (
-                      <Button className="w-full gap-2">
-                        <Tag className="h-4 w-4" />
-                        Send Enquiry
-                      </Button>
-                    )}
-                  </div>
+                  <PromotionContactActions
+                    promotionId={promotion.id}
+                    contactMethods={contactMethods}
+                    sellerPhone={
+                      contactMethods.includes("call") ? (seller?.masked_phone_public ?? null) : null
+                    }
+                    sellerWhatsapp={
+                      contactMethods.includes("whatsapp") ? (seller?.phone ?? null) : null
+                    }
+                  />
                 </CardContent>
               </Card>
 
