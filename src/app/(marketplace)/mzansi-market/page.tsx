@@ -4,9 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
 import { PageHeader } from "@/components/layout/page-header";
 import { TrustStrip } from "@/components/layout/trust-strip";
-import { ListingFilters } from "@/components/listings/listing-filters";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
-import { CategoryStrip } from "@/components/listings/category-strip";
 import { ListingGridHeader } from "@/components/listings/listing-grid-header";
 import { MzansiMarketGrid } from "./grid";
 import { MarketplaceUrlFilterSync } from "./url-filter-sync";
@@ -82,9 +80,6 @@ export default async function MzansiMarketPage() {
       <div className="container-page py-6 space-y-4">
         <PageHeader title="Browse Listings" breadcrumbs={[{ label: "Mzansi Market" }]} />
 
-        {/* Category pills */}
-        <CategoryStrip />
-
         {/* Two-column layout */}
         <div className="flex gap-6">
           {/* Desktop sidebar */}
@@ -94,11 +89,6 @@ export default async function MzansiMarketPage() {
 
           {/* Main content area */}
           <div className="flex-1 min-w-0">
-            {/* Mobile: search + filter dialog */}
-            <div className="lg:hidden mb-4">
-              <ListingFilters />
-            </div>
-
             {/* Toolbar: location + sort + active chips */}
             <ListingGridHeader />
 
