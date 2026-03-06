@@ -177,4 +177,57 @@ describe("proxy middleware — authenticated routing", () => {
     const res = await proxy(createMockRequest("/login"));
     expect(res.status).toBe(200);
   });
+
+  it("redirects posting pages to /dashboard when seller profile lookup fails", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          is_anonymous: false,
+          app_metadata: { role: "seller" },
+        },
+      },
+    });
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: "upstream timeout", code: "ETIMEDOUT" },
+          }),
+        }),
+      }),
+    });
+
+    const res = await proxy(createMockRequest("/post/create"));
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/dashboard");
+  });
+
+  it("returns 503 for posting API routes when seller profile lookup fails", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          is_anonymous: false,
+          app_metadata: { role: "seller" },
+        },
+      },
+    });
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: "upstream timeout", code: "ETIMEDOUT" },
+          }),
+        }),
+      }),
+    });
+
+    const res = await proxy(createMockRequest("/api/post/create"));
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toMatch(/posting eligibility service unavailable/i);
+  });
 });

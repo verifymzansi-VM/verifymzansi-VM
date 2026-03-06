@@ -1,6 +1,9 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { createLogger } from "@/lib/utils/logger";
+
+const logger = createLogger("Middleware");
 
 // ── Security helpers ────────────────────────────────────────
 
@@ -273,11 +276,29 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     pathname.startsWith("/api/post/edit")
   ) {
     if (user) {
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from("seller_profiles")
         .select("seller_verification_status, account_status, suspended_until")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
+
+      if (profileError) {
+        logger.error("Seller profile lookup failed during posting gate", {
+          path: pathname,
+          userId: user.id,
+          error: profileError.message,
+          code: profileError.code,
+        });
+
+        if (isApiRoute) {
+          return NextResponse.json(
+            { error: "Posting eligibility service unavailable" },
+            { status: 503 }
+          );
+        }
+
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
 
       if (profile?.account_status === "banned") {
         if (isApiRoute) return NextResponse.json({ error: "Banned" }, { status: 403 });
