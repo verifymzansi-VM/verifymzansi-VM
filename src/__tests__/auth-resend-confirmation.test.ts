@@ -25,6 +25,7 @@ function createRequest(body: unknown): NextRequest {
   return {
     method: "POST",
     json: async () => body,
+    url: "http://localhost:3000/api/auth/resend-confirmation",
     headers: { get: vi.fn().mockReturnValue(null) },
     nextUrl: new URL("http://localhost:3000/api/auth/resend-confirmation"),
   } as unknown as NextRequest;
@@ -75,6 +76,9 @@ describe("POST /api/auth/resend-confirmation", () => {
     expect(mockResend).toHaveBeenCalledWith({
       type: "signup",
       email: "user@example.com",
+      options: {
+        emailRedirectTo: "http://localhost:3000/auth/callback?next=/login?confirmed=true",
+      },
     });
   });
 

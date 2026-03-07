@@ -69,10 +69,12 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createClient();
+  const callbackUrl = new URL("/auth/callback?next=/login?confirmed=true", request.url);
   const { data: signUpData, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
+      emailRedirectTo: callbackUrl.toString(),
       data: {
         display_name: parsed.data.displayName,
         phone: parsed.data.phone,

@@ -36,9 +36,13 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createClient();
+  const callbackUrl = new URL("/auth/callback?next=/login?confirmed=true", request.url);
   const { error } = await supabase.auth.resend({
     type: "signup",
     email: parsed.data.email,
+    options: {
+      emailRedirectTo: callbackUrl.toString(),
+    },
   });
 
   if (error) {

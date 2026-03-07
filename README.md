@@ -64,6 +64,19 @@ own deterministic app instance on a dedicated port.
 - Production-only requirements such as HTTPS app URLs and a live Africa's
   Talking sender ID are warnings, not failures
 
+### Supabase auth redirect URLs
+
+Add the auth callback route to Supabase Auth redirect allow-lists for every
+origin you use:
+
+- `http://localhost:3000/auth/callback`
+- `https://verifymzansi.com/auth/callback`
+- Any preview or staging origin, for example
+  `https://your-preview-domain/auth/callback`
+
+Without that allow-list entry, signup confirmation emails may fall back to the
+site root instead of the app callback handler.
+
 ### Playwright / CI smoke
 
 - Playwright does not depend on your local `.env.local`

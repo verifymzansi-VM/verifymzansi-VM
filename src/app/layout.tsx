@@ -92,14 +92,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en-ZA" suppressHydrationWarning>
       <body className={`${plusJakarta.variable} ${dmSans.variable} min-h-screen antialiased`}>
-        {/* Polyfill __name for Turbopack keepNames output in inline scripts */}
-        <script
-          nonce={nonce}
-          dangerouslySetInnerHTML={{
-            __html:
-              'if(typeof __name==="undefined")var __name=function(f,n){Object.defineProperty(f,"name",{value:n,configurable:!0});return f};',
-          }}
-        />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"

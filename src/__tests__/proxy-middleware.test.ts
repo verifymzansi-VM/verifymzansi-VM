@@ -63,6 +63,17 @@ describe("proxy middleware — missing Supabase env", () => {
     expect(res.status).toBe(200);
   });
 
+  it("redirects legacy root auth code links to the callback route", async () => {
+    const res = await proxy(createMockRequest("/?code=legacy-code&type=signup"));
+    expect(res.status).toBe(307);
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/auth/callback");
+    expect(location.searchParams.get("code")).toBe("legacy-code");
+    expect(location.searchParams.get("type")).toBe("signup");
+    expect(location.searchParams.get("next")).toBe("/login?confirmed=true");
+  });
+
   it("blocks /billing when Supabase not configured", async () => {
     const res = await proxy(createMockRequest("/billing/checkout"));
     expect(res.status).toBe(307);
@@ -161,6 +172,16 @@ describe("proxy middleware — authenticated routing", () => {
     const res = await proxy(createMockRequest("/login"));
     expect(res.status).toBe(307);
     expect(new URL(res.headers.get("location")!).pathname).toBe("/dashboard");
+  });
+
+  it("allows the public home page without redirecting", async () => {
+    const res = await proxy(createMockRequest("/"));
+    expect(res.status).toBe(200);
+  });
+
+  it("does not redirect the auth callback route again", async () => {
+    const res = await proxy(createMockRequest("/auth/callback?code=legacy-code&type=signup"));
+    expect(res.status).toBe(200);
   });
 
   it("does NOT redirect anonymous users from /login", async () => {

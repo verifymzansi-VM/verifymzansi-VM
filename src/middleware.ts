@@ -94,6 +94,22 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
 
+  // Recover legacy signup links that land on "/?code=..." instead of the
+  // dedicated auth callback route. Keep this scoped to the root path so
+  // unrelated "code" params on other pages are not hijacked.
+  if (request.method === "GET" && pathname === "/" && request.nextUrl.searchParams.has("code")) {
+    const callbackUrl = new URL("/auth/callback", request.url);
+    request.nextUrl.searchParams.forEach((value, key) => {
+      callbackUrl.searchParams.set(key, value);
+    });
+
+    if (!callbackUrl.searchParams.has("next")) {
+      callbackUrl.searchParams.set("next", "/login?confirmed=true");
+    }
+
+    return NextResponse.redirect(callbackUrl);
+  }
+
   // -- Guard: Supabase not configured ---------------------------------------
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     const protectedPrefixes = [

@@ -24,6 +24,7 @@ function createRequest(body: unknown): NextRequest {
   return {
     method: "POST",
     json: async () => body,
+    url: "http://localhost:3000/api/auth/register",
     headers: { get: vi.fn().mockReturnValue(null) },
     nextUrl: new URL("http://localhost:3000/api/auth/register"),
   } as unknown as NextRequest;
@@ -75,7 +76,17 @@ describe("POST /api/auth/register", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(mockSignUp).toHaveBeenCalledWith(expect.objectContaining({ email: "user@example.com" }));
+    expect(mockSignUp).toHaveBeenCalledWith({
+      email: "user@example.com",
+      password: "StrongP@ss1",
+      options: {
+        emailRedirectTo: "http://localhost:3000/auth/callback?next=/login?confirmed=true",
+        data: {
+          display_name: "Test User",
+          phone: "+27821234567",
+        },
+      },
+    });
   });
 
   it("validates Turnstile when configured", async () => {
