@@ -149,65 +149,67 @@ function InlinePlanCard({
         </div>
       )}
 
-      <CardContent className="p-5 pt-6 space-y-4">
+      <CardContent className="p-3 pt-4 space-y-2">
         {/* Plan name + price */}
-        <div className="text-center space-y-1">
-          <h3 className="font-display text-lg font-bold capitalize">{plan.tier}</h3>
+        <div className="text-center space-y-0.5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {plan.tier}
+          </h3>
           <div>
-            <span className="font-display text-3xl font-bold">R{priceRands}</span>
-            <span className="text-sm text-muted-foreground">/ 30 days</span>
+            <span className="font-display text-2xl font-bold">R{priceRands}</span>
+            <span className="text-xs text-muted-foreground">/ 30 days</span>
           </div>
         </div>
 
         {/* Feature list */}
-        <ul className="space-y-2 text-sm">
-          <li className="flex items-center gap-2">
-            <Check className="h-4 w-4 text-brand-green flex-shrink-0" />
+        <ul className="space-y-1 text-xs">
+          <li className="flex items-center gap-1.5">
+            <Check className="h-3.5 w-3.5 text-brand-green flex-shrink-0" />
             <span>
               <strong>{maxItems === -1 ? "Unlimited" : maxItems}</strong> {itemLabel}
             </span>
           </li>
-          <li className="flex items-center gap-2">
-            <Camera className="h-4 w-4 text-brand-green flex-shrink-0" />
+          <li className="flex items-center gap-1.5">
+            <Camera className="h-3.5 w-3.5 text-brand-green flex-shrink-0" />
             <span>
               <strong>{plan.features.maxPhotos}</strong> photos per post
             </span>
           </li>
-          <li className="flex items-center gap-2">
+          <li className="flex items-center gap-1.5">
             {plan.features.videoAllowed ? (
-              <Video className="h-4 w-4 text-brand-green flex-shrink-0" />
+              <Video className="h-3.5 w-3.5 text-brand-green flex-shrink-0" />
             ) : (
-              <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+              <X className="h-3.5 w-3.5 text-muted-foreground/40 flex-shrink-0" />
             )}
             <span className={plan.features.videoAllowed ? "" : "text-muted-foreground/60"}>
               Video uploads
             </span>
           </li>
-          <li className="flex items-center gap-2">
+          <li className="flex items-center gap-1.5">
             {plan.features.boostAllowed ? (
-              <Zap className="h-4 w-4 text-brand-green flex-shrink-0" />
+              <Zap className="h-3.5 w-3.5 text-brand-green flex-shrink-0" />
             ) : (
-              <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+              <X className="h-3.5 w-3.5 text-muted-foreground/40 flex-shrink-0" />
             )}
             <span className={plan.features.boostAllowed ? "" : "text-muted-foreground/60"}>
               Boost listings
             </span>
           </li>
-          <li className="flex items-center gap-2">
+          <li className="flex items-center gap-1.5">
             {plan.features.featuredAllowed ? (
-              <Star className="h-4 w-4 text-brand-green flex-shrink-0" />
+              <Star className="h-3.5 w-3.5 text-brand-green flex-shrink-0" />
             ) : (
-              <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+              <X className="h-3.5 w-3.5 text-muted-foreground/40 flex-shrink-0" />
             )}
             <span className={plan.features.featuredAllowed ? "" : "text-muted-foreground/60"}>
               Featured placement
             </span>
           </li>
-          <li className="flex items-center gap-2">
+          <li className="flex items-center gap-1.5">
             {plan.features.urgentAllowed ? (
-              <Tag className="h-4 w-4 text-brand-green flex-shrink-0" />
+              <Tag className="h-3.5 w-3.5 text-brand-green flex-shrink-0" />
             ) : (
-              <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+              <X className="h-3.5 w-3.5 text-muted-foreground/40 flex-shrink-0" />
             )}
             <span className={plan.features.urgentAllowed ? "" : "text-muted-foreground/60"}>
               Urgent badge
@@ -497,19 +499,19 @@ export function PlanGate({ area, children }: PlanGateProps) {
   // ── No plan and trial expired → must subscribe ──
   if (planInfo.tier === "free" && !planInfo.isTrial) {
     return (
-      <div className="space-y-6">
-        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-xl p-6 text-white">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="h-5 w-5" />
-            <h2 className="font-display text-xl font-bold">Choose Your Plan to Start Posting</h2>
+      <div className="space-y-3">
+        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-lg p-4 text-white">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="h-4 w-4" />
+            <h2 className="font-display text-base font-bold">Choose Your Plan to Start Posting</h2>
           </div>
-          <p className="text-white/80 text-sm max-w-xl">
+          <p className="text-white/80 text-xs max-w-xl">
             You&apos;ve used your free post for {AREA_LABELS[area]}. Select a plan below to continue
-            posting. Your plan determines how many photos, videos, and listings you can use.
+            posting.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {areaPlans.map((plan) => (
             <InlinePlanCard
               key={`${plan.area}-${plan.tier}`}
@@ -565,7 +567,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
 
         {upgradePlans.length > 0 && (
           <div
-            className={`grid grid-cols-1 ${upgradePlans.length >= 2 ? "md:grid-cols-2" : ""} ${upgradePlans.length >= 3 ? "lg:grid-cols-3" : ""} ${upgradePlans.length >= 4 ? "xl:grid-cols-4" : ""} gap-5`}
+            className={`grid grid-cols-1 ${upgradePlans.length >= 2 ? "md:grid-cols-2" : ""} ${upgradePlans.length >= 3 ? "lg:grid-cols-3" : ""} ${upgradePlans.length >= 4 ? "xl:grid-cols-4" : ""} gap-3`}
           >
             {upgradePlans.map((plan) => (
               <InlinePlanCard
@@ -694,42 +696,37 @@ function PlanPickerWithTrial({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Header + Free Post Combined */}
       {planInfo.isTrial ? (
-        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-            <Sparkles className="w-32 h-32" />
-          </div>
-          <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-6">
-            <div className="flex-1 space-y-3">
+        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-lg p-4 text-white shadow-md">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex-1 space-y-1">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-amber-300" />
-                <h2 className="font-display text-xl font-bold">Choose How You Want to Post</h2>
+                <Sparkles className="h-4 w-4 text-amber-300" />
+                <h2 className="font-display text-base font-bold">Choose How You Want to Post</h2>
               </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className="text-xs font-normal border-white/30 text-white bg-white/10"
-                  >
-                    {planInfo.postingLimitBypassEnabled ? "Testing Mode" : "One-Time Offer"}
-                  </Badge>
-                  <p className="font-medium text-amber-200">
-                    {planInfo.postingLimitBypassEnabled
-                      ? `Posting limits removed for testing — ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                      : `1 Free Post Included — ${FREE_POST_CONFIG.durationDays} days visibility`}
-                  </p>
-                </div>
-                <p className="text-white/80 text-sm max-w-xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="text-xs font-normal border-white/30 text-white bg-white/10"
+                >
+                  {planInfo.postingLimitBypassEnabled ? "Testing Mode" : "One-Time Offer"}
+                </Badge>
+                <p className="text-xs text-amber-200">
                   {planInfo.postingLimitBypassEnabled
-                    ? `Posting-count limits are disabled for testing. Each post still uses the free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
-                    : `Post once for free. ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video • ${FREE_POST_CONFIG.durationDays} days • This offer can only be used once per area`}
+                    ? `Posting limits removed for testing — ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
+                    : `1 Free Post Included — ${FREE_POST_CONFIG.durationDays} days visibility`}
                 </p>
               </div>
+              <p className="text-white/70 text-xs">
+                {planInfo.postingLimitBypassEnabled
+                  ? `Each post still uses free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
+                  : `Post once for free. ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video • ${FREE_POST_CONFIG.durationDays} days • Once per area`}
+              </p>
             </div>
             <Button
-              className="gap-2 bg-amber-500 hover:bg-amber-600 text-white shadow-sm border-0 whitespace-nowrap mt-2 sm:mt-0"
+              className="gap-2 bg-amber-500 hover:bg-amber-600 text-white shadow-sm border-0 whitespace-nowrap"
               onClick={() => setShowForm(true)}
             >
               <ArrowRight className="h-4 w-4" />
@@ -738,27 +735,27 @@ function PlanPickerWithTrial({
           </div>
         </div>
       ) : (
-        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-xl p-6 text-white shadow-md">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="h-5 w-5" />
-            <h2 className="font-display text-xl font-bold">Choose How You Want to Post</h2>
+        <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-lg p-4 text-white shadow-md">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            <h2 className="font-display text-base font-bold">Choose How You Want to Post</h2>
           </div>
-          <p className="text-white/80 text-sm max-w-xl">
+          <p className="text-white/80 text-xs mt-1">
             Subscribe to a 30-day plan for the best value on {AREA_LABELS[area]}.
           </p>
         </div>
       )}
 
       {/* ── Section 2: Monthly Plans ─── */}
-      <div className="space-y-4">
-        <h3 className="font-display text-lg font-bold flex items-center gap-2">
-          <Crown className="h-5 w-5 text-brand-gold" />
+      <div className="space-y-2">
+        <h3 className="font-display text-sm font-bold flex items-center gap-2">
+          <Crown className="h-4 w-4 text-brand-gold" />
           Add a Payment Plan
           <Badge variant="outline" className="text-xs font-normal">
             Best Value
           </Badge>
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {areaPlans.map((plan) => (
             <InlinePlanCard
               key={`${plan.area}-${plan.tier}`}
@@ -772,7 +769,7 @@ function PlanPickerWithTrial({
         </div>
       </div>
 
-      <p className="text-center text-xs text-muted-foreground pt-4">
+      <p className="text-center text-xs text-muted-foreground">
         All plans include verification badge • Cancel anytime •{" "}
         <Link href="/billing" className="text-brand-green underline">
           View full plan details
