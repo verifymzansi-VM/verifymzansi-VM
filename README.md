@@ -70,6 +70,10 @@ own deterministic app instance on a dedicated port.
 confirmation and password reset email links. Set it per environment to the real
 app URL users can reach.
 
+If users open confirmation emails on a phone, `localhost` will always fail
+because it points to the phone itself, not your dev machine. Use your public
+domain for production email flows.
+
 Add the auth callback route to Supabase Auth redirect allow-lists for every
 origin you use:
 
@@ -77,6 +81,12 @@ origin you use:
 - `https://verifymzansi.com/auth/callback`
 - Any preview or staging origin, for example
   `https://your-preview-domain/auth/callback`
+
+For the production environment, make sure both of these are aligned:
+
+- `NEXT_PUBLIC_APP_URL=https://your-public-domain`
+- Supabase Auth `site_url` and redirect allow-list include
+  `https://your-public-domain/auth/callback`
 
 Without that allow-list entry, signup confirmation emails may fall back to the
 site root with `?code=...` instead of the app callback handler.
