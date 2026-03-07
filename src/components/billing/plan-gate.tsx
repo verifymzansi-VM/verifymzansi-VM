@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { createLogger } from "@/lib/utils/logger";
+import { isPostingLimitBypassEnabled } from "../../lib/utils/posting-limit-bypass";
 
 const logger = createLogger("PlanGate");
 import {
@@ -44,6 +45,7 @@ interface PlanInfo {
   isTrial: boolean;
   trialDaysLeft: number;
   freePostAvailable: boolean;
+  postingLimitBypassEnabled: boolean;
   currentCount: number;
   maxAllowed: number;
   maxPhotos: number;
@@ -286,6 +288,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           .maybeSingle();
 
         const tier = (entitlement?.tier as PlanTier) || null;
+        const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
         // Check if the user has already used their one-time free post for this area
         const { data: freePostRow } = await supabase
@@ -296,8 +299,8 @@ export function PlanGate({ area, children }: PlanGateProps) {
           .maybeSingle();
 
         const freePostUsed = !!freePostRow;
-        // Free post is available if no paid entitlement AND not yet used
-        const freePostAvailable = !entitlement && !freePostUsed;
+        // In testing mode, keep the free-post flow open and remove the posting count cap.
+        const freePostAvailable = !entitlement && (postingLimitBypassEnabled || !freePostUsed);
 
         // Legacy trial compat: treat free-post-available as "trial" for rendering
         const isTrial = freePostAvailable;
@@ -317,33 +320,44 @@ export function PlanGate({ area, children }: PlanGateProps) {
         const effectiveTier: PlanTier = tier || TRIAL_CONFIG.tier;
         const ent = getEntitlements(effectiveTier, area);
 
-        // For free-post users, use free-post-specific limits
-        const maxAllowed = freePostAvailable
-          ? FREE_POST_CONFIG.maxAllowed
-          : tier
-            ? ent.maxAllowed
-            : 0;
+        // Testing mode keeps free-tier media limits but removes posting-count caps.
+        const maxAllowed = postingLimitBypassEnabled
+          ? -1
+          : freePostAvailable
+            ? FREE_POST_CONFIG.maxAllowed
+            : tier
+              ? ent.maxAllowed
+              : 0;
         const maxPhotos = freePostAvailable
           ? FREE_POST_CONFIG.maxPhotos
           : tier
             ? ent.maxPhotos
             : FREE_POST_CONFIG.maxPhotos;
-        const maxVideos = freePostAvailable ? FREE_POST_CONFIG.maxVideos : tier ? ent.maxVideos : 0;
+        const maxVideos = postingLimitBypassEnabled
+          ? FREE_POST_CONFIG.maxVideos
+          : freePostAvailable
+            ? FREE_POST_CONFIG.maxVideos
+            : tier
+              ? ent.maxVideos
+              : 0;
 
         setPlanInfo({
           tier: tier || "free",
           isTrial,
           trialDaysLeft,
           freePostAvailable,
+          postingLimitBypassEnabled,
           currentCount,
           maxAllowed,
           maxPhotos,
           maxVideos,
-          videoAllowed: freePostAvailable
+          videoAllowed: postingLimitBypassEnabled
             ? FREE_POST_CONFIG.videoAllowed
-            : tier
-              ? ent.videoAllowed
-              : false,
+            : freePostAvailable
+              ? FREE_POST_CONFIG.videoAllowed
+              : tier
+                ? ent.videoAllowed
+                : false,
         });
       } catch {
         setError("failed");
@@ -641,6 +655,10 @@ function PlanPickerWithTrial({
   children: ReactNode;
 }) {
   const [showForm, setShowForm] = useState(false);
+  const usageText =
+    planInfo.maxAllowed === -1
+      ? "Unlimited posts"
+      : `${planInfo.currentCount}/${planInfo.maxAllowed} ${AREA_ITEM_LABELS[area]} used`;
 
   if (showForm) {
     return (
@@ -652,8 +670,9 @@ function PlanPickerWithTrial({
           <div className="flex items-center gap-1.5 text-sm">
             <Sparkles className="h-3.5 w-3.5 text-amber-500" />
             <span className="text-amber-600 dark:text-amber-400 font-medium">
-              Free Post — {FREE_POST_CONFIG.durationDays} days • {FREE_POST_CONFIG.maxPhotos} photos
-              • {FREE_POST_CONFIG.maxVideos} video
+              {planInfo.postingLimitBypassEnabled
+                ? `Testing Mode — Unlimited posts • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
+                : `Free Post — ${FREE_POST_CONFIG.durationDays} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
             </span>
           </div>
 
@@ -665,9 +684,7 @@ function PlanPickerWithTrial({
             <span className="flex items-center gap-1 text-brand-green">
               <Video className="h-3.5 w-3.5" />1 video
             </span>
-            <span>
-              {planInfo.currentCount}/{planInfo.maxAllowed} {AREA_ITEM_LABELS[area]} used
-            </span>
+            <span>{usageText}</span>
           </div>
         </div>
 
@@ -696,16 +713,18 @@ function PlanPickerWithTrial({
                     variant="outline"
                     className="text-xs font-normal border-white/30 text-white bg-white/10"
                   >
-                    One-Time Offer
+                    {planInfo.postingLimitBypassEnabled ? "Testing Mode" : "One-Time Offer"}
                   </Badge>
                   <p className="font-medium text-amber-200">
-                    1 Free Post Included — {FREE_POST_CONFIG.durationDays} days visibility
+                    {planInfo.postingLimitBypassEnabled
+                      ? `Posting limits removed for testing — ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
+                      : `1 Free Post Included — ${FREE_POST_CONFIG.durationDays} days visibility`}
                   </p>
                 </div>
                 <p className="text-white/80 text-sm max-w-xl">
-                  Post once for free. {FREE_POST_CONFIG.maxPhotos} photos •{" "}
-                  {FREE_POST_CONFIG.maxVideos} video • {FREE_POST_CONFIG.durationDays} days • This
-                  offer can only be used once per area
+                  {planInfo.postingLimitBypassEnabled
+                    ? `Posting-count limits are disabled for testing. Each post still uses the free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
+                    : `Post once for free. ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video • ${FREE_POST_CONFIG.durationDays} days • This offer can only be used once per area`}
                 </p>
               </div>
             </div>
@@ -714,7 +733,7 @@ function PlanPickerWithTrial({
               onClick={() => setShowForm(true)}
             >
               <ArrowRight className="h-4 w-4" />
-              Use Your Free Post
+              {planInfo.postingLimitBypassEnabled ? "Start Posting" : "Use Your Free Post"}
             </Button>
           </div>
         </div>
@@ -823,6 +842,7 @@ export function usePlanVideoAllowed(area: MarketplaceArea): boolean {
           data: { user },
         } = await supabase.auth.getUser();
         if (!user) return;
+        const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
         // Check for active entitlement for this area
         const { data: entitlement } = await supabase
@@ -840,6 +860,8 @@ export function usePlanVideoAllowed(area: MarketplaceArea): boolean {
         if (tier) {
           const ent = getEntitlements(tier, area);
           setVideoAllowed(ent.videoAllowed);
+        } else if (postingLimitBypassEnabled) {
+          setVideoAllowed(FREE_POST_CONFIG.videoAllowed);
         } else {
           // Check if free post is still available (not yet used)
           const { data: freePostRow } = await supabase
@@ -877,6 +899,7 @@ export function usePlanMaxVideos(area: MarketplaceArea): number {
           data: { user },
         } = await supabase.auth.getUser();
         if (!user) return;
+        const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
         const { data: entitlement } = await supabase
           .from("entitlements")
@@ -893,6 +916,8 @@ export function usePlanMaxVideos(area: MarketplaceArea): number {
         if (tier) {
           const ent = getEntitlements(tier, area);
           setMaxVideos(ent.maxVideos);
+        } else if (postingLimitBypassEnabled) {
+          setMaxVideos(FREE_POST_CONFIG.maxVideos);
         } else {
           const { data: freePostRow } = await supabase
             .from("free_posts_used")

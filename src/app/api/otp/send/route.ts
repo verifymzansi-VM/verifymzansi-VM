@@ -11,6 +11,23 @@ const log = createLogger("OTP");
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
 const MAX_SENDS_PER_HOUR = 5;
 
+/** Fixed OTP code used for whitelisted test phone numbers. */
+const TEST_OTP_CODE = "999999";
+
+/**
+ * Returns the set of whitelisted test phone numbers from TEST_PHONE_NUMBERS env var.
+ * Phones should be comma-separated E.164 SA numbers, e.g. "+27600000001,+27600000002".
+ */
+function getTestPhones(): Set<string> {
+  const raw = process.env.TEST_PHONE_NUMBERS ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean)
+  );
+}
+
 /** Convert a Uint8Array to hex string */
 function toHex(buf: Uint8Array): string {
   return Array.from(buf)
@@ -126,6 +143,34 @@ export async function POST(request: NextRequest) {
     }
 
     const phone = normalizeSaPhone(parsed.data);
+
+    // ── Magic test phone bypass ──
+    // Whitelisted numbers skip SMS and always accept TEST_OTP_CODE ("999999").
+    // Safe in production: only pre-registered test numbers are affected.
+    if (getTestPhones().has(phone)) {
+      const supabaseTest = await createClient();
+      const {
+        data: { user: testUser },
+      } = await supabaseTest.auth.getUser();
+
+      if (!testUser) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      const adminSupabaseTest = createAdminClient();
+      const testOtpHash = await hashOtp(TEST_OTP_CODE);
+      const testExpiresAt = new Date(Date.now() + OTP_EXPIRY_MS).toISOString();
+
+      await adminSupabaseTest.from("otp_challenges").insert({
+        user_id: testUser.id,
+        phone,
+        otp_hash: testOtpHash,
+        expires_at: testExpiresAt,
+      });
+
+      log.info("Test phone bypass: OTP challenge stored, SMS skipped", { phone });
+      return NextResponse.json({ success: true, testOtp: TEST_OTP_CODE });
+    }
 
     const supabase = await createClient();
     const {

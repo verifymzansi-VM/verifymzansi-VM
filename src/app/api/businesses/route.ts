@@ -8,6 +8,7 @@ import { toFieldErrorMap } from "@/lib/validations/zod-errors";
 import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
 const log = createLogger("BusinessesCRUD");
@@ -85,8 +86,9 @@ export async function POST(request: NextRequest) {
 
     const hasPaidPlan = !!activeEntitlement;
     const tier = (activeEntitlement?.tier as string) || null;
+    const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
-    if (!hasPaidPlan) {
+    if (!hasPaidPlan && !postingLimitBypassEnabled) {
       const { data: freePostRow } = await admin
         .from("free_posts_used")
         .select("id")
@@ -106,7 +108,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (hasPaidPlan && tier) {
+    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       const { count } = await admin
         .from("businesses")
         .select("id", { count: "exact", head: true })
@@ -187,7 +189,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create business" }, { status: 500 });
     }
 
-    if (!hasPaidPlan) {
+    if (!hasPaidPlan && !postingLimitBypassEnabled) {
       const { error: freePostError } = await admin
         .from("free_posts_used")
         .upsert({ user_id: user.id, area: AREA }, { onConflict: "user_id,area" });

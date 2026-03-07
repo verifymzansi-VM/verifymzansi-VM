@@ -7,6 +7,7 @@ import { promotionSchema } from "@/lib/validations/promotion";
 import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
 import {
   type MarketplaceArea,
   type SellerVerificationStatus,
@@ -114,9 +115,10 @@ export async function POST(request: NextRequest) {
 
     const hasPaidPlan = !!activeEntitlement;
     const tier = (activeEntitlement?.tier as string) || null;
+    const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
     // Check free post availability for unpaid users
-    if (!hasPaidPlan) {
+    if (!hasPaidPlan && !postingLimitBypassEnabled) {
       const { data: freePostRow } = await admin
         .from("free_posts_used")
         .select("id")
@@ -136,7 +138,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (hasPaidPlan && tier) {
+    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       // Paid plan — check promotion count against plan limits
       const { count } = await admin
         .from("promotions")
@@ -242,7 +244,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Mark free post as used if no paid entitlement ────────
-    if (!hasPaidPlan) {
+    if (!hasPaidPlan && !postingLimitBypassEnabled) {
       const { error: freePostError } = await admin
         .from("free_posts_used")
         .upsert({ user_id: user.id, area: AREA }, { onConflict: "user_id,area" });

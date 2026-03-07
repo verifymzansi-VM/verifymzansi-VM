@@ -77,6 +77,7 @@ export default function VerificationPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
+  const [testOtpHint, setTestOtpHint] = useState<string | null>(null);
 
   const [idNumber, setIdNumber] = useState("");
   const [idFile, setIdFile] = useState<File | null>(null);
@@ -372,6 +373,7 @@ export default function VerificationPage() {
 
     setIsLoading(true);
     setDevOtpHint(null);
+    setTestOtpHint(null);
 
     try {
       const res = await fetch("/api/otp/send", {
@@ -389,6 +391,13 @@ export default function VerificationPage() {
       if (devOtp && process.env.NODE_ENV === "development") {
         setOtp(devOtp);
         setDevOtpHint(devOtp);
+      }
+
+      // Test phone number bypass — works on live site for whitelisted numbers
+      const testOtp = typeof payload.testOtp === "string" ? payload.testOtp : null;
+      if (testOtp) {
+        setOtp(testOtp);
+        setTestOtpHint(testOtp);
       }
 
       setOtpSent(true);
@@ -666,6 +675,11 @@ export default function VerificationPage() {
                       {process.env.NODE_ENV === "development" && devOtpHint && (
                         <p className="text-xs text-muted-foreground">
                           Dev OTP: <span className="font-mono font-semibold">{devOtpHint}</span>
+                        </p>
+                      )}
+                      {testOtpHint && (
+                        <p className="text-xs rounded bg-amber-50 dark:bg-amber-950 border border-amber-300 dark:border-amber-700 px-2 py-1 text-amber-800 dark:text-amber-200">
+                          Test OTP: <span className="font-mono font-semibold">{testOtpHint}</span>
                         </p>
                       )}
                       <div className="space-y-2">
