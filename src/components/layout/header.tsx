@@ -81,9 +81,9 @@ export function Header({
           <Image
             src="/icons/icon-192.png?v=7"
             alt=""
-            width={40}
-            height={40}
-            className="w-8 h-8 sm:w-10 sm:h-10 object-contain drop-shadow transition-transform group-hover:scale-110"
+            width={56}
+            height={56}
+            className="w-10 h-10 sm:w-14 sm:h-14 object-contain drop-shadow transition-transform group-hover:scale-110"
             priority
           />
           <span className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
