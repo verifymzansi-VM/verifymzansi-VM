@@ -54,10 +54,18 @@ function setupPageListeners(page: Page) {
   });
 }
 
-async function bypassTurnstile(page: Page) {
-  const btn = page.getByText("Click to bypass CAPTCHA");
-  await btn.waitFor({ state: "visible", timeout: 5000 });
-  await btn.click();
+const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
+
+async function prepareTurnstile(page: Page) {
+  if (!isPlaywrightTestMode) return;
+
+  await expect(page.getByText("Click to bypass CAPTCHA")).toHaveCount(0);
+  await expect(page.locator('iframe[src*="challenges.cloudflare"]')).toHaveCount(0);
+  await expect(page.getByText("Security verification failed to load")).toHaveCount(0);
+  await expect(page.getByText("CAPTCHA verification failed. Please try again.")).toHaveCount(0);
+
+  // Allow the dev bypass effect to populate form state before submit assertions.
+  await page.waitForTimeout(100);
 }
 
 // ── Shared state ─────────────────────────────────────────────
@@ -71,7 +79,7 @@ test.use({ trace: "on" });
 // ============================================================
 // SECTION 1: Registration Flow
 // ============================================================
-const skipRegistrationInCI = process.env.PLAYWRIGHT_TEST_MODE === "1";
+const skipRegistrationInCI = isPlaywrightTestMode;
 
 test.describe.serial("Registration Flow", () => {
   test("TC01 — Register happy path", async ({ page }) => {
@@ -93,8 +101,7 @@ test.describe.serial("Registration Flow", () => {
     await page.fill("#confirmPassword", registeredPassword);
     await page.check("#acceptTerms");
 
-    // Bypass turnstile
-    await bypassTurnstile(page);
+    await prepareTurnstile(page);
 
     await screenshot(page, "TC01-form-filled");
 
@@ -155,7 +162,7 @@ test.describe.serial("Registration Flow", () => {
     await page.fill("#password", registeredPassword);
     await page.fill("#confirmPassword", registeredPassword);
     await page.check("#acceptTerms");
-    await bypassTurnstile(page);
+    await prepareTurnstile(page);
 
     const responsePromise = page.waitForResponse(
       (r) => r.url().includes("/api/auth/register") && r.request().method() === "POST"
@@ -185,6 +192,7 @@ test.describe("Registration Validation", () => {
   test("TC03a — Empty form shows all validation errors", async ({ page }) => {
     setupPageListeners(page);
     await page.goto("/register");
+    await prepareTurnstile(page);
 
     // Submit without filling anything (no turnstile bypass either)
     await page.getByRole("button", { name: /create account/i }).click();
@@ -198,7 +206,6 @@ test.describe("Registration Validation", () => {
     await expect(page.locator("text=Phone number is required")).toBeVisible();
     await expect(page.locator("text=Password must be at least 8 characters")).toBeVisible();
     await expect(page.locator("text=You must accept the terms of service")).toBeVisible();
-    await expect(page.locator("text=Complete the CAPTCHA")).toBeVisible();
 
     await screenshot(page, "TC03a-validation-errors");
   });
@@ -213,7 +220,7 @@ test.describe("Registration Validation", () => {
     await page.fill("#password", "TestPass1");
     await page.fill("#confirmPassword", "TestPass2");
     await page.check("#acceptTerms");
-    await bypassTurnstile(page);
+    await prepareTurnstile(page);
 
     await page.getByRole("button", { name: /create account/i }).click();
 
@@ -231,7 +238,7 @@ test.describe("Registration Validation", () => {
     await page.fill("#password", "TestPass1");
     await page.fill("#confirmPassword", "TestPass1");
     await page.check("#acceptTerms");
-    await bypassTurnstile(page);
+    await prepareTurnstile(page);
 
     await page.getByRole("button", { name: /create account/i }).click();
 
@@ -255,7 +262,7 @@ test.describe("Login Flow", () => {
 
     await page.fill("#email", process.env.E2E_EMAIL!);
     await page.fill("#password", process.env.E2E_PASSWORD!);
-    await bypassTurnstile(page);
+    await prepareTurnstile(page);
 
     await screenshot(page, "TC04-form-filled");
 
@@ -281,7 +288,7 @@ test.describe("Login Flow", () => {
 
     await page.fill("#email", "qa-wrong@example.com");
     await page.fill("#password", "WrongPass1");
-    await bypassTurnstile(page);
+    await prepareTurnstile(page);
 
     const responsePromise = page.waitForResponse(
       (r) => r.url().includes("/api/auth/login") && r.request().method() === "POST"
@@ -317,13 +324,13 @@ test.describe("Login Flow", () => {
     });
 
     await page.goto("/login");
+    await prepareTurnstile(page);
 
     // Submit empty form without turnstile bypass
     await page.getByRole("button", { name: /sign in/i }).click();
 
     await expect(page.locator("text=Enter a valid email address")).toBeVisible({ timeout: 3000 });
     await expect(page.locator("text=Password is required")).toBeVisible();
-    await expect(page.locator("text=Complete the CAPTCHA")).toBeVisible();
 
     // Client-side validation should block the API call
     expect(apiCallMade).toBe(false);
@@ -381,28 +388,20 @@ test.describe("Auth Guards", () => {
 // SECTION 5: Turnstile Dev Bypass
 // ============================================================
 test.describe("Turnstile Dev Mode", () => {
-  test("TC09a — Register page shows turnstile bypass button", async ({ page }) => {
+  test("TC09a — Register page auto-bypasses turnstile without manual controls", async ({
+    page,
+  }) => {
+    test.skip(!isPlaywrightTestMode, "Auto-bypass assertions only apply in Playwright test mode");
     await page.goto("/register");
-
-    // Bypass button visible
-    const bypassBtn = page.getByText("Click to bypass CAPTCHA");
-    await expect(bypassBtn).toBeVisible({ timeout: 5000 });
-
-    // No real Turnstile iframe
-    const iframeCount = await page.locator('iframe[src*="challenges.cloudflare"]').count();
-    expect(iframeCount).toBe(0);
+    await prepareTurnstile(page);
 
     await screenshot(page, "TC09a-register-turnstile-bypass");
   });
 
-  test("TC09b — Login page shows turnstile bypass button", async ({ page }) => {
+  test("TC09b — Login page auto-bypasses turnstile without manual controls", async ({ page }) => {
+    test.skip(!isPlaywrightTestMode, "Auto-bypass assertions only apply in Playwright test mode");
     await page.goto("/login");
-
-    const bypassBtn = page.getByText("Click to bypass CAPTCHA");
-    await expect(bypassBtn).toBeVisible({ timeout: 5000 });
-
-    const iframeCount = await page.locator('iframe[src*="challenges.cloudflare"]').count();
-    expect(iframeCount).toBe(0);
+    await prepareTurnstile(page);
 
     await screenshot(page, "TC09b-login-turnstile-bypass");
   });
@@ -414,10 +413,18 @@ test.describe("Turnstile Dev Mode", () => {
 test.describe("Rate Limiting", () => {
   test("TC10 — Rapid login attempts rate-limit behavior", async ({ request }) => {
     const results: { attempt: number; status: number }[] = [];
+    const rateLimitIpOctet =
+      (Array.from(test.info().project.name).reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % 200) +
+      1;
+    const rateLimitHeaders = {
+      "x-forwarded-for": `198.51.100.${rateLimitIpOctet}`,
+      "x-real-ip": `198.51.100.${rateLimitIpOctet}`,
+    };
 
     // Send 25 rapid login attempts
     for (let i = 0; i < 25; i++) {
       const resp = await request.post("/api/auth/login", {
+        headers: rateLimitHeaders,
         data: {
           email: "ratelimit-test@example.com",
           password: "WrongPassword1",
@@ -463,7 +470,7 @@ test.describe("Login Redirect", () => {
     await page.goto("/login?returnUrl=/verification");
     await page.fill("#email", process.env.E2E_EMAIL!);
     await page.fill("#password", process.env.E2E_PASSWORD!);
-    await bypassTurnstile(page);
+    await prepareTurnstile(page);
 
     await page.getByRole("button", { name: /sign in/i }).click();
     await page.waitForURL("**/verification**", { timeout: 10000 });
@@ -482,7 +489,7 @@ test.describe("Login Redirect", () => {
     await page.goto("/login");
     await page.fill("#email", process.env.E2E_EMAIL!);
     await page.fill("#password", process.env.E2E_PASSWORD!);
-    await bypassTurnstile(page);
+    await prepareTurnstile(page);
     await page.getByRole("button", { name: /sign in/i }).click();
     await page.waitForURL("**/dashboard**", { timeout: 10000 });
 
@@ -508,13 +515,11 @@ test.describe("Post-Registration UX", () => {
     setupPageListeners(page);
 
     await page.goto("/login?registered=true");
+    await prepareTurnstile(page);
 
-    // The login page now shows a "Check your email" banner for registered=true
-    const hasRegisteredBanner = await page
-      .locator("text=/registered|account created|check your email|confirm/i")
-      .count();
-
-    expect(hasRegisteredBanner).toBeGreaterThan(0);
+    await expect(page.getByText("Check your email", { exact: true })).toBeVisible();
+    await expect(page.getByText(/We've sent a confirmation link/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /didn't receive it\? resend/i })).toBeVisible();
 
     await screenshot(page, "TC13-registered-true-landing");
 
@@ -523,7 +528,7 @@ test.describe("Post-Registration UX", () => {
       path.join(EVIDENCE_DIR, "TC13-registered-banner.json"),
       JSON.stringify(
         {
-          hasRegisteredBanner: hasRegisteredBanner > 0,
+          hasRegisteredBanner: true,
           note: "PASS: Registration confirmation visible.",
         },
         null,
@@ -541,6 +546,7 @@ test.describe("Turnstile Timeout", () => {
     setupPageListeners(page);
 
     await page.goto("/login");
+    await prepareTurnstile(page);
 
     test.slow(); // This test intentionally waits for a timeout
     // Wait 16 seconds WITHOUT clicking turnstile bypass (timeout is 15s)

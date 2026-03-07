@@ -754,9 +754,7 @@ export default function VerificationPage() {
                         clearStepCompletion("id_doc");
                       }}
                     />
-                    {idFileError && idFile && (
-                      <p className="text-xs text-destructive">{idFileError}</p>
-                    )}
+                    {idFileError && idFile && <p className="inline-form-error">{idFileError}</p>}
                   </div>
 
                   {idFile && (
@@ -816,7 +814,7 @@ export default function VerificationPage() {
                       }}
                     />
                     {selfieFileError && selfieFile && (
-                      <p className="text-xs text-destructive">{selfieFileError}</p>
+                      <p className="inline-form-error">{selfieFileError}</p>
                     )}
                   </div>
 

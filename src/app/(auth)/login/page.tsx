@@ -292,7 +292,7 @@ export default function LoginPage() {
             {...register("email")}
           />
           {errors.email && (
-            <p id="email-error" className="text-xs text-destructive" role="alert">
+            <p id="email-error" className="inline-form-error" role="alert">
               {errors.email.message}
             </p>
           )}
@@ -328,7 +328,7 @@ export default function LoginPage() {
             </button>
           </div>
           {errors.password && (
-            <p id="password-error" className="text-xs text-destructive" role="alert">
+            <p id="password-error" className="inline-form-error" role="alert">
               {errors.password.message}
             </p>
           )}
@@ -341,11 +341,11 @@ export default function LoginPage() {
           onLoad={handleTurnstileLoad}
         />
         {errors.turnstileToken && !turnstileError && (
-          <p className="text-xs text-destructive">{errors.turnstileToken.message}</p>
+          <p className="inline-form-error">{errors.turnstileToken.message}</p>
         )}
         {turnstileError && (
           <div className="flex items-center gap-2">
-            <p className="text-xs text-destructive">Security verification failed to load.</p>
+            <p className="inline-form-error">Security verification failed to load.</p>
             <button
               type="button"
               onClick={handleRetry}

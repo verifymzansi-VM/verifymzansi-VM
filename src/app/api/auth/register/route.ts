@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-  } else if (process.env.TURNSTILE_SECRET_KEY) {
+  } else if (process.env.TURNSTILE_SECRET_KEY && !siteKey) {
     log.warn(
       "Turnstile secret key is set but NEXT_PUBLIC_TURNSTILE_SITE_KEY is missing — skipping CAPTCHA verification"
     );

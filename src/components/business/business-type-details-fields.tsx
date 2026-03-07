@@ -80,7 +80,7 @@ export function BusinessTypeDetailsFields({
               className={cn(fieldErrors.store_number && "border-destructive")}
             />
             {fieldErrors.store_number && (
-              <p className="text-xs text-destructive">{fieldErrors.store_number}</p>
+              <p className="inline-form-error">{fieldErrors.store_number}</p>
             )}
           </div>
           <div className="space-y-2">
@@ -118,7 +118,7 @@ export function BusinessTypeDetailsFields({
             Separate areas with commas so customers know where you operate.
           </p>
           {fieldErrors.service_areas && (
-            <p className="text-xs text-destructive">{fieldErrors.service_areas}</p>
+            <p className="inline-form-error">{fieldErrors.service_areas}</p>
           )}
         </div>
       )}
@@ -139,7 +139,7 @@ export function BusinessTypeDetailsFields({
             Add a shareable maps link for customers who need navigation help.
           </p>
           {fieldErrors.map_directions && (
-            <p className="text-xs text-destructive">{fieldErrors.map_directions}</p>
+            <p className="inline-form-error">{fieldErrors.map_directions}</p>
           )}
         </div>
       )}
@@ -196,7 +196,7 @@ export function BusinessTypeDetailsFields({
                 {field.description && (
                   <p className="text-xs text-muted-foreground">{field.description}</p>
                 )}
-                {error && <p className="text-xs text-destructive">{error}</p>}
+                {error && <p className="inline-form-error">{error}</p>}
               </div>
             );
           }
@@ -219,7 +219,7 @@ export function BusinessTypeDetailsFields({
                 {field.description && (
                   <p className="text-xs text-muted-foreground">{field.description}</p>
                 )}
-                {error && <p className="text-xs text-destructive">{error}</p>}
+                {error && <p className="inline-form-error">{error}</p>}
               </div>
             );
           }
@@ -264,7 +264,7 @@ export function BusinessTypeDetailsFields({
               {field.description && (
                 <p className="text-xs text-muted-foreground">{field.description}</p>
               )}
-              {error && <p className="text-xs text-destructive">{error}</p>}
+              {error && <p className="inline-form-error">{error}</p>}
             </div>
           );
         })}

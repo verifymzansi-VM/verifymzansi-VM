@@ -13,7 +13,7 @@ const publicRoutes = [
   {
     name: "homepage",
     path: "/",
-    readySelector: 'h1:has-text("Ready to join Mzansi\'s most trusted marketplace?")',
+    readySelector: 'h1:has-text("Join Mzansi\'s")',
   },
   {
     name: "mzansi-market",
@@ -21,11 +21,10 @@ const publicRoutes = [
     readySelector: 'h1:has-text("Browse Listings")',
   },
   {
-    name: "business-ads",
-    path: "/business-ads",
-    readySelector: 'h1:has-text("Professional Directory")',
+    name: "mzansi-business",
+    path: "/mzansi-business",
+    readySelector: 'h1:has-text("Mzansi Business")',
   },
-  { name: "mall-shops", path: "/mall-shops", readySelector: 'h1:has-text("Featured Malls")' },
   { name: "login", path: "/login", readySelector: 'h1:has-text("Sign in to your account")' },
   {
     name: "register",
@@ -42,6 +41,29 @@ async function gotoAndWaitForStablePage(page: Page, route: (typeof publicRoutes)
   await page.goto(route.path, { waitUntil: "domcontentloaded" });
   await page.locator("main").first().waitFor({ state: "visible" });
   await page.locator(route.readySelector).first().waitFor({ state: "visible" });
+
+  if (route.name === "mzansi-market") {
+    await page.waitForFunction(() => {
+      return (
+        !document.querySelector('[data-testid="mzansi-market-grid-loading"]') &&
+        !!document.querySelector(
+          '[data-testid="mzansi-market-grid-ready"], [data-testid="mzansi-market-grid-empty"]'
+        )
+      );
+    });
+  }
+
+  if (route.name === "mzansi-business") {
+    await page.waitForFunction(() => {
+      return (
+        !document.querySelector('[data-testid="mzansi-business-grid-loading"]') &&
+        !!document.querySelector(
+          '[data-testid="mzansi-business-grid-ready"], [data-testid="mzansi-business-grid-empty"]'
+        )
+      );
+    });
+  }
+
   await page.evaluate(async () => {
     // Wait for fonts to be ready
     if (document.fonts) {
@@ -65,6 +87,7 @@ async function gotoAndWaitForStablePage(page: Page, route: (typeof publicRoutes)
 test.describe("Visual Regression — Desktop", () => {
   for (const route of publicRoutes) {
     test(`${route.name}`, async ({ page }, testInfo) => {
+      const isUpdatingSnapshots = testInfo.config.updateSnapshots !== "none";
       test.skip(
         !!process.env.CI,
         "Visual regression baselines are platform-specific — skipped in CI"
@@ -74,7 +97,10 @@ test.describe("Visual Regression — Desktop", () => {
         "Chromium snapshots are the baseline for this suite."
       );
       const snapshotPath = testInfo.snapshotPath(`${route.name}-desktop.png`);
-      test.skip(!existsSync(snapshotPath), `Missing baseline snapshot: ${snapshotPath}`);
+      test.skip(
+        !isUpdatingSnapshots && !existsSync(snapshotPath),
+        `Missing baseline snapshot: ${snapshotPath}`
+      );
       await gotoAndWaitForStablePage(page, route);
 
       await expect(page).toHaveScreenshot(`${route.name}-desktop.png`, {
@@ -89,11 +115,12 @@ test.describe("Visual Regression — Mobile", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   const mobilePages = publicRoutes.filter((r) =>
-    ["homepage", "login", "mzansi-market", "pricing"].includes(r.name)
+    ["homepage", "login", "mzansi-market", "mzansi-business", "pricing"].includes(r.name)
   );
 
   for (const route of mobilePages) {
     test(`${route.name}`, async ({ page }, testInfo) => {
+      const isUpdatingSnapshots = testInfo.config.updateSnapshots !== "none";
       test.skip(
         !!process.env.CI,
         "Visual regression baselines are platform-specific — skipped in CI"
@@ -103,7 +130,10 @@ test.describe("Visual Regression — Mobile", () => {
         "Chromium snapshots are the baseline for this suite."
       );
       const snapshotPath = testInfo.snapshotPath(`${route.name}-mobile.png`);
-      test.skip(!existsSync(snapshotPath), `Missing baseline snapshot: ${snapshotPath}`);
+      test.skip(
+        !isUpdatingSnapshots && !existsSync(snapshotPath),
+        `Missing baseline snapshot: ${snapshotPath}`
+      );
       await gotoAndWaitForStablePage(page, route);
 
       await expect(page).toHaveScreenshot(`${route.name}-mobile.png`, {
@@ -120,6 +150,7 @@ test.describe("Visual Regression — Dark Mode", () => {
   for (const name of ["homepage", "login", "pricing"]) {
     const route = publicRoutes.find((r) => r.name === name)!;
     test(`${route.name}`, async ({ page }, testInfo) => {
+      const isUpdatingSnapshots = testInfo.config.updateSnapshots !== "none";
       test.skip(
         !!process.env.CI,
         "Visual regression baselines are platform-specific — skipped in CI"
@@ -129,7 +160,10 @@ test.describe("Visual Regression — Dark Mode", () => {
         "Chromium snapshots are the baseline for this suite."
       );
       const snapshotPath = testInfo.snapshotPath(`${route.name}-dark.png`);
-      test.skip(!existsSync(snapshotPath), `Missing baseline snapshot: ${snapshotPath}`);
+      test.skip(
+        !isUpdatingSnapshots && !existsSync(snapshotPath),
+        `Missing baseline snapshot: ${snapshotPath}`
+      );
       await gotoAndWaitForStablePage(page, route);
 
       await expect(page).toHaveScreenshot(`${route.name}-dark.png`, {

@@ -694,7 +694,7 @@ function CreateBusinessContent() {
                         })}
                       </div>
                       {fieldErrors.business_type && (
-                        <p className="text-xs text-destructive">{fieldErrors.business_type}</p>
+                        <p className="inline-form-error">{fieldErrors.business_type}</p>
                       )}
                     </div>
 
@@ -755,7 +755,7 @@ function CreateBusinessContent() {
                         className={cn(fieldErrors.business_name && "border-destructive")}
                       />
                       {fieldErrors.business_name && (
-                        <p className="text-xs text-destructive">{fieldErrors.business_name}</p>
+                        <p className="inline-form-error">{fieldErrors.business_name}</p>
                       )}
                     </div>
 
@@ -778,9 +778,7 @@ function CreateBusinessContent() {
                         Keep it short and readable. We use lowercase letters, numbers, and hyphens
                         only.
                       </p>
-                      {fieldErrors.slug && (
-                        <p className="text-xs text-destructive">{fieldErrors.slug}</p>
-                      )}
+                      {fieldErrors.slug && <p className="inline-form-error">{fieldErrors.slug}</p>}
                     </div>
 
                     <div className="space-y-2">
@@ -803,7 +801,7 @@ function CreateBusinessContent() {
                         ))}
                       </select>
                       {fieldErrors.category && (
-                        <p className="text-xs text-destructive">{fieldErrors.category}</p>
+                        <p className="inline-form-error">{fieldErrors.category}</p>
                       )}
                     </div>
 
@@ -853,9 +851,7 @@ function CreateBusinessContent() {
                           ))}
                         </select>
                         {fieldErrors.location_province && (
-                          <p className="text-xs text-destructive">
-                            {fieldErrors.location_province}
-                          </p>
+                          <p className="inline-form-error">{fieldErrors.location_province}</p>
                         )}
                       </div>
 
@@ -883,7 +879,7 @@ function CreateBusinessContent() {
                           ))}
                         </select>
                         {fieldErrors.location_city && (
-                          <p className="text-xs text-destructive">{fieldErrors.location_city}</p>
+                          <p className="inline-form-error">{fieldErrors.location_city}</p>
                         )}
                       </div>
                     </div>
@@ -906,7 +902,7 @@ function CreateBusinessContent() {
                           className={cn(fieldErrors.phone && "border-destructive")}
                         />
                         {fieldErrors.phone && (
-                          <p className="text-xs text-destructive">{fieldErrors.phone}</p>
+                          <p className="inline-form-error">{fieldErrors.phone}</p>
                         )}
                       </div>
 
@@ -927,7 +923,7 @@ function CreateBusinessContent() {
                           className={cn(fieldErrors.whatsapp && "border-destructive")}
                         />
                         {fieldErrors.whatsapp && (
-                          <p className="text-xs text-destructive">{fieldErrors.whatsapp}</p>
+                          <p className="inline-form-error">{fieldErrors.whatsapp}</p>
                         )}
                       </div>
 
@@ -949,7 +945,7 @@ function CreateBusinessContent() {
                           className={cn(fieldErrors.email && "border-destructive")}
                         />
                         {fieldErrors.email && (
-                          <p className="text-xs text-destructive">{fieldErrors.email}</p>
+                          <p className="inline-form-error">{fieldErrors.email}</p>
                         )}
                       </div>
 
@@ -970,7 +966,7 @@ function CreateBusinessContent() {
                           className={cn(fieldErrors.website && "border-destructive")}
                         />
                         {fieldErrors.website && (
-                          <p className="text-xs text-destructive">{fieldErrors.website}</p>
+                          <p className="inline-form-error">{fieldErrors.website}</p>
                         )}
                       </div>
                     </div>
@@ -1163,7 +1159,7 @@ function CreateBusinessContent() {
                         </div>
                       )}
                       {fieldErrors.gallery_photos && (
-                        <p className="text-xs text-destructive">{fieldErrors.gallery_photos}</p>
+                        <p className="inline-form-error">{fieldErrors.gallery_photos}</p>
                       )}
                     </div>
 
@@ -1185,7 +1181,7 @@ function CreateBusinessContent() {
                         and easy to watch on mobile.
                       </p>
                       {fieldErrors.cover_video && (
-                        <p className="text-xs text-destructive">{fieldErrors.cover_video}</p>
+                        <p className="inline-form-error">{fieldErrors.cover_video}</p>
                       )}
                     </div>
 
@@ -1218,9 +1214,7 @@ function CreateBusinessContent() {
                               className={cn(fieldErrors.socialFacebook && "border-destructive")}
                             />
                             {fieldErrors.socialFacebook && (
-                              <p className="text-xs text-destructive">
-                                {fieldErrors.socialFacebook}
-                              </p>
+                              <p className="inline-form-error">{fieldErrors.socialFacebook}</p>
                             )}
                             <Input
                               id="socialInstagram"
@@ -1233,9 +1227,7 @@ function CreateBusinessContent() {
                               className={cn(fieldErrors.socialInstagram && "border-destructive")}
                             />
                             {fieldErrors.socialInstagram && (
-                              <p className="text-xs text-destructive">
-                                {fieldErrors.socialInstagram}
-                              </p>
+                              <p className="inline-form-error">{fieldErrors.socialInstagram}</p>
                             )}
                             <Input
                               id="socialTwitter"
@@ -1248,9 +1240,7 @@ function CreateBusinessContent() {
                               className={cn(fieldErrors.socialTwitter && "border-destructive")}
                             />
                             {fieldErrors.socialTwitter && (
-                              <p className="text-xs text-destructive">
-                                {fieldErrors.socialTwitter}
-                              </p>
+                              <p className="inline-form-error">{fieldErrors.socialTwitter}</p>
                             )}
                             <Input
                               id="socialTiktok"
@@ -1263,7 +1253,7 @@ function CreateBusinessContent() {
                               className={cn(fieldErrors.socialTiktok && "border-destructive")}
                             />
                             {fieldErrors.socialTiktok && (
-                              <p className="text-xs text-destructive">{fieldErrors.socialTiktok}</p>
+                              <p className="inline-form-error">{fieldErrors.socialTiktok}</p>
                             )}
                           </div>
                         </div>

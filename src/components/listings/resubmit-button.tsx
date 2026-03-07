@@ -63,7 +63,7 @@ export function ResubmitButton({
         )}
         {label}
       </Button>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="inline-form-error">{error}</p>}
     </div>
   );
 }

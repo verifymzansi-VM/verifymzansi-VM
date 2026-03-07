@@ -459,7 +459,7 @@ export default function CreateListingPage() {
                       />
                     </div>
                     {fieldErrors.category && (
-                      <p className="text-xs text-destructive">{fieldErrors.category}</p>
+                      <p className="inline-form-error">{fieldErrors.category}</p>
                     )}
 
                     <div className="space-y-2">
@@ -512,7 +512,7 @@ export default function CreateListingPage() {
                         className={cn(fieldErrors.title && "border-destructive")}
                       />
                       {fieldErrors.title && (
-                        <p className="text-xs text-destructive">{fieldErrors.title}</p>
+                        <p className="inline-form-error">{fieldErrors.title}</p>
                       )}
                     </div>
 
@@ -545,7 +545,7 @@ export default function CreateListingPage() {
                         aria-invalid={!!fieldErrors.description}
                       />
                       {fieldErrors.description && (
-                        <p className="text-xs text-destructive">{fieldErrors.description}</p>
+                        <p className="inline-form-error">{fieldErrors.description}</p>
                       )}
                     </div>
                   </div>
@@ -592,7 +592,7 @@ export default function CreateListingPage() {
                         </button>
                       </div>
                       {fieldErrors.price_zar && (
-                        <p className="text-xs text-destructive">{fieldErrors.price_zar}</p>
+                        <p className="inline-form-error">{fieldErrors.price_zar}</p>
                       )}
                     </div>
 
@@ -624,7 +624,7 @@ export default function CreateListingPage() {
                             ))}
                           </select>
                           {fieldErrors.province && (
-                            <p className="text-xs text-destructive">{fieldErrors.province}</p>
+                            <p className="inline-form-error">{fieldErrors.province}</p>
                           )}
                         </div>
 
@@ -653,7 +653,7 @@ export default function CreateListingPage() {
                             ))}
                           </select>
                           {fieldErrors.city && (
-                            <p className="text-xs text-destructive">{fieldErrors.city}</p>
+                            <p className="inline-form-error">{fieldErrors.city}</p>
                           )}
                         </div>
 
@@ -709,7 +709,7 @@ export default function CreateListingPage() {
                         })}
                       </div>
                       {fieldErrors.contactMethods && (
-                        <p className="text-xs text-destructive">{fieldErrors.contactMethods}</p>
+                        <p className="inline-form-error">{fieldErrors.contactMethods}</p>
                       )}
                     </div>
                   </div>
@@ -733,7 +733,7 @@ export default function CreateListingPage() {
                         results.
                       </p>
                       {fieldErrors.images && (
-                        <p className="text-xs text-destructive">{fieldErrors.images}</p>
+                        <p className="inline-form-error">{fieldErrors.images}</p>
                       )}
                     </div>
 
@@ -751,7 +751,7 @@ export default function CreateListingPage() {
                         disabled={!videoAllowed}
                       />
                       {fieldErrors.videos && (
-                        <p className="text-xs text-destructive">{fieldErrors.videos}</p>
+                        <p className="inline-form-error">{fieldErrors.videos}</p>
                       )}
                     </div>
 

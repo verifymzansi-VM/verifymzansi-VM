@@ -121,7 +121,7 @@ export default function RegisterPage() {
             {...register("displayName")}
           />
           {errors.displayName && (
-            <p id="displayName-error" className="text-xs text-destructive" role="alert">
+            <p id="displayName-error" className="inline-form-error" role="alert">
               {errors.displayName.message}
             </p>
           )}
@@ -141,7 +141,7 @@ export default function RegisterPage() {
             {...register("email")}
           />
           {errors.email && (
-            <p id="email-error" className="text-xs text-destructive" role="alert">
+            <p id="email-error" className="inline-form-error" role="alert">
               {errors.email.message}
             </p>
           )}
@@ -160,7 +160,7 @@ export default function RegisterPage() {
             {...register("phone")}
           />
           {errors.phone && (
-            <p id="phone-error" className="text-xs text-destructive" role="alert">
+            <p id="phone-error" className="inline-form-error" role="alert">
               {errors.phone.message}
             </p>
           )}
@@ -205,7 +205,7 @@ export default function RegisterPage() {
             ))}
           </div>
           {errors.password && (
-            <p id="password-error" className="text-xs text-destructive" role="alert">
+            <p id="password-error" className="inline-form-error" role="alert">
               {errors.password.message}
             </p>
           )}
@@ -225,7 +225,7 @@ export default function RegisterPage() {
             {...register("confirmPassword")}
           />
           {errors.confirmPassword && (
-            <p id="confirmPassword-error" className="text-xs text-destructive" role="alert">
+            <p id="confirmPassword-error" className="inline-form-error" role="alert">
               {errors.confirmPassword.message}
             </p>
           )}
@@ -250,7 +250,7 @@ export default function RegisterPage() {
           </Label>
         </div>
         {errors.acceptTerms && (
-          <p className="text-xs text-destructive" role="alert">
+          <p className="inline-form-error" role="alert">
             {errors.acceptTerms.message}
           </p>
         )}
@@ -260,9 +260,9 @@ export default function RegisterPage() {
           onError={handleTurnstileError}
           onExpire={handleTurnstileExpire}
         />
-        {turnstileError && <p className="text-xs text-destructive">{turnstileError}</p>}
+        {turnstileError && <p className="inline-form-error">{turnstileError}</p>}
         {errors.turnstileToken && !turnstileError && (
-          <p className="text-xs text-destructive">{errors.turnstileToken.message}</p>
+          <p className="inline-form-error">{errors.turnstileToken.message}</p>
         )}
 
         <Button type="submit" className="w-full" variant="trust-verified" disabled={isSubmitting}>

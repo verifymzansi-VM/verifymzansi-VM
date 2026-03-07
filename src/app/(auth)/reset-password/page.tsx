@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
             ))}
           </div>
           {errors.password && (
-            <p id="password-error" className="text-xs text-destructive" role="alert">
+            <p id="password-error" className="inline-form-error" role="alert">
               {errors.password.message}
             </p>
           )}
@@ -131,7 +131,7 @@ export default function ResetPasswordPage() {
             {...register("confirmPassword")}
           />
           {errors.confirmPassword && (
-            <p id="confirmPassword-error" className="text-xs text-destructive" role="alert">
+            <p id="confirmPassword-error" className="inline-form-error" role="alert">
               {errors.confirmPassword.message}
             </p>
           )}

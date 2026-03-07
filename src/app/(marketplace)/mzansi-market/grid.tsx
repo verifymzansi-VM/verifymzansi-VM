@@ -181,7 +181,11 @@ export function MzansiMarketGrid() {
   ].filter(Boolean).length;
 
   if (loading) {
-    return <ListingGridSkeleton />;
+    return (
+      <div data-testid="mzansi-market-grid-loading">
+        <ListingGridSkeleton />
+      </div>
+    );
   }
 
   if (listings.length === 0) {
@@ -200,7 +204,11 @@ export function MzansiMarketGrid() {
     const suggestedCats = CATEGORIES.slice(0, 4);
 
     return (
-      <div className="flex flex-col items-center justify-center py-6 sm:py-8 space-y-3">
+      <div
+        className="flex flex-col items-center justify-center py-6 sm:py-8 space-y-3"
+        data-testid="mzansi-market-grid-empty"
+        data-grid-state={hasQueryError ? "error" : hasFilters ? "filtered-empty" : "empty"}
+      >
         <div className="rounded-2xl bg-gradient-to-br from-brand-green-50 to-brand-green-100 dark:from-brand-green-950 dark:to-brand-green-900 p-5 shadow-sm">
           {hasQueryError ? (
             <AlertTriangle className="h-8 w-8 text-brand-green" />
@@ -272,7 +280,7 @@ export function MzansiMarketGrid() {
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="mzansi-market-grid-ready">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
           <span className="font-medium text-foreground">{totalCount}</span> listing

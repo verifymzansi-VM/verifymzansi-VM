@@ -64,7 +64,7 @@ export function DeletePostButton({ itemId, area, label = "Delete" }: DeletePostB
         <Button variant="ghost" size="sm" onClick={() => setConfirming(false)} disabled={loading}>
           Cancel
         </Button>
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && <p className="inline-form-error">{error}</p>}
       </div>
     );
   }
@@ -80,7 +80,7 @@ export function DeletePostButton({ itemId, area, label = "Delete" }: DeletePostB
         <Trash2 className="h-3.5 w-3.5" />
         {label}
       </Button>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="inline-form-error">{error}</p>}
     </div>
   );
 }

@@ -249,6 +249,10 @@
     @apply animate-shimmer;
   }
 
+  .inline-form-error {
+    @apply text-[13px] font-medium leading-snug text-red-700 dark:text-red-300;
+  }
+
   /* ── Marketplace area accent chips ───────────────────────── */
   .area-mzansi-market {
     @apply bg-brand-green-100 text-brand-green-800 border-brand-green-300;

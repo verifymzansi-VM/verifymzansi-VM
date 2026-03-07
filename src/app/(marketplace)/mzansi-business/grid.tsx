@@ -153,7 +153,11 @@ export function MzansiBusinessGrid() {
   };
 
   if (loading) {
-    return <ListingGridSkeleton />;
+    return (
+      <div data-testid="mzansi-business-grid-loading">
+        <ListingGridSkeleton />
+      </div>
+    );
   }
 
   if (businesses.length === 0) {
@@ -171,7 +175,11 @@ export function MzansiBusinessGrid() {
         : "Be the first to list your business on Mzansi Business.";
 
     return (
-      <div className="flex flex-col items-center justify-center py-6 sm:py-8 space-y-3">
+      <div
+        className="flex flex-col items-center justify-center py-6 sm:py-8 space-y-3"
+        data-testid="mzansi-business-grid-empty"
+        data-grid-state={hasQueryError ? "error" : hasFilters ? "filtered-empty" : "empty"}
+      >
         <div className="rounded-2xl bg-gradient-to-br from-brand-blue/10 to-brand-blue/20 p-5 shadow-sm">
           {hasQueryError ? (
             <AlertTriangle className="h-8 w-8 text-brand-blue" />
@@ -212,7 +220,7 @@ export function MzansiBusinessGrid() {
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="mzansi-business-grid-ready">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
           <span className="font-medium text-foreground">{totalCount}</span> business

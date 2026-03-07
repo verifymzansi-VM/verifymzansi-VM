@@ -155,7 +155,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [chromium, firefox, webkit, mobile-chrome]
+        project: [chromium, firefox, webkit, mobile-chrome, mobile-safari]
     env:
       PLAYWRIGHT_TEST_MODE: "1"
       NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"

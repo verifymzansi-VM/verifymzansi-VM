@@ -1,7 +1,11 @@
 const { spawn, spawnSync } = require("node:child_process");
 
+const PLAYWRIGHT_PORT = Number(process.env.PLAYWRIGHT_PORT || 3100);
+const PLAYWRIGHT_HOST = process.env.PLAYWRIGHT_HOST || "127.0.0.1";
+
 function createDeterministicEnv() {
   const deterministicValues = {
+    PORT: String(PLAYWRIGHT_PORT),
     PLAYWRIGHT_TEST_MODE: "1",
     VERIFYMZANSI_RUNTIME_MODE: "e2e",
     VERIFYMZANSI_VALIDATION_MODE: "e2e",
@@ -27,7 +31,7 @@ function createDeterministicEnv() {
     RESEND_API_KEY: "re_playwright_1234567890",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key",
     TURNSTILE_SECRET_KEY: "dummy_secret_key",
-    NEXT_PUBLIC_APP_URL: "http://127.0.0.1:3000",
+    NEXT_PUBLIC_APP_URL: `http://${PLAYWRIGHT_HOST}:${PLAYWRIGHT_PORT}`,
   };
 
   return {

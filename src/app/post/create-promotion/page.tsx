@@ -379,7 +379,7 @@ function CreatePromotionContent() {
                         className={cn(fieldErrors.title && "border-destructive")}
                       />
                       {fieldErrors.title && (
-                        <p className="text-xs text-destructive">{fieldErrors.title}</p>
+                        <p className="inline-form-error">{fieldErrors.title}</p>
                       )}
                     </div>
 
@@ -409,7 +409,7 @@ function CreatePromotionContent() {
                         className={cn(fieldErrors.description && "border-destructive")}
                       />
                       {fieldErrors.description && (
-                        <p className="text-xs text-destructive">{fieldErrors.description}</p>
+                        <p className="inline-form-error">{fieldErrors.description}</p>
                       )}
                     </div>
 
@@ -493,7 +493,7 @@ function CreatePromotionContent() {
                           className={cn(fieldErrors.price_zar && "border-destructive")}
                         />
                         {fieldErrors.price_zar && (
-                          <p className="text-xs text-destructive">{fieldErrors.price_zar}</p>
+                          <p className="inline-form-error">{fieldErrors.price_zar}</p>
                         )}
                       </div>
                       <div className="flex items-end pb-2">
@@ -531,7 +531,7 @@ function CreatePromotionContent() {
                           ))}
                         </select>
                         {fieldErrors.province && (
-                          <p className="text-xs text-destructive">{fieldErrors.province}</p>
+                          <p className="inline-form-error">{fieldErrors.province}</p>
                         )}
                       </div>
                       <div className="space-y-2">
@@ -555,7 +555,7 @@ function CreatePromotionContent() {
                           ))}
                         </select>
                         {fieldErrors.city && (
-                          <p className="text-xs text-destructive">{fieldErrors.city}</p>
+                          <p className="inline-form-error">{fieldErrors.city}</p>
                         )}
                       </div>
                     </div>
@@ -587,7 +587,7 @@ function CreatePromotionContent() {
                         ))}
                       </div>
                       {fieldErrors.contact_methods && (
-                        <p className="text-xs text-destructive">{fieldErrors.contact_methods}</p>
+                        <p className="inline-form-error">{fieldErrors.contact_methods}</p>
                       )}
                     </div>
 
@@ -607,7 +607,7 @@ function CreatePromotionContent() {
                           className={cn(fieldErrors.start_date && "border-destructive")}
                         />
                         {fieldErrors.start_date && (
-                          <p className="text-xs text-destructive">{fieldErrors.start_date}</p>
+                          <p className="inline-form-error">{fieldErrors.start_date}</p>
                         )}
                       </div>
                       <div className="space-y-2">
@@ -625,7 +625,7 @@ function CreatePromotionContent() {
                           className={cn(fieldErrors.end_date && "border-destructive")}
                         />
                         {fieldErrors.end_date && (
-                          <p className="text-xs text-destructive">{fieldErrors.end_date}</p>
+                          <p className="inline-form-error">{fieldErrors.end_date}</p>
                         )}
                       </div>
                     </div>
@@ -650,7 +650,7 @@ function CreatePromotionContent() {
                         feeds.
                       </p>
                       {fieldErrors.images && (
-                        <p className="text-xs text-destructive">{fieldErrors.images}</p>
+                        <p className="inline-form-error">{fieldErrors.images}</p>
                       )}
                     </div>
 
@@ -668,7 +668,7 @@ function CreatePromotionContent() {
                         disabled={!videoAllowed}
                       />
                       {fieldErrors.videos && (
-                        <p className="text-xs text-destructive">{fieldErrors.videos}</p>
+                        <p className="inline-form-error">{fieldErrors.videos}</p>
                       )}
                     </div>
 

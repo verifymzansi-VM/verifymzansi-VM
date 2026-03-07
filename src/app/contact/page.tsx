@@ -132,7 +132,7 @@ export default function ContactPage() {
                         aria-describedby={fieldErrors.name ? "name-error" : undefined}
                       />
                       {fieldErrors.name && (
-                        <p id="name-error" role="alert" className="text-xs text-destructive">
+                        <p id="name-error" role="alert" className="inline-form-error">
                           {fieldErrors.name}
                         </p>
                       )}
@@ -156,7 +156,7 @@ export default function ContactPage() {
                         aria-describedby={fieldErrors.email ? "email-error" : undefined}
                       />
                       {fieldErrors.email && (
-                        <p id="email-error" role="alert" className="text-xs text-destructive">
+                        <p id="email-error" role="alert" className="inline-form-error">
                           {fieldErrors.email}
                         </p>
                       )}
@@ -179,7 +179,7 @@ export default function ContactPage() {
                         aria-describedby={fieldErrors.message ? "message-error" : undefined}
                       />
                       {fieldErrors.message && (
-                        <p id="message-error" role="alert" className="text-xs text-destructive">
+                        <p id="message-error" role="alert" className="inline-form-error">
                           {fieldErrors.message}
                         </p>
                       )}

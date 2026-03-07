@@ -200,7 +200,7 @@ export default function DsarPage() {
                         <p
                           id="name-error"
                           role="alert"
-                          className="text-xs text-destructive"
+                          className="inline-form-error"
                           data-error="name"
                         >
                           {fieldErrors.name}
@@ -230,7 +230,7 @@ export default function DsarPage() {
                         <p
                           id="email-error"
                           role="alert"
-                          className="text-xs text-destructive"
+                          className="inline-form-error"
                           data-error="email"
                         >
                           {fieldErrors.email}
@@ -263,7 +263,7 @@ export default function DsarPage() {
                         <p
                           id="idNumber-error"
                           role="alert"
-                          className="text-xs text-destructive"
+                          className="inline-form-error"
                           data-error="idNumber"
                         >
                           {fieldErrors.idNumber}

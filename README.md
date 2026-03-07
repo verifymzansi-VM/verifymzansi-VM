@@ -51,6 +51,9 @@ pnpm dev
 
 Open `http://localhost:3000`.
 
+For Playwright, keep that local dev server separate. `pnpm test:e2e` starts its
+own deterministic app instance on a dedicated port.
+
 ## Environment Modes
 
 ### Local dev
@@ -68,6 +71,14 @@ Open `http://localhost:3000`.
   `scripts/start-playwright-server.cjs`
 - That script injects deterministic e2e-safe env values and sets
   `VERIFYMZANSI_RUNTIME_MODE=e2e`
+- By default, Playwright boots its own server on `http://127.0.0.1:3100` so an
+  unrelated local app on `3000` cannot contaminate browser results
+- Set `PLAYWRIGHT_REUSE_SERVER=1` only when you intentionally want Playwright to
+  attach to an already-running app on the configured Playwright port
+- `chromium`, `firefox`, and `mobile-chrome` run the full interaction suite;
+  `webkit` and `mobile-safari` are currently scoped to the stable page-load
+  accessibility coverage because broader Safari automation intermittently
+  renders blank public/auth pages in this app
 - The app still boots through `next start`, but production-only launch rules are
   relaxed for that explicit e2e mode
 

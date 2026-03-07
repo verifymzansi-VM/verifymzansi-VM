@@ -184,7 +184,7 @@ function AttributeInput({
               );
             })}
           </select>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="inline-form-error">{error}</p>}
         </div>
       );
     }
@@ -209,7 +209,7 @@ function AttributeInput({
             aria-invalid={!!error}
             className={cn(error && "border-destructive")}
           />
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="inline-form-error">{error}</p>}
         </div>
       );
 
@@ -232,7 +232,7 @@ function AttributeInput({
               {field.label}
             </Label>
           </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="inline-form-error">{error}</p>}
         </div>
       );
 
@@ -252,7 +252,7 @@ function AttributeInput({
             aria-invalid={!!error}
             className={cn(error && "border-destructive")}
           />
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="inline-form-error">{error}</p>}
         </div>
       );
   }

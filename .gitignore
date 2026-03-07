@@ -64,7 +64,24 @@ tmp-*
 /.codex-log-analysis/
 
 # ── Visual regression snapshots ──────────────────────────────
-e2e/visual-regression.spec.ts-snapshots/
+e2e/visual-regression.spec.ts-snapshots/*
+!e2e/visual-regression.spec.ts-snapshots/homepage-desktop-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/mzansi-market-desktop-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/mzansi-business-desktop-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/login-desktop-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/register-desktop-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/pricing-desktop-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/contact-desktop-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/privacy-desktop-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/terms-desktop-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/homepage-mobile-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/mzansi-market-mobile-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/mzansi-business-mobile-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/login-mobile-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/pricing-mobile-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/homepage-dark-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/login-dark-chromium-win32.png
+!e2e/visual-regression.spec.ts-snapshots/pricing-dark-chromium-win32.png
 
 # ── Claude IDE / planning ────────────────────────────────────
 .claude/

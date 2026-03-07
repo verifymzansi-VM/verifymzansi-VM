@@ -117,7 +117,7 @@ export default function ForgotPasswordPage() {
             {...register("email")}
           />
           {errors.email && (
-            <p id="email-error" className="text-xs text-destructive" role="alert">
+            <p id="email-error" className="inline-form-error" role="alert">
               {errors.email.message}
             </p>
           )}
@@ -125,7 +125,7 @@ export default function ForgotPasswordPage() {
 
         <TurnstileWidget onSuccess={handleTurnstileSuccess} />
         {errors.turnstileToken && (
-          <p className="text-xs text-destructive">{errors.turnstileToken.message}</p>
+          <p className="inline-form-error">{errors.turnstileToken.message}</p>
         )}
 
         <Button type="submit" className="w-full" variant="trust-verified" disabled={isSubmitting}>

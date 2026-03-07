@@ -7,7 +7,7 @@ test.describe("VerifyMzansi Golden Paths", () => {
     // Hero section visible
     await expect(page.getByRole("heading").first()).toBeVisible();
     // At least one marketplace area link visible (mobile-safe selector)
-    await expect(page.getByRole("link", { name: /Mall Shops/i }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /Mzansi Business/i }).first()).toBeVisible();
   });
 
   test("Login page renders correctly", async ({ page }) => {
@@ -49,6 +49,14 @@ test.describe("VerifyMzansi Golden Paths", () => {
     const response = await page.goto("/mzansi-market");
     // Should load without server errors (allow redirects)
     expect(response?.status()).toBeLessThan(500);
+  });
+
+  test("Legacy marketplace routes redirect to mzansi-business", async ({ page }) => {
+    await page.goto("/business-ads");
+    await expect(page).toHaveURL(/\/mzansi-business/);
+
+    await page.goto("/mall-shops");
+    await expect(page).toHaveURL(/\/mzansi-business\?type=mall_store/);
   });
 
   test("KYC verification page requires auth", async ({ page }) => {
