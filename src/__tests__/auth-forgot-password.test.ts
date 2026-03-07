@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
 const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
@@ -33,7 +33,12 @@ function createRequest(body: unknown): NextRequest {
 describe("POST /api/auth/forgot-password", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
     delete process.env.TURNSTILE_SECRET_KEY;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("returns 400 for invalid JSON", async () => {
@@ -64,6 +69,9 @@ describe("POST /api/auth/forgot-password", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+    expect(mockReset).toHaveBeenCalledWith("exists@example.com", {
+      redirectTo: "https://verifymzansi.com/auth/callback?next=%2Freset-password",
+    });
   });
 
   it("returns success even for non-existent email (anti-enumeration)", async () => {

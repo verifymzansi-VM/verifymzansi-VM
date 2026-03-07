@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
 const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
@@ -43,8 +43,13 @@ const validBody = {
 describe("POST /api/auth/register", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
     delete process.env.TURNSTILE_SECRET_KEY;
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("returns 400 for invalid JSON", async () => {
@@ -80,7 +85,7 @@ describe("POST /api/auth/register", () => {
       email: "user@example.com",
       password: "StrongP@ss1",
       options: {
-        emailRedirectTo: "http://localhost:3000/auth/callback?next=/login?confirmed=true",
+        emailRedirectTo: "https://verifymzansi.com/auth/callback?next=%2Flogin%3Fconfirmed%3Dtrue",
         data: {
           display_name: "Test User",
           phone: "+27821234567",

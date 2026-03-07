@@ -3,6 +3,7 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
+import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { z } from "zod";
 
 const log = createLogger("ResendConfirmation");
@@ -36,12 +37,12 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createClient();
-  const callbackUrl = new URL("/auth/callback?next=/login?confirmed=true", request.url);
+  const callbackUrl = buildAuthCallbackUrl(request, "/login?confirmed=true");
   const { error } = await supabase.auth.resend({
     type: "signup",
     email: parsed.data.email,
     options: {
-      emailRedirectTo: callbackUrl.toString(),
+      emailRedirectTo: callbackUrl,
     },
   });
 

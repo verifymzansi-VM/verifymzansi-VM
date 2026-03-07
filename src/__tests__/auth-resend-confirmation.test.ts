@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
 const { mockCreateClient } = vi.hoisted(() => ({
@@ -32,7 +32,14 @@ function createRequest(body: unknown): NextRequest {
 }
 
 describe("POST /api/auth/resend-confirmation", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
 
   it("returns 400 for invalid JSON", async () => {
     const req = {
@@ -77,7 +84,7 @@ describe("POST /api/auth/resend-confirmation", () => {
       type: "signup",
       email: "user@example.com",
       options: {
-        emailRedirectTo: "http://localhost:3000/auth/callback?next=/login?confirmed=true",
+        emailRedirectTo: "https://verifymzansi.com/auth/callback?next=%2Flogin%3Fconfirmed%3Dtrue",
       },
     });
   });

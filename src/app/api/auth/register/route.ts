@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
+import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 
 const log = createLogger("Register");
 
@@ -69,12 +70,12 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createClient();
-  const callbackUrl = new URL("/auth/callback?next=/login?confirmed=true", request.url);
+  const callbackUrl = buildAuthCallbackUrl(request, "/login?confirmed=true");
   const { data: signUpData, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
-      emailRedirectTo: callbackUrl.toString(),
+      emailRedirectTo: callbackUrl,
       data: {
         display_name: parsed.data.displayName,
         phone: parsed.data.phone,

@@ -68,6 +68,7 @@ describe("proxy middleware — missing Supabase env", () => {
     expect(res.status).toBe(307);
 
     const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).not.toBe("/");
     expect(location.pathname).toBe("/auth/callback");
     expect(location.searchParams.get("code")).toBe("legacy-code");
     expect(location.searchParams.get("type")).toBe("signup");

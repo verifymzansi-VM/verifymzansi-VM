@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { forgotPasswordSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
+import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 
@@ -64,11 +65,11 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createClient();
-  const callbackUrl = new URL("/auth/callback?next=/reset-password", request.url);
+  const callbackUrl = buildAuthCallbackUrl(request, "/reset-password");
 
   // Always return a generic success response to reduce account enumeration.
   await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: callbackUrl.toString(),
+    redirectTo: callbackUrl,
   });
 
   return NextResponse.json({ success: true });

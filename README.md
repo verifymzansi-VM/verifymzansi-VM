@@ -66,6 +66,10 @@ own deterministic app instance on a dedicated port.
 
 ### Supabase auth redirect URLs
 
+`NEXT_PUBLIC_APP_URL` is the canonical public origin used to generate signup
+confirmation and password reset email links. Set it per environment to the real
+app URL users can reach.
+
 Add the auth callback route to Supabase Auth redirect allow-lists for every
 origin you use:
 
@@ -75,7 +79,7 @@ origin you use:
   `https://your-preview-domain/auth/callback`
 
 Without that allow-list entry, signup confirmation emails may fall back to the
-site root instead of the app callback handler.
+site root with `?code=...` instead of the app callback handler.
 
 ### Playwright / CI smoke
 
