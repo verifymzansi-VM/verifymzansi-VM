@@ -194,6 +194,20 @@ Windows cannot materialize. Use one of:
 
 Do not run Cloudflare builds from `/mnt/c/...`.
 
+## Cloudflare MCP
+
+This workspace already includes Cloudflare MCP configuration for VS Code and
+GitHub Copilot.
+
+- Primary workspace config: [docs/cloudflare-mcp.md](docs/cloudflare-mcp.md)
+- VS Code MCP server: `.vscode/mcp.json`
+- Remote endpoint reference: `.mcp.json`
+
+Use the guide in [docs/cloudflare-mcp.md](docs/cloudflare-mcp.md) to validate
+Cloudflare MCP against this repo's R2, KV, Durable Object, and Workers/Pages
+resources. The workspace MCP command uses the validated local startup form
+`npx -y @cloudflare/mcp-server-cloudflare run`.
+
 ## Project Structure
 
 ```text

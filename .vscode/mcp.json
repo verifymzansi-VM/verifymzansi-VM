@@ -2,7 +2,7 @@
   "servers": {
     "cloudflare": {
       "command": "npx",
-      "args": ["-y", "@cloudflare/mcp-server-cloudflare"]
+      "args": ["-y", "@cloudflare/mcp-server-cloudflare", "run"]
     }
   }
 }
