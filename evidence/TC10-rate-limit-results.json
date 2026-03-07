@@ -82,25 +82,25 @@
     },
     {
       "attempt": 21,
-      "status": 401
+      "status": 429
     },
     {
       "attempt": 22,
-      "status": 401
+      "status": 429
     },
     {
       "attempt": 23,
-      "status": 401
+      "status": 429
     },
     {
       "attempt": 24,
-      "status": 401
+      "status": 429
     },
     {
       "attempt": 25,
-      "status": 401
+      "status": 429
     }
   ],
-  "rateLimited": 0,
+  "rateLimited": 5,
   "total": 25
 }

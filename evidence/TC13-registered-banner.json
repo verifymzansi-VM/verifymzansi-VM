@@ -1,4 +1,4 @@
 {
   "hasRegisteredBanner": true,
-  "note": "PASS: Registration confirmation visible on /login?registered=true."
+  "note": "PASS: Registration confirmation visible."
 }

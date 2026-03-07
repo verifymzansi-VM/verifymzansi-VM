@@ -1,4 +1,4 @@
 {
-  "spuriousErrorShown": true,
-  "note": "BUG: 10-second turnstile timeout fires in dev mode even though bypass button is available."
+  "spuriousErrorShown": false,
+  "note": "PASS: No spurious timeout error in non-production environment."
 }
