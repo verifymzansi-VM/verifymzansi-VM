@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("Notifications");
@@ -29,7 +29,7 @@ export interface CreateNotificationInput {
  */
 export async function createNotification(input: CreateNotificationInput): Promise<boolean> {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     const { error } = await supabase.from("notifications").insert({
       user_id: input.userId,
@@ -58,7 +58,7 @@ export async function createNotifications(inputs: CreateNotificationInput[]): Pr
   if (inputs.length === 0) return true;
 
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     const { error } = await supabase.from("notifications").insert(
       inputs.map((input) => ({
