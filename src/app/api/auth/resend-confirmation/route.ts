@@ -46,7 +46,21 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
-    log.warn("Resend confirmation failed", { error: error.message });
+    log.warn("Resend confirmation failed", {
+      error: error.message,
+      status: error.status,
+      code: error.code,
+    });
+
+    if (error.status === 429 || error.code === "over_email_send_rate_limit") {
+      return NextResponse.json(
+        {
+          error:
+            "Confirmation emails are temporarily rate-limited. Please wait a few minutes and try again.",
+        },
+        { status: 429 }
+      );
+    }
   }
 
   // Always return success to prevent email enumeration — even if the

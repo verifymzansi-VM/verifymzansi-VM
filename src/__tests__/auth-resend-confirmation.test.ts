@@ -109,4 +109,21 @@ describe("POST /api/auth/resend-confirmation", () => {
     const body = await res.json();
     expect(body.success).toBe(true);
   });
+
+  it("returns 429 when confirmation emails are rate limited", async () => {
+    const mockResend = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        message: "email rate limit exceeded",
+        status: 429,
+        code: "over_email_send_rate_limit",
+      },
+    });
+    mockCreateClient.mockResolvedValue({ auth: { resend: mockResend } });
+
+    const res = await POST(createRequest({ email: "user@example.com" }));
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error).toContain("rate-limited");
+  });
 });

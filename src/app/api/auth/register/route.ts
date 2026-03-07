@@ -83,8 +83,23 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
+    if (error.status === 429 || error.code === "over_email_send_rate_limit") {
+      log.warn("Signup email send rate limited", {
+        error: error.message,
+        status: error.status,
+        code: error.code,
+      });
+      return NextResponse.json(
+        {
+          error:
+            "Confirmation emails are temporarily rate-limited. Please wait a few minutes and try again.",
+        },
+        { status: 429 }
+      );
+    }
+
     // Return generic error to prevent account enumeration
-    log.error("Auth error", { error: error.message });
+    log.error("Auth error", { error: error.message, status: error.status, code: error.code });
     return NextResponse.json(
       { error: "Registration failed. Please try again or use a different email." },
       { status: 400 }

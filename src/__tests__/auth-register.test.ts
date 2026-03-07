@@ -128,4 +128,21 @@ describe("POST /api/auth/register", () => {
     expect(body.error).not.toContain("already registered");
     expect(body.error).toContain("Registration failed");
   });
+
+  it("returns 429 when signup email sending is rate limited", async () => {
+    const mockSignUp = vi.fn().mockResolvedValue({
+      data: { user: null },
+      error: {
+        message: "email rate limit exceeded",
+        status: 429,
+        code: "over_email_send_rate_limit",
+      },
+    });
+    mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
+
+    const res = await POST(createRequest(validBody));
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error).toContain("rate-limited");
+  });
 });

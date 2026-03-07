@@ -144,6 +144,19 @@ export default function LoginPage() {
         body: JSON.stringify({ email }),
       });
       const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        toast({
+          title: "Failed to resend",
+          description:
+            typeof data.error === "string"
+              ? data.error
+              : "Something went wrong. Please try again later.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Confirmation email sent",
         description: data.message || "Check your inbox for the new confirmation link.",
