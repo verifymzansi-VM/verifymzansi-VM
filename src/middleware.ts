@@ -3,9 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
 
-const logger = createLogger("Proxy");
+const logger = createLogger("Middleware");
 
-// ── Security helpers ────────────────────────────────────────
+// -- Security helpers --------------------------------------------------------
 
 /** Generate a per-request CSP nonce. */
 function generateNonce(): string {
@@ -52,15 +52,15 @@ function applySecurityHeaders(response: NextResponse, csp: string): void {
 }
 
 /**
- * Wrap a proxy result with CSP nonce + security headers.
+ * Wrap a middleware result with CSP nonce + security headers.
  * Redirects and error responses get basic security headers only.
  */
-function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse): NextResponse {
-  if (proxyResponse.headers.has("location") || proxyResponse.status >= 400) {
-    proxyResponse.headers.set("X-Content-Type-Options", "nosniff");
-    proxyResponse.headers.set("X-Frame-Options", "DENY");
-    proxyResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-    return proxyResponse;
+function withSecurityHeaders(request: NextRequest, middlewareResponse: NextResponse): NextResponse {
+  if (middlewareResponse.headers.has("location") || middlewareResponse.status >= 400) {
+    middlewareResponse.headers.set("X-Content-Type-Options", "nosniff");
+    middlewareResponse.headers.set("X-Frame-Options", "DENY");
+    middlewareResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    return middlewareResponse;
   }
 
   const nonce = generateNonce();
@@ -75,7 +75,7 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
   });
 
   // Preserve cookies set during auth (Supabase session refresh, etc.)
-  for (const cookie of proxyResponse.cookies.getAll()) {
+  for (const cookie of middlewareResponse.cookies.getAll()) {
     response.cookies.set(cookie);
   }
 
@@ -84,7 +84,7 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
   return response;
 }
 
-// ── Core routing logic (testable without security headers) ──
+// -- Core routing logic (testable without security headers) ------------------
 
 /**
  * Internal routing function that handles auth checks, role gates,
@@ -94,7 +94,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
 
-  // ── Guard: Supabase not configured ────────────────────────
+  // -- Guard: Supabase not configured ---------------------------------------
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     const protectedPrefixes = [
       "/dashboard",
@@ -123,7 +123,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.next();
   }
 
-  // ── Supabase client ───────────────────────────────────────
+  // -- Supabase client -------------------------------------------------------
 
   // Determine early whether this route needs authentication at all.
   // Public routes (home, marketplace, terms, etc.) skip the Supabase
@@ -209,13 +209,13 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return response;
   }
 
-  // ── Auth routes: redirect logged-in (real) users away ────
+  // -- Auth routes: redirect logged-in (real) users away --------------------
   const isRealUser = user && user.is_anonymous !== true;
   if (isRealUser && authRoutes.some((r) => pathname === r || pathname.startsWith(r + "/"))) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // ── Protected routes: require authentication ─────────────
+  // -- Protected routes: require authentication -----------------------------
   const protectedPrefixes = [
     "/dashboard",
     "/post",
@@ -247,7 +247,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.redirect(loginUrl);
   }
 
-  // ── Admin routes: require admin/moderator role ───────────
+  // -- Admin routes: require admin/moderator role ---------------------------
   if (
     pathname === "/admin" ||
     pathname.startsWith("/admin/") ||
@@ -268,7 +268,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     }
   }
 
-  // ── Seller gating: require verified seller for posting ───
+  // -- Seller gating: require verified seller for posting -------------------
   if (
     pathname.startsWith("/post/create") ||
     pathname.startsWith("/post/edit") ||
@@ -333,14 +333,14 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   return response;
 }
 
-// ── Next.js proxy entry point ────────────────────────────────
+// -- Next.js middleware entry point -----------------------------------------
 
 /**
- * Edge proxy called by Next.js on every matched request.
+ * Edge middleware called by Next.js on every matched request.
  * Delegates to routeRequest() for auth/routing, then wraps
  * the response with security headers (CSP nonce, HSTS, etc.).
  */
-export async function proxy(request: NextRequest): Promise<NextResponse> {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const routeResponse = await routeRequest(request);
   return withSecurityHeaders(request, routeResponse);
 }
