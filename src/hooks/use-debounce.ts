@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 /**
  * Returns a debounced version of the value that only updates
@@ -26,10 +26,14 @@ export function useDebounceValue<T>(value: T, delayMs = 300): T {
  *
  * The returned function is stable (won't change between renders).
  */
+export type DebouncedCallback<Args extends unknown[]> = ((...args: Args) => void) & {
+  cancel: () => void;
+};
+
 export function useDebouncedCallback<Args extends unknown[]>(
   callback: (...args: Args) => void,
   delayMs = 300
-): (...args: Args) => void {
+): DebouncedCallback<Args> {
   const callbackRef = useRef(callback);
 
   // Keep the ref in sync with the latest callback without triggering re-renders.
@@ -47,11 +51,24 @@ export function useDebouncedCallback<Args extends unknown[]>(
     };
   }, []);
 
-  return useCallback(
-    (...args: Args) => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => callbackRef.current(...args), delayMs);
-    },
-    [delayMs]
-  );
+  const cancel = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  return useMemo(() => {
+    const debounced = ((...args: Args) => {
+      cancel();
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        callbackRef.current(...args);
+      }, delayMs);
+    }) as DebouncedCallback<Args>;
+
+    debounced.cancel = cancel;
+
+    return debounced;
+  }, [delayMs]);
 }

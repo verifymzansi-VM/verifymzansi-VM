@@ -133,6 +133,16 @@ export function PromotionsExplorer() {
     updateFilters({ q: value || undefined });
   }, 300);
 
+  const clearQueryFilter = () => {
+    debouncedUpdateQuery.cancel();
+    updateFilters({ q: undefined });
+  };
+
+  const clearAllFilters = () => {
+    debouncedUpdateQuery.cancel();
+    router.replace(pathname, { scroll: false });
+  };
+
   useEffect(() => {
     let active = true;
 
@@ -355,63 +365,87 @@ export function PromotionsExplorer() {
             {filters.query && (
               <Badge variant="secondary" className="gap-1">
                 {filters.query}
-                <X
-                  className="h-3 w-3 cursor-pointer"
-                  onClick={() => updateFilters({ q: undefined })}
-                />
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`Remove query filter ${filters.query}`}
+                  onClick={clearQueryFilter}
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </Badge>
             )}
             {filters.type && (
               <Badge variant="secondary" className="gap-1">
                 {PROMOTION_TYPE_LABELS[filters.type]}
-                <X
-                  className="h-3 w-3 cursor-pointer"
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Remove promotion type filter"
                   onClick={() =>
                     updateFilters({
                       type: undefined,
                       event_state: undefined,
                     })
                   }
-                />
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </Badge>
             )}
             {filters.category && (
               <Badge variant="secondary" className="gap-1">
                 {BUSINESS_CATEGORIES.find((category) => category.value === filters.category)?.label}
-                <X
-                  className="h-3 w-3 cursor-pointer"
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Remove promotion category filter"
                   onClick={() => updateFilters({ category: undefined })}
-                />
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </Badge>
             )}
             {filters.province && (
               <Badge variant="secondary" className="gap-1">
                 {filters.province}
                 {filters.city && `, ${filters.city}`}
-                <X
-                  className="h-3 w-3 cursor-pointer"
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Remove promotion location filter"
                   onClick={() => updateFilters({ province: undefined, city: undefined })}
-                />
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </Badge>
             )}
             {filters.businessId && (
               <Badge variant="secondary" className="gap-1">
                 <Building2 className="h-3 w-3" />
                 {businessMap.get(filters.businessId) || "Linked business"}
-                <X
-                  className="h-3 w-3 cursor-pointer"
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Remove linked business filter"
                   onClick={() => updateFilters({ business_id: undefined })}
-                />
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </Badge>
             )}
             {filters.eventState && (
               <Badge variant="secondary" className="gap-1">
                 <Calendar className="h-3 w-3" />
                 {PROMOTION_EVENT_STATE_LABELS[filters.eventState]}
-                <X
-                  className="h-3 w-3 cursor-pointer"
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Remove event state filter"
                   onClick={() => updateFilters({ event_state: undefined })}
-                />
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </Badge>
             )}
 
@@ -419,7 +453,7 @@ export function PromotionsExplorer() {
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-xs"
-              onClick={() => router.replace(pathname, { scroll: false })}
+              onClick={clearAllFilters}
             >
               Clear all
             </Button>

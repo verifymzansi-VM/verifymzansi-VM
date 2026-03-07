@@ -38,10 +38,9 @@ export function ListingFilterSidebar() {
     (value: string) => setFilter("query", value || undefined),
     300
   );
-  // Sync local state when store changes externally (e.g. URL sync, reset).
-  // Uses the React-recommended "adjusting state during render" pattern.
   const [prevStoreQuery, setPrevStoreQuery] = useState(filters.query);
   if (filters.query !== prevStoreQuery) {
+    debouncedSetQuery.cancel();
     setPrevStoreQuery(filters.query);
     setLocalQuery(filters.query || "");
   }
@@ -216,7 +215,16 @@ export function ListingFilterSidebar() {
 
       {/* ── Reset Button ─────────────────────────── */}
       {hasActiveFilters && (
-        <Button variant="outline" size="sm" className="w-full" onClick={resetFilters}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => {
+            debouncedSetQuery.cancel();
+            setLocalQuery("");
+            resetFilters();
+          }}
+        >
           <X className="mr-1 h-3 w-3" />
           Clear all filters
         </Button>

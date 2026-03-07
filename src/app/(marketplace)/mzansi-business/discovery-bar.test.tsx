@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BusinessDiscoveryBar } from "./discovery-bar";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 
-const { useMarketplaceStoreMock } = vi.hoisted(() => ({
+const { useMarketplaceStoreMock, debounceCancelMock } = vi.hoisted(() => ({
   useMarketplaceStoreMock: vi.fn(),
+  debounceCancelMock: vi.fn(),
 }));
 
 vi.mock("@/stores", () => ({
@@ -12,7 +13,8 @@ vi.mock("@/stores", () => ({
 }));
 
 vi.mock("@/hooks/use-debounce", () => ({
-  useDebouncedCallback: (callback: (value: string) => void) => callback,
+  useDebouncedCallback: (callback: (value: string) => void) =>
+    Object.assign(callback, { cancel: debounceCancelMock }),
 }));
 
 vi.mock("@/lib/constants/sa-provinces", () => ({
@@ -84,14 +86,35 @@ describe("BusinessDiscoveryBar", () => {
       resetFilters,
     });
 
-    const { container } = render(<BusinessDiscoveryBar malls={[]} />);
+    render(<BusinessDiscoveryBar malls={[]} />);
 
     expect(screen.getByText("Fashion & Accessories", { selector: "div" })).toBeInTheDocument();
 
-    const badgeIcon = container.querySelector("svg.h-3.w-3.cursor-pointer");
-    expect(badgeIcon).not.toBeNull();
-
-    fireEvent.click(badgeIcon!);
+    fireEvent.click(screen.getByRole("button", { name: /remove business category filter/i }));
     expect(setFilter).toHaveBeenCalledWith("businessCategory", undefined);
+  });
+
+  it("cancels pending search updates when clearing the query badge", () => {
+    useMarketplaceStoreMock.mockReturnValue({
+      filters: {
+        sort: "newest",
+        attributes: {},
+        query: "coffee",
+        businessCategory: undefined,
+        businessType: undefined,
+        province: undefined,
+        city: undefined,
+        mall: undefined,
+      },
+      setFilter,
+      resetFilters,
+    });
+
+    render(<BusinessDiscoveryBar malls={[]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /remove query filter coffee/i }));
+
+    expect(debounceCancelMock).toHaveBeenCalled();
+    expect(setFilter).toHaveBeenCalledWith("query", undefined);
   });
 });

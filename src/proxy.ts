@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
 
-const logger = createLogger("Middleware");
+const logger = createLogger("Proxy");
 
 // ── Security helpers ────────────────────────────────────────
 
@@ -333,18 +333,14 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   return response;
 }
 
-// ── Next.js middleware entry point ───────────────────────────
+// ── Next.js proxy entry point ────────────────────────────────
 
 /**
- * Edge middleware called by Next.js on every matched request.
+ * Edge proxy called by Next.js on every matched request.
  * Delegates to routeRequest() for auth/routing, then wraps
  * the response with security headers (CSP nonce, HSTS, etc.).
- *
- * TODO(cloudflare-next16): Move this to `proxy.ts` only after the
- * Cloudflare/OpenNext adapter supports the Next.js 16 Node proxy runtime.
- * Until then, keep the middleware convention despite the deprecation warning.
  */
-export async function middleware(request: NextRequest): Promise<NextResponse> {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const routeResponse = await routeRequest(request);
   return withSecurityHeaders(request, routeResponse);
 }

@@ -30,9 +30,22 @@ export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
   const [prevStoreQuery, setPrevStoreQuery] = useState(filters.query);
 
   if (filters.query !== prevStoreQuery) {
+    debouncedSetQuery.cancel();
     setPrevStoreQuery(filters.query);
     setLocalQuery(filters.query || "");
   }
+
+  const clearQueryFilter = () => {
+    debouncedSetQuery.cancel();
+    setLocalQuery("");
+    setFilter("query", undefined);
+  };
+
+  const clearAllFilters = () => {
+    debouncedSetQuery.cancel();
+    setLocalQuery("");
+    resetFilters();
+  };
 
   const hasActiveFilters = [
     filters.query,
@@ -179,45 +192,71 @@ export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
           {filters.query && (
             <Badge variant="secondary" className="gap-1">
               {filters.query}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => setFilter("query", undefined)} />
+              <button
+                type="button"
+                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Remove query filter ${filters.query}`}
+                onClick={clearQueryFilter}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.businessCategory && (
             <Badge variant="secondary" className="gap-1">
               {BUSINESS_CATEGORIES.find((item) => item.value === filters.businessCategory)?.label}
-              <X
-                className="h-3 w-3 cursor-pointer"
+              <button
+                type="button"
+                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove business category filter"
                 onClick={() => setFilter("businessCategory", undefined)}
-              />
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.businessType && (
             <Badge variant="secondary" className="gap-1">
               {BUSINESS_TYPE_OPTIONS.find((item) => item.value === filters.businessType)?.label}
-              <X
-                className="h-3 w-3 cursor-pointer"
+              <button
+                type="button"
+                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove business type filter"
                 onClick={() => setFilter("businessType", undefined)}
-              />
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.province && (
             <Badge variant="secondary" className="gap-1">
               {filters.province}
               {filters.city && `, ${filters.city}`}
-              <X
-                className="h-3 w-3 cursor-pointer"
+              <button
+                type="button"
+                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove location filter"
                 onClick={() => setFilter("province", undefined)}
-              />
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.mall && (
             <Badge variant="secondary" className="gap-1">
               {malls.find((mall) => mall.id === filters.mall)?.name || "Mall"}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => setFilter("mall", undefined)} />
+              <button
+                type="button"
+                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove mall filter"
+                onClick={() => setFilter("mall", undefined)}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
 
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={resetFilters}>
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearAllFilters}>
             Clear all
           </Button>
         </div>

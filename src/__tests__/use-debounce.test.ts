@@ -46,4 +46,19 @@ describe("use-debounce", () => {
     act(() => vi.advanceTimersByTime(300));
     expect(result.current).toBe("c"); // Final value
   });
+
+  it("cancels a pending debounced callback", async () => {
+    const { useDebouncedCallback } = await import("@/hooks/use-debounce");
+    const callback = vi.fn();
+
+    const { result } = renderHook(() => useDebouncedCallback(callback, 300));
+
+    act(() => {
+      result.current("queued");
+      result.current.cancel();
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(callback).not.toHaveBeenCalled();
+  });
 });

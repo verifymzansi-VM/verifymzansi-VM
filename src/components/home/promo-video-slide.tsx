@@ -39,9 +39,9 @@ function LogoEntrance({ noMotion }: { noMotion: boolean }) {
         <Image
           src="/icons/icon-192.png?v=7"
           alt=""
-          width={64}
-          height={64}
-          className="w-12 h-12 sm:w-16 sm:h-16 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+          width={80}
+          height={80}
+          className="w-16 h-16 sm:w-20 sm:h-20 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
           priority
         />
         <span className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white drop-shadow-md">

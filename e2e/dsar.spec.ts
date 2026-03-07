@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.describe("DSAR (Data Subject Access Request)", () => {
   test("@smoke DSAR page loads", async ({ page }) => {
-    await page.goto("/dsar", { waitUntil: "networkidle" });
+    await page.goto("/dsar", { waitUntil: "domcontentloaded" });
 
     // Wait for client hydration — the form or a redirect should appear within 10s
     const formLocator = page.locator("form").first();

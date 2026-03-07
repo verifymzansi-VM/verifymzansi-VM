@@ -187,12 +187,9 @@ export function ListingFilters() {
     (value: string) => setFilter("query", value || undefined),
     300
   );
-
-  // Sync local state when store changes externally (e.g. URL sync, reset)
-  // Uses the React-recommended "adjusting state during render" pattern
-  // instead of useEffect to avoid cascading renders.
   const [prevStoreQuery, setPrevStoreQuery] = useState(filters.query);
   if (filters.query !== prevStoreQuery) {
+    debouncedSetQuery.cancel();
     setPrevStoreQuery(filters.query);
     setLocalQuery(filters.query || "");
   }
@@ -375,6 +372,8 @@ export function ListingFilters() {
                   variant="outline"
                   className="flex-1"
                   onClick={() => {
+                    debouncedSetQuery.cancel();
+                    setLocalQuery("");
                     resetFilters();
                     setFilterOpen(false);
                   }}

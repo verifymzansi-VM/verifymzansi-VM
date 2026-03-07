@@ -70,51 +70,71 @@ export function ListingGridHeader() {
           {filters.query && (
             <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
               {filters.query}
-              <X
-                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+              <button
+                type="button"
+                className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Remove query filter ${filters.query}`}
                 onClick={() => setFilter("query", undefined)}
-              />
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.category && (
             <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
               {[...CATEGORIES, ...BUSINESS_CATEGORIES].find((c) => c.value === filters.category)
                 ?.label || filters.category.replace(/_/g, " ")}
-              <X
-                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+              <button
+                type="button"
+                className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove category filter"
                 onClick={() => setFilter("category", undefined)}
-              />
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.province && (
             <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
               {filters.province}
               {filters.city && ` › ${filters.city}`}
-              <X
-                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+              <button
+                type="button"
+                className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove location filter"
                 onClick={() => setFilter("province", undefined)}
-              />
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.condition && (
             <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
               {getListingConditionLabel(filters.condition)}
-              <X
-                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+              <button
+                type="button"
+                className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove condition filter"
                 onClick={() => setFilter("condition", undefined)}
-              />
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {(filters.priceMin || filters.priceMax) && (
             <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
               R{filters.priceMin || 0} – R{filters.priceMax || "∞"}
-              <X
-                className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+              <button
+                type="button"
+                className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove price filter"
                 onClick={() => {
                   setFilter("priceMin", undefined);
                   setFilter("priceMax", undefined);
                 }}
-              />
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {Object.entries(filters.attributes)
@@ -126,10 +146,14 @@ export function ListingGridHeader() {
                 className="gap-1 text-xs px-2 py-0.5 rounded-md capitalize"
               >
                 {typeof val === "boolean" ? name.replace(/_/g, " ") : String(val)}
-                <X
-                  className="h-3 w-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`Remove ${name.replace(/_/g, " ")} filter`}
                   onClick={() => setAttribute(name, undefined)}
-                />
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </Badge>
             ))}
           <button

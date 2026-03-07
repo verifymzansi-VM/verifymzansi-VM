@@ -17,8 +17,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <Image
               src="/icons/icon-192.png?v=7"
               alt="VerifyMzansi Shield"
-              width={144}
-              height={144}
+              width={192}
+              height={192}
               className="object-contain drop-shadow-xl"
             />
             <span className="font-display text-5xl font-bold tracking-tight">
@@ -57,8 +57,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               <Image
                 src="/icons/icon-192.png?v=7"
                 alt="VerifyMzansi Shield"
-                width={96}
-                height={96}
+                width={128}
+                height={128}
                 className="object-contain drop-shadow-lg"
               />
               <span className="font-display text-3xl font-bold tracking-tight mt-1">
