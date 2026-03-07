@@ -83,9 +83,39 @@ const AREA_ITEM_LABELS: Record<MarketplaceArea, string> = {
 };
 
 /* ─────────────────────────────────────────────────────────────
-   Plan Comparison Table — horizontal table with plans as columns
+   Inline Plan Grid — compact cards matching the pricing page
    ───────────────────────────────────────────────────────────── */
-function PlanComparisonTable({
+function planFeatureList(plan: PlanDefinition): { text: string; enabled: boolean }[] {
+  const f = plan.features;
+  const rows: { text: string; enabled: boolean }[] = [];
+
+  const maxItems =
+    f.maxListings ?? f.maxStorefronts ?? f.maxProfiles ?? f.maxBusinesses ?? f.maxPromotions ?? 0;
+  const itemLabel =
+    plan.area === "MALL_SHOPS"
+      ? "storefronts"
+      : plan.area === "BUSINESS_ADS"
+        ? "profiles"
+        : plan.area === "MZANSI_BUSINESS"
+          ? "businesses"
+          : plan.area === "PROMOTIONS_EVENTS"
+            ? "promotions"
+            : "listings";
+
+  rows.push({ text: `${maxItems === -1 ? "Unlimited" : maxItems} ${itemLabel}`, enabled: true });
+  rows.push({ text: `${f.maxPhotos} photos per listing`, enabled: true });
+  rows.push({ text: "Boost listings", enabled: f.boostAllowed });
+  rows.push({ text: "Featured placement", enabled: f.featuredAllowed });
+  if (f.videoAllowed) {
+    const vCount = (f as Record<string, unknown>).maxVideos as number | undefined;
+    rows.push({ text: `${vCount ?? 1} video tour${(vCount ?? 1) > 1 ? "s" : ""}`, enabled: true });
+  } else {
+    rows.push({ text: "Video tours", enabled: false });
+  }
+  return rows;
+}
+
+function InlinePlanGrid({
   plans,
   onSubscribe,
   subscribing,
@@ -94,265 +124,92 @@ function PlanComparisonTable({
   onSubscribe: (plan: PlanDefinition) => void;
   subscribing: string | null;
 }) {
-  const area = plans[0]?.area;
-  const itemLabel =
-    area === "MALL_SHOPS"
-      ? "storefronts"
-      : area === "BUSINESS_ADS"
-        ? "profiles"
-        : area === "MZANSI_BUSINESS"
-          ? "businesses"
-          : area === "PROMOTIONS_EVENTS"
-            ? "promotions"
-            : "listings";
-
-  function getMaxItems(plan: PlanDefinition) {
-    return (
-      plan.features.maxListings ??
-      plan.features.maxStorefronts ??
-      plan.features.maxProfiles ??
-      plan.features.maxBusinesses ??
-      plan.features.maxPromotions ??
-      0
-    );
-  }
-
-  const featureRows: {
-    label: string;
-    getValue: (p: PlanDefinition) => ReactNode;
-  }[] = [
-    {
-      label: `Max ${itemLabel}`,
-      getValue: (p) => {
-        const v = getMaxItems(p);
-        return <span className="font-semibold">{v === -1 ? "Unlimited" : v}</span>;
-      },
-    },
-    {
-      label: "Photos per post",
-      getValue: (p) => <span className="font-semibold">{p.features.maxPhotos}</span>,
-    },
-    {
-      label: "Video uploads",
-      getValue: (p) =>
-        p.features.videoAllowed ? (
-          <Check className="h-4 w-4 text-brand-green mx-auto" />
-        ) : (
-          <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
-        ),
-    },
-    {
-      label: "Boost listings",
-      getValue: (p) =>
-        p.features.boostAllowed ? (
-          <Check className="h-4 w-4 text-brand-green mx-auto" />
-        ) : (
-          <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
-        ),
-    },
-    {
-      label: "Featured placement",
-      getValue: (p) =>
-        p.features.featuredAllowed ? (
-          <Check className="h-4 w-4 text-brand-green mx-auto" />
-        ) : (
-          <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
-        ),
-    },
-    {
-      label: "Urgent badge",
-      getValue: (p) =>
-        p.features.urgentAllowed ? (
-          <Check className="h-4 w-4 text-brand-green mx-auto" />
-        ) : (
-          <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
-        ),
-    },
-  ];
-
-  /* ── Mobile: compact 2-col grid (< md) ── */
-  const mobileView = (
-    <div className="md:hidden grid grid-cols-2 gap-2">
+  return (
+    <div
+      className={`grid grid-cols-2 ${
+        plans.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"
+      } gap-3 max-w-4xl mx-auto`}
+    >
       {plans.map((plan) => {
         const isPopular = plan.tier === "growth";
         const isPremium = plan.tier === "pro";
-        const maxItems = getMaxItems(plan);
+        const features = planFeatureList(plan);
         return (
-          <div
+          <Card
             key={`${plan.area}-${plan.tier}`}
-            className={`relative rounded-lg border p-3 space-y-2 ${
+            className={`relative ${
               isPopular
-                ? "border-brand-green ring-1 ring-brand-green/20"
+                ? "border-brand-green shadow-md ring-1 ring-brand-green/20"
                 : isPremium
                   ? "border-brand-gold/50"
-                  : "border-border"
+                  : ""
             }`}
           >
             {isPopular && (
-              <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-brand-green text-white text-[10px] gap-0.5 px-1.5 py-0">
-                <Sparkles className="h-2.5 w-2.5" /> Best Value
-              </Badge>
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <Badge className="bg-brand-green text-white gap-1 text-[10px] px-2 py-0.5 whitespace-nowrap">
+                  <Sparkles className="h-3 w-3" />
+                  MOST POPULAR
+                </Badge>
+              </div>
             )}
             {isPremium && (
-              <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-brand-gold text-amber-950 text-[10px] gap-0.5 px-1.5 py-0">
-                <Crown className="h-2.5 w-2.5" /> Premium
-              </Badge>
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <Badge className="bg-brand-gold text-amber-950 gap-1 text-[10px] px-2 py-0.5 whitespace-nowrap">
+                  <Crown className="h-3 w-3" />
+                  PREMIUM
+                </Badge>
+              </div>
             )}
-            <div className="text-center">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                {plan.tier}
-              </p>
-              <p className="font-display text-xl font-bold leading-tight">
-                R{plan.priceCents / 100}
-              </p>
-              <p className="text-[10px] text-muted-foreground">/ 30 days</p>
-            </div>
-            <div className="text-[11px] space-y-0.5 text-muted-foreground">
-              <p>
-                {maxItems === -1 ? "Unlimited" : maxItems} {itemLabel}
-              </p>
-              <p>{plan.features.maxPhotos} photos</p>
-              {plan.features.videoAllowed && (
-                <p className="text-brand-green flex items-center gap-0.5">
-                  <Check className="h-3 w-3" /> Video
-                </p>
-              )}
-              {plan.features.boostAllowed && (
-                <p className="flex items-center gap-0.5">
-                  <Check className="h-3 w-3" /> Boost
-                </p>
-              )}
-            </div>
-            <Button
-              size="sm"
-              className="w-full text-xs h-7 gap-1"
-              variant={isPopular ? "default" : "outline"}
-              disabled={subscribing !== null}
-              onClick={() => onSubscribe(plan)}
-            >
-              {subscribing === `${plan.area}-${plan.tier}` ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <>
-                  Choose <ArrowRight className="h-3 w-3" />
-                </>
-              )}
-            </Button>
-          </div>
+
+            <CardContent className="p-4 pt-5 space-y-3">
+              {/* Plan name + price */}
+              <div className="text-center">
+                <h3 className="font-display text-base font-bold capitalize">{plan.tier}</h3>
+                <div className="mt-0.5">
+                  <span className="font-display text-2xl font-bold">R{plan.priceCents / 100}</span>
+                  <span className="text-xs text-muted-foreground"> / 30 days</span>
+                </div>
+              </div>
+
+              {/* Feature list */}
+              <ul className="space-y-1.5 text-sm">
+                {features.map((feat) => (
+                  <li key={feat.text} className="flex items-center gap-1.5">
+                    {feat.enabled ? (
+                      <Check className="h-4 w-4 text-brand-green flex-shrink-0" />
+                    ) : (
+                      <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                    )}
+                    <span className={feat.enabled ? "" : "text-muted-foreground/60"}>
+                      {feat.text}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Subscribe button */}
+              <Button
+                className="w-full gap-1.5 text-sm"
+                size="sm"
+                variant={isPopular ? "default" : "outline"}
+                disabled={subscribing !== null}
+                onClick={() => onSubscribe(plan)}
+              >
+                {subscribing === `${plan.area}-${plan.tier}` ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Processing…
+                  </>
+                ) : (
+                  `Choose ${plan.tier.charAt(0).toUpperCase() + plan.tier.slice(1)}`
+                )}
+              </Button>
+            </CardContent>
+          </Card>
         );
       })}
     </div>
-  );
-
-  /* ── Desktop: comparison table (md+) ── */
-  const desktopView = (
-    <div className="hidden md:block overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
-        {/* ── Header: plan names + prices ── */}
-        <thead>
-          <tr>
-            <th className="text-left py-2 pr-4 w-[140px]"> </th>
-            {plans.map((plan) => {
-              const isPopular = plan.tier === "growth";
-              const isPremium = plan.tier === "pro";
-              return (
-                <th
-                  key={`${plan.area}-${plan.tier}`}
-                  className={`text-center px-3 pt-1 pb-3 relative ${
-                    isPopular ? "bg-brand-green/5 rounded-t-lg" : ""
-                  }`}
-                >
-                  {isPopular && (
-                    <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-brand-green text-white gap-0.5 text-[10px] px-2 py-0">
-                      <Sparkles className="h-2.5 w-2.5" /> Best Value
-                    </Badge>
-                  )}
-                  {isPremium && (
-                    <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-brand-gold text-amber-950 gap-0.5 text-[10px] px-2 py-0">
-                      <Crown className="h-2.5 w-2.5" /> Premium
-                    </Badge>
-                  )}
-                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mt-1">
-                    {plan.tier}
-                  </p>
-                  <p className="font-display text-2xl font-bold leading-tight">
-                    R{plan.priceCents / 100}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground font-normal">/ 30 days</p>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        {/* ── Feature rows ── */}
-        <tbody>
-          {featureRows.map((row, i) => (
-            <tr key={row.label} className={i % 2 === 0 ? "bg-muted/30" : ""}>
-              <td className="py-1.5 pr-4 text-xs text-muted-foreground whitespace-nowrap">
-                {row.label}
-              </td>
-              {plans.map((plan) => {
-                const isPopular = plan.tier === "growth";
-                return (
-                  <td
-                    key={`${plan.area}-${plan.tier}`}
-                    className={`text-center py-1.5 px-3 text-xs ${
-                      isPopular ? "bg-brand-green/5" : ""
-                    }`}
-                  >
-                    {row.getValue(plan)}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-        {/* ── CTA row ── */}
-        <tfoot>
-          <tr>
-            <td className="pt-3"> </td>
-            {plans.map((plan) => {
-              const isPopular = plan.tier === "growth";
-              return (
-                <td
-                  key={`${plan.area}-${plan.tier}`}
-                  className={`text-center pt-3 px-2 ${
-                    isPopular ? "bg-brand-green/5 rounded-b-lg" : ""
-                  }`}
-                >
-                  <Button
-                    size="sm"
-                    className="w-full gap-1 text-xs"
-                    variant={isPopular ? "default" : "outline"}
-                    disabled={subscribing !== null}
-                    onClick={() => onSubscribe(plan)}
-                  >
-                    {subscribing === `${plan.area}-${plan.tier}` ? (
-                      <>
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Processing…
-                      </>
-                    ) : (
-                      <>
-                        Choose {plan.tier.charAt(0).toUpperCase() + plan.tier.slice(1)}
-                        <ArrowRight className="h-3 w-3" />
-                      </>
-                    )}
-                  </Button>
-                </td>
-              );
-            })}
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-  );
-
-  return (
-    <>
-      {mobileView}
-      {desktopView}
-    </>
   );
 }
 
@@ -626,11 +483,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           </p>
         </div>
 
-        <PlanComparisonTable
-          plans={areaPlans}
-          onSubscribe={handleSubscribe}
-          subscribing={subscribing}
-        />
+        <InlinePlanGrid plans={areaPlans} onSubscribe={handleSubscribe} subscribing={subscribing} />
 
         <p className="text-center text-xs text-muted-foreground">
           All plans include verification badge • Cancel anytime •{" "}
@@ -674,7 +527,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
         </Card>
 
         {upgradePlans.length > 0 && (
-          <PlanComparisonTable
+          <InlinePlanGrid
             plans={upgradePlans}
             onSubscribe={handleSubscribe}
             subscribing={subscribing}
@@ -854,11 +707,7 @@ function PlanPickerWithTrial({
             Best Value
           </Badge>
         </h3>
-        <PlanComparisonTable
-          plans={areaPlans}
-          onSubscribe={onSubscribe}
-          subscribing={subscribing}
-        />
+        <InlinePlanGrid plans={areaPlans} onSubscribe={onSubscribe} subscribing={subscribing} />
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
