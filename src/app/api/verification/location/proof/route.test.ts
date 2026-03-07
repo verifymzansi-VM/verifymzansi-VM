@@ -8,6 +8,7 @@ const {
   mockCreateAdminClient,
   mockFrom,
   mockUploadKycDocument,
+  mockDeleteFromR2,
   mockLogAuditEvent,
   mockProcessKycArtifact,
   mockIsFeatureEnabled,
@@ -16,6 +17,7 @@ const {
   mockCreateAdminClient: vi.fn(),
   mockFrom: vi.fn(),
   mockUploadKycDocument: vi.fn(),
+  mockDeleteFromR2: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockProcessKycArtifact: vi.fn(),
   mockIsFeatureEnabled: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/services/storage", () => ({
   uploadKycDocument: mockUploadKycDocument,
+  deleteFromR2: mockDeleteFromR2,
 }));
 
 vi.mock("@/lib/services/audit", () => ({
@@ -87,10 +90,18 @@ function setupDefaultMocks() {
             single: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
           }),
         }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
+        update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+          if (payload.seller_verification_status) {
+            return {
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            };
+          }
+
+          return {
             eq: vi.fn().mockResolvedValue({ error: null }),
-          }),
+          };
         }),
       };
     }
@@ -101,8 +112,22 @@ function setupDefaultMocks() {
             single: vi.fn().mockResolvedValue({ data: { id: "artifact-1" }, error: null }),
           }),
         }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
+        update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+          if (payload.status === "rejected") {
+            return {
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  neq: vi.fn().mockReturnValue({
+                    in: vi.fn().mockResolvedValue({ error: null }),
+                  }),
+                }),
+              }),
+            };
+          }
+
+          return {
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          };
         }),
       };
     }
@@ -240,5 +265,119 @@ describe("POST /api/verification/location/proof", () => {
         actorId: "user-1",
       })
     );
+  });
+
+  it("clears prior review metadata and reopens the verification session on proof resubmission", async () => {
+    mockAuth({ id: "user-1" });
+
+    const stepUpsert = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
+      }),
+    });
+    const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "seller_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              in: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: "artifact-1" }, error: null }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  in: vi.fn().mockResolvedValue({ error: null }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          upsert: stepUpsert,
+        };
+      }
+      if (table === "verification_sessions") {
+        return { upsert: sessionUpsert };
+      }
+      return {};
+    });
+
+    const file = new File(["test"], "proof.jpg", { type: "image/jpeg" });
+    const response = await POST(createProofRequest(file, "Gauteng", "Johannesburg"));
+
+    expect(response.status).toBe(200);
+    expect(stepUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "pending",
+        reviewed_by: null,
+        reviewed_at: null,
+        reason_code: null,
+        reason_note: null,
+        override_reason_code: null,
+      }),
+      { onConflict: "user_id,step_type" }
+    );
+    expect(sessionUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "user-1",
+        location_submitted_at: expect.any(String),
+        finalized_at: null,
+      }),
+      { onConflict: "user_id" }
+    );
+  });
+
+  it("rolls back proof upload when artifact insert fails", async () => {
+    mockAuth({ id: "user-1" });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "seller_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: null, error: { message: "boom" } }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    mockUploadKycDocument.mockResolvedValue({ url: "u", key: "real-proof-key" });
+    mockDeleteFromR2.mockResolvedValue(undefined);
+
+    const file = new File(["test"], "proof.jpg", { type: "image/jpeg" });
+    const response = await POST(createProofRequest(file, "Gauteng", "Johannesburg"));
+
+    expect(response.status).toBe(500);
+    expect(mockDeleteFromR2).toHaveBeenCalled();
   });
 });

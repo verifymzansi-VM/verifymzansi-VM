@@ -21,6 +21,10 @@ interface TurnstileVerifyResult {
   hostname?: string;
 }
 
+export type TurnstileConfigStatus =
+  | { configured: true }
+  | { configured: false; reason: "missing-secret" | "missing-site-key" | "dummy-site-key" };
+
 async function readResponseBody(response: {
   text?: () => Promise<string>;
   json?: () => Promise<unknown>;
@@ -46,6 +50,25 @@ async function readResponseBody(response: {
   return "";
 }
 
+export function getTurnstileConfigStatus(): TurnstileConfigStatus {
+  const secretKey = process.env.TURNSTILE_SECRET_KEY?.trim();
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
+
+  if (!secretKey || secretKey === "dummy_secret_key") {
+    return { configured: false, reason: "missing-secret" };
+  }
+
+  if (!siteKey) {
+    return { configured: false, reason: "missing-site-key" };
+  }
+
+  if (siteKey === "dummy_site_key") {
+    return { configured: false, reason: "dummy-site-key" };
+  }
+
+  return { configured: true };
+}
+
 /**
  * Verify a Turnstile token with Cloudflare
  *
@@ -55,9 +78,9 @@ async function readResponseBody(response: {
 export async function verifyTurnstileToken(
   params: TurnstileVerifyParams
 ): Promise<TurnstileVerifyResult> {
-  const secretKey = process.env.TURNSTILE_SECRET_KEY;
+  const configStatus = getTurnstileConfigStatus();
 
-  if (!secretKey || secretKey === "dummy_secret_key") {
+  if (!configStatus.configured) {
     log.error("Secret key not configured or is dummy");
     // In development or Playwright test mode, allow bypass token
     if (
@@ -68,6 +91,8 @@ export async function verifyTurnstileToken(
     }
     throw new Error("Turnstile secret key not configured");
   }
+
+  const secretKey = process.env.TURNSTILE_SECRET_KEY as string;
 
   // Allow placeholder in development ONLY when secret key is not set.
   // When a real key is configured, always verify against Cloudflare

@@ -3,14 +3,15 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { forgotPasswordSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
-import { verifyTurnstileToken } from "@/lib/utils/turnstile";
+import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 
 export async function POST(request: NextRequest) {
   const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
+  const turnstileStatus = getTurnstileConfigStatus();
   if (
     process.env.NODE_ENV === "production" &&
-    !process.env.TURNSTILE_SECRET_KEY &&
+    !turnstileStatus.configured &&
     !isPlaywrightTestMode
   ) {
     return NextResponse.json({ error: "Password reset temporarily unavailable" }, { status: 503 });
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (process.env.TURNSTILE_SECRET_KEY) {
+  if (turnstileStatus.configured) {
     const captcha = await verifyTurnstileToken({
       token: parsed.data.turnstileToken,
       remoteIp: getClientIp(request),

@@ -160,7 +160,19 @@ export async function POST(request: Request) {
             },
           });
         }
+      } else {
+        await admin
+          .from("seller_profiles")
+          .update({ seller_verification_status: "pending_review" })
+          .eq("user_id", step.user_id)
+          .in("seller_verification_status", ["incomplete", "pending_review", "rejected"]);
       }
+    } else {
+      await admin
+        .from("seller_profiles")
+        .update({ seller_verification_status: "rejected" })
+        .eq("user_id", step.user_id)
+        .in("seller_verification_status", ["incomplete", "pending_review", "rejected"]);
     }
 
     // Log audit event

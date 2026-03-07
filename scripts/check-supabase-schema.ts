@@ -6,10 +6,15 @@ loadEnvConfig(process.cwd());
 
 export const REQUIRED_TABLES = [
   "listings",
+  "promotions",
   "seller_profiles",
   "plans",
   "storefronts",
-  "business_profiles",
+  "businesses",
+  "otp_challenges",
+  "verification_steps",
+  "verification_sessions",
+  "kyc_artifacts",
 ] as const;
 
 type SchemaTableCheck = {

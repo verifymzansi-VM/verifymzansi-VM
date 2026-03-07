@@ -6,7 +6,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { uploadKycDocument } from "@/lib/services/storage";
+import { deleteFromR2, uploadKycDocument } from "@/lib/services/storage";
 import { processKycArtifact } from "@/lib/services/kyc-engine";
 import { logAuditEvent } from "@/lib/services/audit";
 import { validateUploadedFile } from "@/lib/validations/verification";
@@ -18,6 +18,10 @@ import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { MAX_FILE_SIZE_BYTES } from "@/lib/constants/verification";
 import { getProvinceNames } from "@/lib/constants/sa-provinces";
 import { isStrictLocalDevelopmentRequest } from "@/lib/utils/local-dev";
+import {
+  buildPendingVerificationStep,
+  buildVerificationSessionResumePatch,
+} from "@/lib/services/verification-state";
 
 export async function POST(request: NextRequest) {
   try {
@@ -112,8 +116,10 @@ export async function POST(request: NextRequest) {
 
     // Upload encrypted file to R2
     let uploadResult: { url: string; key: string };
+    let uploadedToR2 = false;
     try {
       uploadResult = await uploadKycDocument(file, user.id, "proof_of_address");
+      uploadedToR2 = true;
     } catch (uploadErr) {
       if (!allowDevFallback) {
         log.error("R2 upload failed", {
@@ -143,7 +149,34 @@ export async function POST(request: NextRequest) {
 
     if (artifactErr || !artifact) {
       log.error("Failed to insert artifact", { error: artifactErr?.message ?? "unknown" });
+
+      if (uploadedToR2) {
+        try {
+          const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+          await deleteFromR2(privateBucket, uploadResult.key);
+        } catch (cleanupErr) {
+          log.error("Failed to roll back orphaned proof artifact", {
+            error: cleanupErr instanceof Error ? cleanupErr.message : "unknown error",
+          });
+        }
+      }
+
       return NextResponse.json({ error: "Failed to record artifact" }, { status: 500 });
+    }
+
+    const { error: supersedeError } = await adminClient
+      .from("kyc_artifacts")
+      .update({ status: "rejected" })
+      .eq("user_id", user.id)
+      .eq("step_type", "location")
+      .neq("id", artifact.id)
+      .in("status", ["pending", "needs_resubmission"]);
+
+    if (supersedeError) {
+      log.warn("Failed to supersede prior proof-of-address artifacts", {
+        error: supersedeError.message,
+        userId: user.id,
+      });
     }
 
     // Run risk engine (SHA-256 dedup, velocity checks)
@@ -182,10 +215,9 @@ export async function POST(request: NextRequest) {
     const { data: step, error: stepErr } = await adminClient
       .from("verification_steps")
       .upsert(
-        {
+        buildPendingVerificationStep({
           user_id: user.id,
           step_type: "location",
-          status: "pending",
           location_method: "proof_of_address",
           location_province: province,
           location_city: city,
@@ -193,7 +225,7 @@ export async function POST(request: NextRequest) {
           risk_level: riskLevel,
           auto_status: "needs_manual_review",
           submitted_at: new Date().toISOString(),
-        },
+        }),
         { onConflict: "user_id,step_type" }
       )
       .select("id")
@@ -206,10 +238,9 @@ export async function POST(request: NextRequest) {
 
     // Update verification session
     await adminClient.from("verification_sessions").upsert(
-      {
-        user_id: user.id,
+      buildVerificationSessionResumePatch(user.id, {
         location_submitted_at: new Date().toISOString(),
-      },
+      }),
       { onConflict: "user_id" }
     );
 
@@ -226,7 +257,7 @@ export async function POST(request: NextRequest) {
       .from("seller_profiles")
       .update({ seller_verification_status: "pending_review" })
       .eq("user_id", user.id)
-      .eq("seller_verification_status", "incomplete");
+      .in("seller_verification_status", ["incomplete", "rejected"]);
 
     // Audit log
     await logAuditEvent({

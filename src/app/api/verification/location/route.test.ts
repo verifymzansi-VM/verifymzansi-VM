@@ -106,10 +106,21 @@ describe("POST /api/verification/location", () => {
   });
 
   it("saves location and creates location verification step", async () => {
-    const updateMock = vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
+    const updateMock = vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+      if (payload.seller_verification_status) {
+        return {
+          eq: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+
+      return {
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      };
     });
     const upsertMock = vi.fn().mockResolvedValue({ error: null });
+    const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
 
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -133,6 +144,12 @@ describe("POST /api/verification/location", () => {
         };
       }
 
+      if (table === "verification_sessions") {
+        return {
+          upsert: sessionUpsert,
+        };
+      }
+
       return {};
     });
 
@@ -150,10 +167,23 @@ describe("POST /api/verification/location", () => {
         user_id: "user-1",
         step_type: "location",
         status: "pending",
+        reviewed_by: null,
+        reviewed_at: null,
+        reason_code: null,
+        reason_note: null,
+        override_reason_code: null,
         location_province: "Gauteng",
         location_city: "Johannesburg",
       }),
       { onConflict: "user_id,step_type" }
+    );
+    expect(sessionUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "user-1",
+        location_submitted_at: expect.any(String),
+        finalized_at: null,
+      }),
+      { onConflict: "user_id" }
     );
   });
 });

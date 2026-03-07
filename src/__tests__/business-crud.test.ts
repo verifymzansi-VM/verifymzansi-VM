@@ -206,4 +206,18 @@ describe("POST /api/businesses", () => {
       })
     );
   });
+
+  it("rejects business media hosted outside the platform", async () => {
+    const res = await POST(
+      createRequest({
+        ...VALID_BODY,
+        logo_url: "https://evil.example.com/logo.png",
+      })
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Validation failed",
+    });
+  });
 });

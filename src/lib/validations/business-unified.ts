@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
 
 const saPhoneRegex = /^(\+27|0)[6-8][0-9]{8}$/;
 
@@ -27,6 +28,15 @@ const BUSINESS_CATEGORIES = [
 ] as const;
 
 const optionalText = (max: number) => z.string().trim().max(max).optional().or(z.literal(""));
+const mediaUrlField = (label: string) =>
+  z
+    .string()
+    .url()
+    .refine(isTrustedPlatformMediaUrl, {
+      message: `${label} must be hosted on the VerifyMzansi platform`,
+    })
+    .optional()
+    .or(z.literal(""));
 
 const serviceAreasSchema = z.object({
   areas: z.array(z.string().trim().min(1)).min(1, "Add at least one service area."),
@@ -146,12 +156,16 @@ export const businessSchema = z
     website: z.string().url("Enter a valid URL").optional().or(z.literal("")),
 
     // Media
-    logo_url: z.string().url().optional().or(z.literal("")),
-    cover_photo: z.string().url().optional().or(z.literal("")),
-    cover_video: z.string().url().optional().or(z.literal("")),
-    video_thumbnail: z.string().url().optional().or(z.literal("")),
+    logo_url: mediaUrlField("Logo"),
+    cover_photo: mediaUrlField("Cover photo"),
+    cover_video: mediaUrlField("Cover video"),
+    video_thumbnail: mediaUrlField("Video thumbnail"),
     gallery_photos: z
-      .array(z.string().url())
+      .array(
+        z.string().url().refine(isTrustedPlatformMediaUrl, {
+          message: "Gallery photos must be hosted on the VerifyMzansi platform",
+        })
+      )
       .max(5, "Maximum 5 gallery photos")
       .optional()
       .default([]),

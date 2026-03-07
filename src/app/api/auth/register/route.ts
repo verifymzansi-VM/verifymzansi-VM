@@ -3,30 +3,25 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { registerSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyTurnstileToken } from "@/lib/utils/turnstile";
+import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
+import { buildSellerPhoneFields, normalizeSaPhone } from "@/lib/utils/phone";
 
 const log = createLogger("Register");
 
 export async function POST(request: NextRequest) {
   const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
+  const turnstileStatus = getTurnstileConfigStatus();
+
   if (
     process.env.NODE_ENV === "production" &&
-    !process.env.TURNSTILE_SECRET_KEY &&
+    !turnstileStatus.configured &&
     !isPlaywrightTestMode
   ) {
     return NextResponse.json({ error: "Registration temporarily unavailable" }, { status: 503 });
   }
-
-  // Turnstile is only fully operational when BOTH the server secret key AND
-  // the client site key are configured.  When the site key is missing, the
-  // client widget cannot render a real challenge and falls back to a dev-bypass
-  // token that Cloudflare will always reject with "invalid-input-response".
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-  const turnstileFullyConfigured =
-    !!process.env.TURNSTILE_SECRET_KEY && !!siteKey && siteKey !== "dummy_site_key";
 
   // Rate limit by client IP
   const ip = getClientIp(request);
@@ -51,7 +46,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (turnstileFullyConfigured) {
+  if (turnstileStatus.configured) {
     const captcha = await verifyTurnstileToken({
       token: parsed.data.turnstileToken,
       remoteIp: getClientIp(request),
@@ -63,12 +58,10 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-  } else if (process.env.TURNSTILE_SECRET_KEY && !siteKey) {
-    log.warn(
-      "Turnstile secret key is set but NEXT_PUBLIC_TURNSTILE_SITE_KEY is missing — skipping CAPTCHA verification"
-    );
   }
 
+  const normalizedPhone = normalizeSaPhone(parsed.data.phone);
+  const sellerPhoneFields = buildSellerPhoneFields(normalizedPhone);
   const supabase = await createClient();
   const callbackUrl = buildAuthCallbackUrl(request, "/login?confirmed=true");
   const { data: signUpData, error } = await supabase.auth.signUp({
@@ -78,7 +71,7 @@ export async function POST(request: NextRequest) {
       emailRedirectTo: callbackUrl,
       data: {
         display_name: parsed.data.displayName,
-        phone: parsed.data.phone,
+        phone: normalizedPhone,
       },
     },
   });
@@ -125,8 +118,8 @@ export async function POST(request: NextRequest) {
         {
           user_id: signUpData.user.id,
           display_name: parsed.data.displayName,
-          phone: parsed.data.phone,
-          seller_verification_status: "unverified",
+          ...sellerPhoneFields,
+          seller_verification_status: "incomplete",
           account_status: "active",
         },
         { onConflict: "user_id" }

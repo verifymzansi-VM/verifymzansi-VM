@@ -148,6 +148,16 @@ describe("listingSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects listing images hosted outside the platform", () => {
+    const result = listingSchema.safeParse({
+      ...baseFields,
+      images: ["https://evil.example.com/image.jpg"],
+      category: "electronics",
+      attributes: { brand: "LG" },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects negative price", () => {
     const result = listingSchema.safeParse({
       ...baseFields,

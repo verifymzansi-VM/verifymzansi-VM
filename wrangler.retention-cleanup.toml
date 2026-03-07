@@ -33,6 +33,11 @@ SUPABASE_URL = ""
 binding = "R2_PRIVATE"
 bucket_name = "verifymzansi-private"
 
+# Public bucket — worker deletes removed listing/business/promotion media from here
+[[r2_buckets]]
+binding = "R2_PUBLIC"
+bucket_name = "verifymzansi-public"
+
 # ────────────────────────────────────────────────────────────────────────────
 # Cron Trigger — daily at 03:00 UTC
 # ────────────────────────────────────────────────────────────────────────────

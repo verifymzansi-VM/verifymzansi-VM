@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { loginSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
-import { verifyTurnstileToken } from "@/lib/utils/turnstile";
+import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -10,17 +10,14 @@ const log = createLogger("Login");
 
 export async function POST(request: NextRequest) {
   const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
+  const turnstileStatus = getTurnstileConfigStatus();
   if (
     process.env.NODE_ENV === "production" &&
-    !process.env.TURNSTILE_SECRET_KEY &&
+    !turnstileStatus.configured &&
     !isPlaywrightTestMode
   ) {
     return NextResponse.json({ error: "Authentication temporarily unavailable" }, { status: 503 });
   }
-
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-  const turnstileFullyConfigured =
-    !!process.env.TURNSTILE_SECRET_KEY && !!siteKey && siteKey !== "dummy_site_key";
 
   // Rate limit by client IP
   const ip = getClientIp(request);
@@ -45,7 +42,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (turnstileFullyConfigured) {
+  if (turnstileStatus.configured) {
     // If the Turnstile widget failed to load on the client, the token will
     // be "turnstile-unavailable". Apply stricter rate limiting rather than
     // skipping CAPTCHA entirely, as this token is easily spoofed.
@@ -76,10 +73,6 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-  } else if (process.env.TURNSTILE_SECRET_KEY && !siteKey) {
-    log.warn(
-      "Turnstile secret key is set but NEXT_PUBLIC_TURNSTILE_SITE_KEY is missing — skipping CAPTCHA verification"
-    );
   }
 
   const supabase = await createClient();

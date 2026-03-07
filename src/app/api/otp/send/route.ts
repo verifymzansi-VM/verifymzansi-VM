@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { saPhoneSchema } from "@/lib/validations/shared";
 import { sendOtpSms } from "@/lib/services/sms";
 import { createLogger } from "@/lib/utils/logger";
+import { normalizeSaPhone } from "@/lib/utils/phone";
 
 const log = createLogger("OTP");
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
@@ -50,10 +51,6 @@ async function hashOtp(otp: string): Promise<string> {
   );
   const hashHex = toHex(new Uint8Array(derivedBits));
   return `${saltHex}:${hashHex}`;
-}
-
-function normalizeSaPhone(phone: string): string {
-  return phone.startsWith("0") ? `+27${phone.slice(1)}` : phone;
 }
 
 function shouldExposeDevOtp(request: NextRequest): boolean {

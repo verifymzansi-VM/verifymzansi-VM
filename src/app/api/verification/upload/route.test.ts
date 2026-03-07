@@ -98,12 +98,20 @@ function setupDefaultAdminMocks() {
             maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
           }),
         }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            in: vi.fn().mockReturnValue({
-              select: vi.fn().mockResolvedValue({ data: [], error: null }),
-            }),
-          }),
+        update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+          if (payload.seller_verification_status) {
+            return {
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockReturnValue({
+                  select: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
+              }),
+            };
+          }
+
+          return {
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          };
         }),
       };
     }
@@ -114,8 +122,22 @@ function setupDefaultAdminMocks() {
             single: vi.fn().mockResolvedValue({ data: { id: "artifact-1" }, error: null }),
           }),
         }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
+        update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+          if (payload.status === "rejected") {
+            return {
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  neq: vi.fn().mockReturnValue({
+                    in: vi.fn().mockResolvedValue({ error: null }),
+                  }),
+                }),
+              }),
+            };
+          }
+
+          return {
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          };
         }),
       };
     }
@@ -294,12 +316,20 @@ describe("POST /api/verification/upload", () => {
             }),
           }),
           upsert: upsertMock,
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              in: vi.fn().mockReturnValue({
-                select: vi.fn().mockResolvedValue({ data: [], error: null }),
-              }),
-            }),
+          update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+            if (payload.seller_verification_status) {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  in: vi.fn().mockReturnValue({
+                    select: vi.fn().mockResolvedValue({ data: [], error: null }),
+                  }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            };
           }),
         };
       }
@@ -310,8 +340,22 @@ describe("POST /api/verification/upload", () => {
               single: vi.fn().mockResolvedValue({ data: { id: "artifact-1" }, error: null }),
             }),
           }),
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
+          update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+            if (payload.status === "rejected") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    neq: vi.fn().mockReturnValue({
+                      in: vi.fn().mockResolvedValue({ error: null }),
+                    }),
+                  }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            };
           }),
         };
       }
@@ -393,5 +437,240 @@ describe("POST /api/verification/upload", () => {
     const response = await POST(req);
     expect(response.status).toBe(500);
     expect(mockDeleteFromR2).toHaveBeenCalled();
+  });
+
+  it("promotes seller status to pending_review and links the artifact into the session", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+
+    const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
+    const sellerStatusSelect = vi
+      .fn()
+      .mockResolvedValue({ data: [{ id: "profile-1" }], error: null });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "seller_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+            }),
+          }),
+          update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+            if (payload.seller_verification_status) {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  in: vi.fn().mockReturnValue({
+                    select: sellerStatusSelect,
+                  }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            };
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: "artifact-1" }, error: null }),
+            }),
+          }),
+          update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+            if (payload.status === "rejected") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    neq: vi.fn().mockReturnValue({
+                      in: vi.fn().mockResolvedValue({ error: null }),
+                    }),
+                  }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            };
+          }),
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          upsert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+      if (table === "verification_sessions") {
+        return {
+          upsert: sessionUpsert,
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  id_artifact_id: "artifact-1",
+                  selfie_artifact_id: null,
+                  location_submitted_at: null,
+                  finalized_at: null,
+                },
+                error: null,
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    mockUploadKycDocument.mockResolvedValue({ url: "u", key: "k" });
+    mockProcessKycArtifact.mockResolvedValue({
+      sha256: "abc",
+      riskScore: 0,
+      riskLevel: "low",
+      providerRef: "ref",
+      autoStatus: "needs_manual_review",
+    });
+    mockLogAuditEvent.mockResolvedValue(undefined);
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(sessionUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "user-1",
+        id_artifact_id: "artifact-1",
+      }),
+      { onConflict: "user_id" }
+    );
+    expect(sellerStatusSelect).toHaveBeenCalled();
+  });
+
+  it("clears prior review metadata and reopens the verification session on resubmission", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+
+    const stepUpsert = vi.fn().mockResolvedValue({ error: null });
+    const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "seller_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+            }),
+          }),
+          update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+            if (payload.seller_verification_status) {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  in: vi.fn().mockReturnValue({
+                    select: vi.fn().mockResolvedValue({ data: [{ id: "profile-1" }], error: null }),
+                  }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            };
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: "artifact-1" }, error: null }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  in: vi.fn().mockResolvedValue({ error: null }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          upsert: stepUpsert,
+        };
+      }
+      if (table === "verification_sessions") {
+        return {
+          upsert: sessionUpsert,
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  id_artifact_id: "artifact-1",
+                  selfie_artifact_id: null,
+                  location_submitted_at: null,
+                  finalized_at: null,
+                },
+                error: null,
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    mockUploadKycDocument.mockResolvedValue({ url: "u", key: "k" });
+    mockProcessKycArtifact.mockResolvedValue({
+      sha256: "abc",
+      riskScore: 10,
+      riskLevel: "medium",
+      providerRef: "provider-ref",
+      autoStatus: "needs_manual_review",
+    });
+
+    const req = createFormDataRequest({
+      file: createTestFile(),
+      docType: "id_document",
+    });
+
+    const response = await POST(req);
+    expect(response.status).toBe(200);
+    expect(stepUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "pending",
+        reviewed_by: null,
+        reviewed_at: null,
+        reason_code: null,
+        reason_note: null,
+        override_reason_code: null,
+      }),
+      { onConflict: "user_id,step_type" }
+    );
+    expect(sessionUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "user-1",
+        id_artifact_id: "artifact-1",
+        finalized_at: null,
+      }),
+      { onConflict: "user_id" }
+    );
   });
 });

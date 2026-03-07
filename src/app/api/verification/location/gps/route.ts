@@ -16,6 +16,10 @@ const log = createLogger("GpsVerification");
 import { parseJsonRequest } from "@/lib/utils/api";
 import { GPS_ACCURACY_WARN_METERS, GPS_ACCURACY_REJECT_METERS } from "@/lib/constants/verification";
 import { getProvinceNames } from "@/lib/constants/sa-provinces";
+import {
+  buildPendingVerificationStep,
+  buildVerificationSessionResumePatch,
+} from "@/lib/services/verification-state";
 
 const gpsLocationSchema = z.object({
   latitude: z.number().min(-35).max(-22),
@@ -159,10 +163,9 @@ export async function POST(request: NextRequest) {
     const { data: step, error: stepError } = await adminClient
       .from("verification_steps")
       .upsert(
-        {
+        buildPendingVerificationStep({
           user_id: user.id,
           step_type: "location",
-          status: "pending",
           location_method: "gps",
           gps_lat: latitude,
           gps_lon: longitude,
@@ -172,7 +175,7 @@ export async function POST(request: NextRequest) {
           risk_level: riskLevel,
           auto_status: riskScore > 50 ? "needs_manual_review" : "approved",
           submitted_at: new Date().toISOString(),
-        },
+        }),
         { onConflict: "user_id,step_type" }
       )
       .select("id")
@@ -198,10 +201,9 @@ export async function POST(request: NextRequest) {
 
     // Update verification session
     await adminClient.from("verification_sessions").upsert(
-      {
-        user_id: user.id,
+      buildVerificationSessionResumePatch(user.id, {
         location_submitted_at: new Date().toISOString(),
-      },
+      }),
       { onConflict: "user_id" }
     );
 
@@ -219,7 +221,7 @@ export async function POST(request: NextRequest) {
       .from("seller_profiles")
       .update({ seller_verification_status: "pending_review" })
       .eq("user_id", user.id)
-      .eq("seller_verification_status", "incomplete");
+      .in("seller_verification_status", ["incomplete", "rejected"]);
 
     // Audit log
     await logAuditEvent({

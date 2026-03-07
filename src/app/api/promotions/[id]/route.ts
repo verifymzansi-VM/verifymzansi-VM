@@ -8,6 +8,11 @@ import { getEntitlements } from "@/lib/services/entitlements";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import type { PlanTier } from "@/types/enums";
 import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
+import {
+  collectMediaUrls,
+  diffRemovedMediaUrls,
+  queuePublicMediaCleanup,
+} from "@/lib/services/media-cleanup";
 
 const log = createLogger("PromotionDetail");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -93,7 +98,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Check ownership
     const { data: existing } = await admin
       .from("promotions")
-      .select("id, seller_id, status")
+      .select("id, seller_id, status, photos, videos, video_thumbnail")
       .eq("id", id)
       .maybeSingle();
 
@@ -167,6 +172,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
+    const removedMediaUrls = diffRemovedMediaUrls(
+      collectMediaUrls(existing.photos, existing.videos, existing.video_thumbnail),
+      collectMediaUrls(data.images, data.videos, data.video_thumbnail || null)
+    );
+
     const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
 
     const { error: updateError } = await admin
@@ -197,6 +207,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (updateError) {
       log.error("Failed to update promotion", { error: updateError.message });
       return NextResponse.json({ error: "Failed to update promotion" }, { status: 500 });
+    }
+
+    if (removedMediaUrls.length > 0) {
+      try {
+        await queuePublicMediaCleanup(admin, removedMediaUrls, "promotion_media_replaced");
+      } catch (cleanupError) {
+        log.error("Failed to queue replaced promotion media for cleanup", {
+          error: cleanupError instanceof Error ? cleanupError.message : "Unknown error",
+          promotionId: id,
+        });
+      }
     }
 
     try {
@@ -248,7 +269,7 @@ export async function DELETE(
 
     const { data: existing } = await admin
       .from("promotions")
-      .select("id, seller_id, status")
+      .select("id, seller_id, status, photos, videos, video_thumbnail")
       .eq("id", id)
       .maybeSingle();
 
@@ -276,6 +297,23 @@ export async function DELETE(
     if (deleteError) {
       log.error("Failed to delete promotion", { error: deleteError.message });
       return NextResponse.json({ error: "Failed to delete promotion" }, { status: 500 });
+    }
+
+    const deletedMediaUrls = collectMediaUrls(
+      existing.photos,
+      existing.videos,
+      existing.video_thumbnail
+    );
+
+    if (deletedMediaUrls.length > 0) {
+      try {
+        await queuePublicMediaCleanup(admin, deletedMediaUrls, "promotion_deleted");
+      } catch (cleanupError) {
+        log.error("Failed to queue deleted promotion media for cleanup", {
+          error: cleanupError instanceof Error ? cleanupError.message : "Unknown error",
+          promotionId: id,
+        });
+      }
     }
 
     try {

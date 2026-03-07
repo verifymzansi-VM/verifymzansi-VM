@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { priceSchema } from "./shared";
+import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
 
 // ── Shared listing fields ───────────────────────────────────
 const listingBase = z.object({
@@ -26,24 +27,9 @@ const listingBase = z.object({
   condition: z.enum(["new", "like_new", "good", "fair", "for_parts"]).optional(),
   images: z
     .array(
-      z
-        .string()
-        .url()
-        .refine(
-          (url) => {
-            try {
-              const parsed = new URL(url);
-              return (
-                parsed.hostname === "media.verifymzansi.co.za" ||
-                parsed.hostname.endsWith(".r2.cloudflarestorage.com") ||
-                parsed.hostname.endsWith(".supabase.co")
-              );
-            } catch {
-              return false;
-            }
-          },
-          { message: "Images must be hosted on the VerifyMzansi platform" }
-        )
+      z.string().url().refine(isTrustedPlatformMediaUrl, {
+        message: "Images must be hosted on the VerifyMzansi platform",
+      })
     )
     .min(1, "At least 1 image is required")
     .max(10, "Maximum 10 images"),

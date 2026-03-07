@@ -17,8 +17,11 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { loadEnvConfig } from "@next/env";
 import { PLANS } from "../src/lib/constants/pricing";
 import { EXPECTED_ACTIVE_PLAN_ROWS } from "./seed-contract";
+
+loadEnvConfig(process.cwd());
 
 // ---------------------------------------------------------------------------
 
@@ -31,6 +34,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const plansOnly = process.argv.includes("--plans-only");
 
 // ---------- Build plan rows from constants ----------
 
@@ -105,6 +109,17 @@ async function seedPlans() {
   });
 
   if (error) {
+    if (
+      error.message?.includes("invalid input value for enum marketplace_area") &&
+      error.message.includes("PROMOTIONS_EVENTS")
+    ) {
+      console.error(
+        "Failed to seed plans: production database is missing the PROMOTIONS_EVENTS marketplace_area enum value. Apply the latest Supabase migrations, then rerun this script."
+      );
+      console.error("Original error:", error);
+      return false;
+    }
+
     console.error("Failed to seed plans:", error);
     return false;
   }
@@ -236,8 +251,12 @@ async function main() {
   let allSuccess = true;
 
   allSuccess = (await seedPlans()) && allSuccess;
-  allSuccess = (await seedAdminUser()) && allSuccess;
-  allSuccess = (await seedModeratorUser()) && allSuccess;
+  if (!plansOnly) {
+    allSuccess = (await seedAdminUser()) && allSuccess;
+    allSuccess = (await seedModeratorUser()) && allSuccess;
+  } else {
+    console.log("Skipping admin and moderator user seeding (--plans-only)");
+  }
 
   console.log("");
   console.log("Note: Pay-per-post and add-on prices are runtime constants");

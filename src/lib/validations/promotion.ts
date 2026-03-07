@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { priceSchema } from "./shared";
 import type { BusinessCategory } from "@/types/enums";
+import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
 
 const BUSINESS_CATEGORY_VALUES = [
   "fashion_accessories",
@@ -44,29 +45,28 @@ export const promotionSchema = z.object({
     .min(1, "At least one contact method is required"),
   images: z
     .array(
-      z
-        .string()
-        .url()
-        .refine(
-          (url) => {
-            try {
-              const parsed = new URL(url);
-              return (
-                parsed.hostname === "media.verifymzansi.co.za" ||
-                parsed.hostname.endsWith(".r2.cloudflarestorage.com") ||
-                parsed.hostname.endsWith(".supabase.co")
-              );
-            } catch {
-              return false;
-            }
-          },
-          { message: "Images must be hosted on the VerifyMzansi platform" }
-        )
+      z.string().url().refine(isTrustedPlatformMediaUrl, {
+        message: "Images must be hosted on the VerifyMzansi platform",
+      })
     )
     .min(1, "At least 1 image is required")
     .max(10, "Maximum 10 images"),
-  videos: z.array(z.string().url()).max(3, "Maximum 3 videos").optional().default([]),
-  video_thumbnail: z.string().url().optional(),
+  videos: z
+    .array(
+      z.string().url().refine(isTrustedPlatformMediaUrl, {
+        message: "Videos must be hosted on the VerifyMzansi platform",
+      })
+    )
+    .max(3, "Maximum 3 videos")
+    .optional()
+    .default([]),
+  video_thumbnail: z
+    .string()
+    .url()
+    .refine(isTrustedPlatformMediaUrl, {
+      message: "Video thumbnail must be hosted on the VerifyMzansi platform",
+    })
+    .optional(),
   start_date: z.string().datetime().optional(),
   end_date: z.string().datetime().optional(),
   business_id: z.string().uuid().optional(),

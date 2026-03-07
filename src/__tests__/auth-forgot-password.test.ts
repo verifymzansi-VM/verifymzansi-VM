@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
+import type * as TurnstileModule from "@/lib/utils/turnstile";
 
 const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -7,7 +8,13 @@ const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
-vi.mock("@/lib/utils/turnstile", () => ({ verifyTurnstileToken: mockVerifyTurnstile }));
+vi.mock("@/lib/utils/turnstile", async () => {
+  const actual = await vi.importActual<typeof TurnstileModule>("@/lib/utils/turnstile");
+  return {
+    ...actual,
+    verifyTurnstileToken: mockVerifyTurnstile,
+  };
+});
 vi.mock("@/lib/utils/api", () => ({
   parseJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }) => {
     try {
@@ -85,12 +92,24 @@ describe("POST /api/auth/forgot-password", () => {
   });
 
   it("validates Turnstile when configured", async () => {
-    process.env.TURNSTILE_SECRET_KEY = "secret";
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key");
     mockVerifyTurnstile.mockResolvedValue({ success: false, error: "Failed" });
 
     const res = await POST(createRequest({ email: "test@example.com", turnstileToken: "bad-tok" }));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toContain("Failed");
+  });
+
+  it("fails closed in production when Turnstile is partially configured", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
+    const res = await POST(createRequest({ email: "test@example.com", turnstileToken: "tok" }));
+
+    expect(res.status).toBe(503);
+    expect(mockVerifyTurnstile).not.toHaveBeenCalled();
   });
 });

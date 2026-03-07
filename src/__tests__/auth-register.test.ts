@@ -1,13 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
+import type * as TurnstileModule from "@/lib/utils/turnstile";
 
 const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockVerifyTurnstile: vi.fn(),
 }));
 
+const { mockCreateAdminClient, mockProfileUpsert, mockCheckRateLimit } = vi.hoisted(() => ({
+  mockCreateAdminClient: vi.fn(),
+  mockProfileUpsert: vi.fn().mockResolvedValue({ error: null }),
+  mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
-vi.mock("@/lib/utils/turnstile", () => ({ verifyTurnstileToken: mockVerifyTurnstile }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
+vi.mock("@/lib/utils/turnstile", async () => {
+  const actual = await vi.importActual<typeof TurnstileModule>("@/lib/utils/turnstile");
+  return {
+    ...actual,
+    verifyTurnstileToken: mockVerifyTurnstile,
+  };
+});
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: mockCheckRateLimit,
+  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+}));
 vi.mock("@/lib/utils/api", () => ({
   parseJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }) => {
     try {
@@ -46,6 +64,12 @@ describe("POST /api/auth/register", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
     delete process.env.TURNSTILE_SECRET_KEY;
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        upsert: mockProfileUpsert,
+      }),
+    });
   });
 
   afterEach(() => {
@@ -74,7 +98,10 @@ describe("POST /api/auth/register", () => {
   });
 
   it("succeeds with valid data (no Turnstile configured)", async () => {
-    const mockSignUp = vi.fn().mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
+    const mockSignUp = vi.fn().mockResolvedValue({
+      data: { user: { id: "u1", identities: [{ id: "identity-1" }] } },
+      error: null,
+    });
     mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
 
     const res = await POST(createRequest(validBody));
@@ -92,11 +119,53 @@ describe("POST /api/auth/register", () => {
         },
       },
     });
+    expect(mockProfileUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "u1",
+        display_name: "Test User",
+        phone: "+27821234567",
+        masked_phone_public: "+27 •••• ••67",
+        seller_verification_status: "incomplete",
+        account_status: "active",
+      }),
+      { onConflict: "user_id" }
+    );
+  });
+
+  it("normalizes local SA phone numbers before persisting profile data", async () => {
+    const mockSignUp = vi.fn().mockResolvedValue({
+      data: { user: { id: "u1", identities: [{ id: "identity-1" }] } },
+      error: null,
+    });
+    mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
+
+    const res = await POST(
+      createRequest({
+        ...validBody,
+        phone: "0821234567",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockSignUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          data: expect.objectContaining({ phone: "+27821234567" }),
+        }),
+      })
+    );
+    expect(mockProfileUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: "+27821234567",
+        masked_phone_public: "+27 •••• ••67",
+      }),
+      { onConflict: "user_id" }
+    );
   });
 
   it("validates Turnstile when configured", async () => {
-    process.env.TURNSTILE_SECRET_KEY = "secret";
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "site-key";
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key");
     mockVerifyTurnstile.mockResolvedValue({ success: true });
     const mockSignUp = vi.fn().mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
     mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
@@ -109,14 +178,25 @@ describe("POST /api/auth/register", () => {
   });
 
   it("rejects failed Turnstile verification", async () => {
-    process.env.TURNSTILE_SECRET_KEY = "secret";
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "site-key";
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key");
     mockVerifyTurnstile.mockResolvedValue({ success: false, error: "Bot detected" });
 
     const res = await POST(createRequest(validBody));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toContain("Bot detected");
+  });
+
+  it("fails closed in production when the Turnstile site key is missing", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(503);
+    expect(mockVerifyTurnstile).not.toHaveBeenCalled();
   });
 
   it("returns generic error on auth failure (anti-enumeration)", async () => {

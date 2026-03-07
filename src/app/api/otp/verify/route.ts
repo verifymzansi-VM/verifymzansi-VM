@@ -5,10 +5,31 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { otpVerifySchema } from "@/lib/validations/auth";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { buildSellerPhoneFields, normalizeSaPhone } from "@/lib/utils/phone";
 
 const log = createLogger("OTPVerify");
 const MAX_VERIFY_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
+
+function getDefaultDisplayName(user: { email?: string | null; user_metadata?: unknown }): string {
+  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const displayName = metadata.display_name;
+  const fullName = metadata.full_name;
+
+  if (typeof displayName === "string" && displayName.trim().length > 0) {
+    return displayName.trim();
+  }
+
+  if (typeof fullName === "string" && fullName.trim().length > 0) {
+    return fullName.trim();
+  }
+
+  if (user.email) {
+    return user.email.split("@")[0] || "New Seller";
+  }
+
+  return "New Seller";
+}
 
 /** Convert a hex string to Uint8Array */
 function fromHex(hex: string): Uint8Array {
@@ -60,10 +81,6 @@ async function verifyOtp(otp: string, storedHash: string): Promise<boolean> {
   return diff === 0;
 }
 
-function normalizeSaPhone(phone: string): string {
-  return phone.startsWith("0") ? `+27${phone.slice(1)}` : phone;
-}
-
 export async function POST(request: NextRequest) {
   try {
     // Rate limit by IP to prevent brute-force across multiple OTP challenges
@@ -88,6 +105,7 @@ export async function POST(request: NextRequest) {
 
     const { otp } = parsed.data;
     const phone = normalizeSaPhone(parsed.data.phone);
+    const sellerPhoneFields = buildSellerPhoneFields(phone);
     const supabase = await createClient();
     const {
       data: { user },
@@ -161,29 +179,67 @@ export async function POST(request: NextRequest) {
       .is("verified_at", null);
 
     // Create or update phone verification step
-    const { data: profile } = await adminSupabase
+    let { data: profile } = await adminSupabase
       .from("seller_profiles")
       .select("id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
+
+    if (!profile) {
+      const { data: createdProfile, error: createProfileError } = await adminSupabase
+        .from("seller_profiles")
+        .upsert(
+          {
+            user_id: user.id,
+            display_name: getDefaultDisplayName(user),
+            ...sellerPhoneFields,
+          },
+          { onConflict: "user_id" }
+        )
+        .select("id")
+        .single();
+
+      if (createProfileError) {
+        log.error("Failed to auto-create seller profile during OTP verification", {
+          error: createProfileError.message,
+          userId: user.id,
+        });
+      } else {
+        profile = createdProfile;
+      }
+    }
 
     if (profile) {
       // Save phone number to profile
-      await adminSupabase.from("seller_profiles").update({ phone: phone }).eq("id", profile.id);
+      await adminSupabase.from("seller_profiles").update(sellerPhoneFields).eq("id", profile.id);
+    }
 
-      const { error: stepsError } = await adminSupabase.from("verification_steps").upsert(
-        {
-          user_id: user.id,
-          step_type: "phone",
-          status: "approved",
-          phone_verified_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,step_type" }
-      );
+    const { error: stepsError } = await adminSupabase.from("verification_steps").upsert(
+      {
+        user_id: user.id,
+        step_type: "phone",
+        status: "approved",
+        phone_verified_at: nowIso,
+      },
+      { onConflict: "user_id,step_type" }
+    );
 
-      if (stepsError) {
-        log.error("Failed to update verification steps", { error: stepsError.message });
-      }
+    if (stepsError) {
+      log.error("Failed to update verification steps", { error: stepsError.message });
+    }
+
+    const { error: sessionError } = await adminSupabase.from("verification_sessions").upsert(
+      {
+        user_id: user.id,
+        phone_verified_at: nowIso,
+      },
+      { onConflict: "user_id" }
+    );
+
+    if (sessionError) {
+      log.error("Failed to update verification session phone state", {
+        error: sessionError.message,
+      });
     }
 
     return NextResponse.json({ success: true, verified: true });

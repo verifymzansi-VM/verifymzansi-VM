@@ -12,7 +12,15 @@ export type SeedPlanContractRow = {
 
 export const SEED_CONTRACT_VERSION = "2026-03-06";
 
-export const EXPECTED_ACTIVE_PLAN_ROWS: SeedPlanContractRow[] = PLANS.map((plan) => ({
+export const ACTIVE_RUNTIME_PLAN_AREAS: MarketplaceArea[] = [
+  "MZANSI_MARKET",
+  "MZANSI_BUSINESS",
+  "PROMOTIONS_EVENTS",
+];
+
+export const EXPECTED_ACTIVE_PLAN_ROWS: SeedPlanContractRow[] = PLANS.filter((plan) =>
+  ACTIVE_RUNTIME_PLAN_AREAS.includes(plan.area)
+).map((plan) => ({
   area: plan.area,
   tier: plan.tier,
   name: plan.name,
@@ -20,6 +28,10 @@ export const EXPECTED_ACTIVE_PLAN_ROWS: SeedPlanContractRow[] = PLANS.map((plan)
   billing_frequency: plan.billingFrequency,
   active: true,
 }));
+
+export function normalizePlanBillingFrequency(value: string): "30_days" | string {
+  return value === "monthly" ? "30_days" : value;
+}
 
 export const EXPECTED_FEATURE_FLAG_KEYS = [
   "kyc_v2_flow",

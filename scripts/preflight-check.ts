@@ -1,10 +1,12 @@
 /* eslint-disable no-console */
 
+import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
 import {
   EXPECTED_ACTIVE_PLAN_ROWS,
   getPlanContractKey,
+  normalizePlanBillingFrequency,
   type SeedPlanContractRow,
 } from "./seed-contract";
 import { verifySupabaseSchema } from "./check-supabase-schema";
@@ -124,7 +126,7 @@ async function checkSupabasePlansSeeded(mode: LaunchValidationMode): Promise<voi
         actual &&
         (actual.name !== row.name ||
           actual.price_cents !== row.price_cents ||
-          actual.billing_frequency !== row.billing_frequency ||
+          normalizePlanBillingFrequency(actual.billing_frequency) !== row.billing_frequency ||
           actual.active !== row.active)
       );
     }).map((row) => `${row.area}/${row.tier}`);
@@ -136,6 +138,12 @@ async function checkSupabasePlansSeeded(mode: LaunchValidationMode): Promise<voi
           )
       )
       .map((row) => `${row.area}/${row.tier}`);
+
+    const missingOnlyPromotionsRows =
+      missing.length > 0 && missing.every((row) => row.startsWith("PROMOTIONS_EVENTS/"));
+    const missingPromotionsHint = missingOnlyPromotionsRows
+      ? " This usually means the linked Supabase database is missing the PROMOTIONS_EVENTS marketplace_area enum migration. Apply migrations, then rerun pnpm seed:prod."
+      : "";
 
     if (missing.length > 0 || mismatched.length > 0 || unexpected.length > 0) {
       const details = [
@@ -149,7 +157,7 @@ async function checkSupabasePlansSeeded(mode: LaunchValidationMode): Promise<voi
       addResult(
         "Plans seeded",
         "fail",
-        `Expected ${EXPECTED_ACTIVE_PLAN_ROWS.length} active runtime plan rows; found ${actualRows.length}. ${details}. Run: pnpm seed:prod`
+        `Expected ${EXPECTED_ACTIVE_PLAN_ROWS.length} active runtime plan rows; found ${actualRows.length}. ${details}. Run: pnpm seed:prod.${missingPromotionsHint}`
       );
       return;
     }
@@ -172,25 +180,36 @@ async function checkR2Access(mode: LaunchValidationMode): Promise<void> {
 
   try {
     const accountId = requireEnv("R2_ACCOUNT_ID");
+    const accessKeyId = requireEnv("R2_ACCESS_KEY_ID");
+    const secretAccessKey = requireEnv("R2_SECRET_ACCESS_KEY");
     const bucket = requireEnv("R2_PRIVATE_BUCKET");
-    const endpoint = `https://${accountId}.r2.cloudflarestorage.com/${bucket}`;
-    const response = await fetch(endpoint, {
-      method: "HEAD",
-      signal: AbortSignal.timeout(10_000),
+    const client = new S3Client({
+      region: "auto",
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+      },
     });
 
-    if (response.status === 403 || response.status === 200) {
-      addResult(
-        "R2",
-        "pass",
-        `account=${accountId.slice(0, 6)}... bucket=${bucket} endpoint reachable`
-      );
-      return;
-    }
+    await client.send(
+      new HeadBucketCommand({
+        Bucket: bucket,
+      })
+    );
 
-    addResult("R2", "warn", `Unexpected HEAD status ${response.status} for ${bucket}`);
+    addResult(
+      "R2",
+      "pass",
+      `account=${accountId.slice(0, 6)}... bucket=${bucket} credentials valid and bucket reachable`
+    );
   } catch (error) {
-    addResult("R2", "fail", (error as Error).message);
+    const rawMessage = error instanceof Error ? error.message : "Unknown R2 error";
+    const message =
+      rawMessage.includes("EPROTO") || rawMessage.toLowerCase().includes("handshake failure")
+        ? `${rawMessage}. Cloudflare R2 TLS negotiation failed from this environment; retry from WSL/CI or verify local TLS interception settings.`
+        : rawMessage;
+    addResult("R2", "fail", message);
   }
 }
 

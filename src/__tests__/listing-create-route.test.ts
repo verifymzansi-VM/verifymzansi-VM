@@ -139,4 +139,18 @@ describe("POST /api/listings", () => {
       error: "Maximum 1 videos allowed on your plan",
     });
   });
+
+  it("rejects listing media hosted outside the platform", async () => {
+    const res = await POST(
+      createRequest({
+        ...VALID_BODY,
+        images: ["https://evil.example.com/not-allowed.jpg"],
+      })
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Validation failed",
+    });
+  });
 });

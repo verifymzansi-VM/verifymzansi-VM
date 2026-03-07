@@ -8,6 +8,11 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { parseJsonRequest } from "@/lib/utils/api";
+import {
+  collectMediaUrls,
+  diffRemovedMediaUrls,
+  queuePublicMediaCleanup,
+} from "@/lib/services/media-cleanup";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
 const log = createLogger("ListingUpdate");
@@ -82,7 +87,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // ── Check listing exists and user owns it ────────────────
     const { data: listing } = await admin
       .from("listings")
-      .select("id, seller_id, status, area")
+      .select("id, seller_id, status, area, photos, videos, video_thumbnail")
       .eq("id", listingId)
       .maybeSingle();
 
@@ -136,6 +141,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (rawVideos.some((video) => typeof video !== "string")) {
       return NextResponse.json({ error: "Videos must be an array of URLs" }, { status: 422 });
     }
+    const videoUrls = rawVideos as string[];
+    const nextVideoThumbnail =
+      typeof (body as Record<string, unknown>).videoThumbnail === "string"
+        ? ((body as Record<string, unknown>).videoThumbnail as string)
+        : null;
 
     if (data.images.length > ent.maxPhotos) {
       return NextResponse.json(
@@ -175,12 +185,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       location_city: data.city || null,
       location_suburb: (body as Record<string, unknown>).town || null,
       photos: data.images,
-      videos: rawVideos,
-      video_thumbnail: (body as Record<string, unknown>).videoThumbnail || null,
+      videos: videoUrls,
+      video_thumbnail: nextVideoThumbnail,
       contact_methods: (body as Record<string, unknown>).contactMethods || ["call"],
       // Re-submit for moderation on edit
       status: listing.status === "live" ? "pending_moderation" : listing.status,
     };
+    const removedMediaUrls = diffRemovedMediaUrls(
+      collectMediaUrls(listing.photos, listing.videos, listing.video_thumbnail),
+      collectMediaUrls(updateRecord.photos, videoUrls, nextVideoThumbnail)
+    );
 
     // ── Update listing ───────────────────────────────────────
     const { error: updateError } = await admin
@@ -199,6 +213,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         { error: "Failed to update listing", details: updateError.message },
         { status: 500 }
       );
+    }
+
+    if (removedMediaUrls.length > 0) {
+      try {
+        await queuePublicMediaCleanup(admin, removedMediaUrls, "listing_media_replaced");
+      } catch (cleanupError) {
+        log.error("Failed to queue replaced listing media for cleanup", {
+          error: cleanupError instanceof Error ? cleanupError.message : "Unknown error",
+          listingId,
+        });
+      }
     }
 
     // ── Audit log ────────────────────────────────────────────

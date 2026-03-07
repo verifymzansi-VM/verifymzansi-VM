@@ -150,6 +150,11 @@ describe("POST /api/admin/verification/decide", () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 
     const highRiskStep = { ...baseStep, risk_level: "high", risk_score: 65 };
+    const sellerUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
 
     const updateMock = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
@@ -162,19 +167,28 @@ describe("POST /api/admin/verification/decide", () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: highRiskStep, error: null }),
-            }),
+          select: vi.fn().mockImplementation((...args: unknown[]) => {
+            if (args[0] === "*") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: highRiskStep, error: null }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({
+                data: [{ step_type: "phone", status: "approved" }],
+                error: null,
+              }),
+            };
           }),
           update: updateMock,
         };
       }
       if (table === "seller_profiles") {
         return {
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          }),
+          update: sellerUpdate,
         };
       }
       if (table === "kyc_artifacts") {
@@ -274,6 +288,11 @@ describe("POST /api/admin/verification/decide", () => {
   it("rejects step with reason code", async () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 
+    const sellerUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
     const updateMock = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         in: vi.fn().mockReturnValue({
@@ -293,6 +312,11 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
+      if (table === "seller_profiles") {
+        return {
+          update: sellerUpdate,
+        };
+      }
       return {};
     });
 
@@ -307,10 +331,16 @@ describe("POST /api/admin/verification/decide", () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.decision).toBe("rejected");
+    expect(sellerUpdate).toHaveBeenCalledWith({ seller_verification_status: "rejected" });
   });
 
   it("moderator can also make decisions", async () => {
     mockAuth({ id: MOD_UUID, app_metadata: { role: "moderator" } });
+    const sellerUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
 
     const updateMock = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
@@ -323,12 +353,28 @@ describe("POST /api/admin/verification/decide", () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
-            }),
+          select: vi.fn().mockImplementation((...args: unknown[]) => {
+            if (args[0] === "*") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({
+                data: [{ step_type: "phone", status: "approved" }],
+                error: null,
+              }),
+            };
           }),
           update: updateMock,
+        };
+      }
+      if (table === "seller_profiles") {
+        return {
+          update: sellerUpdate,
         };
       }
       return {};
@@ -413,6 +459,11 @@ describe("POST /api/admin/verification/decide", () => {
 
   it("accepts legacy 'resubmit' and normalizes to 'needs_resubmission'", async () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+    const sellerUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
 
     const updateMock = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
@@ -425,12 +476,28 @@ describe("POST /api/admin/verification/decide", () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
-            }),
+          select: vi.fn().mockImplementation((...args: unknown[]) => {
+            if (args[0] === "*") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({
+                data: [{ step_type: "phone", status: "approved" }],
+                error: null,
+              }),
+            };
           }),
           update: updateMock,
+        };
+      }
+      if (table === "seller_profiles") {
+        return {
+          update: sellerUpdate,
         };
       }
       return {};

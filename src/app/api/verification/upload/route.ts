@@ -7,6 +7,10 @@ import { fileUploadSchema, validateUploadedFile } from "@/lib/validations/verifi
 import { processKycArtifact } from "@/lib/services/kyc-engine";
 import { createLogger } from "@/lib/utils/logger";
 import { isStrictLocalDevelopmentRequest } from "@/lib/utils/local-dev";
+import {
+  buildPendingVerificationStep,
+  buildVerificationSessionResumePatch,
+} from "@/lib/services/verification-state";
 import crypto from "crypto";
 
 const log = createLogger("VerificationUpload");
@@ -247,6 +251,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to record upload" }, { status: 500 });
     }
 
+    const { error: supersedeError } = await admin
+      .from("kyc_artifacts")
+      .update({ status: "rejected" })
+      .eq("user_id", user.id)
+      .eq("step_type", stepType)
+      .neq("id", artifact.id)
+      .in("status", ["pending", "needs_resubmission"]);
+
+    if (supersedeError) {
+      log.warn("Failed to supersede prior KYC artifacts", {
+        error: supersedeError.message,
+        userId: user.id,
+        stepType,
+      });
+    }
+
     // ── Risk engine: SHA-256, velocity, ID reuse, provider ───
     const engineResult = await processKycArtifact({
       artifactId: artifact.id,
@@ -268,17 +288,14 @@ export async function POST(request: NextRequest) {
       .eq("id", artifact.id);
 
     // ── Build verification step data ──────────────────────────
-    const stepData: Record<string, unknown> = {
+    const stepData = buildPendingVerificationStep({
       user_id: user.id,
       step_type: stepType,
-      // FIX: status is always 'pending' until a human reviewer decides.
-      // auto_status records what the provider said — kept separate.
-      status: "pending",
       auto_status: engineResult.autoStatus,
       risk_score: engineResult.riskScore,
       risk_level: engineResult.riskLevel,
       submitted_at: new Date().toISOString(),
-    };
+    });
 
     if (docType === "id_document" && idNumber) {
       // Encrypt ID number with AES-256-GCM before storage
@@ -313,14 +330,18 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Update verification_sessions ──────────────────────────
-    const sessionPatch: Record<string, unknown> = { user_id: user.id };
+    const sessionPatch: Record<string, unknown> = {};
     if (docType === "id_document") {
       sessionPatch.id_artifact_id = artifact.id;
     } else if (docType === "selfie") {
       sessionPatch.selfie_artifact_id = artifact.id;
     }
 
-    await admin.from("verification_sessions").upsert(sessionPatch, { onConflict: "user_id" });
+    await admin
+      .from("verification_sessions")
+      .upsert(buildVerificationSessionResumePatch(user.id, sessionPatch), {
+        onConflict: "user_id",
+      });
 
     // ── Finalize session when all artifacts are present ───────
     const { data: currentSession } = await admin
@@ -348,7 +369,7 @@ export async function POST(request: NextRequest) {
       .from("seller_profiles")
       .update({ seller_verification_status: "pending_review" })
       .eq("id", profile.id)
-      .in("seller_verification_status", ["incomplete"])
+      .in("seller_verification_status", ["incomplete", "rejected"])
       .select("id");
 
     if (statusUpdated?.length) {

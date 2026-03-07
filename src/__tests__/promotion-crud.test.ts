@@ -227,6 +227,29 @@ describe("POST /api/promotions", () => {
     });
   });
 
+  it("rejects off-platform promotion videos before persistence", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      seller_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: "sp-1", seller_verification_status: "verified" },
+        }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: { ...VALID_BODY, videos: ["https://example.com/promo.mp4"] },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Validation failed",
+      details: {
+        videos: expect.arrayContaining(["Videos must be hosted on the VerifyMzansi platform"]),
+      },
+    });
+  });
+
   it("rejects when api callers exceed the plan video count", async () => {
     mockAuth({ id: USER_ID });
     mockCreateAdminClient.mockReturnValue({

@@ -7,6 +7,11 @@ import { businessSchema } from "@/lib/validations/business-unified";
 import { toFieldErrorMap } from "@/lib/validations/zod-errors";
 import { getEntitlements } from "@/lib/services/entitlements";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import {
+  collectMediaUrls,
+  diffRemovedMediaUrls,
+  queuePublicMediaCleanup,
+} from "@/lib/services/media-cleanup";
 import type { PlanTier } from "@/types/enums";
 
 const log = createLogger("BusinessDetail");
@@ -104,7 +109,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // Check ownership
     const { data: existing } = await admin
       .from("businesses")
-      .select("id, seller_id, status")
+      .select(
+        "id, seller_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos"
+      )
       .eq("id", id)
       .maybeSingle();
 
@@ -170,6 +177,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
+    const nextMediaUrls = collectMediaUrls(
+      data.logo_url || null,
+      data.cover_photo || null,
+      data.cover_video || null,
+      data.video_thumbnail || null,
+      data.gallery_photos || []
+    );
+    const removedMediaUrls = diffRemovedMediaUrls(
+      collectMediaUrls(
+        existing.logo_url,
+        existing.cover_photo,
+        existing.cover_video,
+        existing.video_thumbnail,
+        existing.gallery_photos
+      ),
+      nextMediaUrls
+    );
+
     const { error: updateError } = await admin
       .from("businesses")
       .update({
@@ -208,6 +233,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (updateError) {
       log.error("Failed to update business", { error: updateError.message });
       return NextResponse.json({ error: "Failed to update business" }, { status: 500 });
+    }
+
+    if (removedMediaUrls.length > 0) {
+      try {
+        await queuePublicMediaCleanup(admin, removedMediaUrls, "business_media_replaced");
+      } catch (cleanupError) {
+        log.error("Failed to queue replaced business media for cleanup", {
+          error: cleanupError instanceof Error ? cleanupError.message : "Unknown error",
+          businessId: id,
+        });
+      }
     }
 
     try {
@@ -260,7 +296,9 @@ export async function DELETE(
 
     const { data: existing } = await admin
       .from("businesses")
-      .select("id, seller_id, status")
+      .select(
+        "id, seller_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos"
+      )
       .eq("id", id)
       .maybeSingle();
 
@@ -288,6 +326,25 @@ export async function DELETE(
     if (deleteError) {
       log.error("Failed to delete business", { error: deleteError.message });
       return NextResponse.json({ error: "Failed to delete business" }, { status: 500 });
+    }
+
+    const deletedMediaUrls = collectMediaUrls(
+      existing.logo_url,
+      existing.cover_photo,
+      existing.cover_video,
+      existing.video_thumbnail,
+      existing.gallery_photos
+    );
+
+    if (deletedMediaUrls.length > 0) {
+      try {
+        await queuePublicMediaCleanup(admin, deletedMediaUrls, "business_deleted");
+      } catch (cleanupError) {
+        log.error("Failed to queue deleted business media for cleanup", {
+          error: cleanupError instanceof Error ? cleanupError.message : "Unknown error",
+          businessId: id,
+        });
+      }
     }
 
     try {

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { promotionSchema } from "./promotion";
 
 const VALID_IMAGE = "https://media.verifymzansi.co.za/promotions/photo.jpg";
+const VALID_VIDEO = "https://media.verifymzansi.co.za/promotions/video.mp4";
 const VALID_INPUT = {
   title: "Great Deal on Electronics",
   description:
@@ -156,6 +157,22 @@ describe("promotionSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects videos not hosted on platform", () => {
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      videos: ["https://example.com/promo.mp4"],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts platform-hosted videos", () => {
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      videos: [VALID_VIDEO],
+    });
+    expect(result.success).toBe(true);
+  });
+
   // Optional fields
   it("accepts optional price_zar", () => {
     const result = promotionSchema.safeParse({ ...VALID_INPUT, price_zar: 99.99 });
@@ -190,5 +207,13 @@ describe("promotionSchema", () => {
       video_thumbnail: "https://media.verifymzansi.co.za/thumb.jpg",
     });
     expect(result.success).toBe(true);
+  });
+
+  it("rejects video_thumbnail not hosted on platform", () => {
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      video_thumbnail: "https://example.com/thumb.jpg",
+    });
+    expect(result.success).toBe(false);
   });
 });

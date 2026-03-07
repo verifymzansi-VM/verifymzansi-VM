@@ -8,6 +8,7 @@
  *
  * Required bindings:
  *   - R2_PRIVATE: R2 bucket binding for private files
+ *   - R2_PUBLIC: R2 bucket binding for public media files
  *   - SUPABASE_URL: Supabase REST API URL
  *   - SUPABASE_SERVICE_KEY: Supabase service role key
  */
@@ -43,6 +44,7 @@ interface ExportedHandler<E = Record<string, unknown>> {
 }
 
 interface Env {
+  R2_PUBLIC: R2Bucket;
   R2_PRIVATE: R2Bucket;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
@@ -85,44 +87,61 @@ const worker: ExportedHandler<Env> = {
     const records: CleanupRecord[] = await fetchRes.json();
 
     if (records.length === 0) {
-      console.log("No R2 files queued for cleanup.");
+      console.warn("No R2 files queued for cleanup.");
       return;
     }
 
-    console.log(`Processing ${records.length} R2 cleanup record(s)…`);
+    console.warn(`Processing ${records.length} R2 cleanup record(s)…`);
 
     let successCount = 0;
     let failCount = 0;
 
-    // Batch R2 deletes (the API accepts an array of keys) and track results
+    // Batch R2 deletes (the API accepts an array of keys) and track results.
+    // Records can target different buckets, so each batch is grouped per bucket.
     const BATCH_SIZE = 50;
     for (let i = 0; i < records.length; i += BATCH_SIZE) {
       const batch = records.slice(i, i + BATCH_SIZE);
-      const keys = batch.map((r) => r.r2_key);
-
-      try {
-        // R2 .delete() accepts string[] for batch deletion
-        await env.R2_PRIVATE.delete(keys);
-      } catch (err) {
-        console.error(`Failed to batch-delete R2 keys:`, err);
-        failCount += batch.length;
-        continue;
+      const bucketGroups = new Map<string, CleanupRecord[]>();
+      for (const record of batch) {
+        const current = bucketGroups.get(record.bucket) ?? [];
+        current.push(record);
+        bucketGroups.set(record.bucket, current);
       }
 
-      // Mark batch as processed in Supabase (single request instead of N+1)
-      const batchIds = batch.map((r) => r.id);
-      try {
-        await fetch(`${supabaseUrl}/rest/v1/r2_cleanup_queue?id=in.(${batchIds.join(",")})`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({
-            processed_at: new Date().toISOString(),
-          }),
-        });
-        successCount += batch.length;
-      } catch (err) {
-        console.error(`Failed to mark batch as processed:`, err);
-        failCount += batch.length;
+      for (const [bucket, bucketRecords] of bucketGroups.entries()) {
+        const bucketBinding =
+          bucket === "private" ? env.R2_PRIVATE : bucket === "public" ? env.R2_PUBLIC : null;
+
+        if (!bucketBinding) {
+          console.error(`Unsupported cleanup bucket '${bucket}'`);
+          failCount += bucketRecords.length;
+          continue;
+        }
+
+        const keys = bucketRecords.map((record) => record.r2_key);
+
+        try {
+          await bucketBinding.delete(keys);
+        } catch (err) {
+          console.error(`Failed to batch-delete ${bucket} R2 keys:`, err);
+          failCount += bucketRecords.length;
+          continue;
+        }
+
+        const batchIds = bucketRecords.map((record) => record.id);
+        try {
+          await fetch(`${supabaseUrl}/rest/v1/r2_cleanup_queue?id=in.(${batchIds.join(",")})`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({
+              processed_at: new Date().toISOString(),
+            }),
+          });
+          successCount += bucketRecords.length;
+        } catch (err) {
+          console.error(`Failed to mark ${bucket} cleanup batch as processed:`, err);
+          failCount += bucketRecords.length;
+        }
       }
     }
 
@@ -155,7 +174,7 @@ const worker: ExportedHandler<Env> = {
       );
     }
 
-    console.log(`Retention cleanup complete: ${successCount} deleted, ${failCount} failed.`);
+    console.warn(`Retention cleanup complete: ${successCount} deleted, ${failCount} failed.`);
   },
 
   /**

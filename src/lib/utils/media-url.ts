@@ -20,6 +20,23 @@ const PROXY_PREFIX = "/api/media/serve/";
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "mov"]);
 
 /**
+ * Returns true when a URL points to a platform-controlled media host.
+ * Used by create/update validators before persisting media references.
+ */
+export function isTrustedPlatformMediaUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname === "media.verifymzansi.co.za" ||
+      parsed.hostname.endsWith(".r2.cloudflarestorage.com") ||
+      parsed.hostname.endsWith(".supabase.co")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check if a URL or key points to a video file based on extension.
  */
 function isVideoUrl(url: string): boolean {
@@ -31,7 +48,7 @@ function isVideoUrl(url: string): boolean {
  * Extract the storage key from various URL formats.
  * Returns null if the URL doesn't match any known pattern.
  */
-function extractKey(url: string): string | null {
+export function extractMediaStorageKey(url: string): string | null {
   // Already using the proxy route — extract key after prefix
   if (url.startsWith(PROXY_PREFIX)) {
     return url.slice(PROXY_PREFIX.length);
@@ -61,7 +78,7 @@ function extractKey(url: string): string | null {
 export function normalizeMediaUrl(url: string | null | undefined): string {
   if (!url) return "";
 
-  const key = extractKey(url);
+  const key = extractMediaStorageKey(url);
 
   // Not a recognized media URL — return as-is
   if (key === null) return url;
@@ -82,7 +99,7 @@ export function normalizeMediaUrl(url: string | null | undefined): string {
 export function normalizeVideoUrl(url: string | null | undefined): string {
   if (!url) return "";
 
-  const key = extractKey(url);
+  const key = extractMediaStorageKey(url);
   if (key === null) return url;
 
   return `${MEDIA_BASE}/${key}`;

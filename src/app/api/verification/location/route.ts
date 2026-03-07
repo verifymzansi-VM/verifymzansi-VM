@@ -3,6 +3,10 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseJsonRequest } from "@/lib/utils/api";
+import {
+  buildPendingVerificationStep,
+  buildVerificationSessionResumePatch,
+} from "@/lib/services/verification-state";
 
 const SA_PROVINCES = [
   "Eastern Cape",
@@ -77,14 +81,13 @@ export async function POST(request: NextRequest) {
     }
 
     const { error: stepUpsertError } = await admin.from("verification_steps").upsert(
-      {
+      buildPendingVerificationStep({
         user_id: user.id,
         step_type: "location",
-        status: "pending",
         submitted_at: new Date().toISOString(),
         location_province: province,
         location_city: city,
-      },
+      }),
       { onConflict: "user_id,step_type" }
     );
 
@@ -94,6 +97,19 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await admin.from("verification_sessions").upsert(
+      buildVerificationSessionResumePatch(user.id, {
+        location_submitted_at: new Date().toISOString(),
+      }),
+      { onConflict: "user_id" }
+    );
+
+    await admin
+      .from("seller_profiles")
+      .update({ seller_verification_status: "pending_review" })
+      .eq("id", profile.id)
+      .in("seller_verification_status", ["incomplete", "rejected"]);
 
     return NextResponse.json({ success: true });
   } catch {
