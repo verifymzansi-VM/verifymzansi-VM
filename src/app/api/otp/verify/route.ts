@@ -6,6 +6,7 @@ import { otpVerifySchema } from "@/lib/validations/auth";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { buildSellerPhoneFields, normalizeSaPhone } from "@/lib/utils/phone";
+import { isWhitelistedTestPhone, TEST_OTP_CODE } from "@/lib/utils/test-otp";
 
 const log = createLogger("OTPVerify");
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -81,6 +82,75 @@ async function verifyOtp(otp: string, storedHash: string): Promise<boolean> {
   return diff === 0;
 }
 
+async function finalizePhoneVerification(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  user: { id: string; email?: string | null; user_metadata?: unknown },
+  sellerPhoneFields: ReturnType<typeof buildSellerPhoneFields>,
+  nowIso: string
+) {
+  let { data: profile } = await adminSupabase
+    .from("seller_profiles")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!profile) {
+    const { data: createdProfile, error: createProfileError } = await adminSupabase
+      .from("seller_profiles")
+      .upsert(
+        {
+          user_id: user.id,
+          display_name: getDefaultDisplayName(user),
+          ...sellerPhoneFields,
+        },
+        { onConflict: "user_id" }
+      )
+      .select("id")
+      .single();
+
+    if (createProfileError) {
+      log.error("Failed to auto-create seller profile during OTP verification", {
+        error: createProfileError.message,
+        userId: user.id,
+      });
+    } else {
+      profile = createdProfile;
+    }
+  }
+
+  if (profile) {
+    await adminSupabase.from("seller_profiles").update(sellerPhoneFields).eq("id", profile.id);
+  }
+
+  const { error: stepsError } = await adminSupabase.from("verification_steps").upsert(
+    {
+      user_id: user.id,
+      step_type: "phone",
+      status: "approved",
+      phone_verified_at: nowIso,
+    },
+    { onConflict: "user_id,step_type" }
+  );
+
+  if (stepsError) {
+    log.error("Failed to update verification steps", { error: stepsError.message });
+  }
+
+  const { error: sessionError } = await adminSupabase.from("verification_sessions").upsert(
+    {
+      user_id: user.id,
+      phone_verified_at: nowIso,
+    },
+    { onConflict: "user_id" }
+  );
+
+  if (sessionError) {
+    log.error("Failed to update verification session phone state", {
+      error: sessionError.message,
+    });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Rate limit by IP to prevent brute-force across multiple OTP challenges
@@ -120,6 +190,12 @@ export async function POST(request: NextRequest) {
 
     const now = new Date();
     const nowIso = now.toISOString();
+
+    if (isWhitelistedTestPhone(phone) && otp === TEST_OTP_CODE) {
+      await finalizePhoneVerification(adminSupabase, user, sellerPhoneFields, nowIso);
+      log.info("Test phone bypass verified", { phone, userId: user.id });
+      return NextResponse.json({ success: true, verified: true, testBypass: true });
+    }
 
     // Only challenge rows owned by this user+phone are eligible.
     const { data: challenge, error } = await adminSupabase
@@ -178,69 +254,7 @@ export async function POST(request: NextRequest) {
       .eq("id", challenge.id)
       .is("verified_at", null);
 
-    // Create or update phone verification step
-    let { data: profile } = await adminSupabase
-      .from("seller_profiles")
-      .select("id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (!profile) {
-      const { data: createdProfile, error: createProfileError } = await adminSupabase
-        .from("seller_profiles")
-        .upsert(
-          {
-            user_id: user.id,
-            display_name: getDefaultDisplayName(user),
-            ...sellerPhoneFields,
-          },
-          { onConflict: "user_id" }
-        )
-        .select("id")
-        .single();
-
-      if (createProfileError) {
-        log.error("Failed to auto-create seller profile during OTP verification", {
-          error: createProfileError.message,
-          userId: user.id,
-        });
-      } else {
-        profile = createdProfile;
-      }
-    }
-
-    if (profile) {
-      // Save phone number to profile
-      await adminSupabase.from("seller_profiles").update(sellerPhoneFields).eq("id", profile.id);
-    }
-
-    const { error: stepsError } = await adminSupabase.from("verification_steps").upsert(
-      {
-        user_id: user.id,
-        step_type: "phone",
-        status: "approved",
-        phone_verified_at: nowIso,
-      },
-      { onConflict: "user_id,step_type" }
-    );
-
-    if (stepsError) {
-      log.error("Failed to update verification steps", { error: stepsError.message });
-    }
-
-    const { error: sessionError } = await adminSupabase.from("verification_sessions").upsert(
-      {
-        user_id: user.id,
-        phone_verified_at: nowIso,
-      },
-      { onConflict: "user_id" }
-    );
-
-    if (sessionError) {
-      log.error("Failed to update verification session phone state", {
-        error: sessionError.message,
-      });
-    }
+    await finalizePhoneVerification(adminSupabase, user, sellerPhoneFields, nowIso);
 
     return NextResponse.json({ success: true, verified: true });
   } catch (err) {
