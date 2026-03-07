@@ -40,6 +40,7 @@ NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
 NEXT_PUBLIC_CF_IMAGE_RESIZING = "false"
 ENABLE_TEST_POSTING_BYPASS = "true"
 NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS = "true"
+TEST_PHONE_NUMBERS = "+27600000001,+27600000002"
 
 # ────────────────────────────────────────────────────────────────────────────
 # Durable Objects (required by @opennextjs/cloudflare for ISR/caching)
