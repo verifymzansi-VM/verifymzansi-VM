@@ -1,0 +1,23 @@
+# Default owner for all files
+* @verifymzansi-a11y
+
+# Auth & security — require review for any auth changes
+/src/app/api/auth/ @verifymzansi-a11y
+/src/middleware.ts @verifymzansi-a11y
+/src/hooks/use-auth.ts @verifymzansi-a11y
+
+# KYC verification pipeline — sensitive, POPIA-regulated
+/src/lib/services/kyc-engine.ts @verifymzansi-a11y
+/src/app/api/kyc/ @verifymzansi-a11y
+/supabase/migrations/ @verifymzansi-a11y
+
+# Payments — financial transactions
+/src/app/api/webhooks/payfast/ @verifymzansi-a11y
+/src/lib/services/payment*.ts @verifymzansi-a11y
+
+# Infrastructure — deployment & CI
+/.github/ @verifymzansi-a11y
+/wrangler*.toml @verifymzansi-a11y
+
+# Storage — file handling & encryption
+/src/lib/services/storage.ts @verifymzansi-a11y
