@@ -104,7 +104,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     });
 
     if (!callbackUrl.searchParams.has("next")) {
-      callbackUrl.searchParams.set("next", "/login?confirmed=true");
+      callbackUrl.searchParams.set("next", "/?confirmed=true");
     }
 
     return NextResponse.redirect(callbackUrl);

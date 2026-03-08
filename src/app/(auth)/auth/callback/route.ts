@@ -17,9 +17,9 @@ export async function GET(request: Request) {
     const { error, data } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // For email signup confirmations, redirect to login with a success message
+      // For email signup confirmations, redirect to home page with success indicator
       if (type === "signup") {
-        return NextResponse.redirect(`${origin}/login?confirmed=true`);
+        return NextResponse.redirect(`${origin}/?confirmed=true`);
       }
 
       // For OAuth logins (Google, etc.), check if this is a new user
