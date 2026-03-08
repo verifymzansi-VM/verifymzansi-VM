@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   const normalizedPhone = normalizeSaPhone(parsed.data.phone);
   const sellerPhoneFields = buildSellerPhoneFields(normalizedPhone);
   const supabase = await createClient();
-  const callbackUrl = buildAuthCallbackUrl(request, "/dashboard?confirmed=true");
+  const callbackUrl = buildAuthCallbackUrl(request, "/login?confirmed=true");
   const { data: signUpData, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
