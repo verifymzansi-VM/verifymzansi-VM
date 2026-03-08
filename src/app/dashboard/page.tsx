@@ -23,6 +23,7 @@ import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { AttentionBanner } from "@/components/dashboard/attention-banner";
 import { NeedsAttention } from "@/components/dashboard/needs-attention";
 import { RecentActivity, type ActivityItem } from "@/components/dashboard/recent-activity";
+import { EmailConfirmedToast } from "@/components/dashboard/email-confirmed-toast";
 import type { VerificationStepType, VerificationStatus } from "@/types/enums";
 
 export const metadata = {
@@ -253,6 +254,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <EmailConfirmedToast />
       <PageHeader title={`Welcome back, ${displayName}`} breadcrumbs={[{ label: "Dashboard" }]}>
         <Button asChild variant="trust-verified" size="sm" className="gap-2">
           <Link href="/post/create">
