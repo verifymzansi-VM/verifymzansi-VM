@@ -10,14 +10,45 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { error, data } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // For signup confirmations, redirect to login with a success message
-      // so the user knows their email is verified and can now sign in.
+      // For email signup confirmations, redirect to login with a success message
       if (type === "signup") {
         return NextResponse.redirect(`${origin}/login?confirmed=true`);
       }
+
+      // For OAuth logins (Google, etc.), check if this is a new user
+      // and ensure they have a seller_profiles row.
+      const user = data?.session?.user;
+      if (user?.app_metadata?.provider && user.app_metadata.provider !== "email") {
+        const admin = await createClient();
+        const { data: profile } = await admin
+          .from("seller_profiles")
+          .select("id")
+          .eq("id", user.id)
+          .single();
+
+        // Auto-create seller profile for new OAuth users
+        if (!profile) {
+          const displayName =
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            user.email?.split("@")[0] ||
+            "User";
+
+          await admin.from("seller_profiles").insert({
+            id: user.id,
+            display_name: displayName,
+            email: user.email,
+            seller_verification_status: "incomplete",
+          });
+        }
+
+        // OAuth users go straight to dashboard
+        return NextResponse.redirect(`${origin}${next || "/dashboard"}`);
+      }
+
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

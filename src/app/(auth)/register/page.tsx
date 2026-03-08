@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
+import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -106,6 +107,17 @@ export default function RegisterPage() {
         <h1 className="font-display text-2xl font-bold tracking-tight">
           Create your seller account
         </h1>
+      </div>
+
+      <GoogleOAuthButton mode="register" />
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted-foreground">or register with email</span>
+        </div>
       </div>
 
       <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-3">
