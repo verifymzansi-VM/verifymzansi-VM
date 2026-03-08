@@ -182,7 +182,7 @@ export default function PricingPage() {
           <p className="text-center text-sm text-muted-foreground">
             Have questions?{" "}
             <a
-              href="mailto:hello@verifymzansi.co.za"
+              href="mailto:hello@verifymzansi.com"
               className="text-brand-green underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
             >
               Contact us

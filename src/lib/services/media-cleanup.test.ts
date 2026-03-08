@@ -13,18 +13,18 @@ import {
 describe("media cleanup helpers", () => {
   it("collects and diffs media URLs deterministically", () => {
     const previous = collectMediaUrls(
-      "https://media.verifymzansi.co.za/listings/old-photo.jpg",
-      ["https://media.verifymzansi.co.za/listings/old-video.mp4"],
+      "https://media.verifymzansi.com/listings/old-photo.jpg",
+      ["https://media.verifymzansi.com/listings/old-video.mp4"],
       null,
       undefined,
       ""
     );
-    const next = collectMediaUrls("https://media.verifymzansi.co.za/listings/new-photo.jpg", [
-      "https://media.verifymzansi.co.za/listings/old-video.mp4",
+    const next = collectMediaUrls("https://media.verifymzansi.com/listings/new-photo.jpg", [
+      "https://media.verifymzansi.com/listings/old-video.mp4",
     ]);
 
     expect(diffRemovedMediaUrls(previous, next)).toEqual([
-      "https://media.verifymzansi.co.za/listings/old-photo.jpg",
+      "https://media.verifymzansi.com/listings/old-photo.jpg",
     ]);
   });
 
@@ -37,9 +37,9 @@ describe("media cleanup helpers", () => {
     const queued = await queuePublicMediaCleanup(
       admin,
       [
-        "https://media.verifymzansi.co.za/listings/old-photo.jpg",
-        "https://media.verifymzansi.co.za/listings/old-photo.jpg",
-        "https://media.verifymzansi.co.za/media/listing/user-1/old-video.mp4",
+        "https://media.verifymzansi.com/listings/old-photo.jpg",
+        "https://media.verifymzansi.com/listings/old-photo.jpg",
+        "https://media.verifymzansi.com/media/listing/user-1/old-video.mp4",
         "https://evil.example.com/not-ours.jpg",
       ],
       "listing_media_replaced"

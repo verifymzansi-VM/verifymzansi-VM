@@ -3,7 +3,7 @@
  *
  * Uploaded photos may be stored with:
  *   1. An R2 S3-compatible URL (requires auth, not publicly accessible)
- *   2. A custom-domain URL like https://media.verifymzansi.co.za/…
+ *   2. A custom-domain URL like https://media.verifymzansi.com/…
  *
  * Images are rewritten to use the local media-proxy API route
  * (/api/media/serve/…) for ETag caching and consistent headers.
@@ -13,7 +13,7 @@
  * and better playback performance.
  */
 
-const MEDIA_BASE = process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.co.za";
+const MEDIA_BASE = process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.com";
 
 const PROXY_PREFIX = "/api/media/serve/";
 
@@ -27,7 +27,7 @@ export function isTrustedPlatformMediaUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     return (
-      parsed.hostname === "media.verifymzansi.co.za" ||
+      parsed.hostname === "media.verifymzansi.com" ||
       parsed.hostname.endsWith(".r2.cloudflarestorage.com") ||
       parsed.hostname.endsWith(".supabase.co")
     );

@@ -132,7 +132,7 @@ describe("businessSchema", () => {
       ...base,
       business_type: "standalone_shop",
       logo_url: "https://evil.example.com/logo.png",
-      gallery_photos: ["https://media.verifymzansi.co.za/business/photo-1.jpg"],
+      gallery_photos: ["https://media.verifymzansi.com/business/photo-1.jpg"],
       business_details: {
         type: "standalone_shop",
         street_address: "24 Vilakazi Street",

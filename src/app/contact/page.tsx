@@ -66,9 +66,7 @@ export default function ContactPage() {
       toast({
         title: "Failed to send message",
         description:
-          err instanceof Error
-            ? err.message
-            : "Please try again or email support@verifymzansi.co.za",
+          err instanceof Error ? err.message : "Please try again or email support@verifymzansi.com",
         variant: "destructive",
       });
     } finally {

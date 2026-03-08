@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     const publicUrl = process.env.R2_PUBLIC_URL
       ? `${process.env.R2_PUBLIC_URL}/${key}`
-      : `https://media.verifymzansi.co.za/${key}`;
+      : `https://media.verifymzansi.com/${key}`;
 
     log.info("Generated presigned upload URL", {
       userId: user.id,

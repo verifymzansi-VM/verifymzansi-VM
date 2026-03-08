@@ -23,8 +23,8 @@ vi.mock("@/lib/utils/logger", () => ({
 import { POST } from "@/app/api/listings/route";
 
 const USER_ID = "user-1";
-const VALID_IMAGE = "https://media.verifymzansi.co.za/image.jpg";
-const VALID_VIDEO = "https://media.verifymzansi.co.za/video.mp4";
+const VALID_IMAGE = "https://media.verifymzansi.com/image.jpg";
+const VALID_VIDEO = "https://media.verifymzansi.com/video.mp4";
 
 const VALID_BODY = {
   title: "Apple iPhone 15 Pro",
@@ -61,11 +61,9 @@ describe("POST /api/listings", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi
-              .fn()
-              .mockResolvedValue({
-                data: { id: "seller-1", seller_verification_status: "verified" },
-              }),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "seller-1", seller_verification_status: "verified" },
+            }),
           };
         }
         if (table === "entitlements") {
@@ -107,11 +105,9 @@ describe("POST /api/listings", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi
-              .fn()
-              .mockResolvedValue({
-                data: { id: "seller-1", seller_verification_status: "verified" },
-              }),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "seller-1", seller_verification_status: "verified" },
+            }),
           };
         }
         if (table === "entitlements") {
@@ -155,11 +151,9 @@ describe("POST /api/listings", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi
-              .fn()
-              .mockResolvedValue({
-                data: { id: "seller-1", seller_verification_status: "verified" },
-              }),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "seller-1", seller_verification_status: "verified" },
+            }),
           };
         }
         return {
@@ -190,11 +184,9 @@ describe("POST /api/listings", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi
-              .fn()
-              .mockResolvedValue({
-                data: { id: "seller-1", seller_verification_status: "incomplete" },
-              }),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "seller-1", seller_verification_status: "incomplete" },
+            }),
           };
         }
         return {

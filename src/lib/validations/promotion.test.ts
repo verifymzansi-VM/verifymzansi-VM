@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { promotionSchema } from "./promotion";
 
-const VALID_IMAGE = "https://media.verifymzansi.co.za/promotions/photo.jpg";
-const VALID_VIDEO = "https://media.verifymzansi.co.za/promotions/video.mp4";
+const VALID_IMAGE = "https://media.verifymzansi.com/promotions/photo.jpg";
+const VALID_VIDEO = "https://media.verifymzansi.com/promotions/video.mp4";
 const VALID_INPUT = {
   title: "Great Deal on Electronics",
   description:
@@ -105,7 +105,7 @@ describe("promotionSchema", () => {
   it("rejects more than 10 images", () => {
     const images = Array.from(
       { length: 11 },
-      (_, i) => `https://media.verifymzansi.co.za/promotions/photo${i}.jpg`
+      (_, i) => `https://media.verifymzansi.com/promotions/photo${i}.jpg`
     );
     const result = promotionSchema.safeParse({ ...VALID_INPUT, images });
     expect(result.success).toBe(false);
@@ -148,10 +148,10 @@ describe("promotionSchema", () => {
     const result = promotionSchema.safeParse({
       ...VALID_INPUT,
       videos: [
-        "https://media.verifymzansi.co.za/v1.mp4",
-        "https://media.verifymzansi.co.za/v2.mp4",
-        "https://media.verifymzansi.co.za/v3.mp4",
-        "https://media.verifymzansi.co.za/v4.mp4",
+        "https://media.verifymzansi.com/v1.mp4",
+        "https://media.verifymzansi.com/v2.mp4",
+        "https://media.verifymzansi.com/v3.mp4",
+        "https://media.verifymzansi.com/v4.mp4",
       ],
     });
     expect(result.success).toBe(false);
@@ -204,7 +204,7 @@ describe("promotionSchema", () => {
   it("accepts optional video_thumbnail", () => {
     const result = promotionSchema.safeParse({
       ...VALID_INPUT,
-      video_thumbnail: "https://media.verifymzansi.co.za/thumb.jpg",
+      video_thumbnail: "https://media.verifymzansi.com/thumb.jpg",
     });
     expect(result.success).toBe(true);
   });

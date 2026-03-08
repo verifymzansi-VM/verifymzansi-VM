@@ -8,4 +8,4 @@ config:
     secret: false
   zoneName:
     description: Domain zone name
-    default: verifymzansi.co.za
+    default: verifymzansi.com

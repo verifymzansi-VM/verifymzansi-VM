@@ -131,11 +131,11 @@ export default function TermsPage() {
                     </Link>
 
                     <a
-                      href="mailto:legal@verifymzansi.co.za"
+                      href="mailto:legal@verifymzansi.com"
                       className="group flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 text-brand-green transition-colors text-sm font-medium w-fit border border-brand-green/20"
                     >
                       <Mail className="h-4 w-4" />
-                      legal@verifymzansi.co.za
+                      legal@verifymzansi.com
                     </a>
                   </div>
                 </div>

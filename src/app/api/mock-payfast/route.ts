@@ -12,8 +12,8 @@ function isSafeUrl(url: string): boolean {
       "127.0.0.1",
       "verifymzansi.com",
       "www.verifymzansi.com",
-      "verifymzansi.co.za",
-      "www.verifymzansi.co.za",
+      "verifymzansi.com",
+      "www.verifymzansi.com",
     ];
     return allowedHosts.some((h) => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`));
   } catch {

@@ -19,7 +19,7 @@ import { GET as GET_DETAIL, PUT, DELETE } from "@/app/api/promotions/[id]/route"
 
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "user-0001";
-const VALID_IMAGE = "https://media.verifymzansi.co.za/promotions/photo.jpg";
+const VALID_IMAGE = "https://media.verifymzansi.com/promotions/photo.jpg";
 
 const VALID_BODY = {
   title: "Great Deal on Electronics",
@@ -239,7 +239,7 @@ describe("POST /api/promotions", () => {
     });
     const req = createRequest("http://localhost:3000/api/promotions", {
       method: "POST",
-      body: { ...VALID_BODY, videos: ["https://media.verifymzansi.co.za/promo.mp4"] },
+      body: { ...VALID_BODY, videos: ["https://media.verifymzansi.com/promo.mp4"] },
     });
     const res = await POST(req);
     expect(res.status).toBe(422);
@@ -313,8 +313,8 @@ describe("POST /api/promotions", () => {
       body: {
         ...VALID_BODY,
         videos: [
-          "https://media.verifymzansi.co.za/promo-1.mp4",
-          "https://media.verifymzansi.co.za/promo-2.mp4",
+          "https://media.verifymzansi.com/promo-1.mp4",
+          "https://media.verifymzansi.com/promo-2.mp4",
         ],
       },
     });

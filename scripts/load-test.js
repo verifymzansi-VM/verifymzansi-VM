@@ -3,7 +3,7 @@
  *
  * Run:
  *   k6 run scripts/load-test.js
- *   k6 run scripts/load-test.js --env BASE_URL=https://staging.verifymzansi.co.za
+ *   k6 run scripts/load-test.js --env BASE_URL=https://staging.verifymzansi.com
  *
  * Scenarios:
  *   - smoke:   5 VUs × 30 s  (always passes)

@@ -133,7 +133,7 @@ describe("useMediaUpload", () => {
         Promise.resolve({
           uploadUrl: "https://r2.example.com/presigned-put",
           key: "media/listing/user1/video.mp4",
-          publicUrl: "https://media.verifymzansi.co.za/media/listing/user1/video.mp4",
+          publicUrl: "https://media.verifymzansi.com/media/listing/user1/video.mp4",
         }),
     });
 
@@ -161,13 +161,11 @@ describe("useMediaUpload", () => {
       );
     });
 
-    expect(uploadResult).toBe("https://media.verifymzansi.co.za/media/listing/user1/video.mp4");
+    expect(uploadResult).toBe("https://media.verifymzansi.com/media/listing/user1/video.mp4");
     expect(result.current.isUploading).toBe(false);
     expect(result.current.progress).toBe(100);
     expect(result.current.error).toBeNull();
-    expect(result.current.url).toBe(
-      "https://media.verifymzansi.co.za/media/listing/user1/video.mp4"
-    );
+    expect(result.current.url).toBe("https://media.verifymzansi.com/media/listing/user1/video.mp4");
   });
 
   it("should handle upload failure", async () => {

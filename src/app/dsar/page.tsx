@@ -78,9 +78,7 @@ export default function DsarPage() {
       toast({
         title: "Failed to submit request",
         description:
-          err instanceof Error
-            ? err.message
-            : "Please try again or email privacy@verifymzansi.co.za",
+          err instanceof Error ? err.message : "Please try again or email privacy@verifymzansi.com",
         variant: "destructive",
       });
     } finally {

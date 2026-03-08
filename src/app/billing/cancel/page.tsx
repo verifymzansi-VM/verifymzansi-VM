@@ -29,10 +29,10 @@ export default function BillingCancelPage() {
               <p className="text-xs text-muted-foreground">
                 Having issues? Contact{" "}
                 <a
-                  href="mailto:support@verifymzansi.co.za"
+                  href="mailto:support@verifymzansi.com"
                   className="text-brand-green underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
                 >
-                  support@verifymzansi.co.za
+                  support@verifymzansi.com
                 </a>
               </p>
             </CardContent>

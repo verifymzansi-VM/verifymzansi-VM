@@ -19,7 +19,7 @@ import * as cloudflare from "@pulumi/cloudflare";
 
 const config = new pulumi.Config();
 const accountId = config.require("cloudflareAccountId");
-const zoneName = config.get("zoneName") ?? "verifymzansi.co.za";
+const _zoneName = config.get("zoneName") ?? "verifymzansi.com";
 
 // ── R2 Bucket — media storage ──────────────────────────
 export const mediaBucket = new cloudflare.R2Bucket("verifymzansi-media", {

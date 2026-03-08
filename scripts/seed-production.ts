@@ -136,7 +136,7 @@ async function seedPlans() {
 async function seedAdminUser() {
   console.log("Seeding admin user...");
 
-  const adminEmail = process.env.ADMIN_EMAIL || "admin@verifymzansi.co.za";
+  const adminEmail = process.env.ADMIN_EMAIL || "admin@verifymzansi.com";
   const adminPassword = process.env.ADMIN_PASSWORD || "ChangeThisPassword123!";
 
   // Create auth user with admin role
@@ -191,7 +191,7 @@ async function seedAdminUser() {
 async function seedModeratorUser() {
   console.log("Seeding moderator user...");
 
-  const modEmail = process.env.MODERATOR_EMAIL || "moderator@verifymzansi.co.za";
+  const modEmail = process.env.MODERATOR_EMAIL || "moderator@verifymzansi.com";
   const modPassword = process.env.MODERATOR_PASSWORD || "ChangeThisPassword456!";
 
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({

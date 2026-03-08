@@ -53,7 +53,7 @@ describe("storage service", () => {
     process.env.R2_ACCOUNT_ID = "test-account";
     process.env.R2_ACCESS_KEY_ID = "test-key";
     process.env.R2_SECRET_ACCESS_KEY = "test-secret";
-    process.env.R2_PUBLIC_URL = "https://cdn.verifymzansi.co.za";
+    process.env.R2_PUBLIC_URL = "https://cdn.verifymzansi.com";
     process.env.R2_PRIVATE_BUCKET = "verifymzansi-private";
   });
 
@@ -93,7 +93,7 @@ describe("storage service", () => {
       });
 
       expect(mockSend).toHaveBeenCalled();
-      expect(result.url).toBe("https://cdn.verifymzansi.co.za/listings/s1/photo.jpg");
+      expect(result.url).toBe("https://cdn.verifymzansi.com/listings/s1/photo.jpg");
       expect(result.key).toBe("listings/s1/photo.jpg");
     });
 

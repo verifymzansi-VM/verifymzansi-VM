@@ -125,11 +125,11 @@ export default function PrivacyPolicyPage() {
                     </Link>
 
                     <a
-                      href="mailto:privacy@verifymzansi.co.za"
+                      href="mailto:privacy@verifymzansi.com"
                       className="group flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 text-brand-green transition-colors text-sm font-medium w-fit border border-brand-green/20"
                     >
                       <Mail className="h-4 w-4" />
-                      privacy@verifymzansi.co.za
+                      privacy@verifymzansi.com
                     </a>
                   </div>
                 </div>

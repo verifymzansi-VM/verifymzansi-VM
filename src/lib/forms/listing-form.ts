@@ -12,7 +12,7 @@ const LISTING_BASELINE = {
   negotiable: false,
   province: "Gauteng",
   city: "Johannesburg",
-  images: ["https://media.verifymzansi.co.za/listings/example.jpg"],
+  images: ["https://media.verifymzansi.com/listings/example.jpg"],
 } as const;
 
 function getCategoryDefinition(category: ListingCategory) {

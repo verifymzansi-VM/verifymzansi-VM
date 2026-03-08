@@ -69,10 +69,10 @@ export default function BannedPage() {
                   <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-1 rounded-md bg-muted/50 border border-border">
                     <Mail className="h-3.5 w-3.5 text-foreground/70" />
                     <a
-                      href="mailto:appeals@verifymzansi.co.za"
+                      href="mailto:appeals@verifymzansi.com"
                       className="text-xs font-medium underline"
                     >
-                      appeals@verifymzansi.co.za
+                      appeals@verifymzansi.com
                     </a>
                   </div>
                 </div>

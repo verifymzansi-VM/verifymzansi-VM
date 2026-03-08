@@ -38,7 +38,7 @@ const VALID_BODY = {
     suburb: "Orlando West",
     walk_in_policy: "walk_ins_welcome",
   },
-  gallery_photos: ["https://media.verifymzansi.co.za/business/photo-1.jpg"],
+  gallery_photos: ["https://media.verifymzansi.com/business/photo-1.jpg"],
 };
 
 function createRequest(body: unknown): NextRequest {
@@ -64,11 +64,9 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi
-              .fn()
-              .mockResolvedValue({
-                data: { id: "seller-1", seller_verification_status: "verified" },
-              }),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "seller-1", seller_verification_status: "verified" },
+            }),
           };
         }
         if (table === "entitlements") {
@@ -110,11 +108,9 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi
-              .fn()
-              .mockResolvedValue({
-                data: { id: "seller-1", seller_verification_status: "verified" },
-              }),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "seller-1", seller_verification_status: "verified" },
+            }),
           };
         }
         if (table === "entitlements") {
@@ -145,7 +141,7 @@ describe("POST /api/businesses", () => {
     const res = await POST(
       createRequest({
         ...VALID_BODY,
-        cover_video: "https://media.verifymzansi.co.za/business/cover-video.mp4",
+        cover_video: "https://media.verifymzansi.com/business/cover-video.mp4",
       })
     );
     expect(res.status).toBe(422);
@@ -165,11 +161,9 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi
-              .fn()
-              .mockResolvedValue({
-                data: { id: "seller-1", seller_verification_status: "verified" },
-              }),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "seller-1", seller_verification_status: "verified" },
+            }),
           };
         }
         if (table === "entitlements") {
@@ -226,11 +220,9 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi
-              .fn()
-              .mockResolvedValue({
-                data: { id: "seller-1", seller_verification_status: "verified" },
-              }),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "seller-1", seller_verification_status: "verified" },
+            }),
           };
         }
         return {
@@ -261,11 +253,9 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi
-              .fn()
-              .mockResolvedValue({
-                data: { id: "seller-1", seller_verification_status: "rejected" },
-              }),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: "seller-1", seller_verification_status: "rejected" },
+            }),
           };
         }
         return {

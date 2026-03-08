@@ -18,8 +18,8 @@ function getResend(): Resend {
   return _resend;
 }
 
-const FROM_EMAIL = "VerifyMzansi <noreply@verifymzansi.co.za>";
-const REPLY_TO = "support@verifymzansi.co.za";
+const FROM_EMAIL = "VerifyMzansi <noreply@verifymzansi.com>";
+const REPLY_TO = "support@verifymzansi.com";
 
 /**
  * Sanitize the app URL to prevent XSS via javascript: protocol injection.
@@ -145,7 +145,7 @@ export async function sendVerificationApprovedEmail(
             <p>Best regards,<br>The VerifyMzansi Team</p>
           </div>
           <div class="footer">
-            <p>Questions? Email us at support@verifymzansi.co.za</p>
+            <p>Questions? Email us at support@verifymzansi.com</p>
           </div>
         </div>
       </body>
@@ -197,7 +197,7 @@ export async function sendVerificationRejectedEmail(
             <p>Best regards,<br>The VerifyMzansi Team</p>
           </div>
           <div class="footer">
-            <p>Questions? Email us at support@verifymzansi.co.za</p>
+            <p>Questions? Email us at support@verifymzansi.com</p>
           </div>
         </div>
       </body>
@@ -276,7 +276,7 @@ export async function sendPaymentReceiptEmail(
             <p>Best regards,<br>The VerifyMzansi Team</p>
           </div>
           <div class="footer">
-            <p>Questions? Email us at support@verifymzansi.co.za</p>
+            <p>Questions? Email us at support@verifymzansi.com</p>
           </div>
         </div>
       </body>

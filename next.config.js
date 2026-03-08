@@ -16,7 +16,7 @@ const nextConfig = {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY:
       process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAACmVXwJ4jmJSu6fX",
-    NEXT_PUBLIC_MEDIA_URL: process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.co.za",
+    NEXT_PUBLIC_MEDIA_URL: process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.com",
     // Toggle Cloudflare Image Resizing (/cdn-cgi/image/). Set to "false"
     // if Image Resizing is not enabled on the zone — images will still
     // render but without on-the-fly format/size optimisation.
@@ -33,7 +33,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "media.verifymzansi.co.za",
+        hostname: "media.verifymzansi.com",
       },
       {
         protocol: "https",

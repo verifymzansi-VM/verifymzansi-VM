@@ -92,7 +92,7 @@ export default async function HomePage() {
         sameAs: [],
         contactPoint: {
           "@type": "ContactPoint",
-          email: "hello@verifymzansi.co.za",
+          email: "hello@verifymzansi.com",
           contactType: "customer support",
         },
       },

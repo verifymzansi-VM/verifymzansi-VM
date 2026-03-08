@@ -729,7 +729,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
 
                     {!business.phone && !business.whatsapp && !business.email && (
                       <a
-                        href={`mailto:support@verifymzansi.co.za?subject=Enquiry about ${encodeURIComponent(business.business_name)}&body=Hi, I found ${encodeURIComponent(business.business_name)} on VerifyMzansi and would like to get in touch.`}
+                        href={`mailto:support@verifymzansi.com?subject=Enquiry about ${encodeURIComponent(business.business_name)}&body=Hi, I found ${encodeURIComponent(business.business_name)} on VerifyMzansi and would like to get in touch.`}
                       >
                         <Button className="w-full gap-2" size="lg">
                           <MessageSquare className="h-4 w-4" />
