@@ -135,6 +135,27 @@ describe("POST /api/promotions", () => {
     expect(json.error).toBe("Validation failed");
   });
 
+  it("returns verification_required for unverified sellers", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      seller_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: "sp-1", seller_verification_status: "pending_review" },
+        }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Verification required",
+      code: "verification_required",
+    });
+  });
+
   it("creates promotion successfully (201)", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({

@@ -17,6 +17,7 @@ import {
 import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
 import { normalizeBusinessCategoryParam } from "@/lib/utils/marketplace-query";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -99,6 +100,10 @@ export async function POST(request: NextRequest) {
 
     if (!profile) {
       return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+    }
+
+    if (!isVerifiedSeller(profile.seller_verification_status ?? null)) {
+      return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
     // ── Check entitlement / plan limits ──────────────────────

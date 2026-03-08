@@ -64,7 +64,11 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "seller-1" } }),
+            maybeSingle: vi
+              .fn()
+              .mockResolvedValue({
+                data: { id: "seller-1", seller_verification_status: "verified" },
+              }),
           };
         }
         if (table === "entitlements") {
@@ -106,7 +110,11 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "seller-1" } }),
+            maybeSingle: vi
+              .fn()
+              .mockResolvedValue({
+                data: { id: "seller-1", seller_verification_status: "verified" },
+              }),
           };
         }
         if (table === "entitlements") {
@@ -157,7 +165,11 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "seller-1" } }),
+            maybeSingle: vi
+              .fn()
+              .mockResolvedValue({
+                data: { id: "seller-1", seller_verification_status: "verified" },
+              }),
           };
         }
         if (table === "entitlements") {
@@ -208,6 +220,27 @@ describe("POST /api/businesses", () => {
   });
 
   it("rejects business media hosted outside the platform", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "seller_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi
+              .fn()
+              .mockResolvedValue({
+                data: { id: "seller-1", seller_verification_status: "verified" },
+              }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
     const res = await POST(
       createRequest({
         ...VALID_BODY,
@@ -218,6 +251,37 @@ describe("POST /api/businesses", () => {
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toMatchObject({
       error: "Validation failed",
+    });
+  });
+
+  it("returns verification_required for unverified sellers", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "seller_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi
+              .fn()
+              .mockResolvedValue({
+                data: { id: "seller-1", seller_verification_status: "rejected" },
+              }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Verification required",
+      code: "verification_required",
     });
   });
 });

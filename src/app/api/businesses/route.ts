@@ -10,6 +10,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -54,6 +55,10 @@ export async function POST(request: NextRequest) {
 
     if (!profile) {
       return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+    }
+
+    if (!isVerifiedSeller(profile.seller_verification_status ?? null)) {
+      return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
     // Parse and validate body

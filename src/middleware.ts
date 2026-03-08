@@ -285,12 +285,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   }
 
   // -- Seller gating: require verified seller for posting -------------------
-  if (
-    pathname.startsWith("/post/create") ||
-    pathname.startsWith("/post/edit") ||
-    pathname.startsWith("/api/post/create") ||
-    pathname.startsWith("/api/post/edit")
-  ) {
+  if (pathname.startsWith("/post/edit") || pathname.startsWith("/api/post/edit")) {
     if (user) {
       const { data: profile, error: profileError } = await supabase
         .from("seller_profiles")

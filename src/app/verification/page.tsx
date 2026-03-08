@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -33,6 +33,7 @@ import {
   extractDobFromSaId,
   extractGenderFromSaId,
 } from "@/lib/utils/sa-id-validation";
+import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import type { VerificationStepType, LocationConfidence } from "@/types/enums";
 import { GPS_REQUEST_TIMEOUT_MS, GPS_MAX_AGE_MS } from "@/lib/constants/verification";
 
@@ -120,9 +121,13 @@ export default function VerificationPage() {
   }>({});
 
   const { toast } = useToast();
-  const _router = useRouter();
+  const searchParams = useSearchParams();
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
+  const completionHref = useMemo(
+    () => sanitizeReturnUrl(searchParams.get("returnUrl")),
+    [searchParams]
+  );
 
   const idFileError = validateFile(idFile, true);
   const selfieFileError = validateFile(selfieFile);
@@ -1168,8 +1173,8 @@ export default function VerificationPage() {
                     Your details are under review.
                   </p>
                   <Button variant="trust-verified" asChild className="gap-2">
-                    <Link href="/dashboard">
-                      Go to Dashboard
+                    <Link href={completionHref}>
+                      {completionHref === "/dashboard" ? "Go to Dashboard" : "Return to Posting"}
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>

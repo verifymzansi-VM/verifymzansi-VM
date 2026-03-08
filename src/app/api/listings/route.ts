@@ -11,6 +11,7 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { isPostingLimitBypassEnabled } from "../../../lib/utils/posting-limit-bypass";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
+import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
@@ -279,6 +280,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const admin = createAdminClient();
+
+    // ── Get seller profile ───────────────────────────────────
+    const { data: profile } = await admin
+      .from("seller_profiles")
+      .select("id, seller_verification_status")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!profile) {
+      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+    }
+
+    if (!isVerifiedSeller(profile.seller_verification_status ?? null)) {
+      return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
+    }
+
     // ── Parse body ───────────────────────────────────────────
     const body = await parseJsonRequest(request);
     if (!body) {
@@ -303,18 +321,6 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
-    const admin = createAdminClient();
-
-    // ── Get seller profile ───────────────────────────────────
-    const { data: profile } = await admin
-      .from("seller_profiles")
-      .select("id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
-    }
 
     // ── Check entitlement / plan limits ──────────────────────
     // Check if user has a paid entitlement (not expired)

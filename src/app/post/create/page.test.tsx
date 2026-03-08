@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import CreatePostPage from "./page";
+import { useAuth } from "@/hooks/use-auth";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -16,6 +17,10 @@ vi.mock("next/link", () => ({
       {children}
     </a>
   ),
+}));
+
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: vi.fn(),
 }));
 
 vi.mock("@/components/layout/header", () => ({
@@ -36,21 +41,68 @@ vi.mock("@/components/layout/page-header", () => ({
 }));
 
 describe("CreatePostPage", () => {
-  it("renders exactly three create cards with expected labels", () => {
+  it("renders exactly three category cards with the updated guide copy", () => {
+    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      isLoading: false,
+      isVerified: true,
+      profile: { seller_verification_status: "verified" },
+    });
+
     render(<CreatePostPage />);
 
     expect(screen.getAllByText("Mzansi Market").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mzansi Business").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Promotions & Events").length).toBeGreaterThan(0);
+    expect(screen.getByText("How to choose the right category")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Mzansi Market is for a single listing. Mzansi Business is for your business profile. Promotions & Events is for temporary offers, campaigns, and events."
+      )
+    ).toBeInTheDocument();
     expect(screen.getAllByRole("link")).toHaveLength(3);
   });
 
-  it("renders the posting guide copy", () => {
+  it("sends verified users directly to the create forms", () => {
+    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      isLoading: false,
+      isVerified: true,
+      profile: { seller_verification_status: "verified" },
+    });
+
     render(<CreatePostPage />);
 
-    expect(screen.getByText("How posting works")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
+      "href",
+      "/post/create-listing"
+    );
+    expect(screen.getByRole("link", { name: /Mzansi Business/i })).toHaveAttribute(
+      "href",
+      "/post/create-business"
+    );
+    expect(screen.getByRole("link", { name: /Promotions & Events/i })).toHaveAttribute(
+      "href",
+      "/post/create-promotion"
+    );
+  });
+
+  it("sends unverified users to verification with a returnUrl", () => {
+    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      isLoading: false,
+      isVerified: false,
+      profile: { seller_verification_status: "incomplete" },
+    });
+
+    render(<CreatePostPage />);
+
+    expect(screen.getByText("Verification required before posting")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Mzansi Market/i }).getAttribute("href")).toContain(
+      "/verification?returnUrl=%2Fpost%2Fcreate-listing"
+    );
+    expect(screen.getByRole("link", { name: /Mzansi Business/i }).getAttribute("href")).toContain(
+      "/verification?returnUrl=%2Fpost%2Fcreate-business"
+    );
     expect(
-      screen.getByText("Pick your area, complete the guided form, and submit your post for review.")
-    ).toBeInTheDocument();
+      screen.getByRole("link", { name: /Promotions & Events/i }).getAttribute("href")
+    ).toContain("/verification?returnUrl=%2Fpost%2Fcreate-promotion");
   });
 });

@@ -200,7 +200,7 @@ describe("proxy middleware — authenticated routing", () => {
     expect(res.status).toBe(200);
   });
 
-  it("redirects posting pages to /dashboard when seller profile lookup fails", async () => {
+  it("allows /post/create through without seller verification lookup", async () => {
     mockGetUser.mockResolvedValue({
       data: {
         user: {
@@ -209,24 +209,14 @@ describe("proxy middleware — authenticated routing", () => {
           app_metadata: { role: "seller" },
         },
       },
-    });
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: null,
-            error: { message: "upstream timeout", code: "ETIMEDOUT" },
-          }),
-        }),
-      }),
     });
 
     const res = await proxy(createMockRequest("/post/create"));
-    expect(res.status).toBe(307);
-    expect(new URL(res.headers.get("location")!).pathname).toBe("/dashboard");
+    expect(res.status).toBe(200);
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it("returns 503 for posting API routes when seller profile lookup fails", async () => {
+  it("allows legacy /api/post/create paths through middleware without seller gating", async () => {
     mockGetUser.mockResolvedValue({
       data: {
         user: {
@@ -236,20 +226,9 @@ describe("proxy middleware — authenticated routing", () => {
         },
       },
     });
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: null,
-            error: { message: "upstream timeout", code: "ETIMEDOUT" },
-          }),
-        }),
-      }),
-    });
 
     const res = await proxy(createMockRequest("/api/post/create"));
-    expect(res.status).toBe(503);
-    const body = await res.json();
-    expect(body.error).toMatch(/posting eligibility service unavailable/i);
+    expect(res.status).toBe(200);
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });
