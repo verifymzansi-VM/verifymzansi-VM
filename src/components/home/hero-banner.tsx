@@ -7,6 +7,7 @@ import {
   MapPin,
   Building2,
   Megaphone,
+  ShoppingBag,
   ArrowRight,
   ChevronRight,
   ChevronLeft,
@@ -49,9 +50,28 @@ const ENTITY_CONFIG = {
 };
 
 const HERO_CATEGORY_LINKS = [
-  { href: "/mzansi-market", label: "Mzansi Market" },
-  { href: "/mzansi-business", label: "Mzansi Business" },
-  { href: "/promotions", label: "Promotions & Events" },
+  {
+    href: "/mzansi-market",
+    label: "Mzansi Market",
+    icon: ShoppingBag,
+    iconColor: "text-brand-green",
+    hoverClass:
+      "hover:border-brand-green/40 hover:bg-brand-green-50 dark:hover:border-brand-green/50",
+  },
+  {
+    href: "/mzansi-business",
+    label: "Mzansi Business",
+    icon: Building2,
+    iconColor: "text-brand-blue",
+    hoverClass: "hover:border-brand-blue/40 hover:bg-brand-blue-50 dark:hover:border-brand-blue/50",
+  },
+  {
+    href: "/promotions",
+    label: "Promotions & Events",
+    icon: Megaphone,
+    iconColor: "text-red-500",
+    hoverClass: "hover:border-red-400/40 hover:bg-red-50 dark:hover:border-red-500/50",
+  },
 ] as const;
 
 interface HeroPromotion {
@@ -677,15 +697,28 @@ export function HeroBanner({
             aria-label="Marketplace categories"
             className="mx-auto grid max-w-4xl grid-cols-3 gap-2 sm:gap-3"
           >
-            {HERO_CATEGORY_LINKS.map((category) => (
-              <Link
-                key={category.href}
-                href={category.href}
-                className="flex min-h-[58px] items-center justify-center rounded-2xl border border-warm-200 bg-warm-50 px-3 py-3 text-center text-sm font-semibold leading-tight text-foreground transition-colors hover:border-brand-green/40 hover:bg-brand-green-50 dark:border-warm-700 dark:bg-warm-800 dark:hover:border-brand-green/50 dark:hover:bg-warm-700 sm:min-h-[60px] sm:text-base"
-              >
-                <span className="whitespace-normal">{category.label}</span>
-              </Link>
-            ))}
+            {HERO_CATEGORY_LINKS.map((category) => {
+              const Icon = category.icon;
+
+              return (
+                <Link
+                  key={category.href}
+                  href={category.href}
+                  className={cn(
+                    "flex min-h-[58px] items-center justify-center rounded-2xl border border-warm-200 bg-warm-50 px-3 py-3 text-center text-sm font-semibold leading-tight text-foreground transition-colors dark:border-warm-700 dark:bg-warm-800 dark:hover:bg-warm-700 sm:min-h-[60px] sm:text-base",
+                    category.hoverClass
+                  )}
+                >
+                  <span className="flex items-center justify-center gap-2 whitespace-normal">
+                    <Icon
+                      aria-hidden="true"
+                      className={cn("h-4 w-4 shrink-0", category.iconColor)}
+                    />
+                    <span>{category.label}</span>
+                  </span>
+                </Link>
+              );
+            })}
           </nav>
         </div>
       </div>

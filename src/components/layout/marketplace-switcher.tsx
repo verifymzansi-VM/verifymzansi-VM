@@ -13,6 +13,7 @@ interface AreaTab {
   icon: React.ElementType;
   iconColor: string;
   activeClass: string;
+  hoverClass: string;
 }
 
 const AREA_TABS: AreaTab[] = [
@@ -23,6 +24,7 @@ const AREA_TABS: AreaTab[] = [
     icon: ShoppingBag,
     iconColor: "text-brand-green",
     activeClass: "border-brand-green text-brand-green bg-brand-green-50 dark:bg-brand-green-950",
+    hoverClass: "hover:border-brand-green/40 hover:bg-brand-green-50/80",
   },
   {
     area: "MZANSI_BUSINESS",
@@ -31,6 +33,7 @@ const AREA_TABS: AreaTab[] = [
     icon: Building2,
     iconColor: "text-brand-blue",
     activeClass: "border-brand-blue text-brand-blue bg-brand-blue-50 dark:bg-brand-blue-950",
+    hoverClass: "hover:border-brand-blue/40 hover:bg-brand-blue-50/80",
   },
   {
     area: "PROMOTIONS",
@@ -39,6 +42,7 @@ const AREA_TABS: AreaTab[] = [
     icon: Megaphone,
     iconColor: "text-red-500",
     activeClass: "border-red-500 text-red-600 bg-red-50 dark:bg-red-950",
+    hoverClass: "hover:border-red-400/40 hover:bg-red-50/80",
   },
 ];
 
@@ -61,14 +65,20 @@ export function MarketplaceSwitcher() {
             aria-label={tab.label}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-lg border px-2 py-1.5 md:px-3 md:py-2 text-sm font-medium transition-colors",
+              "inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] font-medium leading-none transition-colors md:flex-none md:px-3 md:py-2 md:text-sm",
               isActive
                 ? tab.activeClass
-                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted"
+                : cn(
+                    "border-transparent text-muted-foreground hover:text-foreground",
+                    tab.hoverClass
+                  )
             )}
           >
-            <Icon className={cn("h-5 w-5 md:h-4 md:w-4 shrink-0", !isActive && tab.iconColor)} />
-            <span className="hidden lg:inline">{tab.label}</span>
+            <Icon
+              aria-hidden="true"
+              className={cn("h-3.5 w-3.5 shrink-0 md:h-4 md:w-4", !isActive && tab.iconColor)}
+            />
+            <span className="truncate">{tab.label}</span>
           </Link>
         );
       })}
