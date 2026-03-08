@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, ArrowLeft } from "lucide-react";
-import { useCallback, useState } from "react";
+import { Loader2, ArrowLeft, RefreshCw } from "lucide-react";
+import { useCallback, useState, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,10 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
+  const [turnstileError, setTurnstileError] = useState(false);
+  const [turnstileLoaded, setTurnstileLoaded] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
 
   const {
@@ -30,12 +34,52 @@ export default function ForgotPasswordPage() {
     },
   });
 
+  // Turnstile widget load timeout
+  const isTurnstileDev =
+    !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY === "dummy_site_key";
+  const skipTurnstileTimeout = isTurnstileDev || process.env.NODE_ENV !== "production";
+
+  useEffect(() => {
+    if (skipTurnstileTimeout || turnstileLoaded) return;
+    timeoutRef.current = setTimeout(() => {
+      setTurnstileError(true);
+      setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
+    }, 15000);
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [skipTurnstileTimeout, turnstileLoaded, retryKey, setValue]);
+
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
+      setTurnstileError(false);
+      setTurnstileLoaded(true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setValue("turnstileToken", token, { shouldValidate: true });
     },
     [setValue]
   );
+
+  const handleTurnstileLoad = useCallback(() => {
+    setTurnstileLoaded(true);
+    setTurnstileError(false);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  }, []);
+
+  const handleTurnstileError = useCallback(() => {
+    setTurnstileError(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
+  }, [setValue]);
+
+  const handleRetry = useCallback(() => {
+    setTurnstileError(false);
+    setTurnstileLoaded(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
+    TurnstileWidget.retry();
+    setRetryKey((k) => k + 1);
+  }, [setValue]);
 
   async function onSubmit(data: ForgotPasswordInput) {
     try {
@@ -123,9 +167,27 @@ export default function ForgotPasswordPage() {
           )}
         </div>
 
-        <TurnstileWidget onSuccess={handleTurnstileSuccess} />
-        {errors.turnstileToken && (
+        <TurnstileWidget
+          key={retryKey}
+          onSuccess={handleTurnstileSuccess}
+          onError={handleTurnstileError}
+          onLoad={handleTurnstileLoad}
+        />
+        {errors.turnstileToken && !turnstileError && (
           <p className="inline-form-error">{errors.turnstileToken.message}</p>
+        )}
+        {turnstileError && (
+          <div className="flex items-center gap-2">
+            <p className="inline-form-error">Security verification failed to load.</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="inline-flex items-center gap-1 text-xs font-medium text-brand-green underline hover:text-brand-green/80"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Retry
+            </button>
+          </div>
         )}
 
         <Button type="submit" className="w-full" variant="trust-verified" disabled={isSubmitting}>

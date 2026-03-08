@@ -1,26 +1,10 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import Image from "next/image";
-import { MapPin, Calendar, Eye, Building2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { PromotionContactActions } from "./promotion-contact-actions";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
-import { TrustBadge } from "@/components/trust/trust-badge";
-import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import { formatZAR } from "@/lib/utils/format";
-import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import {
-  PROMOTION_TYPE_LABELS,
-  type SellerVerificationStatus,
-  type PromotionType,
-} from "@/types/enums";
+import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import type { Metadata } from "next";
-import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 
 interface PromotionDetailPageProps {
   params: Promise<{ id: string }>;
@@ -68,10 +52,6 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
     .eq("user_id", promotion.seller_id)
     .maybeSingle();
 
-  const trustLevel = seller
-    ? computeTrustLevel(seller.seller_verification_status as SellerVerificationStatus)
-    : 0;
-
   // Fetch linked business (if any)
   const linkedBusiness = promotion.business_id
     ? (
@@ -83,26 +63,12 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
       ).data
     : null;
 
-  const photos = (promotion.photos || []) as string[];
-  const videos = (promotion.videos || []) as string[];
-  const leadVideo = videos[0];
-  const leadPhoto = photos[0];
-  const leadPoster = promotion.video_thumbnail || leadPhoto || undefined;
-  const contactMethods = (promotion.contact_methods || []) as string[];
-  const now = new Date();
-  const isBoosted = promotion.boost_until ? new Date(promotion.boost_until) > now : false;
-  const isFeatured = promotion.featured_until ? new Date(promotion.featured_until) > now : false;
-  const categoryLabel = getPromotionCategoryDisplayLabel(
-    promotion.category_key,
-    promotion.category
-  );
-
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Event",
     name: promotion.title,
     description: promotion.description?.slice(0, 300),
-    ...(photos[0] && { image: photos[0] }),
+    ...(promotion.photos?.[0] && { image: promotion.photos[0] }),
     ...(promotion.start_date && { startDate: promotion.start_date }),
     ...(promotion.end_date && { endDate: promotion.end_date }),
     ...(promotion.location && {
@@ -135,248 +101,11 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
               { label: promotion.title },
             ]}
           />
-
-          <article className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: Photos + Description */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Photo & Video gallery */}
-              {(photos.length > 0 || videos.length > 0) && (
-                <div className="grid grid-cols-1 gap-2">
-                  <div className="relative aspect-[2/1] rounded-lg overflow-hidden bg-warm-100 dark:bg-warm-800">
-                    {leadVideo ? (
-                      <video
-                        src={normalizeMediaUrl(leadVideo)}
-                        controls
-                        playsInline
-                        preload="metadata"
-                        poster={leadPoster ? normalizeMediaUrl(leadPoster) : undefined}
-                        className="h-full w-full object-contain bg-black"
-                      >
-                        <track kind="captions" />
-                      </video>
-                    ) : (
-                      <Image
-                        src={normalizeMediaUrl(leadPhoto || "/images/placeholder.png")}
-                        alt={promotion.title}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 1024px) 100vw, 66vw"
-                        priority
-                      />
-                    )}
-                    <div className="absolute top-3 left-3 flex gap-1">
-                      {isFeatured && (
-                        <Badge className="bg-brand-gold text-amber-950">Featured</Badge>
-                      )}
-                      {isBoosted && <Badge className="bg-brand-blue text-white">Boosted</Badge>}
-                      <Badge variant="secondary">
-                        {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] || "Ad"}
-                      </Badge>
-                    </div>
-                  </div>
-                  {(leadVideo ? photos.length > 0 : photos.length > 1) && (
-                    <div className="grid grid-cols-4 gap-2">
-                      {(leadVideo ? photos : photos.slice(1))
-                        .slice(0, 4)
-                        .map((photo: string, i: number) => (
-                          <div
-                            key={i}
-                            className="relative aspect-square rounded-lg overflow-hidden bg-warm-100 dark:bg-warm-800"
-                          >
-                            <Image
-                              src={normalizeMediaUrl(photo)}
-                              alt={`${promotion.title} photo ${i + 2}`}
-                              fill
-                              className="object-cover"
-                              sizes="(max-width: 640px) 25vw, 16vw"
-                            />
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                  {(leadVideo ? videos.length > 1 : videos.length > 0) && (
-                    <div className="grid grid-cols-1 gap-2">
-                      {(leadVideo ? videos.slice(1) : videos).map((videoUrl: string, i: number) => (
-                        <div
-                          key={i}
-                          className="relative aspect-video rounded-lg overflow-hidden bg-black"
-                        >
-                          <video
-                            src={normalizeMediaUrl(videoUrl)}
-                            controls
-                            playsInline
-                            preload="metadata"
-                            poster={leadPoster ? normalizeMediaUrl(leadPoster) : undefined}
-                            className="w-full h-full object-contain"
-                          >
-                            <track kind="captions" />
-                          </video>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Description */}
-              <Card>
-                <CardContent className="p-6 space-y-4">
-                  <h2 className="text-lg font-semibold">About this promotion</h2>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                    {promotion.description}
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* Details */}
-              <Card>
-                <CardContent className="p-6 space-y-3">
-                  <h2 className="text-lg font-semibold">Details</h2>
-                  <dl className="grid grid-cols-2 gap-y-2 text-sm">
-                    <dt className="text-muted-foreground">Type</dt>
-                    <dd className="font-medium">
-                      {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] ||
-                        promotion.promotion_type}
-                    </dd>
-
-                    {categoryLabel && (
-                      <>
-                        <dt className="text-muted-foreground">Category</dt>
-                        <dd className="font-medium">{categoryLabel}</dd>
-                      </>
-                    )}
-
-                    <dt className="text-muted-foreground">Location</dt>
-                    <dd className="font-medium flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {promotion.location_city}, {promotion.location_province}
-                    </dd>
-
-                    {promotion.start_date && (
-                      <>
-                        <dt className="text-muted-foreground">Starts</dt>
-                        <dd className="font-medium flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          <time dateTime={promotion.start_date}>
-                            {new Date(promotion.start_date).toLocaleDateString("en-ZA")}
-                          </time>
-                        </dd>
-                      </>
-                    )}
-
-                    {promotion.end_date && (
-                      <>
-                        <dt className="text-muted-foreground">Ends</dt>
-                        <dd className="font-medium flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          <time dateTime={promotion.end_date}>
-                            {new Date(promotion.end_date).toLocaleDateString("en-ZA")}
-                          </time>
-                        </dd>
-                      </>
-                    )}
-
-                    <dt className="text-muted-foreground">Views</dt>
-                    <dd className="font-medium flex items-center gap-1">
-                      <Eye className="h-3 w-3" />
-                      {promotion.view_count || 0}
-                    </dd>
-                  </dl>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Right: Price + Seller + Contact */}
-            <div className="space-y-4">
-              {/* Price card */}
-              {promotion.price_cents != null && promotion.price_cents > 0 && (
-                <Card>
-                  <CardContent className="p-6 space-y-2">
-                    <div className="flex items-baseline gap-2">
-                      <span className="font-display text-2xl font-bold">
-                        {formatZAR(promotion.price_cents)}
-                      </span>
-                      {promotion.price_negotiable && (
-                        <Badge variant="outline" className="text-brand-green">
-                          Negotiable
-                        </Badge>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Seller info */}
-              <Card>
-                <CardContent className="p-6 space-y-4">
-                  <h3 className="font-semibold">Advertiser</h3>
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-brand-green text-white font-bold flex items-center justify-center">
-                      {seller?.display_name?.charAt(0)?.toUpperCase() || "S"}
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{seller?.display_name || "Seller"}</p>
-                      <TrustBadge level={trustLevel} size="sm" />
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  <PromotionContactActions
-                    promotionId={promotion.id}
-                    contactMethods={contactMethods}
-                    sellerPhone={
-                      contactMethods.includes("call") ? (seller?.masked_phone_public ?? null) : null
-                    }
-                    sellerWhatsapp={
-                      contactMethods.includes("whatsapp") ? (seller?.phone ?? null) : null
-                    }
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Linked Business */}
-              {linkedBusiness && (
-                <Card>
-                  <CardContent className="p-5 space-y-3">
-                    <h3 className="font-semibold text-sm text-muted-foreground">From Business</h3>
-                    <Link
-                      href={`/mzansi-business/${linkedBusiness.id}`}
-                      className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-                    >
-                      <div className="h-10 w-10 rounded-lg bg-brand-blue/10 flex items-center justify-center shrink-0 overflow-hidden">
-                        {linkedBusiness.logo_url ? (
-                          <Image
-                            src={normalizeMediaUrl(linkedBusiness.logo_url)}
-                            alt={linkedBusiness.business_name}
-                            width={40}
-                            height={40}
-                            className="object-cover"
-                          />
-                        ) : (
-                          <Building2 className="h-5 w-5 text-brand-blue" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">
-                          {linkedBusiness.business_name}
-                        </p>
-                        <p className="text-xs text-brand-blue">View Business</p>
-                      </div>
-                    </Link>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Posted date */}
-              <p className="text-xs text-muted-foreground text-center">
-                Posted{" "}
-                <time dateTime={promotion.created_at}>
-                  {new Date(promotion.created_at).toLocaleDateString("en-ZA")}
-                </time>
-              </p>
-            </div>
-          </article>
+          <PromotionDetailContent
+            promotion={promotion}
+            seller={seller}
+            linkedBusiness={linkedBusiness}
+          />
         </div>
       </main>
 

@@ -26,7 +26,9 @@ export default function LoginPage() {
   const [emailConfirmed, setEmailConfirmed] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -35,6 +37,7 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
     setValue,
+    getValues,
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -127,8 +130,24 @@ export default function LoginPage() {
     setRetryKey((k) => k + 1);
   }, [setValue]);
 
+  function startCooldown() {
+    setResendCooldown(60);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
   async function handleResendConfirmation() {
-    const email = document.querySelector<HTMLInputElement>("#email")?.value;
+    if (resendCooldown > 0) return;
+
+    const email = getValues("email") || registeredEmail;
     if (!email) {
       toast({
         title: "Enter your email",
@@ -163,6 +182,7 @@ export default function LoginPage() {
         description: data.message || "Check your inbox for the new confirmation link.",
         variant: "success",
       });
+      startCooldown();
     } catch {
       toast({
         title: "Failed to resend",
@@ -247,7 +267,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={handleResendConfirmation}
-              disabled={resendingEmail}
+              disabled={resendingEmail || resendCooldown > 0}
               className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green underline hover:text-brand-green/80 disabled:opacity-50 disabled:no-underline"
             >
               {resendingEmail ? (
@@ -255,7 +275,9 @@ export default function LoginPage() {
               ) : (
                 <Send className="h-3.5 w-3.5" />
               )}
-              Didn&apos;t receive it? Resend
+              {resendCooldown > 0
+                ? `Resend available in ${resendCooldown}s`
+                : "Didn\u2019t receive it? Resend"}
             </button>
           </div>
         </div>
@@ -273,7 +295,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={handleResendConfirmation}
-              disabled={resendingEmail}
+              disabled={resendingEmail || resendCooldown > 0}
               className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green underline hover:text-brand-green/80 disabled:opacity-50 disabled:no-underline"
             >
               {resendingEmail ? (
@@ -281,7 +303,9 @@ export default function LoginPage() {
               ) : (
                 <Send className="h-3.5 w-3.5" />
               )}
-              Resend confirmation email
+              {resendCooldown > 0
+                ? `Resend available in ${resendCooldown}s`
+                : "Resend confirmation email"}
             </button>
           </div>
         </div>

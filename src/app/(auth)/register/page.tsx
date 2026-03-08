@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, Check } from "lucide-react";
+import { Loader2, Eye, EyeOff, Check, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,9 @@ import { useToast } from "@/hooks/use-toast";
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
+  const [turnstileLoaded, setTurnstileLoaded] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -40,22 +43,56 @@ export default function RegisterPage() {
     },
   });
 
+  // Turnstile widget load timeout — show error if it doesn't load in 15s.
+  const isTurnstileDev =
+    !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY === "dummy_site_key";
+  const skipTurnstileTimeout = isTurnstileDev || process.env.NODE_ENV !== "production";
+
+  useEffect(() => {
+    if (skipTurnstileTimeout || turnstileLoaded) return;
+    timeoutRef.current = setTimeout(() => {
+      setTurnstileError("Security verification failed to load.");
+      setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
+    }, 15000);
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [skipTurnstileTimeout, turnstileLoaded, retryKey, setValue]);
+
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
       setTurnstileError(null);
+      setTurnstileLoaded(true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setValue("turnstileToken", token, { shouldValidate: true });
     },
     [setValue]
   );
 
+  const handleTurnstileLoad = useCallback(() => {
+    setTurnstileLoaded(true);
+    setTurnstileError(null);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  }, []);
+
   const handleTurnstileError = useCallback(() => {
     setTurnstileError("CAPTCHA verification failed. Please try again.");
-    setValue("turnstileToken", "", { shouldValidate: true });
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
   }, [setValue]);
 
   const handleTurnstileExpire = useCallback(() => {
     setTurnstileError("CAPTCHA expired. Please verify again.");
     setValue("turnstileToken", "", { shouldValidate: true });
+  }, [setValue]);
+
+  const handleRetry = useCallback(() => {
+    setTurnstileError(null);
+    setTurnstileLoaded(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
+    TurnstileWidget.retry();
+    setRetryKey((k) => k + 1);
   }, [setValue]);
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
@@ -104,9 +141,7 @@ export default function RegisterPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">
-          Create your seller account
-        </h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Create your account</h1>
       </div>
 
       <GoogleOAuthButton mode="register" />
@@ -268,11 +303,25 @@ export default function RegisterPage() {
         )}
 
         <TurnstileWidget
+          key={retryKey}
           onSuccess={handleTurnstileSuccess}
           onError={handleTurnstileError}
           onExpire={handleTurnstileExpire}
+          onLoad={handleTurnstileLoad}
         />
-        {turnstileError && <p className="inline-form-error">{turnstileError}</p>}
+        {turnstileError && (
+          <div className="flex items-center gap-2">
+            <p className="inline-form-error">{turnstileError}</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="inline-flex items-center gap-1 text-xs font-medium text-brand-green underline hover:text-brand-green/80"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Retry
+            </button>
+          </div>
+        )}
         {errors.turnstileToken && !turnstileError && (
           <p className="inline-form-error">{errors.turnstileToken.message}</p>
         )}

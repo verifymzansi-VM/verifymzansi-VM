@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, Check } from "lucide-react";
+import { Loader2, Eye, EyeOff, Check, AlertTriangle, ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +16,17 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [sessionValid, setSessionValid] = useState<boolean | null>(null);
   const router = useRouter();
   const { toast } = useToast();
+
+  // Check if the user has a valid recovery session (set by the reset link)
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSessionValid(!!session);
+    });
+  }, []);
 
   const {
     register,
@@ -44,6 +54,15 @@ export default function ResetPasswordPage() {
       });
 
       if (error) {
+        // Handle expired or invalid session specifically
+        if (
+          error.message?.toLowerCase().includes("session") ||
+          error.message?.toLowerCase().includes("token") ||
+          error.message?.toLowerCase().includes("expired")
+        ) {
+          setSessionValid(false);
+          return;
+        }
         toast({
           title: "Error",
           description: error.message,
@@ -64,6 +83,41 @@ export default function ResetPasswordPage() {
         variant: "destructive",
       });
     }
+  }
+
+  // Loading state while checking session
+  if (sessionValid === null) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // No valid session — show helpful message
+  if (!sessionValid) {
+    return (
+      <div className="space-y-4 text-center">
+        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-amber-500/10 text-amber-600 mx-auto">
+          <AlertTriangle className="h-5 w-5" />
+        </div>
+        <h1 className="font-display text-2xl font-bold">Reset link expired</h1>
+        <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+          This password reset link has expired or is invalid. Please request a new one.
+        </p>
+        <div className="flex flex-col gap-3">
+          <Button asChild variant="trust-verified">
+            <Link href="/forgot-password">Request new reset link</Link>
+          </Button>
+          <Button asChild variant="outline" className="gap-2">
+            <Link href="/login">
+              <ArrowLeft className="h-4 w-4" />
+              Back to sign in
+            </Link>
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
