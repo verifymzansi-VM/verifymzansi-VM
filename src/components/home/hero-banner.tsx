@@ -3,9 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import {
-  Search,
   MapPin,
   Building2,
   Megaphone,
@@ -19,7 +17,7 @@ import {
   Pause,
   Square,
 } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useVideoVisibility } from "@/hooks/use-video-visibility";
@@ -49,6 +47,12 @@ const ENTITY_CONFIG = {
     cta: "View Listing",
   },
 };
+
+const HERO_CATEGORY_LINKS = [
+  { href: "/mzansi-market", label: "Mzansi Market" },
+  { href: "/mzansi-business", label: "Mzansi Business" },
+  { href: "/promotions", label: "Promotions & Events" },
+] as const;
 
 interface HeroPromotion {
   type?: string;
@@ -361,9 +365,6 @@ export function HeroBanner({
 }: HeroBannerProps) {
   const [current, setCurrent] = useState(0);
   const [fading, setFading] = useState(false);
-  const [query, setQuery] = useState("");
-  const [searchArea, setSearchArea] = useState<"market" | "business" | "promotions">("market");
-  const router = useRouter();
 
   const goTo = useCallback(
     (index: number) => {
@@ -486,17 +487,6 @@ export function HeroBanner({
       currency: "ZAR",
       maximumFractionDigits: 0,
     }).format(price);
-  };
-
-  const handleSearch = () => {
-    const path =
-      searchArea === "business"
-        ? "/mzansi-business"
-        : searchArea === "promotions"
-          ? "/promotions"
-          : "/mzansi-market";
-
-    router.push(`${path}${query ? `?q=${encodeURIComponent(query)}` : ""}`);
   };
 
   return (
@@ -680,54 +670,23 @@ export function HeroBanner({
         )}
       </div>
 
-      {/* ── Search Bar ── */}
+      {/* ── Category Strip ── */}
       <div className="bg-white dark:bg-warm-900 border-b border-warm-200 dark:border-warm-800 shadow-sm">
         <div className="container-page py-3">
-          <div className="flex gap-2 max-w-3xl mx-auto">
-            <select
-              aria-label="Search area"
-              className="h-[50px] min-w-[132px] rounded-lg border border-warm-200 bg-warm-50 px-3 text-sm text-foreground dark:border-warm-700 dark:bg-warm-800"
-              value={searchArea}
-              onChange={(event) =>
-                setSearchArea(event.target.value as "market" | "business" | "promotions")
-              }
-            >
-              <option value="market">Mzansi Market</option>
-              <option value="business">Mzansi Business</option>
-              <option value="promotions">Promotions & Events</option>
-            </select>
-
-            <label className="flex-1 flex items-center gap-2 rounded-lg border border-warm-200 dark:border-warm-700 bg-warm-50 dark:bg-warm-800 px-4 cursor-text">
-              <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleSearch();
-                  }
-                }}
-                placeholder="What are you looking for?"
-                enterKeyHint="search"
-                aria-label="Search listings"
-                className="flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground text-foreground"
-              />
-            </label>
-
-            <div className="hidden sm:flex items-center gap-2 rounded-lg border border-warm-200 dark:border-warm-700 bg-warm-50 dark:bg-warm-800 px-4 min-w-[170px] cursor-default">
-              <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-sm text-muted-foreground">All South Africa</span>
-            </div>
-
-            <Button
-              className="bg-brand-green hover:bg-brand-green/90 text-white px-6 h-full font-semibold"
-              onClick={handleSearch}
-            >
-              Search
-            </Button>
-          </div>
+          <nav
+            aria-label="Marketplace categories"
+            className="mx-auto grid max-w-4xl grid-cols-3 gap-2 sm:gap-3"
+          >
+            {HERO_CATEGORY_LINKS.map((category) => (
+              <Link
+                key={category.href}
+                href={category.href}
+                className="flex min-h-[58px] items-center justify-center rounded-2xl border border-warm-200 bg-warm-50 px-3 py-3 text-center text-sm font-semibold leading-tight text-foreground transition-colors hover:border-brand-green/40 hover:bg-brand-green-50 dark:border-warm-700 dark:bg-warm-800 dark:hover:border-brand-green/50 dark:hover:bg-warm-700 sm:min-h-[60px] sm:text-base"
+              >
+                <span className="whitespace-normal">{category.label}</span>
+              </Link>
+            ))}
+          </nav>
         </div>
       </div>
     </div>
