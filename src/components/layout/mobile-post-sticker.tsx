@@ -9,7 +9,7 @@ export function MobilePostSticker() {
   const isActive = pathname.startsWith("/post/create");
 
   return (
-    <div className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[60] md:hidden">
+    <div className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[60]">
       <Link
         href="/post/create"
         aria-current={isActive ? "page" : undefined}

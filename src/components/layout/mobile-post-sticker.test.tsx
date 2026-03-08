@@ -27,9 +27,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("MobilePostSticker", () => {
-  it("renders a persistent Post+ link to the create post page", () => {
-    render(<MobilePostSticker />);
+  it("renders a persistent Post+ link to the create post page on all breakpoints", () => {
+    const { container } = render(<MobilePostSticker />);
 
     expect(screen.getByRole("link", { name: "Post+" })).toHaveAttribute("href", "/post/create");
+    expect(container.firstChild).not.toHaveClass("md:hidden");
   });
 });
