@@ -13,7 +13,7 @@ const publicRoutes = [
   {
     name: "homepage",
     path: "/",
-    readySelector: 'h1:has-text("Join Mzansi\'s")',
+    readySelector: 'h2:has-text("Start here on VerifyMzansi")',
   },
   {
     name: "mzansi-market",
