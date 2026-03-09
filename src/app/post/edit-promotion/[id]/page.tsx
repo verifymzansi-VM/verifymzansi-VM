@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Megaphone, ArrowLeft, Loader2, X, Building2 } from "lucide-react";
@@ -23,6 +23,7 @@ import {
 } from "@/components/billing/plan-gate";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 
 const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
 const selectClass =
@@ -67,6 +68,14 @@ export default function EditPromotionPage() {
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
+  const previewPhotoUrls = useMemo(
+    () => newPhotoFiles.map((file) => URL.createObjectURL(file)),
+    [newPhotoFiles]
+  );
+  const previewVideoUrls = useMemo(
+    () => newVideoFiles.map((file) => URL.createObjectURL(file)),
+    [newVideoFiles]
+  );
 
   // Load existing data and user's businesses
   useEffect(() => {
@@ -118,6 +127,20 @@ export default function EditPromotionPage() {
     load();
     loadBusinesses();
   }, [promotionId]);
+
+  useEffect(
+    () => () => {
+      previewPhotoUrls.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [previewPhotoUrls]
+  );
+
+  useEffect(
+    () => () => {
+      previewVideoUrls.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [previewVideoUrls]
+  );
 
   function toggleContact(method: string) {
     setContactMethods((prev) =>
@@ -223,6 +246,11 @@ export default function EditPromotionPage() {
   }
 
   const totalImages = existingImages.length + newPhotoFiles.length;
+  const previewImages = previewPhotoUrls.length > 0 ? previewPhotoUrls : existingImages;
+  const previewVideos = previewVideoUrls.length > 0 ? previewVideoUrls : existingVideos;
+  const linkedBusiness = businessId
+    ? (myBusinesses.find((item) => item.id === businessId) ?? null)
+    : null;
 
   if (isLoading) {
     return (
@@ -509,6 +537,53 @@ export default function EditPromotionPage() {
                 accept="video/*"
                 disabled={!videoAllowed}
               />
+
+              <div className="space-y-3 rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
+                <div className="text-sm font-medium text-muted-foreground">Promotion preview</div>
+                <PromotionDetailContent
+                  promotion={{
+                    id: promotionId,
+                    seller_id: "preview-seller",
+                    business_id: businessId || null,
+                    title: title || "Your promotion title",
+                    description: description || "Your promotion description will appear here.",
+                    promotion_type: promotionType,
+                    category: category || null,
+                    category_key: categoryKey || null,
+                    photos: previewImages,
+                    videos: previewVideos,
+                    video_thumbnail: videoThumbnail || null,
+                    price_cents: priceZar ? Math.round(parseFloat(priceZar || "0") * 100) : null,
+                    price_negotiable: negotiable,
+                    location_province: province || null,
+                    location_city: city || null,
+                    contact_methods: contactMethods,
+                    start_date: startDate ? new Date(startDate).toISOString() : null,
+                    end_date: endDate ? new Date(endDate).toISOString() : null,
+                    boost_until: null,
+                    featured_until: null,
+                    view_count: null,
+                    created_at: new Date().toISOString(),
+                  }}
+                  seller={{
+                    display_name: "You",
+                    seller_verification_status: null,
+                    phone: null,
+                    masked_phone_public: null,
+                  }}
+                  linkedBusiness={
+                    linkedBusiness
+                      ? {
+                          id: linkedBusiness.id,
+                          business_name: linkedBusiness.business_name,
+                          logo_url: null,
+                        }
+                      : null
+                  }
+                  showContactActions={false}
+                  showContactSummary
+                />
+              </div>
 
               <div className="flex justify-between">
                 <Button variant="outline" asChild className="gap-1">

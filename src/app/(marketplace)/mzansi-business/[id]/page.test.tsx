@@ -58,7 +58,10 @@ vi.mock("@/components/trust/trust-badge", () => ({
 
 function buildClient(
   business: Record<string, unknown>,
-  options?: { mall?: { id: string; name: string } | null }
+  options?: {
+    mall?: { id: string; name: string } | null;
+    promotions?: Array<Record<string, unknown>>;
+  }
 ) {
   return {
     from: (table: string) => {
@@ -107,7 +110,7 @@ function buildClient(
             eq: () => ({
               eq: () => ({
                 order: () => ({
-                  limit: async () => ({ data: [] }),
+                  limit: async () => ({ data: options?.promotions ?? [] }),
                 }),
               }),
             }),
@@ -306,5 +309,74 @@ describe("BusinessDetailPage", () => {
 
     expect(screen.getByText("Mall")).toBeInTheDocument();
     expect(screen.getByText("Maponya Mall")).toBeInTheDocument();
+  });
+
+  it("renders linked promotions through the shared business detail content", async () => {
+    mockCreateClient.mockResolvedValue(
+      buildClient(
+        {
+          id: "business-5",
+          seller_id: "seller-1",
+          business_name: "Nomsa Market Kitchen",
+          description: "Fresh food and weekly events.",
+          status: "live",
+          business_type: "standalone_shop",
+          category: "food_dining",
+          cover_photo: null,
+          logo_url: null,
+          cover_video: null,
+          video_thumbnail: null,
+          gallery_photos: [],
+          social_links: {},
+          operating_hours: {},
+          services_offered: [],
+          payment_methods_accepted: [],
+          delivery_options: [],
+          service_areas: null,
+          location_city: "Johannesburg",
+          location_province: "Gauteng",
+          phone: null,
+          whatsapp: null,
+          email: null,
+          website: null,
+          store_number: null,
+          mall_id: null,
+          map_directions: null,
+          business_details: {
+            type: "standalone_shop",
+            street_address: "24 Vilakazi Street",
+            suburb: "Orlando West",
+          },
+        },
+        {
+          promotions: [
+            {
+              id: "promo-1",
+              title: "Friday Food Special",
+              price_cents: 9900,
+              price_negotiable: false,
+              photos: [],
+              videos: [],
+              video_thumbnail: null,
+              category_key: "food_dining",
+              category: "Food & Dining",
+              location_province: "Gauteng",
+              location_city: "Johannesburg",
+              promotion_type: "deal",
+              created_at: "2026-03-08T00:00:00.000Z",
+              view_count: 12,
+              boost_until: null,
+              featured_until: null,
+              end_date: "2099-03-12T00:00:00.000Z",
+            },
+          ],
+        }
+      )
+    );
+
+    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-5" }) }));
+
+    expect(screen.getByText("Promotions & Offers")).toBeInTheDocument();
+    expect(screen.getByText("Promotion")).toBeInTheDocument();
   });
 });

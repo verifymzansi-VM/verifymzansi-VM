@@ -143,9 +143,21 @@ describe("ListingCard", () => {
   });
 
   it("should accept category prop", () => {
-    // category is accepted as a prop but not visually rendered in the card
-    const { container } = render(<ListingCard {...defaultProps} />);
-    expect(container).toBeTruthy();
+    render(<ListingCard {...defaultProps} />);
+    expect(screen.getByText(/Electronics/i)).toBeTruthy();
+  });
+
+  it("should render attribute highlights when attributes are present", () => {
+    render(
+      <ListingCard
+        {...defaultProps}
+        category="electronics"
+        attributes={{ brand: "Apple", storage_gb: 256 }}
+      />
+    );
+
+    expect(screen.getByText(/Brand: Apple/i)).toBeTruthy();
+    expect(screen.getByText(/Storage Capacity: 256 GB/i)).toBeTruthy();
   });
 
   it("should render negotiable badge when applicable", () => {

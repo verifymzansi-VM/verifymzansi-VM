@@ -29,7 +29,9 @@ interface PromotionCardProps {
   viewCount?: number;
   boosted?: boolean;
   featured?: boolean;
+  startDate?: string | null;
   endDate?: string | null;
+  businessName?: string;
 }
 
 const TYPE_COLORS: Record<PromotionType, string> = {
@@ -53,6 +55,16 @@ function getSellerInitial(name?: string): string {
   return name.charAt(0).toUpperCase();
 }
 
+function getEventState(startDate?: string | null, endDate?: string | null) {
+  const now = new Date();
+  const startsAt = startDate ? new Date(startDate) : null;
+  const endsAt = endDate ? new Date(endDate) : null;
+
+  if (startsAt && startsAt > now) return "Upcoming";
+  if (endsAt && endsAt < now) return "Ended";
+  return "Live";
+}
+
 export const PromotionCard = memo(function PromotionCard({
   id,
   title,
@@ -70,11 +82,15 @@ export const PromotionCard = memo(function PromotionCard({
   viewCount,
   boosted,
   featured,
+  startDate,
   endDate,
+  businessName,
 }: PromotionCardProps) {
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const imageIsVideo = isVideoUrl(imageUrl);
+  const isEvent = promotionType === "event";
+  const eventState = isEvent ? getEventState(startDate, endDate) : null;
 
   return (
     <Link href={`/promotion/${id}`} className="group block">
@@ -160,6 +176,32 @@ export const PromotionCard = memo(function PromotionCard({
             <p className="text-xs text-muted-foreground line-clamp-1">{categoryLabel}</p>
           )}
 
+          {businessName && (
+            <p className="text-xs font-medium text-brand-blue line-clamp-1">by {businessName}</p>
+          )}
+
+          {isEvent && (
+            <div className="rounded-md border border-brand-blue/20 bg-brand-blue/5 px-2 py-1.5 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-brand-blue">{eventState}</span>
+                {startDate && (
+                  <time dateTime={startDate} className="text-muted-foreground">
+                    {new Date(startDate).toLocaleDateString("en-ZA", {
+                      day: "numeric",
+                      month: "short",
+                    })}
+                  </time>
+                )}
+              </div>
+              {endDate && (
+                <p className="mt-1 text-muted-foreground">
+                  Ends{" "}
+                  <time dateTime={endDate}>{new Date(endDate).toLocaleDateString("en-ZA")}</time>
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Meta */}
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="flex items-center gap-1 truncate">
@@ -173,7 +215,7 @@ export const PromotionCard = memo(function PromotionCard({
           </div>
 
           {/* End date */}
-          {endDate && (
+          {!isEvent && endDate && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Calendar className="h-3 w-3" />
               Ends <time dateTime={endDate}>{new Date(endDate).toLocaleDateString("en-ZA")}</time>

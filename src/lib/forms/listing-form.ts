@@ -2,7 +2,7 @@ import { CATEGORIES } from "@/lib/constants/categories";
 import type { ListingCategory } from "@/types/enums";
 import { listingSchema } from "@/lib/validations/listing";
 
-type RawListingAttributeValue = string | boolean;
+type RawListingAttributeValue = string | number | boolean;
 type RawListingAttributes = Record<string, RawListingAttributeValue>;
 
 const LISTING_BASELINE = {
@@ -38,20 +38,33 @@ export function coerceListingAttributes(
       continue;
     }
 
+    if (field.type === "number") {
+      if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
+        coerced[field.name] = rawValue;
+        continue;
+      }
+
+      if (typeof rawValue === "string") {
+        const trimmed = rawValue.trim();
+        if (!trimmed) {
+          continue;
+        }
+
+        const numericValue = Number(trimmed);
+        if (Number.isFinite(numericValue)) {
+          coerced[field.name] = numericValue;
+        }
+      }
+
+      continue;
+    }
+
     if (typeof rawValue !== "string") {
       continue;
     }
 
     const trimmed = rawValue.trim();
     if (!trimmed) {
-      continue;
-    }
-
-    if (field.type === "number") {
-      const numericValue = Number(trimmed);
-      if (Number.isFinite(numericValue)) {
-        coerced[field.name] = numericValue;
-      }
       continue;
     }
 

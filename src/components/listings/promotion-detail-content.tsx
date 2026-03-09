@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import { Building2, Calendar, Eye, MapPin } from "lucide-react";
@@ -54,6 +56,37 @@ export interface LinkedBusinessRecord {
   logo_url: string | null;
 }
 
+function getEventState(startDate: string | null, endDate: string | null) {
+  const now = new Date();
+  const startsAt = startDate ? new Date(startDate) : null;
+  const endsAt = endDate ? new Date(endDate) : null;
+
+  if (startsAt && startsAt > now) return "upcoming";
+  if (endsAt && endsAt < now) return "ended";
+  return "ongoing";
+}
+
+const EVENT_STATE_BADGE: Record<string, { label: string; className: string }> = {
+  upcoming: {
+    label: "Upcoming Event",
+    className: "bg-brand-blue text-white",
+  },
+  ongoing: {
+    label: "Happening Now",
+    className: "bg-brand-green text-white",
+  },
+  ended: {
+    label: "Event Ended",
+    className: "bg-muted text-foreground",
+  },
+};
+
+const CONTACT_METHOD_LABELS: Record<string, string> = {
+  call: "Phone Call",
+  whatsapp: "WhatsApp",
+  form: "Contact Form",
+};
+
 export function PromotionDetailContent({
   promotion,
   seller,
@@ -76,6 +109,8 @@ export function PromotionDetailContent({
   const now = new Date();
   const isBoosted = promotion.boost_until ? new Date(promotion.boost_until) > now : false;
   const isFeatured = promotion.featured_until ? new Date(promotion.featured_until) > now : false;
+  const isEvent = promotion.promotion_type === "event";
+  const eventState = isEvent ? getEventState(promotion.start_date, promotion.end_date) : null;
   const categoryLabel = getPromotionCategoryDisplayLabel(
     promotion.category_key,
     promotion.category
@@ -165,6 +200,24 @@ export function PromotionDetailContent({
 
         <Card>
           <CardContent className="space-y-4 p-6">
+            {isEvent && eventState ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className={EVENT_STATE_BADGE[eventState].className}>
+                  {EVENT_STATE_BADGE[eventState].label}
+                </Badge>
+                {promotion.start_date && (
+                  <Badge variant="outline">
+                    Starts {new Date(promotion.start_date).toLocaleDateString("en-ZA")}
+                  </Badge>
+                )}
+                {promotion.end_date && (
+                  <Badge variant="outline">
+                    Ends {new Date(promotion.end_date).toLocaleDateString("en-ZA")}
+                  </Badge>
+                )}
+              </div>
+            ) : null}
+
             <h2 className="text-lg font-semibold">About this promotion</h2>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
               {promotion.description}
@@ -226,15 +279,17 @@ export function PromotionDetailContent({
               </dd>
             </dl>
 
-            {showContactSummary && contactMethods.length > 0 && (
+            {(showContactSummary || contactMethods.length > 0) && contactMethods.length > 0 && (
               <>
                 <Separator />
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Saved contact methods</p>
+                  <p className="text-sm font-medium">
+                    {showContactSummary ? "Saved contact methods" : "Contact options"}
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {contactMethods.map((method) => (
                       <Badge key={method} variant="outline" className="capitalize">
-                        {method}
+                        {CONTACT_METHOD_LABELS[method] ?? method}
                       </Badge>
                     ))}
                   </div>

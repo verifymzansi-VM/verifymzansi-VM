@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Eye, FileText, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { useToast } from "@/hooks/use-toast";
@@ -14,7 +13,6 @@ import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { PlanGate, usePlanMaxPhotos, usePlanVideoAllowed } from "@/components/billing/plan-gate";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
-import { formatZAR } from "@/lib/utils/format";
 import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { cn } from "@/lib/utils";
@@ -26,6 +24,7 @@ import {
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
+import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 
 const STEPS: PostFormStep[] = [
   { label: "Details", icon: FileText, description: "Category, title, and description" },
@@ -112,6 +111,14 @@ export default function CreateListingPage() {
   const cities = province ? getCitiesForProvince(province) : [];
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
   const videoAllowed = usePlanVideoAllowed("MZANSI_MARKET");
+  const videoPreviewUrl = useMemo(
+    () => (videoFile.length > 0 ? URL.createObjectURL(videoFile[0]) : null),
+    [videoFile]
+  );
+  const videoCoverPreviewUrl = useMemo(
+    () => (videoCoverFile.length > 0 ? URL.createObjectURL(videoCoverFile[0]) : null),
+    [videoCoverFile]
+  );
 
   useEffect(() => {
     if (photoFiles.length > 0) {
@@ -122,6 +129,20 @@ export default function CreateListingPage() {
 
     setPreviewUrl(null);
   }, [photoFiles]);
+
+  useEffect(
+    () => () => {
+      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+    },
+    [videoPreviewUrl]
+  );
+
+  useEffect(
+    () => () => {
+      if (videoCoverPreviewUrl) URL.revokeObjectURL(videoCoverPreviewUrl);
+    },
+    [videoCoverPreviewUrl]
+  );
 
   function clearErrors(...keys: string[]) {
     setFormError(null);
@@ -332,6 +353,9 @@ export default function CreateListingPage() {
 
   function renderPreview() {
     const numericPrice = parseFloat(price);
+    const normalizedAttributes = category
+      ? coerceListingAttributes(category, categoryAttributes)
+      : {};
 
     return (
       <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
@@ -340,68 +364,36 @@ export default function CreateListingPage() {
           Listing preview
         </div>
 
-        <div className="space-y-3">
-          <div className="flex gap-3">
-            <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
-              {previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewUrl}
-                  alt="Listing preview"
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                  width={80}
-                  height={80}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-muted-foreground">
-                  <Camera className="h-5 w-5" />
-                </div>
-              )}
-            </div>
-
-            <div className="min-w-0 flex-1 space-y-1">
-              <h3 className="truncate font-display text-sm font-semibold">
-                {title || "Your listing title"}
-              </h3>
-              <p className="text-base font-bold text-brand-green">
-                {!Number.isNaN(numericPrice) && numericPrice > 0
-                  ? formatZAR(Math.round(numericPrice * 100))
-                  : "R 0.00"}
-                {negotiable && (
-                  <span className="ml-2 rounded bg-brand-green/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-green">
-                    Negotiable
-                  </span>
-                )}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {[city, province].filter(Boolean).join(", ") || "Location not set"}
-              </p>
-            </div>
-          </div>
-
-          {description && (
-            <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
-          )}
-
-          <div className="flex flex-wrap gap-1">
-            {category && (
-              <Badge variant="secondary" className="text-[10px]">
-                {category.replace(/_/g, " ")}
-              </Badge>
-            )}
-            {condition && (
-              <Badge variant="outline" className="text-[10px]">
-                {LISTING_CONDITIONS.find((item) => item.value === condition)?.label || condition}
-              </Badge>
-            )}
-            {contactMethods.map((method) => (
-              <Badge key={method} variant="outline" className="text-[10px] capitalize">
-                {method}
-              </Badge>
-            ))}
-          </div>
-        </div>
+        <ListingDetailContent
+          listing={{
+            id: "preview-listing",
+            seller_id: "preview-seller",
+            title: title || "Your listing title",
+            description: description || "Your listing description will appear here.",
+            price_cents:
+              !Number.isNaN(numericPrice) && numericPrice > 0 ? Math.round(numericPrice * 100) : 0,
+            price_negotiable: negotiable,
+            category: category || null,
+            condition: condition || null,
+            attributes: normalizedAttributes,
+            photos: previewUrl ? [previewUrl] : [],
+            videos: videoPreviewUrl ? [videoPreviewUrl] : [],
+            video_thumbnail: videoCoverPreviewUrl,
+            location_province: province || null,
+            location_city: city || null,
+            location_suburb: town || null,
+            contact_methods: contactMethods,
+            created_at: new Date().toISOString(),
+          }}
+          seller={{
+            display_name: "You",
+            location_province: province || null,
+            location_city: city || null,
+            seller_verification_status: null,
+          }}
+          showContactActions={false}
+          showSimilarListings={false}
+        />
       </div>
     );
   }
@@ -579,7 +571,7 @@ export default function CreateListingPage() {
 
                         <button
                           type="button"
-                          aria-pressed={negotiable ? "true" : "false"}
+                          aria-pressed={negotiable}
                           onClick={() => setNegotiable((current) => !current)}
                           className={cn(
                             "rounded-md border px-3 py-2 text-sm font-medium transition-all",
@@ -692,7 +684,7 @@ export default function CreateListingPage() {
                             <button
                               key={option.id}
                               type="button"
-                              aria-pressed={isSelected ? "true" : "false"}
+                              aria-pressed={isSelected}
                               onClick={() => toggleContact(option.id)}
                               className={cn(
                                 "flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all",

@@ -51,6 +51,7 @@ import {
 } from "@/lib/forms/business-type-details";
 import { BusinessTypeDetailsFields } from "@/components/business/business-type-details-fields";
 import type { BusinessDetails } from "@/types/business-details";
+import { BusinessDetailContent } from "@/components/business/business-detail-content";
 
 const SELECT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
@@ -198,6 +199,18 @@ function CreateBusinessContent() {
     () => (coverFile.length > 0 ? URL.createObjectURL(coverFile[0]) : null),
     [coverFile]
   );
+  const galleryPreviewUrls = useMemo(
+    () => galleryFiles.map((file) => URL.createObjectURL(file)),
+    [galleryFiles]
+  );
+  const promoVideoPreviewUrl = useMemo(
+    () => (promoVideoFile.length > 0 ? URL.createObjectURL(promoVideoFile[0]) : null),
+    [promoVideoFile]
+  );
+  const videoThumbnailPreviewUrl = useMemo(
+    () => (videoThumbnailFile.length > 0 ? URL.createObjectURL(videoThumbnailFile[0]) : null),
+    [videoThumbnailFile]
+  );
   useEffect(
     () => () => {
       if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
@@ -209,6 +222,24 @@ function CreateBusinessContent() {
       if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
     },
     [coverPreviewUrl]
+  );
+  useEffect(
+    () => () => {
+      galleryPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [galleryPreviewUrls]
+  );
+  useEffect(
+    () => () => {
+      if (promoVideoPreviewUrl) URL.revokeObjectURL(promoVideoPreviewUrl);
+    },
+    [promoVideoPreviewUrl]
+  );
+  useEffect(
+    () => () => {
+      if (videoThumbnailPreviewUrl) URL.revokeObjectURL(videoThumbnailPreviewUrl);
+    },
+    [videoThumbnailPreviewUrl]
   );
 
   useEffect(() => {
@@ -498,97 +529,67 @@ function CreateBusinessContent() {
 
   function renderReview() {
     const selectedType = BUSINESS_TYPE_OPTIONS.find((option) => option.value === businessType);
-    const selectedCategory = BUSINESS_CATEGORIES.find((option) => option.value === category);
-    const serviceAreas = serviceAreasInput
-      .split(",")
-      .map((area) => area.trim())
-      .filter(Boolean);
+    const linkedMall = malls.find((mall) => mall.id === mallId);
+    const serviceAreas = parseServiceAreas(serviceAreasInput);
+    const socialLinks = Object.fromEntries(
+      Object.entries({
+        facebook: socialFacebook,
+        instagram: socialInstagram,
+        twitter: socialTwitter,
+        tiktok: socialTiktok,
+      }).filter(([, value]) => value.trim().length > 0)
+    );
+
     return (
       <div className="rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
           <Building2 className="h-4 w-4" />
           Business review
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Business</p>
-            <p className="font-display text-base font-semibold">
-              {businessName || "Your business name"}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {selectedType?.label || "Business type not selected"}
-            </p>
-            {selectedCategory && (
-              <Badge variant="secondary" className="mt-1">
-                {selectedCategory.label}
-              </Badge>
-            )}
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Reach</p>
-            <p className="text-sm text-foreground">
-              {[city, province].filter(Boolean).join(", ") || "Location not set"}
-            </p>
-            {businessType === "mall_store" && storeNumber && (
-              <p className="text-sm text-muted-foreground">Store number: {storeNumber}</p>
-            )}
-            {businessType === "mobile_service" && serviceAreas.length > 0 && (
-              <p className="text-sm text-muted-foreground">
-                Service areas: {serviceAreas.join(", ")}
-              </p>
-            )}
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Contact</p>
-            <p className="text-sm text-muted-foreground">
-              {[phone && "Phone", whatsapp && "WhatsApp", email && "Email", website && "Website"]
-                .filter(Boolean)
-                .join(", ") || "No contact channels added yet"}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Media</p>
-            <p className="text-sm text-muted-foreground">
-              {logoFile.length} logo, {coverFile.length} cover, {galleryFiles.length} gallery
-              photos, {promoVideoFile.length} video
-            </p>
-            {/* Mini visual preview of logo + cover placement */}
-            {(logoFile.length > 0 || coverFile.length > 0) && (
-              <div className="relative rounded-lg overflow-hidden border bg-muted">
-                <div className="aspect-[4/1] bg-gradient-to-r from-brand-blue/20 to-brand-blue/5 flex items-center justify-center">
-                  {coverPreviewUrl ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={coverPreviewUrl}
-                      alt="Cover preview"
-                      className="w-full h-full object-cover"
-                      width={400}
-                      height={100}
-                    />
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground">No cover</span>
-                  )}
-                </div>
-                <div className="absolute bottom-1 left-2 h-8 w-8 rounded-md bg-white dark:bg-warm-900 p-0.5 shadow border overflow-hidden">
-                  {logoPreviewUrl ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={logoPreviewUrl}
-                      alt="Logo preview"
-                      className="w-full h-full object-contain rounded"
-                      width={32}
-                      height={32}
-                    />
-                  ) : (
-                    <div className="w-full h-full rounded bg-muted flex items-center justify-center">
-                      <Store className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <BusinessDetailContent
+          business={{
+            id: "preview-business",
+            seller_id: "preview-seller",
+            business_name: businessName || "Your business name",
+            description: description || "Your business description will appear here.",
+            status: "preview",
+            business_type: businessType || selectedType?.value || "standalone_shop",
+            category: category || "general_other",
+            cover_photo: coverPreviewUrl,
+            logo_url: logoPreviewUrl,
+            cover_video: promoVideoPreviewUrl,
+            video_thumbnail: videoThumbnailPreviewUrl,
+            gallery_photos: galleryPreviewUrls,
+            social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
+            operating_hours: {
+              ...(hoursMonFri ? { Mon_Fri: hoursMonFri } : {}),
+              ...(hoursSat ? { Sat: hoursSat } : {}),
+              ...(hoursSun ? { Sun: hoursSun } : {}),
+            },
+            services_offered: services,
+            payment_methods_accepted: paymentMethods,
+            delivery_options: deliveryOptions,
+            service_areas: serviceAreas.length > 0 ? { areas: serviceAreas } : null,
+            location_city: city || null,
+            location_province: province || null,
+            phone: phone || null,
+            whatsapp: whatsapp || null,
+            email: email || null,
+            website: website || null,
+            store_number: storeNumber || null,
+            mall_id: mallId || null,
+            map_directions: mapDirections || null,
+            business_details: businessType
+              ? coerceBusinessDetails(businessType, businessDetails)
+              : businessDetails,
+          }}
+          trustLevel={null}
+          seller={{ display_name: "You" }}
+          linkedMall={linkedMall ? { id: linkedMall.id, name: linkedMall.name } : null}
+          promotions={[]}
+          showPromotions={false}
+          showPublicActions={false}
+        />
       </div>
     );
   }
@@ -643,7 +644,7 @@ function CreateBusinessContent() {
                               key={option.value}
                               type="button"
                               role="radio"
-                              aria-checked={isSelected ? "true" : "false"}
+                              aria-checked={isSelected}
                               onClick={() => {
                                 setBusinessType(option.value);
                                 setBusinessDetails(getDefaultBusinessDetails(option.value));

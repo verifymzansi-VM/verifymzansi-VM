@@ -322,6 +322,7 @@ export function MzansiMarketGrid() {
                 province={listing.location_province}
                 city={listing.location_city}
                 category={listing.category}
+                attributes={listing.attributes}
                 condition={listing.condition ?? undefined}
                 createdAt={listing.created_at}
                 sellerTrustLevel={trustLevel}

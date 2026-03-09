@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { Calendar, Eye, MapPin } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -298,6 +300,7 @@ export function ListingDetailContent({
                   province={item.location_province}
                   city={item.location_city}
                   category={item.category}
+                  attributes={item.attributes}
                   condition={item.condition ?? undefined}
                   createdAt={item.created_at}
                   sellerTrustLevel={itemTrust}

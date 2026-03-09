@@ -93,7 +93,7 @@ describe("CreatePromotionPage", () => {
     fireEvent.change(screen.getByLabelText(/Title/i), {
       target: { value: "Weekend Fresh Produce Sale" },
     });
-    fireEvent.change(screen.getByLabelText(/Description/i), {
+    fireEvent.change(screen.getByLabelText(/Event Details|Description/i), {
       target: {
         value: "A detailed promotion description that is long enough for the validation rules.",
       },
@@ -145,5 +145,29 @@ describe("CreatePromotionPage", () => {
     expect(screen.queryByText("Video thumbnail (optional)")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Add media for Videos/i }));
     expect(screen.getByText("Video thumbnail (optional)")).toBeInTheDocument();
+  });
+
+  it("renders event state and readable contact methods in the preview step", async () => {
+    render(<CreatePromotionPage />);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText("Promotion Type"), { target: { value: "event" } });
+    completeStepOne();
+
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.change(screen.getByLabelText(/Start Date \(optional\)/i), {
+      target: { value: "2099-03-10" },
+    });
+    fireEvent.change(screen.getByLabelText(/End Date \(optional\)/i), {
+      target: { value: "2099-03-12" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Upcoming Event")).toBeInTheDocument();
+    expect(screen.getByText("Saved contact methods")).toBeInTheDocument();
+    expect(screen.getByText("Phone Call")).toBeInTheDocument();
   });
 });

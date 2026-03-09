@@ -41,6 +41,22 @@ vi.mock("@/components/layout/page-header", () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
 
+vi.mock("@/components/business/business-detail-content", () => ({
+  BusinessDetailContent: ({
+    business,
+  }: {
+    business: { business_name: string; business_details?: { service_suburb?: string } | null };
+  }) => (
+    <div>
+      <div>Business Detail Preview</div>
+      <div>{business.business_name}</div>
+      {business.business_details?.service_suburb ? (
+        <div>{business.business_details.service_suburb}</div>
+      ) : null}
+    </div>
+  ),
+}));
+
 vi.mock("@/components/ui/media-upload", () => ({
   MediaUpload: ({ label }: { label: string }) => <div>{label}</div>,
 }));
@@ -122,6 +138,9 @@ describe("EditBusinessPage", () => {
     });
 
     expect(screen.getByText("Home Business")).toBeInTheDocument();
+    expect(screen.getByText("Business preview")).toBeInTheDocument();
+    expect(screen.getByText("Business Detail Preview")).toBeInTheDocument();
+    expect(screen.getByText("Nomsa Home Studio")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 

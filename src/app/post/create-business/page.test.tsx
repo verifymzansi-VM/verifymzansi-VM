@@ -216,6 +216,28 @@ describe("CreateBusinessPage", () => {
     expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
   });
 
+  it("renders subtype-specific details in the shared review preview", async () => {
+    render(<CreateBusinessPage />);
+
+    await selectBusinessType(/Home Business/i);
+    fillCoreBusinessFields({
+      businessName: "Nomsa Home Studio",
+      slug: "nomsa-home-studio",
+      category: "health_beauty",
+    });
+    fireEvent.change(screen.getByLabelText(/Service suburb/i), {
+      target: { value: "Noordwyk" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    completeLocationStep();
+
+    expect(screen.getByText(/Business review/i)).toBeInTheDocument();
+    expect(screen.getByText("Service suburb")).toBeInTheDocument();
+    expect(screen.getByText("Noordwyk")).toBeInTheDocument();
+    expect(screen.getByText("Nomsa Home Studio")).toBeInTheDocument();
+  });
+
   it("blocks final submit when step-3 optional social URLs are invalid", async () => {
     render(<CreateBusinessPage />);
 

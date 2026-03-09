@@ -12,6 +12,7 @@ import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { TrustLevel } from "@/types/enums";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
+import { CATEGORIES } from "@/lib/constants/categories";
 
 interface ListingCardProps {
   id: string;
@@ -23,6 +24,7 @@ interface ListingCardProps {
   province: string;
   city: string;
   category: string;
+  attributes?: Record<string, unknown>;
   condition?: string;
   createdAt: string;
   sellerTrustLevel?: TrustLevel;
@@ -42,6 +44,42 @@ function isNew(createdAt: string): boolean {
   return new Date().getTime() - new Date(createdAt).getTime() < 24 * 60 * 60 * 1000;
 }
 
+function formatAttributeValue(value: unknown, unit?: string) {
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return unit ? `${String(value)} ${unit}` : String(value);
+}
+
+function getAttributeHighlights(category: string, attributes?: Record<string, unknown>) {
+  if (!attributes) return [];
+
+  const categoryDefinition = CATEGORIES.find((item) => item.value === category);
+  if (!categoryDefinition) return [];
+
+  return categoryDefinition.attributeFields
+    .map((field) => {
+      const rawValue = attributes[field.name];
+      if (rawValue === null || rawValue === undefined || rawValue === "" || rawValue === false) {
+        return null;
+      }
+
+      if (typeof rawValue === "boolean") {
+        return field.label;
+      }
+
+      const displayValue = formatAttributeValue(rawValue, field.unit);
+      return displayValue ? `${field.label}: ${displayValue}` : null;
+    })
+    .filter((value): value is string => Boolean(value))
+    .slice(0, 2);
+}
+
 export const ListingCard = memo(function ListingCard({
   id,
   title,
@@ -51,7 +89,8 @@ export const ListingCard = memo(function ListingCard({
   posterUrl,
   province,
   city,
-  category: _category,
+  category,
+  attributes,
   condition,
   createdAt,
   sellerTrustLevel = 0,
@@ -79,6 +118,7 @@ export const ListingCard = memo(function ListingCard({
   }, [id]);
   const getServerSnapshot = useCallback(() => false, []);
   const isFavourited = useSyncExternalStore(subscribeFavs, getFavSnapshot, getServerSnapshot);
+  const attributeHighlights = getAttributeHighlights(category, attributes);
 
   function toggleFavourite(e: React.SyntheticEvent) {
     e.preventDefault();
@@ -213,6 +253,17 @@ export const ListingCard = memo(function ListingCard({
           <h3 className="font-medium text-sm line-clamp-2 group-hover:text-brand-green transition-colors duration-200">
             {title}
           </h3>
+
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="secondary" className="text-[10px] capitalize">
+              {category.replace(/_/g, " ")}
+            </Badge>
+            {attributeHighlights.map((highlight) => (
+              <Badge key={highlight} variant="outline" className="text-[10px]">
+                {highlight}
+              </Badge>
+            ))}
+          </div>
 
           {/* Meta */}
           <div className="flex items-center justify-between text-xs text-muted-foreground">

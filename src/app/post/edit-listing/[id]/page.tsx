@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Loader2, X, Phone, MessageCircle, Mail, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
+import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 
 export default function EditListingPage() {
   const params = useParams();
@@ -53,6 +54,18 @@ export default function EditListingPage() {
   const { toast } = useToast();
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
+  const previewPhotoUrls = useMemo(
+    () => newPhotoFiles.map((file) => URL.createObjectURL(file)),
+    [newPhotoFiles]
+  );
+  const previewVideoUrls = useMemo(
+    () => newVideoFile.map((file) => URL.createObjectURL(file)),
+    [newVideoFile]
+  );
+  const previewVideoCoverUrl = useMemo(
+    () => (newVideoCoverFile.length > 0 ? URL.createObjectURL(newVideoCoverFile[0]) : null),
+    [newVideoCoverFile]
+  );
 
   useEffect(() => {
     async function load() {
@@ -100,6 +113,27 @@ export default function EditListingPage() {
     load();
   }, [id, router, toast]);
 
+  useEffect(
+    () => () => {
+      previewPhotoUrls.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [previewPhotoUrls]
+  );
+
+  useEffect(
+    () => () => {
+      previewVideoUrls.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [previewVideoUrls]
+  );
+
+  useEffect(
+    () => () => {
+      if (previewVideoCoverUrl) URL.revokeObjectURL(previewVideoCoverUrl);
+    },
+    [previewVideoCoverUrl]
+  );
+
   function handleCategoryChange(cat: ListingCategory) {
     setCategory(cat);
     setCategoryAttributes({});
@@ -131,6 +165,13 @@ export default function EditListingPage() {
       return next;
     });
   }
+
+  const normalizedPreviewAttributes = category
+    ? coerceListingAttributes(category, categoryAttributes)
+    : {};
+  const previewPhotos = previewPhotoUrls.length > 0 ? previewPhotoUrls : existingPhotos;
+  const previewVideos = previewVideoUrls.length > 0 ? previewVideoUrls : existingVideos;
+  const previewVideoThumbnail = previewVideoCoverUrl ?? existingVideoThumbnail;
 
   async function uploadMedia(files: File[], area: UploadArea): Promise<string[]> {
     if (files.length === 0) return [];
@@ -349,7 +390,6 @@ export default function EditListingPage() {
                       />
                       <button
                         type="button"
-                        aria-pressed={negotiable}
                         onClick={() => setNegotiable((v) => !v)}
                         className={cn(
                           "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-all",
@@ -538,7 +578,6 @@ export default function EditListingPage() {
                           <button
                             key={opt.id}
                             type="button"
-                            aria-pressed={isSelected}
                             onClick={() => toggleContact(opt.id)}
                             className={cn(
                               "flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all",
@@ -553,6 +592,43 @@ export default function EditListingPage() {
                         );
                       })}
                     </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
+                    <div className="text-sm font-medium text-muted-foreground">Listing preview</div>
+                    <ListingDetailContent
+                      listing={{
+                        id,
+                        seller_id: "preview-seller",
+                        title: title || "Your listing title",
+                        description: description || "Your listing description will appear here.",
+                        price_cents: price ? Math.round(parseFloat(price || "0") * 100) : 0,
+                        price_negotiable: negotiable,
+                        category: category || null,
+                        condition: condition || null,
+                        attributes: normalizedPreviewAttributes,
+                        photos: previewPhotos,
+                        videos: previewVideos,
+                        video_thumbnail: previewVideoThumbnail,
+                        location_province: province || null,
+                        location_city: city || null,
+                        location_suburb: town || null,
+                        contact_methods: contactMethods,
+                        created_at: new Date().toISOString(),
+                      }}
+                      seller={{
+                        display_name: "You",
+                        location_province: province || null,
+                        location_city: city || null,
+                        seller_verification_status: null,
+                        phone: null,
+                        masked_phone_public: null,
+                      }}
+                      similarItems={[]}
+                      similarSellers={new Map()}
+                      showContactActions={false}
+                      showSimilarListings={false}
+                    />
                   </div>
 
                   <div className="flex gap-3">

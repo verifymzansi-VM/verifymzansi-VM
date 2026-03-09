@@ -123,40 +123,10 @@ export default async function EventsPage() {
                     viewCount={event.view_count}
                     boosted={isBoosted}
                     featured={isFeatured}
+                    startDate={event.start_date}
                     endDate={event.end_date}
+                    businessName={businessName}
                   />
-                  {/* Event date strip */}
-                  {event.start_date && (
-                    <div className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      <span>
-                        <time dateTime={event.start_date}>
-                          {new Date(event.start_date).toLocaleDateString("en-ZA", {
-                            weekday: "short",
-                            day: "numeric",
-                            month: "short",
-                          })}
-                        </time>
-                        {event.end_date && event.end_date !== event.start_date && (
-                          <>
-                            {" \u2013 "}
-                            <time dateTime={event.end_date}>
-                              {new Date(event.end_date).toLocaleDateString("en-ZA", {
-                                weekday: "short",
-                                day: "numeric",
-                                month: "short",
-                              })}
-                            </time>
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  )}
-                  {businessName && (
-                    <p className="px-2 text-xs text-brand-blue font-medium truncate">
-                      by {businessName}
-                    </p>
-                  )}
                 </div>
               );
             })}
@@ -199,6 +169,7 @@ export default async function EventsPage() {
                   createdAt={event.created_at}
                   sellerTrustLevel={seller?.trust}
                   sellerName={seller?.name}
+                  startDate={event.start_date}
                   endDate={event.end_date}
                 />
               );

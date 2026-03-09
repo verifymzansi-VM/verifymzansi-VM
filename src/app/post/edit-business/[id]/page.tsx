@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -43,6 +43,7 @@ import {
 } from "@/lib/forms/business-type-details";
 import { BusinessTypeDetailsFields } from "@/components/business/business-type-details-fields";
 import type { BusinessDetails } from "@/types/business-details";
+import { BusinessDetailContent } from "@/components/business/business-detail-content";
 
 const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow";
@@ -138,6 +139,26 @@ export default function EditBusinessPage() {
   const cities = province ? getCitiesForProvince(province) : [];
   const maxPhotos = usePlanMaxPhotos("MZANSI_BUSINESS");
   const coverVideoAllowed = usePlanCoverVideoAllowed("MZANSI_BUSINESS");
+  const previewLogoUrl = useMemo(
+    () => (newLogoFile.length > 0 ? URL.createObjectURL(newLogoFile[0]) : null),
+    [newLogoFile]
+  );
+  const previewCoverPhotoUrl = useMemo(
+    () => (newCoverFile.length > 0 ? URL.createObjectURL(newCoverFile[0]) : null),
+    [newCoverFile]
+  );
+  const previewGalleryUrls = useMemo(
+    () => newGalleryFiles.map((file) => URL.createObjectURL(file)),
+    [newGalleryFiles]
+  );
+  const previewPromoVideoUrl = useMemo(
+    () => (newPromoVideoFile.length > 0 ? URL.createObjectURL(newPromoVideoFile[0]) : null),
+    [newPromoVideoFile]
+  );
+  const previewVideoThumbnailUrl = useMemo(
+    () => (newVideoThumbnailFile.length > 0 ? URL.createObjectURL(newVideoThumbnailFile[0]) : null),
+    [newVideoThumbnailFile]
+  );
 
   // Load existing data
   useEffect(() => {
@@ -218,6 +239,41 @@ export default function EditBusinessPage() {
     load();
     fetchMalls();
   }, [businessId]);
+
+  useEffect(
+    () => () => {
+      if (previewLogoUrl) URL.revokeObjectURL(previewLogoUrl);
+    },
+    [previewLogoUrl]
+  );
+
+  useEffect(
+    () => () => {
+      if (previewCoverPhotoUrl) URL.revokeObjectURL(previewCoverPhotoUrl);
+    },
+    [previewCoverPhotoUrl]
+  );
+
+  useEffect(
+    () => () => {
+      previewGalleryUrls.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [previewGalleryUrls]
+  );
+
+  useEffect(
+    () => () => {
+      if (previewPromoVideoUrl) URL.revokeObjectURL(previewPromoVideoUrl);
+    },
+    [previewPromoVideoUrl]
+  );
+
+  useEffect(
+    () => () => {
+      if (previewVideoThumbnailUrl) URL.revokeObjectURL(previewVideoThumbnailUrl);
+    },
+    [previewVideoThumbnailUrl]
+  );
 
   function clearErrors(...keys: string[]) {
     setError(null);
@@ -437,6 +493,24 @@ export default function EditBusinessPage() {
       </div>
     );
   }
+
+  const linkedMall = mallId ? (malls.find((mall) => mall.id === mallId) ?? null) : null;
+  const socialLinks = Object.fromEntries(
+    Object.entries({
+      facebook: socialFacebook,
+      instagram: socialInstagram,
+      twitter: socialTwitter,
+      tiktok: socialTiktok,
+    }).filter(([, value]) => value.trim().length > 0)
+  );
+  const previewGalleryPhotos =
+    previewGalleryUrls.length > 0 ? previewGalleryUrls : removeGallery ? [] : existingGalleryPhotos;
+  const previewCoverVideo = removeVideo
+    ? null
+    : (previewPromoVideoUrl ?? existingCoverVideo ?? null);
+  const previewVideoThumbnail = removeVideo
+    ? null
+    : (previewVideoThumbnailUrl ?? existingVideoThumbnail ?? null);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -979,6 +1053,55 @@ export default function EditBusinessPage() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div className="space-y-3 rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
+                <div className="text-sm font-medium text-muted-foreground">Business preview</div>
+                <BusinessDetailContent
+                  business={{
+                    id: businessId,
+                    seller_id: "preview-seller",
+                    business_name: businessName || "Your business name",
+                    description: description || "Your business description will appear here.",
+                    status: "preview",
+                    business_type: businessType,
+                    category: category || "general_other",
+                    cover_photo: previewCoverPhotoUrl ?? existingCoverPhoto ?? null,
+                    logo_url: previewLogoUrl ?? existingLogo ?? null,
+                    cover_video: previewCoverVideo,
+                    video_thumbnail: previewVideoThumbnail,
+                    gallery_photos: previewGalleryPhotos,
+                    social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
+                    operating_hours: {
+                      ...(hoursMonFri ? { Mon_Fri: hoursMonFri } : {}),
+                      ...(hoursSat ? { Sat: hoursSat } : {}),
+                      ...(hoursSun ? { Sun: hoursSun } : {}),
+                    },
+                    services_offered: services,
+                    payment_methods_accepted: paymentMethods,
+                    delivery_options: deliveryOptions,
+                    service_areas:
+                      businessType === "mobile_service" && serviceAreasInput
+                        ? { areas: parseServiceAreas(serviceAreasInput) }
+                        : null,
+                    location_city: city || null,
+                    location_province: province || null,
+                    phone: phone || null,
+                    whatsapp: whatsapp || null,
+                    email: email || null,
+                    website: website || null,
+                    store_number: storeNumber || null,
+                    mall_id: mallId || null,
+                    map_directions: mapDirections || null,
+                    business_details: coerceBusinessDetails(businessType, businessDetails),
+                  }}
+                  trustLevel={null}
+                  seller={{ display_name: "You" }}
+                  linkedMall={linkedMall ? { id: linkedMall.id, name: linkedMall.name } : null}
+                  promotions={[]}
+                  showPromotions={false}
+                  showPublicActions={false}
+                />
               </div>
 
               {/* Payment Methods */}

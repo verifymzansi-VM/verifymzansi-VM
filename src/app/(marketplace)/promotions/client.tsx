@@ -530,13 +530,10 @@ export function PromotionsExplorer() {
                     viewCount={promotion.view_count}
                     boosted={isBoosted}
                     featured={isFeatured}
+                    startDate={promotion.start_date}
                     endDate={promotion.end_date}
+                    businessName={businessName}
                   />
-                  {businessName && (
-                    <p className="truncate px-2 text-xs font-medium text-brand-blue">
-                      by {businessName}
-                    </p>
-                  )}
                 </div>
               );
             })}

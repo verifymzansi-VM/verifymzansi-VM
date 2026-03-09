@@ -134,4 +134,25 @@ describe("CreateListingPage", () => {
 
     expect(screen.getByRole("button", { name: "Submit for review" })).toBeInTheDocument();
   });
+
+  it("renders saved category attributes inside the shared listing preview", () => {
+    render(<CreateListingPage />);
+
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Price (ZAR) *"), { target: { value: "1500" } });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText(/Listing preview/i)).toBeInTheDocument();
+    expect(screen.getByText("Brand")).toBeInTheDocument();
+    expect(screen.getByText("Apple")).toBeInTheDocument();
+    expect(screen.getByText(/Electronics/i)).toBeInTheDocument();
+  });
 });

@@ -91,6 +91,7 @@ export async function HomePromotionsShowcase() {
               featured={
                 promo.featured_until ? new Date(promo.featured_until) > new Date(now) : false
               }
+              startDate={null}
               endDate={promo.end_date}
             />
           ))}

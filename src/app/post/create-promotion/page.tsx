@@ -27,6 +27,7 @@ import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 import { useToast } from "@/hooks/use-toast";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 
 const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
 const SELECT_CLASS =
@@ -102,11 +103,31 @@ function CreatePromotionContent() {
     () => (photoFiles.length > 0 ? URL.createObjectURL(photoFiles[0]) : null),
     [photoFiles]
   );
+  const previewVideoUrls = useMemo(
+    () => videoFiles.map((file) => URL.createObjectURL(file)),
+    [videoFiles]
+  );
+  const videoThumbnailUrl = useMemo(
+    () => (videoThumbnailFile.length > 0 ? URL.createObjectURL(videoThumbnailFile[0]) : null),
+    [videoThumbnailFile]
+  );
   useEffect(
     () => () => {
       if (coverPhotoUrl) URL.revokeObjectURL(coverPhotoUrl);
     },
     [coverPhotoUrl]
+  );
+  useEffect(
+    () => () => {
+      previewVideoUrls.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [previewVideoUrls]
+  );
+  useEffect(
+    () => () => {
+      if (videoThumbnailUrl) URL.revokeObjectURL(videoThumbnailUrl);
+    },
+    [videoThumbnailUrl]
   );
 
   useEffect(() => {
@@ -688,53 +709,59 @@ function CreatePromotionContent() {
                         Preview
                       </div>
 
-                      {/* Visual card preview */}
-                      <div className="mb-4 overflow-hidden rounded-lg border bg-background shadow-sm">
-                        <div className="aspect-[16/9] bg-muted flex items-center justify-center">
-                          {coverPhotoUrl ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img
-                              src={coverPhotoUrl}
-                              alt="Promotion preview"
-                              className="w-full h-full object-cover"
-                              width={400}
-                              height={225}
-                            />
-                          ) : (
-                            <div className="flex flex-col items-center gap-1 text-muted-foreground">
-                              <Camera className="h-6 w-6" />
-                              <span className="text-xs">Your cover photo will appear here</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-3 space-y-1">
-                          <p className="font-display text-sm font-semibold truncate">
-                            {title || "Your promotion title"}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {PROMOTION_TYPE_LABELS[promotionType]}
-                            {city ? ` · ${city}` : ""}
-                            {province ? `, ${province}` : ""}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-muted-foreground">
-                        <span>Type:</span>
-                        <span className="font-medium text-foreground">
-                          {PROMOTION_TYPE_LABELS[promotionType]}
-                        </span>
-                        <span>{isEvent ? "Event title:" : "Title:"}</span>
-                        <span className="font-medium text-foreground">{title || "Not set"}</span>
-                        <span>Location:</span>
-                        <span className="font-medium text-foreground">
-                          {[city, province].filter(Boolean).join(", ") || "Not set"}
-                        </span>
-                        <span>Photos:</span>
-                        <span className="font-medium text-foreground">{photoFiles.length}</span>
-                        <span>Videos:</span>
-                        <span className="font-medium text-foreground">{videoFiles.length}</span>
-                      </div>
+                      <PromotionDetailContent
+                        promotion={{
+                          id: "preview-promotion",
+                          seller_id: "preview-seller",
+                          business_id: businessId || null,
+                          title: title || "Your promotion title",
+                          description:
+                            description || "Your promotion description will appear here.",
+                          promotion_type: promotionType,
+                          category: category || null,
+                          category_key: categoryKey || null,
+                          photos: coverPhotoUrl ? [coverPhotoUrl] : [],
+                          videos: previewVideoUrls,
+                          video_thumbnail: videoThumbnailUrl,
+                          price_cents: priceZar
+                            ? Math.round(parseFloat(priceZar || "0") * 100)
+                            : null,
+                          price_negotiable: negotiable,
+                          location_province: province,
+                          location_city: city,
+                          contact_methods: contactMethods,
+                          start_date: startDate || null,
+                          end_date: endDate || null,
+                          boost_until: null,
+                          featured_until: null,
+                          view_count: null,
+                          created_at: new Date().toISOString(),
+                        }}
+                        seller={{
+                          display_name: "You",
+                          seller_verification_status: null,
+                          phone: null,
+                          masked_phone_public: null,
+                        }}
+                        linkedBusiness={
+                          businessId
+                            ? (() => {
+                                const linkedBusiness = myBusinesses.find(
+                                  (item) => item.id === businessId
+                                );
+                                return linkedBusiness
+                                  ? {
+                                      id: linkedBusiness.id,
+                                      business_name: linkedBusiness.business_name,
+                                      logo_url: null,
+                                    }
+                                  : null;
+                              })()
+                            : null
+                        }
+                        showContactActions={false}
+                        showContactSummary
+                      />
                     </div>
                   </div>
                 )}

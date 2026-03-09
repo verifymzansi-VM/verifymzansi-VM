@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import {
   Clock,
@@ -277,7 +279,16 @@ function BusinessDetailsCard({
   linkedMall: BusinessLinkedMallRecord | null;
   serviceAreas: { areas?: string[] } | null;
 }) {
-  if (!(businessDetails || business.store_number || business.map_directions || serviceAreas)) {
+  const canShowMapDirections = businessType !== "home_business";
+
+  if (
+    !(
+      businessDetails ||
+      business.store_number ||
+      (canShowMapDirections && business.map_directions) ||
+      serviceAreas
+    )
+  ) {
     return null;
   }
 
@@ -485,7 +496,7 @@ function BusinessDetailsCard({
           </>
         )}
 
-        {business.map_directions && (
+        {canShowMapDirections && business.map_directions && (
           <Button asChild variant="outline" className="w-full gap-2">
             <a href={business.map_directions} target="_blank" rel="noopener noreferrer nofollow">
               <MapPin className="h-4 w-4" />
@@ -603,7 +614,6 @@ export function BusinessDetailContent({
           </div>
         </div>
       </div>
-
       <article className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           {business.cover_video && (
