@@ -149,7 +149,10 @@ export function ListingFilterDrawer() {
               aria-label="Province"
               className={selectClass}
               value={filters.province || ""}
-              onChange={(e) => setFilter("province", e.target.value || undefined)}
+              onChange={(e) => {
+                setFilter("province", e.target.value || undefined);
+                setFilter("city", undefined);
+              }}
             >
               <option value="">All provinces</option>
               {getProvinceNames().map((p) => (

@@ -328,7 +328,6 @@ export function PromotionsExplorer() {
       {featuredPromotion && !loading && (
         <FeaturedHeroCard
           promotion={featuredPromotion}
-          seller={sellerMap.get(featuredPromotion.seller_id)}
           businessName={
             featuredPromotion.business_id
               ? businessMap.get(featuredPromotion.business_id)
@@ -338,7 +337,7 @@ export function PromotionsExplorer() {
       )}
 
       {/* ── Desktop Filters ── */}
-      <section className="hidden sm:block space-y-4 rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
+      <section className="hidden lg:block space-y-4 rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,1fr))]">
           <div className="space-y-1.5">
             <Label htmlFor="promotion-search">Search</Label>
@@ -539,7 +538,7 @@ export function PromotionsExplorer() {
 
       {/* ── Mobile Filter FAB + Sheet ── */}
       <Sheet>
-        <div className="fixed bottom-20 right-4 z-40 sm:hidden">
+        <div className="fixed bottom-20 right-4 z-40 lg:hidden">
           <SheetTrigger asChild>
             <Button
               size="lg"
@@ -691,6 +690,9 @@ export function PromotionsExplorer() {
             <p className="text-sm text-muted-foreground">
               Try broadening the search, changing the category, or clearing a location filter.
             </p>
+            <Button variant="outline" size="sm" onClick={clearAllFilters}>
+              Clear all filters
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -748,7 +750,10 @@ export function PromotionsExplorer() {
                 variant="outline"
                 size="sm"
                 disabled={page <= 1}
-                onClick={() => updateFilters({ page: String(page - 1) }, { preservePage: true })}
+                onClick={() => {
+                  updateFilters({ page: String(page - 1) }, { preservePage: true });
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
               >
                 Previous
               </Button>
@@ -770,9 +775,10 @@ export function PromotionsExplorer() {
                       variant={pageNumber === page ? "default" : "ghost"}
                       size="sm"
                       className={`h-8 w-8 p-0 ${pageNumber === page ? "pointer-events-none" : ""}`}
-                      onClick={() =>
-                        updateFilters({ page: String(pageNumber) }, { preservePage: true })
-                      }
+                      onClick={() => {
+                        updateFilters({ page: String(pageNumber) }, { preservePage: true });
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
                     >
                       {pageNumber}
                     </Button>
@@ -784,7 +790,10 @@ export function PromotionsExplorer() {
                 variant="outline"
                 size="sm"
                 disabled={page >= totalPages}
-                onClick={() => updateFilters({ page: String(page + 1) }, { preservePage: true })}
+                onClick={() => {
+                  updateFilters({ page: String(page + 1) }, { preservePage: true });
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
               >
                 Next
               </Button>
@@ -799,11 +808,9 @@ export function PromotionsExplorer() {
 /* ── Featured Hero Card ─────────────────────────────────── */
 function FeaturedHeroCard({
   promotion,
-  seller: _seller,
   businessName,
 }: {
   promotion: PromotionRow;
-  seller?: SellerSummary;
   businessName?: string;
 }) {
   const imageUrl = promotion.photos?.[0] || promotion.videos?.[0];

@@ -267,7 +267,10 @@ export function MzansiBusinessGrid() {
             variant="outline"
             size="sm"
             disabled={page <= 1}
-            onClick={() => setPage(page - 1)}
+            onClick={() => {
+              setPage(page - 1);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
           >
             Previous
           </Button>
@@ -289,7 +292,10 @@ export function MzansiBusinessGrid() {
                   variant={pageNum === page ? "default" : "ghost"}
                   size="sm"
                   className={`w-8 h-8 p-0 ${pageNum === page ? "pointer-events-none" : ""}`}
-                  onClick={() => setPage(pageNum)}
+                  onClick={() => {
+                    setPage(pageNum);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
                 >
                   {pageNum}
                 </Button>
@@ -301,7 +307,10 @@ export function MzansiBusinessGrid() {
             variant="outline"
             size="sm"
             disabled={page >= totalPages}
-            onClick={() => setPage(page + 1)}
+            onClick={() => {
+              setPage(page + 1);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
           >
             Next
           </Button>

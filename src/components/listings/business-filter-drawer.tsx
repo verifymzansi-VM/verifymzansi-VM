@@ -162,9 +162,7 @@ export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
               value={filters.province || ""}
               onChange={(event) => {
                 setFilter("province", event.target.value || undefined);
-                if (!event.target.value) {
-                  setFilter("city", undefined);
-                }
+                setFilter("city", undefined);
               }}
             >
               <option value="">All provinces</option>

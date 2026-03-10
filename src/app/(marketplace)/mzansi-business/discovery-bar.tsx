@@ -134,9 +134,7 @@ export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
             value={filters.province || ""}
             onChange={(event) => {
               setFilter("province", event.target.value || undefined);
-              if (!event.target.value) {
-                setFilter("city", undefined);
-              }
+              setFilter("city", undefined);
             }}
           >
             <option value="">All provinces</option>
@@ -236,7 +234,10 @@ export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
                 type="button"
                 className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Remove location filter"
-                onClick={() => setFilter("province", undefined)}
+                onClick={() => {
+                  setFilter("province", undefined);
+                  setFilter("city", undefined);
+                }}
               >
                 <X className="h-3 w-3" />
               </button>

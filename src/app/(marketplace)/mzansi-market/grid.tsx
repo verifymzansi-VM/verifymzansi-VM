@@ -64,7 +64,7 @@ interface GridFetchError {
 type ViewMode = "grid" | "list";
 
 export function MzansiMarketGrid() {
-  const { filters, page, setPage, resetFilters } = useMarketplaceStore();
+  const { filters, page, setPage, setFilter, resetFilters } = useMarketplaceStore();
   const [listings, setListings] = useState<ListingRow[]>([]);
   const [sellers, setSellers] = useState<Map<string, SellerRow>>(new Map());
   const [totalCount, setTotalCount] = useState(0);
@@ -240,6 +240,10 @@ export function MzansiMarketGrid() {
                   key={cat.value}
                   variant="secondary"
                   className="gap-1 cursor-pointer hover:bg-brand-green/10 transition-colors"
+                  onClick={() => {
+                    resetFilters();
+                    setFilter("category", cat.value);
+                  }}
                 >
                   <Icon className="h-3 w-3" />
                   {cat.label}
@@ -417,7 +421,10 @@ export function MzansiMarketGrid() {
             variant="outline"
             size="sm"
             disabled={page <= 1}
-            onClick={() => setPage(page - 1)}
+            onClick={() => {
+              setPage(page - 1);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
           >
             Previous
           </Button>
@@ -439,7 +446,10 @@ export function MzansiMarketGrid() {
                   variant={pageNum === page ? "default" : "ghost"}
                   size="sm"
                   className={`w-8 h-8 p-0 ${pageNum === page ? "pointer-events-none" : ""}`}
-                  onClick={() => setPage(pageNum)}
+                  onClick={() => {
+                    setPage(pageNum);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
                 >
                   {pageNum}
                 </Button>
@@ -451,7 +461,10 @@ export function MzansiMarketGrid() {
             variant="outline"
             size="sm"
             disabled={page >= totalPages}
-            onClick={() => setPage(page + 1)}
+            onClick={() => {
+              setPage(page + 1);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
           >
             Next
           </Button>

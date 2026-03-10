@@ -106,7 +106,10 @@ export function ListingFilterSidebar() {
           aria-label="Province"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           value={filters.province || ""}
-          onChange={(e) => setFilter("province", e.target.value || undefined)}
+          onChange={(e) => {
+            setFilter("province", e.target.value || undefined);
+            setFilter("city", undefined);
+          }}
         >
           <option value="">All provinces</option>
           {getProvinceNames().map((p) => (
@@ -115,21 +118,24 @@ export function ListingFilterSidebar() {
             </option>
           ))}
         </select>
-        {filters.province && (
-          <select
-            aria-label="City"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 animate-in fade-in-0 duration-200"
-            value={filters.city || ""}
-            onChange={(e) => setFilter("city", e.target.value || undefined)}
-          >
-            <option value="">All cities</option>
-            {getCitiesForProvince(filters.province).map((c) => (
+        <select
+          aria-label="City"
+          className={cn(
+            "w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            !filters.province && "opacity-50"
+          )}
+          value={filters.city || ""}
+          onChange={(e) => setFilter("city", e.target.value || undefined)}
+          disabled={!filters.province}
+        >
+          <option value="">{filters.province ? "All cities" : "Select province first"}</option>
+          {filters.province &&
+            getCitiesForProvince(filters.province).map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
             ))}
-          </select>
-        )}
+        </select>
       </div>
 
       {/* ── Dynamic Category Attributes ────────────── */}
