@@ -1,18 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import {
-  ArrowRight,
-  Car,
-  Home,
-  Wrench,
-  Smartphone,
-  Sofa,
-  Briefcase,
-  Building2,
-  Megaphone,
-  ShoppingBag,
-} from "lucide-react";
+import { ArrowRight, Building2, Megaphone, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -112,88 +101,6 @@ export default async function HomePage() {
         <Suspense fallback={<HeroBannerSkeleton />}>
           <HeroBannerWithData />
         </Suspense>
-
-        {/* ═══ Browse by Category ═══ */}
-        <section className="py-4 sm:py-6 border-b border-warm-200 dark:border-warm-800 bg-white dark:bg-warm-950">
-          <div className="container-page">
-            {/* Mobile: horizontal scroll pills  |  Desktop: grid */}
-            <div className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-4 md:grid-cols-8 sm:overflow-visible sm:gap-3">
-              {[
-                {
-                  label: "Vehicles",
-                  icon: Car,
-                  href: "/mzansi-market?category=vehicles",
-                  iconBg: "bg-blue-100 dark:bg-blue-950",
-                  iconColor: "text-blue-500",
-                },
-                {
-                  label: "Property",
-                  icon: Home,
-                  href: "/mzansi-market?category=property",
-                  iconBg: "bg-teal-100 dark:bg-teal-950",
-                  iconColor: "text-teal-500",
-                },
-                {
-                  label: "Jobs",
-                  icon: Briefcase,
-                  href: "/mzansi-market?category=jobs_services",
-                  iconBg: "bg-violet-100 dark:bg-violet-950",
-                  iconColor: "text-violet-500",
-                },
-                {
-                  label: "Electronics",
-                  icon: Smartphone,
-                  href: "/mzansi-market?category=electronics",
-                  iconBg: "bg-gray-100 dark:bg-gray-800",
-                  iconColor: "text-gray-500 dark:text-gray-400",
-                },
-                {
-                  label: "Auto Parts",
-                  icon: Wrench,
-                  href: "/mzansi-market?category=auto_parts",
-                  iconBg: "bg-rose-100 dark:bg-rose-950",
-                  iconColor: "text-rose-400",
-                },
-                {
-                  label: "Home & Living",
-                  icon: Sofa,
-                  href: "/mzansi-market?category=home_lifestyle",
-                  iconBg: "bg-green-100 dark:bg-green-950",
-                  iconColor: "text-green-500",
-                },
-                {
-                  label: "Business",
-                  icon: Building2,
-                  href: "/mzansi-business",
-                  iconBg: "bg-blue-100 dark:bg-blue-950",
-                  iconColor: "text-blue-500",
-                },
-                {
-                  label: "Promotions",
-                  icon: Megaphone,
-                  href: "/promotions",
-                  iconBg: "bg-red-100 dark:bg-red-950",
-                  iconColor: "text-red-500",
-                },
-              ].map(({ label, icon: Icon, href, iconBg, iconColor }) => (
-                <Link
-                  key={label}
-                  href={href}
-                  className="group flex snap-start shrink-0 sm:shrink sm:min-w-0 flex-col items-center gap-1.5 sm:gap-2 p-2.5 sm:p-3 rounded-xl border border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-900 hover:shadow-md hover:border-warm-300 dark:hover:border-warm-600 transition-all duration-200 min-w-[76px] touch-manipulation"
-                >
-                  <div
-                    className={`flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full ${iconBg} ${iconColor} transition-transform duration-200 group-hover:scale-110`}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <span className="text-[11px] sm:text-xs font-medium text-center text-foreground leading-tight whitespace-nowrap">
-                    {label}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
 
         {/* ═══ Marketplace Showcase ═══ */}
         <Suspense fallback={<MarketplacePreviewsSkeleton />}>
