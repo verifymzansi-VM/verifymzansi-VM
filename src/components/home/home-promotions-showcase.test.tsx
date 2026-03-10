@@ -27,6 +27,12 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock("./auto-scroll-rail", () => ({
+  AutoScrollRail: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="auto-scroll-rail">{children}</div>
+  ),
+}));
+
 vi.mock("@/components/ui/button", () => ({
   Button: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -102,5 +108,37 @@ describe("HomePromotionsShowcase", () => {
 
     const ui = await HomePromotionsShowcase();
     expect(ui).toBeNull();
+  });
+
+  it("renders promotions inside the shared auto-scroll rail", async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      createSupabaseMock([
+        {
+          id: "promo-2",
+          title: "Grand Opening",
+          price_cents: null,
+          price_negotiable: false,
+          photos: ["https://example.com/opening.jpg"],
+          videos: [],
+          video_thumbnail: null,
+          category: "Events",
+          category_key: "events",
+          location_province: "Gauteng",
+          location_city: "Pretoria",
+          promotion_type: "event",
+          view_count: 10,
+          boost_until: null,
+          featured_until: null,
+          start_date: "2099-01-10T00:00:00.000Z",
+          end_date: "2099-01-11T00:00:00.000Z",
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ]) as never
+    );
+
+    const ui = await HomePromotionsShowcase();
+    render(ui);
+
+    expect(screen.getByTestId("auto-scroll-rail")).toBeInTheDocument();
   });
 });

@@ -39,7 +39,7 @@ export interface ListingSellerRecord {
   display_name: string | null;
   location_province: string | null;
   location_city: string | null;
-  seller_verification_status: string | null;
+  seller_verification_status: SellerVerificationStatus | null;
   phone?: string | null;
   masked_phone_public?: string | null;
 }
@@ -64,7 +64,7 @@ interface SimilarListingRow {
 interface SimilarSellerRow {
   user_id: string;
   display_name: string;
-  seller_verification_status: string;
+  seller_verification_status: SellerVerificationStatus | null;
 }
 
 export function ListingDetailContent({
@@ -82,9 +82,7 @@ export function ListingDetailContent({
   similarItems?: SimilarListingRow[];
   similarSellers?: Map<string, SimilarSellerRow>;
 }) {
-  const trustLevel = seller
-    ? computeTrustLevel(seller.seller_verification_status ?? "unverified")
-    : null;
+  const trustLevel = seller ? computeTrustLevel(seller.seller_verification_status ?? null) : null;
   const createdAt = new Date(listing.created_at).toLocaleDateString("en-ZA", {
     day: "numeric",
     month: "long",
@@ -285,9 +283,7 @@ export function ListingDetailContent({
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {similarItems.map((item) => {
               const itemSeller = similarSellers.get(item.seller_id);
-              const itemTrust = computeTrustLevel(
-                (itemSeller?.seller_verification_status ?? null) as SellerVerificationStatus | null
-              );
+              const itemTrust = computeTrustLevel(itemSeller?.seller_verification_status ?? null);
 
               return (
                 <ListingCard

@@ -3,6 +3,7 @@ import { Megaphone, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { createClient } from "@/lib/supabase/server";
+import { AutoScrollRail } from "./auto-scroll-rail";
 import type { BusinessCategory, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 
@@ -67,32 +68,35 @@ export async function HomePromotionsShowcase() {
           </Button>
         </div>
 
-        {/* Stacked on mobile (1 col), 3-col on desktop */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <AutoScrollRail ariaLabel="Promotions and ads">
           {promotions.map((promo) => (
-            <PromotionCard
+            <div
               key={promo.id}
-              id={promo.id}
-              title={promo.title}
-              price={promo.price_cents}
-              negotiable={promo.price_negotiable}
-              imageUrl={promo.videos?.[0] || promo.photos?.[0]}
-              posterUrl={promo.video_thumbnail || promo.photos?.[0] || undefined}
-              categoryLabel={getPromotionCategoryDisplayLabel(promo.category_key, promo.category)}
-              province={promo.location_province}
-              city={promo.location_city}
-              promotionType={promo.promotion_type as PromotionType}
-              createdAt={promo.created_at}
-              viewCount={promo.view_count}
-              boosted={promo.boost_until ? new Date(promo.boost_until) > new Date(now) : false}
-              featured={
-                promo.featured_until ? new Date(promo.featured_until) > new Date(now) : false
-              }
-              startDate={promo.start_date}
-              endDate={promo.end_date}
-            />
+              className="min-w-[280px] max-w-[340px] sm:min-w-[340px] sm:max-w-[340px]"
+            >
+              <PromotionCard
+                id={promo.id}
+                title={promo.title}
+                price={promo.price_cents}
+                negotiable={promo.price_negotiable}
+                imageUrl={promo.videos?.[0] || promo.photos?.[0]}
+                posterUrl={promo.video_thumbnail || promo.photos?.[0] || undefined}
+                categoryLabel={getPromotionCategoryDisplayLabel(promo.category_key, promo.category)}
+                province={promo.location_province}
+                city={promo.location_city}
+                promotionType={promo.promotion_type as PromotionType}
+                createdAt={promo.created_at}
+                viewCount={promo.view_count}
+                boosted={promo.boost_until ? new Date(promo.boost_until) > new Date(now) : false}
+                featured={
+                  promo.featured_until ? new Date(promo.featured_until) > new Date(now) : false
+                }
+                startDate={promo.start_date}
+                endDate={promo.end_date}
+              />
+            </div>
           ))}
-        </div>
+        </AutoScrollRail>
       </div>
     </section>
   );

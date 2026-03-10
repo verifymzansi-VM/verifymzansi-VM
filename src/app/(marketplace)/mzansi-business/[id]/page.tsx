@@ -65,9 +65,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
     .order("created_at", { ascending: false })
     .limit(12);
 
-  const trustLevel = seller
-    ? computeTrustLevel(seller.seller_verification_status ?? "unverified")
-    : null;
+  const trustLevel = seller ? computeTrustLevel(seller.seller_verification_status ?? null) : null;
 
   const jsonLd = {
     "@context": "https://schema.org",

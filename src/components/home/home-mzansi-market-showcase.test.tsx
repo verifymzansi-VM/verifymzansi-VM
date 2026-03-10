@@ -11,6 +11,12 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock("./auto-scroll-rail", () => ({
+  AutoScrollRail: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="auto-scroll-rail">{children}</div>
+  ),
+}));
+
 vi.mock("./market-preview-card", () => ({
   MarketPreviewCard: (props: unknown) => {
     marketCardSpy(props);
@@ -87,6 +93,28 @@ describe("HomeMzansiMarketShowcase", () => {
       imageUrl: string;
     };
     expect(props.imageUrl).toBe("https://example.com/fridge.jpg");
+  });
+
+  it("renders listings inside the shared auto-scroll rail", async () => {
+    const supabase = createSupabaseMock([
+      {
+        id: "list-3",
+        title: "Sofa",
+        price_cents: 450000,
+        videos: [],
+        video_thumbnail: null,
+        photos: ["https://example.com/sofa.jpg"],
+        location_city: "Cape Town",
+        location_province: "Western Cape",
+        boost_until: null,
+      },
+    ]);
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const ui = await HomeMzansiMarketShowcase();
+    render(ui);
+
+    expect(screen.getByTestId("auto-scroll-rail")).toBeInTheDocument();
   });
 
   it("returns null when no listings are available", async () => {

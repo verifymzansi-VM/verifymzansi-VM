@@ -27,6 +27,12 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock("./auto-scroll-rail", () => ({
+  AutoScrollRail: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="auto-scroll-rail">{children}</div>
+  ),
+}));
+
 vi.mock("./business-preview-card", () => ({
   BusinessPreviewCard: (props: unknown) => {
     businessCardSpy(props);
@@ -93,5 +99,29 @@ describe("HomeBusinessShowcase", () => {
 
     const ui = await HomeBusinessShowcase();
     expect(ui).toBeNull();
+  });
+
+  it("renders businesses inside the shared auto-scroll rail", async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      createSupabaseMock([
+        {
+          id: "biz-2",
+          business_name: "Mandla Mechanics",
+          cover_photo: "https://example.com/cover.jpg",
+          cover_video: null,
+          video_thumbnail: null,
+          logo_url: null,
+          location_province: "KwaZulu-Natal",
+          location_city: "Durban",
+          boost_until: null,
+          business_type: "general_store",
+        },
+      ]) as never
+    );
+
+    const ui = await HomeBusinessShowcase();
+    render(ui);
+
+    expect(screen.getByTestId("auto-scroll-rail")).toBeInTheDocument();
   });
 });

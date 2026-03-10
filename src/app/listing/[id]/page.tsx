@@ -5,6 +5,7 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import type { Metadata } from "next";
+import type { SellerVerificationStatus } from "@/types/enums";
 
 interface SimilarListingRow {
   id: string;
@@ -26,7 +27,7 @@ interface SimilarListingRow {
 interface SimilarSellerRow {
   user_id: string;
   display_name: string;
-  seller_verification_status: string;
+  seller_verification_status: SellerVerificationStatus | null;
 }
 
 interface ListingDetailPageProps {

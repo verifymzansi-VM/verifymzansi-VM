@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { MarketPreviewCard } from "./market-preview-card";
+import { AutoScrollRail } from "./auto-scroll-rail";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 
 function provinceCode(name: string): string {
@@ -45,8 +46,7 @@ export async function HomeMzansiMarketShowcase() {
           </Link>
         </div>
 
-        {/* Horizontal scroll on mobile, grid on desktop */}
-        <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:overflow-visible sm:gap-4">
+        <AutoScrollRail ariaLabel="Latest on Mzansi Market">
           {items.map((l) => {
             const videoUrl = l.videos?.[0];
             const displayUrl = videoUrl || l.photos?.[0];
@@ -55,7 +55,7 @@ export async function HomeMzansiMarketShowcase() {
             return (
               <div
                 key={l.id}
-                className="min-w-[220px] max-w-[260px] snap-start shrink-0 sm:min-w-0 sm:max-w-none"
+                className="min-w-[220px] max-w-[260px] sm:min-w-[260px] sm:max-w-[260px]"
               >
                 <MarketPreviewCard
                   href={`/listing/${l.id}`}
@@ -70,7 +70,7 @@ export async function HomeMzansiMarketShowcase() {
               </div>
             );
           })}
-        </div>
+        </AutoScrollRail>
       </div>
     </section>
   );

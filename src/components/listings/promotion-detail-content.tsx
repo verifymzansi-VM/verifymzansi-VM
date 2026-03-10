@@ -12,6 +12,7 @@ import { formatZAR } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import {
   PROMOTION_TYPE_LABELS,
+  type BusinessCategory,
   type PromotionType,
   type SellerVerificationStatus,
 } from "@/types/enums";
@@ -26,7 +27,7 @@ export interface PromotionDetailRecord {
   description: string;
   promotion_type: string;
   category: string | null;
-  category_key: string | null;
+  category_key: BusinessCategory | null;
   photos: string[] | null;
   videos: string[] | null;
   video_thumbnail: string | null;
@@ -45,7 +46,7 @@ export interface PromotionDetailRecord {
 
 export interface PromotionSellerRecord {
   display_name: string | null;
-  seller_verification_status: string | null;
+  seller_verification_status: SellerVerificationStatus | null;
   phone: string | null;
   masked_phone_public: string | null;
 }
@@ -115,9 +116,7 @@ export function PromotionDetailContent({
     promotion.category_key,
     promotion.category
   );
-  const trustLevel = seller
-    ? computeTrustLevel(seller.seller_verification_status as SellerVerificationStatus)
-    : 0;
+  const trustLevel = seller ? computeTrustLevel(seller.seller_verification_status) : 0;
 
   return (
     <article className="grid grid-cols-1 gap-6 lg:grid-cols-3">

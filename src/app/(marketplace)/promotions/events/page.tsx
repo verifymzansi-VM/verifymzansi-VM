@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import type { SellerVerificationStatus } from "@/types/enums";
 import { PastEventsAccordion } from "./past-events-accordion";
 
 export const metadata = {
@@ -91,9 +90,7 @@ export default async function EventsPage() {
       s.user_id,
       {
         name: s.display_name,
-        trust: computeTrustLevel(
-          (s.seller_verification_status ?? "unverified") as SellerVerificationStatus
-        ),
+        trust: computeTrustLevel(s.seller_verification_status ?? null),
       },
     ])
   );

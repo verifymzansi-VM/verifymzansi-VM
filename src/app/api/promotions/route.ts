@@ -8,12 +8,7 @@ import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
-import {
-  type MarketplaceArea,
-  type SellerVerificationStatus,
-  type PlanTier,
-  type PromotionEventState,
-} from "@/types/enums";
+import { type MarketplaceArea, type PlanTier, type PromotionEventState } from "@/types/enums";
 import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
 import { normalizeBusinessCategoryParam } from "@/lib/utils/marketplace-query";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
@@ -385,9 +380,7 @@ export async function GET(request: NextRequest) {
         sellers?.map((seller) => ({
           user_id: seller.user_id,
           display_name: seller.display_name,
-          trust: computeTrustLevel(
-            (seller.seller_verification_status ?? "unverified") as SellerVerificationStatus
-          ),
+          trust: computeTrustLevel(seller.seller_verification_status ?? null),
         })) ?? [],
       businesses: businesses ?? [],
       total: count ?? 0,

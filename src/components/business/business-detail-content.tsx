@@ -36,6 +36,7 @@ import {
   type BusinessCategory,
   type BusinessType,
   type PromotionType,
+  type TrustLevel,
 } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import {
@@ -95,7 +96,7 @@ export interface BusinessPromotionRecord {
   title: string;
   promotion_type: string;
   category: string | null;
-  category_key: string | null;
+  category_key: BusinessCategory | null;
   photos: string[] | null;
   videos: string[] | null;
   video_thumbnail: string | null;
@@ -520,7 +521,7 @@ export function BusinessDetailContent({
   showPublicActions = true,
 }: {
   business: BusinessDetailRecord;
-  trustLevel: number | null;
+  trustLevel: TrustLevel | null;
   seller: BusinessSellerRecord | null;
   linkedMall: BusinessLinkedMallRecord | null;
   promotions?: BusinessPromotionRecord[];

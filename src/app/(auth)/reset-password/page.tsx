@@ -23,9 +23,13 @@ export default function ResetPasswordPage() {
   // Check if the user has a valid recovery session (set by the reset link)
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSessionValid(!!session);
-    });
+
+    async function checkSession() {
+      const { data } = await supabase.auth.getSession();
+      setSessionValid(!!data.session);
+    }
+
+    void checkSession();
   }, []);
 
   const {

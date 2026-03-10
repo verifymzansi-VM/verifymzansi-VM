@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { BusinessPreviewCard } from "./business-preview-card";
+import { AutoScrollRail } from "./auto-scroll-rail";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import type { BusinessType } from "@/types/enums";
 
@@ -45,10 +46,12 @@ export async function HomeBusinessShowcase() {
           </Link>
         </div>
 
-        {/* Horizontal scroll on mobile, grid on desktop */}
-        <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:overflow-visible sm:gap-4">
+        <AutoScrollRail ariaLabel="Mzansi Business">
           {items.map((b) => (
-            <div key={b.id} className="min-w-[280px] snap-start shrink-0 sm:min-w-0">
+            <div
+              key={b.id}
+              className="min-w-[280px] max-w-[320px] sm:min-w-[320px] sm:max-w-[320px]"
+            >
               <BusinessPreviewCard
                 href={`/mzansi-business/${b.id}`}
                 imageUrl={b.cover_video || b.cover_photo}
@@ -61,7 +64,7 @@ export async function HomeBusinessShowcase() {
               />
             </div>
           ))}
-        </div>
+        </AutoScrollRail>
       </div>
     </section>
   );

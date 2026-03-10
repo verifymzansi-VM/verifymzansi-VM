@@ -1,23 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
-import { Plus_Jakarta_Sans, DM_Sans } from "next/font/google";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { MobilePostSticker } from "@/components/layout/mobile-post-sticker";
 import "@/styles/globals.css";
-
-const plusJakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-display",
-  display: "swap",
-});
-
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  variable: "--font-body",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -92,7 +79,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en-ZA" suppressHydrationWarning>
-      <body className={`${plusJakarta.variable} ${dmSans.variable} min-h-screen antialiased`}>
+      <body className="min-h-screen antialiased">
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"
