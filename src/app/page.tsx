@@ -72,14 +72,14 @@ export default async function HomePage() {
       {
         "@type": "WebSite",
         name: "VerifyMzansi",
-        url: url || "https://verifymzansi.com",
+        url,
         description:
           "South Africa's verification-first marketplace for classifieds, shops, and business services.",
         potentialAction: {
           "@type": "SearchAction",
           target: {
             "@type": "EntryPoint",
-            urlTemplate: `${url || "https://verifymzansi.com"}/mzansi-market?q={search_term_string}`,
+            urlTemplate: `${url}/mzansi-market?q={search_term_string}`,
           },
           "query-input": "required name=search_term_string",
         },
@@ -87,8 +87,8 @@ export default async function HomePage() {
       {
         "@type": "Organization",
         name: "VerifyMzansi",
-        url: url || "https://verifymzansi.com",
-        logo: `${url || "https://verifymzansi.com"}/icons/icon-512.png`,
+        url,
+        logo: `${url}/icons/icon-512.png`,
         sameAs: [],
         contactPoint: {
           "@type": "ContactPoint",

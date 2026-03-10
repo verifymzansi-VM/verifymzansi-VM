@@ -10,7 +10,9 @@ interface PastEvent {
   id: string;
   title: string;
   price: number | null;
+  negotiable?: boolean;
   imageUrl?: string;
+  posterUrl?: string;
   province: string;
   city: string;
   createdAt: string;
@@ -50,7 +52,9 @@ export function PastEventsAccordion({ events }: { events: PastEvent[] }) {
                 id={event.id}
                 title={event.title}
                 price={event.price}
+                negotiable={event.negotiable}
                 imageUrl={event.imageUrl}
+                posterUrl={event.posterUrl}
                 province={event.province}
                 city={event.city}
                 promotionType="event"

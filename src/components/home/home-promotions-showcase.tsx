@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Megaphone, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
 import type { BusinessCategory, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 
@@ -28,12 +28,7 @@ interface PromotionRow {
 }
 
 export async function HomePromotionsShowcase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !anonKey) return null;
-
-  const supabase = createClient(url, anonKey);
+  const supabase = await createClient();
   const now = new Date().toISOString();
 
   const { data } = await supabase

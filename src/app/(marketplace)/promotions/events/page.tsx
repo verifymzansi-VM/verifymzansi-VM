@@ -67,7 +67,7 @@ export default async function EventsPage() {
     .from("promotions")
     .select(
       `id, seller_id, business_id, title, promotion_type,
-       photos, videos, price_cents, price_negotiable, location_province, location_city,
+       photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, view_count, created_at`
     )
     .eq("status", "live")
@@ -209,12 +209,17 @@ export default async function EventsPage() {
         <PastEventsAccordion
           events={past.map((event) => {
             const seller = sellerMap.get(event.seller_id);
+            const videos = event.videos as string[] | null;
+            const photos = event.photos as string[] | null;
             return {
               id: event.id,
               title: event.title,
               price: event.price_cents,
-              imageUrl:
-                (event.photos as string[] | null)?.[0] || (event.videos as string[] | null)?.[0],
+              negotiable: event.price_negotiable as boolean,
+              imageUrl: photos?.[0] || videos?.[0],
+              posterUrl: videos?.[0]
+                ? (event.video_thumbnail as string | null) || photos?.[0] || undefined
+                : undefined,
               province: event.location_province,
               city: event.location_city,
               createdAt: event.created_at,

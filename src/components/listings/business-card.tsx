@@ -149,9 +149,9 @@ export function BusinessCard({
             <div className="absolute bottom-2 right-2 flex items-center gap-1">
               {galleryPhotos && galleryPhotos.length >= 3 && (
                 <div className="flex -space-x-1.5">
-                  {galleryPhotos.slice(0, 3).map((photo, i) => (
+                  {galleryPhotos.slice(0, 3).map((photo) => (
                     <div
-                      key={i}
+                      key={photo}
                       className="w-5 h-5 rounded-full border-2 border-background overflow-hidden bg-warm-200 dark:bg-warm-700"
                     >
                       <Image

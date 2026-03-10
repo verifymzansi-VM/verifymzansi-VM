@@ -10,7 +10,9 @@ interface CountdownBadgeProps {
 }
 
 function getTimeRemaining(endDate: string) {
-  const diff = new Date(endDate).getTime() - Date.now();
+  const end = new Date(endDate).getTime();
+  if (isNaN(end)) return null;
+  const diff = end - Date.now();
   if (diff <= 0) return null;
 
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));

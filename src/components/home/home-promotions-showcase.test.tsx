@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createClient } from "@supabase/supabase-js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createClient } from "@/lib/supabase/server";
 import { HomePromotionsShowcase } from "./home-promotions-showcase";
 
 const { promotionCardSpy } = vi.hoisted(() => ({
@@ -23,7 +23,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("@supabase/supabase-js", () => ({
+vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
@@ -54,16 +54,10 @@ function createSupabaseMock(data: unknown[]) {
 describe("HomePromotionsShowcase", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key-value");
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
   });
 
   it("maps live promotions to presentation props with boost and feature state", async () => {
-    vi.mocked(createClient).mockReturnValue(
+    vi.mocked(createClient).mockResolvedValue(
       createSupabaseMock([
         {
           id: "promo-1",
@@ -103,8 +97,8 @@ describe("HomePromotionsShowcase", () => {
     expect(props.featured).toBe(true);
   });
 
-  it("returns null when Supabase env is absent", async () => {
-    vi.unstubAllEnvs();
+  it("returns null when no promotions exist", async () => {
+    vi.mocked(createClient).mockResolvedValue(createSupabaseMock([]) as never);
 
     const ui = await HomePromotionsShowcase();
     expect(ui).toBeNull();
