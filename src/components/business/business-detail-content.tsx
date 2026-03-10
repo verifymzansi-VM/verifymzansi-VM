@@ -35,6 +35,7 @@ import {
   BUSINESS_TYPE_LABELS,
   type BusinessCategory,
   type BusinessType,
+  type PromotionType,
 } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import {
@@ -754,7 +755,7 @@ export function BusinessDetailContent({
                       )}
                       province={promo.location_province}
                       city={promo.location_city}
-                      promotionType={promo.promotion_type}
+                      promotionType={promo.promotion_type as PromotionType}
                       createdAt={promo.created_at}
                       viewCount={promo.view_count ?? undefined}
                       boosted={promo.boost_until ? new Date(promo.boost_until) > new Date() : false}

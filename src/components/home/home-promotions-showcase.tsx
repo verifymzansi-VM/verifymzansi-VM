@@ -22,6 +22,7 @@ interface PromotionRow {
   view_count: number;
   boost_until: string | null;
   featured_until: string | null;
+  start_date: string | null;
   end_date: string | null;
   created_at: string;
 }
@@ -38,7 +39,7 @@ export async function HomePromotionsShowcase() {
   const { data } = await supabase
     .from("promotions")
     .select(
-      "id, title, price_cents, price_negotiable, category, category_key, photos, videos, video_thumbnail, location_province, location_city, promotion_type, view_count, boost_until, featured_until, end_date, created_at"
+      "id, title, price_cents, price_negotiable, category, category_key, photos, videos, video_thumbnail, location_province, location_city, promotion_type, view_count, boost_until, featured_until, start_date, end_date, created_at"
     )
     .eq("status", "live")
     .order("boost_until", { ascending: false, nullsFirst: false })
@@ -71,6 +72,7 @@ export async function HomePromotionsShowcase() {
           </Button>
         </div>
 
+        {/* Stacked on mobile (1 col), 3-col on desktop */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {promotions.map((promo) => (
             <PromotionCard
@@ -91,7 +93,7 @@ export async function HomePromotionsShowcase() {
               featured={
                 promo.featured_until ? new Date(promo.featured_until) > new Date(now) : false
               }
-              startDate={null}
+              startDate={promo.start_date}
               endDate={promo.end_date}
             />
           ))}

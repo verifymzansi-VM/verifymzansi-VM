@@ -114,9 +114,10 @@ export default async function HomePage() {
         </Suspense>
 
         {/* ═══ Browse by Category ═══ */}
-        <section className="py-5 sm:py-8 border-b border-warm-200 dark:border-warm-800 bg-white dark:bg-warm-950">
+        <section className="py-4 sm:py-6 border-b border-warm-200 dark:border-warm-800 bg-white dark:bg-warm-950">
           <div className="container-page">
-            <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-3">
+            {/* Mobile: horizontal scroll pills  |  Desktop: grid */}
+            <div className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-4 md:grid-cols-8 sm:overflow-visible sm:gap-3">
               {[
                 {
                   label: "Vehicles",
@@ -178,14 +179,14 @@ export default async function HomePage() {
                 <Link
                   key={label}
                   href={href}
-                  className="group flex flex-col items-center gap-2 p-3 rounded-xl border border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-900 hover:shadow-md hover:border-warm-300 dark:hover:border-warm-600 transition-all duration-200"
+                  className="group flex snap-start shrink-0 sm:shrink sm:min-w-0 flex-col items-center gap-1.5 sm:gap-2 p-2.5 sm:p-3 rounded-xl border border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-900 hover:shadow-md hover:border-warm-300 dark:hover:border-warm-600 transition-all duration-200 min-w-[76px] touch-manipulation"
                 >
                   <div
                     className={`flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full ${iconBg} ${iconColor} transition-transform duration-200 group-hover:scale-110`}
                   >
                     <Icon className="h-5 w-5" />
                   </div>
-                  <span className="text-xs font-medium text-center text-foreground leading-tight">
+                  <span className="text-[11px] sm:text-xs font-medium text-center text-foreground leading-tight whitespace-nowrap">
                     {label}
                   </span>
                 </Link>

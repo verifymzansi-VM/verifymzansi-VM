@@ -9,6 +9,7 @@ import { MzansiBusinessFilterSync } from "./filter-sync";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { BusinessDiscoveryBar } from "./discovery-bar";
+import { BusinessFilterDrawer } from "@/components/listings/business-filter-drawer";
 
 export const metadata = {
   title: "Mzansi Business",
@@ -98,7 +99,10 @@ export default async function MzansiBusinessPage() {
       <div className="container-page py-6 space-y-4">
         <PageHeader title="Mzansi Business" breadcrumbs={[{ label: "Mzansi Business" }]} />
 
-        <BusinessDiscoveryBar malls={malls ?? []} />
+        {/* Desktop discovery bar (hidden on mobile — mobile uses the filter drawer) */}
+        <div className="hidden lg:block">
+          <BusinessDiscoveryBar malls={malls ?? []} />
+        </div>
 
         <BusinessCategoryStrip categoryCounts={categoryCounts} />
 
@@ -108,6 +112,9 @@ export default async function MzansiBusinessPage() {
           </Suspense>
         </section>
       </div>
+
+      {/* Mobile filter FAB + drawer */}
+      <BusinessFilterDrawer malls={malls ?? []} />
     </div>
   );
 }

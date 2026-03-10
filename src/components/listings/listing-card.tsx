@@ -77,7 +77,7 @@ function getAttributeHighlights(category: string, attributes?: Record<string, un
       return displayValue ? `${field.label}: ${displayValue}` : null;
     })
     .filter((value): value is string => Boolean(value))
-    .slice(0, 2);
+    .slice(0, 3);
 }
 
 export const ListingCard = memo(function ListingCard({

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { AreaPreviewCard } from "./area-preview-card";
+import { BusinessPreviewCard } from "./business-preview-card";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
+import type { BusinessType } from "@/types/enums";
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
@@ -13,7 +14,7 @@ export async function HomeBusinessShowcase() {
   const { data: businesses } = await supabase
     .from("businesses")
     .select(
-      "id, business_name, cover_photo, cover_video, video_thumbnail, location_province, location_city, description, boost_until, business_type"
+      "id, business_name, cover_photo, cover_video, video_thumbnail, logo_url, business_type, location_province, location_city, boost_until"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS")
@@ -44,20 +45,21 @@ export async function HomeBusinessShowcase() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Horizontal scroll on mobile, grid on desktop */}
+        <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:overflow-visible sm:gap-4">
           {items.map((b) => (
-            <AreaPreviewCard
-              key={b.id}
-              href={`/mzansi-business/${b.id}`}
-              imageUrl={b.cover_video || b.cover_photo}
-              posterUrl={b.video_thumbnail || b.cover_photo || undefined}
-              title={b.business_name}
-              description={b.description}
-              city={b.location_city ?? "South Africa"}
-              provinceCode={provinceCode(b.location_province ?? "ZA")}
-              hasVideo={!!b.cover_video}
-              accentColor="blue"
-            />
+            <div key={b.id} className="min-w-[280px] snap-start shrink-0 sm:min-w-0">
+              <BusinessPreviewCard
+                href={`/mzansi-business/${b.id}`}
+                imageUrl={b.cover_video || b.cover_photo}
+                posterUrl={b.video_thumbnail || b.cover_photo || undefined}
+                logoUrl={b.logo_url}
+                title={b.business_name}
+                businessType={(b.business_type || "general_store") as BusinessType}
+                city={b.location_city ?? "South Africa"}
+                provinceCode={provinceCode(b.location_province ?? "ZA")}
+              />
+            </div>
           ))}
         </div>
       </div>

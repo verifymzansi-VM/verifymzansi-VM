@@ -28,7 +28,15 @@ vi.mock("next/image", () => ({
 }));
 
 vi.mock("@/components/ui/card", () => ({
-  Card: ({ children, trustLevel: _trustLevel, ...props }: { children: React.ReactNode }) => (
+  Card: ({
+    children,
+    trustLevel: _trustLevel,
+    ...props
+  }: {
+    children: React.ReactNode;
+    trustLevel?: unknown;
+    [key: string]: unknown;
+  }) => (
     <div data-testid="card" {...props}>
       {children}
     </div>
@@ -56,6 +64,12 @@ vi.mock("@/lib/utils/format", () => ({
 vi.mock("@/components/ui/video-card-player", () => ({
   VideoCardPlayer: ({ src }: { src: string }) => <div data-testid="video-card-player">{src}</div>,
   isVideoUrl: (url: string | null | undefined) => Boolean(url?.endsWith(".mp4")),
+}));
+
+vi.mock("@/components/ui/countdown-badge", () => ({
+  CountdownBadge: ({ endDate }: { endDate: string }) => (
+    <span data-testid="countdown-badge">Ends {endDate}</span>
+  ),
 }));
 
 const { PromotionCard } = await import("@/components/listings/promotion-card");

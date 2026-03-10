@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useCallback, useTransition, useRef } from "react";
 import { ListingCard } from "@/components/listings/listing-card";
+import { ListingCardList } from "@/components/listings/listing-card-list";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import type { ListingCondition, SellerVerificationStatus } from "@/types/enums";
 import { useMarketplaceStore } from "@/stores";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
-import { PackageOpen, Plus, AlertTriangle } from "lucide-react";
+import { PackageOpen, Plus, AlertTriangle, LayoutGrid, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -60,6 +61,8 @@ interface GridFetchError {
   code?: string;
 }
 
+type ViewMode = "grid" | "list";
+
 export function MzansiMarketGrid() {
   const { filters, page, setPage, resetFilters } = useMarketplaceStore();
   const [listings, setListings] = useState<ListingRow[]>([]);
@@ -67,6 +70,7 @@ export function MzansiMarketGrid() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<GridFetchError | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [, startTransition] = useTransition();
   const fetchGenRef = useRef(0);
 
@@ -292,48 +296,120 @@ export function MzansiMarketGrid() {
             </span>
           )}
         </p>
+
+        {/* View mode toggle */}
+        <div className="flex items-center rounded-lg border border-border p-0.5 gap-0.5">
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            className={`p-1.5 rounded-md transition-colors ${
+              viewMode === "grid"
+                ? "bg-brand-green/10 text-brand-green"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            aria-label="Grid view"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={`p-1.5 rounded-md transition-colors ${
+              viewMode === "list"
+                ? "bg-brand-green/10 text-brand-green"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            aria-label="List view"
+          >
+            <List className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {listings.map((listing, index) => {
-          const videoUrl = listing.videos?.[0];
-          const displayUrl = videoUrl || listing.photos?.[0];
-          const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
-          const seller = sellers.get(listing.seller_id);
-          const trustLevel = computeTrustLevel(
-            (seller?.seller_verification_status ?? null) as SellerVerificationStatus | null
-          );
-          const isBoosted = listing.boost_until
-            ? new Date(listing.boost_until) > new Date()
-            : false;
+      {viewMode === "grid" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {listings.map((listing, index) => {
+            const videoUrl = listing.videos?.[0];
+            const displayUrl = videoUrl || listing.photos?.[0];
+            const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
+            const seller = sellers.get(listing.seller_id);
+            const trustLevel = computeTrustLevel(
+              (seller?.seller_verification_status ?? null) as SellerVerificationStatus | null
+            );
+            const isBoosted = listing.boost_until
+              ? new Date(listing.boost_until) > new Date()
+              : false;
 
-          return (
-            <div
-              key={listing.id}
-              className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
-            >
-              <ListingCard
-                id={listing.id}
-                title={listing.title}
-                price={listing.price_cents ?? 0}
-                negotiable={listing.price_negotiable}
-                imageUrl={displayUrl}
-                posterUrl={posterSrc}
-                province={listing.location_province}
-                city={listing.location_city}
-                category={listing.category}
-                attributes={listing.attributes}
-                condition={listing.condition ?? undefined}
-                createdAt={listing.created_at}
-                sellerTrustLevel={trustLevel}
-                sellerName={seller?.display_name}
-                boosted={isBoosted}
-                featured={listing.featured}
-              />
-            </div>
-          );
-        })}
-      </div>
+            return (
+              <div
+                key={listing.id}
+                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
+              >
+                <ListingCard
+                  id={listing.id}
+                  title={listing.title}
+                  price={listing.price_cents ?? 0}
+                  negotiable={listing.price_negotiable}
+                  imageUrl={displayUrl}
+                  posterUrl={posterSrc}
+                  province={listing.location_province}
+                  city={listing.location_city}
+                  category={listing.category}
+                  attributes={listing.attributes}
+                  condition={listing.condition ?? undefined}
+                  createdAt={listing.created_at}
+                  sellerTrustLevel={trustLevel}
+                  sellerName={seller?.display_name}
+                  boosted={isBoosted}
+                  featured={listing.featured}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {listings.map((listing, index) => {
+            const videoUrl = listing.videos?.[0];
+            const displayUrl = videoUrl || listing.photos?.[0];
+            const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
+            const seller = sellers.get(listing.seller_id);
+            const trustLevel = computeTrustLevel(
+              (seller?.seller_verification_status ?? null) as SellerVerificationStatus | null
+            );
+            const isBoosted = listing.boost_until
+              ? new Date(listing.boost_until) > new Date()
+              : false;
+
+            return (
+              <div
+                key={listing.id}
+                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
+              >
+                <ListingCardList
+                  id={listing.id}
+                  title={listing.title}
+                  price={listing.price_cents ?? 0}
+                  negotiable={listing.price_negotiable}
+                  imageUrl={displayUrl}
+                  posterUrl={posterSrc}
+                  province={listing.location_province}
+                  city={listing.location_city}
+                  category={listing.category}
+                  attributes={listing.attributes}
+                  condition={listing.condition ?? undefined}
+                  createdAt={listing.created_at}
+                  sellerTrustLevel={trustLevel}
+                  sellerName={seller?.display_name}
+                  viewCount={undefined}
+                  boosted={isBoosted}
+                  featured={listing.featured}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 pt-4">

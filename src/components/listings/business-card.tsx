@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Store, MapPin, Wrench, Camera } from "lucide-react";
+import { Store, MapPin, Wrench, Camera, Truck, Globe, Home as HomeIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +51,7 @@ export function BusinessCard({
   category,
   boostUntil,
   featuredUntil,
-  serviceAreas,
+  serviceAreas: _serviceAreas,
 }: BusinessCardProps) {
   const categoryData = BUSINESS_CATEGORIES.find((c) => c.value === category);
   const isBoosted = boostUntil && new Date(boostUntil) > new Date();
@@ -144,9 +144,27 @@ export function BusinessCard({
             </Badge>
           </div>
 
-          {/* Photo count badge */}
+          {/* Gallery preview thumbnails + count */}
           {photoCount > 0 && (
-            <div className="absolute bottom-2 right-2">
+            <div className="absolute bottom-2 right-2 flex items-center gap-1">
+              {galleryPhotos && galleryPhotos.length >= 3 && (
+                <div className="flex -space-x-1.5">
+                  {galleryPhotos.slice(0, 3).map((photo, i) => (
+                    <div
+                      key={i}
+                      className="w-5 h-5 rounded-full border-2 border-background overflow-hidden bg-warm-200 dark:bg-warm-700"
+                    >
+                      <Image
+                        src={normalizeMediaUrl(photo)}
+                        alt=""
+                        width={20}
+                        height={20}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
               <Badge
                 variant="outline"
                 className="bg-background/80 backdrop-blur-sm text-[10px] font-medium gap-1"
@@ -186,9 +204,24 @@ export function BusinessCard({
               <p className="text-sm text-muted-foreground line-clamp-2 flex-1">{description}</p>
             )}
 
-            {/* Mobile service badge */}
-            {businessType === "mobile_service" && serviceAreas && (
-              <p className="text-xs text-brand-blue font-medium">We come to you</p>
+            {/* Business type-specific badge */}
+            {businessType === "mobile_service" && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-brand-blue/10 text-brand-blue text-xs font-medium">
+                <Truck className="h-3 w-3" />
+                We come to you
+              </div>
+            )}
+            {businessType === "online_only" && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs font-medium">
+                <Globe className="h-3 w-3" />
+                Shop Online
+              </div>
+            )}
+            {businessType === "home_business" && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-xs font-medium">
+                <HomeIcon className="h-3 w-3" />
+                Home Business
+              </div>
             )}
 
             {/* Location */}

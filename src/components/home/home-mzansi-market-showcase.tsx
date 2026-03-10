@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { AreaPreviewCard } from "./area-preview-card";
+import { MarketPreviewCard } from "./market-preview-card";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 
 function provinceCode(name: string): string {
@@ -13,7 +13,7 @@ export async function HomeMzansiMarketShowcase() {
   const { data: listings } = await supabase
     .from("listings")
     .select(
-      "id, title, description, price_cents, photos, videos, video_thumbnail, location_province, location_city, boost_until"
+      "id, title, price_cents, photos, videos, video_thumbnail, location_province, location_city, boost_until"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_MARKET")
@@ -45,27 +45,29 @@ export async function HomeMzansiMarketShowcase() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Horizontal scroll on mobile, grid on desktop */}
+        <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:overflow-visible sm:gap-4">
           {items.map((l) => {
             const videoUrl = l.videos?.[0];
             const displayUrl = videoUrl || l.photos?.[0];
             const isBoosted = l.boost_until ? new Date(l.boost_until) > new Date() : false;
             const poster = l.video_thumbnail || l.photos?.[0] || undefined;
             return (
-              <AreaPreviewCard
+              <div
                 key={l.id}
-                href={`/listing/${l.id}`}
-                imageUrl={displayUrl}
-                posterUrl={poster}
-                title={l.title}
-                description={l.description}
-                price={l.price_cents ? l.price_cents / 100 : null}
-                city={l.location_city ?? "South Africa"}
-                provinceCode={provinceCode(l.location_province ?? "ZA")}
-                hasVideo={!!videoUrl}
-                accentColor="green"
-                boosted={isBoosted}
-              />
+                className="min-w-[220px] max-w-[260px] snap-start shrink-0 sm:min-w-0 sm:max-w-none"
+              >
+                <MarketPreviewCard
+                  href={`/listing/${l.id}`}
+                  imageUrl={displayUrl}
+                  posterUrl={poster}
+                  title={l.title}
+                  price={l.price_cents ? l.price_cents / 100 : null}
+                  city={l.location_city ?? "South Africa"}
+                  provinceCode={provinceCode(l.location_province ?? "ZA")}
+                  boosted={isBoosted}
+                />
+              </div>
             );
           })}
         </div>

@@ -3,18 +3,18 @@ import { render, screen } from "@testing-library/react";
 import { HomeMzansiMarketShowcase } from "./home-mzansi-market-showcase";
 import { createClient } from "@/lib/supabase/server";
 
-const { areaCardSpy } = vi.hoisted(() => ({
-  areaCardSpy: vi.fn(),
+const { marketCardSpy } = vi.hoisted(() => ({
+  marketCardSpy: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
-vi.mock("./area-preview-card", () => ({
-  AreaPreviewCard: (props: unknown) => {
-    areaCardSpy(props);
-    return <div data-testid="area-preview-card" />;
+vi.mock("./market-preview-card", () => ({
+  MarketPreviewCard: (props: unknown) => {
+    marketCardSpy(props);
+    return <div data-testid="market-preview-card" />;
   },
 }));
 
@@ -36,14 +36,14 @@ describe("HomeMzansiMarketShowcase", () => {
     vi.clearAllMocks();
   });
 
-  it("prefers listing video when available and flags card as video", async () => {
+  it("prefers listing video when available and passes it as imageUrl", async () => {
     const supabase = createSupabaseMock([
       {
         id: "list-1",
         title: "Laptop",
-        description: "High-end gaming laptop",
         price_cents: 150000,
         videos: ["https://example.com/video.mp4"],
+        video_thumbnail: "https://example.com/thumb.jpg",
         photos: ["https://example.com/photo.jpg"],
         location_city: "Pretoria",
         location_province: "Gauteng",
@@ -55,13 +55,13 @@ describe("HomeMzansiMarketShowcase", () => {
     const ui = await HomeMzansiMarketShowcase();
     render(ui);
 
-    expect(screen.getByTestId("area-preview-card")).toBeInTheDocument();
-    const props = areaCardSpy.mock.calls[0]?.[0] as {
+    expect(screen.getByTestId("market-preview-card")).toBeInTheDocument();
+    const props = marketCardSpy.mock.calls[0]?.[0] as {
       imageUrl: string;
-      hasVideo: boolean;
+      posterUrl: string;
     };
     expect(props.imageUrl).toBe("https://example.com/video.mp4");
-    expect(props.hasVideo).toBe(true);
+    expect(props.posterUrl).toBe("https://example.com/thumb.jpg");
   });
 
   it("falls back to first photo when listing has no video", async () => {
@@ -69,9 +69,9 @@ describe("HomeMzansiMarketShowcase", () => {
       {
         id: "list-2",
         title: "Fridge",
-        description: "Double-door fridge",
         price_cents: 90000,
         videos: [],
+        video_thumbnail: null,
         photos: ["https://example.com/fridge.jpg"],
         location_city: "Durban",
         location_province: "KwaZulu-Natal",
@@ -83,12 +83,10 @@ describe("HomeMzansiMarketShowcase", () => {
     const ui = await HomeMzansiMarketShowcase();
     render(ui);
 
-    const props = areaCardSpy.mock.calls[0]?.[0] as {
+    const props = marketCardSpy.mock.calls[0]?.[0] as {
       imageUrl: string;
-      hasVideo: boolean;
     };
     expect(props.imageUrl).toBe("https://example.com/fridge.jpg");
-    expect(props.hasVideo).toBe(false);
   });
 
   it("returns null when no listings are available", async () => {
