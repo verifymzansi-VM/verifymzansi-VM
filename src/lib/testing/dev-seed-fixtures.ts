@@ -98,27 +98,6 @@ export const DEV_SEED_MEMBERS: DevSeedMember[] = [
     location_province: "Gauteng",
     location_city: "Johannesburg",
   },
-  {
-    email: "dev_seed_seller2@test.com",
-    name: "Dev Seed Member Two",
-    phone: "+27000000011",
-    location_province: "Western Cape",
-    location_city: "Cape Town",
-  },
-  {
-    email: "dev_seed_seller3@test.com",
-    name: "Dev Seed Member Three",
-    phone: "+27000000012",
-    location_province: "KwaZulu-Natal",
-    location_city: "Durban",
-  },
-  {
-    email: "dev_seed_seller4@test.com",
-    name: "Dev Seed Member Four",
-    phone: "+27000000013",
-    location_province: "Eastern Cape",
-    location_city: "Gqeberha",
-  },
 ];
 
 export const DEV_SEED_LISTING_FIXTURES: DevSeedListingFixture[] = [
