@@ -6,6 +6,7 @@ import type {
   MarketplaceArea,
   VerificationStepType,
   VerificationStatus,
+  AccountVerificationStatus,
   SellerVerificationStatus,
   DocumentType,
   LocationMethod,
@@ -27,7 +28,7 @@ import type {
   ReportStatus,
   EnforcementAction,
   AccountStatus,
-  UserRole,
+  CompatibleUserRole,
   DsarType,
   DsarStatus,
   BuyerTokenStatus,
@@ -37,11 +38,13 @@ import type {
 } from "./enums";
 import type { BusinessDetails } from "./business-details";
 
-/* ── Seller Profiles ─────────────────────────────────────── */
-export interface SellerProfile {
+/* ── Account Profiles (compat: seller_profiles) ─────────── */
+export interface AccountProfile {
   id: string;
   user_id: string;
+  owner_id?: string;
   display_name: string;
+  account_verification_status?: AccountVerificationStatus;
   seller_verification_status: SellerVerificationStatus;
   phone: string | null;
   masked_phone_public: string | null;
@@ -58,6 +61,8 @@ export interface SellerProfile {
   created_at: string;
   updated_at: string;
 }
+
+export type SellerProfile = AccountProfile;
 
 /* ── Verification Steps ──────────────────────────────────── */
 export interface VerificationStep {
@@ -193,6 +198,7 @@ export interface Entitlement {
 export interface Listing {
   id: string;
   seller_id: string;
+  owner_id?: string;
   area: MarketplaceArea;
   category: ListingCategory;
   condition: ListingCondition | null;
@@ -227,6 +233,7 @@ export interface Listing {
 export interface Business {
   id: string;
   seller_id: string;
+  owner_id?: string;
   area: MarketplaceArea;
   business_type: BusinessType;
   business_name: string;
@@ -268,6 +275,7 @@ export interface Business {
 export interface Promotion {
   id: string;
   seller_id: string;
+  owner_id?: string;
   business_id: string | null;
   title: string;
   description: string;
@@ -330,6 +338,7 @@ export interface Lead {
   target_id: string;
   target_type: "listing" | "storefront" | "business_profile" | "business";
   seller_id: string;
+  owner_id?: string;
   buyer_name: string | null;
   buyer_email: string | null;
   buyer_phone: string | null;
@@ -345,6 +354,7 @@ export interface ContactEvent {
   target_id: string;
   target_type: string;
   seller_id: string;
+  owner_id?: string;
   seller_verified: boolean;
   contact_type: ContactEventType;
   created_at: string;
@@ -376,6 +386,7 @@ export interface ModerationAction {
   actor_id: string;
   action: EnforcementAction;
   target_seller_id: string;
+  target_owner_id?: string;
   area: MarketplaceArea;
   reason: string;
   duration_days: number | null;
@@ -387,7 +398,7 @@ export interface ModerationAction {
 export interface AuditLog {
   id: string;
   actor_id: string;
-  actor_role: UserRole;
+  actor_role: CompatibleUserRole;
   action: string;
   target_type: string;
   target_id: string;

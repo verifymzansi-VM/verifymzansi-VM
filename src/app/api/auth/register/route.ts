@@ -7,7 +7,11 @@ import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turn
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
-import { buildSellerPhoneFields, normalizeSaPhone } from "@/lib/utils/phone";
+import {
+  ACCOUNT_PHONE_IN_USE_ERROR,
+  buildAccountPhoneFields,
+  normalizeSaPhone,
+} from "@/lib/utils/phone";
 
 const log = createLogger("Register");
 
@@ -61,7 +65,30 @@ export async function POST(request: NextRequest) {
   }
 
   const normalizedPhone = normalizeSaPhone(parsed.data.phone);
-  const sellerPhoneFields = buildSellerPhoneFields(normalizedPhone);
+  const accountPhoneFields = buildAccountPhoneFields(normalizedPhone);
+  const admin = createAdminClient();
+
+  const { data: existingPhoneProfile, error: existingPhoneError } = await admin
+    .from("seller_profiles")
+    .select("id")
+    .eq("phone", normalizedPhone)
+    .maybeSingle();
+
+  if (existingPhoneError) {
+    log.error("Failed to check phone uniqueness during registration", {
+      error: existingPhoneError.message,
+      code: existingPhoneError.code,
+    });
+    return NextResponse.json(
+      { error: "Registration is temporarily unavailable. Please try again." },
+      { status: 500 }
+    );
+  }
+
+  if (existingPhoneProfile) {
+    return NextResponse.json({ error: ACCOUNT_PHONE_IN_USE_ERROR }, { status: 409 });
+  }
+
   const supabase = await createClient();
   const callbackUrl = buildAuthCallbackUrl(request, "/?confirmed=true");
   const { data: signUpData, error } = await supabase.auth.signUp({
@@ -110,23 +137,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   }
 
-  // Create seller profile so downstream flows (dashboard, billing, posting) work
+  // Create the account profile so downstream flows (dashboard, billing, posting) work.
   if (signUpData?.user?.id) {
     try {
-      const admin = createAdminClient();
-      await admin.from("seller_profiles").upsert(
+      const { error: profileError } = await admin.from("seller_profiles").upsert(
         {
           user_id: signUpData.user.id,
           display_name: parsed.data.displayName,
-          ...sellerPhoneFields,
+          ...accountPhoneFields,
+          account_verification_status: "incomplete",
           seller_verification_status: "incomplete",
           account_status: "active",
         },
         { onConflict: "user_id" }
       );
+
+      if (profileError) {
+        if (profileError.code === "23505") {
+          return NextResponse.json({ error: ACCOUNT_PHONE_IN_USE_ERROR }, { status: 409 });
+        }
+
+        throw profileError;
+      }
     } catch (profileError) {
-      // Non-blocking: user can still confirm email; profile can be created later
-      log.warn("Failed to create seller profile on registration", {
+      // Non-blocking: the user can still confirm email; the account profile can be created later.
+      log.warn("Failed to create account profile on registration", {
         userId: signUpData.user.id,
         error: profileError instanceof Error ? profileError.message : "Unknown",
       });

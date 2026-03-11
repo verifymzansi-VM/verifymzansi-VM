@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     "South Africa",
     "marketplace",
     "classifieds",
-    "verified sellers",
+    "verified accounts",
     "buy and sell",
     "Mzansi",
     "trusted marketplace",

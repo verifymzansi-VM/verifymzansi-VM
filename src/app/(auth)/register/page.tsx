@@ -124,7 +124,7 @@ export default function RegisterPage() {
 
       toast({
         title: "Account created!",
-        description: "Check your email to confirm, then start verification.",
+        description: "Check your email to confirm, then complete your account verification.",
         variant: "success",
       });
       const encodedEmail = encodeURIComponent(data.email);

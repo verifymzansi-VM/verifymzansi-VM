@@ -99,7 +99,7 @@ function setupDefaultAdminMocks() {
           }),
         }),
         update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-          if (payload.seller_verification_status) {
+          if (payload.account_verification_status || payload.seller_verification_status) {
             return {
               eq: vi.fn().mockReturnValue({
                 in: vi.fn().mockReturnValue({
@@ -298,7 +298,7 @@ describe("POST /api/verification/upload", () => {
     );
   });
 
-  it("auto-creates seller profile when none exists", async () => {
+  it("auto-creates account profile when none exists", async () => {
     mockAuth({ id: "user-1", email: "seller@example.com" });
 
     const upsertMock = vi.fn().mockReturnValue({
@@ -317,7 +317,7 @@ describe("POST /api/verification/upload", () => {
           }),
           upsert: upsertMock,
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-            if (payload.seller_verification_status) {
+            if (payload.account_verification_status || payload.seller_verification_status) {
               return {
                 eq: vi.fn().mockReturnValue({
                   in: vi.fn().mockReturnValue({
@@ -439,7 +439,7 @@ describe("POST /api/verification/upload", () => {
     expect(mockDeleteFromR2).toHaveBeenCalled();
   });
 
-  it("promotes seller status to pending_review and links the artifact into the session", async () => {
+  it("promotes account status to pending_review and links the artifact into the session", async () => {
     mockAuth({ id: "user-1", email: "test@example.com" });
 
     const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -456,7 +456,7 @@ describe("POST /api/verification/upload", () => {
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-            if (payload.seller_verification_status) {
+            if (payload.account_verification_status || payload.seller_verification_status) {
               return {
                 eq: vi.fn().mockReturnValue({
                   in: vi.fn().mockReturnValue({
@@ -572,7 +572,7 @@ describe("POST /api/verification/upload", () => {
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-            if (payload.seller_verification_status) {
+            if (payload.account_verification_status || payload.seller_verification_status) {
               return {
                 eq: vi.fn().mockReturnValue({
                   in: vi.fn().mockReturnValue({

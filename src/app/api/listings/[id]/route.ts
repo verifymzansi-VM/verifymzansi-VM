@@ -229,7 +229,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // ── Audit log ────────────────────────────────────────────
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: "listing_updated",
       targetType: "listing",
       targetId: listingId,

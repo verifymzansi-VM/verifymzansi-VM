@@ -50,7 +50,9 @@ interface VerificationStep {
   step_type: string;
   status: string;
   created_at: string;
-  seller_display_name: string | null;
+  account_display_name?: string | null;
+  account_verification_status?: string | null;
+  seller_display_name?: string | null;
   seller_verification_status: string | null;
 }
 
@@ -119,6 +121,7 @@ export function KycPreviewLightbox({
   const [reasonNote, setReasonNote] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const displayName = step.account_display_name ?? step.seller_display_name;
 
   const isImage = artifact.content_type.startsWith("image/");
   const isPdf = artifact.content_type === "application/pdf";
@@ -248,7 +251,7 @@ export function KycPreviewLightbox({
               </DialogTitle>
               <DialogDescription className="flex items-center gap-2 mt-1">
                 <span className="font-medium">
-                  {step.seller_display_name || step.user_id.slice(0, 8) + "..."}
+                  {displayName || step.user_id.slice(0, 8) + "..."}
                 </span>
                 <Badge variant="outline" className="text-[10px]">
                   {STEP_LABELS[step.step_type] || step.step_type}
@@ -446,14 +449,14 @@ export function KycPreviewLightbox({
               </Badge>
               <span className="text-xs text-muted-foreground">
                 {STEP_LABELS[step.step_type] || step.step_type} for{" "}
-                {step.seller_display_name || step.user_id.slice(0, 8) + "..."}
+                {displayName || step.user_id.slice(0, 8) + "..."}
               </span>
             </div>
 
             {decision === "approved" ? (
               <p className="text-sm text-muted-foreground">
-                This will mark the step as approved. If all 4 steps are approved, the seller will be
-                verified.
+                This will mark the step as approved. If all 4 steps are approved, the account will
+                be verified.
               </p>
             ) : (
               <div className="space-y-3">

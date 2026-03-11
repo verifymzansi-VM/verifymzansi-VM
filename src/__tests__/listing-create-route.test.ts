@@ -62,7 +62,11 @@ describe("POST /api/listings", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+                seller_verification_status: "verified",
+              },
             }),
           };
         }
@@ -106,7 +110,11 @@ describe("POST /api/listings", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+                seller_verification_status: "verified",
+              },
             }),
           };
         }
@@ -152,7 +160,11 @@ describe("POST /api/listings", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+                seller_verification_status: "verified",
+              },
             }),
           };
         }
@@ -177,7 +189,7 @@ describe("POST /api/listings", () => {
     });
   });
 
-  it("returns verification_required for unverified sellers", async () => {
+  it("returns verification_required for unverified accounts", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
         if (table === "seller_profiles") {
@@ -185,7 +197,11 @@ describe("POST /api/listings", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "incomplete" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "incomplete",
+                seller_verification_status: "incomplete",
+              },
             }),
           };
         }

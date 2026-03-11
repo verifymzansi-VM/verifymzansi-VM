@@ -236,7 +236,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           return;
         }
 
-        // Get seller profile — just check it exists
+        // Get account profile — just check it exists.
         const { data: profile } = await supabase
           .from("seller_profiles")
           .select("id, created_at")
@@ -410,7 +410,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto" />
           <h2 className="font-display text-xl font-bold">Sign In Required</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            You need to be signed in and have a seller profile to post on VerifyMzansi.
+            You need to be signed in and have an account profile to post on VerifyMzansi.
           </p>
           <div className="flex gap-3 justify-center">
             <Button asChild variant="outline">
@@ -427,7 +427,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
     );
   }
 
-  // No seller profile
+  // No account profile
   if (error === "no_profile") {
     return (
       <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
@@ -435,7 +435,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           <ShieldCheck className="h-8 w-8 text-amber-500 mx-auto" />
           <h2 className="font-display text-xl font-bold">Complete Your Profile</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            Set up your seller profile to start posting on VerifyMzansi. It takes less than 5
+            Set up your account profile to start posting on VerifyMzansi. It takes less than 5
             minutes.
           </p>
           <Button asChild className="gap-2">

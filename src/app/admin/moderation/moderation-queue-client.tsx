@@ -273,7 +273,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                 <>
                   {decision === "approve"
                     ? `This will publish "${selectedItem.title || "this item"}" and make it live.`
-                    : `This will reject "${selectedItem.title || "this item"}". The seller will be notified.`}
+                    : `This will reject "${selectedItem.title || "this item"}". The account holder will be notified.`}
                 </>
               )}
             </DialogDescription>

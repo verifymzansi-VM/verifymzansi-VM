@@ -114,7 +114,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // If approved, check if all 4 steps are now approved → update seller to verified
+    // If approved, check if all 4 steps are now approved → update the account to verified
     if (decision === "approved") {
       const { data: allSteps } = await admin
         .from("verification_steps")
@@ -130,7 +130,10 @@ export async function POST(request: Request) {
       if (allApproved) {
         await admin
           .from("seller_profiles")
-          .update({ seller_verification_status: "verified" })
+          .update({
+            account_verification_status: "verified",
+            seller_verification_status: "verified",
+          })
           .eq("user_id", step.user_id);
 
         // Set purge_after = NOW + 30 days on all KYC artifacts for this user
@@ -157,20 +160,27 @@ export async function POST(request: Request) {
             metadata: {
               purge_after: purgeAfter,
               step_count: approvedSteps.length,
+              owner_user_id: step.user_id,
             },
           });
         }
       } else {
         await admin
           .from("seller_profiles")
-          .update({ seller_verification_status: "pending_review" })
+          .update({
+            account_verification_status: "pending_review",
+            seller_verification_status: "pending_review",
+          })
           .eq("user_id", step.user_id)
           .in("seller_verification_status", ["incomplete", "pending_review", "rejected"]);
       }
     } else {
       await admin
         .from("seller_profiles")
-        .update({ seller_verification_status: "rejected" })
+        .update({
+          account_verification_status: "rejected",
+          seller_verification_status: "rejected",
+        })
         .eq("user_id", step.user_id)
         .in("seller_verification_status", ["incomplete", "pending_review", "rejected"]);
     }
@@ -200,11 +210,13 @@ export async function POST(request: Request) {
         overrideReasonCode,
         risk_level: step.risk_level,
         risk_score: step.risk_score,
+        account_user_id: step.user_id,
+        owner_user_id: step.user_id,
         seller_user_id: step.user_id,
       },
     });
 
-    // Notify the seller about the verification decision
+    // Notify the account holder about the verification decision
     try {
       const stepLabel =
         step.step_type === "id_doc"

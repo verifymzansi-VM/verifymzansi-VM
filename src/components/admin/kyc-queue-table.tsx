@@ -49,7 +49,9 @@ interface VerificationStep {
   step_type: string;
   status: string;
   created_at: string;
-  seller_display_name: string | null;
+  account_display_name?: string | null;
+  account_verification_status?: string | null;
+  seller_display_name?: string | null;
   seller_verification_status: string | null;
 }
 
@@ -188,6 +190,7 @@ export function KycQueueTable({
         {steps.map((step) => {
           const StepIcon = STEP_ICONS[step.step_type] || FileCheck;
           const stepLabel = STEP_LABELS[step.step_type] || step.step_type;
+          const displayName = step.account_display_name ?? step.seller_display_name;
 
           return (
             <Card key={step.id}>
@@ -206,7 +209,7 @@ export function KycQueueTable({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium">
-                        {step.seller_display_name || (
+                        {displayName || (
                           <span className="text-muted-foreground">
                             <User className="h-3 w-3 inline mr-1" />
                             {step.user_id.slice(0, 8)}...
@@ -300,7 +303,9 @@ export function KycQueueTable({
                   <strong>{STEP_LABELS[selectedStep.step_type] || selectedStep.step_type}</strong>{" "}
                   for{" "}
                   <strong>
-                    {selectedStep.seller_display_name || selectedStep.user_id.slice(0, 8) + "..."}
+                    {selectedStep.account_display_name ||
+                      selectedStep.seller_display_name ||
+                      selectedStep.user_id.slice(0, 8) + "..."}
                   </strong>
                 </>
               )}
@@ -310,7 +315,7 @@ export function KycQueueTable({
           {decision === "approved" ? (
             <p className="text-sm text-muted-foreground">
               This will mark the step as approved. If all 4 verification steps are now approved, the
-              seller will be marked as verified.
+              account will be marked as verified.
             </p>
           ) : (
             <div className="space-y-4">

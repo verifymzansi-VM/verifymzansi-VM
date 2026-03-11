@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { BusinessDetailContent } from "@/components/business/business-detail-content";
 
 interface BusinessDetailPageProps {
@@ -49,9 +50,9 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
         .data
     : null;
 
-  const { data: seller } = await supabase
+  const { data: ownerProfile } = await supabase
     .from("seller_profiles")
-    .select("display_name, seller_verification_status")
+    .select("display_name, account_verification_status, seller_verification_status")
     .eq("user_id", business.seller_id)
     .maybeSingle();
 
@@ -65,7 +66,9 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
     .order("created_at", { ascending: false })
     .limit(12);
 
-  const trustLevel = seller ? computeTrustLevel(seller.seller_verification_status ?? null) : null;
+  const trustLevel = ownerProfile
+    ? computeTrustLevel(readAccountVerificationStatus(ownerProfile))
+    : null;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -94,7 +97,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
           <BusinessDetailContent
             business={business}
             trustLevel={trustLevel}
-            seller={seller}
+            ownerProfile={ownerProfile}
             linkedMall={linkedMall}
             promotions={promotions ?? []}
           />

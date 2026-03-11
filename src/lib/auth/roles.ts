@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { normalizeUserRole } from "@/lib/account/compat";
 
 type MaybeUser = Pick<User, "app_metadata" | "is_anonymous"> | null | undefined;
 
@@ -25,7 +26,8 @@ export function getRoleFromUser(user: MaybeUser): string | null {
     return null;
   }
 
-  return readRole(user.app_metadata);
+  const rawRole = readRole(user.app_metadata);
+  return normalizeUserRole(rawRole) ?? rawRole;
 }
 
 /** Check whether the given user has the `admin` role. */
@@ -53,5 +55,13 @@ export function asAdminRole(role: string | null): "admin" | "moderator" | null {
  */
 export function requireRole(user: MaybeUser, allowedRoles: ReadonlyArray<string>): boolean {
   const role = getRoleFromUser(user);
-  return role ? allowedRoles.includes(role) : false;
+  if (!role) {
+    return false;
+  }
+
+  if (allowedRoles.includes(role)) {
+    return true;
+  }
+
+  return role === "member" && allowedRoles.includes("seller");
 }

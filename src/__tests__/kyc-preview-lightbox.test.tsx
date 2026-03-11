@@ -107,8 +107,10 @@ const MOCK_STEP = {
   step_type: "id_doc",
   status: "pending",
   created_at: "2025-01-01T00:00:00Z",
-  seller_display_name: "Test Seller",
-  seller_verification_status: "pending",
+  account_display_name: "Test Account",
+  account_verification_status: "pending_review",
+  seller_display_name: "Test Account",
+  seller_verification_status: "pending_review",
 };
 
 const MOCK_ARTIFACT = {
@@ -180,7 +182,7 @@ describe("KycPreviewLightbox", () => {
     });
   });
 
-  it("shows seller name and step type in header", async () => {
+  it("shows the account name and step type in header", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
@@ -188,7 +190,7 @@ describe("KycPreviewLightbox", () => {
 
     await renderOpenLightbox();
 
-    expect(screen.getByText("Test Seller")).toBeDefined();
+    expect(screen.getByText("Test Account")).toBeDefined();
     expect(screen.getByText("ID Document")).toBeDefined();
   });
 

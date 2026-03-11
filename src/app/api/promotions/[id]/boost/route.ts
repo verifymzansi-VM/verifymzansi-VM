@@ -6,6 +6,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { ADDON_PRICES, BOOST_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 
 const log = createLogger("PromotionBoostCheckout");
 
@@ -36,7 +37,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     const admin = createAdminClient();
 
-    // Check seller profile
+    // Check account profile
     const { data: profile } = await admin
       .from("seller_profiles")
       .select("id")
@@ -44,7 +45,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
     // Check promotion exists and belongs to user
@@ -125,7 +126,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "listing_boosted",
         targetType: "promotion",
         targetId: promotionId,

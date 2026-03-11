@@ -40,7 +40,7 @@ interface FlaggingQueueTableProps {
 const SEVERITY_FILTER = ["all", "high", "standard"] as const;
 
 const ENFORCEMENT_ACTIONS = [
-  { value: "warn", label: "Warn Seller", icon: AlertTriangle, variant: "default" as const },
+  { value: "warn", label: "Warn Account", icon: AlertTriangle, variant: "default" as const },
   { value: "hide", label: "Hide Content", icon: EyeOff, variant: "default" as const },
   { value: "suspend", label: "Suspend Account", icon: Shield, variant: "destructive" as const },
   { value: "ban", label: "Ban Account", icon: Ban, variant: "destructive" as const },
@@ -282,7 +282,7 @@ export function FlaggingQueueTable({ reports, onActionComplete }: FlaggingQueueT
             {action === "ban" && (
               <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3">
                 <p className="text-sm text-destructive font-medium">
-                  Warning: This will permanently ban the seller account and hide all their content.
+                  Warning: This will permanently ban the account and hide all associated content.
                   This action cannot be easily reversed.
                 </p>
               </div>

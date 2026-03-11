@@ -1096,7 +1096,7 @@ export default function EditBusinessPage() {
                     business_details: coerceBusinessDetails(businessType, businessDetails),
                   }}
                   trustLevel={null}
-                  seller={{ display_name: "You" }}
+                  ownerProfile={{ display_name: "You" }}
                   linkedMall={linkedMall ? { id: linkedMall.id, name: linkedMall.name } : null}
                   promotions={[]}
                   showPromotions={false}

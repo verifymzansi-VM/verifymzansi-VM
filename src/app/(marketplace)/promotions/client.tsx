@@ -67,7 +67,7 @@ interface PromotionRow {
   created_at: string;
 }
 
-interface SellerSummary {
+interface AccountProfileSummary {
   user_id: string;
   display_name: string;
   trust: TrustLevel;
@@ -80,7 +80,8 @@ interface BusinessSummary {
 
 interface PromotionsResponse {
   promotions?: PromotionRow[];
-  sellers?: SellerSummary[];
+  accountProfiles?: AccountProfileSummary[];
+  sellers?: AccountProfileSummary[];
   businesses?: BusinessSummary[];
   total?: number;
   page?: number;
@@ -130,6 +131,7 @@ export function PromotionsExplorer() {
   const currentSearchParams = useMemo(() => new URLSearchParams(searchParamKey), [searchParamKey]);
   const [response, setResponse] = useState<PromotionsResponse>({
     promotions: [],
+    accountProfiles: [],
     sellers: [],
     businesses: [],
     total: 0,
@@ -214,6 +216,7 @@ export function PromotionsExplorer() {
           setError(payload.error || "Failed to load promotions.");
           setResponse({
             promotions: [],
+            accountProfiles: [],
             sellers: [],
             businesses: [],
             total: 0,
@@ -232,6 +235,7 @@ export function PromotionsExplorer() {
         setError(loadError instanceof Error ? loadError.message : "Failed to load promotions.");
         setResponse({
           promotions: [],
+          accountProfiles: [],
           sellers: [],
           businesses: [],
           total: 0,
@@ -249,9 +253,15 @@ export function PromotionsExplorer() {
     };
   }, [searchParamKey]);
 
-  const sellerMap = useMemo(
-    () => new Map((response.sellers ?? []).map((seller) => [seller.user_id, seller])),
-    [response.sellers]
+  const accountProfileMap = useMemo(
+    () =>
+      new Map(
+        (response.accountProfiles ?? response.sellers ?? []).map((accountProfile) => [
+          accountProfile.user_id,
+          accountProfile,
+        ])
+      ),
+    [response.accountProfiles, response.sellers]
   );
   const businessMap = useMemo(
     () =>
@@ -294,7 +304,7 @@ export function PromotionsExplorer() {
     <div className="container mx-auto px-4 py-6 space-y-5 max-w-7xl">
       <PageHeader
         title="Promotions & Events"
-        description="Deals, promotions, launches, and events from verified South African sellers."
+        description="Deals, promotions, launches, and events from verified South African businesses and advertisers."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Promotions & Events" }]}
       />
 
@@ -699,7 +709,7 @@ export function PromotionsExplorer() {
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {gridPromotions.map((promotion, index) => {
-              const seller = sellerMap.get(promotion.seller_id);
+              const accountProfile = accountProfileMap.get(promotion.seller_id);
               const businessName = promotion.business_id
                 ? businessMap.get(promotion.business_id)
                 : undefined;
@@ -730,8 +740,8 @@ export function PromotionsExplorer() {
                     city={promotion.location_city}
                     promotionType={promotion.promotion_type}
                     createdAt={promotion.created_at}
-                    sellerTrustLevel={seller?.trust}
-                    sellerName={seller?.display_name}
+                    ownerTrustLevel={accountProfile?.trust}
+                    ownerName={accountProfile?.display_name}
                     viewCount={promotion.view_count}
                     boosted={isBoosted}
                     featured={isFeatured}

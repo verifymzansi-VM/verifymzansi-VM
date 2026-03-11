@@ -101,7 +101,7 @@ describe("POST /api/promotions", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 404 when seller profile not found", async () => {
+  it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
       seller_profiles: {
@@ -114,6 +114,9 @@ describe("POST /api/promotions", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Account profile not found",
+    });
   });
 
   it("returns 400 for invalid body", async () => {
@@ -121,7 +124,11 @@ describe("POST /api/promotions", () => {
     mockAdmin({
       seller_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: "sp-1", seller_verification_status: "verified" },
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+            seller_verification_status: "verified",
+          },
         }),
       },
     });
@@ -135,12 +142,16 @@ describe("POST /api/promotions", () => {
     expect(json.error).toBe("Validation failed");
   });
 
-  it("returns verification_required for unverified sellers", async () => {
+  it("returns verification_required for unverified accounts", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
       seller_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: "sp-1", seller_verification_status: "pending_review" },
+          data: {
+            id: "sp-1",
+            account_verification_status: "pending_review",
+            seller_verification_status: "pending_review",
+          },
         }),
       },
     });
@@ -161,7 +172,11 @@ describe("POST /api/promotions", () => {
     mockAdmin({
       seller_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: "sp-1", seller_verification_status: "verified" },
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+            seller_verification_status: "verified",
+          },
         }),
       },
       promotions: {
@@ -184,7 +199,11 @@ describe("POST /api/promotions", () => {
     mockAdmin({
       seller_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: "sp-1", seller_verification_status: "verified" },
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+            seller_verification_status: "verified",
+          },
         }),
       },
       promotions: {
@@ -209,7 +228,11 @@ describe("POST /api/promotions", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "sp-1", seller_verification_status: "verified" },
+              data: {
+                id: "sp-1",
+                account_verification_status: "verified",
+                seller_verification_status: "verified",
+              },
             }),
           };
         }
@@ -253,7 +276,11 @@ describe("POST /api/promotions", () => {
     mockAdmin({
       seller_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: "sp-1", seller_verification_status: "verified" },
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+            seller_verification_status: "verified",
+          },
         }),
       },
     });
@@ -280,7 +307,11 @@ describe("POST /api/promotions", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "sp-1", seller_verification_status: "verified" },
+              data: {
+                id: "sp-1",
+                account_verification_status: "verified",
+                seller_verification_status: "verified",
+              },
             }),
           };
         }
@@ -333,9 +364,21 @@ describe("GET /api/promotions", () => {
     mockAdmin({
       promotions: {
         range: vi.fn().mockResolvedValue({
-          data: [{ id: VALID_UUID, title: "Test" }],
+          data: [{ id: VALID_UUID, title: "Test", seller_id: USER_ID }],
           count: 1,
           error: null,
+        }),
+      },
+      seller_profiles: {
+        in: vi.fn().mockResolvedValue({
+          data: [
+            {
+              user_id: USER_ID,
+              display_name: "Nomsa",
+              account_verification_status: "verified",
+              seller_verification_status: "verified",
+            },
+          ],
         }),
       },
     });
@@ -344,6 +387,10 @@ describe("GET /api/promotions", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.promotions).toHaveLength(1);
+    expect(json.accountProfiles).toMatchObject([
+      { user_id: USER_ID, display_name: "Nomsa", trust: expect.any(Number) },
+    ]);
+    expect(json.sellers).toEqual(json.accountProfiles);
     expect(json.total).toBe(1);
   });
 

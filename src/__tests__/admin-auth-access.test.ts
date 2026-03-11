@@ -94,7 +94,7 @@ describe("Admin auth access control", () => {
       expect(res.status).toBe(401);
     });
 
-    it("returns 403 for seller role", async () => {
+    it("returns 403 for legacy seller role", async () => {
       mockAuth({ id: "seller-1", app_metadata: { role: "seller" } });
       const res = await getEvidence(
         createMockNextRequest(
@@ -205,7 +205,7 @@ describe("Admin auth access control", () => {
       expect(res.status).toBe(401);
     });
 
-    it("returns 403 for seller role", async () => {
+    it("returns 403 for legacy seller role", async () => {
       mockAuth({ id: "seller-1", app_metadata: { role: "seller" } });
       const res = await postDecide(
         createMockNextRequest("http://localhost:3000/api/admin/verification/decide", {

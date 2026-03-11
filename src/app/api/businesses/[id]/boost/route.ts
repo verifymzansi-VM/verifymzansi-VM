@@ -8,6 +8,7 @@ import { ADDON_PRICES, BOOST_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 
 const log = createLogger("BoostBusiness");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,14 +37,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     const admin = createAdminClient();
 
-    const { data: seller } = await admin
+    const { data: accountProfile } = await admin
       .from("seller_profiles")
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (!seller) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+    if (!accountProfile) {
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
     const { data: business } = await admin
@@ -126,7 +127,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "business_boosted",
         targetType: "business",
         targetId: businessId,

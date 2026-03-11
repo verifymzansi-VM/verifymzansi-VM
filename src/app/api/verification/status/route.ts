@@ -1,4 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  readAccountVerificationStatus,
+} from "@/lib/account/compat";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(_request: NextRequest) {
@@ -15,13 +19,15 @@ export async function GET(_request: NextRequest) {
 
     const { data: profile } = await supabase
       .from("seller_profiles")
-      .select("id, seller_verification_status")
+      .select("id, account_verification_status, seller_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: "No profile found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
+
+    const verificationStatus = readAccountVerificationStatus(profile);
 
     const { data: steps } = await supabase
       .from("verification_steps")
@@ -29,7 +35,8 @@ export async function GET(_request: NextRequest) {
       .eq("user_id", user.id);
 
     return NextResponse.json({
-      overallStatus: profile.seller_verification_status,
+      accountVerificationStatus: verificationStatus,
+      overallStatus: verificationStatus,
       steps: steps || [],
     });
   } catch {

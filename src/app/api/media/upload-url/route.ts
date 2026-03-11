@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateStorageKey, generatePresignedUploadUrl } from "@/lib/services/storage";
 import { createLogger } from "@/lib/utils/logger";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 import { UPLOAD_AREAS } from "@/types/enums";
 
 const log = createLogger("MediaUploadUrl");
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ── Get seller profile ───────────────────────────────────
+    // ── Get account profile ──────────────────────────────────
     const { data: profile } = await supabase
       .from("seller_profiles")
       .select("id")
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
     // ── Parse request body ───────────────────────────────────

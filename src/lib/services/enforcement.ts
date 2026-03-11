@@ -1,5 +1,5 @@
 /**
- * Enforcement actions — suspend, ban, warn sellers.
+ * Enforcement actions — suspend, ban, or warn accounts.
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -22,8 +22,8 @@ interface EnforceParams {
 }
 
 /**
- * Apply an enforcement action to a seller (warn, suspend, ban, or unban).
- * Updates the seller's account status, creates a moderation record,
+ * Apply an enforcement action to an account (warn, suspend, ban, or unban).
+ * Updates the account status, creates a moderation record,
  * hides all content on ban, and logs an audit event.
  */
 export async function enforceAction(params: EnforceParams) {
@@ -45,12 +45,12 @@ export async function enforceAction(params: EnforceParams) {
       .eq("user_id", params.sellerId)
       .single();
     if (profileErr || !profile) {
-      throw new Error(`Seller profile not found for unban: ${params.sellerId}`);
+      throw new Error(`Account profile not found for unban: ${params.sellerId}`);
     }
     previousStatus = profile.account_status;
   }
 
-  // Update seller account status
+  // Update account status
   const { error } = await supabase
     .from("seller_profiles")
     .update({ account_status: statusMap[params.action] })
@@ -115,12 +115,12 @@ export async function enforceAction(params: EnforceParams) {
   // If unbanned/unsuspended, only reactivate content that was hidden by moderation.
   // We use the previousStatus (read BEFORE the update) to verify they were actually banned/suspended.
   // We only restore content that was hidden AFTER the most recent ban/suspend action
-  // to avoid restoring content that was hidden by the seller or by prior moderation.
+  // to avoid restoring content that was hidden by the account holder or by prior moderation.
   if (
     params.action === "unban" &&
     (previousStatus === "banned" || previousStatus === "suspended")
   ) {
-    // Find the timestamp of the most recent ban/suspend action for this seller
+    // Find the timestamp of the most recent ban/suspend action for this account
     const { data: lastAction } = await supabase
       .from("moderation_actions")
       .select("created_at")

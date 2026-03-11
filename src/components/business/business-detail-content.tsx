@@ -82,7 +82,7 @@ export interface BusinessDetailRecord {
   business_details: BusinessDetails | null;
 }
 
-export interface BusinessSellerRecord {
+export interface BusinessOwnerRecord {
   display_name: string | null;
 }
 
@@ -514,7 +514,7 @@ function BusinessDetailsCard({
 export function BusinessDetailContent({
   business,
   trustLevel,
-  seller,
+  ownerProfile,
   linkedMall,
   promotions = [],
   showPromotions = true,
@@ -522,7 +522,7 @@ export function BusinessDetailContent({
 }: {
   business: BusinessDetailRecord;
   trustLevel: TrustLevel | null;
-  seller: BusinessSellerRecord | null;
+  ownerProfile: BusinessOwnerRecord | null;
   linkedMall: BusinessLinkedMallRecord | null;
   promotions?: BusinessPromotionRecord[];
   showPromotions?: boolean;
@@ -829,7 +829,7 @@ export function BusinessDetailContent({
                   <ShieldCheck className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="font-medium">{seller?.display_name || "Verified Owner"}</p>
+                  <p className="font-medium">{ownerProfile?.display_name || "Verified Owner"}</p>
                   {trustLevel && <TrustBadge level={trustLevel} size="sm" />}
                 </div>
               </div>

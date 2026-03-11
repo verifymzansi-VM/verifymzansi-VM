@@ -58,6 +58,17 @@ const validBody = {
   turnstileToken: "tok-valid",
 };
 
+function createAdminMock(existingPhoneProfile: { id: string } | null = null) {
+  return {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: existingPhoneProfile, error: null }),
+      upsert: mockProfileUpsert,
+    }),
+  };
+}
+
 describe("POST /api/auth/register", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -65,11 +76,7 @@ describe("POST /api/auth/register", () => {
     delete process.env.TURNSTILE_SECRET_KEY;
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
     mockCheckRateLimit.mockResolvedValue({ limited: false });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        upsert: mockProfileUpsert,
-      }),
-    });
+    mockCreateAdminClient.mockReturnValue(createAdminMock() as never);
   });
 
   afterEach(() => {
@@ -112,7 +119,7 @@ describe("POST /api/auth/register", () => {
       email: "user@example.com",
       password: "StrongP@ss1",
       options: {
-        emailRedirectTo: "https://verifymzansi.com/auth/callback?next=%2Flogin%3Fconfirmed%3Dtrue",
+        emailRedirectTo: "https://verifymzansi.com/auth/callback?next=%2F%3Fconfirmed%3Dtrue",
         data: {
           display_name: "Test User",
           phone: "+27821234567",
@@ -125,6 +132,7 @@ describe("POST /api/auth/register", () => {
         display_name: "Test User",
         phone: "+27821234567",
         masked_phone_public: "+27 •••• ••67",
+        account_verification_status: "incomplete",
         seller_verification_status: "incomplete",
         account_status: "active",
       }),
@@ -229,5 +237,16 @@ describe("POST /api/auth/register", () => {
     expect(res.status).toBe(429);
     const body = await res.json();
     expect(body.error).toContain("rate-limited");
+  });
+
+  it("returns 409 when the phone number is already linked to another account", async () => {
+    mockCreateAdminClient.mockReturnValue(createAdminMock({ id: "sp-1" }) as never);
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "This phone number is already linked to another account.",
+    });
   });
 });

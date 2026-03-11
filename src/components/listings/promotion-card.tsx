@@ -25,8 +25,8 @@ interface PromotionCardProps {
   city: string;
   promotionType: PromotionType;
   createdAt: string;
-  sellerTrustLevel?: TrustLevel;
-  sellerName?: string;
+  ownerTrustLevel?: TrustLevel;
+  ownerName?: string;
   viewCount?: number;
   boosted?: boolean;
   featured?: boolean;
@@ -59,8 +59,8 @@ const TYPE_BORDER_ACCENT: Record<PromotionType, string> = {
   general: "hover:border-gray-400 dark:hover:border-gray-600",
 };
 
-function getSellerInitial(name?: string): string {
-  if (!name) return "S";
+function getOwnerInitial(name?: string): string {
+  if (!name) return "A";
   return name.charAt(0).toUpperCase();
 }
 
@@ -92,8 +92,8 @@ export const PromotionCard = memo(function PromotionCard({
   city,
   promotionType,
   createdAt,
-  sellerTrustLevel = 0,
-  sellerName,
+  ownerTrustLevel = 0,
+  ownerName,
   viewCount,
   boosted,
   featured,
@@ -113,7 +113,7 @@ export const PromotionCard = memo(function PromotionCard({
     <Link href={`/promotion/${id}`} className="group block h-full">
       <Card
         className={`h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col ${TYPE_BORDER_ACCENT[promotionType]}`}
-        trustLevel={sellerTrustLevel}
+        trustLevel={ownerTrustLevel}
       >
         {/* Image area */}
         <div className="relative aspect-[4/3] bg-warm-100 dark:bg-warm-800 overflow-hidden shrink-0">
@@ -184,15 +184,15 @@ export const PromotionCard = memo(function PromotionCard({
           )}
 
           {/* Trust badge (bottom-right of image) */}
-          {sellerTrustLevel > 0 && (
+          {ownerTrustLevel > 0 && (
             <div className="absolute bottom-2 right-2">
-              <TrustBadge level={sellerTrustLevel} size="sm" />
+              <TrustBadge level={ownerTrustLevel} size="sm" />
             </div>
           )}
 
-          {/* Seller initial avatar (bottom-left of image) */}
+          {/* Advertiser / owner initial avatar (bottom-left of image) */}
           <div className="absolute bottom-2 left-2 h-7 w-7 rounded-full bg-brand-green text-white text-xs font-bold flex items-center justify-center shadow-md border-2 border-white dark:border-warm-800">
-            {getSellerInitial(sellerName)}
+            {getOwnerInitial(ownerName)}
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { SellerProfile } from "@/types/database";
+import type { AccountProfile } from "@/types/database";
 import type { TrustLevel } from "@/types/enums";
 
 interface AuthUser {
@@ -11,12 +11,12 @@ interface AuthUser {
 
 interface AuthState {
   user: AuthUser | null;
-  profile: SellerProfile | null;
+  profile: AccountProfile | null;
   trustLevel: TrustLevel;
   isLoading: boolean;
 
   setUser: (user: AuthUser | null) => void;
-  setProfile: (profile: SellerProfile | null) => void;
+  setProfile: (profile: AccountProfile | null) => void;
   setTrustLevel: (level: TrustLevel) => void;
   setLoading: (loading: boolean) => void;
   reset: () => void;

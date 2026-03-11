@@ -164,7 +164,7 @@ describe.each([
     expect(body.error).toBe("Unauthorized");
   });
 
-  it("returns 404 when seller profile is not found", async () => {
+  it("returns 404 when account profile is not found", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
 
     const sellerProfileBuilder = {
@@ -180,7 +180,7 @@ describe.each([
     const res = await handler()(makeRequest(), makeParams(VALID_UUID));
     expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.error).toBe("Seller profile not found");
+    expect(body.error).toBe("Account profile not found");
   });
 
   it("returns 403 when user does not own the listing", async () => {

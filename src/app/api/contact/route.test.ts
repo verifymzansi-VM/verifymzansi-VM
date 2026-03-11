@@ -66,8 +66,8 @@ describe("POST /api/contact", () => {
     mockCreateNotification.mockResolvedValue(true);
   });
 
-  it("creates a seller notification for anonymous contact requests", async () => {
-    const sellerId = "11111111-1111-4111-8111-111111111111";
+  it("creates an account holder notification for anonymous contact requests", async () => {
+    const ownerId = "11111111-1111-4111-8111-111111111111";
     const listingId = "22222222-2222-4222-8222-222222222222";
 
     mockFrom.mockImplementation((table: string) => {
@@ -78,7 +78,7 @@ describe("POST /api/contact", () => {
               return {
                 eq: vi.fn().mockReturnValue({
                   single: vi.fn().mockResolvedValue({
-                    data: { seller_id: sellerId },
+                    data: { seller_id: ownerId },
                     error: null,
                   }),
                 }),
@@ -106,7 +106,10 @@ describe("POST /api/contact", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               maybeSingle: vi.fn().mockResolvedValue({
-                data: { seller_verification_status: "verified" },
+                data: {
+                  account_verification_status: "verified",
+                  seller_verification_status: "rejected",
+                },
                 error: null,
               }),
             }),
@@ -140,11 +143,95 @@ describe("POST /api/contact", () => {
       action: "contact:send",
     });
     expect(mockCreateNotification).toHaveBeenCalledWith({
-      userId: sellerId,
+      userId: ownerId,
       type: "info",
       title: "New lead received!",
       message: 'Someone is interested in "Vintage Couch".',
       href: "/dashboard/leads",
     });
+  });
+
+  it("falls back to the legacy seller verification status when the account alias is missing", async () => {
+    const ownerId = "11111111-1111-4111-8111-111111111111";
+    const listingId = "22222222-2222-4222-8222-222222222222";
+    const contactInsert = vi.fn().mockResolvedValue({ error: null });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "listings") {
+        return {
+          select: vi.fn().mockImplementation((fields: string) => {
+            if (fields === "seller_id") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: { seller_id: ownerId },
+                    error: null,
+                  }),
+                }),
+              };
+            }
+
+            if (fields === "title") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: { title: "Vintage Couch" },
+                    error: null,
+                  }),
+                }),
+              };
+            }
+
+            return {};
+          }),
+        };
+      }
+
+      if (table === "seller_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  account_verification_status: null,
+                  seller_verification_status: "verified",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "contact_events") {
+        return {
+          insert: contactInsert,
+        };
+      }
+
+      if (table === "leads") {
+        return {
+          insert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+
+      return {};
+    });
+
+    const response = await POST(
+      createMockRequest({
+        listingId,
+        message: "Hi there, I want to buy this today.",
+        contactMethod: "form",
+        turnstileToken: "token",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(contactInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        seller_verified: true,
+      })
+    );
   });
 });

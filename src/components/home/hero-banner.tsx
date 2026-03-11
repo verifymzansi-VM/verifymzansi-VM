@@ -451,7 +451,7 @@ export function HeroBanner({
           type: "promotion" as const,
           id: promotion.id,
           title: promotion.title,
-          description: promotion.description || "Latest promotion from a verified seller.",
+          description: promotion.description || "Latest promotion from a verified advertiser.",
           location: promotion.location_city || "South Africa",
           mediaUrl: normalizeMediaUrl(
             usesVideo

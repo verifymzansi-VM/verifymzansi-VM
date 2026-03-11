@@ -95,7 +95,7 @@ describe("POST /api/billing/create-checkout", () => {
     const data = await res.json();
 
     expect(res.status).toBe(404);
-    expect(data.error).toBe("Seller profile not found");
+    expect(data.error).toBe("Account profile not found");
   });
 
   it("returns 404 cleanly instead of crashing when plan is not found", async () => {
@@ -137,7 +137,7 @@ describe("POST /api/billing/create-checkout", () => {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({
-            data: { id: "profile-1", display_name: "Test Seller" },
+            data: { id: "profile-1", display_name: "Test Account" },
           }),
         };
       }

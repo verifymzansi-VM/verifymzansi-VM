@@ -72,7 +72,7 @@ describe("proxy middleware — missing Supabase env", () => {
     expect(location.pathname).toBe("/auth/callback");
     expect(location.searchParams.get("code")).toBe("legacy-code");
     expect(location.searchParams.get("type")).toBe("signup");
-    expect(location.searchParams.get("next")).toBe("/login?confirmed=true");
+    expect(location.searchParams.get("next")).toBe("/?confirmed=true");
   });
 
   it("blocks /billing when Supabase not configured", async () => {
@@ -200,7 +200,7 @@ describe("proxy middleware — authenticated routing", () => {
     expect(res.status).toBe(200);
   });
 
-  it("allows /post/create through without seller verification lookup", async () => {
+  it("allows /post/create through without legacy seller verification lookup", async () => {
     mockGetUser.mockResolvedValue({
       data: {
         user: {
@@ -216,7 +216,7 @@ describe("proxy middleware — authenticated routing", () => {
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it("allows legacy /api/post/create paths through middleware without seller gating", async () => {
+  it("allows legacy /api/post/create paths through middleware without legacy seller gating", async () => {
     mockGetUser.mockResolvedValue({
       data: {
         user: {

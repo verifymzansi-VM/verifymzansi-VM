@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { createClient } from "@/lib/supabase/client";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -40,16 +41,18 @@ export function useKycStatus() {
         return;
       }
 
-      // Check seller profile verification status
+      // Check account profile verification status
       const { data: profile } = await supabase
         .from("seller_profiles")
-        .select("seller_verification_status")
+        .select("account_verification_status, seller_verification_status")
         .eq("user_id", user.id)
         .single();
 
-      if (profile?.seller_verification_status === "verified") {
+      const verificationStatus = readAccountVerificationStatus(profile);
+
+      if (verificationStatus === "verified") {
         setStatus("verified");
-      } else if (profile?.seller_verification_status === "rejected") {
+      } else if (verificationStatus === "rejected") {
         setStatus("rejected");
       } else {
         // Check if there are pending steps

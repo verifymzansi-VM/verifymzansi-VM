@@ -26,6 +26,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 import {
   getAdminDashboardStats,
   getAreaCardCounts,
+  getDashboardKycQueue,
+  getExtendedPlatformStats,
   getPendingVerifications,
   getRecentActivity,
   getAreaReports,
@@ -44,6 +46,7 @@ describe("admin-queries", () => {
 
       const stats = await getAdminDashboardStats();
 
+      expect(stats.totalAccounts).toBe(5);
       expect(stats.totalSellers).toBe(5);
       expect(stats.totalListings).toBe(5);
       expect(stats.openReports).toBe(5);
@@ -55,6 +58,7 @@ describe("admin-queries", () => {
 
       const stats = await getAdminDashboardStats();
 
+      expect(stats.totalAccounts).toBe(0);
       expect(stats.totalSellers).toBe(0);
       expect(stats.openReports).toBe(0);
     });
@@ -93,7 +97,7 @@ describe("admin-queries", () => {
       expect(result).toEqual([]);
     });
 
-    it("enriches steps with seller profile data", async () => {
+    it("enriches steps with account profile data", async () => {
       const steps = [
         {
           id: "s1",
@@ -104,7 +108,12 @@ describe("admin-queries", () => {
         },
       ];
       const profiles = [
-        { user_id: "u1", display_name: "Thabo", seller_verification_status: "pending" },
+        {
+          user_id: "u1",
+          display_name: "Thabo",
+          account_verification_status: "pending_review",
+          seller_verification_status: "pending_review",
+        },
       ];
 
       let callCount = 0;
@@ -118,7 +127,49 @@ describe("admin-queries", () => {
 
       const result = await getPendingVerifications();
       expect(result).toHaveLength(1);
+      expect(result[0].account_display_name).toBe("Thabo");
+      expect(result[0].account_verification_status).toBe("pending_review");
       expect(result[0].seller_display_name).toBe("Thabo");
+    });
+  });
+
+  describe("getDashboardKycQueue", () => {
+    it("prefers account verification status when present", async () => {
+      const steps = [
+        {
+          id: "k1",
+          user_id: "u1",
+          step_type: "location",
+          status: "pending",
+          created_at: "2024-01-01",
+        },
+      ];
+      const profiles = [
+        {
+          user_id: "u1",
+          display_name: "Ayanda",
+          account_verification_status: "verified",
+          seller_verification_status: "pending_review",
+          account_status: "active",
+          strikes: 1,
+        },
+      ];
+
+      let callCount = 0;
+      mockFrom.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return createChainableMock({ data: steps });
+        }
+        return createChainableMock({ data: profiles });
+      });
+
+      const result = await getDashboardKycQueue();
+      expect(result).toHaveLength(1);
+      expect(result[0].account_display_name).toBe("Ayanda");
+      expect(result[0].account_verification_status).toBe("verified");
+      expect(result[0].seller_verification_status).toBe("pending_review");
+      expect(result[0].account_strikes).toBe(1);
     });
   });
 
@@ -191,6 +242,18 @@ describe("admin-queries", () => {
       mockFrom.mockReturnValue(createChainableMock({ data: [] }));
       const counts = await getActionsToday();
       expect(counts).toEqual({});
+    });
+  });
+
+  describe("getExtendedPlatformStats", () => {
+    it("counts verified accounts through the neutral-or-legacy verification fields", async () => {
+      mockFrom.mockReturnValue(createChainableMock({ count: 7 }));
+
+      const stats = await getExtendedPlatformStats();
+
+      expect(stats.verifiedAccounts).toBe(7);
+      expect(stats.verifiedSellers).toBe(7);
+      expect(stats.bannedAccounts).toBe(7);
     });
   });
 });

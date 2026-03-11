@@ -11,6 +11,7 @@ import { processKycArtifact } from "@/lib/services/kyc-engine";
 import { logAuditEvent } from "@/lib/services/audit";
 import { validateUploadedFile } from "@/lib/validations/verification";
 import { createLogger } from "@/lib/utils/logger";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 
 const log = createLogger("ProofUpload");
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     const adminClient = createAdminClient();
 
-    // Check seller profile exists
+    // Check account profile exists
     const { data: profile } = await adminClient
       .from("seller_profiles")
       .select("id")
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
     // Upload encrypted file to R2
@@ -244,7 +245,7 @@ export async function POST(request: NextRequest) {
       { onConflict: "user_id" }
     );
 
-    // Update seller profile
+    // Update account profile
     await adminClient
       .from("seller_profiles")
       .update({
@@ -255,14 +256,17 @@ export async function POST(request: NextRequest) {
 
     await adminClient
       .from("seller_profiles")
-      .update({ seller_verification_status: "pending_review" })
+      .update({
+        account_verification_status: "pending_review",
+        seller_verification_status: "pending_review",
+      })
       .eq("user_id", user.id)
       .in("seller_verification_status", ["incomplete", "rejected"]);
 
     // Audit log
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: "kyc_proof_uploaded",
       targetType: "verification_step",
       targetId: step.id,

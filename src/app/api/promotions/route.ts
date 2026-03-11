@@ -12,6 +12,10 @@ import { type MarketplaceArea, type PlanTier, type PromotionEventState } from "@
 import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
 import { normalizeBusinessCategoryParam } from "@/lib/utils/marketplace-query";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  readAccountVerificationStatus,
+} from "@/lib/account/compat";
 import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
 
 const log = createLogger("PromotionsCRUD");
@@ -59,7 +63,7 @@ function applyEventStateFilter<T>(query: T, eventState: PromotionEventState, now
  * POST /api/promotions
  *
  * Create a new standalone promotion / advertisement.
- * Requires authenticated, verified seller with a valid entitlement or free post.
+ * Requires an authenticated, verified account with a valid entitlement or free post.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -86,18 +90,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check seller profile exists
+    // Check account profile exists
     const { data: profile } = await admin
       .from("seller_profiles")
-      .select("id, seller_verification_status")
+      .select("id, account_verification_status, seller_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedSeller(profile.seller_verification_status ?? null)) {
+    if (!isVerifiedSeller(readAccountVerificationStatus(profile))) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
@@ -261,7 +265,7 @@ export async function POST(request: NextRequest) {
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "listing_created",
         targetType: "promotion",
         targetId: promotion.id,
@@ -357,31 +361,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch promotions" }, { status: 500 });
     }
 
-    const sellerIds = Array.from(
+    const accountIds = Array.from(
       new Set((promotions ?? []).map((promotion) => promotion.seller_id).filter(Boolean))
     );
     const businessIds = Array.from(
       new Set((promotions ?? []).map((promotion) => promotion.business_id).filter(Boolean))
     ) as string[];
 
-    const { data: sellers } = sellerIds.length
+    const { data: accountProfiles } = accountIds.length
       ? await admin
           .from("seller_profiles")
-          .select("user_id, display_name, seller_verification_status")
-          .in("user_id", sellerIds)
+          .select("user_id, display_name, account_verification_status, seller_verification_status")
+          .in("user_id", accountIds)
       : { data: [] };
     const { data: businesses } = businessIds.length
       ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
       : { data: [] };
 
+    const serializedAccountProfiles =
+      accountProfiles?.map((accountProfile) => ({
+        user_id: accountProfile.user_id,
+        display_name: accountProfile.display_name,
+        trust: computeTrustLevel(readAccountVerificationStatus(accountProfile)),
+      })) ?? [];
+
     return NextResponse.json({
       promotions: promotions ?? [],
-      sellers:
-        sellers?.map((seller) => ({
-          user_id: seller.user_id,
-          display_name: seller.display_name,
-          trust: computeTrustLevel(seller.seller_verification_status ?? null),
-        })) ?? [],
+      accountProfiles: serializedAccountProfiles,
+      sellers: serializedAccountProfiles,
       businesses: businesses ?? [],
       total: count ?? 0,
       page,

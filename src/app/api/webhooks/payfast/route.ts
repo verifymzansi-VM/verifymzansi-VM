@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
 
         await logAuditEvent({
           actorId: existingPayment.user_id || SYSTEM_ACTOR_ID,
-          actorRole: "seller",
+          actorRole: "member",
           action: "listing_boosted",
           targetType: "listing",
           targetId: meta.listing_id as string,
@@ -228,7 +228,7 @@ export async function POST(request: NextRequest) {
 
         await logAuditEvent({
           actorId: existingPayment.user_id || SYSTEM_ACTOR_ID,
-          actorRole: "seller",
+          actorRole: "member",
           action: "business_boosted",
           targetType: "business",
           targetId,
@@ -266,7 +266,7 @@ export async function POST(request: NextRequest) {
 
         await logAuditEvent({
           actorId: existingPayment.user_id || SYSTEM_ACTOR_ID,
-          actorRole: "seller",
+          actorRole: "member",
           action: "storefront_boosted",
           targetType: "storefront",
           targetId: meta.storefront_id as string,
@@ -306,7 +306,7 @@ export async function POST(request: NextRequest) {
 
         await logAuditEvent({
           actorId: existingPayment.user_id || SYSTEM_ACTOR_ID,
-          actorRole: "seller",
+          actorRole: "member",
           action: "listing_featured",
           targetType: "listing",
           targetId: meta.listing_id as string,
@@ -344,7 +344,7 @@ export async function POST(request: NextRequest) {
 
         await logAuditEvent({
           actorId: existingPayment.user_id || SYSTEM_ACTOR_ID,
-          actorRole: "seller",
+          actorRole: "member",
           action: "listing_urgent",
           targetType: "listing",
           targetId: meta.listing_id as string,
@@ -382,7 +382,7 @@ export async function POST(request: NextRequest) {
 
         await logAuditEvent({
           actorId: existingPayment.user_id || SYSTEM_ACTOR_ID,
-          actorRole: "seller",
+          actorRole: "member",
           action: "listing_boosted",
           targetType: "promotion",
           targetId: meta.promotion_id as string,
@@ -422,7 +422,7 @@ export async function POST(request: NextRequest) {
 
         await logAuditEvent({
           actorId: existingPayment.user_id || SYSTEM_ACTOR_ID,
-          actorRole: "seller",
+          actorRole: "member",
           action: "listing_featured",
           targetType: "promotion",
           targetId: meta.promotion_id as string,
@@ -453,7 +453,7 @@ export async function POST(request: NextRequest) {
       }
       await logAuditEvent({
         actorId: existingPayment.user_id || SYSTEM_ACTOR_ID,
-        actorRole: "seller",
+        actorRole: "member",
         action: "payment_completed",
         targetType: "payment",
         targetId: mPaymentId,

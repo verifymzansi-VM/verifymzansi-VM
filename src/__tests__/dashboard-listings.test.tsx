@@ -81,7 +81,7 @@ describe("ListingsPage", () => {
     // Setup valid user
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "u-123" } } });
 
-    // Simulate user who doesn't have a seller profile (returns null)
+    // Simulate user who doesn't have an account profile (returns null)
     const queryBuilderProfile = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),

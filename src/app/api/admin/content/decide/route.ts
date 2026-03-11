@@ -106,9 +106,9 @@ export async function POST(request: Request) {
       metadata: { decision, area, reason },
     });
 
-    // Notify the seller about the moderation decision
+    // Notify the account holder about the moderation decision
     try {
-      // Get the seller's user_id and content title
+      // Get the account holder's user ID and content title
       const ownerField = table === "listings" ? "seller_id" : "owner_id";
       const titleField =
         table === "listings" ? "title" : table === "storefronts" ? "mall_name" : "business_name";
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
 
       if (contentItem) {
         const record = contentItem as Record<string, unknown>;
-        const sellerId = record[ownerField] as string;
+        const accountHolderId = record[ownerField] as string;
         const contentTitle = (record[titleField] as string)?.slice(0, 40) || "your content";
         const contentLabel =
           table === "listings"
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
 
         if (decision === "approve") {
           await createNotification({
-            userId: sellerId,
+            userId: accountHolderId,
             type: "success",
             title: `${contentLabel} approved!`,
             message: `"${contentTitle}" is now live and visible to buyers.`,
@@ -144,7 +144,7 @@ export async function POST(request: Request) {
           });
         } else {
           await createNotification({
-            userId: sellerId,
+            userId: accountHolderId,
             type: "error",
             title: `${contentLabel} rejected`,
             message: reason

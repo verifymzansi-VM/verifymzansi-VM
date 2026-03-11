@@ -22,7 +22,7 @@ const checkoutSchema = z.object({
  * POST /api/billing/create-checkout
  *
  * Create a PayFast checkout session and return the redirect URL.
- * Requires authenticated user with a seller profile.
+ * Requires an authenticated user with an account profile.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     const { planId } = parsed.data;
 
-    // ── Get seller profile ───────────────────────────────────
+    // ── Get account profile ──────────────────────────────────
     const admin = createAdminClient();
     const { data: profile } = await admin
       .from("seller_profiles")
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: "Account profile not found" }, { status: 404 });
     }
 
     // ── Fetch plan ───────────────────────────────────────────
@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
     // ── Audit log ────────────────────────────────────────────
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: "checkout_initiated",
       targetType: "payment",
       targetId: payment.id,

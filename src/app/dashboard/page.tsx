@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { VerificationProgress } from "@/components/trust/verification-progress";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { AttentionBanner } from "@/components/dashboard/attention-banner";
 import { NeedsAttention } from "@/components/dashboard/needs-attention";
@@ -63,7 +64,7 @@ export default async function DashboardPage() {
     recentLeadsResult,
     recentListingChangesResult,
   ] = await Promise.all([
-    // Seller profile (maybeSingle – new users may not have a profile yet)
+    // Account profile (maybeSingle – new users may not have a profile yet)
     supabase.from("seller_profiles").select("*").eq("user_id", user.id).maybeSingle(),
     // Verification steps
     supabase.from("verification_steps").select("step_type, status").eq("user_id", user.id),
@@ -73,7 +74,7 @@ export default async function DashboardPage() {
       .select("*", { count: "exact", head: true })
       .eq("seller_id", user.id)
       .eq("status", "live"),
-    // All seller listings (for views query + activity)
+    // All listing records for views and activity
     supabase
       .from("listings")
       .select("id, title, status, created_at, updated_at")
@@ -176,7 +177,7 @@ export default async function DashboardPage() {
     (totalViews || 0) > 0 ? ((totalLeadCount / (totalViews || 1)) * 100).toFixed(1) : "0.0";
 
   const trustLevel = computeTrustLevel(
-    profile?.seller_verification_status ?? "incomplete",
+    readAccountVerificationStatus(profile) ?? "incomplete",
     undefined,
     profile?.account_status,
     { strikes: profile?.strikes ?? 0, legalHold: profile?.legal_hold ?? false }
@@ -188,7 +189,7 @@ export default async function DashboardPage() {
       status: s.status as VerificationStatus,
     })) || [];
 
-  const displayName = profile?.display_name || user.user_metadata?.display_name || "Seller";
+  const displayName = profile?.display_name || user.user_metadata?.display_name || "Member";
 
   // Build activity feed from recent leads + listing changes
   const activityItems: ActivityItem[] = [];

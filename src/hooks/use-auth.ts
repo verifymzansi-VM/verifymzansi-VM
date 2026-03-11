@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useRef } from "react";
 import { useAuthStore } from "@/stores/auth-store";
+import { normalizeUserRole, readAccountVerificationStatus } from "@/lib/account/compat";
 import { createClient } from "@/lib/supabase/client";
 import { createLogger } from "@/lib/utils/logger";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
@@ -19,6 +20,14 @@ export function useAuth() {
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
   const fetchedRef = useRef(false);
+
+  function readSessionRole(role: unknown): string {
+    if (typeof role !== "string") {
+      return "user";
+    }
+
+    return normalizeUserRole(role) ?? role;
+  }
 
   const fetchUser = useCallback(async () => {
     // Guard: skip if we already fetched during this component lifecycle.
@@ -45,18 +54,18 @@ export function useAuth() {
           ((authUser.user_metadata?.display_name ?? "") as string) ||
           authUser.email?.split("@")[0] ||
           "User",
-        role: ((authUser.app_metadata?.role ?? "") as string) || "user",
+        role: readSessionRole(authUser.app_metadata?.role),
       });
 
-      // Fetch seller profile
-      const { data: sellerProfile } = await supabase
+      // Fetch account profile
+      const { data: accountProfile } = await supabase
         .from("seller_profiles")
         .select("*")
         .eq("user_id", authUser.id)
         .single();
 
-      if (sellerProfile) {
-        setProfile(sellerProfile);
+      if (accountProfile) {
+        setProfile(accountProfile);
       }
     } catch (err) {
       log.error("Failed to fetch user", {
@@ -85,7 +94,7 @@ export function useAuth() {
             (session.user.user_metadata?.display_name as string) ||
             session.user.email?.split("@")[0] ||
             "User",
-          role: (session.user.app_metadata?.role as string) || "user",
+          role: readSessionRole(session.user.app_metadata?.role),
         });
       } else {
         // If user was previously authenticated and session was lost, reset store.
@@ -116,7 +125,7 @@ export function useAuth() {
   const isAuthenticated = !!user;
   const isAdmin = user?.role === "admin";
   const isModerator = user?.role === "moderator" || isAdmin;
-  const isVerified = profile?.seller_verification_status === "verified";
+  const isVerified = readAccountVerificationStatus(profile) === "verified";
 
   return {
     user,

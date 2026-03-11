@@ -4,11 +4,13 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
 
 // ── Types ────────────────────────────────────────────────────
 
 export interface AdminDashboardStats {
+  totalAccounts: number;
   totalSellers: number;
   totalListings: number;
   openReports: number;
@@ -34,7 +36,9 @@ export interface PendingVerification {
   risk_level: string | null;
   risk_score: number | null;
   auto_status: string | null;
-  seller_display_name: string | null;
+  account_display_name?: string | null;
+  account_verification_status?: string | null;
+  seller_display_name?: string | null;
   seller_verification_status: string | null;
 }
 
@@ -81,6 +85,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   ]);
 
   return {
+    totalAccounts: totalSellers || 0,
     totalSellers: totalSellers || 0,
     totalListings: totalListings || 0,
     openReports: openReports || 0,
@@ -291,7 +296,7 @@ function buildCategoryBreakdown(
     .sort((a, b) => b.count - a.count);
 }
 
-/** Get pending verification steps with seller display name */
+/** Get pending verification steps with account display name */
 export async function getPendingVerifications(limit = 50): Promise<PendingVerification[]> {
   const supabase = createAdminClient();
 
@@ -304,12 +309,12 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
 
   if (!steps?.length) return [];
 
-  // Get seller profiles for each user
+  // Get account profiles for each user
 
   const userIds = Array.from(new Set(steps.map((s) => s.user_id))) as string[];
   const { data: profiles } = await supabase
     .from("seller_profiles")
-    .select("user_id, display_name, seller_verification_status")
+    .select("user_id, display_name, account_verification_status, seller_verification_status")
     .in("user_id", userIds);
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p] as const));
@@ -318,6 +323,8 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
     const profile = profileMap.get(s.user_id);
     return {
       ...s,
+      account_display_name: profile?.display_name || null,
+      account_verification_status: readAccountVerificationStatus(profile),
       seller_display_name: profile?.display_name || null,
       seller_verification_status: profile?.seller_verification_status || null,
     };
@@ -406,7 +413,11 @@ export interface DashboardKycItem {
   risk_level: string | null;
   risk_score: number | null;
   auto_status: string | null;
-  seller_display_name: string | null;
+  account_display_name?: string | null;
+  account_verification_status?: string | null;
+  account_status?: string | null;
+  account_strikes?: number;
+  seller_display_name?: string | null;
   seller_verification_status: string | null;
   seller_account_status: string | null;
   seller_strikes: number;
@@ -431,7 +442,9 @@ export async function getDashboardKycQueue(limit = 50): Promise<DashboardKycItem
 
   const { data: profiles } = await supabase
     .from("seller_profiles")
-    .select("user_id, display_name, seller_verification_status, account_status, strikes")
+    .select(
+      "user_id, display_name, account_verification_status, seller_verification_status, account_status, strikes"
+    )
     .in("user_id", userIds);
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p] as const));
@@ -440,6 +453,10 @@ export async function getDashboardKycQueue(limit = 50): Promise<DashboardKycItem
     const profile = profileMap.get(s.user_id);
     return {
       ...s,
+      account_display_name: profile?.display_name || null,
+      account_verification_status: readAccountVerificationStatus(profile),
+      account_status: profile?.account_status || null,
+      account_strikes: profile?.strikes || 0,
       seller_display_name: profile?.display_name || null,
       seller_verification_status: profile?.seller_verification_status || null,
       seller_account_status: profile?.account_status || null,
@@ -572,6 +589,8 @@ export async function getVerificationStepCounts(): Promise<VerificationStepCount
 }
 
 export interface ExtendedPlatformStats {
+  verifiedAccounts: number;
+  bannedAccounts: number;
   verifiedSellers: number;
   bannedSellers: number;
   liveListings: number;
@@ -582,7 +601,7 @@ export interface ExtendedPlatformStats {
 export async function getExtendedPlatformStats(): Promise<ExtendedPlatformStats> {
   const supabase = createAdminClient();
   const [
-    { count: verifiedSellers },
+    { count: verifiedAccounts },
     { count: bannedSellers },
     { count: liveListings },
     { count: hiddenListings },
@@ -590,7 +609,7 @@ export async function getExtendedPlatformStats(): Promise<ExtendedPlatformStats>
     supabase
       .from("seller_profiles")
       .select("*", { count: "exact", head: true })
-      .eq("seller_verification_status", "verified"),
+      .or("account_verification_status.eq.verified,seller_verification_status.eq.verified"),
     supabase
       .from("seller_profiles")
       .select("*", { count: "exact", head: true })
@@ -599,7 +618,9 @@ export async function getExtendedPlatformStats(): Promise<ExtendedPlatformStats>
     supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "hidden"),
   ]);
   return {
-    verifiedSellers: verifiedSellers || 0,
+    verifiedAccounts: verifiedAccounts || 0,
+    bannedAccounts: bannedSellers || 0,
+    verifiedSellers: verifiedAccounts || 0,
     bannedSellers: bannedSellers || 0,
     liveListings: liveListings || 0,
     hiddenListings: hiddenListings || 0,

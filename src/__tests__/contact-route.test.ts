@@ -45,7 +45,7 @@ function mockAuth(user: { id: string; email?: string } | null) {
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           single: vi.fn().mockResolvedValue({
-            data: { seller_id: "seller-1" },
+            data: { seller_id: "account-owner-1" },
             error: null,
           }),
         }),
@@ -62,7 +62,10 @@ describe("POST /api/contact", () => {
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           maybeSingle: vi.fn().mockResolvedValue({
-            data: { seller_verification_status: "verified" },
+            data: {
+              account_verification_status: "verified",
+              seller_verification_status: "rejected",
+            },
             error: null,
           }),
         }),
@@ -99,7 +102,10 @@ describe("POST /api/contact", () => {
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           maybeSingle: vi.fn().mockResolvedValue({
-            data: { seller_verification_status: "verified" },
+            data: {
+              account_verification_status: "verified",
+              seller_verification_status: "rejected",
+            },
             error: null,
           }),
         }),

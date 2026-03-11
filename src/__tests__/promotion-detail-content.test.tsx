@@ -82,8 +82,9 @@ describe("PromotionDetailContent", () => {
           view_count: 12,
           created_at: "2026-03-08T00:00:00.000Z",
         }}
-        seller={{
+        advertiserProfile={{
           display_name: "You",
+          account_verification_status: null,
           seller_verification_status: null,
           phone: null,
           masked_phone_public: null,

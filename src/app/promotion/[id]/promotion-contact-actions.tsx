@@ -19,15 +19,15 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 interface PromotionContactActionsProps {
   promotionId: string;
   contactMethods: string[];
-  sellerPhone?: string | null;
-  sellerWhatsapp?: string | null;
+  advertiserPhone?: string | null;
+  advertiserWhatsapp?: string | null;
 }
 
 export function PromotionContactActions({
   promotionId,
   contactMethods,
-  sellerPhone,
-  sellerWhatsapp,
+  advertiserPhone,
+  advertiserWhatsapp,
 }: PromotionContactActionsProps) {
   const [showContact, setShowContact] = useState(false);
   const [enquiryOpen, setEnquiryOpen] = useState(false);
@@ -159,14 +159,14 @@ export function PromotionContactActions({
         {contactMethods.includes("call") && (
           <Button className="w-full gap-2" size="lg" onClick={() => setShowContact(true)}>
             <Phone className="h-4 w-4" />
-            {showContact && sellerPhone ? sellerPhone : "Call Seller"}
+            {showContact && advertiserPhone ? advertiserPhone : "Call Advertiser"}
           </Button>
         )}
 
-        {showContact && contactMethods.includes("whatsapp") && sellerWhatsapp && (
+        {showContact && contactMethods.includes("whatsapp") && advertiserWhatsapp && (
           <Button variant="outline" className="w-full gap-2" size="lg" asChild>
             <a
-              href={`https://wa.me/${sellerWhatsapp.replace(/\D/g, "")}`}
+              href={`https://wa.me/${advertiserWhatsapp.replace(/\D/g, "")}`}
               target="_blank"
               rel="noopener noreferrer nofollow ugc"
             >

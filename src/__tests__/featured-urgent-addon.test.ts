@@ -129,7 +129,7 @@ describe("POST /api/listings/[id]/featured", () => {
     expect(res.status).toBe(401);
   });
 
-  // FIX: This now correctly tests "listing not found" (seller profile present, listing absent)
+  // FIX: This now correctly tests "listing not found" (account profile present, listing absent)
   it("returns 404 when listing not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
@@ -147,7 +147,7 @@ describe("POST /api/listings/[id]/featured", () => {
     expect(body.error).toBe("Listing not found");
   });
 
-  it("returns 404 when seller profile not found", async () => {
+  it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
       seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: null }) },
@@ -155,7 +155,7 @@ describe("POST /api/listings/[id]/featured", () => {
     const req = createRequest(`http://localhost:3000/api/listings/${UUID}/featured`);
     const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
     expect(res.status).toBe(404);
-    expect((await res.json()).error).toBe("Seller profile not found");
+    expect((await res.json()).error).toBe("Account profile not found");
   });
 
   it("returns 403 when user does not own listing", async () => {
@@ -295,7 +295,7 @@ describe("POST /api/listings/[id]/urgent", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 404 when seller profile not found", async () => {
+  it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
       seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: null }) },
@@ -303,7 +303,7 @@ describe("POST /api/listings/[id]/urgent", () => {
     const req = createRequest(`http://localhost:3000/api/listings/${UUID}/urgent`);
     const res = await UrgentPOST(req, { params: Promise.resolve({ id: UUID }) });
     expect(res.status).toBe(404);
-    expect((await res.json()).error).toBe("Seller profile not found");
+    expect((await res.json()).error).toBe("Account profile not found");
   });
 
   it("returns 403 when user does not own listing", async () => {
@@ -443,7 +443,7 @@ describe("POST /api/listings/[id]/boost", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 404 when seller profile not found", async () => {
+  it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
       seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: null }) },
@@ -451,7 +451,7 @@ describe("POST /api/listings/[id]/boost", () => {
     const req = createRequest(`http://localhost:3000/api/listings/${UUID}/boost`);
     const res = await BoostPOST(req, { params: Promise.resolve({ id: UUID }) });
     expect(res.status).toBe(404);
-    expect((await res.json()).error).toBe("Seller profile not found");
+    expect((await res.json()).error).toBe("Account profile not found");
   });
 
   it("returns 403 when user does not own listing", async () => {

@@ -25,7 +25,7 @@ const tableMap: Record<string, string> = {
 
 /**
  * POST /api/content/resubmit
- * Allows the seller to resubmit rejected content for moderation after editing.
+ * Allows the account holder to resubmit rejected content for moderation after editing.
  */
 export async function POST(request: Request) {
   try {
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     };
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: (actionMap[targetType] || "listing_updated") as Parameters<
         typeof logAuditEvent
       >[0]["action"],

@@ -9,7 +9,9 @@ interface PendingStep {
   step_type: string;
   status: string;
   created_at: string;
-  seller_display_name: string | null;
+  account_display_name?: string | null;
+  account_verification_status?: string | null;
+  seller_display_name?: string | null;
   seller_verification_status: string | null;
 }
 

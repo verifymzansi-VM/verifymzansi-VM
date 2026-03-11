@@ -16,8 +16,8 @@ interface PastEvent {
   province: string;
   city: string;
   createdAt: string;
-  sellerTrustLevel?: TrustLevel;
-  sellerName?: string;
+  ownerTrustLevel?: TrustLevel;
+  ownerName?: string;
   startDate?: string | null;
   endDate?: string | null;
 }
@@ -59,8 +59,8 @@ export function PastEventsAccordion({ events }: { events: PastEvent[] }) {
                 city={event.city}
                 promotionType="event"
                 createdAt={event.createdAt}
-                sellerTrustLevel={event.sellerTrustLevel}
-                sellerName={event.sellerName}
+                ownerTrustLevel={event.ownerTrustLevel}
+                ownerName={event.ownerName}
                 startDate={event.startDate}
                 endDate={event.endDate}
               />

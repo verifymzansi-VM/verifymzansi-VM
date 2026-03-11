@@ -5,12 +5,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { PastEventsAccordion } from "./past-events-accordion";
 
 export const metadata = {
   title: "Events",
   description:
-    "Discover upcoming events, gatherings, and happenings from verified businesses and sellers across South Africa.",
+    "Discover upcoming events, gatherings, and happenings from verified businesses and advertisers across South Africa.",
 };
 
 export const revalidate = 60;
@@ -75,22 +76,22 @@ export default async function EventsPage() {
     .order("end_date", { ascending: false })
     .limit(24);
 
-  // Gather unique seller IDs for trust levels
+  // Gather unique account IDs for trust levels
   const allEvents = [...(events ?? []), ...(pastEvents ?? [])];
-  const sellerIds = [...new Set(allEvents.map((e) => e.seller_id))];
-  const { data: sellers } = sellerIds.length
+  const accountIds = [...new Set(allEvents.map((event) => event.seller_id))];
+  const { data: accountProfiles } = accountIds.length
     ? await admin
         .from("seller_profiles")
-        .select("user_id, display_name, seller_verification_status")
-        .in("user_id", sellerIds)
+        .select("user_id, display_name, account_verification_status, seller_verification_status")
+        .in("user_id", accountIds)
     : { data: [] };
 
-  const sellerMap = new Map(
-    (sellers ?? []).map((s) => [
-      s.user_id,
+  const accountProfileMap = new Map(
+    (accountProfiles ?? []).map((accountProfile) => [
+      accountProfile.user_id,
       {
-        name: s.display_name,
-        trust: computeTrustLevel(s.seller_verification_status ?? null),
+        name: accountProfile.display_name,
+        trust: computeTrustLevel(readAccountVerificationStatus(accountProfile)),
       },
     ])
   );
@@ -143,7 +144,7 @@ export default async function EventsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {group.events.map((event, index) => {
-                  const seller = sellerMap.get(event.seller_id as string);
+                  const accountProfile = accountProfileMap.get(event.seller_id as string);
                   const businessName = event.business_id
                     ? businessMap.get(event.business_id as string)
                     : undefined;
@@ -173,8 +174,8 @@ export default async function EventsPage() {
                         city={event.location_city as string}
                         promotionType="event"
                         createdAt={event.created_at}
-                        sellerTrustLevel={seller?.trust}
-                        sellerName={seller?.name}
+                        ownerTrustLevel={accountProfile?.trust}
+                        ownerName={accountProfile?.name}
                         viewCount={event.view_count as number}
                         boosted={isBoosted}
                         featured={isFeatured}
@@ -205,7 +206,7 @@ export default async function EventsPage() {
       {past.length > 0 && (
         <PastEventsAccordion
           events={past.map((event) => {
-            const seller = sellerMap.get(event.seller_id);
+            const accountProfile = accountProfileMap.get(event.seller_id);
             const videos = event.videos as string[] | null;
             const photos = event.photos as string[] | null;
             return {
@@ -220,8 +221,8 @@ export default async function EventsPage() {
               province: event.location_province,
               city: event.location_city,
               createdAt: event.created_at,
-              sellerTrustLevel: seller?.trust,
-              sellerName: seller?.name,
+              ownerTrustLevel: accountProfile?.trust,
+              ownerName: accountProfile?.name,
               startDate: event.start_date,
               endDate: event.end_date,
             };

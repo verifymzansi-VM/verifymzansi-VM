@@ -24,7 +24,7 @@ export function VerificationAlertBanner({ pendingCount }: VerificationAlertBanne
           </h3>
           <p className="text-sm text-amber-700 dark:text-amber-300 mt-0.5">
             {pendingCount} verification {pendingCount === 1 ? "request" : "requests"} awaiting
-            review. Review promptly to maintain seller trust.
+            review. Review promptly to maintain platform trust.
           </p>
         </div>
         <Link

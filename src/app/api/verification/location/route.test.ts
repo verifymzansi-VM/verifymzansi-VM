@@ -44,7 +44,7 @@ describe("POST /api/verification/location", () => {
     expect(data.error).toBe("Unauthorized");
   });
 
-  it("returns 404 when seller profile is missing", async () => {
+  it("returns 404 when account profile is missing", async () => {
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
@@ -67,7 +67,7 @@ describe("POST /api/verification/location", () => {
     const data = await response.json();
 
     expect(response.status).toBe(404);
-    expect(data.error).toBe("Seller profile not found");
+    expect(data.error).toBe("Account profile not found");
   });
 
   it("returns 500 when verification step upsert fails", async () => {
@@ -107,7 +107,7 @@ describe("POST /api/verification/location", () => {
 
   it("saves location and creates location verification step", async () => {
     const updateMock = vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-      if (payload.seller_verification_status) {
+      if (payload.account_verification_status || payload.seller_verification_status) {
         return {
           eq: vi.fn().mockReturnValue({
             in: vi.fn().mockResolvedValue({ error: null }),
@@ -161,6 +161,10 @@ describe("POST /api/verification/location", () => {
     expect(updateMock).toHaveBeenCalledWith({
       location_province: "Gauteng",
       location_city: "Johannesburg",
+    });
+    expect(updateMock).toHaveBeenCalledWith({
+      account_verification_status: "pending_review",
+      seller_verification_status: "pending_review",
     });
     expect(upsertMock).toHaveBeenCalledWith(
       expect.objectContaining({

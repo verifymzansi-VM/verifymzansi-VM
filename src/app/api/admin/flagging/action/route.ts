@@ -62,8 +62,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    // Get the seller for this target
-    let sellerId: string | null = null;
+    // Get the account holder for this target
+    let ownerId: string | null = null;
 
     if (report.target_type === "listing") {
       const { data: listing, error: listingErr } = await admin
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
           error: listingErr.message,
         });
       }
-      sellerId = listing?.seller_id || null;
+      ownerId = listing?.seller_id || null;
     } else if (
       report.target_type === "storefront" ||
       report.target_type === "business_profile" ||
@@ -94,27 +94,27 @@ export async function POST(request: Request) {
           error: bizErr.message,
         });
       }
-      sellerId = biz?.seller_id || null;
+      ownerId = biz?.seller_id || null;
     }
 
-    // Actions that target a seller require a valid sellerId
-    const sellerRequiredActions = ["warn", "suspend", "ban"];
-    if (sellerRequiredActions.includes(action) && !sellerId) {
+    // Actions that target an account holder require a valid owner reference
+    const ownerTargetedActions = ["warn", "suspend", "ban"];
+    if (ownerTargetedActions.includes(action) && !ownerId) {
       return NextResponse.json(
-        { error: "Target content not found or has no associated seller" },
+        { error: "Target content not found or has no associated account holder" },
         { status: 404 }
       );
     }
 
     // Execute action
-    if (action === "warn" && sellerId) {
-      const { error: rpcErr } = await admin.rpc("increment_strikes", { seller_id_input: sellerId });
+    if (action === "warn" && ownerId) {
+      const { error: rpcErr } = await admin.rpc("increment_strikes", { seller_id_input: ownerId });
       if (rpcErr) {
         // If RPC doesn't exist, do manual update
         await admin
           .from("seller_profiles")
           .update({ account_status: "warned" })
-          .eq("user_id", sellerId);
+          .eq("user_id", ownerId);
       }
     } else if (action === "hide") {
       const tableMap: Record<string, string> = {
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
       if (table) {
         await admin.from(table).update({ status: "hidden" }).eq("id", report.target_id);
       }
-    } else if (action === "suspend" && sellerId) {
+    } else if (action === "suspend" && ownerId) {
       const suspendUntil = new Date();
       suspendUntil.setDate(suspendUntil.getDate() + (durationDays || 7));
 
@@ -137,20 +137,20 @@ export async function POST(request: Request) {
           account_status: "suspended",
           suspended_until: suspendUntil.toISOString(),
         })
-        .eq("user_id", sellerId);
+        .eq("user_id", ownerId);
 
-      // Hide all content for suspended seller
+      // Hide all content for the suspended account holder
       await admin
         .from("listings")
         .update({ status: "hidden" })
-        .eq("seller_id", sellerId)
+        .eq("seller_id", ownerId)
         .eq("status", "live");
       await admin
         .from("businesses")
         .update({ status: "hidden" })
-        .eq("seller_id", sellerId)
+        .eq("seller_id", ownerId)
         .eq("status", "live");
-    } else if (action === "ban" && sellerId) {
+    } else if (action === "ban" && ownerId) {
       await admin
         .from("seller_profiles")
         .update({
@@ -158,11 +158,11 @@ export async function POST(request: Request) {
           banned_at: new Date().toISOString(),
           ban_reason: reason || "Violation of terms",
         })
-        .eq("user_id", sellerId);
+        .eq("user_id", ownerId);
 
       // Hide all content
-      await admin.from("listings").update({ status: "hidden" }).eq("seller_id", sellerId);
-      await admin.from("businesses").update({ status: "hidden" }).eq("seller_id", sellerId);
+      await admin.from("listings").update({ status: "hidden" }).eq("seller_id", ownerId);
+      await admin.from("businesses").update({ status: "hidden" }).eq("seller_id", ownerId);
     }
 
     // Record moderation action
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
       report_id: reportId,
       actor_id: user.id,
       action,
-      target_seller_id: sellerId,
+      target_seller_id: ownerId,
       area: report.area || null,
       reason: reason || null,
       duration_days: action === "suspend" ? durationDays : null,
@@ -209,7 +209,8 @@ export async function POST(request: Request) {
         enforcement_action: action,
         reason,
         durationDays,
-        sellerId,
+        ownerId,
+        sellerId: ownerId,
         target_type: report.target_type,
         target_id: report.target_id,
       },

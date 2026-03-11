@@ -5,7 +5,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { otpVerifySchema } from "@/lib/validations/auth";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
-import { buildSellerPhoneFields, normalizeSaPhone } from "@/lib/utils/phone";
+import {
+  ACCOUNT_PHONE_IN_USE_ERROR,
+  buildAccountPhoneFields,
+  normalizeSaPhone,
+} from "@/lib/utils/phone";
 import { isWhitelistedTestPhone, TEST_OTP_CODE } from "@/lib/utils/test-otp";
 
 const log = createLogger("OTPVerify");
@@ -26,10 +30,10 @@ function getDefaultDisplayName(user: { email?: string | null; user_metadata?: un
   }
 
   if (user.email) {
-    return user.email.split("@")[0] || "New Seller";
+    return user.email.split("@")[0] || "New Member";
   }
 
-  return "New Seller";
+  return "New Member";
 }
 
 /** Convert a hex string to Uint8Array */
@@ -85,9 +89,9 @@ async function verifyOtp(otp: string, storedHash: string): Promise<boolean> {
 async function finalizePhoneVerification(
   adminSupabase: ReturnType<typeof createAdminClient>,
   user: { id: string; email?: string | null; user_metadata?: unknown },
-  sellerPhoneFields: ReturnType<typeof buildSellerPhoneFields>,
+  accountPhoneFields: ReturnType<typeof buildAccountPhoneFields>,
   nowIso: string
-) {
+): Promise<{ success: true } | { success: false; error: string; status: number }> {
   let { data: profile } = await adminSupabase
     .from("seller_profiles")
     .select("id")
@@ -101,7 +105,7 @@ async function finalizePhoneVerification(
         {
           user_id: user.id,
           display_name: getDefaultDisplayName(user),
-          ...sellerPhoneFields,
+          ...accountPhoneFields,
         },
         { onConflict: "user_id" }
       )
@@ -109,17 +113,45 @@ async function finalizePhoneVerification(
       .single();
 
     if (createProfileError) {
-      log.error("Failed to auto-create seller profile during OTP verification", {
+      if (createProfileError.code === "23505") {
+        return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
+      }
+
+      log.error("Failed to auto-create account profile during OTP verification", {
         error: createProfileError.message,
         userId: user.id,
       });
-    } else {
-      profile = createdProfile;
+      return {
+        success: false,
+        error: "Failed to save the verified phone number on your account.",
+        status: 500,
+      };
     }
+
+    profile = createdProfile;
   }
 
   if (profile) {
-    await adminSupabase.from("seller_profiles").update(sellerPhoneFields).eq("id", profile.id);
+    const { error: profileUpdateError } = await adminSupabase
+      .from("seller_profiles")
+      .update(accountPhoneFields)
+      .eq("id", profile.id);
+
+    if (profileUpdateError) {
+      if (profileUpdateError.code === "23505") {
+        return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
+      }
+
+      log.error("Failed to save phone on account profile", {
+        error: profileUpdateError.message,
+        userId: user.id,
+      });
+      return {
+        success: false,
+        error: "Failed to save the verified phone number on your account.",
+        status: 500,
+      };
+    }
   }
 
   const { error: stepsError } = await adminSupabase.from("verification_steps").upsert(
@@ -149,6 +181,8 @@ async function finalizePhoneVerification(
       error: sessionError.message,
     });
   }
+
+  return { success: true };
 }
 
 export async function POST(request: NextRequest) {
@@ -175,7 +209,7 @@ export async function POST(request: NextRequest) {
 
     const { otp } = parsed.data;
     const phone = normalizeSaPhone(parsed.data.phone);
-    const sellerPhoneFields = buildSellerPhoneFields(phone);
+    const accountPhoneFields = buildAccountPhoneFields(phone);
     const supabase = await createClient();
     const {
       data: { user },
@@ -192,7 +226,18 @@ export async function POST(request: NextRequest) {
     const nowIso = now.toISOString();
 
     if (isWhitelistedTestPhone(phone) && otp === TEST_OTP_CODE) {
-      await finalizePhoneVerification(adminSupabase, user, sellerPhoneFields, nowIso);
+      const verificationResult = await finalizePhoneVerification(
+        adminSupabase,
+        user,
+        accountPhoneFields,
+        nowIso
+      );
+      if (!verificationResult.success) {
+        return NextResponse.json(
+          { error: verificationResult.error },
+          { status: verificationResult.status }
+        );
+      }
       log.info("Test phone bypass verified", { phone, userId: user.id });
       return NextResponse.json({ success: true, verified: true, testBypass: true });
     }
@@ -254,7 +299,18 @@ export async function POST(request: NextRequest) {
       .eq("id", challenge.id)
       .is("verified_at", null);
 
-    await finalizePhoneVerification(adminSupabase, user, sellerPhoneFields, nowIso);
+    const verificationResult = await finalizePhoneVerification(
+      adminSupabase,
+      user,
+      accountPhoneFields,
+      nowIso
+    );
+    if (!verificationResult.success) {
+      return NextResponse.json(
+        { error: verificationResult.error },
+        { status: verificationResult.status }
+      );
+    }
 
     return NextResponse.json({ success: true, verified: true });
   } catch (err) {

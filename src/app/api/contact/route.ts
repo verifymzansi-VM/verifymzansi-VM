@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { contactSellerSchema } from "@/lib/validations/contact";
+import { contactAccountHolderSchema } from "@/lib/validations/contact";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { mapLegacyContactMethod } from "@/lib/utils/enum-compat";
 import { createLogger } from "@/lib/utils/logger";
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
     if (!body) {
       return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
     }
-    const parsed = contactSellerSchema.safeParse(body);
+    const parsed = contactAccountHolderSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     // Use admin client for lookups and inserts to bypass RLS on service-only tables
     const admin = createAdminClient();
 
-    // Get the listing's seller (use admin client so unauthenticated users can still contact)
+    // Get the listing owner (use admin client so unauthenticated users can still contact)
     const { data: listing } = await admin
       .from("listings")
       .select("seller_id")
@@ -69,14 +70,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
 
-    // Check seller verification status
-    const { data: sellerProfile } = await admin
+    // Check account verification status
+    const { data: accountProfile } = await admin
       .from("seller_profiles")
-      .select("seller_verification_status")
+      .select("account_verification_status, seller_verification_status")
       .eq("user_id", listing.seller_id)
       .maybeSingle();
 
-    const sellerVerified = sellerProfile?.seller_verification_status === "verified";
+    const ownerVerified = readAccountVerificationStatus(accountProfile) === "verified";
 
     // Map legacy contactMethod values to canonical contact_type
     const contactType = mapLegacyContactMethod(parsed.data.contactMethod);
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
       target_id: parsed.data.listingId,
       target_type: "listing",
       seller_id: listing.seller_id,
-      seller_verified: sellerVerified,
+      seller_verified: ownerVerified,
       contact_type: contactType,
     });
 
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Notify the seller about the new lead/contact
+    // Notify the account holder about the new lead/contact
     try {
       const { data: listingInfo } = await admin
         .from("listings")

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseJsonRequest } from "@/lib/utils/api";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
@@ -59,11 +60,11 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (profileError) {
-      return NextResponse.json({ error: "Failed to load seller profile" }, { status: 500 });
+      return NextResponse.json({ error: "Failed to load account profile" }, { status: 500 });
     }
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
     const { province, city } = parsed.data;
@@ -107,7 +108,10 @@ export async function POST(request: NextRequest) {
 
     await admin
       .from("seller_profiles")
-      .update({ seller_verification_status: "pending_review" })
+      .update({
+        account_verification_status: "pending_review",
+        seller_verification_status: "pending_review",
+      })
       .eq("id", profile.id)
       .in("seller_verification_status", ["incomplete", "rejected"]);
 

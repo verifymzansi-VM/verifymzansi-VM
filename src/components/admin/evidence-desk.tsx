@@ -79,8 +79,9 @@ interface AccessLog {
   accessed_at: string;
 }
 
-interface SellerProfile {
+interface AccountProfile {
   display_name: string;
+  account_verification_status?: string | null;
   seller_verification_status: string;
   account_status: string;
   strikes: number;
@@ -94,7 +95,8 @@ interface EvidenceMetadata {
   artifacts: Artifact[];
   providerResults: ProviderResult[];
   riskSignals: RiskSignal[];
-  sellerProfile: SellerProfile | null;
+  accountProfile?: AccountProfile | null;
+  sellerProfile?: AccountProfile | null;
   accessLog: AccessLog[];
 }
 
@@ -134,6 +136,9 @@ export function EvidenceDeskClient({
   const [metadata, setMetadata] = useState<EvidenceMetadata | null>(null);
   const [selectedStep, setSelectedStep] = useState<EvidenceStep | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
+  const accountProfile = metadata?.accountProfile ?? metadata?.sellerProfile ?? null;
+  const verificationStatus =
+    accountProfile?.account_verification_status ?? accountProfile?.seller_verification_status;
 
   const fetchMetadata = useCallback(
     async (sid?: string, uid?: string) => {
@@ -218,7 +223,7 @@ export function EvidenceDeskClient({
               </Label>
               <Input
                 id="userId"
-                placeholder="Seller user UUID"
+                placeholder="Account user UUID"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
                 className="w-72"
@@ -252,22 +257,21 @@ export function EvidenceDeskClient({
         <div className="grid gap-6 xl:grid-cols-3">
           {/* Left: Steps + Decision Controls */}
           <div className="space-y-4 xl:col-span-1">
-            {/* Seller info */}
-            {metadata.sellerProfile && (
+            {/* Account info */}
+            {accountProfile && (
               <Card className="border-warm-200/70 dark:border-warm-700/70">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Seller Profile</CardTitle>
+                  <CardTitle className="text-sm font-medium">Account Profile</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-1 text-sm">
-                  <p className="font-medium">{metadata.sellerProfile.display_name}</p>
+                  <p className="font-medium">{accountProfile.display_name}</p>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-xs">
-                      {metadata.sellerProfile.seller_verification_status}
+                      {verificationStatus}
                     </Badge>
-                    {metadata.sellerProfile.location_province && (
+                    {accountProfile.location_province && (
                       <span className="text-xs text-muted-foreground">
-                        {metadata.sellerProfile.location_city},{" "}
-                        {metadata.sellerProfile.location_province}
+                        {accountProfile.location_city}, {accountProfile.location_province}
                       </span>
                     )}
                   </div>

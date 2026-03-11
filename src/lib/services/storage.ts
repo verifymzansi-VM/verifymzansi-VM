@@ -188,7 +188,7 @@ export async function generatePresignedDownloadUrl(
  * Documents are encrypted before upload for POPIA compliance.
  *
  * @param file - The KYC document file
- * @param sellerId - The seller's profile ID
+ * @param sellerId - The account profile ID
  * @param docType - Type of document (e.g., "id_document", "selfie_id", "proof_location")
  * @returns Upload result with key for database storage
  */

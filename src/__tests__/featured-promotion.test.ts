@@ -113,7 +113,7 @@ describe("POST /api/promotions/[id]/featured", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 404 when seller profile not found", async () => {
+  it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
       seller_profiles: {

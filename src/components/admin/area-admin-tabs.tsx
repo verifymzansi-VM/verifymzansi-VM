@@ -21,7 +21,9 @@ interface AreaAdminTabsProps {
     step_type: string;
     status: string;
     created_at: string;
-    seller_display_name: string | null;
+    account_display_name?: string | null;
+    account_verification_status?: string | null;
+    seller_display_name?: string | null;
     seller_verification_status: string | null;
   }>;
   pendingContent: Array<{
@@ -182,7 +184,7 @@ export function AreaAdminTabs({
         {/* KYC Queue — Global (D-021) */}
         <div>
           <h3 className="text-sm font-semibold mb-4">
-            Seller KYC Queue{" "}
+            Account KYC Queue{" "}
             <span className="text-xs text-muted-foreground font-normal">(Global — all areas)</span>
           </h3>
           <KycQueueTable steps={pendingVerifications} onDecisionComplete={handleRefresh} />

@@ -565,7 +565,7 @@ export default function EditPromotionPage() {
                     view_count: null,
                     created_at: new Date().toISOString(),
                   }}
-                  seller={{
+                  advertiserProfile={{
                     display_name: "You",
                     seller_verification_status: null,
                     phone: null,

@@ -13,7 +13,8 @@ export type VerificationStepType = "phone" | "id_doc" | "selfie" | "location";
 
 export type VerificationStatus = "pending" | "approved" | "rejected" | "needs_resubmission";
 
-export type SellerVerificationStatus = "incomplete" | "pending_review" | "verified" | "rejected";
+export type AccountVerificationStatus = "incomplete" | "pending_review" | "verified" | "rejected";
+export type SellerVerificationStatus = AccountVerificationStatus;
 
 export type DocumentType = "sa_id_card" | "sa_id_book" | "sa_passport" | "sa_drivers_license";
 
@@ -119,7 +120,8 @@ export type EnforcementAction = "warn" | "hide" | "suspend" | "ban" | "dismiss";
 
 export type AccountStatus = "active" | "warned" | "suspended" | "banned";
 
-export type UserRole = "seller" | "moderator" | "admin";
+export type UserRole = "member" | "moderator" | "admin";
+export type CompatibleUserRole = UserRole | "seller";
 
 export type DsarType = "access" | "correction" | "deletion" | "objection";
 

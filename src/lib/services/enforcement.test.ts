@@ -128,7 +128,7 @@ describe("enforcement service", () => {
     expect(mockFrom).toHaveBeenCalledWith("reports");
   });
 
-  it("throws when unban target seller profile not found", async () => {
+  it("throws when unban target account profile not found", async () => {
     // Override the mock so seller_profiles SELECT returns null
     mockFrom.mockImplementation((table: string) => {
       if (table === "seller_profiles") {
@@ -153,10 +153,10 @@ describe("enforcement service", () => {
         reason: "Reversal",
         moderatorId: "mod-1",
       })
-    ).rejects.toThrow("Seller profile not found for unban");
+    ).rejects.toThrow("Account profile not found for unban");
   });
 
-  it("throws when seller profile update fails", async () => {
+  it("throws when account profile update fails", async () => {
     // Override the mock for this test to return an error
     mockFrom.mockImplementationOnce(() => ({
       update: vi.fn().mockReturnValue({

@@ -6,7 +6,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
  * - Renders search form with step/user ID inputs
  * - Shows empty state when no data loaded
  * - Auto-fetches when initial params provided
- * - Displays metadata, steps, and seller profile on load
+ * - Displays metadata, steps, and account profile on load
  * - Shows error toast on API failure
  */
 
@@ -66,9 +66,20 @@ const METADATA_RESPONSE = {
   ],
   providerResults: [],
   riskSignals: [],
+  accountProfile: {
+    display_name: "Test Account",
+    account_verification_status: "pending_review",
+    seller_verification_status: "pending_review",
+    account_status: "active",
+    strikes: 0,
+    legal_hold: false,
+    location_province: "Gauteng",
+    location_city: "Johannesburg",
+  },
   sellerProfile: {
-    display_name: "Test Seller",
-    seller_verification_status: "pending",
+    display_name: "Test Account",
+    account_verification_status: "pending_review",
+    seller_verification_status: "pending_review",
     account_status: "active",
     strikes: 0,
     legal_hold: false,
@@ -120,10 +131,10 @@ describe("EvidenceDeskClient", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Test Seller")).toBeDefined();
+      expect(screen.getByText("Test Account")).toBeDefined();
     });
 
-    // Seller profile location
+    // Account profile location
     expect(screen.getByText(/Johannesburg/)).toBeDefined();
 
     // Step displayed

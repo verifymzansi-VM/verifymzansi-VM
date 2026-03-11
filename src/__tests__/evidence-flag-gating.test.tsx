@@ -103,7 +103,8 @@ describe("Feature-flag gating: Evidence Desk", () => {
       step_type: "id_doc",
       status: "pending",
       created_at: "2025-01-01T00:00:00Z",
-      seller_display_name: "Test Seller",
+      account_display_name: "Test Account",
+      seller_display_name: "Test Account",
       seller_verification_status: "pending",
     };
 

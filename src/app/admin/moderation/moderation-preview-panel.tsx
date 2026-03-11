@@ -318,12 +318,12 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
           </div>
         )}
 
-        {/* ── Seller Info ──────────────────────────── */}
+        {/* ── Account Info ─────────────────────────── */}
         <Separator />
         <div className="space-y-1.5">
           <h4 className="text-sm font-semibold flex items-center gap-1.5">
             <User className="h-3.5 w-3.5" />
-            Seller
+            Account
           </h4>
           <div className="text-sm text-muted-foreground space-y-1">
             <p>

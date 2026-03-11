@@ -2,7 +2,7 @@ import { z } from "zod";
 import { saPhoneSchema } from "./shared";
 
 /**
- * Zod schema for seller profile updates.
+ * Zod schema for account profile updates.
  * Validates display name, bio, phone (SA format), province, and city.
  */
 export const profileUpdateSchema = z.object({

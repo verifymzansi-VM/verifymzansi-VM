@@ -117,7 +117,7 @@ describe("POST /api/promotions/[id]/boost", () => {
     expect(body.error).toBe("Unauthorized");
   });
 
-  it("returns 404 when seller profile not found", async () => {
+  it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
       seller_profiles: {
@@ -128,7 +128,7 @@ describe("POST /api/promotions/[id]/boost", () => {
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.error).toBe("Seller profile not found");
+    expect(body.error).toBe("Account profile not found");
   });
 
   it("returns 404 when promotion not found", async () => {

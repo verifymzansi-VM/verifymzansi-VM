@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { buildVerificationRedirectUrl, isVerifiedSeller } from "@/app/post/_lib/post-access";
 
 export async function requireVerifiedPostAccess(returnUrl: string) {
@@ -14,11 +15,11 @@ export async function requireVerifiedPostAccess(returnUrl: string) {
 
   const { data: profile } = await supabase
     .from("seller_profiles")
-    .select("seller_verification_status")
+    .select("account_verification_status, seller_verification_status")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!isVerifiedSeller(profile?.seller_verification_status ?? null)) {
+  if (!isVerifiedSeller(readAccountVerificationStatus(profile))) {
     redirect(buildVerificationRedirectUrl(returnUrl));
   }
 }

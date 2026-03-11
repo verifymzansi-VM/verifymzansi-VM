@@ -20,7 +20,7 @@ export default function TermsPage() {
     {
       title: "2. Account Registration",
       content: [
-        "To sell on VerifyMzansi, you must:",
+        "To post on VerifyMzansi, you must:",
         "• Be at least 18 years old",
         "• Provide accurate and truthful information",
         "• Complete identity verification",
@@ -29,11 +29,11 @@ export default function TermsPage() {
       ],
     },
     {
-      title: "3. Seller Obligations",
+      title: "3. Account Posting Obligations",
       content: [
-        "As a seller, you agree to:",
-        "• List only items you legally own or are authorised to sell",
-        "• Provide accurate descriptions, images, and pricing",
+        "As an account holder, you agree to:",
+        "• Post only items, businesses, offers, or events you legally own or are authorised to advertise",
+        "• Provide accurate descriptions, images, pricing, and business details",
         "• Not list prohibited items (weapons, illegal substances, counterfeit goods)",
         "• Comply with the Consumer Protection Act and all applicable SA laws",
       ],
@@ -58,7 +58,7 @@ export default function TermsPage() {
     {
       title: "6. Limitation of Liability",
       content: [
-        "VerifyMzansi connects buyers and sellers — we are not a party to transactions. We do not guarantee quality, safety, or legality of listed items. Liability is limited to the maximum extent permitted by SA law.",
+        "VerifyMzansi connects buyers, account holders, businesses, and advertisers — we are not a party to transactions. We do not guarantee quality, safety, or legality of listed items or promotions. Liability is limited to the maximum extent permitted by SA law.",
       ],
     },
   ];

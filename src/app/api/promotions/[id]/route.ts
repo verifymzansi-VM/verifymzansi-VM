@@ -223,7 +223,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "listing_updated",
         targetType: "promotion",
         targetId: id,
@@ -319,7 +319,7 @@ export async function DELETE(
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "listing_deleted",
         targetType: "promotion",
         targetId: id,

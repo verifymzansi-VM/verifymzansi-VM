@@ -80,7 +80,7 @@ export function VerificationCard({ pendingVerifications, stepCounts }: Verificat
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-bold tracking-tight">Verification (KYC)</h2>
-          <p className="text-xs text-muted-foreground">Seller identity verification requests</p>
+          <p className="text-xs text-muted-foreground">Account identity verification requests</p>
         </div>
         <Badge
           variant={pendingVerifications > 0 ? "destructive" : "secondary"}

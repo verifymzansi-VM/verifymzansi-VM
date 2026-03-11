@@ -18,6 +18,7 @@ import {
 } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
 
 export interface PromotionDetailRecord {
   id: string;
@@ -44,8 +45,9 @@ export interface PromotionDetailRecord {
   created_at: string;
 }
 
-export interface PromotionSellerRecord {
+export interface PromotionAdvertiserRecord {
   display_name: string | null;
+  account_verification_status?: SellerVerificationStatus | null;
   seller_verification_status: SellerVerificationStatus | null;
   phone: string | null;
   masked_phone_public: string | null;
@@ -90,13 +92,13 @@ const CONTACT_METHOD_LABELS: Record<string, string> = {
 
 export function PromotionDetailContent({
   promotion,
-  seller,
+  advertiserProfile,
   linkedBusiness,
   showContactActions = true,
   showContactSummary = false,
 }: {
   promotion: PromotionDetailRecord;
-  seller: PromotionSellerRecord | null;
+  advertiserProfile: PromotionAdvertiserRecord | null;
   linkedBusiness: LinkedBusinessRecord | null;
   showContactActions?: boolean;
   showContactSummary?: boolean;
@@ -116,7 +118,9 @@ export function PromotionDetailContent({
     promotion.category_key,
     promotion.category
   );
-  const trustLevel = seller ? computeTrustLevel(seller.seller_verification_status) : 0;
+  const trustLevel = advertiserProfile
+    ? computeTrustLevel(readAccountVerificationStatus(advertiserProfile))
+    : 0;
 
   return (
     <article className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -322,10 +326,12 @@ export function PromotionDetailContent({
             <h3 className="font-semibold">Advertiser</h3>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-green font-bold text-white">
-                {seller?.display_name?.charAt(0)?.toUpperCase() || "S"}
+                {advertiserProfile?.display_name?.charAt(0)?.toUpperCase() || "A"}
               </div>
               <div>
-                <p className="text-sm font-medium">{seller?.display_name || "Seller"}</p>
+                <p className="text-sm font-medium">
+                  {advertiserProfile?.display_name || "Advertiser"}
+                </p>
                 <TrustBadge level={trustLevel} size="sm" />
               </div>
             </div>
@@ -336,11 +342,13 @@ export function PromotionDetailContent({
               <PromotionContactActions
                 promotionId={promotion.id}
                 contactMethods={contactMethods}
-                sellerPhone={
-                  contactMethods.includes("call") ? (seller?.masked_phone_public ?? null) : null
+                advertiserPhone={
+                  contactMethods.includes("call")
+                    ? (advertiserProfile?.masked_phone_public ?? null)
+                    : null
                 }
-                sellerWhatsapp={
-                  contactMethods.includes("whatsapp") ? (seller?.phone ?? null) : null
+                advertiserWhatsapp={
+                  contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
                 }
               />
             ) : (

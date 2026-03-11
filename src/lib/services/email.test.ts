@@ -44,7 +44,7 @@ describe("email service", () => {
       );
     });
 
-    it("includes seller name in email body", async () => {
+    it("includes the account holder name in email body", async () => {
       await sendVerificationApprovedEmail("user@example.com", "Zanele");
 
       const call = mockSend.mock.calls[0][0];
@@ -100,7 +100,7 @@ describe("email service", () => {
   describe("sendContactFormNotification", () => {
     it("sends contact notification with all details", async () => {
       const result = await sendContactFormNotification(
-        "seller@example.com",
+        "account@example.com",
         "Andile",
         "Buyer Guy",
         "buyer@example.com",

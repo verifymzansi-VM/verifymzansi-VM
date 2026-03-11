@@ -25,7 +25,7 @@ const tableMap: Record<string, string> = {
 
 /**
  * POST /api/content/delete
- * Allows the seller to permanently delete their own content.
+ * Allows the account holder to permanently delete their own content.
  */
 export async function POST(request: Request) {
   try {
@@ -95,13 +95,13 @@ export async function POST(request: Request) {
     };
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: (actionMap[targetType] || "listing_deleted") as Parameters<
         typeof logAuditEvent
       >[0]["action"],
       targetType,
       targetId: itemId,
-      metadata: { action: "seller_delete", area, previousStatus: item.status },
+      metadata: { action: "account_delete", area, previousStatus: item.status },
     });
 
     return NextResponse.json({ success: true });

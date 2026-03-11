@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, User, Save } from "lucide-react";
+import { Loader2, User, Save, ShieldCheck, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,16 +11,20 @@ import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { resetPasswordSchema } from "@/lib/validations/auth";
 import { profileUpdateSchema } from "@/lib/validations/profile";
+import { ACCOUNT_PHONE_IN_USE_ERROR, normalizeSaPhone } from "@/lib/utils/phone";
 
 export default function ProfilePage() {
   const [displayName, setDisplayName] = useState("");
-  const [bio, setBio] = useState("");
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [phone, setPhone] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const provinces = getProvinceNames();
@@ -39,29 +43,27 @@ export default function ProfilePage() {
 
       const { data: profile } = await supabase
         .from("seller_profiles")
-        .select("*")
+        .select("display_name, location_province, location_city, phone")
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (profile) {
         setDisplayName(profile.display_name || "");
-        setBio(profile.bio || "");
         setProvince(profile.location_province || "");
         setCity(profile.location_city || "");
         setPhone(profile.phone || "");
       }
       setIsLoading(false);
     }
-    load();
+
+    void load();
   }, [router]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
 
-    // Client-side validation with Zod schema
     const result = profileUpdateSchema.safeParse({
       displayName,
-      bio: bio || undefined,
       phone: phone || undefined,
       province: province || undefined,
       city: city || undefined,
@@ -89,14 +91,25 @@ export default function ProfilePage() {
         .from("seller_profiles")
         .update({
           display_name: result.data.displayName || null,
-          bio: result.data.bio || null,
           location_province: result.data.province || null,
           location_city: result.data.city || null,
-          phone: result.data.phone || null,
+          phone: result.data.phone ? normalizeSaPhone(result.data.phone) : null,
         })
         .eq("user_id", user.id);
 
       if (error) {
+        if (
+          error.code === "23505" ||
+          error.message?.toLowerCase().includes("phone number already linked")
+        ) {
+          toast({
+            title: "Phone number already in use",
+            description: ACCOUNT_PHONE_IN_USE_ERROR,
+            variant: "destructive",
+          });
+          return;
+        }
+
         toast({
           title: "Failed to save profile",
           description: error.message,
@@ -105,11 +118,63 @@ export default function ProfilePage() {
         return;
       }
 
+      setPhone(result.data.phone ? normalizeSaPhone(result.data.phone) : "");
       toast({ title: "Profile updated!", variant: "success" });
     } catch {
       toast({ title: "Something went wrong", variant: "destructive" });
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handlePasswordUpdate(e: React.FormEvent) {
+    e.preventDefault();
+
+    const result = resetPasswordSchema.safeParse({
+      password: newPassword,
+      confirmPassword,
+    });
+
+    if (!result.success) {
+      toast({
+        title: "Password update failed",
+        description: result.error.issues[0]?.message || "Please check your new password.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({
+        password: result.data.password,
+      });
+
+      if (error) {
+        toast({
+          title: "Failed to update password",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setNewPassword("");
+      setConfirmPassword("");
+      toast({
+        title: "Password updated",
+        description: "Your account password has been changed successfully.",
+        variant: "success",
+      });
+    } catch {
+      toast({
+        title: "Something went wrong",
+        description: "We could not update your password right now.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingPassword(false);
     }
   }
 
@@ -125,7 +190,7 @@ export default function ProfilePage() {
     <div className="space-y-4">
       <PageHeader
         title="My Profile"
-        description="Update your seller display profile."
+        description="Manage your account details, phone number, and password."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Profile" }]}
       />
 
@@ -144,23 +209,11 @@ export default function ProfilePage() {
                 id="displayName"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value.slice(0, 50))}
-                placeholder="How buyers see your name"
+                placeholder="How people see your name"
                 maxLength={50}
                 required
               />
               <p className="text-xs text-muted-foreground">{displayName.length}/50</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="bio">Bio</Label>
-              <textarea
-                id="bio"
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="Tell buyers about yourself..."
-                maxLength={300}
-              />
             </div>
 
             <div className="space-y-2">
@@ -170,11 +223,12 @@ export default function ProfilePage() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="082 000 0000"
-                pattern="^(\+27|0)[6-8][0-9]{8}$"
+                pattern="^(\\+27|0)[6-8][0-9]{8}$"
                 title="Enter a valid SA mobile number (e.g. 071 234 5678)"
               />
               <p className="text-xs text-muted-foreground">
-                SA mobile format: 0XX XXX XXXX or +27XX XXX XXXX
+                Stored privately on your account profile. Each phone number can belong to only one
+                account.
               </p>
             </div>
 
@@ -226,6 +280,55 @@ export default function ProfilePage() {
                 <Save className="h-4 w-4" />
               )}
               Save Profile
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-xl">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ShieldCheck className="h-5 w-5" />
+            Password & Security
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form noValidate onSubmit={handlePasswordUpdate} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New password</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Create a strong password"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm new password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm your new password"
+              />
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Use at least 8 characters with uppercase, lowercase, and a number.
+            </p>
+
+            <Button type="submit" className="gap-2" disabled={isUpdatingPassword}>
+              {isUpdatingPassword ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <KeyRound className="h-4 w-4" />
+              )}
+              Update Password
             </Button>
           </form>
         </CardContent>

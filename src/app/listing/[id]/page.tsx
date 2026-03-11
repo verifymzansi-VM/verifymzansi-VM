@@ -67,7 +67,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
   if (!listing) notFound();
 
-  // Fetch seller profile (maybeSingle — seller account may have been deleted)
+  // Fetch listing owner profile (maybeSingle — the account may have been deleted)
   const { data: seller } = await supabase
     .from("seller_profiles")
     .select(
@@ -95,7 +95,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     .order("created_at", { ascending: false })
     .limit(4);
 
-  // Fetch seller profiles for similar listings
+  // Fetch owner profiles for similar listings
   const similarItems = (similarListings ?? []) as SimilarListingRow[];
   let similarSellers = new Map<string, SimilarSellerRow>();
   if (similarItems.length > 0) {

@@ -43,11 +43,11 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
 
   if (!promotion) notFound();
 
-  // Fetch seller profile (maybeSingle — seller account may have been deleted)
-  const { data: seller } = await supabase
+  // Fetch advertiser profile (maybeSingle — the account may have been deleted)
+  const { data: advertiserProfile } = await supabase
     .from("seller_profiles")
     .select(
-      "display_name, seller_verification_status, phone, masked_phone_public, location_province, location_city, strikes"
+      "display_name, account_verification_status, seller_verification_status, phone, masked_phone_public, location_province, location_city, strikes"
     )
     .eq("user_id", promotion.seller_id)
     .maybeSingle();
@@ -103,7 +103,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
           />
           <PromotionDetailContent
             promotion={promotion}
-            seller={seller}
+            advertiserProfile={advertiserProfile}
             linkedBusiness={linkedBusiness}
           />
         </div>

@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -284,17 +285,19 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     }
   }
 
-  // -- Seller gating: require verified seller for posting -------------------
+  // -- Posting gate: require a verified account for posting -----------------
   if (pathname.startsWith("/post/edit") || pathname.startsWith("/api/post/edit")) {
     if (user) {
       const { data: profile, error: profileError } = await supabase
         .from("seller_profiles")
-        .select("seller_verification_status, account_status, suspended_until")
+        .select(
+          "account_verification_status, seller_verification_status, account_status, suspended_until"
+        )
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (profileError) {
-        logger.error("Seller profile lookup failed during posting gate", {
+        logger.error("Account profile lookup failed during posting gate", {
           path: pathname,
           userId: user.id,
           error: profileError.message,
@@ -333,7 +336,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         }
       }
 
-      if (profile?.seller_verification_status !== "verified") {
+      if (readAccountVerificationStatus(profile) !== "verified") {
         if (isApiRoute)
           return NextResponse.json({ error: "Verification required" }, { status: 403 });
         return NextResponse.redirect(new URL("/verification", request.url));

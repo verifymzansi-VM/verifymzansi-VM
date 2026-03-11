@@ -15,11 +15,11 @@ import { HomePromotionsShowcase } from "@/components/home/home-promotions-showca
 export const metadata: Metadata = {
   title: "VerifyMzansi — SA's Trusted Marketplace",
   description:
-    "Buy & sell with verified sellers. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
+    "Buy, sell, advertise, and discover trusted businesses with verified accounts. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
   openGraph: {
     title: "VerifyMzansi — SA's Trusted Marketplace",
     description:
-      "Buy & sell with verified sellers. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
+      "Buy, sell, advertise, and discover trusted businesses with verified accounts. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
   },
 };
 

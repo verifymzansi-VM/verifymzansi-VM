@@ -23,17 +23,17 @@ vi.mock("@/components/layout/page-header", () => ({
 vi.mock("@/components/listings/promotion-detail-content", () => ({
   PromotionDetailContent: ({
     promotion,
-    seller,
+    advertiserProfile,
     linkedBusiness,
   }: {
     promotion: { title: string; start_date?: string | null; end_date?: string | null };
-    seller: { display_name?: string | null } | null;
+    advertiserProfile: { display_name?: string | null } | null;
     linkedBusiness: { business_name?: string | null } | null;
   }) => (
     <div>
       <div>Promotion Detail Mock</div>
       <div>{promotion.title}</div>
-      <div>{seller?.display_name ?? "No seller"}</div>
+      <div>{advertiserProfile?.display_name ?? "No advertiser"}</div>
       <div>{linkedBusiness?.business_name ?? "No linked business"}</div>
       {promotion.start_date ? <div>Starts {promotion.start_date}</div> : null}
       {promotion.end_date ? <div>Ends {promotion.end_date}</div> : null}
@@ -43,7 +43,7 @@ vi.mock("@/components/listings/promotion-detail-content", () => ({
 
 function buildClient(options?: {
   promotion?: Record<string, unknown> | null;
-  seller?: Record<string, unknown> | null;
+  advertiserProfile?: Record<string, unknown> | null;
   linkedBusiness?: Record<string, unknown> | null;
 }) {
   return {
@@ -64,7 +64,7 @@ function buildClient(options?: {
         return {
           select: () => ({
             eq: () => ({
-              maybeSingle: async () => ({ data: options?.seller ?? null }),
+              maybeSingle: async () => ({ data: options?.advertiserProfile ?? null }),
             }),
           }),
         };
@@ -86,7 +86,7 @@ function buildClient(options?: {
 }
 
 describe("PromotionDetailPage", () => {
-  it("renders the promotion detail content with seller and linked business context", async () => {
+  it("renders the promotion detail content with advertiser and linked business context", async () => {
     mockCreateClient.mockResolvedValue(
       buildClient({
         promotion: {
@@ -102,8 +102,8 @@ describe("PromotionDetailPage", () => {
           end_date: "2099-03-12",
           photos: [],
         },
-        seller: {
-          display_name: "Nomsa Seller",
+        advertiserProfile: {
+          display_name: "Nomsa Advertiser",
           seller_verification_status: "verified",
         },
         linkedBusiness: {
@@ -118,7 +118,7 @@ describe("PromotionDetailPage", () => {
 
     expect(screen.getByText("Promotion Detail Mock")).toBeInTheDocument();
     expect(screen.getAllByText("Night Market")).toHaveLength(2);
-    expect(screen.getByText("Nomsa Seller")).toBeInTheDocument();
+    expect(screen.getByText("Nomsa Advertiser")).toBeInTheDocument();
     expect(screen.getByText("Nomsa Kitchen")).toBeInTheDocument();
     expect(screen.getByText("Starts 2099-03-10")).toBeInTheDocument();
     expect(screen.getByText("Ends 2099-03-12")).toBeInTheDocument();

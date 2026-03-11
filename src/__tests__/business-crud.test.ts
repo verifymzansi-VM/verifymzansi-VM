@@ -65,7 +65,11 @@ describe("POST /api/businesses", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+                seller_verification_status: "verified",
+              },
             }),
           };
         }
@@ -109,7 +113,11 @@ describe("POST /api/businesses", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+                seller_verification_status: "verified",
+              },
             }),
           };
         }
@@ -162,7 +170,11 @@ describe("POST /api/businesses", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+                seller_verification_status: "verified",
+              },
             }),
           };
         }
@@ -221,7 +233,11 @@ describe("POST /api/businesses", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+                seller_verification_status: "verified",
+              },
             }),
           };
         }
@@ -246,7 +262,7 @@ describe("POST /api/businesses", () => {
     });
   });
 
-  it("returns verification_required for unverified sellers", async () => {
+  it("returns verification_required for unverified accounts", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
         if (table === "seller_profiles") {
@@ -254,7 +270,11 @@ describe("POST /api/businesses", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "rejected" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "rejected",
+                seller_verification_status: "rejected",
+              },
             }),
           };
         }

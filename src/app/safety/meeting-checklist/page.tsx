@@ -23,7 +23,7 @@ export const metadata = {
 const BEFORE_MEETING = [
   {
     icon: Shield,
-    text: "Verify the seller's trust badge and profile",
+    text: "Verify the account's trust badge and profile",
   },
   {
     icon: Phone,
@@ -59,7 +59,7 @@ const DURING_MEETING = [
 const AFTER_MEETING = [
   "Leave before counting your money again",
   "Confirm with your contact that you're safe",
-  "Rate the buyer/seller on VerifyMzansi",
+  "Rate the other account on VerifyMzansi",
   "Report suspicious behaviour",
 ];
 

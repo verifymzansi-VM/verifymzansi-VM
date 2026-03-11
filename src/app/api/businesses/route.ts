@@ -9,6 +9,10 @@ import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  readAccountVerificationStatus,
+} from "@/lib/account/compat";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
 
@@ -19,7 +23,7 @@ const AREA: MarketplaceArea = "MZANSI_BUSINESS";
  * POST /api/businesses
  *
  * Create a new Mzansi Business listing.
- * Requires authenticated, verified seller.
+ * Requires an authenticated, verified account.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -46,18 +50,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check seller profile exists
+    // Check account profile exists
     const { data: profile } = await admin
       .from("seller_profiles")
-      .select("id, seller_verification_status")
+      .select("id, account_verification_status, seller_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedSeller(profile.seller_verification_status ?? null)) {
+    if (!isVerifiedSeller(readAccountVerificationStatus(profile))) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
@@ -211,7 +215,7 @@ export async function POST(request: NextRequest) {
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "listing_created",
         targetType: "business",
         targetId: business.id,

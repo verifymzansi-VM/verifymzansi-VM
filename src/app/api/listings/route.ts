@@ -9,6 +9,10 @@ import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { isPostingLimitBypassEnabled } from "../../../lib/utils/posting-limit-bypass";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  readAccountVerificationStatus,
+} from "@/lib/account/compat";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
 import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
@@ -229,13 +233,21 @@ export async function GET(request: NextRequest) {
     const { data: sellers } = sellerIds.length
       ? await admin
           .from("seller_profiles")
-          .select("user_id, display_name, seller_verification_status")
+          .select("user_id, display_name, account_verification_status, seller_verification_status")
           .in("user_id", sellerIds)
       : { data: [] as Array<Record<string, unknown>> };
 
+    const serializedSellers =
+      sellers?.map((seller) => ({
+        user_id: seller.user_id,
+        display_name: seller.display_name,
+        account_verification_status: readAccountVerificationStatus(seller),
+        seller_verification_status: seller.seller_verification_status ?? null,
+      })) ?? [];
+
     return NextResponse.json({
       listings,
-      sellers: sellers ?? [],
+      sellers: serializedSellers,
       total,
       page: filters.page,
       limit,
@@ -282,18 +294,18 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient();
 
-    // ── Get seller profile ───────────────────────────────────
+    // ── Get account profile ──────────────────────────────────
     const { data: profile } = await admin
       .from("seller_profiles")
-      .select("id, seller_verification_status")
+      .select("id, account_verification_status, seller_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedSeller(profile.seller_verification_status ?? null)) {
+    if (!isVerifiedSeller(readAccountVerificationStatus(profile))) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
@@ -478,7 +490,7 @@ export async function POST(request: NextRequest) {
     // ── Audit log ────────────────────────────────────────────
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: "listing_created",
       targetType: "listing",
       targetId: newListing.id,

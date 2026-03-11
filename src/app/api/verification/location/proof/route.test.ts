@@ -91,7 +91,7 @@ function setupDefaultMocks() {
           }),
         }),
         update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-          if (payload.seller_verification_status) {
+          if (payload.account_verification_status || payload.seller_verification_status) {
             return {
               eq: vi.fn().mockReturnValue({
                 in: vi.fn().mockResolvedValue({ error: null }),
@@ -233,7 +233,7 @@ describe("POST /api/verification/location/proof", () => {
     expect(data.artifactId).toBe("artifact-1");
   });
 
-  it("returns 404 when seller profile is missing", async () => {
+  it("returns 404 when account profile is missing", async () => {
     mockAuth({ id: "user-1" });
 
     mockFrom.mockImplementation((table: string) => {
