@@ -1,15 +1,28 @@
 import { z } from "zod";
 
-/** Zod schema for the contact-listing-owner form (message, method, Turnstile token). */
-export const contactAccountHolderSchema = z.object({
-  listingId: z.string().uuid("Invalid listing"),
-  message: z
-    .string()
-    .min(5, "Message must be at least 5 characters")
-    .max(1000, "Message cannot exceed 1000 characters"),
-  contactMethod: z.enum(["call", "whatsapp", "form", "in_app"]).default("form"),
-  turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
-});
+/** Zod schema for contacting a listing or promotion owner. */
+export const contactAccountHolderSchema = z
+  .object({
+    listingId: z.string().uuid("Invalid listing").optional(),
+    promotionId: z.string().uuid("Invalid promotion").optional(),
+    message: z
+      .string()
+      .min(5, "Message must be at least 5 characters")
+      .max(1000, "Message cannot exceed 1000 characters"),
+    contactMethod: z.enum(["call", "whatsapp", "form", "in_app"]).default("form"),
+    turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
+  })
+  .refine((value) => value.listingId || value.promotionId, {
+    message: "A valid listing or promotion is required",
+    path: ["listingId"],
+  })
+  .transform((value) => ({
+    targetId: value.promotionId ?? value.listingId!,
+    targetType: (value.promotionId ? "promotion" : "listing") as "listing" | "promotion",
+    message: value.message,
+    contactMethod: value.contactMethod,
+    turnstileToken: value.turnstileToken,
+  }));
 
 /**
  * Zod schema for reporting a listing, account profile, storefront, or business.
@@ -27,6 +40,8 @@ export const reportSchema = z.object({
   targetId: z.string().uuid("Invalid target"),
   reason: z.enum([
     "scam",
+    "misleading",
+    "expired",
     "fake_listing",
     "prohibited_item",
     "harassment",

@@ -277,7 +277,7 @@ export default function LoginPage() {
               )}
               {resendCooldown > 0
                 ? `Resend available in ${resendCooldown}s`
-                : "Didn\u2019t receive it? Resend"}
+                : "Didn't receive it? Resend"}
             </button>
           </div>
         </div>

@@ -61,6 +61,7 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
   const makeChain = (table: string) => ({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
     or: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     range: vi.fn().mockReturnThis(),
@@ -398,6 +399,53 @@ describe("GET /api/promotions", () => {
     const json = await res.json();
     expect(json.page).toBe(2);
     expect(json.limit).toBe(10);
+  });
+
+  it("filters placeholder promotions from public results", async () => {
+    mockAdmin({
+      promotions: {
+        range: vi.fn().mockResolvedValue({
+          data: [
+            {
+              id: "promo-seed",
+              title: "[Seed] Launch Campaign",
+              description: "Placeholder campaign",
+              owner_id: "user-seed",
+              business_id: null,
+            },
+            {
+              id: VALID_UUID,
+              title: "Summer Sale",
+              description: "Verified promotion",
+              owner_id: USER_ID,
+              business_id: null,
+            },
+          ],
+          count: 2,
+          error: null,
+        }),
+      },
+      account_profiles: {
+        in: vi.fn().mockResolvedValue({
+          data: [
+            {
+              user_id: USER_ID,
+              display_name: "Nomsa",
+              account_verification_status: "verified",
+            },
+          ],
+        }),
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.promotions).toHaveLength(1);
+    expect(json.promotions[0].id).toBe(VALID_UUID);
+    expect(json.total).toBe(1);
+    expect(json.accountProfiles).toHaveLength(1);
   });
 });
 

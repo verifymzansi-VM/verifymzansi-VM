@@ -3,7 +3,17 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useCallback } from "react";
-import { Menu, X, ShieldAlert, LayoutDashboard, Settings, LogOut, Sun, Moon } from "lucide-react";
+import {
+  Menu,
+  X,
+  ShieldAlert,
+  LayoutDashboard,
+  Settings,
+  LogOut,
+  Sun,
+  Moon,
+  Megaphone,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -98,6 +108,18 @@ export function Header({
 
         {/* Desktop Right — Auth */}
         <div className="hidden md:flex items-center gap-2">
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="border-brand-gold/60 text-foreground hover:bg-brand-gold/10"
+          >
+            <Link href="/advertise">
+              <Megaphone className="h-4 w-4" />
+              Advertise
+            </Link>
+          </Button>
+
           {/* Theme toggle */}
           <Button
             variant="ghost"
@@ -203,7 +225,6 @@ export function Header({
           className="md:hidden p-2"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          aria-expanded={mobileOpen ? "true" : "false"}
           aria-controls="mobile-nav-menu"
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -287,6 +308,12 @@ export function Header({
                 </>
               ) : (
                 <>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/advertise" onClick={() => setMobileOpen(false)}>
+                      <Megaphone className="h-4 w-4" />
+                      Advertise
+                    </Link>
+                  </Button>
                   <Button asChild variant="outline" className="w-full">
                     <Link href="/login" onClick={() => setMobileOpen(false)}>
                       Sign In

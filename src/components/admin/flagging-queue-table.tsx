@@ -35,6 +35,7 @@ interface ReportItem {
 interface FlaggingQueueTableProps {
   reports: ReportItem[];
   onActionComplete?: () => void;
+  readOnly?: boolean;
 }
 
 const SEVERITY_FILTER = ["all", "high", "standard"] as const;
@@ -54,7 +55,11 @@ const SUSPEND_DURATIONS = [
   { value: 90, label: "90 days" },
 ];
 
-export function FlaggingQueueTable({ reports, onActionComplete }: FlaggingQueueTableProps) {
+export function FlaggingQueueTable({
+  reports,
+  onActionComplete,
+  readOnly = false,
+}: FlaggingQueueTableProps) {
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
   const [action, setAction] = useState("");
@@ -130,7 +135,9 @@ export function FlaggingQueueTable({ reports, onActionComplete }: FlaggingQueueT
     return (
       <div className="text-center py-6 text-muted-foreground">
         <Flag className="h-8 w-8 mx-auto mb-3 opacity-50" />
-        <p className="text-sm">No open reports for this area.</p>
+        <p className="text-sm">
+          {readOnly ? "No resolved reports for this area." : "No open reports for this area."}
+        </p>
       </div>
     );
   }
@@ -193,14 +200,16 @@ export function FlaggingQueueTable({ reports, onActionComplete }: FlaggingQueueT
                       : "Breached"}
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="flex-shrink-0"
-                  onClick={() => openAction(report)}
-                >
-                  Take Action
-                </Button>
+                {!readOnly && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-shrink-0"
+                    onClick={() => openAction(report)}
+                  >
+                    Take Action
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -208,7 +217,10 @@ export function FlaggingQueueTable({ reports, onActionComplete }: FlaggingQueueT
       </div>
 
       {/* Enforcement Action Dialog */}
-      <Dialog open={!!selectedReport} onOpenChange={(open: boolean) => !open && closeDialog()}>
+      <Dialog
+        open={!readOnly && !!selectedReport}
+        onOpenChange={(open: boolean) => !open && closeDialog()}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Enforcement Action</DialogTitle>

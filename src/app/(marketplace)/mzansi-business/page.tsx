@@ -10,6 +10,10 @@ import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { BusinessDiscoveryBar } from "./discovery-bar";
 import { BusinessFilterDrawer } from "@/components/listings/business-filter-drawer";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+import { isPlaceholderMarketplaceContent } from "../../../lib/utils/placeholder-content";
 
 export const metadata = {
   title: "Mzansi Business",
@@ -31,13 +35,21 @@ export default async function MzansiBusinessPage() {
     )
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS")
+    .not("business_name", "ilike", "%seed%")
+    .not("business_name", "ilike", "%[seed]%")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(10);
+
+  const visibleTopBusinesses = (topBusinesses ?? [])
+    .filter(
+      (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
+    )
+    .slice(0, 5);
 
   const slides: ShowroomSlide[] =
-    topBusinesses && topBusinesses.length > 0
-      ? topBusinesses.map((b) => ({
+    visibleTopBusinesses.length > 0
+      ? visibleTopBusinesses.map((b) => ({
           type: "business",
           id: b.id,
           title: b.business_name,
@@ -69,14 +81,19 @@ export default async function MzansiBusinessPage() {
   // Fetch category counts for auto-hiding empty categories
   const { data: allLive } = await supabase
     .from("businesses")
-    .select("category")
+    .select("category, business_name, description")
     .eq("status", "live")
-    .eq("area", "MZANSI_BUSINESS");
+    .eq("area", "MZANSI_BUSINESS")
+    .not("business_name", "ilike", "%seed%")
+    .not("business_name", "ilike", "%[seed]%");
 
   const { data: malls } = await supabase.from("malls").select("id, name").order("name");
 
   const categoryCounts: Record<string, number> = {};
   for (const b of allLive ?? []) {
+    if (isPlaceholderMarketplaceContent(b.business_name, b.description)) {
+      continue;
+    }
     categoryCounts[b.category] = (categoryCounts[b.category] || 0) + 1;
   }
 
@@ -95,7 +112,18 @@ export default async function MzansiBusinessPage() {
 
       {/* ── Main Content ─────────────────────────────────── */}
       <div className="container-page py-6 space-y-4">
-        <PageHeader title="Mzansi Business" breadcrumbs={[{ label: "Mzansi Business" }]} />
+        <PageHeader
+          title="Mzansi Business"
+          description="Browse verified South African businesses, compare service providers, and discover trusted shops near you."
+          breadcrumbs={[{ label: "Mzansi Business" }]}
+        >
+          <Button asChild size="sm" className="gap-2">
+            <Link href="/post/create-business">
+              List Your Business
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </PageHeader>
 
         {/* Desktop discovery bar (hidden on mobile — mobile uses the filter drawer) */}
         <div className="hidden lg:block">

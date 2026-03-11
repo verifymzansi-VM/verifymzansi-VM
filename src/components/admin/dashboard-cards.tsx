@@ -295,7 +295,7 @@ export function AdminControls({ enforcementStats }: AdminControlsProps) {
 
       <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
         <span className="text-muted-foreground">
-          Hidden:{" "}
+          Hidden content:{" "}
           <span
             className={`font-semibold tabular-nums ${enforcementStats.hidden > 0 ? "text-destructive" : ""}`}
           >

@@ -209,4 +209,48 @@ describe("notification-store", () => {
     expect(notifications[0].createdAt >= before).toBe(true);
     expect(notifications[0].createdAt <= after).toBe(true);
   });
+
+  it("should preserve server unread count when hydrating a partial list", () => {
+    const { hydrateNotifications } = useNotificationStore.getState();
+
+    hydrateNotifications(
+      [
+        {
+          id: "visible-1",
+          type: "info",
+          title: "Newest",
+          read: false,
+          createdAt: "2026-03-02T12:00:00Z",
+        },
+      ],
+      27
+    );
+
+    const { notifications, unreadCount } = useNotificationStore.getState();
+    expect(notifications).toHaveLength(1);
+    expect(unreadCount).toBe(27);
+  });
+
+  it("should decrement server unread count when a visible unread item is marked read", () => {
+    const { hydrateNotifications, markRead } = useNotificationStore.getState();
+
+    hydrateNotifications(
+      [
+        {
+          id: "visible-1",
+          type: "info",
+          title: "Newest",
+          read: false,
+          createdAt: "2026-03-02T12:00:00Z",
+        },
+      ],
+      27
+    );
+
+    markRead("visible-1");
+
+    const { notifications, unreadCount } = useNotificationStore.getState();
+    expect(notifications[0].read).toBe(true);
+    expect(unreadCount).toBe(26);
+  });
 });

@@ -306,7 +306,14 @@ export function PromotionsExplorer() {
         title="Promotions & Events"
         description="Deals, promotions, launches, and events from verified South African businesses and advertisers."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Promotions & Events" }]}
-      />
+      >
+        <Button asChild size="sm" className="gap-1">
+          <Link href="/advertise">
+            Advertise
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Button>
+      </PageHeader>
 
       {/* ── Type Tabs (horizontal scroll on mobile) ── */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
@@ -583,8 +590,10 @@ export function PromotionsExplorer() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Category</Label>
+              <Label htmlFor="promotion-category-mobile">Category</Label>
               <select
+                id="promotion-category-mobile"
+                aria-label="Category"
                 className={selectClass}
                 value={filters.category || ""}
                 onChange={(e) => updateFilters({ category: normalizeValue(e.target.value) })}
@@ -599,8 +608,10 @@ export function PromotionsExplorer() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Province</Label>
+                <Label htmlFor="promotion-province-mobile">Province</Label>
                 <select
+                  id="promotion-province-mobile"
+                  aria-label="Province"
                   className={selectClass}
                   value={filters.province || ""}
                   onChange={(e) =>
@@ -619,8 +630,10 @@ export function PromotionsExplorer() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label>City</Label>
+                <Label htmlFor="promotion-city-mobile">City</Label>
                 <select
+                  id="promotion-city-mobile"
+                  aria-label="City"
                   className={selectClass}
                   value={filters.city || ""}
                   onChange={(e) => updateFilters({ city: normalizeValue(e.target.value) })}
@@ -637,8 +650,10 @@ export function PromotionsExplorer() {
             </div>
             {filters.type === "event" && (
               <div className="space-y-1.5">
-                <Label>Event state</Label>
+                <Label htmlFor="promotion-event-state-mobile">Event state</Label>
                 <select
+                  id="promotion-event-state-mobile"
+                  aria-label="Event state"
                   className={selectClass}
                   value={filters.eventState || ""}
                   onChange={(e) => updateFilters({ event_state: normalizeValue(e.target.value) })}
@@ -671,7 +686,7 @@ export function PromotionsExplorer() {
           {total === 1 ? "" : "s"} found
         </p>
         <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex gap-1">
-          <Link href="/post/create">
+          <Link href="/advertise">
             Start Advertising
             <ArrowRight className="h-4 w-4" />
           </Link>

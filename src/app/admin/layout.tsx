@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
+import { getPendingModerationCount } from "@/lib/utils/admin-queries";
 
 /** Prevent search engines from indexing admin pages */
 export const metadata = {
@@ -29,7 +30,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const [
     { count: pendingVerifications },
     { count: openReports },
-    { count: pendingModeration },
+    pendingModeration,
     evidenceDeskEnabled,
   ] = await Promise.all([
     admin
@@ -37,10 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .select("*", { count: "exact", head: true })
       .eq("status", "pending"),
     admin.from("reports").select("*", { count: "exact", head: true }).eq("status", "open"),
-    admin
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending_moderation"),
+    getPendingModerationCount(),
     isFeatureEnabled("kyc_evidence_desk"),
   ]);
 
@@ -57,7 +55,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <AdminSidebar
           pendingVerifications={pendingVerifications || 0}
           openReports={openReports || 0}
-          pendingModeration={pendingModeration || 0}
+          pendingModeration={pendingModeration}
           userRole={role}
           evidenceDeskEnabled={evidenceDeskEnabled}
         />

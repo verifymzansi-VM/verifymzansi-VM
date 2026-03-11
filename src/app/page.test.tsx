@@ -117,6 +117,10 @@ describe("HomePage", () => {
       "href",
       "/pricing"
     );
+    expect(screen.getByRole("link", { name: /Advertise a promotion/i })).toHaveAttribute(
+      "href",
+      "/advertise"
+    );
     expect(screen.getByText("Create an account")).toBeInTheDocument();
     expect(screen.getByText("Complete verification")).toBeInTheDocument();
     expect(screen.getByText("Browse or post in the area that fits your goal")).toBeInTheDocument();

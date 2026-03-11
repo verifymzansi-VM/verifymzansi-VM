@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { HeroBanner } from "./hero-banner";
+import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -36,7 +37,7 @@ export async function HeroBannerWithData() {
         .not("business_name", "ilike", "%[seed]%")
         .order("boost_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
-        .limit(3),
+        .limit(9),
       supabase
         .from("listings")
         .select(
@@ -48,7 +49,7 @@ export async function HeroBannerWithData() {
         .not("title", "ilike", "%[seed]%")
         .order("featured", { ascending: false })
         .order("created_at", { ascending: false })
-        .limit(3),
+        .limit(9),
       supabase
         .from("promotions")
         .select(
@@ -60,12 +61,22 @@ export async function HeroBannerWithData() {
         .order("boost_until", { ascending: false, nullsFirst: false })
         .order("featured_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
-        .limit(3),
+        .limit(9),
     ]);
 
-    topBusinesses = businesses.data;
-    latestListings = listings.data;
-    latestPromotions = promotions.data;
+    topBusinesses = (businesses.data || [])
+      .filter(
+        (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
+      )
+      .slice(0, 3);
+    latestListings = (listings.data || [])
+      .filter((listing) => !isPlaceholderMarketplaceContent(listing.title, listing.description))
+      .slice(0, 3);
+    latestPromotions = (promotions.data || [])
+      .filter(
+        (promotion) => !isPlaceholderMarketplaceContent(promotion.title, promotion.description)
+      )
+      .slice(0, 3);
   }
 
   return (

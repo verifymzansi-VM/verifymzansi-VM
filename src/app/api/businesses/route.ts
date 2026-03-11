@@ -16,6 +16,7 @@ import {
 } from "@/lib/account/compat";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
+import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -256,11 +257,15 @@ export async function GET(request: NextRequest) {
         // Fallback: manual query
         const { data: businesses } = await admin
           .from("businesses")
-          .select("category")
-          .eq("status", "live");
+          .select("category, business_name, description")
+          .eq("status", "live")
+          .eq("area", "MZANSI_BUSINESS");
 
         const categoryCounts: Record<string, number> = {};
         for (const b of businesses ?? []) {
+          if (isPlaceholderMarketplaceContent(b.business_name, b.description)) {
+            continue;
+          }
           categoryCounts[b.category] = (categoryCounts[b.category] || 0) + 1;
         }
         return NextResponse.json({ categoryCounts });
@@ -316,7 +321,11 @@ export async function GET(request: NextRequest) {
         .from("businesses")
         .select(selectClause, { count: "exact" })
         .eq("status", "live")
-        .eq("area", "MZANSI_BUSINESS");
+        .eq("area", "MZANSI_BUSINESS")
+        .not("business_name", "ilike", "%seed%")
+        .not("business_name", "ilike", "%[seed]%")
+        .not("business_name", "ilike", "%demo%")
+        .not("business_name", "ilike", "%sample%");
 
       if (businessType) {
         query = query.eq("business_type", businessType);

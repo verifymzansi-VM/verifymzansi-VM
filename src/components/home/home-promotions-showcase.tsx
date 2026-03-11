@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import type { BusinessCategory, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
+import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 
 interface PromotionRow {
   id: string;
@@ -43,9 +44,11 @@ export async function HomePromotionsShowcase() {
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(6);
+    .limit(12);
 
-  const promotions = (data || []) as PromotionRow[];
+  const promotions = ((data || []) as PromotionRow[])
+    .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
+    .slice(0, 6);
 
   if (promotions.length === 0) {
     return (
@@ -65,9 +68,9 @@ export async function HomePromotionsShowcase() {
             <Button
               asChild
               size="sm"
-              className="bg-red-500 hover:bg-red-600 text-white rounded-full"
+              className="bg-red-700 hover:bg-red-800 text-white rounded-full"
             >
-              <Link href="/post/create-promotion">
+              <Link href="/advertise">
                 Create a Promotion
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Link>

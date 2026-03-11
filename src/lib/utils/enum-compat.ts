@@ -30,6 +30,8 @@ export function mapLegacyContactMethod(method: string): ContactEventType {
 
 const REPORT_REASON_TO_CATEGORY: Record<string, ReportCategory> = {
   scam: "scam",
+  misleading: "misleading_info",
+  expired: "misleading_info",
   fake_listing: "misleading_info",
   prohibited_item: "prohibited_item",
   harassment: "harassment",
@@ -42,6 +44,7 @@ const REPORT_REASON_TO_CATEGORY: Record<string, ReportCategory> = {
 
 const TARGET_TYPE_CANONICAL: Record<string, string> = {
   listing: "listing",
+  promotion: "promotion",
   storefront: "business",
   business: "business",
   business_profile: "business",
@@ -51,6 +54,7 @@ const TARGET_TYPE_CANONICAL: Record<string, string> = {
 const TARGET_TYPE_TO_AREA: Record<string, MarketplaceArea> = {
   listing: "MZANSI_MARKET",
   account_profile: "MZANSI_MARKET",
+  promotion: "PROMOTIONS_EVENTS",
   business: "MZANSI_BUSINESS",
   storefront: "MZANSI_BUSINESS",
   business_profile: "MZANSI_BUSINESS",

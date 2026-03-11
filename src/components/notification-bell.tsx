@@ -56,7 +56,10 @@ export function NotificationBell({ userId }: { userId?: string }) {
               createdAt: (n.created_at as string) ?? new Date().toISOString(),
             };
           });
-          hydrateNotifications(mapped);
+          hydrateNotifications(
+            mapped,
+            typeof data.unreadCount === "number" ? data.unreadCount : undefined
+          );
         }
       })
       .catch(() => {

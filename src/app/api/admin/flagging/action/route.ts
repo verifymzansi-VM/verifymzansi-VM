@@ -98,6 +98,19 @@ export async function POST(request: Request) {
         });
       }
       ownerId = biz?.owner_id || null;
+    } else if (report.target_type === "promotion") {
+      const { data: promotion, error: promotionErr } = await admin
+        .from("promotions")
+        .select("owner_id")
+        .eq("id", report.target_id)
+        .single();
+      if (promotionErr) {
+        log.warn("Target promotion not found", {
+          targetId: report.target_id,
+          error: promotionErr.message,
+        });
+      }
+      ownerId = promotion?.owner_id || null;
     }
 
     // Actions that target an account holder require a valid owner reference
@@ -122,6 +135,7 @@ export async function POST(request: Request) {
     } else if (action === "hide") {
       const tableMap: Record<string, string> = {
         listing: "listings",
+        promotion: "promotions",
         storefront: "businesses",
         business_profile: "businesses",
         business: "businesses",
@@ -153,6 +167,11 @@ export async function POST(request: Request) {
         .update({ status: "hidden" })
         .eq("owner_id", ownerId)
         .eq("status", "live");
+      await admin
+        .from("promotions")
+        .update({ status: "hidden" })
+        .eq("owner_id", ownerId)
+        .eq("status", "live");
     } else if (action === "ban" && ownerId) {
       await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
@@ -166,6 +185,7 @@ export async function POST(request: Request) {
       // Hide all content
       await admin.from("listings").update({ status: "hidden" }).eq("owner_id", ownerId);
       await admin.from("businesses").update({ status: "hidden" }).eq("owner_id", ownerId);
+      await admin.from("promotions").update({ status: "hidden" }).eq("owner_id", ownerId);
     }
 
     // Record moderation action

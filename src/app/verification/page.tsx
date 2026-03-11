@@ -71,6 +71,18 @@ function validateFile(file: File | null, allowPdf = false): string | null {
   return null;
 }
 
+function getCompletionCtaLabel(completionHref: string): string {
+  if (completionHref === "/dashboard") {
+    return "Go to Dashboard";
+  }
+
+  if (completionHref.startsWith("/post/")) {
+    return "Return to Posting";
+  }
+
+  return "Continue";
+}
+
 export default function VerificationPage() {
   const [step, setStep] = useState<WizardStep>("phone");
   const [phone, setPhone] = useState("");
@@ -1174,7 +1186,7 @@ export default function VerificationPage() {
                   </p>
                   <Button variant="trust-verified" asChild className="gap-2">
                     <Link href={completionHref}>
-                      {completionHref === "/dashboard" ? "Go to Dashboard" : "Return to Posting"}
+                      {getCompletionCtaLabel(completionHref)}
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>

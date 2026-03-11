@@ -41,7 +41,7 @@ export default async function AdminDSARPage() {
       {!requests?.length ? (
         <div className="text-center py-6 text-muted-foreground">
           <FileText className="h-8 w-8 mx-auto mb-3" />
-          <p>No DSAR requests pending.</p>
+          <p>No data requests found.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -78,9 +78,7 @@ export default async function AdminDSARPage() {
                       {formatRelativeTime(req.created_at)}
                     </p>
                   </div>
-                  {(req.status === "submitted" || req.status === "in_progress") && (
-                    <DsarActionButtons requestId={req.id} />
-                  )}
+                  {req.status === "submitted" && <DsarActionButtons requestId={req.id} />}
                 </div>
               </CardContent>
             </Card>

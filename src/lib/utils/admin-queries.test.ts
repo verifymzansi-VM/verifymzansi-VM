@@ -29,6 +29,7 @@ import {
   getDashboardKycQueue,
   getExtendedPlatformStats,
   getPendingVerifications,
+  getPendingModerationCount,
   getRecentActivity,
   getAreaReports,
   getPendingContent,
@@ -51,6 +52,7 @@ describe("admin-queries", () => {
       expect(stats.totalListings).toBe(5);
       expect(stats.openReports).toBe(5);
       expect(typeof stats.pendingVerifications).toBe("number");
+      expect(stats.pendingModeration).toBe(15);
     });
 
     it("defaults counts to 0 when null", async () => {
@@ -61,6 +63,51 @@ describe("admin-queries", () => {
       expect(stats.totalAccounts).toBe(0);
       expect(stats.totalMembers).toBe(0);
       expect(stats.openReports).toBe(0);
+      expect(stats.pendingModeration).toBe(0);
+    });
+
+    it("sums pending moderation across listings, businesses, and promotions", async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "listings") {
+          return createChainableMock({ count: 4 });
+        }
+
+        if (table === "businesses") {
+          return createChainableMock({ count: 3 });
+        }
+
+        if (table === "promotions") {
+          return createChainableMock({ count: 2 });
+        }
+
+        return createChainableMock({ count: 1 });
+      });
+
+      const stats = await getAdminDashboardStats();
+
+      expect(stats.pendingModeration).toBe(9);
+    });
+  });
+
+  describe("getPendingModerationCount", () => {
+    it("returns the combined moderation backlog across all public content areas", async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "listings") {
+          return createChainableMock({ count: 7 });
+        }
+
+        if (table === "businesses") {
+          return createChainableMock({ count: 5 });
+        }
+
+        if (table === "promotions") {
+          return createChainableMock({ count: 4 });
+        }
+
+        return createChainableMock({ count: 0 });
+      });
+
+      await expect(getPendingModerationCount()).resolves.toBe(16);
     });
   });
 
@@ -199,6 +246,31 @@ describe("admin-queries", () => {
       expect(result).toHaveLength(1);
       expect(mockFrom).toHaveBeenCalledWith("reports");
     });
+
+    it("includes business-profile and storefront reports in the Mzansi Business area", async () => {
+      const limitSpy = vi.fn().mockResolvedValue({ data: [] });
+      const orderSpy = vi.fn().mockReturnValue({ limit: limitSpy });
+      const statusInSpy = vi.fn().mockReturnValue({ order: orderSpy });
+      const targetTypeInSpy = vi.fn().mockReturnValue({ in: statusInSpy });
+      const selectSpy = vi.fn().mockReturnValue({ in: targetTypeInSpy });
+
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "reports") {
+          return { select: selectSpy };
+        }
+
+        return createChainableMock({ data: [] });
+      });
+
+      await getAreaReports("MZANSI_BUSINESS");
+
+      expect(targetTypeInSpy).toHaveBeenCalledWith("target_type", [
+        "business",
+        "business_profile",
+        "storefront",
+      ]);
+      expect(statusInSpy).toHaveBeenCalledWith("status", ["open", "in_progress"]);
+    });
   });
 
   describe("getPendingContent", () => {
@@ -253,6 +325,29 @@ describe("admin-queries", () => {
       expect(stats.verifiedMembers).toBe(7);
       expect(stats.bannedAccounts).toBe(7);
       expect(stats.bannedMembers).toBe(7);
+    });
+
+    it("aggregates live and hidden content across listings, businesses, and promotions", async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "listings") {
+          return createChainableMock({ count: 4 });
+        }
+
+        if (table === "businesses") {
+          return createChainableMock({ count: 3 });
+        }
+
+        if (table === "promotions") {
+          return createChainableMock({ count: 2 });
+        }
+
+        return createChainableMock({ count: 1 });
+      });
+
+      const stats = await getExtendedPlatformStats();
+
+      expect(stats.liveListings).toBe(9);
+      expect(stats.hiddenListings).toBe(9);
     });
   });
 });

@@ -3,10 +3,13 @@ import { Calendar } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { PastEventsAccordion } from "./past-events-accordion";
+import Link from "next/link";
 
 export const metadata = {
   title: "Events",
@@ -41,6 +44,10 @@ function groupByMonth(
     }));
 }
 
+function isPlaceholderEvent(event: { title: string | null; description?: string | null }) {
+  return isPlaceholderMarketplaceContent(event.title, event.description);
+}
+
 export default async function EventsPage() {
   const admin = createAdminClient();
   const now = new Date().toISOString();
@@ -55,6 +62,10 @@ export default async function EventsPage() {
     )
     .eq("status", "live")
     .eq("promotion_type", "event")
+    .not("title", "ilike", "%seed%")
+    .not("title", "ilike", "%[seed]%")
+    .not("title", "ilike", "%demo%")
+    .not("title", "ilike", "%sample%")
     .or(`end_date.is.null,end_date.gte.${now}`)
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
@@ -72,12 +83,18 @@ export default async function EventsPage() {
     )
     .eq("status", "live")
     .eq("promotion_type", "event")
+    .not("title", "ilike", "%seed%")
+    .not("title", "ilike", "%[seed]%")
+    .not("title", "ilike", "%demo%")
+    .not("title", "ilike", "%sample%")
     .lt("end_date", now)
     .order("end_date", { ascending: false })
     .limit(24);
 
   // Gather unique account IDs for trust levels
-  const allEvents = [...(events ?? []), ...(pastEvents ?? [])];
+  const upcoming = (events ?? []).filter((event) => !isPlaceholderEvent(event));
+  const past = (pastEvents ?? []).filter((event) => !isPlaceholderEvent(event));
+  const allEvents = [...upcoming, ...past];
   const accountIds = [...new Set(allEvents.map((event) => event.owner_id))];
   const { data: accountProfiles } = accountIds.length
     ? await admin
@@ -104,9 +121,6 @@ export default async function EventsPage() {
 
   const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
 
-  const upcoming = events ?? [];
-  const past = pastEvents ?? [];
-
   // Group upcoming events by month
   const monthGroups = groupByMonth(
     upcoming as Array<{
@@ -127,7 +141,11 @@ export default async function EventsPage() {
           { label: "Promotions & Events", href: "/promotions" },
           { label: "Events" },
         ]}
-      />
+      >
+        <Button asChild size="sm" className="gap-1">
+          <Link href="/advertise">Advertise an event</Link>
+        </Button>
+      </PageHeader>
 
       {/* Upcoming Events — grouped by month */}
       {upcoming.length > 0 ? (

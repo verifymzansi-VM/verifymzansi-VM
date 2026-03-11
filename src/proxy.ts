@@ -2,9 +2,10 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-stub";
 import { createLogger } from "@/lib/utils/logger";
 
-const logger = createLogger("Middleware");
+const logger = createLogger("Proxy");
 
 // -- Security helpers --------------------------------------------------------
 
@@ -53,15 +54,15 @@ function applySecurityHeaders(response: NextResponse, csp: string): void {
 }
 
 /**
- * Wrap a middleware result with CSP nonce + security headers.
+ * Wrap a proxy result with CSP nonce + security headers.
  * Redirects and error responses get basic security headers only.
  */
-function withSecurityHeaders(request: NextRequest, middlewareResponse: NextResponse): NextResponse {
-  if (middlewareResponse.headers.has("location") || middlewareResponse.status >= 400) {
-    middlewareResponse.headers.set("X-Content-Type-Options", "nosniff");
-    middlewareResponse.headers.set("X-Frame-Options", "DENY");
-    middlewareResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-    return middlewareResponse;
+function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse): NextResponse {
+  if (proxyResponse.headers.has("location") || proxyResponse.status >= 400) {
+    proxyResponse.headers.set("X-Content-Type-Options", "nosniff");
+    proxyResponse.headers.set("X-Frame-Options", "DENY");
+    proxyResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    return proxyResponse;
   }
 
   const nonce = generateNonce();
@@ -76,7 +77,7 @@ function withSecurityHeaders(request: NextRequest, middlewareResponse: NextRespo
   });
 
   // Preserve cookies set during auth (Supabase session refresh, etc.)
-  for (const cookie of middlewareResponse.cookies.getAll()) {
+  for (const cookie of proxyResponse.cookies.getAll()) {
     response.cookies.set(cookie);
   }
 
@@ -94,6 +95,32 @@ function withSecurityHeaders(request: NextRequest, middlewareResponse: NextRespo
 export async function routeRequest(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
+  const authRoutes = ["/login", "/register"];
+  const protectedPrefixesAll = [
+    "/dashboard",
+    "/post",
+    "/billing",
+    "/verification",
+    "/admin",
+    "/api/dashboard",
+    "/api/post",
+    "/api/billing",
+    "/api/verification",
+    "/api/admin",
+    "/api/otp",
+  ];
+  const protectedPrefixes = [
+    "/dashboard",
+    "/post",
+    "/billing",
+    "/verification",
+    "/admin",
+    "/api/dashboard",
+    "/api/post",
+    "/api/billing",
+    "/api/verification",
+    "/api/admin",
+  ];
 
   // Recover legacy signup links that land on "/?code=..." instead of the
   // dedicated auth callback route. Keep this scoped to the root path so
@@ -111,20 +138,27 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.redirect(callbackUrl);
   }
 
+  if (isPlaywrightSupabaseStubMode()) {
+    const isProtected = protectedPrefixesAll.some((prefix) => pathname.startsWith(prefix));
+    const isAuthRoute = authRoutes.some(
+      (route) => pathname === route || pathname.startsWith(route + "/")
+    );
+
+    if (!isProtected || isAuthRoute) {
+      return NextResponse.next();
+    }
+
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("returnUrl", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
   // -- Guard: Supabase not configured ---------------------------------------
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    const protectedPrefixes = [
-      "/dashboard",
-      "/post",
-      "/billing",
-      "/verification",
-      "/admin",
-      "/api/dashboard",
-      "/api/post",
-      "/api/billing",
-      "/api/verification",
-      "/api/admin",
-    ];
     const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
 
     if (isProtected) {
@@ -145,20 +179,6 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // Determine early whether this route needs authentication at all.
   // Public routes (home, marketplace, terms, etc.) skip the Supabase
   // getUser() call entirely — saving 100-300 ms on mobile networks.
-  const authRoutes = ["/login", "/register"];
-  const protectedPrefixesAll = [
-    "/dashboard",
-    "/post",
-    "/billing",
-    "/verification",
-    "/admin",
-    "/api/dashboard",
-    "/api/post",
-    "/api/billing",
-    "/api/verification",
-    "/api/admin",
-    "/api/otp",
-  ];
   const needsAuth =
     protectedPrefixesAll.some((p) => pathname.startsWith(p)) ||
     authRoutes.some((r) => pathname === r || pathname.startsWith(r + "/"));
@@ -204,18 +224,6 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   } catch {
     // Auth check failed — deny access to protected routes to prevent
     // unguarded access during Supabase outages.
-    const protectedPrefixes = [
-      "/dashboard",
-      "/post",
-      "/billing",
-      "/verification",
-      "/admin",
-      "/api/dashboard",
-      "/api/post",
-      "/api/billing",
-      "/api/verification",
-      "/api/admin",
-    ];
     const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
     if (isProtected) {
       if (isApiRoute) {
@@ -233,17 +241,9 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   }
 
   // -- Protected routes: require authentication -----------------------------
-  const protectedPrefixes = [
-    "/dashboard",
-    "/post",
-    "/billing",
-    "/verification",
-    "/api/dashboard",
-    "/api/post",
-    "/api/billing",
-    "/api/verification",
-  ];
-  const isProtectedRoute = protectedPrefixes.some((p) => pathname.startsWith(p));
+  const isProtectedRoute = protectedPrefixes
+    .filter((prefix) => prefix !== "/admin" && prefix !== "/api/admin")
+    .some((p) => pathname.startsWith(p));
 
   if (!user && isProtectedRoute) {
     if (isApiRoute) {
@@ -345,14 +345,14 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   return response;
 }
 
-// -- Next.js middleware entry point -----------------------------------------
+// -- Next.js proxy entry point ----------------------------------------------
 
 /**
- * Edge middleware called by Next.js on every matched request.
+ * Edge proxy called by Next.js on every matched request.
  * Delegates to routeRequest() for auth/routing, then wraps
  * the response with security headers (CSP nonce, HSTS, etc.).
  */
-export async function middleware(request: NextRequest): Promise<NextResponse> {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const routeResponse = await routeRequest(request);
   return withSecurityHeaders(request, routeResponse);
 }

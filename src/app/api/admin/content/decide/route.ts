@@ -60,6 +60,8 @@ export async function POST(request: Request) {
       MZANSI_MARKET: "listings",
       BUSINESS_ADS: "business_profiles",
       MALL_SHOPS: "storefronts",
+      MZANSI_BUSINESS: "businesses",
+      PROMOTIONS_EVENTS: "promotions",
     };
 
     const table = tableMap[area];
@@ -90,17 +92,53 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Content item not found" }, { status: 404 });
     }
 
-    const targetType = table.replace(/s$/, "") as string;
-    const actionPrefix =
-      targetType === "listing"
-        ? "listing"
-        : targetType === "business_profile"
-          ? "business_profile"
-          : "storefront";
+    const auditConfig: Record<
+      string,
+      {
+        targetType: string;
+        approveAction:
+          | "listing_updated"
+          | "business_profile_updated"
+          | "storefront_updated"
+          | "moderation_action";
+        rejectAction:
+          | "listing_deleted"
+          | "business_profile_deleted"
+          | "storefront_deleted"
+          | "moderation_action";
+      }
+    > = {
+      listings: {
+        targetType: "listing",
+        approveAction: "listing_updated",
+        rejectAction: "listing_deleted",
+      },
+      business_profiles: {
+        targetType: "business_profile",
+        approveAction: "business_profile_updated",
+        rejectAction: "business_profile_deleted",
+      },
+      storefronts: {
+        targetType: "storefront",
+        approveAction: "storefront_updated",
+        rejectAction: "storefront_deleted",
+      },
+      businesses: {
+        targetType: "business",
+        approveAction: "moderation_action",
+        rejectAction: "moderation_action",
+      },
+      promotions: {
+        targetType: "promotion",
+        approveAction: "moderation_action",
+        rejectAction: "moderation_action",
+      },
+    };
+    const { targetType, approveAction, rejectAction } = auditConfig[table];
     await logAuditEvent({
       actorId: user.id,
       actorRole: adminRole || "admin",
-      action: decision === "approve" ? `${actionPrefix}_updated` : `${actionPrefix}_deleted`,
+      action: decision === "approve" ? approveAction : rejectAction,
       targetType,
       targetId: itemId,
       metadata: { decision, area, reason },
@@ -111,7 +149,13 @@ export async function POST(request: Request) {
       // Get the account holder's user ID and content title
       const ownerField = table === "listings" ? "owner_id" : "owner_id";
       const titleField =
-        table === "listings" ? "title" : table === "storefronts" ? "mall_name" : "business_name";
+        table === "listings"
+          ? "title"
+          : table === "storefronts"
+            ? "mall_name"
+            : table === "promotions"
+              ? "title"
+              : "business_name";
       const { data: contentItem } = await admin
         .from(table)
         .select(`${ownerField}, ${titleField}`)
@@ -127,7 +171,21 @@ export async function POST(request: Request) {
             ? "Listing"
             : table === "storefronts"
               ? "Storefront"
-              : "Business profile";
+              : table === "promotions"
+                ? "Promotion"
+                : table === "business_profiles"
+                  ? "Business profile"
+                  : "Business";
+        const dashboardHref =
+          table === "listings"
+            ? "/dashboard/listings"
+            : table === "storefronts"
+              ? "/dashboard/storefronts"
+              : table === "promotions"
+                ? "/dashboard/promotions"
+                : table === "business_profiles"
+                  ? "/dashboard/business-profiles"
+                  : "/dashboard/businesses";
 
         if (decision === "approve") {
           await createNotification({
@@ -135,12 +193,7 @@ export async function POST(request: Request) {
             type: "success",
             title: `${contentLabel} approved!`,
             message: `"${contentTitle}" is now live and visible to buyers.`,
-            href:
-              table === "listings"
-                ? "/dashboard/listings"
-                : table === "storefronts"
-                  ? "/dashboard/storefronts"
-                  : "/dashboard/business-profiles",
+            href: dashboardHref,
           });
         } else {
           await createNotification({
@@ -150,12 +203,7 @@ export async function POST(request: Request) {
             message: reason
               ? `"${contentTitle}" was rejected: ${reason.slice(0, 80)}`
               : `"${contentTitle}" needs changes. Check the rejection reason.`,
-            href:
-              table === "listings"
-                ? "/dashboard/listings"
-                : table === "storefronts"
-                  ? "/dashboard/storefronts"
-                  : "/dashboard/business-profiles",
+            href: dashboardHref,
           });
         }
       }

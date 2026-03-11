@@ -71,7 +71,7 @@ export default async function AdminPage() {
   const overviewMetrics = [
     { label: "Accounts", value: totalAccounts },
     ...(verifiedPct !== null ? [{ label: "Verified", value: `${verifiedPct}%` }] : []),
-    ...(isAdminRole && extended ? [{ label: "Live", value: extended.liveListings }] : []),
+    ...(isAdminRole && extended ? [{ label: "Live Content", value: extended.liveListings }] : []),
     { label: "KYC queue", value: stats.pendingVerifications },
     { label: "Reports", value: stats.openReports },
     { label: "Moderation", value: stats.pendingModeration },

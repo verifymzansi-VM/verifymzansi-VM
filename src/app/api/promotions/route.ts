@@ -17,6 +17,7 @@ import {
   readAccountVerificationStatus,
 } from "@/lib/account/compat";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
+import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -57,6 +58,10 @@ function applyEventStateFilter<T>(query: T, eventState: PromotionEventState, now
     default:
       return query;
   }
+}
+
+function isPlaceholderPromotion(promotion: { title: string | null; description?: string | null }) {
+  return isPlaceholderMarketplaceContent(promotion.title, promotion.description);
 }
 
 /**
@@ -319,7 +324,11 @@ export async function GET(request: NextRequest) {
         "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
         { count: "exact" }
       )
-      .eq("status", "live");
+      .eq("status", "live")
+      .not("title", "ilike", "%seed%")
+      .not("title", "ilike", "%[seed]%")
+      .not("title", "ilike", "%demo%")
+      .not("title", "ilike", "%sample%");
 
     if (promotionType) {
       query = query.eq("promotion_type", promotionType);
@@ -361,11 +370,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch promotions" }, { status: 500 });
     }
 
+    const filteredPromotions = (promotions ?? []).filter(
+      (promotion) => !isPlaceholderPromotion(promotion)
+    );
+    const removedCount = (promotions?.length ?? 0) - filteredPromotions.length;
+
     const accountIds = Array.from(
-      new Set((promotions ?? []).map((promotion) => promotion.owner_id).filter(Boolean))
+      new Set(filteredPromotions.map((promotion) => promotion.owner_id).filter(Boolean))
     );
     const businessIds = Array.from(
-      new Set((promotions ?? []).map((promotion) => promotion.business_id).filter(Boolean))
+      new Set(filteredPromotions.map((promotion) => promotion.business_id).filter(Boolean))
     ) as string[];
 
     const { data: accountProfiles } = accountIds.length
@@ -386,11 +400,11 @@ export async function GET(request: NextRequest) {
       })) ?? [];
 
     return NextResponse.json({
-      promotions: promotions ?? [],
+      promotions: filteredPromotions,
       accountProfiles: serializedAccountProfiles,
       sellers: serializedAccountProfiles,
       businesses: businesses ?? [],
-      total: count ?? 0,
+      total: Math.max(0, (count ?? filteredPromotions.length) - removedCount),
       page,
       limit,
     });

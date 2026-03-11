@@ -141,7 +141,9 @@ export default function RegisterPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Create your account</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">
+          Create your seller account
+        </h1>
       </div>
 
       <GoogleOAuthButton mode="register" />

@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     }
 
     await logAuditEvent({
-      action: decision === "approve" ? "dsar_completed" : "dsar_rejected",
+      action: decision === "approve" ? "dsar_started" : "dsar_rejected",
       actorId: user.id,
       actorRole: "admin",
       targetId: requestId,

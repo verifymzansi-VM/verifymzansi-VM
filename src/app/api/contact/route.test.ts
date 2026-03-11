@@ -75,22 +75,11 @@ describe("POST /api/contact", () => {
       if (table === "listings") {
         return {
           select: vi.fn().mockImplementation((fields: string) => {
-            if (fields === "owner_id") {
+            if (fields === "owner_id, title") {
               return {
                 eq: vi.fn().mockReturnValue({
                   single: vi.fn().mockResolvedValue({
-                    data: { owner_id: ownerId },
-                    error: null,
-                  }),
-                }),
-              };
-            }
-
-            if (fields === "title") {
-              return {
-                eq: vi.fn().mockReturnValue({
-                  single: vi.fn().mockResolvedValue({
-                    data: { title: "Vintage Couch" },
+                    data: { owner_id: ownerId, title: "Vintage Couch" },
                     error: null,
                   }),
                 }),
@@ -160,22 +149,11 @@ describe("POST /api/contact", () => {
       if (table === "listings") {
         return {
           select: vi.fn().mockImplementation((fields: string) => {
-            if (fields === "owner_id") {
+            if (fields === "owner_id, title") {
               return {
                 eq: vi.fn().mockReturnValue({
                   single: vi.fn().mockResolvedValue({
-                    data: { owner_id: ownerId },
-                    error: null,
-                  }),
-                }),
-              };
-            }
-
-            if (fields === "title") {
-              return {
-                eq: vi.fn().mockReturnValue({
-                  single: vi.fn().mockResolvedValue({
-                    data: { title: "Vintage Couch" },
+                    data: { owner_id: ownerId, title: "Vintage Couch" },
                     error: null,
                   }),
                 }),
@@ -230,6 +208,87 @@ describe("POST /api/contact", () => {
     expect(contactInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         member_verified: false,
+      })
+    );
+  });
+
+  it("accepts promotion enquiries and stores them against the promotion target", async () => {
+    const ownerId = "11111111-1111-4111-8111-111111111111";
+    const promotionId = "33333333-3333-4333-8333-333333333333";
+    const contactInsert = vi.fn().mockResolvedValue({ error: null });
+    const leadInsert = vi.fn().mockResolvedValue({ error: null });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "promotions") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { owner_id: ownerId, title: "Launch Week Promo" },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE || table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  account_verification_status: "verified",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "contact_events") {
+        return {
+          insert: contactInsert,
+        };
+      }
+
+      if (table === "leads") {
+        return {
+          insert: leadInsert,
+        };
+      }
+
+      return {};
+    });
+
+    const response = await POST(
+      createMockRequest({
+        promotionId,
+        message: "Hi, I want details about this promo.",
+        contactMethod: "form",
+        turnstileToken: "token",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(contactInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_id: promotionId,
+        target_type: "promotion",
+        owner_id: ownerId,
+      })
+    );
+    expect(leadInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_id: promotionId,
+        target_type: "promotion",
+      })
+    );
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: ownerId,
+        message: 'Someone is interested in "Launch Week Promo".',
       })
     );
   });

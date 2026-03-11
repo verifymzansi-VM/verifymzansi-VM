@@ -53,6 +53,32 @@ export interface AuditLogEntry {
   created_at: string;
 }
 
+async function getPendingModerationCountInternal() {
+  const supabase = createAdminClient();
+
+  const [{ count: pendingListings }, { count: pendingBusinesses }, { count: pendingPromotions }] =
+    await Promise.all([
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+      supabase
+        .from("businesses")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+      supabase
+        .from("promotions")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+    ]);
+
+  return (pendingListings || 0) + (pendingBusinesses || 0) + (pendingPromotions || 0);
+}
+
+export async function getPendingModerationCount(): Promise<number> {
+  return getPendingModerationCountInternal();
+}
+
 // ── Queries ──────────────────────────────────────────────────
 
 /** Fetch all high-level stats for the admin dashboard */
@@ -65,7 +91,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     { count: openReports },
     { count: pendingVerifications },
     { count: activeSuspensions },
-    { count: pendingModeration },
+    pendingModeration,
   ] = await Promise.all([
     supabase.from(ACCOUNT_PROFILE_WRITE_TABLE).select("*", { count: "exact", head: true }),
     supabase.from("listings").select("*", { count: "exact", head: true }),
@@ -78,10 +104,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("*", { count: "exact", head: true })
       .eq("account_status", "suspended"),
-    supabase
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending_moderation"),
+    getPendingModerationCountInternal(),
   ]);
 
   return {
@@ -91,7 +114,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     openReports: openReports || 0,
     pendingVerifications: pendingVerifications || 0,
     activeSuspensions: activeSuspensions || 0,
-    pendingModeration: pendingModeration || 0,
+    pendingModeration,
   };
 }
 
@@ -356,7 +379,7 @@ export async function getAreaReports(area: MarketplaceArea) {
     MZANSI_MARKET: ["listing", "account_profile"],
     BUSINESS_ADS: ["business"],
     MALL_SHOPS: ["business"],
-    MZANSI_BUSINESS: ["business"],
+    MZANSI_BUSINESS: ["business", "business_profile", "storefront"],
     PROMOTIONS_EVENTS: ["promotion"],
   };
 
@@ -589,26 +612,34 @@ export interface ExtendedPlatformStats {
   hiddenListings: number;
 }
 
+async function getContentStatusTotalsInternal(status: "live" | "hidden") {
+  const supabase = createAdminClient();
+
+  const [{ count: listings }, { count: businesses }, { count: promotions }] = await Promise.all([
+    supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", status),
+    supabase.from("businesses").select("*", { count: "exact", head: true }).eq("status", status),
+    supabase.from("promotions").select("*", { count: "exact", head: true }).eq("status", status),
+  ]);
+
+  return (listings || 0) + (businesses || 0) + (promotions || 0);
+}
+
 /** Get extended platform stats beyond the basic dashboard stats */
 export async function getExtendedPlatformStats(): Promise<ExtendedPlatformStats> {
   const supabase = createAdminClient();
-  const [
-    { count: verifiedAccounts },
-    { count: bannedMembers },
-    { count: liveListings },
-    { count: hiddenListings },
-  ] = await Promise.all([
-    supabase
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("*", { count: "exact", head: true })
-      .or("account_verification_status.eq.verified"),
-    supabase
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("*", { count: "exact", head: true })
-      .eq("account_status", "banned"),
-    supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
-    supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "hidden"),
-  ]);
+  const [{ count: verifiedAccounts }, { count: bannedMembers }, liveListings, hiddenListings] =
+    await Promise.all([
+      supabase
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("*", { count: "exact", head: true })
+        .or("account_verification_status.eq.verified"),
+      supabase
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("*", { count: "exact", head: true })
+        .eq("account_status", "banned"),
+      getContentStatusTotalsInternal("live"),
+      getContentStatusTotalsInternal("hidden"),
+    ]);
   return {
     verifiedAccounts: verifiedAccounts || 0,
     bannedAccounts: bannedMembers || 0,

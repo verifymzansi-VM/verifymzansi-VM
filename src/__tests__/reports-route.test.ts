@@ -122,4 +122,24 @@ describe("POST /api/reports", () => {
     const res = await POST(createRequest(validBody));
     expect(res.status).toBe(200);
   });
+
+  it("accepts promotion-specific reasons that map to moderation categories", async () => {
+    mockAuth({ id: "user-1", email: "u@test.com" });
+    const insert = mockAdminInsert();
+
+    const res = await POST(
+      createRequest({
+        ...validBody,
+        targetType: "promotion",
+        reason: "expired",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_type: "promotion",
+      })
+    );
+  });
 });

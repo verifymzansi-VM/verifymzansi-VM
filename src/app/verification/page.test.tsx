@@ -87,4 +87,16 @@ describe("VerificationPage", () => {
       );
     });
   });
+
+  it("uses a generic completion CTA for non-posting return paths", async () => {
+    (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      new URLSearchParams("returnUrl=%2Fbilling")
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: /Continue/i })).toHaveAttribute("href", "/billing");
+    });
+  });
 });

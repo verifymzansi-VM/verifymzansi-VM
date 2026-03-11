@@ -94,7 +94,7 @@ export function GoogleOAuthButton({ mode }: GoogleOAuthButtonProps) {
           />
         </svg>
       )}
-      {mode === "login" ? "Sign in with Google" : "Sign up with Google"}
+      {mode === "login" ? "Continue with Google" : "Sign up with Google"}
     </Button>
   );
 }

@@ -23,6 +23,8 @@ export default function DsarPage() {
   const [details, setDetails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submittedReference, setSubmittedReference] = useState("");
+  const [submittedRequestId, setSubmittedRequestId] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
@@ -73,6 +75,9 @@ export default function DsarPage() {
         throw new Error(data.error || "Submission failed");
       }
 
+      const data = (await res.json()) as { reference?: string; requestId?: string };
+      setSubmittedReference(data.reference || "");
+      setSubmittedRequestId(data.requestId || "");
       setIsSubmitted(true);
     } catch (err) {
       toast({
@@ -132,8 +137,11 @@ export default function DsarPage() {
                     POPIA. You&apos;ll receive a confirmation email at <strong>{email}</strong>.
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Reference: DSAR-{Date.now().toString(36).toUpperCase()}
+                    Reference: {submittedReference || "Pending reference"}
                   </p>
+                  {submittedRequestId ? (
+                    <p className="text-xs text-muted-foreground">Case ID: {submittedRequestId}</p>
+                  ) : null}
                   <Button
                     variant="outline"
                     size="sm"

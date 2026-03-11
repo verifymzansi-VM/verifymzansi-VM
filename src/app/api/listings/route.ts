@@ -16,6 +16,7 @@ import {
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
+import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
@@ -120,6 +121,10 @@ function matchesAttributeFilters(
   );
 }
 
+function isPlaceholderListing(listing: { title: string | null; description?: string | null }) {
+  return isPlaceholderMarketplaceContent(listing.title, listing.description);
+}
+
 /**
  * GET /api/listings
  *
@@ -147,7 +152,15 @@ export async function GET(request: NextRequest) {
 
       while (true) {
         const batchQuery = applyBaseMarketFilters(
-          admin.from("listings").select(selectClause).eq("status", "live").eq("area", AREA),
+          admin
+            .from("listings")
+            .select(selectClause)
+            .eq("status", "live")
+            .eq("area", AREA)
+            .not("title", "ilike", "%seed%")
+            .not("title", "ilike", "%[seed]%")
+            .not("title", "ilike", "%demo%")
+            .not("title", "ilike", "%sample%"),
           filters
         ).range(from, from + batchSize - 1);
 
@@ -182,11 +195,16 @@ export async function GET(request: NextRequest) {
         from += batchSize;
       }
 
-      listings = listings.filter((listing) =>
-        matchesAttributeFilters(
-          (listing.attributes as Record<string, unknown> | null | undefined) ?? {},
-          filters.attributes
-        )
+      listings = listings.filter(
+        (listing) =>
+          !isPlaceholderListing({
+            title: String(listing.title ?? ""),
+            description: typeof listing.description === "string" ? listing.description : null,
+          }) &&
+          matchesAttributeFilters(
+            (listing.attributes as Record<string, unknown> | null | undefined) ?? {},
+            filters.attributes
+          )
       );
       total = listings.length;
       listings = listings.slice(offset, offset + limit);
@@ -196,7 +214,11 @@ export async function GET(request: NextRequest) {
           .from("listings")
           .select(selectClause, { count: "exact" })
           .eq("status", "live")
-          .eq("area", AREA),
+          .eq("area", AREA)
+          .not("title", "ilike", "%seed%")
+          .not("title", "ilike", "%[seed]%")
+          .not("title", "ilike", "%demo%")
+          .not("title", "ilike", "%sample%"),
         filters
       ).range(offset, offset + limit - 1);
 
@@ -222,8 +244,19 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
       }
 
-      listings = (data ?? []) as Record<string, unknown>[];
-      total = count ?? 0;
+      const filteredListings = ((data ?? []) as Record<string, unknown>[]).filter(
+        (listing) =>
+          !isPlaceholderListing({
+            title: String(listing.title ?? ""),
+            description: typeof listing.description === "string" ? listing.description : null,
+          })
+      );
+
+      listings = filteredListings;
+      total = Math.max(
+        0,
+        (count ?? filteredListings.length) - ((data?.length ?? 0) - filteredListings.length)
+      );
     }
 
     const sellerIds = Array.from(

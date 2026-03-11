@@ -14,7 +14,7 @@ vi.mock("@supabase/ssr", () => ({
   }),
 }));
 
-import { routeRequest as proxy } from "@/middleware";
+import { routeRequest as proxy } from "@/proxy";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -230,5 +230,60 @@ describe("proxy middleware — authenticated routing", () => {
     const res = await proxy(createMockRequest("/api/post/create"));
     expect(res.status).toBe(200);
     expect(mockFrom).not.toHaveBeenCalled();
+  });
+});
+
+describe("proxy middleware — Playwright stub mode", () => {
+  const originalStubMode = process.env.PLAYWRIGHT_SUPABASE_MODE;
+  const origUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const origKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.PLAYWRIGHT_SUPABASE_MODE = "stub";
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://playwright.supabase.stub";
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "playwright-anon-key";
+  });
+
+  afterEach(() => {
+    if (originalStubMode) process.env.PLAYWRIGHT_SUPABASE_MODE = originalStubMode;
+    else delete process.env.PLAYWRIGHT_SUPABASE_MODE;
+
+    if (origUrl) process.env.NEXT_PUBLIC_SUPABASE_URL = origUrl;
+    else delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+    if (origKey) process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = origKey;
+    else delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  });
+
+  it("allows public pages without calling Supabase", async () => {
+    const res = await proxy(createMockRequest("/mzansi-market"));
+
+    expect(res.status).toBe(200);
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+
+  it("redirects protected pages to login with returnUrl", async () => {
+    const res = await proxy(createMockRequest("/dashboard"));
+
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("returnUrl")).toBe("/dashboard");
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 for protected API routes", async () => {
+    const res = await proxy(createMockRequest("/api/verification/session/start"));
+
+    expect(res.status).toBe(401);
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+
+  it("keeps auth pages reachable", async () => {
+    const res = await proxy(createMockRequest("/login"));
+
+    expect(res.status).toBe(200);
+    expect(mockGetUser).not.toHaveBeenCalled();
   });
 });

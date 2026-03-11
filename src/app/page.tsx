@@ -188,6 +188,20 @@ export default async function HomePage() {
                       </Link>
                     </Button>
 
+                    <Button
+                      asChild
+                      size="lg"
+                      variant="outline"
+                      className="w-full sm:w-auto h-12 px-8 text-base rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10"
+                    >
+                      <Link href="/advertise">
+                        Advertise a promotion
+                        <ArrowRight className="h-5 w-5" />
+                      </Link>
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                     <Link
                       href="/pricing"
                       className="inline-flex items-center gap-2 text-sm font-medium text-warm-100 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-warm-950 rounded-full"
