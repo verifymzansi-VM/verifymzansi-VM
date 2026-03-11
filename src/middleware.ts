@@ -1,6 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { readAccountVerificationStatus } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -289,7 +289,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   if (pathname.startsWith("/post/edit") || pathname.startsWith("/api/post/edit")) {
     if (user) {
       const { data: profile, error: profileError } = await supabase
-        .from("seller_profiles")
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .select(
           "account_verification_status, seller_verification_status, account_status, suspended_until"
         )
@@ -297,7 +297,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         .maybeSingle();
 
       if (profileError) {
-        logger.error("Account profile lookup failed during posting gate", {
+        logger.error("Account profile lookup failed in posting gate", {
           path: pathname,
           userId: user.id,
           error: profileError.message,
@@ -323,7 +323,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         if (profile.suspended_until && new Date(profile.suspended_until) <= new Date()) {
           try {
             await supabase
-              .from("seller_profiles")
+              .from(ACCOUNT_PROFILE_WRITE_TABLE)
               .update({ account_status: "active", suspended_until: null })
               .eq("user_id", user.id);
           } catch {

@@ -44,7 +44,7 @@ export default async function ListingsPage() {
     const { data } = await supabase
       .from("listings")
       .select("*")
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .order("created_at", { ascending: false });
     listings = data || [];
   }

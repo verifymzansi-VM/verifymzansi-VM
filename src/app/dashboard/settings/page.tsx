@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { settingsDisplayNameSchema } from "@/lib/validations/profile";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +45,7 @@ export default function SettingsPage() {
       }
 
       const { error } = await supabase
-        .from("seller_profiles")
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({ display_name: result.data.displayName })
         .eq("user_id", user.id);
 

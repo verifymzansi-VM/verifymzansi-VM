@@ -5,7 +5,7 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import { readAccountVerificationStatus } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch account profile
     const { data: accountProfile } = await adminClient
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select(
         "display_name, account_verification_status, seller_verification_status, account_status, strikes, legal_hold, location_province, location_city"
       )

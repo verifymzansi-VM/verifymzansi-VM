@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { readAccountVerificationStatus } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { createClient } from "@/lib/supabase/client";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -43,7 +43,7 @@ export function useKycStatus() {
 
       // Check account profile verification status
       const { data: profile } = await supabase
-        .from("seller_profiles")
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .select("account_verification_status, seller_verification_status")
         .eq("user_id", user.id)
         .single();

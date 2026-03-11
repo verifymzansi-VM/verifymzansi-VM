@@ -42,15 +42,17 @@ const REPORT_REASON_TO_CATEGORY: Record<string, ReportCategory> = {
 
 const TARGET_TYPE_CANONICAL: Record<string, string> = {
   listing: "listing",
-  seller: "seller_profile",
+  seller: "account_profile",
   storefront: "business",
   business: "business",
   business_profile: "business",
-  seller_profile: "seller_profile",
+  seller_profile: "account_profile",
+  account_profile: "account_profile",
 };
 
 const TARGET_TYPE_TO_AREA: Record<string, MarketplaceArea> = {
   listing: "MZANSI_MARKET",
+  account_profile: "MZANSI_MARKET",
   seller_profile: "MZANSI_MARKET",
   business: "MZANSI_BUSINESS",
   storefront: "MZANSI_BUSINESS",

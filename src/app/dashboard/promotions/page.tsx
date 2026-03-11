@@ -51,7 +51,7 @@ export default async function MyPromotionsPage() {
     supabase
       .from("listings")
       .select("id, title, boost_until, area")
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .eq("status", "live")
       .gt("boost_until", now)
       .order("boost_until", { ascending: true }),
@@ -60,7 +60,7 @@ export default async function MyPromotionsPage() {
     supabase
       .from("listings")
       .select("id, title, featured_until, area")
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .eq("status", "live")
       .gt("featured_until", now)
       .order("featured_until", { ascending: true }),
@@ -69,7 +69,7 @@ export default async function MyPromotionsPage() {
     supabase
       .from("listings")
       .select("id, title, urgent_until, area")
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .eq("status", "live")
       .gt("urgent_until", now)
       .order("urgent_until", { ascending: true }),
@@ -80,7 +80,7 @@ export default async function MyPromotionsPage() {
       .select(
         "id, title, promotion_type, business_id, status, boost_until, featured_until, created_at"
       )
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .in("status", ["live", "pending_moderation", "draft"])
       .order("created_at", { ascending: false })
       .limit(50),

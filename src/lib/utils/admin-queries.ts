@@ -4,14 +4,14 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { readAccountVerificationStatus } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
 
 // ── Types ────────────────────────────────────────────────────
 
 export interface AdminDashboardStats {
   totalAccounts: number;
-  totalSellers: number;
+  totalMembers: number;
   totalListings: number;
   openReports: number;
   pendingVerifications: number;
@@ -38,7 +38,9 @@ export interface PendingVerification {
   auto_status: string | null;
   account_display_name?: string | null;
   account_verification_status?: string | null;
+  /** @deprecated Use account_display_name */
   seller_display_name?: string | null;
+  /** @deprecated Use account_verification_status */
   seller_verification_status: string | null;
 }
 
@@ -60,14 +62,14 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   const supabase = createAdminClient();
 
   const [
-    { count: totalSellers },
+    { count: totalMembers },
     { count: totalListings },
     { count: openReports },
     { count: pendingVerifications },
     { count: activeSuspensions },
     { count: pendingModeration },
   ] = await Promise.all([
-    supabase.from("seller_profiles").select("*", { count: "exact", head: true }),
+    supabase.from(ACCOUNT_PROFILE_WRITE_TABLE).select("*", { count: "exact", head: true }),
     supabase.from("listings").select("*", { count: "exact", head: true }),
     supabase.from("reports").select("*", { count: "exact", head: true }).eq("status", "open"),
     supabase
@@ -75,7 +77,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
       .select("*", { count: "exact", head: true })
       .eq("status", "pending"),
     supabase
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("*", { count: "exact", head: true })
       .eq("account_status", "suspended"),
     supabase
@@ -85,8 +87,8 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   ]);
 
   return {
-    totalAccounts: totalSellers || 0,
-    totalSellers: totalSellers || 0,
+    totalAccounts: totalMembers || 0,
+    totalMembers: totalMembers || 0,
     totalListings: totalListings || 0,
     openReports: openReports || 0,
     pendingVerifications: pendingVerifications || 0,
@@ -313,7 +315,7 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
 
   const userIds = Array.from(new Set(steps.map((s) => s.user_id))) as string[];
   const { data: profiles } = await supabase
-    .from("seller_profiles")
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
     .select("user_id, display_name, account_verification_status, seller_verification_status")
     .in("user_id", userIds);
 
@@ -417,9 +419,13 @@ export interface DashboardKycItem {
   account_verification_status?: string | null;
   account_status?: string | null;
   account_strikes?: number;
+  /** @deprecated Use account_display_name */
   seller_display_name?: string | null;
+  /** @deprecated Use account_verification_status */
   seller_verification_status: string | null;
+  /** @deprecated Use account_status */
   seller_account_status: string | null;
+  /** @deprecated Use account_strikes */
   seller_strikes: number;
 }
 
@@ -441,7 +447,7 @@ export async function getDashboardKycQueue(limit = 50): Promise<DashboardKycItem
   const userIds = Array.from(new Set(steps.map((s) => s.user_id))) as string[];
 
   const { data: profiles } = await supabase
-    .from("seller_profiles")
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
     .select(
       "user_id, display_name, account_verification_status, seller_verification_status, account_status, strikes"
     )
@@ -591,8 +597,8 @@ export async function getVerificationStepCounts(): Promise<VerificationStepCount
 export interface ExtendedPlatformStats {
   verifiedAccounts: number;
   bannedAccounts: number;
-  verifiedSellers: number;
-  bannedSellers: number;
+  verifiedMembers: number;
+  bannedMembers: number;
   liveListings: number;
   hiddenListings: number;
 }
@@ -602,16 +608,16 @@ export async function getExtendedPlatformStats(): Promise<ExtendedPlatformStats>
   const supabase = createAdminClient();
   const [
     { count: verifiedAccounts },
-    { count: bannedSellers },
+    { count: bannedMembers },
     { count: liveListings },
     { count: hiddenListings },
   ] = await Promise.all([
     supabase
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("*", { count: "exact", head: true })
       .or("account_verification_status.eq.verified,seller_verification_status.eq.verified"),
     supabase
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("*", { count: "exact", head: true })
       .eq("account_status", "banned"),
     supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
@@ -619,9 +625,9 @@ export async function getExtendedPlatformStats(): Promise<ExtendedPlatformStats>
   ]);
   return {
     verifiedAccounts: verifiedAccounts || 0,
-    bannedAccounts: bannedSellers || 0,
-    verifiedSellers: verifiedAccounts || 0,
-    bannedSellers: bannedSellers || 0,
+    bannedAccounts: bannedMembers || 0,
+    verifiedMembers: verifiedAccounts || 0,
+    bannedMembers: bannedMembers || 0,
     liveListings: liveListings || 0,
     hiddenListings: hiddenListings || 0,
   };

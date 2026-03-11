@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
@@ -52,14 +53,14 @@ function mockAuth(user: { id: string; app_metadata?: Record<string, unknown> } |
 }
 
 const STEP_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
-const SELLER_UUID = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
+const MEMBER_UUID = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
 const ADMIN_UUID = "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33";
 const MOD_UUID = "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380a44";
 const NONEXISTENT_UUID = "e4eebc99-9c0b-4ef8-bb6d-6bb9bd380a55";
 
 const baseStep = {
   id: STEP_UUID,
-  user_id: SELLER_UUID,
+  user_id: MEMBER_UUID,
   step_type: "id_doc",
   status: "pending",
   risk_level: "low",
@@ -83,7 +84,7 @@ describe("POST /api/admin/verification/decide", () => {
   });
 
   it("returns 403 when user is not admin or moderator", async () => {
-    mockAuth({ id: SELLER_UUID, app_metadata: { role: "seller" } });
+    mockAuth({ id: MEMBER_UUID, app_metadata: { role: "member" } });
     const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
     expect(response.status).toBe(403);
   });
@@ -186,7 +187,7 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           update: profileUpdate,
         };
@@ -255,7 +256,7 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({ error: null }),
@@ -312,7 +313,7 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           update: profileUpdate,
         };
@@ -375,7 +376,7 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           update: profileUpdate,
         };
@@ -430,7 +431,7 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({ error: null }),
@@ -498,7 +499,7 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           update: profileUpdate,
         };

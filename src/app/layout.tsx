@@ -76,10 +76,13 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const turbopackNamePolyfill =
+    'if(typeof __name!=="function"){window.__name=function(fn,name){Object.defineProperty(fn,"name",{value:name,configurable:true});return fn;};}';
 
   return (
     <html lang="en-ZA" suppressHydrationWarning>
       <body className="min-h-screen antialiased">
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: turbopackNamePolyfill }} />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"

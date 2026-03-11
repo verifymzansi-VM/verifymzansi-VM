@@ -126,7 +126,7 @@ describe("buyerVerifySchema", () => {
   it("accepts valid input", () => {
     expect(
       buyerVerifySchema.safeParse({
-        sellerProfileId: "550e8400-e29b-41d4-a716-446655440000",
+        accountProfileId: "550e8400-e29b-41d4-a716-446655440000",
         turnstileToken: "tok",
       }).success
     ).toBe(true);
@@ -135,7 +135,7 @@ describe("buyerVerifySchema", () => {
   it("rejects non-UUID", () => {
     expect(
       buyerVerifySchema.safeParse({
-        sellerProfileId: "abc",
+        accountProfileId: "abc",
         turnstileToken: "tok",
       }).success
     ).toBe(false);

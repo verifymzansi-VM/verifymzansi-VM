@@ -72,7 +72,7 @@ export default async function MzansiMarketPage() {
       <ShowroomHero
         slides={slides}
         fallbackTitle="Mzansi Market Showroom"
-        fallbackDescription="Browse classified ads from identity-verified sellers."
+        fallbackDescription="Browse classified ads from identity-verified members."
       />
 
       <TrustStrip variant="green" />

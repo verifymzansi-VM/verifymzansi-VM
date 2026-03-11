@@ -7,6 +7,7 @@ import { adminFlaggingActionSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("AdminFlagging");
 
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
       if (rpcErr) {
         // If RPC doesn't exist, do manual update
         await admin
-          .from("seller_profiles")
+          .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .update({ account_status: "warned" })
           .eq("user_id", ownerId);
       }
@@ -132,7 +133,7 @@ export async function POST(request: Request) {
       suspendUntil.setDate(suspendUntil.getDate() + (durationDays || 7));
 
       await admin
-        .from("seller_profiles")
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_status: "suspended",
           suspended_until: suspendUntil.toISOString(),
@@ -152,7 +153,7 @@ export async function POST(request: Request) {
         .eq("status", "live");
     } else if (action === "ban" && ownerId) {
       await admin
-        .from("seller_profiles")
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_status: "banned",
           banned_at: new Date().toISOString(),
@@ -210,7 +211,7 @@ export async function POST(request: Request) {
         reason,
         durationDays,
         ownerId,
-        sellerId: ownerId,
+        owner_user_id: ownerId,
         target_type: report.target_type,
         target_id: report.target_id,
       },

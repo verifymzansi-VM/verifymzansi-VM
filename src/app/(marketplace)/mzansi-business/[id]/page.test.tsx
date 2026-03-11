@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import BusinessDetailPage from "./page";
+import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 
 const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -87,13 +88,13 @@ function buildClient(
           }),
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_TABLE) {
         return {
           select: () => ({
             eq: () => ({
               maybeSingle: async () => ({
                 data: {
-                  id: "seller-1",
+                  id: "owner-1",
                   display_name: "Nomsa",
                   account_verification_status: "verified",
                   location_province: "Gauteng",
@@ -128,7 +129,7 @@ describe("BusinessDetailPage", () => {
     mockCreateClient.mockResolvedValue(
       buildClient({
         id: "business-1",
-        seller_id: "seller-1",
+        owner_id: "owner-1",
         business_name: "Nomsa Home Studio",
         description: "A home-based studio.",
         status: "live",
@@ -174,7 +175,7 @@ describe("BusinessDetailPage", () => {
     mockCreateClient.mockResolvedValue(
       buildClient({
         id: "business-2",
-        seller_id: "seller-1",
+        owner_id: "owner-1",
         business_name: "Mzansi Online",
         description: "Shop online.",
         status: "live",
@@ -224,7 +225,7 @@ describe("BusinessDetailPage", () => {
     mockCreateClient.mockResolvedValue(
       buildClient({
         id: "business-3",
-        seller_id: "seller-1",
+        owner_id: "owner-1",
         business_name: "Nomsa Socials",
         description: "Find us online.",
         status: "live",
@@ -269,7 +270,7 @@ describe("BusinessDetailPage", () => {
       buildClient(
         {
           id: "business-4",
-          seller_id: "seller-1",
+          owner_id: "owner-1",
           business_name: "Mall Style",
           description: "A mall store.",
           status: "live",
@@ -317,7 +318,7 @@ describe("BusinessDetailPage", () => {
       buildClient(
         {
           id: "business-5",
-          seller_id: "seller-1",
+          owner_id: "owner-1",
           business_name: "Nomsa Market Kitchen",
           description: "Fresh food and weekly events.",
           status: "live",

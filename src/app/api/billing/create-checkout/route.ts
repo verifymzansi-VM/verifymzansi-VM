@@ -8,6 +8,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { z } from "zod";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("Checkout");
 
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     // ── Get account profile ──────────────────────────────────
     const admin = createAdminClient();
     const { data: profile } = await admin
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id, display_name")
       .eq("user_id", user.id)
       .maybeSingle();

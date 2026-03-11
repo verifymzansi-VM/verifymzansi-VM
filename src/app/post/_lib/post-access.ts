@@ -1,11 +1,14 @@
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { AREA_LABELS, type AccountVerificationStatus, type MarketplaceArea } from "@/types/enums";
 
-export function isVerifiedSeller(
+export function isVerifiedMember(
   status: AccountVerificationStatus | null | undefined
 ): status is "verified" {
   return status === "verified";
 }
+
+/** @deprecated Use isVerifiedMember instead */
+export const isVerifiedSeller = isVerifiedMember;
 
 export function buildVerificationRedirectUrl(returnUrl: string): string {
   const safeReturnUrl = sanitizeReturnUrl(returnUrl);
@@ -17,7 +20,7 @@ export function buildPostCategoryHref(
   status: AccountVerificationStatus | null | undefined
 ): string {
   const safeTargetHref = sanitizeReturnUrl(targetHref);
-  return isVerifiedSeller(status) ? safeTargetHref : buildVerificationRedirectUrl(safeTargetHref);
+  return isVerifiedMember(status) ? safeTargetHref : buildVerificationRedirectUrl(safeTargetHref);
 }
 
 export function createVerificationRequiredPayload(area: MarketplaceArea) {

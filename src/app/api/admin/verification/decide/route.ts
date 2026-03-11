@@ -8,6 +8,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { getRoleFromUser, isModeratorOrAdmin, asAdminRole } from "@/lib/auth/roles";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("AdminVerification");
 
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
 
       if (allApproved) {
         await admin
-          .from("seller_profiles")
+          .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .update({
             account_verification_status: "verified",
             seller_verification_status: "verified",
@@ -155,7 +156,7 @@ export async function POST(request: Request) {
             actorId: user.id,
             actorRole: adminRole,
             action: "kyc_purge_scheduled",
-            targetType: "seller_profile",
+            targetType: "account_profile",
             targetId: step.user_id,
             metadata: {
               purge_after: purgeAfter,
@@ -166,7 +167,7 @@ export async function POST(request: Request) {
         }
       } else {
         await admin
-          .from("seller_profiles")
+          .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .update({
             account_verification_status: "pending_review",
             seller_verification_status: "pending_review",
@@ -176,7 +177,7 @@ export async function POST(request: Request) {
       }
     } else {
       await admin
-        .from("seller_profiles")
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_verification_status: "rejected",
           seller_verification_status: "rejected",
@@ -210,9 +211,7 @@ export async function POST(request: Request) {
         overrideReasonCode,
         risk_level: step.risk_level,
         risk_score: step.risk_score,
-        account_user_id: step.user_id,
         owner_user_id: step.user_id,
-        seller_user_id: step.user_id,
       },
     });
 

@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
+import { ACCOUNT_PROFILE_TABLE, readOwnerId } from "@/lib/account/compat";
 import type { Metadata } from "next";
 
 interface PromotionDetailPageProps {
@@ -44,13 +45,16 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
   if (!promotion) notFound();
 
   // Fetch advertiser profile (maybeSingle — the account may have been deleted)
-  const { data: advertiserProfile } = await supabase
-    .from("seller_profiles")
-    .select(
-      "display_name, account_verification_status, seller_verification_status, phone, masked_phone_public, location_province, location_city, strikes"
-    )
-    .eq("user_id", promotion.seller_id)
-    .maybeSingle();
+  const promotionOwnerId = readOwnerId(promotion);
+  const { data: advertiserProfile } = promotionOwnerId
+    ? await supabase
+        .from(ACCOUNT_PROFILE_TABLE)
+        .select(
+          "display_name, account_verification_status, seller_verification_status, phone, masked_phone_public, location_province, location_city, strikes"
+        )
+        .eq("user_id", promotionOwnerId)
+        .maybeSingle()
+    : { data: null };
 
   // Fetch linked business (if any)
   const linkedBusiness = promotion.business_id

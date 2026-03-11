@@ -5,6 +5,7 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import type { Metadata } from "next";
+import { ACCOUNT_PROFILE_TABLE, readOwnerId } from "@/lib/account/compat";
 import type { SellerVerificationStatus } from "@/types/enums";
 
 interface SimilarListingRow {
@@ -21,10 +22,10 @@ interface SimilarListingRow {
   created_at: string;
   boost_until: string | null;
   featured: boolean;
-  seller_id: string;
+  owner_id: string;
 }
 
-interface SimilarSellerRow {
+interface SimilarOwnerRow {
   user_id: string;
   display_name: string;
   seller_verification_status: SellerVerificationStatus | null;
@@ -68,13 +69,16 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   if (!listing) notFound();
 
   // Fetch listing owner profile (maybeSingle — the account may have been deleted)
-  const { data: seller } = await supabase
-    .from("seller_profiles")
-    .select(
-      "id, display_name, location_province, location_city, seller_verification_status, phone, masked_phone_public"
-    )
-    .eq("user_id", listing.seller_id)
-    .maybeSingle();
+  const listingOwnerId = readOwnerId(listing);
+  const { data: seller } = listingOwnerId
+    ? await supabase
+        .from(ACCOUNT_PROFILE_TABLE)
+        .select(
+          "id, display_name, location_province, location_city, seller_verification_status, phone, masked_phone_public"
+        )
+        .eq("user_id", listingOwnerId)
+        .maybeSingle()
+    : { data: null };
 
   // Track view
   supabase
@@ -86,7 +90,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   const { data: similarListings } = await supabase
     .from("listings")
     .select(
-      "id, title, price_cents, price_negotiable, condition, photos, location_province, location_city, category, attributes, created_at, boost_until, featured, seller_id"
+      "id, title, price_cents, price_negotiable, condition, photos, location_province, location_city, category, attributes, created_at, boost_until, featured, owner_id"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_MARKET")
@@ -97,14 +101,14 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
   // Fetch owner profiles for similar listings
   const similarItems = (similarListings ?? []) as SimilarListingRow[];
-  let similarSellers = new Map<string, SimilarSellerRow>();
+  let similarSellers = new Map<string, SimilarOwnerRow>();
   if (similarItems.length > 0) {
-    const sellerIds = Array.from(new Set(similarItems.map((l) => l.seller_id)));
-    const { data: sellerData } = await supabase
-      .from("seller_profiles")
+    const ownerIds = Array.from(new Set(similarItems.map((l) => l.owner_id)));
+    const { data: ownerData } = await supabase
+      .from(ACCOUNT_PROFILE_TABLE)
       .select("user_id, display_name, seller_verification_status")
-      .in("user_id", sellerIds);
-    similarSellers = new Map((sellerData ?? []).map((s) => [s.user_id, s]));
+      .in("user_id", ownerIds);
+    similarSellers = new Map((ownerData ?? []).map((s) => [s.user_id, s]));
   }
 
   const jsonLd = {

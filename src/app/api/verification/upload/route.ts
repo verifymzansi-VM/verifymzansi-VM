@@ -12,6 +12,7 @@ import {
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
 import crypto from "crypto";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("VerificationUpload");
 
@@ -132,14 +133,14 @@ export async function POST(request: NextRequest) {
     // ── Get account profile ──────────────────────────────────
     const admin = createAdminClient();
     let { data: profile } = await admin
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!profile) {
       const { data: createdProfile, error: createProfileError } = await admin
-        .from("seller_profiles")
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .upsert(
           {
             user_id: user.id,
@@ -368,7 +369,7 @@ export async function POST(request: NextRequest) {
 
     // ── Update account verification status to pending_review ─
     const { data: statusUpdated } = await admin
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
         account_verification_status: "pending_review",
         seller_verification_status: "pending_review",

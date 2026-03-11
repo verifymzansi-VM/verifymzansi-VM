@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const {
   mockCreateClient,
@@ -101,7 +102,7 @@ describe("POST /api/contact", () => {
         };
       }
 
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -187,7 +188,7 @@ describe("POST /api/contact", () => {
         };
       }
 
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({

@@ -5,6 +5,7 @@ import { POST as verifyOtp } from "@/app/api/otp/verify/route";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import * as smsService from "@/lib/services/sms";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 async function hashOtpForTest(otp: string): Promise<string> {
   const salt = new Uint8Array(16);
@@ -184,7 +185,7 @@ describe("OTP Routes", () => {
             };
           }
 
-          if (table === "seller_profiles") {
+          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
             return {
               select: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
@@ -273,7 +274,7 @@ describe("OTP Routes", () => {
             };
           }
 
-          if (table === "seller_profiles") {
+          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
             return {
               select: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({

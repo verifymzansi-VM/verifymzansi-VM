@@ -24,6 +24,7 @@ export const reportSchema = z.object({
     "business",
     "promotion",
     "seller",
+    "account_profile",
     "storefront",
     "seller_profile",
     "business_profile",

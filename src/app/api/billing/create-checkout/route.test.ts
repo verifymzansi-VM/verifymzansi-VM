@@ -3,6 +3,7 @@ import { POST as createCheckout } from "@/app/api/billing/create-checkout/route"
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { type NextRequest } from "next/server";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
@@ -81,7 +82,7 @@ describe("POST /api/billing/create-checkout", () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
 
     mockAdmin.from.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
@@ -102,7 +103,7 @@ describe("POST /api/billing/create-checkout", () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
 
     mockAdmin.from.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
@@ -128,11 +129,11 @@ describe("POST /api/billing/create-checkout", () => {
 
   it("happy path: returns checkoutUrl and paymentId on success", async () => {
     mockSupabase.auth.getUser.mockResolvedValue({
-      data: { user: { id: "user-1", email: "seller@test.com" } },
+      data: { user: { id: "user-1", email: "member@test.com" } },
     });
 
     mockAdmin.from.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),

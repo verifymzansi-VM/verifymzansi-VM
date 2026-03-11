@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { VerificationProgress } from "@/components/trust/verification-progress";
-import { readAccountVerificationStatus } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { AttentionBanner } from "@/components/dashboard/attention-banner";
 import { NeedsAttention } from "@/components/dashboard/needs-attention";
@@ -52,7 +52,7 @@ export default async function DashboardPage() {
     profileResult,
     verificationStepsResult,
     activeListingsResult,
-    sellerListingsResult,
+    ownerListingsResult,
     unreadLeadsResult,
     totalLeadsResult,
     activePromosResult,
@@ -65,57 +65,57 @@ export default async function DashboardPage() {
     recentListingChangesResult,
   ] = await Promise.all([
     // Account profile (maybeSingle – new users may not have a profile yet)
-    supabase.from("seller_profiles").select("*").eq("user_id", user.id).maybeSingle(),
+    supabase.from(ACCOUNT_PROFILE_TABLE).select("*").eq("user_id", user.id).maybeSingle(),
     // Verification steps
     supabase.from("verification_steps").select("step_type, status").eq("user_id", user.id),
     // Active listings count
     supabase
       .from("listings")
       .select("*", { count: "exact", head: true })
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .eq("status", "live"),
     // All listing records for views and activity
     supabase
       .from("listings")
       .select("id, title, status, created_at, updated_at")
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(50),
     // Unread leads count (NEW — the key actionable metric)
     supabase
       .from("leads")
       .select("*", { count: "exact", head: true })
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .eq("status", "new"),
     // Total leads count
     supabase
       .from("contact_events")
       .select("*", { count: "exact", head: true })
-      .eq("seller_id", user.id),
+      .eq("owner_id", user.id),
     // Active promotions count
     supabase
       .from("listings")
       .select("*", { count: "exact", head: true })
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .eq("status", "live")
       .or(`boost_until.gt.${now},featured_until.gt.${now},urgent_until.gt.${now}`),
     // Rejected listings count (NEW — needs attention)
     supabase
       .from("listings")
       .select("*", { count: "exact", head: true })
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .eq("status", "rejected"),
     // Pending moderation count (NEW — needs attention)
     supabase
       .from("listings")
       .select("*", { count: "exact", head: true })
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .in("status", ["pending_moderation", "flagged_for_review"]),
     // Expiring listings count (NEW — within 7 days)
     supabase
       .from("listings")
       .select("*", { count: "exact", head: true })
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .eq("status", "live")
       .lt("expires_at", sevenDaysFromNow)
       .gt("expires_at", now),
@@ -123,28 +123,25 @@ export default async function DashboardPage() {
     supabase
       .from("listings")
       .select("*", { count: "exact", head: true })
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .eq("status", "live")
       .or(
         `and(boost_until.gt.${now},boost_until.lt.${fortyEightHoursFromNow}),and(featured_until.gt.${now},featured_until.lt.${fortyEightHoursFromNow}),and(urgent_until.gt.${now},urgent_until.lt.${fortyEightHoursFromNow})`
       ),
     // Business count (for quick actions)
-    supabase
-      .from("businesses")
-      .select("*", { count: "exact", head: true })
-      .eq("seller_id", user.id),
+    supabase.from("businesses").select("*", { count: "exact", head: true }).eq("owner_id", user.id),
     // Recent leads for activity feed
     supabase
       .from("leads")
       .select("id, buyer_name, message, created_at")
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .order("created_at", { ascending: false })
       .limit(5),
     // Recent listing status changes for activity feed
     supabase
       .from("listings")
       .select("id, title, status, created_at, updated_at")
-      .eq("seller_id", user.id)
+      .eq("owner_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(5),
   ]);
@@ -152,8 +149,8 @@ export default async function DashboardPage() {
   const profile = profileResult.data;
   const verificationSteps = verificationStepsResult.data;
   const activeListings = activeListingsResult.count;
-  const sellerListings = sellerListingsResult.data;
-  const listingIds = sellerListings?.map((l) => l.id) ?? [];
+  const ownerListings = ownerListingsResult.data;
+  const listingIds = ownerListings?.map((l) => l.id) ?? [];
   const unreadLeadCount = unreadLeadsResult.count || 0;
   const totalLeadCount = totalLeadsResult.count || 0;
   const activePromos = activePromosResult.count;

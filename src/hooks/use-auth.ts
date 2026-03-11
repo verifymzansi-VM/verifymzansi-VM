@@ -2,7 +2,11 @@
 
 import { useEffect, useCallback, useRef } from "react";
 import { useAuthStore } from "@/stores/auth-store";
-import { normalizeUserRole, readAccountVerificationStatus } from "@/lib/account/compat";
+import {
+  ACCOUNT_PROFILE_WRITE_TABLE,
+  normalizeUserRole,
+  readAccountVerificationStatus,
+} from "@/lib/account/compat";
 import { createClient } from "@/lib/supabase/client";
 import { createLogger } from "@/lib/utils/logger";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
@@ -59,7 +63,7 @@ export function useAuth() {
 
       // Fetch account profile
       const { data: accountProfile } = await supabase
-        .from("seller_profiles")
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .select("*")
         .eq("user_id", authUser.id)
         .single();

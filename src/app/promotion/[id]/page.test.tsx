@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import PromotionDetailPage from "./page";
+import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 
 const { mockCreateClient, mockNotFound } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -60,7 +61,7 @@ function buildClient(options?: {
         };
       }
 
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_TABLE) {
         return {
           select: () => ({
             eq: () => ({
@@ -91,7 +92,7 @@ describe("PromotionDetailPage", () => {
       buildClient({
         promotion: {
           id: "promotion-1",
-          seller_id: "seller-1",
+          owner_id: "owner-1",
           business_id: "business-1",
           title: "Night Market",
           description: "Community event with food, music, and stalls.",
@@ -104,7 +105,7 @@ describe("PromotionDetailPage", () => {
         },
         advertiserProfile: {
           display_name: "Nomsa Advertiser",
-          seller_verification_status: "verified",
+          account_verification_status: "verified",
         },
         linkedBusiness: {
           id: "business-1",

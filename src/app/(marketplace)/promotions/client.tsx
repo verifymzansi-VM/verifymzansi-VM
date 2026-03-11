@@ -46,7 +46,7 @@ import { formatZAR } from "@/lib/utils/format";
 
 interface PromotionRow {
   id: string;
-  seller_id: string;
+  owner_id: string;
   business_id: string | null;
   title: string;
   promotion_type: PromotionType;
@@ -709,7 +709,7 @@ export function PromotionsExplorer() {
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {gridPromotions.map((promotion, index) => {
-              const accountProfile = accountProfileMap.get(promotion.seller_id);
+              const accountProfile = accountProfileMap.get(promotion.owner_id);
               const businessName = promotion.business_id
                 ? businessMap.get(promotion.business_id)
                 : undefined;

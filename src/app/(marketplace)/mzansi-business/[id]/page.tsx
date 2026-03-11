@@ -4,7 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import { readAccountVerificationStatus } from "@/lib/account/compat";
+import {
+  ACCOUNT_PROFILE_TABLE,
+  readAccountVerificationStatus,
+  readOwnerId,
+} from "@/lib/account/compat";
 import { BusinessDetailContent } from "@/components/business/business-detail-content";
 
 interface BusinessDetailPageProps {
@@ -50,11 +54,14 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
         .data
     : null;
 
-  const { data: ownerProfile } = await supabase
-    .from("seller_profiles")
-    .select("display_name, account_verification_status, seller_verification_status")
-    .eq("user_id", business.seller_id)
-    .maybeSingle();
+  const businessOwnerId = readOwnerId(business);
+  const { data: ownerProfile } = businessOwnerId
+    ? await supabase
+        .from(ACCOUNT_PROFILE_TABLE)
+        .select("display_name, account_verification_status, seller_verification_status")
+        .eq("user_id", businessOwnerId)
+        .maybeSingle()
+    : { data: null };
 
   const { data: promotions } = await supabase
     .from("promotions")

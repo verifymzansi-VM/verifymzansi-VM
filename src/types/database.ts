@@ -44,6 +44,7 @@ export interface AccountProfile {
   user_id: string;
   owner_id?: string;
   display_name: string;
+  bio: string | null;
   account_verification_status?: AccountVerificationStatus;
   seller_verification_status: SellerVerificationStatus;
   phone: string | null;

@@ -16,8 +16,8 @@ export default async function MetricsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Use user.id directly — listings.seller_id references auth.users(id)
-  const sellerId = user.id;
+  // Use user.id directly — listings.owner_id references auth.users(id)
+  const ownerId = user.id;
 
   // Fetch stats
   const [
@@ -29,14 +29,14 @@ export default async function MetricsPage() {
     supabase
       .from("listings")
       .select("*", { count: "exact", head: true })
-      .eq("seller_id", sellerId)
+      .eq("owner_id", ownerId)
       .eq("status", "live"),
-    supabase.from("listings").select("view_count").eq("seller_id", sellerId),
+    supabase.from("listings").select("view_count").eq("owner_id", ownerId),
     supabase
       .from("contact_events")
       .select("*", { count: "exact", head: true })
-      .eq("seller_id", sellerId),
-    supabase.from("listings").select("*", { count: "exact", head: true }).eq("seller_id", sellerId),
+      .eq("owner_id", ownerId),
+    supabase.from("listings").select("*", { count: "exact", head: true }).eq("owner_id", ownerId),
   ]);
 
   const totalViews =

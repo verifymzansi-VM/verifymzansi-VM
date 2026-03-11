@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { readAccountVerificationStatus } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import {
   DashboardSidebar,
   type DashboardSidebarBadges,
@@ -35,17 +35,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           supabase
             .from("leads")
             .select("*", { count: "exact", head: true })
-            .eq("seller_id", user.id)
+            .eq("owner_id", user.id)
             .eq("status", "new"),
           supabase
             .from("listings")
             .select("*", { count: "exact", head: true })
-            .eq("seller_id", user.id)
+            .eq("owner_id", user.id)
             .eq("status", "rejected"),
           supabase
             .from("listings")
             .select("*", { count: "exact", head: true })
-            .eq("seller_id", user.id)
+            .eq("owner_id", user.id)
             .in("status", ["pending_moderation", "flagged_for_review"]),
           supabase
             .from("verification_steps")
@@ -53,7 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             .eq("user_id", user.id)
             .in("status", ["approved", "pending"]),
           supabase
-            .from("seller_profiles")
+            .from(ACCOUNT_PROFILE_TABLE)
             .select("account_verification_status, seller_verification_status")
             .eq("user_id", user.id)
             .single(),

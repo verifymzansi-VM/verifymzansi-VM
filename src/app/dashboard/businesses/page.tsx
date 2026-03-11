@@ -45,7 +45,7 @@ export default async function MyBusinessesPage() {
     .select(
       "id, business_name, business_type, category, status, boost_until, featured_until, created_at"
     )
-    .eq("seller_id", user.id)
+    .eq("owner_id", user.id)
     .in("status", ["live", "pending_moderation", "draft", "rejected"])
     .order("created_at", { ascending: false })
     .limit(50);

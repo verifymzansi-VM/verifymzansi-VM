@@ -35,10 +35,10 @@ interface ListingRow {
   video_thumbnail: string | null;
   boost_until: string | null;
   featured: boolean;
-  seller_id: string;
+  owner_id: string;
 }
 
-interface SellerRow {
+interface OwnerRow {
   user_id: string;
   display_name: string;
   seller_verification_status: string;
@@ -46,7 +46,7 @@ interface SellerRow {
 
 interface ListingsResponse {
   listings?: ListingRow[];
-  sellers?: SellerRow[];
+  sellers?: OwnerRow[];
   total?: number;
   page?: number;
   limit?: number;
@@ -66,7 +66,7 @@ type ViewMode = "grid" | "list";
 export function MzansiMarketGrid() {
   const { filters, page, setPage, setFilter, resetFilters } = useMarketplaceStore();
   const [listings, setListings] = useState<ListingRow[]>([]);
-  const [sellers, setSellers] = useState<Map<string, SellerRow>>(new Map());
+  const [sellers, setSellers] = useState<Map<string, OwnerRow>>(new Map());
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<GridFetchError | null>(null);
@@ -336,7 +336,7 @@ export function MzansiMarketGrid() {
             const videoUrl = listing.videos?.[0];
             const displayUrl = videoUrl || listing.photos?.[0];
             const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
-            const seller = sellers.get(listing.seller_id);
+            const seller = sellers.get(listing.owner_id);
             const trustLevel = computeTrustLevel(
               (seller?.seller_verification_status ?? null) as SellerVerificationStatus | null
             );
@@ -362,8 +362,8 @@ export function MzansiMarketGrid() {
                   attributes={listing.attributes}
                   condition={listing.condition ?? undefined}
                   createdAt={listing.created_at}
-                  sellerTrustLevel={trustLevel}
-                  sellerName={seller?.display_name}
+                  ownerTrustLevel={trustLevel}
+                  ownerName={seller?.display_name}
                   boosted={isBoosted}
                   featured={listing.featured}
                 />
@@ -377,7 +377,7 @@ export function MzansiMarketGrid() {
             const videoUrl = listing.videos?.[0];
             const displayUrl = videoUrl || listing.photos?.[0];
             const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
-            const seller = sellers.get(listing.seller_id);
+            const seller = sellers.get(listing.owner_id);
             const trustLevel = computeTrustLevel(
               (seller?.seller_verification_status ?? null) as SellerVerificationStatus | null
             );
@@ -403,8 +403,8 @@ export function MzansiMarketGrid() {
                   attributes={listing.attributes}
                   condition={listing.condition ?? undefined}
                   createdAt={listing.created_at}
-                  sellerTrustLevel={trustLevel}
-                  sellerName={seller?.display_name}
+                  ownerTrustLevel={trustLevel}
+                  ownerName={seller?.display_name}
                   viewCount={undefined}
                   boosted={isBoosted}
                   featured={listing.featured}

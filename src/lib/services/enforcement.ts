@@ -3,6 +3,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { logAuditEvent, type AuditAction } from "./audit";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -12,7 +13,7 @@ const log = createLogger("Enforcement");
 export type EnforcementAction = "warning" | "suspend" | "ban" | "unban";
 
 interface EnforceParams {
-  sellerId: string;
+  ownerId: string;
   action: EnforcementAction;
   reason: string;
   moderatorId: string;
@@ -40,21 +41,21 @@ export async function enforceAction(params: EnforceParams) {
   let previousStatus: string | undefined;
   if (params.action === "unban") {
     const { data: profile, error: profileErr } = await supabase
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("account_status")
-      .eq("user_id", params.sellerId)
+      .eq("user_id", params.ownerId)
       .single();
     if (profileErr || !profile) {
-      throw new Error(`Account profile not found for unban: ${params.sellerId}`);
+      throw new Error(`Account profile not found for unban: ${params.ownerId}`);
     }
     previousStatus = profile.account_status;
   }
 
   // Update account status
   const { error } = await supabase
-    .from("seller_profiles")
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
     .update({ account_status: statusMap[params.action] })
-    .eq("user_id", params.sellerId);
+    .eq("user_id", params.ownerId);
 
   if (error) {
     throw new Error("Failed to update account status");
@@ -63,7 +64,7 @@ export async function enforceAction(params: EnforceParams) {
   // Create moderation action record
   try {
     await supabase.from("moderation_actions").insert({
-      target_seller_id: params.sellerId,
+      target_seller_id: params.ownerId,
       actor_id: params.moderatorId,
       action: params.action,
       reason: params.reason,
@@ -79,8 +80,8 @@ export async function enforceAction(params: EnforceParams) {
   // If banned, hide all content across all marketplace areas
   if (params.action === "ban") {
     const hideResults = await Promise.all([
-      supabase.from("listings").update({ status: "hidden" }).eq("seller_id", params.sellerId),
-      supabase.from("businesses").update({ status: "hidden" }).eq("seller_id", params.sellerId),
+      supabase.from("listings").update({ status: "hidden" }).eq("seller_id", params.ownerId),
+      supabase.from("businesses").update({ status: "hidden" }).eq("seller_id", params.ownerId),
     ]);
     const hideErrors = hideResults.filter((r) => r.error);
     if (hideErrors.length > 0) {
@@ -96,12 +97,12 @@ export async function enforceAction(params: EnforceParams) {
       supabase
         .from("listings")
         .update({ status: "hidden" })
-        .eq("seller_id", params.sellerId)
+        .eq("seller_id", params.ownerId)
         .eq("status", "live"),
       supabase
         .from("businesses")
         .update({ status: "hidden" })
-        .eq("seller_id", params.sellerId)
+        .eq("seller_id", params.ownerId)
         .eq("status", "live"),
     ]);
     const suspendErrors = suspendResults.filter((r) => r.error);
@@ -124,7 +125,7 @@ export async function enforceAction(params: EnforceParams) {
     const { data: lastAction } = await supabase
       .from("moderation_actions")
       .select("created_at")
-      .eq("target_seller_id", params.sellerId)
+      .eq("target_seller_id", params.ownerId)
       .in("action", ["ban", "suspend"])
       .order("created_at", { ascending: false })
       .limit(1)
@@ -137,13 +138,13 @@ export async function enforceAction(params: EnforceParams) {
       supabase
         .from("listings")
         .update({ status: "live" })
-        .eq("seller_id", params.sellerId)
+        .eq("seller_id", params.ownerId)
         .eq("status", "hidden")
         .gte("updated_at", hiddenSince),
       supabase
         .from("businesses")
         .update({ status: "live" })
-        .eq("seller_id", params.sellerId)
+        .eq("seller_id", params.ownerId)
         .eq("status", "hidden")
         .gte("updated_at", hiddenSince),
     ]);
@@ -167,8 +168,8 @@ export async function enforceAction(params: EnforceParams) {
     actorId: params.moderatorId,
     actorRole: "moderator",
     action: auditActionMap[params.action],
-    targetType: "seller_profile",
-    targetId: params.sellerId,
+    targetType: "account_profile",
+    targetId: params.ownerId,
     metadata: { reason: params.reason, reportId: params.reportId },
   });
 

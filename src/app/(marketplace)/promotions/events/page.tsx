@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import { readAccountVerificationStatus } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { PastEventsAccordion } from "./past-events-accordion";
 
 export const metadata = {
@@ -49,7 +49,7 @@ export default async function EventsPage() {
   const { data: events } = await admin
     .from("promotions")
     .select(
-      `id, seller_id, business_id, title, description, promotion_type, category,
+      `id, owner_id, business_id, title, description, promotion_type, category,
        photos, videos, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, boost_until, featured_until, view_count, created_at`
     )
@@ -66,7 +66,7 @@ export default async function EventsPage() {
   const { data: pastEvents } = await admin
     .from("promotions")
     .select(
-      `id, seller_id, business_id, title, promotion_type,
+      `id, owner_id, business_id, title, promotion_type,
        photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, view_count, created_at`
     )
@@ -78,10 +78,10 @@ export default async function EventsPage() {
 
   // Gather unique account IDs for trust levels
   const allEvents = [...(events ?? []), ...(pastEvents ?? [])];
-  const accountIds = [...new Set(allEvents.map((event) => event.seller_id))];
+  const accountIds = [...new Set(allEvents.map((event) => event.owner_id))];
   const { data: accountProfiles } = accountIds.length
     ? await admin
-        .from("seller_profiles")
+        .from(ACCOUNT_PROFILE_TABLE)
         .select("user_id, display_name, account_verification_status, seller_verification_status")
         .in("user_id", accountIds)
     : { data: [] };
@@ -144,7 +144,7 @@ export default async function EventsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {group.events.map((event, index) => {
-                  const accountProfile = accountProfileMap.get(event.seller_id as string);
+                  const accountProfile = accountProfileMap.get(event.owner_id as string);
                   const businessName = event.business_id
                     ? businessMap.get(event.business_id as string)
                     : undefined;
@@ -206,7 +206,7 @@ export default async function EventsPage() {
       {past.length > 0 && (
         <PastEventsAccordion
           events={past.map((event) => {
-            const accountProfile = accountProfileMap.get(event.seller_id);
+            const accountProfile = accountProfileMap.get(event.owner_id);
             const videos = event.videos as string[] | null;
             const photos = event.photos as string[] | null;
             return {

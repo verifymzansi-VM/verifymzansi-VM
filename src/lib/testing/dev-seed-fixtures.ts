@@ -7,13 +7,16 @@ import {
   type PromotionType,
 } from "@/types/enums";
 
-export interface DevSeedSeller {
+export interface DevSeedMember {
   email: string;
   name: string;
   phone: string;
   location_province: string;
   location_city: string;
 }
+
+/** @deprecated Use DevSeedMember */
+export type DevSeedSeller = DevSeedMember;
 
 export interface DevSeedListingFixture {
   category: ListingCategory;
@@ -73,6 +76,7 @@ export interface DevSeedBusinessRowRef {
   id: string;
   slug: string | null;
   seller_id: string;
+  owner_id?: string;
   location_province: string;
   location_city: string;
 }
@@ -87,31 +91,31 @@ const DEFAULT_OPERATING_HOURS = {
   sunday: "closed",
 } satisfies Record<string, unknown>;
 
-export const DEV_SEED_SELLERS: DevSeedSeller[] = [
+export const DEV_SEED_MEMBERS: DevSeedMember[] = [
   {
     email: "dev_seed_seller1@test.com",
-    name: "Dev Seed Seller One",
+    name: "Dev Seed Member One",
     phone: "+27000000010",
     location_province: "Gauteng",
     location_city: "Johannesburg",
   },
   {
     email: "dev_seed_seller2@test.com",
-    name: "Dev Seed Seller Two",
+    name: "Dev Seed Member Two",
     phone: "+27000000011",
     location_province: "Western Cape",
     location_city: "Cape Town",
   },
   {
     email: "dev_seed_seller3@test.com",
-    name: "Dev Seed Seller Three",
+    name: "Dev Seed Member Three",
     phone: "+27000000012",
     location_province: "KwaZulu-Natal",
     location_city: "Durban",
   },
   {
     email: "dev_seed_seller4@test.com",
-    name: "Dev Seed Seller Four",
+    name: "Dev Seed Member Four",
     phone: "+27000000013",
     location_province: "Eastern Cape",
     location_city: "Gqeberha",
@@ -599,7 +603,7 @@ export const DEV_SEED_PROMOTION_FIXTURES: DevSeedPromotionFixture[] = [
     category_key: "events_entertainment",
     title: "[Seed] Community Market Takeover",
     description:
-      "Upcoming vendor market with live hosting, family activities, and booking slots for local sellers.",
+      "Upcoming vendor market with live hosting, family activities, and booking slots for local members.",
     promotion_type: "event",
     photos: ["/images/promo/seed-mall-africa.png"],
     price_cents: null,
@@ -627,19 +631,22 @@ export const DEV_SEED_PROMOTION_FIXTURES: DevSeedPromotionFixture[] = [
   },
 ];
 
-function assignSellerId(sellerIds: string[], index: number): string {
-  if (sellerIds.length === 0) {
-    throw new Error("At least one seller ID is required to build development seed rows.");
+/** @deprecated Use DEV_SEED_MEMBERS */
+export const DEV_SEED_SELLERS = DEV_SEED_MEMBERS;
+
+function assignOwnerId(ownerIds: string[], index: number): string {
+  if (ownerIds.length === 0) {
+    throw new Error("At least one owner ID is required to build development seed rows.");
   }
 
-  return sellerIds[index % sellerIds.length];
+  return ownerIds[index % ownerIds.length];
 }
 
-export function buildDevSeedListings(sellerIds: string[]) {
+export function buildDevSeedListings(ownerIds: string[]) {
   const publishedAt = new Date().toISOString();
 
   return DEV_SEED_LISTING_FIXTURES.map((fixture, index) => ({
-    seller_id: assignSellerId(sellerIds, index),
+    seller_id: assignOwnerId(ownerIds, index),
     area: "MZANSI_MARKET" as const,
     category: fixture.category,
     title: fixture.title,
@@ -660,11 +667,11 @@ export function buildDevSeedListings(sellerIds: string[]) {
   }));
 }
 
-export function buildDevSeedBusinesses(sellerIds: string[]) {
+export function buildDevSeedBusinesses(ownerIds: string[]) {
   const publishedAt = new Date().toISOString();
 
   return DEV_SEED_BUSINESS_FIXTURES.map((fixture, index) => ({
-    seller_id: assignSellerId(sellerIds, index),
+    seller_id: assignOwnerId(ownerIds, index),
     area: "MZANSI_BUSINESS" as const,
     business_type: fixture.business_type,
     business_name: fixture.business_name,

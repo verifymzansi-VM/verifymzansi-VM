@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseJsonRequest } from "@/lib/utils/api";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient();
     const { data: profile, error: profileError } = await admin
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     const { province, city } = parsed.data;
 
     const { error: profileUpdateError } = await admin
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
         location_province: province,
         location_city: city,
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     );
 
     await admin
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
         account_verification_status: "pending_review",
         seller_verification_status: "pending_review",

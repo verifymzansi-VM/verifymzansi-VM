@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const { mockCreateClient, mockFrom } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -42,7 +43,7 @@ describe("GET /api/verification/status", () => {
 
   it("returns account-first verification status while keeping overallStatus compatible", async () => {
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -82,7 +83,7 @@ describe("GET /api/verification/status", () => {
 
   it("falls back to the legacy seller verification status when needed", async () => {
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -121,7 +122,7 @@ describe("GET /api/verification/status", () => {
 
   it("returns 404 when the account profile does not exist", async () => {
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({

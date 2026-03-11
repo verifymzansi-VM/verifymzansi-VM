@@ -58,7 +58,7 @@ export type AuditAction =
 
 interface AuditLogEntry {
   actorId: string;
-  actorRole?: "member" | "seller" | "moderator" | "admin" | "system";
+  actorRole?: "member" | "seller" | "moderator" | "admin" | "system" | "owner";
   action: AuditAction;
   targetType?: string;
   targetId?: string;

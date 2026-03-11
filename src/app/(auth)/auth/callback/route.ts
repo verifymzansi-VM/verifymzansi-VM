@@ -2,7 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  ACCOUNT_PROFILE_TABLE,
+  ACCOUNT_PROFILE_WRITE_TABLE,
+} from "@/lib/account/compat";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("AuthCallback");
@@ -32,7 +36,7 @@ export async function GET(request: Request) {
         try {
           const admin = createAdminClient();
           const { data: profile } = await admin
-            .from("seller_profiles")
+            .from(ACCOUNT_PROFILE_TABLE)
             .select("user_id")
             .eq("user_id", user.id)
             .maybeSingle();
@@ -45,7 +49,7 @@ export async function GET(request: Request) {
               user.email?.split("@")[0] ||
               "User";
 
-            await admin.from("seller_profiles").upsert(
+            await admin.from(ACCOUNT_PROFILE_WRITE_TABLE).upsert(
               {
                 user_id: user.id,
                 display_name: displayName,

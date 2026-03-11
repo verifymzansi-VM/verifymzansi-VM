@@ -367,7 +367,7 @@ export default function CreateListingPage() {
         <ListingDetailContent
           listing={{
             id: "preview-listing",
-            seller_id: "preview-seller",
+            owner_id: "preview-owner",
             title: title || "Your listing title",
             description: description || "Your listing description will appear here.",
             price_cents:

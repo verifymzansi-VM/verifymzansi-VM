@@ -12,6 +12,7 @@ import {
   buildAccountPhoneFields,
   normalizeSaPhone,
 } from "@/lib/utils/phone";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("Register");
 
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
 
   const { data: existingPhoneProfile, error: existingPhoneError } = await admin
-    .from("seller_profiles")
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
     .select("id")
     .eq("phone", normalizedPhone)
     .maybeSingle();
@@ -140,7 +141,7 @@ export async function POST(request: NextRequest) {
   // Create the account profile so downstream flows (dashboard, billing, posting) work.
   if (signUpData?.user?.id) {
     try {
-      const { error: profileError } = await admin.from("seller_profiles").upsert(
+      const { error: profileError } = await admin.from(ACCOUNT_PROFILE_WRITE_TABLE).upsert(
         {
           user_id: signUpData.user.id,
           display_name: parsed.data.displayName,
