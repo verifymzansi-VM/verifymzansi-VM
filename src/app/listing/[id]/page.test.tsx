@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ListingDetailPage from "./page";
+import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 
 const { mockCreateClient, mockNotFound } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -82,7 +83,7 @@ function buildClient(options?: {
         };
       }
 
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_TABLE) {
         return {
           select: () => ({
             eq: () => ({

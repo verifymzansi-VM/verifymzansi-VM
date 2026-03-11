@@ -60,9 +60,9 @@ export default async function AdminPage() {
         : "healthy";
 
   // ── Overview metrics ───────────────────────────────────────
-  const totalAccounts = stats.totalAccounts ?? stats.totalSellers;
-  const verifiedAccounts = extended?.verifiedAccounts ?? extended?.verifiedSellers ?? 0;
-  const bannedAccounts = extended?.bannedAccounts ?? extended?.bannedSellers ?? 0;
+  const totalAccounts = stats.totalAccounts;
+  const verifiedAccounts = extended?.verifiedAccounts ?? 0;
+  const bannedAccounts = extended?.bannedAccounts ?? 0;
   const verifiedPct =
     isAdminRole && extended && totalAccounts > 0
       ? Math.round((verifiedAccounts / totalAccounts) * 100)

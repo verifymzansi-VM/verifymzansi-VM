@@ -3,33 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
-import { ListingDetailContent } from "@/components/listings/listing-detail-content";
+import {
+  ListingDetailContent,
+  type SimilarListingRow,
+  type SimilarSellerRow,
+} from "@/components/listings/listing-detail-content";
 import type { Metadata } from "next";
 import { ACCOUNT_PROFILE_TABLE, readOwnerId } from "@/lib/account/compat";
-import type { SellerVerificationStatus } from "@/types/enums";
-
-interface SimilarListingRow {
-  id: string;
-  title: string;
-  price_cents: number | null;
-  price_negotiable: boolean;
-  condition: string | null;
-  photos: string[];
-  location_province: string;
-  location_city: string;
-  category: string;
-  attributes: Record<string, unknown>;
-  created_at: string;
-  boost_until: string | null;
-  featured: boolean;
-  owner_id: string;
-}
-
-interface SimilarOwnerRow {
-  user_id: string;
-  display_name: string;
-  seller_verification_status: SellerVerificationStatus | null;
-}
 
 interface ListingDetailPageProps {
   params: Promise<{ id: string }>;
@@ -101,9 +81,13 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
   // Fetch owner profiles for similar listings
   const similarItems = (similarListings ?? []) as SimilarListingRow[];
-  let similarSellers = new Map<string, SimilarOwnerRow>();
+  let similarSellers = new Map<string, SimilarSellerRow>();
   if (similarItems.length > 0) {
-    const ownerIds = Array.from(new Set(similarItems.map((l) => l.owner_id)));
+    const ownerIds = Array.from(
+      new Set(
+        similarItems.map((item) => readOwnerId(item)).filter((id): id is string => Boolean(id))
+      )
+    );
     const { data: ownerData } = await supabase
       .from(ACCOUNT_PROFILE_TABLE)
       .select("user_id, display_name, seller_verification_status")

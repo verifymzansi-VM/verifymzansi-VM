@@ -47,7 +47,7 @@ describe("admin-queries", () => {
       const stats = await getAdminDashboardStats();
 
       expect(stats.totalAccounts).toBe(5);
-      expect(stats.totalSellers).toBe(5);
+      expect(stats.totalMembers).toBe(5);
       expect(stats.totalListings).toBe(5);
       expect(stats.openReports).toBe(5);
       expect(typeof stats.pendingVerifications).toBe("number");
@@ -59,7 +59,7 @@ describe("admin-queries", () => {
       const stats = await getAdminDashboardStats();
 
       expect(stats.totalAccounts).toBe(0);
-      expect(stats.totalSellers).toBe(0);
+      expect(stats.totalMembers).toBe(0);
       expect(stats.openReports).toBe(0);
     });
   });
@@ -252,8 +252,9 @@ describe("admin-queries", () => {
       const stats = await getExtendedPlatformStats();
 
       expect(stats.verifiedAccounts).toBe(7);
-      expect(stats.verifiedSellers).toBe(7);
+      expect(stats.verifiedMembers).toBe(7);
       expect(stats.bannedAccounts).toBe(7);
+      expect(stats.bannedMembers).toBe(7);
     });
   });
 });

@@ -173,8 +173,8 @@ describe("ListingCard", () => {
     expect(listingLink).toBeTruthy();
   });
 
-  it("should render trust badge when seller trust level provided", () => {
-    render(<ListingCard {...defaultProps} sellerTrustLevel={2 as never} />);
+  it("should render trust badge when owner trust level provided", () => {
+    render(<ListingCard {...defaultProps} ownerTrustLevel={2 as never} />);
     expect(screen.getByTestId("trust-badge")).toBeTruthy();
   });
 
