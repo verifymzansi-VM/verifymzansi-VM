@@ -4,6 +4,7 @@ import { verifyTurnstileToken, requireValidTurnstile } from "./turnstile";
 describe("turnstile verification", () => {
   beforeEach(() => {
     vi.stubEnv("TURNSTILE_SECRET_KEY", "test-secret-key-1234567890");
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key-1234567890");
     vi.stubEnv("NODE_ENV", "production");
   });
 
@@ -70,6 +71,7 @@ describe("turnstile verification", () => {
     it("allows bypass in development mode with placeholder token", async () => {
       vi.stubEnv("NODE_ENV", "development");
       vi.stubEnv("TURNSTILE_SECRET_KEY", "");
+      vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
 
       const result = await verifyTurnstileToken({ token: "dev-turnstile-bypass" });
       expect(result.success).toBe(true);

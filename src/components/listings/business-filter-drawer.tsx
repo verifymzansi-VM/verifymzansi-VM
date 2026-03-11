@@ -64,6 +64,7 @@ export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
           <Button
             size="lg"
             className="rounded-full shadow-lg h-14 w-14 bg-brand-blue hover:bg-brand-blue/90"
+            aria-label="Open business filters"
           >
             <SlidersHorizontal className="h-5 w-5" />
             {activeFilterCount > 0 && (
@@ -90,6 +91,7 @@ export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
                 id="drawer-business-search"
                 type="search"
                 placeholder="Search businesses, services, or brands"
+                aria-label="Search businesses"
                 className="pl-9"
                 value={localQuery}
                 onChange={(event) => {

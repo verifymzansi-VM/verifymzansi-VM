@@ -77,7 +77,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const nonce = (await headers()).get("x-nonce") ?? undefined;
   const turbopackNamePolyfill =
-    'if(typeof __name!=="function"){window.__name=function(fn,name){Object.defineProperty(fn,"name",{value:name,configurable:true});return fn;};}';
+    'if(typeof globalThis.__name!=="function"){globalThis.__name=function(fn,name){Object.defineProperty(fn,"name",{value:name,configurable:true});return fn;};}var __name=globalThis.__name;';
 
   return (
     <html lang="en-ZA" suppressHydrationWarning>

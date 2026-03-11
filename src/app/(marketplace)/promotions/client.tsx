@@ -553,6 +553,7 @@ export function PromotionsExplorer() {
             <Button
               size="lg"
               className="rounded-full shadow-lg h-14 w-14 bg-red-500 hover:bg-red-600 relative"
+              aria-label="Open promotion filters"
             >
               <SlidersHorizontal className="h-5 w-5" />
               {activeFilterCount > 0 && (

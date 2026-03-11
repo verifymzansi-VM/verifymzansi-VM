@@ -4,7 +4,7 @@ import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/li
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
 
-const logger = createLogger("Middleware");
+const logger = createLogger("Proxy");
 
 // -- Security helpers --------------------------------------------------------
 
@@ -53,15 +53,15 @@ function applySecurityHeaders(response: NextResponse, csp: string): void {
 }
 
 /**
- * Wrap a middleware result with CSP nonce + security headers.
+ * Wrap a proxy result with CSP nonce + security headers.
  * Redirects and error responses get basic security headers only.
  */
-function withSecurityHeaders(request: NextRequest, middlewareResponse: NextResponse): NextResponse {
-  if (middlewareResponse.headers.has("location") || middlewareResponse.status >= 400) {
-    middlewareResponse.headers.set("X-Content-Type-Options", "nosniff");
-    middlewareResponse.headers.set("X-Frame-Options", "DENY");
-    middlewareResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-    return middlewareResponse;
+function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse): NextResponse {
+  if (proxyResponse.headers.has("location") || proxyResponse.status >= 400) {
+    proxyResponse.headers.set("X-Content-Type-Options", "nosniff");
+    proxyResponse.headers.set("X-Frame-Options", "DENY");
+    proxyResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    return proxyResponse;
   }
 
   const nonce = generateNonce();
@@ -76,7 +76,7 @@ function withSecurityHeaders(request: NextRequest, middlewareResponse: NextRespo
   });
 
   // Preserve cookies set during auth (Supabase session refresh, etc.)
-  for (const cookie of middlewareResponse.cookies.getAll()) {
+  for (const cookie of proxyResponse.cookies.getAll()) {
     response.cookies.set(cookie);
   }
 
@@ -345,14 +345,14 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   return response;
 }
 
-// -- Next.js middleware entry point -----------------------------------------
+// -- Next.js proxy entry point ----------------------------------------------
 
 /**
- * Edge middleware called by Next.js on every matched request.
+ * Edge proxy called by Next.js on every matched request.
  * Delegates to routeRequest() for auth/routing, then wraps
  * the response with security headers (CSP nonce, HSTS, etc.).
  */
-export async function middleware(request: NextRequest): Promise<NextResponse> {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const routeResponse = await routeRequest(request);
   return withSecurityHeaders(request, routeResponse);
 }

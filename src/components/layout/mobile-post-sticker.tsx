@@ -7,9 +7,18 @@ import { cn } from "@/lib/utils";
 export function MobilePostSticker() {
   const pathname = usePathname();
   const isActive = pathname.startsWith("/post/create");
+  const hasNearbyFilterFab =
+    pathname.startsWith("/mzansi-market") ||
+    pathname.startsWith("/mzansi-business") ||
+    pathname.startsWith("/promotions");
 
   return (
-    <div className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[60]">
+    <div
+      className={cn(
+        "pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[60]",
+        hasNearbyFilterFab ? "left-4 right-auto" : "right-4"
+      )}
+    >
       <Link
         href="/post/create"
         aria-current={isActive ? "page" : undefined}

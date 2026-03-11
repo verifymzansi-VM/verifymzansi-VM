@@ -28,7 +28,7 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    const verificationStatus = readAccountVerificationStatus(profile);
+    const verificationStatus = readAccountVerificationStatus(profile) ?? "pending_review";
 
     const { data: steps } = await supabase
       .from("verification_steps")

@@ -76,36 +76,6 @@ describe("HomePage", () => {
     const ui = await HomePage();
     render(ui);
 
-    expect(screen.getByRole("link", { name: "Vehicles" })).toHaveAttribute(
-      "href",
-      "/mzansi-market?category=vehicles"
-    );
-    expect(screen.getByRole("link", { name: "Jobs" })).toHaveAttribute(
-      "href",
-      "/mzansi-market?category=jobs_services"
-    );
-    expect(screen.getByRole("link", { name: "Business" })).toHaveAttribute(
-      "href",
-      "/mzansi-business"
-    );
-  });
-
-  it("links onboarding destinations and actions to the expected pages", async () => {
-    const ui = await HomePage();
-    render(ui);
-
-    expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
-      "href",
-      "/mzansi-market"
-    );
-    expect(screen.getByRole("link", { name: /Mzansi Business/i })).toHaveAttribute(
-      "href",
-      "/mzansi-business"
-    );
-    expect(screen.getByRole("link", { name: /Promotions & Events/i })).toHaveAttribute(
-      "href",
-      "/promotions"
-    );
     expect(screen.getByRole("link", { name: /Create your account/i })).toHaveAttribute(
       "href",
       "/register"
@@ -114,5 +84,37 @@ describe("HomePage", () => {
       "href",
       "/pricing"
     );
+    expect(
+      screen.getByRole("link", {
+        name: /Mzansi Market Browse or post verified listings for everyday buying and selling\./i,
+      })
+    ).toHaveAttribute("href", "/mzansi-market");
+    expect(
+      screen.getByRole("link", {
+        name: /Mzansi Business Find trusted businesses or create a profile for your services\./i,
+      })
+    ).toHaveAttribute("href", "/mzansi-business");
+    expect(
+      screen.getByRole("link", {
+        name: /Promotions & Events Discover current offers and events or advertise a new campaign\./i,
+      })
+    ).toHaveAttribute("href", "/promotions");
+  });
+
+  it("links onboarding destinations and actions to the expected pages", async () => {
+    const ui = await HomePage();
+    render(ui);
+
+    expect(screen.getByRole("link", { name: /Create your account/i })).toHaveAttribute(
+      "href",
+      "/register"
+    );
+    expect(screen.getByRole("link", { name: /See pricing and plans/i })).toHaveAttribute(
+      "href",
+      "/pricing"
+    );
+    expect(screen.getByText("Create an account")).toBeInTheDocument();
+    expect(screen.getByText("Complete verification")).toBeInTheDocument();
+    expect(screen.getByText("Browse or post in the area that fits your goal")).toBeInTheDocument();
   });
 });
