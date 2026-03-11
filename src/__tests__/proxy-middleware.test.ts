@@ -14,7 +14,7 @@ vi.mock("@supabase/ssr", () => ({
   }),
 }));
 
-import { routeRequest as proxy } from "@/proxy";
+import { routeRequest } from "@/middleware";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -26,7 +26,7 @@ function createMockRequest(path: string, options?: { hostname?: string }): NextR
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
-describe("proxy middleware — missing Supabase env", () => {
+describe("middleware — missing Supabase env", () => {
   const origUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const origKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -45,26 +45,26 @@ describe("proxy middleware — missing Supabase env", () => {
   });
 
   it("returns 503 for protected API routes when Supabase not configured", async () => {
-    const res = await proxy(createMockRequest("/api/admin/users"));
+    const res = await routeRequest(createMockRequest("/api/admin/users"));
     expect(res.status).toBe(503);
     const body = await res.json();
     expect(body.error).toMatch(/misconfigured/i);
   });
 
   it("redirects protected page routes to / when Supabase not configured", async () => {
-    const res = await proxy(createMockRequest("/dashboard"));
+    const res = await routeRequest(createMockRequest("/dashboard"));
     expect(res.status).toBe(307);
     expect(new URL(res.headers.get("location")!).pathname).toBe("/");
   });
 
   it("allows public pages through when Supabase not configured", async () => {
-    const res = await proxy(createMockRequest("/"));
+    const res = await routeRequest(createMockRequest("/"));
     // NextResponse.next() returns 200
     expect(res.status).toBe(200);
   });
 
   it("redirects legacy root auth code links to the callback route", async () => {
-    const res = await proxy(createMockRequest("/?code=legacy-code&type=signup"));
+    const res = await routeRequest(createMockRequest("/?code=legacy-code&type=signup"));
     expect(res.status).toBe(307);
 
     const location = new URL(res.headers.get("location")!);
@@ -76,19 +76,19 @@ describe("proxy middleware — missing Supabase env", () => {
   });
 
   it("blocks /billing when Supabase not configured", async () => {
-    const res = await proxy(createMockRequest("/billing/checkout"));
+    const res = await routeRequest(createMockRequest("/billing/checkout"));
     expect(res.status).toBe(307);
     expect(new URL(res.headers.get("location")!).pathname).toBe("/");
   });
 
   it("blocks /verification when Supabase not configured", async () => {
-    const res = await proxy(createMockRequest("/verification"));
+    const res = await routeRequest(createMockRequest("/verification"));
     expect(res.status).toBe(307);
     expect(new URL(res.headers.get("location")!).pathname).toBe("/");
   });
 });
 
-describe("proxy middleware — authenticated routing", () => {
+describe("middleware — authenticated routing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
@@ -98,7 +98,7 @@ describe("proxy middleware — authenticated routing", () => {
   it("redirects unauthenticated users from /dashboard to /login", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
-    const res = await proxy(createMockRequest("/dashboard"));
+    const res = await routeRequest(createMockRequest("/dashboard"));
     expect(res.status).toBe(307);
     const location = new URL(res.headers.get("location")!);
     expect(location.pathname).toBe("/login");
@@ -110,7 +110,7 @@ describe("proxy middleware — authenticated routing", () => {
 
     // /api routes under protected prefixes like /dashboard don't exist,
     // but /api/admin is a protected admin prefix
-    const res = await proxy(createMockRequest("/api/admin/stats"));
+    const res = await routeRequest(createMockRequest("/api/admin/stats"));
     expect(res.status).toBe(401);
   });
 
@@ -125,7 +125,7 @@ describe("proxy middleware — authenticated routing", () => {
       },
     });
 
-    const res = await proxy(createMockRequest("/api/admin/stats"));
+    const res = await routeRequest(createMockRequest("/api/admin/stats"));
     expect(res.status).toBe(403);
   });
 
@@ -140,7 +140,7 @@ describe("proxy middleware — authenticated routing", () => {
       },
     });
 
-    const res = await proxy(createMockRequest("/admin/dashboard"));
+    const res = await routeRequest(createMockRequest("/admin/dashboard"));
     expect(res.status).toBe(200);
   });
 
@@ -155,7 +155,7 @@ describe("proxy middleware — authenticated routing", () => {
       },
     });
 
-    const res = await proxy(createMockRequest("/admin/reports"));
+    const res = await routeRequest(createMockRequest("/admin/reports"));
     expect(res.status).toBe(200);
   });
 
@@ -170,18 +170,20 @@ describe("proxy middleware — authenticated routing", () => {
       },
     });
 
-    const res = await proxy(createMockRequest("/login"));
+    const res = await routeRequest(createMockRequest("/login"));
     expect(res.status).toBe(307);
     expect(new URL(res.headers.get("location")!).pathname).toBe("/dashboard");
   });
 
   it("allows the public home page without redirecting", async () => {
-    const res = await proxy(createMockRequest("/"));
+    const res = await routeRequest(createMockRequest("/"));
     expect(res.status).toBe(200);
   });
 
   it("does not redirect the auth callback route again", async () => {
-    const res = await proxy(createMockRequest("/auth/callback?code=legacy-code&type=signup"));
+    const res = await routeRequest(
+      createMockRequest("/auth/callback?code=legacy-code&type=signup")
+    );
     expect(res.status).toBe(200);
   });
 
@@ -196,7 +198,7 @@ describe("proxy middleware — authenticated routing", () => {
       },
     });
 
-    const res = await proxy(createMockRequest("/login"));
+    const res = await routeRequest(createMockRequest("/login"));
     expect(res.status).toBe(200);
   });
 
@@ -211,7 +213,7 @@ describe("proxy middleware — authenticated routing", () => {
       },
     });
 
-    const res = await proxy(createMockRequest("/post/create"));
+    const res = await routeRequest(createMockRequest("/post/create"));
     expect(res.status).toBe(200);
     expect(mockFrom).not.toHaveBeenCalled();
   });
@@ -227,13 +229,13 @@ describe("proxy middleware — authenticated routing", () => {
       },
     });
 
-    const res = await proxy(createMockRequest("/api/post/create"));
+    const res = await routeRequest(createMockRequest("/api/post/create"));
     expect(res.status).toBe(200);
     expect(mockFrom).not.toHaveBeenCalled();
   });
 });
 
-describe("proxy middleware — Playwright stub mode", () => {
+describe("middleware — Playwright stub mode", () => {
   const originalStubMode = process.env.PLAYWRIGHT_SUPABASE_MODE;
   const origUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const origKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -257,14 +259,14 @@ describe("proxy middleware — Playwright stub mode", () => {
   });
 
   it("allows public pages without calling Supabase", async () => {
-    const res = await proxy(createMockRequest("/mzansi-market"));
+    const res = await routeRequest(createMockRequest("/mzansi-market"));
 
     expect(res.status).toBe(200);
     expect(mockGetUser).not.toHaveBeenCalled();
   });
 
   it("redirects protected pages to login with returnUrl", async () => {
-    const res = await proxy(createMockRequest("/dashboard"));
+    const res = await routeRequest(createMockRequest("/dashboard"));
 
     expect(res.status).toBe(307);
     const location = new URL(res.headers.get("location")!);
@@ -274,14 +276,14 @@ describe("proxy middleware — Playwright stub mode", () => {
   });
 
   it("returns 401 for protected API routes", async () => {
-    const res = await proxy(createMockRequest("/api/verification/session/start"));
+    const res = await routeRequest(createMockRequest("/api/verification/session/start"));
 
     expect(res.status).toBe(401);
     expect(mockGetUser).not.toHaveBeenCalled();
   });
 
   it("keeps auth pages reachable", async () => {
-    const res = await proxy(createMockRequest("/login"));
+    const res = await routeRequest(createMockRequest("/login"));
 
     expect(res.status).toBe(200);
     expect(mockGetUser).not.toHaveBeenCalled();

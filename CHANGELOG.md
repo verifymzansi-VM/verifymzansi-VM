@@ -1,5 +1,21 @@
 # VerifyMzansi — Recent Development Log
 
+## Cloudflare Middleware Compatibility Fix (2026-03-12)
+
+- **Root cause fixed:** Next.js 16 `src/proxy.ts` runs on the Node.js runtime,
+  which OpenNext Cloudflare rejects with
+  `Node.js middleware is not currently supported`.
+- **Implementation:** Replaced the active request gate with Edge
+  `src/middleware.ts`, removed `src/proxy.ts`, and kept the existing auth, CSP,
+  and route-protection logic intact.
+- **Tests updated:** Middleware routing tests now import from
+  `src/middleware.ts` and use the current naming.
+- **Validation:** `pnpm run build` passes and
+  `pnpm exec vitest run src/__tests__/proxy-middleware.test.ts` passes.
+  `pnpm run build:cloudflare` remains intentionally blocked on native Windows by
+  `scripts/preflight-cloudflare.js`; full Cloudflare bundling still needs Linux,
+  WSL on ext4, or CI.
+
 ## Production Deploy — WSL Build Fix (2026-03-01)
 
 - **Symlink EPERM resolved:** Moved Cloudflare build from native Windows to WSL
