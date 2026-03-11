@@ -106,7 +106,7 @@ export default function PricingPage() {
     "@context": "https://schema.org",
     "@type": "WebPage",
     name: "VerifyMzansi Pricing",
-    url: "https://verifymzansi.com/pricing",
+    url: `${process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com"}/pricing`,
     mainEntity: {
       "@type": "ItemList",
       itemListElement: allPlans.map((plan, i) => ({

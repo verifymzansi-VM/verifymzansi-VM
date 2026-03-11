@@ -13,12 +13,15 @@ import { BusinessFilterDrawer } from "@/components/listings/business-filter-draw
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { isPlaceholderMarketplaceContent } from "../../../lib/utils/placeholder-content";
+import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 
 export const metadata = {
   title: "Mzansi Business",
   description:
     "Discover verified South African businesses — shops, services, mobile providers, and more on VerifyMzansi.",
+  alternates: {
+    canonical: "/mzansi-business",
+  },
 };
 
 /** Revalidate every 60 seconds (ISR) */
@@ -28,18 +31,28 @@ export default async function MzansiBusinessPage() {
   const supabase = await createClient();
 
   // Fetch top businesses for showroom hero
-  const { data: topBusinesses } = await supabase
-    .from("businesses")
-    .select(
-      "id, business_name, description, cover_photo, cover_video, video_thumbnail, location_province, location_city, boost_until"
-    )
-    .eq("status", "live")
-    .eq("area", "MZANSI_BUSINESS")
-    .not("business_name", "ilike", "%seed%")
-    .not("business_name", "ilike", "%[seed]%")
-    .order("boost_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(10);
+  const [{ data: topBusinesses }, { data: allLive }, { data: malls }] = await Promise.all([
+    supabase
+      .from("businesses")
+      .select(
+        "id, business_name, description, cover_photo, cover_video, video_thumbnail, location_province, location_city, boost_until"
+      )
+      .eq("status", "live")
+      .eq("area", "MZANSI_BUSINESS")
+      .not("business_name", "ilike", "%seed%")
+      .not("business_name", "ilike", "%[seed]%")
+      .order("boost_until", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(10),
+    supabase
+      .from("businesses")
+      .select("category, business_name, description")
+      .eq("status", "live")
+      .eq("area", "MZANSI_BUSINESS")
+      .not("business_name", "ilike", "%seed%")
+      .not("business_name", "ilike", "%[seed]%"),
+    supabase.from("malls").select("id, name").order("name"),
+  ]);
 
   const visibleTopBusinesses = (topBusinesses ?? [])
     .filter(
@@ -78,17 +91,6 @@ export default async function MzansiBusinessPage() {
           },
         ];
 
-  // Fetch category counts for auto-hiding empty categories
-  const { data: allLive } = await supabase
-    .from("businesses")
-    .select("category, business_name, description")
-    .eq("status", "live")
-    .eq("area", "MZANSI_BUSINESS")
-    .not("business_name", "ilike", "%seed%")
-    .not("business_name", "ilike", "%[seed]%");
-
-  const { data: malls } = await supabase.from("malls").select("id, name").order("name");
-
   const categoryCounts: Record<string, number> = {};
   for (const b of allLive ?? []) {
     if (isPlaceholderMarketplaceContent(b.business_name, b.description)) {
@@ -99,7 +101,9 @@ export default async function MzansiBusinessPage() {
 
   return (
     <div className="space-y-0">
-      <MzansiBusinessFilterSync />
+      <Suspense fallback={null}>
+        <MzansiBusinessFilterSync />
+      </Suspense>
 
       {/* ── Dynamic Showroom Hero ──────────────────────────────────── */}
       <ShowroomHero

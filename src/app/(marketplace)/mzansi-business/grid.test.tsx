@@ -109,7 +109,7 @@ describe("MzansiBusinessGrid", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/businesses?page=2&limit=24&category=fashion_accessories",
-      { cache: "no-store" }
+      expect.objectContaining({ cache: "no-store" })
     );
     expect(screen.getByText(/26/)).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("1 filter active");

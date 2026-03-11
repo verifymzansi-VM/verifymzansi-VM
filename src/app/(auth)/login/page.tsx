@@ -130,6 +130,13 @@ export default function LoginPage() {
     setRetryKey((k) => k + 1);
   }, [setValue]);
 
+  // Clean up cooldown interval on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    };
+  }, []);
+
   function startCooldown() {
     setResendCooldown(60);
     if (cooldownRef.current) clearInterval(cooldownRef.current);
@@ -206,7 +213,11 @@ export default function LoginPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        if (response.status === 403) {
+        if (
+          response.status === 403 &&
+          typeof result.error === "string" &&
+          /confirm|verif/i.test(result.error)
+        ) {
           setEmailNotConfirmed(true);
         }
         toast({

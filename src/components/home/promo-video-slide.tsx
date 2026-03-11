@@ -38,7 +38,7 @@ function LogoEntrance({ noMotion }: { noMotion: boolean }) {
       >
         <Image
           src="/icons/icon-192.png?v=7"
-          alt=""
+          alt="VerifyMzansi logo"
           width={80}
           height={80}
           className="w-16 h-16 sm:w-20 sm:h-20 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"

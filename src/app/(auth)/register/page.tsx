@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
@@ -141,9 +142,7 @@ export default function RegisterPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">
-          Create your seller account
-        </h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Create your account</h1>
       </div>
 
       <GoogleOAuthButton mode="register" />
@@ -262,17 +261,28 @@ export default function RegisterPage() {
 
         <div className="space-y-2">
           <Label htmlFor="confirmPassword">Confirm password</Label>
-          <Input
-            id="confirmPassword"
-            type="password"
-            placeholder="Confirm your password"
-            autoComplete="new-password"
-            spellCheck={false}
-            autoCapitalize="none"
-            aria-invalid={!!errors.confirmPassword}
-            aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
-            {...register("confirmPassword")}
-          />
+          <div className="relative">
+            <Input
+              id="confirmPassword"
+              type={showConfirmPassword ? "text" : "password"}
+              placeholder="Confirm your password"
+              autoComplete="new-password"
+              spellCheck={false}
+              autoCapitalize="none"
+              aria-invalid={!!errors.confirmPassword}
+              aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
+              {...register("confirmPassword")}
+            />
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              tabIndex={-1}
+              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           {errors.confirmPassword && (
             <p id="confirmPassword-error" className="inline-form-error" role="alert">
               {errors.confirmPassword.message}
@@ -289,11 +299,21 @@ export default function RegisterPage() {
           />
           <Label htmlFor="acceptTerms" className="text-xs text-muted-foreground leading-tight">
             I agree to the{" "}
-            <Link href="/terms" className="text-brand-green underline">
+            <Link
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-green underline"
+            >
               Terms of Service
             </Link>{" "}
             and{" "}
-            <Link href="/privacy" className="text-brand-green underline">
+            <Link
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-green underline"
+            >
               Privacy Policy
             </Link>
           </Label>

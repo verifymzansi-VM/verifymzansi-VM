@@ -73,9 +73,15 @@ export function MzansiMarketGrid() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [, startTransition] = useTransition();
   const fetchGenRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchListings = useCallback(
     async (gen: number) => {
+      // Abort any in-flight request
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       setLoading(true);
 
       const params = serializeMarketplaceFiltersToSearchParams(
@@ -97,6 +103,7 @@ export function MzansiMarketGrid() {
       try {
         const response = await fetch(`/api/listings?${params.toString()}`, {
           cache: "no-store",
+          signal: controller.signal,
         });
         const payload = (await response.json()) as ListingsResponse;
 
@@ -275,7 +282,7 @@ export function MzansiMarketGrid() {
 
         {!hasFilters && !hasQueryError && (
           <Button asChild size="lg" className="mt-2 shadow-md">
-            <Link href="/post/create-listing">
+            <Link href="/post/create">
               <Plus className="mr-1.5 h-4 w-4" />
               Post Your First Ad
             </Link>
@@ -347,7 +354,8 @@ export function MzansiMarketGrid() {
             return (
               <div
                 key={listing.id}
-                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms]"
+                style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
               >
                 <ListingCard
                   id={listing.id}
@@ -388,7 +396,8 @@ export function MzansiMarketGrid() {
             return (
               <div
                 key={listing.id}
-                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms]"
+                style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
               >
                 <ListingCardList
                   id={listing.id}

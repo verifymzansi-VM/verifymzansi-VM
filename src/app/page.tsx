@@ -21,6 +21,7 @@ export const metadata: Metadata = {
     title: "VerifyMzansi — SA's Trusted Marketplace",
     description:
       "Buy, sell, advertise, and discover trusted businesses with verified accounts. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
+    images: [{ url: "/icons/icon-512.png", width: 512, height: 512, alt: "VerifyMzansi" }],
   },
 };
 

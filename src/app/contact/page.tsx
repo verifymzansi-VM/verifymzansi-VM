@@ -174,6 +174,7 @@ export default function ContactPage() {
                         rows={3}
                         className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         placeholder="How can we help?"
+                        aria-invalid={!!fieldErrors.message}
                         aria-describedby={fieldErrors.message ? "message-error" : undefined}
                       />
                       {fieldErrors.message && (

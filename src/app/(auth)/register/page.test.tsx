@@ -42,9 +42,7 @@ describe("RegisterPage", () => {
   it("renders the registration heading expected by the auth QA flow", () => {
     render(<RegisterPage />);
 
-    expect(
-      screen.getByRole("heading", { name: /Create your seller account/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Create your account/i })).toBeInTheDocument();
     expect(screen.getByTestId("google-oauth-register")).toBeInTheDocument();
     expect(screen.getByTestId("turnstile-widget")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Sign in/i })).toHaveAttribute("href", "/login");

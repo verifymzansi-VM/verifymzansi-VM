@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Settings,
   LogOut,
+  Loader2,
   Sun,
   Moon,
   Megaphone,
@@ -45,6 +46,7 @@ export function Header({
   trustLevel: trustLevelProp = 0,
 }: HeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const { theme, setTheme } = useTheme();
 
   // Use the shared auth store via useAuth() instead of a duplicate Supabase subscription
@@ -76,7 +78,20 @@ export function Header({
     return () => document.removeEventListener("keydown", handleEscape);
   }, [handleEscape]);
 
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
+
   async function handleSignOut() {
+    setSigningOut(true);
     await auth.signOut();
   }
 
@@ -192,13 +207,18 @@ export function Header({
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="cursor-pointer text-destructive focus:text-destructive"
+                    disabled={signingOut}
                     onSelect={(e) => {
                       e.preventDefault();
                       handleSignOut();
                     }}
                   >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sign Out
+                    {signingOut ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogOut className="mr-2 h-4 w-4" />
+                    )}
+                    {signingOut ? "Signing out…" : "Sign Out"}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -296,14 +316,19 @@ export function Header({
                     </Link>
                   </Button>
                   <button
-                    className="flex items-center gap-2 py-2 text-sm font-medium text-destructive"
+                    className="flex items-center gap-2 py-2 text-sm font-medium text-destructive disabled:opacity-50"
+                    disabled={signingOut}
                     onClick={() => {
                       setMobileOpen(false);
                       handleSignOut();
                     }}
                   >
-                    <LogOut className="h-4 w-4" />
-                    Sign Out
+                    {signingOut ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogOut className="h-4 w-4" />
+                    )}
+                    {signingOut ? "Signing out…" : "Sign Out"}
                   </button>
                 </>
               ) : (
