@@ -5,6 +5,7 @@ import { ArrowRight, Building2, Megaphone, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { MobileNav } from "@/components/layout/mobile-nav";
 import { MarketplacePreviewsSkeleton } from "@/components/home/marketplace-previews-skeleton";
 import { HeroBannerWithData } from "@/components/home/hero-banner-with-data";
 import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
@@ -96,7 +97,7 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <main className="flex-1">
+      <main className="flex-1 pb-20 md:pb-0">
         {/* ═══ Hero Banner (rotating promotions + search) ═══ */}
         <Suspense fallback={<HeroBannerSkeleton />}>
           <HeroBannerWithData />
@@ -147,15 +148,29 @@ export default async function HomePage() {
                     </p>
                     <ol className="mt-4 space-y-3">
                       {[
-                        "Create an account",
-                        "Complete verification",
-                        "Browse or post in the area that fits your goal",
+                        {
+                          title: "Create an account",
+                          detail: "Sign up with your phone number or email.",
+                        },
+                        {
+                          title: "Complete verification",
+                          detail:
+                            "Verify your identity with a phone OTP, ID document, selfie, and location — it only takes a few minutes.",
+                        },
+                        {
+                          title: "Browse or post in the area that fits your goal",
+                          detail:
+                            "List items for sale, register your business, or discover verified sellers and services.",
+                        },
                       ].map((step, index) => (
-                        <li key={step} className="flex items-start gap-3 text-warm-100">
+                        <li key={step.title} className="flex items-start gap-3 text-warm-100">
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-sm font-semibold text-brand-green-300">
                             {index + 1}
                           </span>
-                          <span className="pt-1 text-sm sm:text-base">{step}</span>
+                          <div className="pt-1">
+                            <span className="text-sm sm:text-base font-medium">{step.title}</span>
+                            <p className="text-xs sm:text-sm text-warm-300 mt-0.5">{step.detail}</p>
+                          </div>
                         </li>
                       ))}
                     </ol>
@@ -216,6 +231,7 @@ export default async function HomePage() {
       </main>
 
       <Footer />
+      <MobileNav />
     </div>
   );
 }

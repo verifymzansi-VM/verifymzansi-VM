@@ -6,11 +6,23 @@ import { cn } from "@/lib/utils";
 
 export function MobilePostSticker() {
   const pathname = usePathname();
+
+  // Hide on auth, admin, and error pages where it's not relevant
+  const isHidden =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/banned");
+
   const isActive = pathname.startsWith("/post/create");
   const hasNearbyFilterFab =
     pathname.startsWith("/mzansi-market") ||
     pathname.startsWith("/mzansi-business") ||
     pathname.startsWith("/promotions");
+
+  if (isHidden) return null;
 
   return (
     <div

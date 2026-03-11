@@ -44,9 +44,7 @@ export default async function MzansiBusinessPage() {
           description: b.description || "Verified South African business.",
           location: b.location_city || b.location_province || "South Africa",
           mediaUrl: normalizeMediaUrl(
-            b.cover_video ||
-              b.cover_photo ||
-              "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1600&q=80"
+            b.cover_video || b.cover_photo || "/images/fallbacks/hero-business.svg"
           ),
           posterUrl: b.video_thumbnail
             ? normalizeMediaUrl(b.video_thumbnail)

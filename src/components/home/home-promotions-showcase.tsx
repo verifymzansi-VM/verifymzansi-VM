@@ -38,6 +38,8 @@ export async function HomePromotionsShowcase() {
       "id, title, price_cents, price_negotiable, category, category_key, photos, videos, video_thumbnail, location_province, location_city, promotion_type, view_count, boost_until, featured_until, start_date, end_date, created_at"
     )
     .eq("status", "live")
+    .not("title", "ilike", "%seed%")
+    .not("title", "ilike", "%[seed]%")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
@@ -45,7 +47,36 @@ export async function HomePromotionsShowcase() {
 
   const promotions = (data || []) as PromotionRow[];
 
-  if (promotions.length === 0) return null;
+  if (promotions.length === 0) {
+    return (
+      <section className="py-4 sm:py-6 bg-gradient-to-b from-red-50/30 to-white dark:from-red-950/10 dark:to-warm-950">
+        <div className="container-page space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Megaphone className="h-6 w-6 text-red-500" />
+              <h2 className="font-display text-xl sm:text-2xl font-bold">Promotions & Ads</h2>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-dashed border-warm-300 dark:border-warm-700 bg-warm-50 dark:bg-warm-900 p-8 text-center space-y-3">
+            <Megaphone className="h-10 w-10 text-red-400/50 mx-auto" />
+            <p className="text-muted-foreground text-sm">
+              No promotions yet. Be the first to advertise your deal or event!
+            </p>
+            <Button
+              asChild
+              size="sm"
+              className="bg-red-500 hover:bg-red-600 text-white rounded-full"
+            >
+              <Link href="/post/create-promotion">
+                Create a Promotion
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="py-4 sm:py-6 bg-gradient-to-b from-red-50/30 to-white dark:from-red-950/10 dark:to-warm-950">

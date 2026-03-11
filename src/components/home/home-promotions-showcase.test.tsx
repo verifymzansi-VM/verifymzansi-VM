@@ -48,6 +48,7 @@ function createSupabaseMock(data: unknown[]) {
   const builder = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue({ data }),
   };
@@ -103,11 +104,15 @@ describe("HomePromotionsShowcase", () => {
     expect(props.featured).toBe(true);
   });
 
-  it("returns null when no promotions exist", async () => {
+  it("renders an empty-state CTA when no promotions exist", async () => {
     vi.mocked(createClient).mockResolvedValue(createSupabaseMock([]) as never);
 
     const ui = await HomePromotionsShowcase();
-    expect(ui).toBeNull();
+    const { getByText } = render(ui as React.ReactElement);
+    expect(
+      getByText("No promotions yet. Be the first to advertise your deal or event!")
+    ).toBeTruthy();
+    expect(getByText("Create a Promotion")).toBeTruthy();
   });
 
   it("renders promotions inside the shared auto-scroll rail", async () => {

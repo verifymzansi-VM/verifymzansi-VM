@@ -51,7 +51,7 @@ export default async function MzansiMarketPage() {
         ? l.videos[0]
         : l.photos && l.photos.length > 0
           ? l.photos[0]
-          : "https://images.unsplash.com/photo-1593642632823-8f785ba67e45?w=1600&q=80"
+          : "/images/fallbacks/hero-listing.svg"
     ),
     posterUrl: l.video_thumbnail
       ? normalizeMediaUrl(l.video_thumbnail)

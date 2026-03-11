@@ -26,6 +26,10 @@ vi.mock("@/components/layout/footer", () => ({
   Footer: () => <footer data-testid="footer" />,
 }));
 
+vi.mock("@/components/layout/mobile-nav", () => ({
+  MobileNav: () => <nav data-testid="mobile-nav" />,
+}));
+
 vi.mock("@/components/home/hero-banner-with-data", () => ({
   HeroBannerWithData: () => <div data-testid="hero-banner-with-data" />,
 }));

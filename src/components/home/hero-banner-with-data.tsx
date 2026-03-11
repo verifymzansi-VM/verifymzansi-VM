@@ -32,6 +32,8 @@ export async function HeroBannerWithData() {
           "id, business_name, cover_photo, cover_video, video_thumbnail, description, location_city"
         )
         .eq("status", "live")
+        .not("business_name", "ilike", "%seed%")
+        .not("business_name", "ilike", "%[seed]%")
         .order("boost_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(3),
@@ -42,6 +44,8 @@ export async function HeroBannerWithData() {
         )
         .eq("status", "live")
         .eq("area", "MZANSI_MARKET")
+        .not("title", "ilike", "%seed%")
+        .not("title", "ilike", "%[seed]%")
         .order("featured", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(3),
@@ -51,6 +55,8 @@ export async function HeroBannerWithData() {
           "id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, location_city, price_cents"
         )
         .eq("status", "live")
+        .not("title", "ilike", "%seed%")
+        .not("title", "ilike", "%[seed]%")
         .order("boost_until", { ascending: false, nullsFirst: false })
         .order("featured_until", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })

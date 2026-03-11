@@ -101,9 +101,13 @@ export function Footer() {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <p>&copy; {currentYear} VerifyMzansi. All rights reserved.</p>
           <div className="flex items-center gap-1">
-            <span className="inline-block w-4 h-3 rounded-sm overflow-hidden">
+            <span
+              className="inline-block w-4 h-3 rounded-sm overflow-hidden"
+              role="img"
+              aria-label="South African flag"
+            >
               {/* SA flag mini icon — CSS gradient */}
-              <span className="block w-full h-full sa-flag-mini" />
+              <span className="block w-full h-full sa-flag-mini" aria-hidden="true" />
             </span>
             <span>Made in South Africa</span>
           </div>
