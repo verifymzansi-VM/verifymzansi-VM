@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     // Notify the account holder about the moderation decision
     try {
       // Get the account holder's user ID and content title
-      const ownerField = table === "listings" ? "seller_id" : "owner_id";
+      const ownerField = table === "listings" ? "owner_id" : "owner_id";
       const titleField =
         table === "listings" ? "title" : table === "storefronts" ? "mall_name" : "business_name";
       const { data: contentItem } = await admin

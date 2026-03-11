@@ -712,7 +712,7 @@ function CreatePromotionContent() {
                       <PromotionDetailContent
                         promotion={{
                           id: "preview-promotion",
-                          seller_id: "preview-seller",
+                          owner_id: "preview-seller",
                           business_id: businessId || null,
                           title: title || "Your promotion title",
                           description:
@@ -739,7 +739,7 @@ function CreatePromotionContent() {
                         }}
                         advertiserProfile={{
                           display_name: "You",
-                          seller_verification_status: null,
+                          account_verification_status: null,
                           phone: null,
                           masked_phone_public: null,
                         }}

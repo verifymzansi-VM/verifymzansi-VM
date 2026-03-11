@@ -108,7 +108,7 @@ describe("POST /api/verification/location", () => {
 
   it("saves location and creates location verification step", async () => {
     const updateMock = vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-      if (payload.account_verification_status || payload.seller_verification_status) {
+      if (payload.account_verification_status || payload.account_verification_status) {
         return {
           eq: vi.fn().mockReturnValue({
             in: vi.fn().mockResolvedValue({ error: null }),
@@ -165,7 +165,6 @@ describe("POST /api/verification/location", () => {
     });
     expect(updateMock).toHaveBeenCalledWith({
       account_verification_status: "pending_review",
-      seller_verification_status: "pending_review",
     });
     expect(upsertMock).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -82,7 +82,7 @@ export default async function EventsPage() {
   const { data: accountProfiles } = accountIds.length
     ? await admin
         .from(ACCOUNT_PROFILE_TABLE)
-        .select("user_id, display_name, account_verification_status, seller_verification_status")
+        .select("user_id, display_name, account_verification_status")
         .in("user_id", accountIds)
     : { data: [] };
 

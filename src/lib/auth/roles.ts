@@ -59,9 +59,5 @@ export function requireRole(user: MaybeUser, allowedRoles: ReadonlyArray<string>
     return false;
   }
 
-  if (allowedRoles.includes(role)) {
-    return true;
-  }
-
-  return role === "member" && allowedRoles.includes("seller");
+  return allowedRoles.includes(role);
 }

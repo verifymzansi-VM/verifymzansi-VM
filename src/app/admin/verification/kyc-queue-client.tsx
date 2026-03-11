@@ -11,8 +11,6 @@ interface PendingStep {
   created_at: string;
   account_display_name?: string | null;
   account_verification_status?: string | null;
-  seller_display_name?: string | null;
-  seller_verification_status: string | null;
 }
 
 export function KycQueueClient({

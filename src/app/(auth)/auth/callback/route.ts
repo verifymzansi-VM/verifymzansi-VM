@@ -54,7 +54,6 @@ export async function GET(request: Request) {
                 user_id: user.id,
                 display_name: displayName,
                 account_verification_status: "incomplete",
-                seller_verification_status: "incomplete",
                 account_status: "active",
               },
               { onConflict: "user_id" }

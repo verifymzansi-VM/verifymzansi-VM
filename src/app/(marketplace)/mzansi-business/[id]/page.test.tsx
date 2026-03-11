@@ -99,7 +99,6 @@ function buildClient(
                   account_verification_status: "verified",
                   location_province: "Gauteng",
                   location_city: "Johannesburg",
-                  seller_verification_status: "verified",
                 },
               }),
             }),

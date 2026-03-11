@@ -110,10 +110,9 @@ export async function POST(request: NextRequest) {
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
         account_verification_status: "pending_review",
-        seller_verification_status: "pending_review",
       })
       .eq("id", profile.id)
-      .in("seller_verification_status", ["incomplete", "rejected"]);
+      .in("account_verification_status", ["incomplete", "rejected"]);
 
     return NextResponse.json({ success: true });
   } catch {

@@ -133,7 +133,6 @@ export async function POST(request: Request) {
           .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .update({
             account_verification_status: "verified",
-            seller_verification_status: "verified",
           })
           .eq("user_id", step.user_id);
 
@@ -170,20 +169,18 @@ export async function POST(request: Request) {
           .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .update({
             account_verification_status: "pending_review",
-            seller_verification_status: "pending_review",
           })
           .eq("user_id", step.user_id)
-          .in("seller_verification_status", ["incomplete", "pending_review", "rejected"]);
+          .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
       }
     } else {
       await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_verification_status: "rejected",
-          seller_verification_status: "rejected",
         })
         .eq("user_id", step.user_id)
-        .in("seller_verification_status", ["incomplete", "pending_review", "rejected"]);
+        .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
     }
 
     // Log audit event

@@ -58,7 +58,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   const { data: ownerProfile } = businessOwnerId
     ? await supabase
         .from(ACCOUNT_PROFILE_TABLE)
-        .select("display_name, account_verification_status, seller_verification_status")
+        .select("display_name, account_verification_status")
         .eq("user_id", businessOwnerId)
         .maybeSingle()
     : { data: null };

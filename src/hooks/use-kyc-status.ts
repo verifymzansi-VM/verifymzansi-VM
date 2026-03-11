@@ -44,7 +44,7 @@ export function useKycStatus() {
       // Check account profile verification status
       const { data: profile } = await supabase
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .select("account_verification_status, seller_verification_status")
+        .select("account_verification_status")
         .eq("user_id", user.id)
         .single();
 

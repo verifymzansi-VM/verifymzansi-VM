@@ -39,7 +39,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     // Check account profile
     const { data: profile } = await admin
-      .from("seller_profiles")
+      .from("account_profiles")
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
@@ -51,7 +51,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     // Check promotion exists and belongs to user
     const { data: promotion } = await admin
       .from("promotions")
-      .select("id, title, status, seller_id, boost_until")
+      .select("id, title, status, owner_id, boost_until")
       .eq("id", promotionId)
       .maybeSingle();
 
@@ -59,7 +59,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
     }
 
-    if (promotion.seller_id !== user.id) {
+    if (promotion.owner_id !== user.id) {
       return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 

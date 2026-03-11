@@ -51,7 +51,6 @@ describe("GET /api/verification/status", () => {
                 data: {
                   id: "profile-1",
                   account_verification_status: "verified",
-                  seller_verification_status: "rejected",
                 },
               }),
             }),
@@ -91,7 +90,6 @@ describe("GET /api/verification/status", () => {
                 data: {
                   id: "profile-1",
                   account_verification_status: null,
-                  seller_verification_status: "pending_review",
                 },
               }),
             }),

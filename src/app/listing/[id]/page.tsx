@@ -54,7 +54,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     ? await supabase
         .from(ACCOUNT_PROFILE_TABLE)
         .select(
-          "id, display_name, location_province, location_city, seller_verification_status, phone, masked_phone_public"
+          "id, display_name, location_province, location_city, account_verification_status, phone, masked_phone_public"
         )
         .eq("user_id", listingOwnerId)
         .maybeSingle()
@@ -90,7 +90,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     );
     const { data: ownerData } = await supabase
       .from(ACCOUNT_PROFILE_TABLE)
-      .select("user_id, display_name, seller_verification_status")
+      .select("user_id, display_name, account_verification_status")
       .in("user_id", ownerIds);
     similarSellers = new Map((ownerData ?? []).map((s) => [s.user_id, s]));
   }

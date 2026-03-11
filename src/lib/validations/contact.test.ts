@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contactAccountHolderSchema, contactSellerSchema, reportSchema } from "./contact";
+import { contactAccountHolderSchema, reportSchema } from "./contact";
 
 // ── Contact Listing Owner Schema ────────────────────────────────────────────
 
@@ -54,10 +54,6 @@ describe("contactAccountHolderSchema", () => {
       false
     );
   });
-
-  it("keeps the legacy seller schema alias wired to the same schema", () => {
-    expect(contactSellerSchema).toBe(contactAccountHolderSchema);
-  });
 });
 
 // ── Report Schema ───────────────────────────────────────────────────────────
@@ -75,14 +71,14 @@ describe("reportSchema", () => {
     expect(reportSchema.safeParse(valid).success).toBe(true);
   });
 
-  it("accepts all legacy target types", () => {
-    for (const t of ["listing", "seller", "storefront", "business"]) {
+  it("accepts the supported target types", () => {
+    for (const t of ["listing", "storefront", "business", "account_profile"]) {
       expect(reportSchema.safeParse({ ...valid, targetType: t }).success).toBe(true);
     }
   });
 
-  it("accepts canonical target types (seller_profile, business_profile)", () => {
-    expect(reportSchema.safeParse({ ...valid, targetType: "seller_profile" }).success).toBe(true);
+  it("accepts canonical profile target types", () => {
+    expect(reportSchema.safeParse({ ...valid, targetType: "account_profile" }).success).toBe(true);
     expect(reportSchema.safeParse({ ...valid, targetType: "business_profile" }).success).toBe(true);
   });
 

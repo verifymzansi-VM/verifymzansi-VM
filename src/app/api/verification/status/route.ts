@@ -20,7 +20,7 @@ export async function GET(_request: NextRequest) {
 
     const { data: profile } = await supabase
       .from(ACCOUNT_PROFILE_TABLE)
-      .select("id, account_verification_status, seller_verification_status")
+      .select("id, account_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 

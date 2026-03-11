@@ -14,12 +14,11 @@ import { CATEGORIES } from "@/lib/constants/categories";
 import { ListingDetailClient } from "@/app/listing/[id]/client";
 import { ListingContactActions } from "@/app/listing/[id]/listing-contact-actions";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
-import type { SellerVerificationStatus } from "@/types/enums";
+import type { AccountVerificationStatus } from "@/types/enums";
 
 export interface ListingDetailRecord {
   id: string;
   owner_id?: string | null;
-  seller_id?: string | null;
   title: string;
   description: string | null;
   price_cents: number | null;
@@ -41,7 +40,7 @@ export interface ListingSellerRecord {
   display_name: string | null;
   location_province: string | null;
   location_city: string | null;
-  seller_verification_status: SellerVerificationStatus | null;
+  account_verification_status: AccountVerificationStatus | null;
   phone?: string | null;
   masked_phone_public?: string | null;
 }
@@ -61,13 +60,12 @@ export interface SimilarListingRow {
   boost_until: string | null;
   featured: boolean;
   owner_id?: string | null;
-  seller_id?: string | null;
 }
 
 export interface SimilarSellerRow {
   user_id: string;
   display_name: string;
-  seller_verification_status: SellerVerificationStatus | null;
+  account_verification_status: AccountVerificationStatus | null;
 }
 
 export function ListingDetailContent({
@@ -85,7 +83,7 @@ export function ListingDetailContent({
   similarItems?: SimilarListingRow[];
   similarSellers?: Map<string, SimilarSellerRow>;
 }) {
-  const trustLevel = seller ? computeTrustLevel(seller.seller_verification_status ?? null) : null;
+  const trustLevel = seller ? computeTrustLevel(seller.account_verification_status ?? null) : null;
   const createdAt = new Date(listing.created_at).toLocaleDateString("en-ZA", {
     day: "numeric",
     month: "long",
@@ -287,7 +285,7 @@ export function ListingDetailContent({
             {similarItems.map((item) => {
               const itemOwnerId = readOwnerId(item);
               const itemSeller = itemOwnerId ? similarSellers.get(itemOwnerId) : undefined;
-              const itemTrust = computeTrustLevel(itemSeller?.seller_verification_status ?? null);
+              const itemTrust = computeTrustLevel(itemSeller?.account_verification_status ?? null);
 
               return (
                 <ListingCard

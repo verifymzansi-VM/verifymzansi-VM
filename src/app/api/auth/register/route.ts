@@ -147,7 +147,6 @@ export async function POST(request: NextRequest) {
           display_name: parsed.data.displayName,
           ...accountPhoneFields,
           account_verification_status: "incomplete",
-          seller_verification_status: "incomplete",
           account_status: "active",
         },
         { onConflict: "user_id" }

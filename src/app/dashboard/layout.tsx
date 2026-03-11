@@ -54,7 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             .in("status", ["approved", "pending"]),
           supabase
             .from(ACCOUNT_PROFILE_TABLE)
-            .select("account_verification_status, seller_verification_status")
+            .select("account_verification_status")
             .eq("user_id", user.id)
             .single(),
         ]);

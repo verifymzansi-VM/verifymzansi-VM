@@ -290,9 +290,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     if (user) {
       const { data: profile, error: profileError } = await supabase
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .select(
-          "account_verification_status, seller_verification_status, account_status, suspended_until"
-        )
+        .select("account_verification_status, account_status, suspended_until")
         .eq("user_id", user.id)
         .maybeSingle();
 

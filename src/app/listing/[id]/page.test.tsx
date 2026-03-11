@@ -111,7 +111,7 @@ describe("ListingDetailPage", () => {
       buildClient({
         listing: {
           id: "listing-1",
-          seller_id: "seller-1",
+          owner_id: "seller-1",
           title: "Used iPhone 15",
           description: "Clean phone in excellent condition.",
           status: "live",
@@ -125,14 +125,14 @@ describe("ListingDetailPage", () => {
         },
         seller: {
           display_name: "Nomsa Seller",
-          seller_verification_status: "verified",
+          account_verification_status: "verified",
           phone: "0821234567",
           masked_phone_public: "082***4567",
         },
         similarListings: [
           {
             id: "listing-2",
-            seller_id: "seller-2",
+            owner_id: "seller-2",
             title: "Samsung Galaxy S24",
             price_cents: 120000,
             price_negotiable: false,
@@ -151,7 +151,7 @@ describe("ListingDetailPage", () => {
           {
             user_id: "seller-2",
             display_name: "Tech Store",
-            seller_verification_status: "verified",
+            account_verification_status: "verified",
           },
         ],
       })

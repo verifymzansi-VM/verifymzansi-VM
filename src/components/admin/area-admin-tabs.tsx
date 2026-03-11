@@ -23,8 +23,6 @@ interface AreaAdminTabsProps {
     created_at: string;
     account_display_name?: string | null;
     account_verification_status?: string | null;
-    seller_display_name?: string | null;
-    seller_verification_status: string | null;
   }>;
   pendingContent: Array<{
     id: string;
@@ -36,7 +34,7 @@ interface AreaAdminTabsProps {
     status: string;
     created_at: string;
     category?: string;
-    seller_id?: string;
+    owner_id?: string;
   }>;
   reports: Array<{
     id: string;

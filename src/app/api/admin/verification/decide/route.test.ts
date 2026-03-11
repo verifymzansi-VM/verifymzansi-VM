@@ -334,7 +334,6 @@ describe("POST /api/admin/verification/decide", () => {
     expect(data.decision).toBe("rejected");
     expect(profileUpdate).toHaveBeenCalledWith({
       account_verification_status: "rejected",
-      seller_verification_status: "rejected",
     });
   });
 

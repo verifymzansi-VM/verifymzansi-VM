@@ -103,9 +103,9 @@ describe("PlanGate", () => {
       data: { user: { id: "u1" } },
       error: null,
     });
-    // Mock the from() calls for seller_profiles, entitlements, and listings
+    // Mock the from() calls for account_profiles, entitlements, and listings
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === "account_profiles") {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({

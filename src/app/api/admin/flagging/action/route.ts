@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     if (report.target_type === "listing") {
       const { data: listing, error: listingErr } = await admin
         .from("listings")
-        .select("seller_id")
+        .select("owner_id")
         .eq("id", report.target_id)
         .single();
       if (listingErr) {
@@ -78,7 +78,9 @@ export async function POST(request: Request) {
           error: listingErr.message,
         });
       }
-      ownerId = listing?.seller_id || null;
+      ownerId = listing?.owner_id || null;
+    } else if (report.target_type === "account_profile") {
+      ownerId = report.target_id;
     } else if (
       report.target_type === "storefront" ||
       report.target_type === "business_profile" ||
@@ -86,7 +88,7 @@ export async function POST(request: Request) {
     ) {
       const { data: biz, error: bizErr } = await admin
         .from("businesses")
-        .select("seller_id")
+        .select("owner_id")
         .eq("id", report.target_id)
         .single();
       if (bizErr) {
@@ -95,7 +97,7 @@ export async function POST(request: Request) {
           error: bizErr.message,
         });
       }
-      ownerId = biz?.seller_id || null;
+      ownerId = biz?.owner_id || null;
     }
 
     // Actions that target an account holder require a valid owner reference
@@ -109,7 +111,7 @@ export async function POST(request: Request) {
 
     // Execute action
     if (action === "warn" && ownerId) {
-      const { error: rpcErr } = await admin.rpc("increment_strikes", { seller_id_input: ownerId });
+      const { error: rpcErr } = await admin.rpc("increment_strikes", { owner_id_input: ownerId });
       if (rpcErr) {
         // If RPC doesn't exist, do manual update
         await admin
@@ -144,12 +146,12 @@ export async function POST(request: Request) {
       await admin
         .from("listings")
         .update({ status: "hidden" })
-        .eq("seller_id", ownerId)
+        .eq("owner_id", ownerId)
         .eq("status", "live");
       await admin
         .from("businesses")
         .update({ status: "hidden" })
-        .eq("seller_id", ownerId)
+        .eq("owner_id", ownerId)
         .eq("status", "live");
     } else if (action === "ban" && ownerId) {
       await admin
@@ -162,8 +164,8 @@ export async function POST(request: Request) {
         .eq("user_id", ownerId);
 
       // Hide all content
-      await admin.from("listings").update({ status: "hidden" }).eq("seller_id", ownerId);
-      await admin.from("businesses").update({ status: "hidden" }).eq("seller_id", ownerId);
+      await admin.from("listings").update({ status: "hidden" }).eq("owner_id", ownerId);
+      await admin.from("businesses").update({ status: "hidden" }).eq("owner_id", ownerId);
     }
 
     // Record moderation action
@@ -171,7 +173,7 @@ export async function POST(request: Request) {
       report_id: reportId,
       actor_id: user.id,
       action,
-      target_seller_id: ownerId,
+      target_owner_id: ownerId,
       area: report.area || null,
       reason: reason || null,
       duration_days: action === "suspend" ? durationDays : null,

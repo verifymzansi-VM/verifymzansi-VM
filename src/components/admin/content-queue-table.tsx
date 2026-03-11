@@ -27,7 +27,7 @@ interface ContentItem {
   status: string;
   created_at: string;
   category?: string;
-  seller_id?: string;
+  owner_id?: string;
 }
 
 interface ContentQueueTableProps {

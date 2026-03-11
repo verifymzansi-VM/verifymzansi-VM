@@ -39,9 +39,7 @@ export interface PendingVerification {
   account_display_name?: string | null;
   account_verification_status?: string | null;
   /** @deprecated Use account_display_name */
-  seller_display_name?: string | null;
   /** @deprecated Use account_verification_status */
-  seller_verification_status: string | null;
 }
 
 export interface AuditLogEntry {
@@ -135,7 +133,8 @@ export async function getAreaCardCounts(): Promise<
     PROMOTIONS_EVENTS: 0,
   };
   for (const r of openReports || []) {
-    if (r.target_type === "listing") flagCounts.MZANSI_MARKET++;
+    if (r.target_type === "listing" || r.target_type === "account_profile")
+      flagCounts.MZANSI_MARKET++;
     if (
       r.target_type === "business_profile" ||
       r.target_type === "storefront" ||
@@ -316,7 +315,7 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
   const userIds = Array.from(new Set(steps.map((s) => s.user_id))) as string[];
   const { data: profiles } = await supabase
     .from(ACCOUNT_PROFILE_WRITE_TABLE)
-    .select("user_id, display_name, account_verification_status, seller_verification_status")
+    .select("user_id, display_name, account_verification_status")
     .in("user_id", userIds);
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p] as const));
@@ -327,8 +326,6 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
       ...s,
       account_display_name: profile?.display_name || null,
       account_verification_status: readAccountVerificationStatus(profile),
-      seller_display_name: profile?.display_name || null,
-      seller_verification_status: profile?.seller_verification_status || null,
     };
   });
 }
@@ -355,19 +352,18 @@ export async function getRecentActivity(limit = 20, area?: string): Promise<Audi
 export async function getAreaReports(area: MarketplaceArea) {
   const supabase = createAdminClient();
 
-  // Map area to target_type
-  const targetTypeMap: Record<MarketplaceArea, string> = {
-    MZANSI_MARKET: "listing",
-    BUSINESS_ADS: "business",
-    MALL_SHOPS: "business",
-    MZANSI_BUSINESS: "business",
-    PROMOTIONS_EVENTS: "promotion",
+  const targetTypeMap: Record<MarketplaceArea, string[]> = {
+    MZANSI_MARKET: ["listing", "account_profile"],
+    BUSINESS_ADS: ["business"],
+    MALL_SHOPS: ["business"],
+    MZANSI_BUSINESS: ["business"],
+    PROMOTIONS_EVENTS: ["promotion"],
   };
 
   const { data } = await supabase
     .from("reports")
     .select("*")
-    .eq("target_type", targetTypeMap[area])
+    .in("target_type", targetTypeMap[area])
     .in("status", ["open", "in_progress"])
     .order("created_at", { ascending: true })
     .limit(100);
@@ -420,13 +416,9 @@ export interface DashboardKycItem {
   account_status?: string | null;
   account_strikes?: number;
   /** @deprecated Use account_display_name */
-  seller_display_name?: string | null;
   /** @deprecated Use account_verification_status */
-  seller_verification_status: string | null;
   /** @deprecated Use account_status */
-  seller_account_status: string | null;
   /** @deprecated Use account_strikes */
-  seller_strikes: number;
 }
 
 /** Get pending KYC steps with full metadata for the dashboard command centre */
@@ -448,9 +440,7 @@ export async function getDashboardKycQueue(limit = 50): Promise<DashboardKycItem
 
   const { data: profiles } = await supabase
     .from(ACCOUNT_PROFILE_WRITE_TABLE)
-    .select(
-      "user_id, display_name, account_verification_status, seller_verification_status, account_status, strikes"
-    )
+    .select("user_id, display_name, account_verification_status, account_status, strikes")
     .in("user_id", userIds);
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p] as const));
@@ -463,10 +453,6 @@ export async function getDashboardKycQueue(limit = 50): Promise<DashboardKycItem
       account_verification_status: readAccountVerificationStatus(profile),
       account_status: profile?.account_status || null,
       account_strikes: profile?.strikes || 0,
-      seller_display_name: profile?.display_name || null,
-      seller_verification_status: profile?.seller_verification_status || null,
-      seller_account_status: profile?.account_status || null,
-      seller_strikes: profile?.strikes || 0,
     };
   });
 }
@@ -514,7 +500,7 @@ export interface DashboardContentItem {
   areaLabel: string;
   itemType: string;
   category: string | null;
-  seller_id: string | null;
+  owner_id: string | null;
   created_at: string;
   status: string;
 }
@@ -526,13 +512,13 @@ export async function getDashboardContentQueue(): Promise<DashboardContentItem[]
   const [{ data: pendingListings }, { data: pendingBusinesses }] = await Promise.all([
     supabase
       .from("listings")
-      .select("id, title, status, created_at, category, seller_id")
+      .select("id, title, status, created_at, category, owner_id")
       .eq("status", "pending_moderation")
       .order("created_at", { ascending: true })
       .limit(30),
     supabase
       .from("businesses")
-      .select("id, business_name, business_type, status, created_at, category, seller_id")
+      .select("id, business_name, business_type, status, created_at, category, owner_id")
       .eq("status", "pending_moderation")
       .order("created_at", { ascending: true })
       .limit(30),
@@ -546,7 +532,7 @@ export async function getDashboardContentQueue(): Promise<DashboardContentItem[]
       areaLabel: "Mzansi Market",
       itemType: "Listing",
       category: l.category || null,
-      seller_id: l.seller_id || null,
+      owner_id: l.owner_id || null,
       created_at: l.created_at,
       status: l.status,
     })),
@@ -557,7 +543,7 @@ export async function getDashboardContentQueue(): Promise<DashboardContentItem[]
       areaLabel: "Mzansi Business",
       itemType: "Business",
       category: b.category || null,
-      seller_id: b.seller_id || null,
+      owner_id: b.owner_id || null,
       created_at: b.created_at,
       status: b.status,
     })),
@@ -615,7 +601,7 @@ export async function getExtendedPlatformStats(): Promise<ExtendedPlatformStats>
     supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("*", { count: "exact", head: true })
-      .or("account_verification_status.eq.verified,seller_verification_status.eq.verified"),
+      .or("account_verification_status.eq.verified"),
     supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("*", { count: "exact", head: true })

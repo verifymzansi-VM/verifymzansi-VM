@@ -51,8 +51,6 @@ interface VerificationStep {
   created_at: string;
   account_display_name?: string | null;
   account_verification_status?: string | null;
-  seller_display_name?: string | null;
-  seller_verification_status: string | null;
 }
 
 interface Artifact {
@@ -190,7 +188,7 @@ export function KycQueueTable({
         {steps.map((step) => {
           const StepIcon = STEP_ICONS[step.step_type] || FileCheck;
           const stepLabel = STEP_LABELS[step.step_type] || step.step_type;
-          const displayName = step.account_display_name ?? step.seller_display_name;
+          const displayName = step.account_display_name ?? step.account_display_name;
 
           return (
             <Card key={step.id}>
@@ -304,7 +302,7 @@ export function KycQueueTable({
                   for{" "}
                   <strong>
                     {selectedStep.account_display_name ||
-                      selectedStep.seller_display_name ||
+                      selectedStep.account_display_name ||
                       selectedStep.user_id.slice(0, 8) + "..."}
                   </strong>
                 </>

@@ -49,7 +49,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user || user.id !== business.seller_id) {
+      if (!user || user.id !== business.owner_id) {
         return NextResponse.json({ error: "Business not found" }, { status: 404 });
       }
     }
@@ -110,7 +110,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { data: existing } = await admin
       .from("businesses")
       .select(
-        "id, seller_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos"
+        "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos"
       )
       .eq("id", id)
       .maybeSingle();
@@ -119,7 +119,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
-    if (existing.seller_id !== user.id) {
+    if (existing.owner_id !== user.id) {
       return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 
@@ -228,7 +228,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         status: "pending_moderation",
       })
       .eq("id", id)
-      .eq("seller_id", user.id);
+      .eq("owner_id", user.id);
 
     if (updateError) {
       log.error("Failed to update business", { error: updateError.message });
@@ -297,7 +297,7 @@ export async function DELETE(
     const { data: existing } = await admin
       .from("businesses")
       .select(
-        "id, seller_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos"
+        "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos"
       )
       .eq("id", id)
       .maybeSingle();
@@ -306,7 +306,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
-    if (existing.seller_id !== user.id) {
+    if (existing.owner_id !== user.id) {
       return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 
@@ -321,7 +321,7 @@ export async function DELETE(
       .from("businesses")
       .delete()
       .eq("id", id)
-      .eq("seller_id", user.id);
+      .eq("owner_id", user.id);
 
     if (deleteError) {
       log.error("Failed to delete business", { error: deleteError.message });

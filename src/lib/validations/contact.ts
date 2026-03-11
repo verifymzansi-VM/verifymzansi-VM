@@ -11,9 +11,6 @@ export const contactAccountHolderSchema = z.object({
   turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
 });
 
-// Compatibility alias during terminology rollout.
-export const contactSellerSchema = contactAccountHolderSchema;
-
 /**
  * Zod schema for reporting a listing, account profile, storefront, or business.
  * Requires a reason enum, a description, optional evidence URLs, and a Turnstile token.
@@ -23,10 +20,8 @@ export const reportSchema = z.object({
     "listing",
     "business",
     "promotion",
-    "seller",
     "account_profile",
     "storefront",
-    "seller_profile",
     "business_profile",
   ]),
   targetId: z.string().uuid("Invalid target"),
@@ -49,7 +44,5 @@ export const reportSchema = z.object({
 
 /** Inferred input type for {@link contactAccountHolderSchema}. */
 export type ContactAccountHolderInput = z.infer<typeof contactAccountHolderSchema>;
-/** Compatibility alias for older imports. */
-export type ContactSellerInput = ContactAccountHolderInput;
 /** Inferred input type for {@link reportSchema}. */
 export type ReportInput = z.infer<typeof reportSchema>;

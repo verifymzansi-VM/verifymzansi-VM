@@ -1,15 +1,13 @@
 import type { AccountVerificationStatus, CompatibleUserRole, UserRole } from "@/types/enums";
 
-export const LEGACY_ACCOUNT_PROFILE_TABLE = "seller_profiles";
 export const ACCOUNT_PROFILE_TABLE = "account_profiles";
-export const ACCOUNT_PROFILE_WRITE_TABLE = LEGACY_ACCOUNT_PROFILE_TABLE;
+export const ACCOUNT_PROFILE_WRITE_TABLE = ACCOUNT_PROFILE_TABLE;
 export const ACCOUNT_PROFILE_NOT_FOUND_ERROR = "Account profile not found";
 
 export function normalizeUserRole(role: string | null | undefined): UserRole | null {
   const normalized = role?.trim().toLowerCase();
 
   switch (normalized) {
-    case "seller":
     case "member":
       return "member";
     case "moderator":
@@ -22,7 +20,7 @@ export function normalizeUserRole(role: string | null | undefined): UserRole | n
 }
 
 export function isCompatibleUserRole(role: string | null | undefined): role is CompatibleUserRole {
-  return normalizeUserRole(role) !== null || role === "seller";
+  return normalizeUserRole(role) !== null;
 }
 
 export function normalizeAccountVerificationStatus(
@@ -43,24 +41,20 @@ export function readAccountVerificationStatus(
   profile:
     | {
         account_verification_status?: string | null;
-        seller_verification_status?: string | null;
       }
     | null
     | undefined
 ): AccountVerificationStatus | null {
-  return normalizeAccountVerificationStatus(
-    profile?.account_verification_status ?? profile?.seller_verification_status ?? null
-  );
+  return normalizeAccountVerificationStatus(profile?.account_verification_status ?? null);
 }
 
 export function readOwnerId(
   record:
     | {
         owner_id?: string | null;
-        seller_id?: string | null;
       }
     | null
     | undefined
 ): string | null {
-  return record?.owner_id ?? record?.seller_id ?? null;
+  return record?.owner_id ?? null;
 }

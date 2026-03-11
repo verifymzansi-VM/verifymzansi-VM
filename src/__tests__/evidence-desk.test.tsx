@@ -69,7 +69,6 @@ const METADATA_RESPONSE = {
   accountProfile: {
     display_name: "Test Account",
     account_verification_status: "pending_review",
-    seller_verification_status: "pending_review",
     account_status: "active",
     strikes: 0,
     legal_hold: false,
@@ -79,7 +78,6 @@ const METADATA_RESPONSE = {
   sellerProfile: {
     display_name: "Test Account",
     account_verification_status: "pending_review",
-    seller_verification_status: "pending_review",
     account_status: "active",
     strikes: 0,
     legal_hold: false,

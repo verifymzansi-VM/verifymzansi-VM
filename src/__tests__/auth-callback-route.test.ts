@@ -84,7 +84,7 @@ describe("GET /auth/callback", () => {
     });
 
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === "account_profiles") {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -109,7 +109,6 @@ describe("GET /auth/callback", () => {
         user_id: "oauth-user-1",
         display_name: "OAuth User",
         account_verification_status: "incomplete",
-        seller_verification_status: "incomplete",
         account_status: "active",
       }),
       { onConflict: "user_id" }

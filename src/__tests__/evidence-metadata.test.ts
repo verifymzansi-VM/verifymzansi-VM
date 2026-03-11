@@ -89,7 +89,6 @@ const MOCK_ARTIFACT = {
 const MOCK_SELLER_PROFILE = {
   display_name: "Test Account",
   account_verification_status: "pending_review",
-  seller_verification_status: "pending_review",
   account_status: "active",
   strikes: 0,
   legal_hold: false,
@@ -220,7 +219,7 @@ describe("Evidence Metadata API", () => {
             return chainStub([]);
           case "kyc_risk_signals":
             return chainStub([]);
-          case "seller_profiles":
+          case "account_profiles":
             return chainStub(MOCK_SELLER_PROFILE);
           case "kyc_evidence_access_logs":
             return chainStub([]);
@@ -262,7 +261,7 @@ describe("Evidence Metadata API", () => {
             return chainStub([]);
           case "kyc_risk_signals":
             return chainStub([]);
-          case "seller_profiles":
+          case "account_profiles":
             return chainStub(MOCK_SELLER_PROFILE);
           case "kyc_evidence_access_logs":
             return chainStub([]);
@@ -299,7 +298,7 @@ describe("Evidence Metadata API", () => {
             return chainStub([]);
           case "kyc_risk_signals":
             return chainStub([]);
-          case "seller_profiles":
+          case "account_profiles":
             return chainStub(MOCK_SELLER_PROFILE);
           case "kyc_evidence_access_logs":
             return chainStub([]);

@@ -76,7 +76,7 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
 function setupHappyPath() {
   mockAuth({ id: USER_ID, email: "test@example.com" });
   mockAdmin({
-    seller_profiles: {
+    account_profiles: {
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
     },
     promotions: {
@@ -85,7 +85,7 @@ function setupHappyPath() {
           id: VALID_UUID,
           title: "Test Promotion",
           status: "live",
-          seller_id: USER_ID,
+          owner_id: USER_ID,
           boost_until: null,
         },
       }),
@@ -120,7 +120,7 @@ describe("POST /api/promotions/[id]/boost", () => {
   it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: null }),
       },
     });
@@ -134,7 +134,7 @@ describe("POST /api/promotions/[id]/boost", () => {
   it("returns 404 when promotion not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
       promotions: {
@@ -151,7 +151,7 @@ describe("POST /api/promotions/[id]/boost", () => {
   it("returns 403 when user does not own the promotion", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
       promotions: {
@@ -160,7 +160,7 @@ describe("POST /api/promotions/[id]/boost", () => {
             id: VALID_UUID,
             title: "Not My Promo",
             status: "live",
-            seller_id: "different-user",
+            owner_id: "different-user",
             boost_until: null,
           },
         }),
@@ -176,7 +176,7 @@ describe("POST /api/promotions/[id]/boost", () => {
   it("returns 400 when promotion is not live", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
       promotions: {
@@ -185,7 +185,7 @@ describe("POST /api/promotions/[id]/boost", () => {
             id: VALID_UUID,
             title: "Draft Promo",
             status: "draft",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             boost_until: null,
           },
         }),
@@ -202,7 +202,7 @@ describe("POST /api/promotions/[id]/boost", () => {
     mockAuth({ id: USER_ID });
     const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
       promotions: {
@@ -211,7 +211,7 @@ describe("POST /api/promotions/[id]/boost", () => {
             id: VALID_UUID,
             title: "Boosted Promo",
             status: "live",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             boost_until: futureDate,
           },
         }),
@@ -227,7 +227,7 @@ describe("POST /api/promotions/[id]/boost", () => {
   it("returns 500 when payment creation fails", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
       promotions: {
@@ -236,7 +236,7 @@ describe("POST /api/promotions/[id]/boost", () => {
             id: VALID_UUID,
             title: "Test Promo",
             status: "live",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             boost_until: null,
           },
         }),

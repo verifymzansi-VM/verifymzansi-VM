@@ -57,7 +57,7 @@ describe("POST /api/listings", () => {
   it("rejects video uploads when the paid plan disallows them", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -65,7 +65,6 @@ describe("POST /api/listings", () => {
               data: {
                 id: "seller-1",
                 account_verification_status: "verified",
-                seller_verification_status: "verified",
               },
             }),
           };
@@ -105,7 +104,7 @@ describe("POST /api/listings", () => {
   it("rejects when api callers exceed the plan video count", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -113,7 +112,6 @@ describe("POST /api/listings", () => {
               data: {
                 id: "seller-1",
                 account_verification_status: "verified",
-                seller_verification_status: "verified",
               },
             }),
           };
@@ -155,7 +153,7 @@ describe("POST /api/listings", () => {
   it("rejects listing media hosted outside the platform", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -163,7 +161,6 @@ describe("POST /api/listings", () => {
               data: {
                 id: "seller-1",
                 account_verification_status: "verified",
-                seller_verification_status: "verified",
               },
             }),
           };
@@ -192,7 +189,7 @@ describe("POST /api/listings", () => {
   it("returns verification_required for unverified accounts", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -200,7 +197,6 @@ describe("POST /api/listings", () => {
               data: {
                 id: "seller-1",
                 account_verification_status: "incomplete",
-                seller_verification_status: "incomplete",
               },
             }),
           };

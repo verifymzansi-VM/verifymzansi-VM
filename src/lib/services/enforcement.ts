@@ -64,7 +64,7 @@ export async function enforceAction(params: EnforceParams) {
   // Create moderation action record
   try {
     await supabase.from("moderation_actions").insert({
-      target_seller_id: params.ownerId,
+      target_owner_id: params.ownerId,
       actor_id: params.moderatorId,
       action: params.action,
       reason: params.reason,
@@ -80,8 +80,8 @@ export async function enforceAction(params: EnforceParams) {
   // If banned, hide all content across all marketplace areas
   if (params.action === "ban") {
     const hideResults = await Promise.all([
-      supabase.from("listings").update({ status: "hidden" }).eq("seller_id", params.ownerId),
-      supabase.from("businesses").update({ status: "hidden" }).eq("seller_id", params.ownerId),
+      supabase.from("listings").update({ status: "hidden" }).eq("owner_id", params.ownerId),
+      supabase.from("businesses").update({ status: "hidden" }).eq("owner_id", params.ownerId),
     ]);
     const hideErrors = hideResults.filter((r) => r.error);
     if (hideErrors.length > 0) {
@@ -97,12 +97,12 @@ export async function enforceAction(params: EnforceParams) {
       supabase
         .from("listings")
         .update({ status: "hidden" })
-        .eq("seller_id", params.ownerId)
+        .eq("owner_id", params.ownerId)
         .eq("status", "live"),
       supabase
         .from("businesses")
         .update({ status: "hidden" })
-        .eq("seller_id", params.ownerId)
+        .eq("owner_id", params.ownerId)
         .eq("status", "live"),
     ]);
     const suspendErrors = suspendResults.filter((r) => r.error);
@@ -125,7 +125,7 @@ export async function enforceAction(params: EnforceParams) {
     const { data: lastAction } = await supabase
       .from("moderation_actions")
       .select("created_at")
-      .eq("target_seller_id", params.ownerId)
+      .eq("target_owner_id", params.ownerId)
       .in("action", ["ban", "suspend"])
       .order("created_at", { ascending: false })
       .limit(1)
@@ -138,13 +138,13 @@ export async function enforceAction(params: EnforceParams) {
       supabase
         .from("listings")
         .update({ status: "live" })
-        .eq("seller_id", params.ownerId)
+        .eq("owner_id", params.ownerId)
         .eq("status", "hidden")
         .gte("updated_at", hiddenSince),
       supabase
         .from("businesses")
         .update({ status: "live" })
-        .eq("seller_id", params.ownerId)
+        .eq("owner_id", params.ownerId)
         .eq("status", "hidden")
         .gte("updated_at", hiddenSince),
     ]);

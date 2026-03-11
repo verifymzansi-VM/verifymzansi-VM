@@ -15,7 +15,7 @@ import {
   readAccountVerificationStatus,
 } from "@/lib/account/compat";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
-import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
+import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     // Check account profile exists
     const { data: profile } = await admin
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("id, account_verification_status, seller_verification_status")
+      .select("id, account_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedSeller(readAccountVerificationStatus(profile))) {
+    if (!isVerifiedMember(readAccountVerificationStatus(profile))) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
       const { count } = await admin
         .from("businesses")
         .select("id", { count: "exact", head: true })
-        .eq("seller_id", user.id)
+        .eq("owner_id", user.id)
         .neq("status", "rejected");
 
       const check = canCreateListing(count ?? 0, tier as PlanTier, AREA);
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
     const { data: business, error: insertError } = await admin
       .from("businesses")
       .insert({
-        seller_id: user.id,
+        owner_id: user.id,
         area: AREA,
         business_type: data.business_type,
         business_name: data.business_name,
@@ -289,7 +289,7 @@ export async function GET(request: NextRequest) {
       const { data: myBusinesses } = await admin
         .from("businesses")
         .select("id, business_name, business_type, category, status, created_at")
-        .eq("seller_id", user.id)
+        .eq("owner_id", user.id)
         .order("created_at", { ascending: false })
         .limit(mineLimit);
 
@@ -307,9 +307,9 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     const primarySelect =
-      "id, seller_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at";
+      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at";
     const fallbackSelect =
-      "id, seller_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at";
+      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at";
 
     const buildQuery = (selectClause: string) => {
       let query = admin

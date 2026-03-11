@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
           .from("listings")
           .update({ boost_until: boostUntil })
           .eq("id", meta.listing_id as string)
-          .eq("seller_id", existingPayment.user_id);
+          .eq("owner_id", existingPayment.user_id);
 
         if (boostError) {
           log.error("Failed to boost listing", {
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
           .from("businesses")
           .update({ boost_until: boostUntil })
           .eq("id", targetId)
-          .eq("seller_id", existingPayment.user_id);
+          .eq("owner_id", existingPayment.user_id);
 
         if (boostError) {
           log.error("Failed to boost business", {
@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
           .from("storefronts")
           .update({ boost_until: boostUntil })
           .eq("id", meta.storefront_id as string)
-          .eq("seller_id", existingPayment.user_id);
+          .eq("owner_id", existingPayment.user_id);
 
         if (boostError) {
           log.error("Failed to boost storefront", {
@@ -293,7 +293,7 @@ export async function POST(request: NextRequest) {
           .from("listings")
           .update({ featured_until: featuredUntil })
           .eq("id", meta.listing_id as string)
-          .eq("seller_id", existingPayment.user_id);
+          .eq("owner_id", existingPayment.user_id);
 
         if (featuredError) {
           log.error("Failed to feature listing", {
@@ -331,7 +331,7 @@ export async function POST(request: NextRequest) {
           .from("listings")
           .update({ urgent_until: urgentUntil })
           .eq("id", meta.listing_id as string)
-          .eq("seller_id", existingPayment.user_id);
+          .eq("owner_id", existingPayment.user_id);
 
         if (urgentError) {
           log.error("Failed to mark listing urgent", {
@@ -369,7 +369,7 @@ export async function POST(request: NextRequest) {
           .from("promotions")
           .update({ boost_until: boostUntil })
           .eq("id", meta.promotion_id as string)
-          .eq("seller_id", existingPayment.user_id);
+          .eq("owner_id", existingPayment.user_id);
 
         if (boostError) {
           log.error("Failed to boost promotion", {
@@ -409,7 +409,7 @@ export async function POST(request: NextRequest) {
           .from("promotions")
           .update({ featured_until: featuredUntil })
           .eq("id", meta.promotion_id as string)
-          .eq("seller_id", existingPayment.user_id);
+          .eq("owner_id", existingPayment.user_id);
 
         if (featuredError) {
           log.error("Failed to feature promotion", {

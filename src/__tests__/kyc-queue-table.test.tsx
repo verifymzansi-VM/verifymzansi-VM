@@ -97,8 +97,6 @@ const mockSteps = [
     created_at: new Date().toISOString(),
     account_display_name: "John Doe",
     account_verification_status: "pending_review",
-    seller_display_name: "John Doe",
-    seller_verification_status: "pending_review",
   },
   {
     id: "step-2",
@@ -108,8 +106,6 @@ const mockSteps = [
     created_at: new Date().toISOString(),
     account_display_name: null,
     account_verification_status: "pending_review",
-    seller_display_name: null,
-    seller_verification_status: "pending_review",
   },
 ];
 

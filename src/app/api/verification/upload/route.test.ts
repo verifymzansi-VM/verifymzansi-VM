@@ -100,7 +100,7 @@ function setupDefaultAdminMocks() {
           }),
         }),
         update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-          if (payload.account_verification_status || payload.seller_verification_status) {
+          if (payload.account_verification_status || payload.account_verification_status) {
             return {
               eq: vi.fn().mockReturnValue({
                 in: vi.fn().mockReturnValue({
@@ -318,7 +318,7 @@ describe("POST /api/verification/upload", () => {
           }),
           upsert: upsertMock,
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-            if (payload.account_verification_status || payload.seller_verification_status) {
+            if (payload.account_verification_status || payload.account_verification_status) {
               return {
                 eq: vi.fn().mockReturnValue({
                   in: vi.fn().mockReturnValue({
@@ -457,7 +457,7 @@ describe("POST /api/verification/upload", () => {
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-            if (payload.account_verification_status || payload.seller_verification_status) {
+            if (payload.account_verification_status || payload.account_verification_status) {
               return {
                 eq: vi.fn().mockReturnValue({
                   in: vi.fn().mockReturnValue({
@@ -573,7 +573,7 @@ describe("POST /api/verification/upload", () => {
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-            if (payload.account_verification_status || payload.seller_verification_status) {
+            if (payload.account_verification_status || payload.account_verification_status) {
               return {
                 eq: vi.fn().mockReturnValue({
                   in: vi.fn().mockReturnValue({

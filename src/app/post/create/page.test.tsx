@@ -45,7 +45,7 @@ describe("CreatePostPage", () => {
     (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       isLoading: false,
       isVerified: true,
-      profile: { seller_verification_status: "verified" },
+      profile: { account_verification_status: "verified" },
     });
 
     render(<CreatePostPage />);
@@ -66,7 +66,7 @@ describe("CreatePostPage", () => {
     (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       isLoading: false,
       isVerified: true,
-      profile: { seller_verification_status: "verified" },
+      profile: { account_verification_status: "verified" },
     });
 
     render(<CreatePostPage />);
@@ -89,7 +89,7 @@ describe("CreatePostPage", () => {
     (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       isLoading: false,
       isVerified: false,
-      profile: { seller_verification_status: "incomplete" },
+      profile: { account_verification_status: "incomplete" },
     });
 
     render(<CreatePostPage />);

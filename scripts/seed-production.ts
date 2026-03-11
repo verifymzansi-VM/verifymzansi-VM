@@ -162,15 +162,15 @@ async function seedAdminUser() {
   }
 
   if (authData?.user) {
-    // Create seller profile for admin
-    const { error: profileError } = await supabase.from("seller_profiles").upsert(
+    // Create account profile for admin
+    const { error: profileError } = await supabase.from("account_profiles").upsert(
       {
         user_id: authData.user.id,
         display_name: "System Admin",
         phone: "+27000000000",
         location_province: "gauteng",
         location_city: "Johannesburg",
-        seller_verification_status: "verified",
+        account_verification_status: "verified",
         account_status: "active",
       },
       {
@@ -216,14 +216,14 @@ async function seedModeratorUser() {
   }
 
   if (authData?.user) {
-    const { error: profileError } = await supabase.from("seller_profiles").upsert(
+    const { error: profileError } = await supabase.from("account_profiles").upsert(
       {
         user_id: authData.user.id,
         display_name: "Moderator",
         phone: "+27000000001",
         location_province: "gauteng",
         location_city: "Johannesburg",
-        seller_verification_status: "verified",
+        account_verification_status: "verified",
         account_status: "active",
       },
       {

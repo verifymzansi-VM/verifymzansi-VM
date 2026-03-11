@@ -104,7 +104,7 @@ describe("POST /api/promotions", () => {
   it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: null }),
       },
     });
@@ -122,12 +122,11 @@ describe("POST /api/promotions", () => {
   it("returns 400 for invalid body", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
             id: "sp-1",
             account_verification_status: "verified",
-            seller_verification_status: "verified",
           },
         }),
       },
@@ -145,12 +144,11 @@ describe("POST /api/promotions", () => {
   it("returns verification_required for unverified accounts", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
             id: "sp-1",
             account_verification_status: "pending_review",
-            seller_verification_status: "pending_review",
           },
         }),
       },
@@ -170,12 +168,11 @@ describe("POST /api/promotions", () => {
   it("creates promotion successfully (201)", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
             id: "sp-1",
             account_verification_status: "verified",
-            seller_verification_status: "verified",
           },
         }),
       },
@@ -197,12 +194,11 @@ describe("POST /api/promotions", () => {
   it("logs audit event on successful creation", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
             id: "sp-1",
             account_verification_status: "verified",
-            seller_verification_status: "verified",
           },
         }),
       },
@@ -223,7 +219,7 @@ describe("POST /api/promotions", () => {
     mockAuth({ id: USER_ID });
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -231,7 +227,6 @@ describe("POST /api/promotions", () => {
               data: {
                 id: "sp-1",
                 account_verification_status: "verified",
-                seller_verification_status: "verified",
               },
             }),
           };
@@ -274,12 +269,11 @@ describe("POST /api/promotions", () => {
   it("rejects off-platform promotion videos before persistence", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
             id: "sp-1",
             account_verification_status: "verified",
-            seller_verification_status: "verified",
           },
         }),
       },
@@ -302,7 +296,7 @@ describe("POST /api/promotions", () => {
     mockAuth({ id: USER_ID });
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -310,7 +304,6 @@ describe("POST /api/promotions", () => {
               data: {
                 id: "sp-1",
                 account_verification_status: "verified",
-                seller_verification_status: "verified",
               },
             }),
           };
@@ -364,19 +357,18 @@ describe("GET /api/promotions", () => {
     mockAdmin({
       promotions: {
         range: vi.fn().mockResolvedValue({
-          data: [{ id: VALID_UUID, title: "Test", seller_id: USER_ID }],
+          data: [{ id: VALID_UUID, title: "Test", owner_id: USER_ID }],
           count: 1,
           error: null,
         }),
       },
-      seller_profiles: {
+      account_profiles: {
         in: vi.fn().mockResolvedValue({
           data: [
             {
               user_id: USER_ID,
               display_name: "Nomsa",
               account_verification_status: "verified",
-              seller_verification_status: "verified",
             },
           ],
         }),
@@ -483,7 +475,7 @@ describe("PUT /api/promotions/[id]", () => {
     mockAdmin({
       promotions: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: VALID_UUID, seller_id: "different-user", status: "live" },
+          data: { id: VALID_UUID, owner_id: "different-user", status: "live" },
         }),
       },
     });
@@ -524,7 +516,7 @@ describe("PUT /api/promotions/[id]", () => {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
               maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: VALID_UUID, seller_id: USER_ID, status: "live" },
+                data: { id: VALID_UUID, owner_id: USER_ID, status: "live" },
               }),
             };
           }
@@ -587,7 +579,7 @@ describe("DELETE /api/promotions/[id]", () => {
     mockAdmin({
       promotions: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: VALID_UUID, seller_id: USER_ID, status: "live" },
+          data: { id: VALID_UUID, owner_id: USER_ID, status: "live" },
         }),
       },
     });
@@ -613,7 +605,7 @@ describe("DELETE /api/promotions/[id]", () => {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
               maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: VALID_UUID, seller_id: USER_ID, status: "draft" },
+                data: { id: VALID_UUID, owner_id: USER_ID, status: "draft" },
               }),
             };
           }
@@ -653,7 +645,7 @@ describe("DELETE /api/promotions/[id]", () => {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
               maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: VALID_UUID, seller_id: USER_ID, status: "rejected" },
+                data: { id: VALID_UUID, owner_id: USER_ID, status: "rejected" },
               }),
             };
           }

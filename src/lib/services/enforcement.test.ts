@@ -10,7 +10,7 @@ const mockUpdate = vi.fn().mockReturnValue({
 const mockInsert = vi.fn().mockResolvedValue({ error: null });
 
 const mockFrom = vi.fn().mockImplementation((table: string) => {
-  if (table === "seller_profiles") {
+  if (table === "account_profiles") {
     return {
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockResolvedValue({ error: null }),
@@ -64,7 +64,7 @@ describe("enforcement service", () => {
     expect(mockFrom).toHaveBeenCalledWith("moderation_actions");
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        target_seller_id: "seller-1",
+        target_owner_id: "seller-1",
         action: "warning",
         reason: "First offense",
         actor_id: "mod-1",
@@ -80,7 +80,7 @@ describe("enforcement service", () => {
       moderatorId: "mod-1",
     });
 
-    expect(mockFrom).toHaveBeenCalledWith("seller_profiles");
+    expect(mockFrom).toHaveBeenCalledWith("account_profiles");
   });
 
   it("updates listings and businesses to hidden on ban", async () => {
@@ -129,9 +129,9 @@ describe("enforcement service", () => {
   });
 
   it("throws when unban target account profile not found", async () => {
-    // Override the mock so seller_profiles SELECT returns null
+    // Override the mock so account_profiles SELECT returns null
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === "account_profiles") {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({

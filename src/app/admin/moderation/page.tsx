@@ -28,21 +28,21 @@ export default async function AdminModerationPage() {
       admin
         .from("listings")
         .select(
-          "id, title, status, created_at, category, seller_id, description, photos, videos, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required"
+          "id, title, status, created_at, category, owner_id, description, photos, videos, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required"
         )
         .eq("status", "pending_moderation")
         .order("created_at", { ascending: true })
         .limit(50),
       admin
         .from("businesses")
-        .select("id, business_name, business_type, status, created_at, seller_id")
+        .select("id, business_name, business_type, status, created_at, owner_id")
         .eq("status", "pending_moderation")
         .order("created_at", { ascending: true })
         .limit(50),
       admin
         .from("promotions")
         .select(
-          "id, title, status, created_at, category, seller_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type"
+          "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type"
         )
         .eq("status", "pending_moderation")
         .order("created_at", { ascending: true })

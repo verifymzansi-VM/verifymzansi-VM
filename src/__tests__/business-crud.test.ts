@@ -60,7 +60,7 @@ describe("POST /api/businesses", () => {
   it("blocks a second free post when no paid plan exists", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -68,7 +68,6 @@ describe("POST /api/businesses", () => {
               data: {
                 id: "seller-1",
                 account_verification_status: "verified",
-                seller_verification_status: "verified",
               },
             }),
           };
@@ -108,7 +107,7 @@ describe("POST /api/businesses", () => {
   it("blocks cover video uploads when the plan does not allow them", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -116,7 +115,6 @@ describe("POST /api/businesses", () => {
               data: {
                 id: "seller-1",
                 account_verification_status: "verified",
-                seller_verification_status: "verified",
               },
             }),
           };
@@ -165,7 +163,7 @@ describe("POST /api/businesses", () => {
 
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -173,7 +171,6 @@ describe("POST /api/businesses", () => {
               data: {
                 id: "seller-1",
                 account_verification_status: "verified",
-                seller_verification_status: "verified",
               },
             }),
           };
@@ -228,7 +225,7 @@ describe("POST /api/businesses", () => {
   it("rejects business media hosted outside the platform", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -236,7 +233,6 @@ describe("POST /api/businesses", () => {
               data: {
                 id: "seller-1",
                 account_verification_status: "verified",
-                seller_verification_status: "verified",
               },
             }),
           };
@@ -265,7 +261,7 @@ describe("POST /api/businesses", () => {
   it("returns verification_required for unverified accounts", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -273,7 +269,6 @@ describe("POST /api/businesses", () => {
               data: {
                 id: "seller-1",
                 account_verification_status: "rejected",
-                seller_verification_status: "rejected",
               },
             }),
           };

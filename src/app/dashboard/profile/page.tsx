@@ -60,7 +60,7 @@ export default function ProfilePage() {
       const { data: profile } = await supabase
         .from(ACCOUNT_PROFILE_TABLE)
         .select(
-          "display_name, bio, location_province, location_city, phone, account_verification_status, seller_verification_status"
+          "display_name, bio, location_province, location_city, phone, account_verification_status"
         )
         .eq("user_id", user.id)
         .maybeSingle();

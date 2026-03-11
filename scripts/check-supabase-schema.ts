@@ -7,7 +7,7 @@ loadEnvConfig(process.cwd());
 export const REQUIRED_TABLES = [
   "listings",
   "promotions",
-  "seller_profiles",
+  "account_profiles",
   "plans",
   "storefronts",
   "businesses",

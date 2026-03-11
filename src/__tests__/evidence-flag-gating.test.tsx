@@ -104,8 +104,7 @@ describe("Feature-flag gating: Evidence Desk", () => {
       status: "pending",
       created_at: "2025-01-01T00:00:00Z",
       account_display_name: "Test Account",
-      seller_display_name: "Test Account",
-      seller_verification_status: "pending",
+      account_verification_status: "pending",
     };
 
     it("hides Evidence button when evidenceDeskEnabled is false", async () => {

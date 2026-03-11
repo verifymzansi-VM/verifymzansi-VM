@@ -1060,7 +1060,7 @@ export default function EditBusinessPage() {
                 <BusinessDetailContent
                   business={{
                     id: businessId,
-                    seller_id: "preview-seller",
+                    owner_id: "preview-seller",
                     business_name: businessName || "Your business name",
                     description: description || "Your business description will appear here.",
                     status: "preview",

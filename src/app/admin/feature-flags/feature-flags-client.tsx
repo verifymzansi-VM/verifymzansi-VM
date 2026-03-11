@@ -33,12 +33,11 @@ const MODE_LABELS: Record<FlagMode, string> = {
   allowlist: "Role Allowlist",
 };
 
-const AVAILABLE_ROLES = ["admin", "moderator", "member", "seller", "buyer"];
+const AVAILABLE_ROLES = ["admin", "moderator", "member", "buyer"];
 const ROLE_LABELS: Record<string, string> = {
   admin: "admin",
   moderator: "moderator",
   member: "member",
-  seller: "seller (legacy)",
   buyer: "buyer",
 };
 

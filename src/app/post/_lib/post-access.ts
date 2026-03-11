@@ -7,9 +7,6 @@ export function isVerifiedMember(
   return status === "verified";
 }
 
-/** @deprecated Use isVerifiedMember instead */
-export const isVerifiedSeller = isVerifiedMember;
-
 export function buildVerificationRedirectUrl(returnUrl: string): string {
   const safeReturnUrl = sanitizeReturnUrl(returnUrl);
   return `/verification?returnUrl=${encodeURIComponent(safeReturnUrl)}`;

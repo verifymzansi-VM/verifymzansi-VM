@@ -75,11 +75,11 @@ describe("POST /api/contact", () => {
       if (table === "listings") {
         return {
           select: vi.fn().mockImplementation((fields: string) => {
-            if (fields === "seller_id") {
+            if (fields === "owner_id") {
               return {
                 eq: vi.fn().mockReturnValue({
                   single: vi.fn().mockResolvedValue({
-                    data: { seller_id: ownerId },
+                    data: { owner_id: ownerId },
                     error: null,
                   }),
                 }),
@@ -109,7 +109,6 @@ describe("POST /api/contact", () => {
               maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   account_verification_status: "verified",
-                  seller_verification_status: "rejected",
                 },
                 error: null,
               }),
@@ -152,7 +151,7 @@ describe("POST /api/contact", () => {
     });
   });
 
-  it("falls back to the legacy seller verification status when the account alias is missing", async () => {
+  it("records the canonical member verification flag on contact events", async () => {
     const ownerId = "11111111-1111-4111-8111-111111111111";
     const listingId = "22222222-2222-4222-8222-222222222222";
     const contactInsert = vi.fn().mockResolvedValue({ error: null });
@@ -161,11 +160,11 @@ describe("POST /api/contact", () => {
       if (table === "listings") {
         return {
           select: vi.fn().mockImplementation((fields: string) => {
-            if (fields === "seller_id") {
+            if (fields === "owner_id") {
               return {
                 eq: vi.fn().mockReturnValue({
                   single: vi.fn().mockResolvedValue({
-                    data: { seller_id: ownerId },
+                    data: { owner_id: ownerId },
                     error: null,
                   }),
                 }),
@@ -195,7 +194,6 @@ describe("POST /api/contact", () => {
               maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   account_verification_status: null,
-                  seller_verification_status: "verified",
                 },
                 error: null,
               }),
@@ -231,7 +229,7 @@ describe("POST /api/contact", () => {
     expect(response.status).toBe(200);
     expect(contactInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        seller_verified: true,
+        member_verified: false,
       })
     );
   });

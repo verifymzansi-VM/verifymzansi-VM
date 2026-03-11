@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useTransition, useRef } from "react";
 import { ListingCard } from "@/components/listings/listing-card";
 import { ListingCardList } from "@/components/listings/listing-card-list";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import type { ListingCondition, SellerVerificationStatus } from "@/types/enums";
+import type { ListingCondition, AccountVerificationStatus } from "@/types/enums";
 import { useMarketplaceStore } from "@/stores";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { PackageOpen, Plus, AlertTriangle, LayoutGrid, List } from "lucide-react";
@@ -41,7 +41,7 @@ interface ListingRow {
 interface OwnerRow {
   user_id: string;
   display_name: string;
-  seller_verification_status: string;
+  account_verification_status: string;
 }
 
 interface ListingsResponse {
@@ -338,7 +338,7 @@ export function MzansiMarketGrid() {
             const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
             const seller = sellers.get(listing.owner_id);
             const trustLevel = computeTrustLevel(
-              (seller?.seller_verification_status ?? null) as SellerVerificationStatus | null
+              (seller?.account_verification_status ?? null) as AccountVerificationStatus | null
             );
             const isBoosted = listing.boost_until
               ? new Date(listing.boost_until) > new Date()
@@ -379,7 +379,7 @@ export function MzansiMarketGrid() {
             const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
             const seller = sellers.get(listing.owner_id);
             const trustLevel = computeTrustLevel(
-              (seller?.seller_verification_status ?? null) as SellerVerificationStatus | null
+              (seller?.account_verification_status ?? null) as AccountVerificationStatus | null
             );
             const isBoosted = listing.boost_until
               ? new Date(listing.boost_until) > new Date()

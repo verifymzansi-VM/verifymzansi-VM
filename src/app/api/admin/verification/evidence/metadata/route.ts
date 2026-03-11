@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
     const { data: accountProfile } = await adminClient
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select(
-        "display_name, account_verification_status, seller_verification_status, account_status, strikes, legal_hold, location_province, location_city"
+        "display_name, account_verification_status, account_status, strikes, legal_hold, location_province, location_city"
       )
       .eq("user_id", targetUserId)
       .single();

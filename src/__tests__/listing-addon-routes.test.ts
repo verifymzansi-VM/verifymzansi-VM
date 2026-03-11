@@ -117,7 +117,7 @@ function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_u
         title: "Test Listing",
         status: "live",
         area: "MZANSI_MARKET",
-        seller_id: USER_ID,
+        owner_id: USER_ID,
         [addonField]: null,
       },
     }),
@@ -130,7 +130,7 @@ function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_u
   };
 
   mockFrom.mockImplementation((table: string) => {
-    if (table === "seller_profiles") return sellerProfileBuilder;
+    if (table === "account_profiles") return sellerProfileBuilder;
     if (table === "listings") return listingBuilder;
     if (table === "payments") return paymentBuilder;
     return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
@@ -173,7 +173,7 @@ describe.each([
       maybeSingle: vi.fn().mockResolvedValue({ data: null }),
     };
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") return sellerProfileBuilder;
+      if (table === "account_profiles") return sellerProfileBuilder;
       return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
     });
 
@@ -200,13 +200,13 @@ describe.each([
           title: "Other Listing",
           status: "live",
           area: "MZANSI_MARKET",
-          seller_id: "different-user-id",
+          owner_id: "different-user-id",
           [addonField]: null,
         },
       }),
     };
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") return sellerProfileBuilder;
+      if (table === "account_profiles") return sellerProfileBuilder;
       if (table === "listings") return listingBuilder;
       return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
     });
@@ -234,13 +234,13 @@ describe.each([
           title: "Draft Listing",
           status: "draft",
           area: "MZANSI_MARKET",
-          seller_id: USER_ID,
+          owner_id: USER_ID,
           [addonField]: null,
         },
       }),
     };
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") return sellerProfileBuilder;
+      if (table === "account_profiles") return sellerProfileBuilder;
       if (table === "listings") return listingBuilder;
       return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
     });
@@ -271,13 +271,13 @@ describe.each([
           title: "Active Listing",
           status: "live",
           area: "MZANSI_MARKET",
-          seller_id: USER_ID,
+          owner_id: USER_ID,
           [addonField]: futureDate,
         },
       }),
     };
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") return sellerProfileBuilder;
+      if (table === "account_profiles") return sellerProfileBuilder;
       if (table === "listings") return listingBuilder;
       return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
     });

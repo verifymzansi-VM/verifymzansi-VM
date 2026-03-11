@@ -109,8 +109,6 @@ const MOCK_STEP = {
   created_at: "2025-01-01T00:00:00Z",
   account_display_name: "Test Account",
   account_verification_status: "pending_review",
-  seller_display_name: "Test Account",
-  seller_verification_status: "pending_review",
 };
 
 const MOCK_ARTIFACT = {

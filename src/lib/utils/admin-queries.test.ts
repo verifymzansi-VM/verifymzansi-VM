@@ -71,6 +71,7 @@ describe("admin-queries", () => {
           return createChainableMock({
             data: [
               { target_type: "listing" },
+              { target_type: "account_profile" },
               { target_type: "listing" },
               { target_type: "business_profile" },
             ],
@@ -82,7 +83,7 @@ describe("admin-queries", () => {
 
       const counts = await getAreaCardCounts();
 
-      expect(counts.MZANSI_MARKET.pendingFlags).toBe(2);
+      expect(counts.MZANSI_MARKET.pendingFlags).toBe(3);
       expect(counts.MZANSI_BUSINESS.pendingFlags).toBe(1);
       expect(counts.BUSINESS_ADS.pendingFlags).toBe(0);
       expect(counts.MALL_SHOPS.pendingFlags).toBe(0);
@@ -112,7 +113,6 @@ describe("admin-queries", () => {
           user_id: "u1",
           display_name: "Thabo",
           account_verification_status: "pending_review",
-          seller_verification_status: "pending_review",
         },
       ];
 
@@ -129,7 +129,7 @@ describe("admin-queries", () => {
       expect(result).toHaveLength(1);
       expect(result[0].account_display_name).toBe("Thabo");
       expect(result[0].account_verification_status).toBe("pending_review");
-      expect(result[0].seller_display_name).toBe("Thabo");
+      expect(result[0].account_display_name).toBe("Thabo");
     });
   });
 
@@ -149,7 +149,6 @@ describe("admin-queries", () => {
           user_id: "u1",
           display_name: "Ayanda",
           account_verification_status: "verified",
-          seller_verification_status: "pending_review",
           account_status: "active",
           strikes: 1,
         },
@@ -168,7 +167,6 @@ describe("admin-queries", () => {
       expect(result).toHaveLength(1);
       expect(result[0].account_display_name).toBe("Ayanda");
       expect(result[0].account_verification_status).toBe("verified");
-      expect(result[0].seller_verification_status).toBe("pending_review");
       expect(result[0].account_strikes).toBe(1);
     });
   });

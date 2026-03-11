@@ -49,7 +49,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     const { data: business } = await admin
       .from("businesses")
-      .select("id, business_name, status, seller_id, boost_until")
+      .select("id, business_name, status, owner_id, boost_until")
       .eq("id", businessId)
       .maybeSingle();
 
@@ -57,7 +57,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
-    if (business.seller_id !== user.id) {
+    if (business.owner_id !== user.id) {
       return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 

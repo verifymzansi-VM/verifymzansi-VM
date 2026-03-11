@@ -82,7 +82,6 @@ interface AccessLog {
 interface AccountProfile {
   display_name: string;
   account_verification_status?: string | null;
-  seller_verification_status: string;
   account_status: string;
   strikes: number;
   legal_hold: boolean;
@@ -138,7 +137,7 @@ export function EvidenceDeskClient({
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const accountProfile = metadata?.accountProfile ?? metadata?.sellerProfile ?? null;
   const verificationStatus =
-    accountProfile?.account_verification_status ?? accountProfile?.seller_verification_status;
+    accountProfile?.account_verification_status ?? accountProfile?.account_verification_status;
 
   const fetchMetadata = useCallback(
     async (sid?: string, uid?: string) => {

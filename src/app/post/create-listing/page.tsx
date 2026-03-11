@@ -389,7 +389,7 @@ export default function CreateListingPage() {
             display_name: "You",
             location_province: province || null,
             location_city: city || null,
-            seller_verification_status: null,
+            account_verification_status: null,
           }}
           showContactActions={false}
           showSimilarListings={false}

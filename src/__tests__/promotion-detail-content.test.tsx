@@ -60,7 +60,7 @@ describe("PromotionDetailContent", () => {
       <PromotionDetailContent
         promotion={{
           id: "promo-1",
-          seller_id: "seller-1",
+          owner_id: "seller-1",
           business_id: null,
           title: "Night Market",
           description: "Community food and craft event with live music and stalls.",
@@ -85,7 +85,6 @@ describe("PromotionDetailContent", () => {
         advertiserProfile={{
           display_name: "You",
           account_verification_status: null,
-          seller_verification_status: null,
           phone: null,
           masked_phone_public: null,
         }}

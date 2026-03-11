@@ -14,7 +14,7 @@ import {
   PROMOTION_TYPE_LABELS,
   type BusinessCategory,
   type PromotionType,
-  type SellerVerificationStatus,
+  type AccountVerificationStatus,
 } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
@@ -22,7 +22,7 @@ import { readAccountVerificationStatus } from "@/lib/account/compat";
 
 export interface PromotionDetailRecord {
   id: string;
-  seller_id: string;
+  owner_id: string;
   business_id: string | null;
   title: string;
   description: string;
@@ -47,8 +47,7 @@ export interface PromotionDetailRecord {
 
 export interface PromotionAdvertiserRecord {
   display_name: string | null;
-  account_verification_status?: SellerVerificationStatus | null;
-  seller_verification_status: SellerVerificationStatus | null;
+  account_verification_status?: AccountVerificationStatus | null;
   phone: string | null;
   masked_phone_public: string | null;
 }

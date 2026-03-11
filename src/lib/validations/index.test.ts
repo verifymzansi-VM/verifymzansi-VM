@@ -28,7 +28,6 @@ describe("validations index barrel", () => {
 
     // Contact schemas
     expect(v.contactAccountHolderSchema).toBeDefined();
-    expect(v.contactSellerSchema).toBeDefined();
     expect(v.reportSchema).toBeDefined();
   });
 });

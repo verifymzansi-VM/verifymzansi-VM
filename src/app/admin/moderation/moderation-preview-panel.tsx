@@ -16,7 +16,7 @@ export interface ModerationItem {
   status: string;
   created_at: string;
   category?: string;
-  seller_id?: string;
+  owner_id?: string;
   area: string;
   areaLabel: string;
   itemType: string;
@@ -329,7 +329,7 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
             <p>
               <span className="text-muted-foreground">ID:</span>{" "}
               <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                {item.seller_id?.slice(0, 12)}…
+                {item.owner_id?.slice(0, 12)}…
               </code>
             </p>
             {item.buyer_verification_required && (

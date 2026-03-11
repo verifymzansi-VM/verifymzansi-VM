@@ -15,7 +15,7 @@ import {
 } from "@/lib/account/compat";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
-import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
+import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
     );
     const offset = (filters.page - 1) * limit;
     const selectClause =
-      "id, seller_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured";
+      "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured";
     const hasAttributeFilters = Object.keys(filters.attributes).length > 0;
 
     let listings: Record<string, unknown>[] = [];
@@ -227,13 +227,13 @@ export async function GET(request: NextRequest) {
     }
 
     const sellerIds = Array.from(
-      new Set(listings.map((listing) => String(listing.seller_id)).filter(Boolean))
+      new Set(listings.map((listing) => String(listing.owner_id)).filter(Boolean))
     );
 
     const { data: sellers } = sellerIds.length
       ? await admin
-          .from("seller_profiles")
-          .select("user_id, display_name, account_verification_status, seller_verification_status")
+          .from("account_profiles")
+          .select("user_id, display_name, account_verification_status")
           .in("user_id", sellerIds)
       : { data: [] as Array<Record<string, unknown>> };
 
@@ -242,7 +242,6 @@ export async function GET(request: NextRequest) {
         user_id: seller.user_id,
         display_name: seller.display_name,
         account_verification_status: readAccountVerificationStatus(seller),
-        seller_verification_status: seller.seller_verification_status ?? null,
       })) ?? [];
 
     return NextResponse.json({
@@ -296,8 +295,8 @@ export async function POST(request: NextRequest) {
 
     // ── Get account profile ──────────────────────────────────
     const { data: profile } = await admin
-      .from("seller_profiles")
-      .select("id, account_verification_status, seller_verification_status")
+      .from("account_profiles")
+      .select("id, account_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -305,7 +304,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedSeller(readAccountVerificationStatus(profile))) {
+    if (!isVerifiedMember(readAccountVerificationStatus(profile))) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
@@ -377,7 +376,7 @@ export async function POST(request: NextRequest) {
       const { count } = await admin
         .from("listings")
         .select("id", { count: "exact", head: true })
-        .eq("seller_id", user.id)
+        .eq("owner_id", user.id)
         .neq("status", "rejected");
 
       const currentCount = count ?? 0;
@@ -435,7 +434,7 @@ export async function POST(request: NextRequest) {
     const priceCents = Math.round(data.price_zar * 100);
 
     const listingRecord = {
-      seller_id: user.id,
+      owner_id: user.id,
       title: data.title,
       description: data.description,
       price_cents: priceCents,

@@ -549,7 +549,7 @@ function CreateBusinessContent() {
         <BusinessDetailContent
           business={{
             id: "preview-business",
-            seller_id: "preview-seller",
+            owner_id: "preview-seller",
             business_name: businessName || "Your business name",
             description: description || "Your business description will appear here.",
             status: "preview",

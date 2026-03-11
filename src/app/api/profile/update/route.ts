@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Build the update payload
-  // Note: DB trigger sync_seller_profile_phone_fields handles phone normalization + masked_phone_public
+  // Note: DB trigger sync_account_profile_phone_fields handles phone normalization + masked_phone_public
   const updatePayload: Record<string, unknown> = {
     display_name: parsed.data.displayName,
     bio: parsed.data.bio || null,

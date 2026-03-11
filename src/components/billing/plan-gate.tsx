@@ -238,7 +238,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
 
         // Get account profile — just check it exists.
         const { data: profile } = await supabase
-          .from("seller_profiles")
+          .from("account_profiles")
           .select("id, created_at")
           .eq("user_id", user.id)
           .single();
@@ -285,7 +285,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
         const { count } = await supabase
           .from(table)
           .select("id", { count: "exact", head: true })
-          .eq("seller_id", user.id)
+          .eq("owner_id", user.id)
           .neq("status", "rejected");
 
         const currentCount = count ?? 0;

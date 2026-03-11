@@ -53,7 +53,7 @@ const zarCurrency = new Intl.NumberFormat("en-ZA", {
 
 export interface BusinessDetailRecord {
   id: string;
-  seller_id: string;
+  owner_id: string;
   business_name: string;
   description: string | null;
   status: string;

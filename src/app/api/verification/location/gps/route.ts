@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
 
     // Check account profile exists
     const { data: profile } = await adminClient
-      .from("seller_profiles")
+      .from("account_profiles")
       .select("id")
       .eq("user_id", user.id)
       .single();
@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
 
     // Update account profile
     await adminClient
-      .from("seller_profiles")
+      .from("account_profiles")
       .update({
         location_province: province,
         location_city: city,
@@ -219,13 +219,12 @@ export async function POST(request: NextRequest) {
 
     // Set pending_review if currently incomplete
     await adminClient
-      .from("seller_profiles")
+      .from("account_profiles")
       .update({
         account_verification_status: "pending_review",
-        seller_verification_status: "pending_review",
       })
       .eq("user_id", user.id)
-      .in("seller_verification_status", ["incomplete", "rejected"]);
+      .in("account_verification_status", ["incomplete", "rejected"]);
 
     // Audit log
     await logAuditEvent({

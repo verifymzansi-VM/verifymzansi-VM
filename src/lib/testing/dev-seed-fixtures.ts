@@ -75,8 +75,7 @@ export interface DevSeedPromotionFixture {
 export interface DevSeedBusinessRowRef {
   id: string;
   slug: string | null;
-  seller_id: string;
-  owner_id?: string;
+  owner_id: string;
   location_province: string;
   location_city: string;
 }
@@ -646,7 +645,7 @@ export function buildDevSeedListings(ownerIds: string[]) {
   const publishedAt = new Date().toISOString();
 
   return DEV_SEED_LISTING_FIXTURES.map((fixture, index) => ({
-    seller_id: assignOwnerId(ownerIds, index),
+    owner_id: assignOwnerId(ownerIds, index),
     area: "MZANSI_MARKET" as const,
     category: fixture.category,
     title: fixture.title,
@@ -671,7 +670,7 @@ export function buildDevSeedBusinesses(ownerIds: string[]) {
   const publishedAt = new Date().toISOString();
 
   return DEV_SEED_BUSINESS_FIXTURES.map((fixture, index) => ({
-    seller_id: assignOwnerId(ownerIds, index),
+    owner_id: assignOwnerId(ownerIds, index),
     area: "MZANSI_BUSINESS" as const,
     business_type: fixture.business_type,
     business_name: fixture.business_name,
@@ -726,7 +725,7 @@ export function buildDevSeedPromotions(businessRows: DevSeedBusinessRowRef[]) {
     }
 
     return {
-      seller_id: business.seller_id,
+      owner_id: business.owner_id,
       business_id: business.id,
       title: fixture.title,
       description: fixture.description,

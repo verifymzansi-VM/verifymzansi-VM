@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     // Get the listing owner (use admin client so unauthenticated users can still contact)
     const { data: listing } = await admin
       .from("listings")
-      .select("seller_id")
+      .select("owner_id")
       .eq("id", parsed.data.listingId)
       .single();
 
@@ -72,9 +72,9 @@ export async function POST(request: NextRequest) {
 
     // Check account verification status
     const { data: accountProfile } = await admin
-      .from("seller_profiles")
-      .select("account_verification_status, seller_verification_status")
-      .eq("user_id", listing.seller_id)
+      .from("account_profiles")
+      .select("account_verification_status")
+      .eq("user_id", listing.owner_id)
       .maybeSingle();
 
     const ownerVerified = readAccountVerificationStatus(accountProfile) === "verified";
@@ -86,8 +86,8 @@ export async function POST(request: NextRequest) {
     const { error: contactError } = await admin.from("contact_events").insert({
       target_id: parsed.data.listingId,
       target_type: "listing",
-      seller_id: listing.seller_id,
-      seller_verified: ownerVerified,
+      owner_id: listing.owner_id,
+      member_verified: ownerVerified,
       contact_type: contactType,
     });
 
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       const { error: leadsError } = await admin.from("leads").insert({
         target_id: parsed.data.listingId,
         target_type: "listing",
-        seller_id: listing.seller_id,
+        owner_id: listing.owner_id,
         buyer_name: null,
         buyer_email: user?.email || null,
         buyer_phone: null,
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
       const listingTitle = listingInfo?.title?.slice(0, 40) || "your listing";
 
       await createNotification({
-        userId: listing.seller_id,
+        userId: listing.owner_id,
         type: "info",
         title: "New lead received!",
         message: `Someone is interested in \"${listingTitle}\".`,

@@ -260,11 +260,10 @@ export function DashboardKycPanel({
             const waitMs = Date.now() - new Date(waitTime).getTime();
             const waitHours = waitMs / (1000 * 60 * 60);
             const isUrgent = waitHours > 24;
-            const displayName = item.account_display_name ?? item.seller_display_name;
-            const verificationStatus =
-              item.account_verification_status ?? item.seller_verification_status;
-            const accountStatus = item.account_status ?? item.seller_account_status;
-            const strikeCount = item.account_strikes ?? item.seller_strikes;
+            const displayName = item.account_display_name ?? null;
+            const verificationStatus = item.account_verification_status ?? null;
+            const accountStatus = item.account_status ?? null;
+            const strikeCount = item.account_strikes ?? 0;
 
             return (
               <Card
@@ -474,7 +473,7 @@ export function DashboardKycPanel({
                   {STEP_LABELS[dialog.step.step_type] || dialog.step.step_type} for{" "}
                   <strong>
                     {dialog.step.account_display_name ||
-                      dialog.step.seller_display_name ||
+                      dialog.step.account_display_name ||
                       dialog.step.user_id.slice(0, 8) + "…"}
                   </strong>
                 </>

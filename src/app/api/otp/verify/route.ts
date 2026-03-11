@@ -93,14 +93,14 @@ async function finalizePhoneVerification(
   nowIso: string
 ): Promise<{ success: true } | { success: false; error: string; status: number }> {
   let { data: profile } = await adminSupabase
-    .from("seller_profiles")
+    .from("account_profiles")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (!profile) {
     const { data: createdProfile, error: createProfileError } = await adminSupabase
-      .from("seller_profiles")
+      .from("account_profiles")
       .upsert(
         {
           user_id: user.id,
@@ -133,7 +133,7 @@ async function finalizePhoneVerification(
 
   if (profile) {
     const { error: profileUpdateError } = await adminSupabase
-      .from("seller_profiles")
+      .from("account_profiles")
       .update(accountPhoneFields)
       .eq("id", profile.id);
 

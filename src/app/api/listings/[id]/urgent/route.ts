@@ -42,7 +42,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     // ── Get account profile ──────────────────────────────────
     const { data: profile } = await admin
-      .from("seller_profiles")
+      .from("account_profiles")
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
@@ -54,7 +54,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     // ── Check listing exists and belongs to user ─────────────
     const { data: listing } = await admin
       .from("listings")
-      .select("id, title, status, area, seller_id, urgent_until")
+      .select("id, title, status, area, owner_id, urgent_until")
       .eq("id", listingId)
       .maybeSingle();
 
@@ -62,7 +62,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
 
-    if (listing.seller_id !== user.id) {
+    if (listing.owner_id !== user.id) {
       return NextResponse.json({ error: "You don't own this listing" }, { status: 403 });
     }
 

@@ -50,7 +50,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
     ? await supabase
         .from(ACCOUNT_PROFILE_TABLE)
         .select(
-          "display_name, account_verification_status, seller_verification_status, phone, masked_phone_public, location_province, location_city, strikes"
+          "display_name, account_verification_status, phone, masked_phone_public, location_province, location_city, strikes"
         )
         .eq("user_id", promotionOwnerId)
         .maybeSingle()

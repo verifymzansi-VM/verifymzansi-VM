@@ -133,7 +133,6 @@ describe("POST /api/auth/register", () => {
         phone: "+27821234567",
         masked_phone_public: "+27 •••• ••67",
         account_verification_status: "incomplete",
-        seller_verification_status: "incomplete",
         account_status: "active",
       }),
       { onConflict: "user_id" }

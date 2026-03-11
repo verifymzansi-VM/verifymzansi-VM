@@ -48,8 +48,8 @@ async function ensureSeedSeller(user: {
     email: user.email,
     password: "Password123!",
     email_confirm: true,
-    user_metadata: { role: "seller", display_name: user.name },
-    app_metadata: { role: "seller" },
+    user_metadata: { role: "member", display_name: user.name },
+    app_metadata: { role: "member" },
   });
 
   let userId = authData?.user?.id;
@@ -61,7 +61,7 @@ async function ensureSeedSeller(user: {
       authError.code === "user_already_exists")
   ) {
     const { data: existing } = await supabase
-      .from("seller_profiles")
+      .from("account_profiles")
       .select("user_id")
       .eq("display_name", user.name)
       .limit(1)
@@ -73,14 +73,14 @@ async function ensureSeedSeller(user: {
 
   if (!userId) return null;
 
-  await supabase.from("seller_profiles").upsert(
+  await supabase.from("account_profiles").upsert(
     {
       user_id: userId,
       display_name: user.name,
       phone: user.phone,
       location_province: user.location_province,
       location_city: user.location_city,
-      seller_verification_status: "verified",
+      account_verification_status: "verified",
       account_status: "active",
     },
     { onConflict: "user_id" }
@@ -95,13 +95,13 @@ async function cleanupExistingSeedRows(sellerIds: string[]) {
   console.log("  Cleaning previous seed rows...");
 
   const cleanupSteps = [
-    { table: "promotions", column: "seller_id" },
-    { table: "businesses", column: "seller_id" },
-    { table: "listings", column: "seller_id" },
-    { table: "business_posts", column: "seller_id" },
-    { table: "business_profiles", column: "seller_id" },
-    { table: "storefront_posts", column: "seller_id" },
-    { table: "storefronts", column: "seller_id" },
+    { table: "promotions", column: "owner_id" },
+    { table: "businesses", column: "owner_id" },
+    { table: "listings", column: "owner_id" },
+    { table: "business_posts", column: "owner_id" },
+    { table: "business_profiles", column: "owner_id" },
+    { table: "storefront_posts", column: "owner_id" },
+    { table: "storefronts", column: "owner_id" },
   ] as const;
 
   for (const step of cleanupSteps) {
@@ -147,7 +147,7 @@ async function seedDevelopmentData() {
   const { data: insertedBusinesses, error: businessesError } = await supabase
     .from("businesses")
     .insert(businesses)
-    .select("id, slug, seller_id, location_province, location_city");
+    .select("id, slug, owner_id, location_province, location_city");
   if (businessesError) {
     console.error("  Error seeding businesses:", businessesError);
   } else {

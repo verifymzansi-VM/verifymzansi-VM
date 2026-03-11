@@ -16,7 +16,7 @@ import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
   readAccountVerificationStatus,
 } from "@/lib/account/compat";
-import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
+import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -92,8 +92,8 @@ export async function POST(request: NextRequest) {
 
     // Check account profile exists
     const { data: profile } = await admin
-      .from("seller_profiles")
-      .select("id, account_verification_status, seller_verification_status")
+      .from("account_profiles")
+      .select("id, account_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedSeller(readAccountVerificationStatus(profile))) {
+    if (!isVerifiedMember(readAccountVerificationStatus(profile))) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
       const { count } = await admin
         .from("promotions")
         .select("id", { count: "exact", head: true })
-        .eq("seller_id", user.id)
+        .eq("owner_id", user.id)
         .neq("status", "rejected");
 
       const currentCount = count ?? 0;
@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
     const { data: promotion, error: insertError } = await admin
       .from("promotions")
       .insert({
-        seller_id: user.id,
+        owner_id: user.id,
         title: data.title,
         description: data.description,
         promotion_type: data.promotion_type,
@@ -316,7 +316,7 @@ export async function GET(request: NextRequest) {
     let query = admin
       .from("promotions")
       .select(
-        "id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
+        "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
         { count: "exact" }
       )
       .eq("status", "live");
@@ -362,7 +362,7 @@ export async function GET(request: NextRequest) {
     }
 
     const accountIds = Array.from(
-      new Set((promotions ?? []).map((promotion) => promotion.seller_id).filter(Boolean))
+      new Set((promotions ?? []).map((promotion) => promotion.owner_id).filter(Boolean))
     );
     const businessIds = Array.from(
       new Set((promotions ?? []).map((promotion) => promotion.business_id).filter(Boolean))
@@ -370,8 +370,8 @@ export async function GET(request: NextRequest) {
 
     const { data: accountProfiles } = accountIds.length
       ? await admin
-          .from("seller_profiles")
-          .select("user_id, display_name, account_verification_status, seller_verification_status")
+          .from("account_profiles")
+          .select("user_id, display_name, account_verification_status")
           .in("user_id", accountIds)
       : { data: [] };
     const { data: businesses } = businessIds.length

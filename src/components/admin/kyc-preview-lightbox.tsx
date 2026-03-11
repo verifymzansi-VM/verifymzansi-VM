@@ -52,8 +52,6 @@ interface VerificationStep {
   created_at: string;
   account_display_name?: string | null;
   account_verification_status?: string | null;
-  seller_display_name?: string | null;
-  seller_verification_status: string | null;
 }
 
 interface KycPreviewLightboxProps {
@@ -121,7 +119,7 @@ export function KycPreviewLightbox({
   const [reasonNote, setReasonNote] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const displayName = step.account_display_name ?? step.seller_display_name;
+  const displayName = step.account_display_name ?? step.account_display_name;
 
   const isImage = artifact.content_type.startsWith("image/");
   const isPdf = artifact.content_type === "application/pdf";
