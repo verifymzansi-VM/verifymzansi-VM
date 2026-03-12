@@ -61,11 +61,13 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     : { data: null };
 
   // Track view (non-blocking, best-effort)
-  supabase
-    .from("listing_views")
-    .insert({ target_id: listing.id, target_type: "listing" })
-    .then(() => {})
-    .catch(() => {});
+  void (async () => {
+    try {
+      await supabase
+        .from("listing_views")
+        .insert({ target_id: listing.id, target_type: "listing" });
+    } catch {}
+  })();
 
   // Fetch similar listings (same category, excluding current)
   const { data: similarListings } = await supabase
