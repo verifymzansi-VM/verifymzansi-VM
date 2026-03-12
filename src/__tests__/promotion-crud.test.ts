@@ -61,6 +61,7 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
   const makeChain = (table: string) => ({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
     or: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     range: vi.fn().mockReturnThis(),
@@ -101,10 +102,10 @@ describe("POST /api/promotions", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 404 when seller profile not found", async () => {
+  it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: null }),
       },
     });
@@ -114,14 +115,20 @@ describe("POST /api/promotions", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Account profile not found",
+    });
   });
 
   it("returns 400 for invalid body", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: "sp-1", seller_verification_status: "verified" },
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
         }),
       },
     });
@@ -135,12 +142,15 @@ describe("POST /api/promotions", () => {
     expect(json.error).toBe("Validation failed");
   });
 
-  it("returns verification_required for unverified sellers", async () => {
+  it("returns verification_required for unverified accounts", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: "sp-1", seller_verification_status: "pending_review" },
+          data: {
+            id: "sp-1",
+            account_verification_status: "pending_review",
+          },
         }),
       },
     });
@@ -159,9 +169,12 @@ describe("POST /api/promotions", () => {
   it("creates promotion successfully (201)", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: "sp-1", seller_verification_status: "verified" },
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
         }),
       },
       promotions: {
@@ -182,9 +195,12 @@ describe("POST /api/promotions", () => {
   it("logs audit event on successful creation", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: "sp-1", seller_verification_status: "verified" },
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
         }),
       },
       promotions: {
@@ -204,12 +220,15 @@ describe("POST /api/promotions", () => {
     mockAuth({ id: USER_ID });
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "sp-1", seller_verification_status: "verified" },
+              data: {
+                id: "sp-1",
+                account_verification_status: "verified",
+              },
             }),
           };
         }
@@ -251,9 +270,12 @@ describe("POST /api/promotions", () => {
   it("rejects off-platform promotion videos before persistence", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: "sp-1", seller_verification_status: "verified" },
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
         }),
       },
     });
@@ -275,12 +297,15 @@ describe("POST /api/promotions", () => {
     mockAuth({ id: USER_ID });
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "sp-1", seller_verification_status: "verified" },
+              data: {
+                id: "sp-1",
+                account_verification_status: "verified",
+              },
             }),
           };
         }
@@ -333,9 +358,20 @@ describe("GET /api/promotions", () => {
     mockAdmin({
       promotions: {
         range: vi.fn().mockResolvedValue({
-          data: [{ id: VALID_UUID, title: "Test" }],
+          data: [{ id: VALID_UUID, title: "Test", owner_id: USER_ID }],
           count: 1,
           error: null,
+        }),
+      },
+      account_profiles: {
+        in: vi.fn().mockResolvedValue({
+          data: [
+            {
+              user_id: USER_ID,
+              display_name: "Nomsa",
+              account_verification_status: "verified",
+            },
+          ],
         }),
       },
     });
@@ -344,6 +380,10 @@ describe("GET /api/promotions", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.promotions).toHaveLength(1);
+    expect(json.accountProfiles).toMatchObject([
+      { user_id: USER_ID, display_name: "Nomsa", trust: expect.any(Number) },
+    ]);
+    expect(json.sellers).toEqual(json.accountProfiles);
     expect(json.total).toBe(1);
   });
 
@@ -359,6 +399,106 @@ describe("GET /api/promotions", () => {
     const json = await res.json();
     expect(json.page).toBe(2);
     expect(json.limit).toBe(10);
+  });
+
+  it("filters placeholder promotions from public results", async () => {
+    mockAdmin({
+      promotions: {
+        range: vi.fn().mockResolvedValue({
+          data: [
+            {
+              id: "promo-seed",
+              title: "[Seed] Launch Campaign",
+              description: "Placeholder campaign",
+              owner_id: "user-seed",
+              business_id: null,
+            },
+            {
+              id: VALID_UUID,
+              title: "Summer Sale",
+              description: "Verified promotion",
+              owner_id: USER_ID,
+              business_id: null,
+            },
+          ],
+          count: 2,
+          error: null,
+        }),
+      },
+      account_profiles: {
+        in: vi.fn().mockResolvedValue({
+          data: [
+            {
+              user_id: USER_ID,
+              display_name: "Nomsa",
+              account_verification_status: "verified",
+            },
+          ],
+        }),
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.promotions).toHaveLength(1);
+    expect(json.promotions[0].id).toBe(VALID_UUID);
+    expect(json.total).toBe(1);
+    expect(json.accountProfiles).toHaveLength(1);
+  });
+
+  it("falls back when the category_key column is unavailable", async () => {
+    const promotionsRange = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: null,
+        count: null,
+        error: { message: "column promotions.category_key does not exist" },
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: VALID_UUID,
+            owner_id: USER_ID,
+            title: "Summer Sale",
+            description: "Verified promotion",
+            promotion_type: "deal",
+            category: "Food & Dining",
+            business_id: null,
+          },
+        ],
+        count: 1,
+        error: null,
+      });
+
+    mockAdmin({
+      promotions: {
+        range: promotionsRange,
+      },
+      account_profiles: {
+        in: vi.fn().mockResolvedValue({
+          data: [
+            {
+              user_id: USER_ID,
+              display_name: "Nomsa",
+              account_verification_status: "verified",
+            },
+          ],
+        }),
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+
+    const json = await res.json();
+    expect(promotionsRange).toHaveBeenCalledTimes(2);
+    expect(json.promotions[0]).toMatchObject({
+      id: VALID_UUID,
+      category_key: "food_dining",
+    });
   });
 });
 
@@ -436,7 +576,7 @@ describe("PUT /api/promotions/[id]", () => {
     mockAdmin({
       promotions: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: VALID_UUID, seller_id: "different-user", status: "live" },
+          data: { id: VALID_UUID, owner_id: "different-user", status: "live" },
         }),
       },
     });
@@ -477,7 +617,7 @@ describe("PUT /api/promotions/[id]", () => {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
               maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: VALID_UUID, seller_id: USER_ID, status: "live" },
+                data: { id: VALID_UUID, owner_id: USER_ID, status: "live" },
               }),
             };
           }
@@ -540,7 +680,7 @@ describe("DELETE /api/promotions/[id]", () => {
     mockAdmin({
       promotions: {
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: VALID_UUID, seller_id: USER_ID, status: "live" },
+          data: { id: VALID_UUID, owner_id: USER_ID, status: "live" },
         }),
       },
     });
@@ -566,7 +706,7 @@ describe("DELETE /api/promotions/[id]", () => {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
               maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: VALID_UUID, seller_id: USER_ID, status: "draft" },
+                data: { id: VALID_UUID, owner_id: USER_ID, status: "draft" },
               }),
             };
           }
@@ -606,7 +746,7 @@ describe("DELETE /api/promotions/[id]", () => {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
               maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: VALID_UUID, seller_id: USER_ID, status: "rejected" },
+                data: { id: VALID_UUID, owner_id: USER_ID, status: "rejected" },
               }),
             };
           }

@@ -6,7 +6,7 @@ import type {
   MarketplaceArea,
   VerificationStepType,
   VerificationStatus,
-  SellerVerificationStatus,
+  AccountVerificationStatus,
   DocumentType,
   LocationMethod,
   RiskLevel,
@@ -27,7 +27,7 @@ import type {
   ReportStatus,
   EnforcementAction,
   AccountStatus,
-  UserRole,
+  CompatibleUserRole,
   DsarType,
   DsarStatus,
   BuyerTokenStatus,
@@ -37,12 +37,13 @@ import type {
 } from "./enums";
 import type { BusinessDetails } from "./business-details";
 
-/* ── Seller Profiles ─────────────────────────────────────── */
-export interface SellerProfile {
+/* ── Account Profiles ─────────────────────────────────────── */
+export interface AccountProfile {
   id: string;
   user_id: string;
   display_name: string;
-  seller_verification_status: SellerVerificationStatus;
+  bio: string | null;
+  account_verification_status: AccountVerificationStatus;
   phone: string | null;
   masked_phone_public: string | null;
   location_province: string | null;
@@ -192,7 +193,7 @@ export interface Entitlement {
 /* ── Listings (Mzansi Market) ────────────────────────────── */
 export interface Listing {
   id: string;
-  seller_id: string;
+  owner_id: string;
   area: MarketplaceArea;
   category: ListingCategory;
   condition: ListingCondition | null;
@@ -226,7 +227,7 @@ export interface Listing {
 /* ── Businesses (Mzansi Business — unified) ────────────── */
 export interface Business {
   id: string;
-  seller_id: string;
+  owner_id: string;
   area: MarketplaceArea;
   business_type: BusinessType;
   business_name: string;
@@ -241,7 +242,6 @@ export interface Business {
   location_province: string;
   location_city: string;
   store_number: string | null;
-  mall_id: string | null;
   map_directions: string | null;
   phone: string | null;
   whatsapp: string | null;
@@ -267,7 +267,7 @@ export interface Business {
 /* ── Promotions ─────────────────────────────────────────── */
 export interface Promotion {
   id: string;
-  seller_id: string;
+  owner_id: string;
   business_id: string | null;
   title: string;
   description: string;
@@ -329,7 +329,7 @@ export interface Lead {
   id: string;
   target_id: string;
   target_type: "listing" | "storefront" | "business_profile" | "business";
-  seller_id: string;
+  owner_id: string;
   buyer_name: string | null;
   buyer_email: string | null;
   buyer_phone: string | null;
@@ -344,8 +344,8 @@ export interface ContactEvent {
   id: string;
   target_id: string;
   target_type: string;
-  seller_id: string;
-  seller_verified: boolean;
+  owner_id: string;
+  member_verified: boolean;
   contact_type: ContactEventType;
   created_at: string;
 }
@@ -375,7 +375,7 @@ export interface ModerationAction {
   report_id: string;
   actor_id: string;
   action: EnforcementAction;
-  target_seller_id: string;
+  target_owner_id: string;
   area: MarketplaceArea;
   reason: string;
   duration_days: number | null;
@@ -387,7 +387,7 @@ export interface ModerationAction {
 export interface AuditLog {
   id: string;
   actor_id: string;
-  actor_role: UserRole;
+  actor_role: CompatibleUserRole;
   action: string;
   target_type: string;
   target_id: string;

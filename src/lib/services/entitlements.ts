@@ -1,5 +1,5 @@
 /**
- * Entitlement engine — check what a seller's plan allows.
+ * Entitlement engine — check what an account holder's plan allows.
  */
 
 import { PLANS, type PlanDefinition } from "@/lib/constants/pricing";
@@ -89,7 +89,7 @@ export function getEntitlements(tier: PlanTier, area: MarketplaceArea): Entitlem
 }
 
 /**
- * Check whether a seller can create another listing/storefront/profile.
+ * Check whether an account holder can create another listing/storefront/profile.
  * Compares `currentCount` against the plan's limit (`-1` = unlimited).
  */
 export function canCreateListing(
@@ -123,7 +123,7 @@ export function canCreateListing(
 }
 
 /**
- * Check whether a seller's plan allows boosting listings.
+ * Check whether an account holder's plan allows boosting listings.
  * @returns `{ allowed: true }` or `{ allowed: false, reason }` with upgrade prompt.
  */
 export function canBoost(
@@ -143,7 +143,7 @@ export function canBoost(
 }
 
 /**
- * Check whether a seller's plan allows featuring listings.
+ * Check whether an account holder's plan allows featuring listings.
  * Only available on Pro plans.
  */
 export function canFeatured(
@@ -163,7 +163,7 @@ export function canFeatured(
 }
 
 /**
- * Check whether a seller's plan allows marking listings as urgent.
+ * Check whether an account holder's plan allows marking listings as urgent.
  * Only available on Pro plans.
  */
 export function canUrgent(

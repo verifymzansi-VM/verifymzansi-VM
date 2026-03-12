@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { contactSellerSchema } from "@/lib/validations/contact";
+import { contactAccountHolderSchema } from "@/lib/validations/contact";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { mapLegacyContactMethod } from "@/lib/utils/enum-compat";
 import { createLogger } from "@/lib/utils/logger";
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
     if (!body) {
       return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
     }
-    const parsed = contactSellerSchema.safeParse(body);
+    const parsed = contactAccountHolderSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
@@ -58,35 +59,38 @@ export async function POST(request: NextRequest) {
     // Use admin client for lookups and inserts to bypass RLS on service-only tables
     const admin = createAdminClient();
 
-    // Get the listing's seller (use admin client so unauthenticated users can still contact)
-    const { data: listing } = await admin
-      .from("listings")
-      .select("seller_id")
-      .eq("id", parsed.data.listingId)
+    const targetTable = parsed.data.targetType === "promotion" ? "promotions" : "listings";
+    const notFoundLabel = parsed.data.targetType === "promotion" ? "Promotion" : "Listing";
+
+    // Get the content owner (use admin client so unauthenticated users can still contact)
+    const { data: targetRecord } = await admin
+      .from(targetTable)
+      .select("owner_id, title")
+      .eq("id", parsed.data.targetId)
       .single();
 
-    if (!listing) {
-      return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+    if (!targetRecord) {
+      return NextResponse.json({ error: `${notFoundLabel} not found` }, { status: 404 });
     }
 
-    // Check seller verification status
-    const { data: sellerProfile } = await admin
-      .from("seller_profiles")
-      .select("seller_verification_status")
-      .eq("user_id", listing.seller_id)
+    // Check account verification status
+    const { data: accountProfile } = await admin
+      .from("account_profiles")
+      .select("account_verification_status")
+      .eq("user_id", targetRecord.owner_id)
       .maybeSingle();
 
-    const sellerVerified = sellerProfile?.seller_verification_status === "verified";
+    const ownerVerified = readAccountVerificationStatus(accountProfile) === "verified";
 
     // Map legacy contactMethod values to canonical contact_type
     const contactType = mapLegacyContactMethod(parsed.data.contactMethod);
 
     // Create canonical contact_events record
     const { error: contactError } = await admin.from("contact_events").insert({
-      target_id: parsed.data.listingId,
-      target_type: "listing",
-      seller_id: listing.seller_id,
-      seller_verified: sellerVerified,
+      target_id: parsed.data.targetId,
+      target_type: parsed.data.targetType,
+      owner_id: targetRecord.owner_id,
+      member_verified: ownerVerified,
       contact_type: contactType,
     });
 
@@ -100,9 +104,9 @@ export async function POST(request: NextRequest) {
       // Sanitize message: strip HTML tags to prevent stored XSS
       const sanitizedMessage = parsed.data.message.replace(/<[^>]*>/g, "").trim();
       const { error: leadsError } = await admin.from("leads").insert({
-        target_id: parsed.data.listingId,
-        target_type: "listing",
-        seller_id: listing.seller_id,
+        target_id: parsed.data.targetId,
+        target_type: parsed.data.targetType,
+        owner_id: targetRecord.owner_id,
         buyer_name: null,
         buyer_email: user?.email || null,
         buyer_phone: null,
@@ -115,21 +119,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Notify the seller about the new lead/contact
+    // Notify the account holder about the new lead/contact
     try {
-      const { data: listingInfo } = await admin
-        .from("listings")
-        .select("title")
-        .eq("id", parsed.data.listingId)
-        .single();
-
-      const listingTitle = listingInfo?.title?.slice(0, 40) || "your listing";
+      const itemTitle = targetRecord.title?.slice(0, 40) || `your ${parsed.data.targetType}`;
 
       await createNotification({
-        userId: listing.seller_id,
+        userId: targetRecord.owner_id,
         type: "info",
         title: "New lead received!",
-        message: `Someone is interested in \"${listingTitle}\".`,
+        message: `Someone is interested in "${itemTitle}".`,
         href: "/dashboard/leads",
       });
     } catch {

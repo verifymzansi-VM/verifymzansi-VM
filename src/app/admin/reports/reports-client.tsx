@@ -70,7 +70,11 @@ export function ReportsClient({ reports }: ReportsClientProps) {
           <h3 className="text-sm font-medium text-muted-foreground mb-2">
             Resolved / Dismissed ({resolvedReports.length})
           </h3>
-          <FlaggingQueueTable reports={resolvedReports} onActionComplete={() => router.refresh()} />
+          <FlaggingQueueTable
+            reports={resolvedReports}
+            onActionComplete={() => router.refresh()}
+            readOnly
+          />
         </div>
       )}
 

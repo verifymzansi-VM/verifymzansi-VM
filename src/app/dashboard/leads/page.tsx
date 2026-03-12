@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils/format";
+import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 
 interface LeadRow {
   id: string;
@@ -30,7 +31,7 @@ export default async function LeadsPage() {
   if (!user) redirect("/login");
 
   const { data: _profile } = await supabase
-    .from("seller_profiles")
+    .from(ACCOUNT_PROFILE_TABLE)
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -51,7 +52,7 @@ export default async function LeadsPage() {
       )
     `
     )
-    .eq("seller_id", user.id)
+    .eq("owner_id", user.id)
     .order("created_at", { ascending: false })
     .limit(50);
 

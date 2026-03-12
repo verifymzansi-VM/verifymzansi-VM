@@ -71,7 +71,11 @@ export function ListingFilterDrawer() {
       {/* ── FAB Trigger ──────────────────────────────── */}
       <div className="fixed bottom-20 right-4 z-40 lg:hidden">
         <SheetTrigger asChild>
-          <Button size="lg" className="rounded-full shadow-lg h-14 w-14">
+          <Button
+            size="lg"
+            className="rounded-full shadow-lg h-14 w-14"
+            aria-label="Open listing filters"
+          >
             <SlidersHorizontal className="h-5 w-5" />
             {activeFilterCount > 0 && (
               <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">

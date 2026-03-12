@@ -28,6 +28,7 @@ function createSupabaseMock(data: unknown[]) {
   const builder = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue({ data }),
   };
@@ -123,5 +124,43 @@ describe("HomeMzansiMarketShowcase", () => {
 
     const ui = await HomeMzansiMarketShowcase();
     expect(ui).toBeNull();
+  });
+
+  it("filters placeholder listings before rendering the rail", async () => {
+    const supabase = createSupabaseMock([
+      {
+        id: "list-seed",
+        title: "[Seed] Demo Laptop",
+        description: "Seed content",
+        price_cents: 1000,
+        videos: [],
+        video_thumbnail: null,
+        photos: ["https://example.com/seed.jpg"],
+        location_city: "Pretoria",
+        location_province: "Gauteng",
+        boost_until: null,
+      },
+      {
+        id: "list-live",
+        title: "MacBook Pro",
+        description: "Clean and ready for sale",
+        price_cents: 150000,
+        videos: [],
+        video_thumbnail: null,
+        photos: ["https://example.com/macbook.jpg"],
+        location_city: "Pretoria",
+        location_province: "Gauteng",
+        boost_until: null,
+      },
+    ]);
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const ui = await HomeMzansiMarketShowcase();
+    render(ui);
+
+    expect(screen.getByTestId("market-preview-card")).toBeInTheDocument();
+    expect(marketCardSpy).toHaveBeenCalledTimes(1);
+    const props = marketCardSpy.mock.calls[0]?.[0] as { title: string };
+    expect(props.title).toBe("MacBook Pro");
   });
 });

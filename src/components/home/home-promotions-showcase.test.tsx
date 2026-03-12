@@ -48,6 +48,7 @@ function createSupabaseMock(data: unknown[]) {
   const builder = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue({ data }),
   };
@@ -103,11 +104,18 @@ describe("HomePromotionsShowcase", () => {
     expect(props.featured).toBe(true);
   });
 
-  it("returns null when no promotions exist", async () => {
+  it("renders an empty-state CTA when no promotions exist", async () => {
     vi.mocked(createClient).mockResolvedValue(createSupabaseMock([]) as never);
 
     const ui = await HomePromotionsShowcase();
-    expect(ui).toBeNull();
+    render(ui as React.ReactElement);
+    expect(
+      screen.getByText("No promotions yet. Be the first to advertise your deal or event!")
+    ).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Create a Promotion/i })).toHaveAttribute(
+      "href",
+      "/advertise"
+    );
   });
 
   it("renders promotions inside the shared auto-scroll rail", async () => {
@@ -140,5 +148,57 @@ describe("HomePromotionsShowcase", () => {
     render(ui);
 
     expect(screen.getByTestId("auto-scroll-rail")).toBeInTheDocument();
+  });
+
+  it("filters placeholder promotions before rendering cards", async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      createSupabaseMock([
+        {
+          id: "promo-seed",
+          title: "[Seed] Launch Campaign",
+          price_cents: null,
+          price_negotiable: false,
+          photos: ["https://example.com/seed.jpg"],
+          videos: [],
+          video_thumbnail: null,
+          category: "Events",
+          category_key: "events",
+          location_province: "Gauteng",
+          location_city: "Pretoria",
+          promotion_type: "event",
+          view_count: 10,
+          boost_until: null,
+          featured_until: null,
+          start_date: "2099-01-10T00:00:00.000Z",
+          end_date: "2099-01-11T00:00:00.000Z",
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+        {
+          id: "promo-live",
+          title: "Grand Opening",
+          price_cents: null,
+          price_negotiable: false,
+          photos: ["https://example.com/opening.jpg"],
+          videos: [],
+          video_thumbnail: null,
+          category: "Events",
+          category_key: "events",
+          location_province: "Gauteng",
+          location_city: "Pretoria",
+          promotion_type: "event",
+          view_count: 10,
+          boost_until: null,
+          featured_until: null,
+          start_date: "2099-01-10T00:00:00.000Z",
+          end_date: "2099-01-11T00:00:00.000Z",
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ]) as never
+    );
+
+    const ui = await HomePromotionsShowcase();
+    render(ui);
+
+    expect(screen.getAllByTestId("promotion-card")).toHaveLength(1);
   });
 });

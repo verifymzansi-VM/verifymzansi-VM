@@ -51,7 +51,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user || user.id !== promotion.seller_id) {
+      if (!user || user.id !== promotion.owner_id) {
         return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
       }
     }
@@ -98,7 +98,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Check ownership
     const { data: existing } = await admin
       .from("promotions")
-      .select("id, seller_id, status, photos, videos, video_thumbnail")
+      .select("id, owner_id, status, photos, videos, video_thumbnail")
       .eq("id", id)
       .maybeSingle();
 
@@ -106,7 +106,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
     }
 
-    if (existing.seller_id !== user.id) {
+    if (existing.owner_id !== user.id) {
       return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
@@ -202,7 +202,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         status: "pending_moderation",
       })
       .eq("id", id)
-      .eq("seller_id", user.id);
+      .eq("owner_id", user.id);
 
     if (updateError) {
       log.error("Failed to update promotion", { error: updateError.message });
@@ -223,7 +223,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "listing_updated",
         targetType: "promotion",
         targetId: id,
@@ -269,7 +269,7 @@ export async function DELETE(
 
     const { data: existing } = await admin
       .from("promotions")
-      .select("id, seller_id, status, photos, videos, video_thumbnail")
+      .select("id, owner_id, status, photos, videos, video_thumbnail")
       .eq("id", id)
       .maybeSingle();
 
@@ -277,7 +277,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
     }
 
-    if (existing.seller_id !== user.id) {
+    if (existing.owner_id !== user.id) {
       return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
@@ -292,7 +292,7 @@ export async function DELETE(
       .from("promotions")
       .delete()
       .eq("id", id)
-      .eq("seller_id", user.id);
+      .eq("owner_id", user.id);
 
     if (deleteError) {
       log.error("Failed to delete promotion", { error: deleteError.message });
@@ -319,7 +319,7 @@ export async function DELETE(
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "listing_deleted",
         targetType: "promotion",
         targetId: id,

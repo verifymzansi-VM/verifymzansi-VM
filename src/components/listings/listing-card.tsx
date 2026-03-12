@@ -27,15 +27,15 @@ interface ListingCardProps {
   attributes?: Record<string, unknown>;
   condition?: string;
   createdAt: string;
-  sellerTrustLevel?: TrustLevel;
-  sellerName?: string;
+  ownerTrustLevel?: TrustLevel;
+  ownerName?: string;
   viewCount?: number;
   boosted?: boolean;
   featured?: boolean;
   urgent?: boolean;
 }
 
-function getSellerInitial(name?: string): string {
+function getOwnerInitial(name?: string): string {
   if (!name) return "S";
   return name.charAt(0).toUpperCase();
 }
@@ -93,8 +93,8 @@ export const ListingCard = memo(function ListingCard({
   attributes,
   condition,
   createdAt,
-  sellerTrustLevel = 0,
-  sellerName,
+  ownerTrustLevel = 0,
+  ownerName,
   viewCount,
   boosted,
   featured,
@@ -145,7 +145,7 @@ export const ListingCard = memo(function ListingCard({
     <Link href={`/listing/${id}`} className="group block">
       <Card
         className="overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-brand-green/30"
-        trustLevel={sellerTrustLevel}
+        trustLevel={ownerTrustLevel}
       >
         {/* Image / Video */}
         <div className="relative aspect-[4/3] bg-warm-100 dark:bg-warm-800 overflow-hidden">
@@ -224,15 +224,15 @@ export const ListingCard = memo(function ListingCard({
           </div>
 
           {/* Trust badge (bottom-right of image) */}
-          {sellerTrustLevel > 0 && (
+          {ownerTrustLevel > 0 && (
             <div className="absolute bottom-2 right-2">
-              <TrustBadge level={sellerTrustLevel} size="sm" />
+              <TrustBadge level={ownerTrustLevel} size="sm" />
             </div>
           )}
 
-          {/* Seller initial avatar (bottom-left of image) */}
+          {/* Owner initial avatar (bottom-left of image) */}
           <div className="absolute bottom-2 left-2 h-7 w-7 rounded-full bg-brand-green text-white text-xs font-bold flex items-center justify-center shadow-md border-2 border-white dark:border-warm-800">
-            {getSellerInitial(sellerName)}
+            {getOwnerInitial(ownerName)}
           </div>
         </div>
 

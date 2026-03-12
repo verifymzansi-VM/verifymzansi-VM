@@ -125,7 +125,7 @@ describe("Retention & Legal Hold", () => {
             update: stepUpdateMock,
           };
         }
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             update: vi.fn().mockReturnValue({
               eq: vi.fn().mockResolvedValue({ error: null }),
@@ -190,7 +190,7 @@ describe("Retention & Legal Hold", () => {
             }),
           };
         }
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             update: vi.fn().mockReturnValue({
               eq: vi.fn().mockResolvedValue({ error: null }),
@@ -225,7 +225,7 @@ describe("Retention & Legal Hold", () => {
     it("cron SQL: legal_hold = true sellers excluded from purge queue", () => {
       // The migration SQL includes:
       //   AND NOT EXISTS (
-      //     SELECT 1 FROM seller_profiles sp
+      //     SELECT 1 FROM account_profiles sp
       //     WHERE sp.user_id = ka.user_id AND sp.legal_hold = true
       //   )
       // This is a structural/documentation test that the migration covers legal hold.

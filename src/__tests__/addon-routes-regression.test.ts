@@ -96,7 +96,7 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
 function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_until") {
   mockAuth({ id: USER_ID, email: "seller@test.com" });
   mockAdmin({
-    seller_profiles: {
+    account_profiles: {
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
     },
     listings: {
@@ -106,7 +106,7 @@ function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_u
           title: "Test Listing",
           status: "live",
           area: "MZANSI_MARKET",
-          seller_id: USER_ID,
+          owner_id: USER_ID,
           [addonField]: null,
         },
       }),
@@ -208,7 +208,7 @@ describe("Payment insert failure path", () => {
     mockAuth({ id: USER_ID, email: "seller@test.com" });
     setupEnvWithPayFast();
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
       listings: {
@@ -218,7 +218,7 @@ describe("Payment insert failure path", () => {
             title: "Test",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             featured_until: null,
           },
         }),
@@ -297,7 +297,7 @@ describe("Already-active guard edge cases", () => {
     mockAuth({ id: USER_ID, email: "seller@test.com" });
     setupEnvWithPayFast();
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
       listings: {
@@ -307,7 +307,7 @@ describe("Already-active guard edge cases", () => {
             title: "Test",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             featured_until: pastDate, // Expired
           },
         }),
@@ -331,7 +331,7 @@ describe("Already-active guard edge cases", () => {
     mockAuth({ id: USER_ID, email: "seller@test.com" });
     setupEnvWithPayFast();
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
       listings: {
@@ -341,7 +341,7 @@ describe("Already-active guard edge cases", () => {
             title: "Test",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             featured_until: nearFutureDate, // Still active
           },
         }),

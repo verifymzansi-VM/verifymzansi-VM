@@ -80,7 +80,7 @@ export function VerificationCard({ pendingVerifications, stepCounts }: Verificat
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-bold tracking-tight">Verification (KYC)</h2>
-          <p className="text-xs text-muted-foreground">Seller identity verification requests</p>
+          <p className="text-xs text-muted-foreground">Account identity verification requests</p>
         </div>
         <Badge
           variant={pendingVerifications > 0 ? "destructive" : "secondary"}
@@ -295,7 +295,7 @@ export function AdminControls({ enforcementStats }: AdminControlsProps) {
 
       <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
         <span className="text-muted-foreground">
-          Hidden:{" "}
+          Hidden content:{" "}
           <span
             className={`font-semibold tabular-nums ${enforcementStats.hidden > 0 ? "text-destructive" : ""}`}
           >

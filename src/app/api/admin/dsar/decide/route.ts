@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -15,7 +15,7 @@ const log = createLogger("DSARDecide");
  *
  * Updates a DSAR request status (approve → in_progress/completed, reject → rejected).
  */
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     const supabase = await createClient();
     const {
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     }
 
     await logAuditEvent({
-      action: decision === "approve" ? "dsar_completed" : "dsar_rejected",
+      action: decision === "approve" ? "dsar_started" : "dsar_rejected",
       actorId: user.id,
       actorRole: "admin",
       targetId: requestId,

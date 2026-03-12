@@ -20,7 +20,7 @@ vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 
-import { POST } from "@/app/api/listings/route";
+import { GET, POST } from "@/app/api/listings/route";
 
 const USER_ID = "user-1";
 const VALID_IMAGE = "https://media.verifymzansi.com/image.jpg";
@@ -46,6 +46,14 @@ function createRequest(body: unknown): NextRequest {
   } as unknown as NextRequest;
 }
 
+function createGetRequest(url: string): NextRequest {
+  return {
+    method: "GET",
+    nextUrl: new URL(url),
+    headers: { get: vi.fn().mockReturnValue(null) },
+  } as unknown as NextRequest;
+}
+
 describe("POST /api/listings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -57,12 +65,15 @@ describe("POST /api/listings", () => {
   it("rejects video uploads when the paid plan disallows them", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
             }),
           };
         }
@@ -101,12 +112,15 @@ describe("POST /api/listings", () => {
   it("rejects when api callers exceed the plan video count", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
             }),
           };
         }
@@ -147,12 +161,15 @@ describe("POST /api/listings", () => {
   it("rejects listing media hosted outside the platform", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
             }),
           };
         }
@@ -177,15 +194,18 @@ describe("POST /api/listings", () => {
     });
   });
 
-  it("returns verification_required for unverified sellers", async () => {
+  it("returns verification_required for unverified accounts", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "incomplete" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "incomplete",
+              },
             }),
           };
         }
@@ -204,5 +224,108 @@ describe("POST /api/listings", () => {
       error: "Verification required",
       code: "verification_required",
     });
+  });
+});
+
+describe("GET /api/listings", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("applies placeholder-content exclusions to public listing queries", async () => {
+    const rangeSpy = vi.fn().mockResolvedValue({ data: [], count: 0, error: null });
+    const orderSpy = vi.fn().mockReturnThis();
+    const notSpy = vi.fn().mockReturnThis();
+    const eqSpy = vi.fn().mockReturnThis();
+    const selectSpy = vi.fn().mockReturnThis();
+    const fromSpy = vi.fn().mockReturnValue({
+      select: selectSpy,
+      eq: eqSpy,
+      not: notSpy,
+      order: orderSpy,
+      range: rangeSpy,
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: fromSpy,
+    });
+
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/listings?page=1&limit=24")
+    );
+
+    expect(response.status).toBe(200);
+    expect(notSpy).toHaveBeenCalledWith("title", "ilike", "%seed%");
+    expect(notSpy).toHaveBeenCalledWith("title", "ilike", "%[seed]%");
+    expect(notSpy).toHaveBeenCalledWith("title", "ilike", "%demo%");
+    expect(notSpy).toHaveBeenCalledWith("title", "ilike", "%sample%");
+  });
+
+  it("filters placeholder listings from public results", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "listings") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            not: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            lte: vi.fn().mockReturnThis(),
+            or: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            range: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  id: "listing-seed",
+                  owner_id: "user-seed",
+                  title: "[Seed] Test vehicle",
+                  description: "Placeholder listing",
+                },
+                {
+                  id: "listing-live",
+                  owner_id: USER_ID,
+                  title: "Toyota Corolla",
+                  description: "Verified listing",
+                },
+              ],
+              count: 2,
+              error: null,
+            }),
+          };
+        }
+
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  user_id: USER_ID,
+                  display_name: "Nomsa",
+                  account_verification_status: "verified",
+                },
+              ],
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/listings?page=1&limit=24")
+    );
+    expect(response.status).toBe(200);
+
+    const json = await response.json();
+    expect(json.listings).toHaveLength(1);
+    expect(json.listings[0].id).toBe("listing-live");
+    expect(json.total).toBe(1);
+    expect(json.sellers).toHaveLength(1);
   });
 });

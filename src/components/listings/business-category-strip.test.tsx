@@ -24,7 +24,6 @@ describe("BusinessCategoryStrip", () => {
         businessType: undefined,
         province: undefined,
         city: undefined,
-        mall: undefined,
       },
       setFilter: vi.fn(),
     });

@@ -3,32 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
-import { ListingDetailContent } from "@/components/listings/listing-detail-content";
+import {
+  ListingDetailContent,
+  type SimilarListingRow,
+  type SimilarSellerRow,
+} from "@/components/listings/listing-detail-content";
 import type { Metadata } from "next";
-import type { SellerVerificationStatus } from "@/types/enums";
-
-interface SimilarListingRow {
-  id: string;
-  title: string;
-  price_cents: number | null;
-  price_negotiable: boolean;
-  condition: string | null;
-  photos: string[];
-  location_province: string;
-  location_city: string;
-  category: string;
-  attributes: Record<string, unknown>;
-  created_at: string;
-  boost_until: string | null;
-  featured: boolean;
-  seller_id: string;
-}
-
-interface SimilarSellerRow {
-  user_id: string;
-  display_name: string;
-  seller_verification_status: SellerVerificationStatus | null;
-}
+import { ACCOUNT_PROFILE_TABLE, readOwnerId } from "@/lib/account/compat";
 
 interface ListingDetailPageProps {
   params: Promise<{ id: string }>;
@@ -67,26 +48,32 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
   if (!listing) notFound();
 
-  // Fetch seller profile (maybeSingle — seller account may have been deleted)
-  const { data: seller } = await supabase
-    .from("seller_profiles")
-    .select(
-      "id, display_name, location_province, location_city, seller_verification_status, phone, masked_phone_public"
-    )
-    .eq("user_id", listing.seller_id)
-    .maybeSingle();
+  // Fetch listing owner profile (maybeSingle — the account may have been deleted)
+  const listingOwnerId = readOwnerId(listing);
+  const { data: seller } = listingOwnerId
+    ? await supabase
+        .from(ACCOUNT_PROFILE_TABLE)
+        .select(
+          "id, display_name, location_province, location_city, account_verification_status, phone, masked_phone_public"
+        )
+        .eq("user_id", listingOwnerId)
+        .maybeSingle()
+    : { data: null };
 
-  // Track view
-  supabase
-    .from("listing_views")
-    .insert({ target_id: listing.id, target_type: "listing" })
-    .then(() => {});
+  // Track view (non-blocking, best-effort)
+  void (async () => {
+    try {
+      await supabase
+        .from("listing_views")
+        .insert({ target_id: listing.id, target_type: "listing" });
+    } catch {}
+  })();
 
   // Fetch similar listings (same category, excluding current)
   const { data: similarListings } = await supabase
     .from("listings")
     .select(
-      "id, title, price_cents, price_negotiable, condition, photos, location_province, location_city, category, attributes, created_at, boost_until, featured, seller_id"
+      "id, title, price_cents, price_negotiable, condition, photos, location_province, location_city, category, attributes, created_at, boost_until, featured, owner_id"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_MARKET")
@@ -95,16 +82,20 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     .order("created_at", { ascending: false })
     .limit(4);
 
-  // Fetch seller profiles for similar listings
+  // Fetch owner profiles for similar listings
   const similarItems = (similarListings ?? []) as SimilarListingRow[];
   let similarSellers = new Map<string, SimilarSellerRow>();
   if (similarItems.length > 0) {
-    const sellerIds = Array.from(new Set(similarItems.map((l) => l.seller_id)));
-    const { data: sellerData } = await supabase
-      .from("seller_profiles")
-      .select("user_id, display_name, seller_verification_status")
-      .in("user_id", sellerIds);
-    similarSellers = new Map((sellerData ?? []).map((s) => [s.user_id, s]));
+    const ownerIds = Array.from(
+      new Set(
+        similarItems.map((item) => readOwnerId(item)).filter((id): id is string => Boolean(id))
+      )
+    );
+    const { data: ownerData } = await supabase
+      .from(ACCOUNT_PROFILE_TABLE)
+      .select("user_id, display_name, account_verification_status")
+      .in("user_id", ownerIds);
+    similarSellers = new Map((ownerData ?? []).map((s) => [s.user_id, s]));
   }
 
   const jsonLd = {

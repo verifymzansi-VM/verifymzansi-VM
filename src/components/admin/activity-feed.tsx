@@ -33,6 +33,7 @@ const ACTION_LABELS: Record<string, string> = {
   account_unbanned: "Account unbanned",
   moderation_action: "Moderation action",
   dsar_requested: "DSAR requested",
+  dsar_started: "DSAR started",
   dsar_completed: "DSAR completed",
   consent_updated: "Consent updated",
   payment_completed: "Payment completed",

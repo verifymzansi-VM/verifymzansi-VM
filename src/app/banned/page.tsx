@@ -50,7 +50,7 @@ export default function BannedPage() {
                   <ul className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
                     {[
                       "All active listings removed",
-                      "Seller profile no longer visible",
+                      "Account profile no longer visible",
                       "Cannot create new listings",
                       "Active subscriptions cancelled",
                     ].map((item, i) => (

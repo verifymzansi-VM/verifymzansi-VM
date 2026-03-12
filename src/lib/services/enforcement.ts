@@ -1,8 +1,9 @@
 /**
- * Enforcement actions — suspend, ban, warn sellers.
+ * Enforcement actions — suspend, ban, or warn accounts.
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { logAuditEvent, type AuditAction } from "./audit";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -12,7 +13,7 @@ const log = createLogger("Enforcement");
 export type EnforcementAction = "warning" | "suspend" | "ban" | "unban";
 
 interface EnforceParams {
-  sellerId: string;
+  ownerId: string;
   action: EnforcementAction;
   reason: string;
   moderatorId: string;
@@ -22,8 +23,8 @@ interface EnforceParams {
 }
 
 /**
- * Apply an enforcement action to a seller (warn, suspend, ban, or unban).
- * Updates the seller's account status, creates a moderation record,
+ * Apply an enforcement action to an account (warn, suspend, ban, or unban).
+ * Updates the account status, creates a moderation record,
  * hides all content on ban, and logs an audit event.
  */
 export async function enforceAction(params: EnforceParams) {
@@ -40,21 +41,21 @@ export async function enforceAction(params: EnforceParams) {
   let previousStatus: string | undefined;
   if (params.action === "unban") {
     const { data: profile, error: profileErr } = await supabase
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("account_status")
-      .eq("user_id", params.sellerId)
+      .eq("user_id", params.ownerId)
       .single();
     if (profileErr || !profile) {
-      throw new Error(`Seller profile not found for unban: ${params.sellerId}`);
+      throw new Error(`Account profile not found for unban: ${params.ownerId}`);
     }
     previousStatus = profile.account_status;
   }
 
-  // Update seller account status
+  // Update account status
   const { error } = await supabase
-    .from("seller_profiles")
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
     .update({ account_status: statusMap[params.action] })
-    .eq("user_id", params.sellerId);
+    .eq("user_id", params.ownerId);
 
   if (error) {
     throw new Error("Failed to update account status");
@@ -63,7 +64,7 @@ export async function enforceAction(params: EnforceParams) {
   // Create moderation action record
   try {
     await supabase.from("moderation_actions").insert({
-      target_seller_id: params.sellerId,
+      target_owner_id: params.ownerId,
       actor_id: params.moderatorId,
       action: params.action,
       reason: params.reason,
@@ -79,8 +80,8 @@ export async function enforceAction(params: EnforceParams) {
   // If banned, hide all content across all marketplace areas
   if (params.action === "ban") {
     const hideResults = await Promise.all([
-      supabase.from("listings").update({ status: "hidden" }).eq("seller_id", params.sellerId),
-      supabase.from("businesses").update({ status: "hidden" }).eq("seller_id", params.sellerId),
+      supabase.from("listings").update({ status: "hidden" }).eq("owner_id", params.ownerId),
+      supabase.from("businesses").update({ status: "hidden" }).eq("owner_id", params.ownerId),
     ]);
     const hideErrors = hideResults.filter((r) => r.error);
     if (hideErrors.length > 0) {
@@ -96,12 +97,12 @@ export async function enforceAction(params: EnforceParams) {
       supabase
         .from("listings")
         .update({ status: "hidden" })
-        .eq("seller_id", params.sellerId)
+        .eq("owner_id", params.ownerId)
         .eq("status", "live"),
       supabase
         .from("businesses")
         .update({ status: "hidden" })
-        .eq("seller_id", params.sellerId)
+        .eq("owner_id", params.ownerId)
         .eq("status", "live"),
     ]);
     const suspendErrors = suspendResults.filter((r) => r.error);
@@ -115,16 +116,16 @@ export async function enforceAction(params: EnforceParams) {
   // If unbanned/unsuspended, only reactivate content that was hidden by moderation.
   // We use the previousStatus (read BEFORE the update) to verify they were actually banned/suspended.
   // We only restore content that was hidden AFTER the most recent ban/suspend action
-  // to avoid restoring content that was hidden by the seller or by prior moderation.
+  // to avoid restoring content that was hidden by the account holder or by prior moderation.
   if (
     params.action === "unban" &&
     (previousStatus === "banned" || previousStatus === "suspended")
   ) {
-    // Find the timestamp of the most recent ban/suspend action for this seller
+    // Find the timestamp of the most recent ban/suspend action for this account
     const { data: lastAction } = await supabase
       .from("moderation_actions")
       .select("created_at")
-      .eq("target_seller_id", params.sellerId)
+      .eq("target_owner_id", params.ownerId)
       .in("action", ["ban", "suspend"])
       .order("created_at", { ascending: false })
       .limit(1)
@@ -137,13 +138,13 @@ export async function enforceAction(params: EnforceParams) {
       supabase
         .from("listings")
         .update({ status: "live" })
-        .eq("seller_id", params.sellerId)
+        .eq("owner_id", params.ownerId)
         .eq("status", "hidden")
         .gte("updated_at", hiddenSince),
       supabase
         .from("businesses")
         .update({ status: "live" })
-        .eq("seller_id", params.sellerId)
+        .eq("owner_id", params.ownerId)
         .eq("status", "hidden")
         .gte("updated_at", hiddenSince),
     ]);
@@ -167,8 +168,8 @@ export async function enforceAction(params: EnforceParams) {
     actorId: params.moderatorId,
     actorRole: "moderator",
     action: auditActionMap[params.action],
-    targetType: "seller_profile",
-    targetId: params.sellerId,
+    targetType: "account_profile",
+    targetId: params.ownerId,
     metadata: { reason: params.reason, reportId: params.reportId },
   });
 

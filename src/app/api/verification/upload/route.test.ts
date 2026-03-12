@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
@@ -91,7 +92,7 @@ function mockAuth(
 
 function setupDefaultAdminMocks() {
   mockFrom.mockImplementation((table: string) => {
-    if (table === "seller_profiles") {
+    if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
@@ -99,7 +100,7 @@ function setupDefaultAdminMocks() {
           }),
         }),
         update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-          if (payload.seller_verification_status) {
+          if (payload.account_verification_status || payload.account_verification_status) {
             return {
               eq: vi.fn().mockReturnValue({
                 in: vi.fn().mockReturnValue({
@@ -298,8 +299,8 @@ describe("POST /api/verification/upload", () => {
     );
   });
 
-  it("auto-creates seller profile when none exists", async () => {
-    mockAuth({ id: "user-1", email: "seller@example.com" });
+  it("auto-creates account profile when none exists", async () => {
+    mockAuth({ id: "user-1", email: "member@example.com" });
 
     const upsertMock = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
@@ -308,7 +309,7 @@ describe("POST /api/verification/upload", () => {
     });
 
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -317,7 +318,7 @@ describe("POST /api/verification/upload", () => {
           }),
           upsert: upsertMock,
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-            if (payload.seller_verification_status) {
+            if (payload.account_verification_status || payload.account_verification_status) {
               return {
                 eq: vi.fn().mockReturnValue({
                   in: vi.fn().mockReturnValue({
@@ -402,7 +403,7 @@ describe("POST /api/verification/upload", () => {
     mockAuth({ id: "user-1" });
 
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -439,16 +440,16 @@ describe("POST /api/verification/upload", () => {
     expect(mockDeleteFromR2).toHaveBeenCalled();
   });
 
-  it("promotes seller status to pending_review and links the artifact into the session", async () => {
+  it("promotes account status to pending_review and links the artifact into the session", async () => {
     mockAuth({ id: "user-1", email: "test@example.com" });
 
     const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
-    const sellerStatusSelect = vi
+    const accountStatusSelect = vi
       .fn()
       .mockResolvedValue({ data: [{ id: "profile-1" }], error: null });
 
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -456,11 +457,11 @@ describe("POST /api/verification/upload", () => {
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-            if (payload.seller_verification_status) {
+            if (payload.account_verification_status || payload.account_verification_status) {
               return {
                 eq: vi.fn().mockReturnValue({
                   in: vi.fn().mockReturnValue({
-                    select: sellerStatusSelect,
+                    select: accountStatusSelect,
                   }),
                 }),
               };
@@ -554,7 +555,7 @@ describe("POST /api/verification/upload", () => {
       }),
       { onConflict: "user_id" }
     );
-    expect(sellerStatusSelect).toHaveBeenCalled();
+    expect(accountStatusSelect).toHaveBeenCalled();
   });
 
   it("clears prior review metadata and reopens the verification session on resubmission", async () => {
@@ -564,7 +565,7 @@ describe("POST /api/verification/upload", () => {
     const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
 
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -572,7 +573,7 @@ describe("POST /api/verification/upload", () => {
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
-            if (payload.seller_verification_status) {
+            if (payload.account_verification_status || payload.account_verification_status) {
               return {
                 eq: vi.fn().mockReturnValue({
                   in: vi.fn().mockReturnValue({

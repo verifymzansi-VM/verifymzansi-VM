@@ -5,6 +5,7 @@ import { BusinessPreviewCard } from "./business-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import type { BusinessType } from "@/types/enums";
+import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
@@ -15,15 +16,21 @@ export async function HomeBusinessShowcase() {
   const { data: businesses } = await supabase
     .from("businesses")
     .select(
-      "id, business_name, cover_photo, cover_video, video_thumbnail, logo_url, business_type, location_province, location_city, boost_until"
+      "id, business_name, description, cover_photo, cover_video, video_thumbnail, logo_url, business_type, location_province, location_city, boost_until"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS")
+    .not("business_name", "ilike", "%seed%")
+    .not("business_name", "ilike", "%[seed]%")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(8);
+    .limit(16);
 
-  const items = businesses ?? [];
+  const items = (businesses ?? [])
+    .filter(
+      (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
+    )
+    .slice(0, 8);
   if (items.length === 0) return null;
 
   return (

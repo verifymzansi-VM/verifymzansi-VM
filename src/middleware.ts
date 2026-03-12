@@ -1,6 +1,8 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-stub";
 import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger("Middleware");
@@ -93,6 +95,32 @@ function withSecurityHeaders(request: NextRequest, middlewareResponse: NextRespo
 export async function routeRequest(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
+  const authRoutes = ["/login", "/register"];
+  const protectedPrefixesAll = [
+    "/dashboard",
+    "/post",
+    "/billing",
+    "/verification",
+    "/admin",
+    "/api/dashboard",
+    "/api/post",
+    "/api/billing",
+    "/api/verification",
+    "/api/admin",
+    "/api/otp",
+  ];
+  const protectedPrefixes = [
+    "/dashboard",
+    "/post",
+    "/billing",
+    "/verification",
+    "/admin",
+    "/api/dashboard",
+    "/api/post",
+    "/api/billing",
+    "/api/verification",
+    "/api/admin",
+  ];
 
   // Recover legacy signup links that land on "/?code=..." instead of the
   // dedicated auth callback route. Keep this scoped to the root path so
@@ -110,20 +138,27 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.redirect(callbackUrl);
   }
 
+  if (isPlaywrightSupabaseStubMode()) {
+    const isProtected = protectedPrefixesAll.some((prefix) => pathname.startsWith(prefix));
+    const isAuthRoute = authRoutes.some(
+      (route) => pathname === route || pathname.startsWith(route + "/")
+    );
+
+    if (!isProtected || isAuthRoute) {
+      return NextResponse.next();
+    }
+
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("returnUrl", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
   // -- Guard: Supabase not configured ---------------------------------------
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    const protectedPrefixes = [
-      "/dashboard",
-      "/post",
-      "/billing",
-      "/verification",
-      "/admin",
-      "/api/dashboard",
-      "/api/post",
-      "/api/billing",
-      "/api/verification",
-      "/api/admin",
-    ];
     const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
 
     if (isProtected) {
@@ -144,20 +179,6 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // Determine early whether this route needs authentication at all.
   // Public routes (home, marketplace, terms, etc.) skip the Supabase
   // getUser() call entirely — saving 100-300 ms on mobile networks.
-  const authRoutes = ["/login", "/register"];
-  const protectedPrefixesAll = [
-    "/dashboard",
-    "/post",
-    "/billing",
-    "/verification",
-    "/admin",
-    "/api/dashboard",
-    "/api/post",
-    "/api/billing",
-    "/api/verification",
-    "/api/admin",
-    "/api/otp",
-  ];
   const needsAuth =
     protectedPrefixesAll.some((p) => pathname.startsWith(p)) ||
     authRoutes.some((r) => pathname === r || pathname.startsWith(r + "/"));
@@ -203,18 +224,6 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   } catch {
     // Auth check failed — deny access to protected routes to prevent
     // unguarded access during Supabase outages.
-    const protectedPrefixes = [
-      "/dashboard",
-      "/post",
-      "/billing",
-      "/verification",
-      "/admin",
-      "/api/dashboard",
-      "/api/post",
-      "/api/billing",
-      "/api/verification",
-      "/api/admin",
-    ];
     const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
     if (isProtected) {
       if (isApiRoute) {
@@ -231,18 +240,33 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
+  // -- Phone-missing gate: require phone number on profile --------------------
+  // OAuth users may have an account profile without a phone number.
+  // Redirect them to complete-profile so they add one before using the platform.
+  const phoneGatedPrefixes = ["/dashboard", "/post", "/billing", "/verification"];
+  const isPhoneGatedRoute = phoneGatedPrefixes.some((p) => pathname.startsWith(p));
+  const isCompleteProfileRoute = pathname === "/dashboard/complete-profile";
+
+  if (isRealUser && user && isPhoneGatedRoute && !isCompleteProfileRoute && !isApiRoute) {
+    try {
+      const { data: phoneProfile } = await supabase
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("phone")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (phoneProfile && !phoneProfile.phone) {
+        return NextResponse.redirect(new URL("/dashboard/complete-profile", request.url));
+      }
+    } catch {
+      // Non-blocking: if we can't check, let the user through.
+    }
+  }
+
   // -- Protected routes: require authentication -----------------------------
-  const protectedPrefixes = [
-    "/dashboard",
-    "/post",
-    "/billing",
-    "/verification",
-    "/api/dashboard",
-    "/api/post",
-    "/api/billing",
-    "/api/verification",
-  ];
-  const isProtectedRoute = protectedPrefixes.some((p) => pathname.startsWith(p));
+  const isProtectedRoute = protectedPrefixes
+    .filter((prefix) => prefix !== "/admin" && prefix !== "/api/admin")
+    .some((p) => pathname.startsWith(p));
 
   if (!user && isProtectedRoute) {
     if (isApiRoute) {
@@ -284,17 +308,17 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     }
   }
 
-  // -- Seller gating: require verified seller for posting -------------------
+  // -- Posting gate: require a verified account for posting -----------------
   if (pathname.startsWith("/post/edit") || pathname.startsWith("/api/post/edit")) {
     if (user) {
       const { data: profile, error: profileError } = await supabase
-        .from("seller_profiles")
-        .select("seller_verification_status, account_status, suspended_until")
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("account_verification_status, account_status, suspended_until")
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (profileError) {
-        logger.error("Seller profile lookup failed during posting gate", {
+        logger.error("Account profile lookup failed in posting gate", {
           path: pathname,
           userId: user.id,
           error: profileError.message,
@@ -320,7 +344,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         if (profile.suspended_until && new Date(profile.suspended_until) <= new Date()) {
           try {
             await supabase
-              .from("seller_profiles")
+              .from(ACCOUNT_PROFILE_WRITE_TABLE)
               .update({ account_status: "active", suspended_until: null })
               .eq("user_id", user.id);
           } catch {
@@ -333,9 +357,10 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         }
       }
 
-      if (profile?.seller_verification_status !== "verified") {
-        if (isApiRoute)
+      if (readAccountVerificationStatus(profile) !== "verified") {
+        if (isApiRoute) {
           return NextResponse.json({ error: "Verification required" }, { status: 403 });
+        }
         return NextResponse.redirect(new URL("/verification", request.url));
       }
     }

@@ -1,14 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { PLANS } from "@/lib/constants/pricing";
-import { EXPECTED_ACTIVE_PLAN_ROWS, getPlanContractKey } from "../../scripts/seed-contract";
+import {
+  ACTIVE_RUNTIME_PLAN_AREAS,
+  EXPECTED_ACTIVE_PLAN_ROWS,
+  getPlanContractKey,
+} from "../../scripts/seed-contract";
 
 describe("Seed contract alignment", () => {
   it("defines exactly the runtime subscription plan catalog", () => {
-    expect(EXPECTED_ACTIVE_PLAN_ROWS).toHaveLength(PLANS.length);
+    const activeRuntimePlans = PLANS.filter((plan) =>
+      ACTIVE_RUNTIME_PLAN_AREAS.includes(plan.area)
+    );
+    expect(EXPECTED_ACTIVE_PLAN_ROWS).toHaveLength(activeRuntimePlans.length);
   });
 
   it("stays aligned with runtime pricing constants", () => {
-    const runtimePlanRows = PLANS.map((plan) => ({
+    const runtimePlanRows = PLANS.filter((plan) =>
+      ACTIVE_RUNTIME_PLAN_AREAS.includes(plan.area)
+    ).map((plan) => ({
       area: plan.area,
       tier: plan.tier,
       name: plan.name,

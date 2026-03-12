@@ -5,6 +5,7 @@ import { POST as verifyOtp } from "@/app/api/otp/verify/route";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import * as smsService from "@/lib/services/sms";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 async function hashOtpForTest(otp: string): Promise<string> {
   const salt = new Uint8Array(16);
@@ -153,7 +154,7 @@ describe("OTP Routes", () => {
       const challengeUpdateEq = vi.fn().mockReturnValue({
         is: vi.fn().mockResolvedValue({ error: null }),
       });
-      const sellerUpdateEq = vi.fn().mockResolvedValue({ error: null });
+      const profileUpdateEq = vi.fn().mockResolvedValue({ error: null });
       const verificationStepUpsert = vi.fn().mockResolvedValue({ error: null });
       const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
       const storedHash = await hashOtpForTest("123456");
@@ -184,7 +185,7 @@ describe("OTP Routes", () => {
             };
           }
 
-          if (table === "seller_profiles") {
+          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
             return {
               select: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
@@ -194,7 +195,7 @@ describe("OTP Routes", () => {
                 }),
               }),
               update: vi.fn().mockReturnValue({
-                eq: sellerUpdateEq,
+                eq: profileUpdateEq,
               }),
             };
           }
@@ -224,7 +225,7 @@ describe("OTP Routes", () => {
 
       expect(res.status).toBe(200);
       expect(data).toMatchObject({ success: true, verified: true });
-      expect(sellerUpdateEq).toHaveBeenCalledWith("id", "profile-1");
+      expect(profileUpdateEq).toHaveBeenCalledWith("id", "profile-1");
       expect(verificationStepUpsert).toHaveBeenCalledWith(
         expect.objectContaining({
           user_id: "user-1",
@@ -240,6 +241,85 @@ describe("OTP Routes", () => {
         }),
         { onConflict: "user_id" }
       );
+    });
+
+    it("returns 409 when the verified phone already belongs to another account", async () => {
+      const storedHash = await hashOtpForTest("123456");
+
+      const mockAdminClient = {
+        from: vi.fn((table: string) => {
+          if (table === "otp_challenges") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              is: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "challenge-1",
+                  otp_hash: storedHash,
+                  attempt_count: 0,
+                  locked_until: null,
+                  expires_at: new Date(Date.now() + 60_000).toISOString(),
+                },
+                error: null,
+              }),
+              update: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  is: vi.fn().mockResolvedValue({ error: null }),
+                }),
+              }),
+            };
+          }
+
+          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi
+                    .fn()
+                    .mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+                }),
+              }),
+              update: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({
+                  error: {
+                    code: "23505",
+                    message: "Phone number already linked to another account",
+                  },
+                }),
+              }),
+            };
+          }
+
+          if (table === "verification_steps") {
+            return {
+              upsert: vi.fn().mockResolvedValue({ error: null }),
+            };
+          }
+
+          if (table === "verification_sessions") {
+            return {
+              upsert: vi.fn().mockResolvedValue({ error: null }),
+            };
+          }
+
+          return {};
+        }),
+      };
+
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+
+      const res = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+
+      expect(res.status).toBe(409);
+      await expect(res.json()).resolves.toMatchObject({
+        error: "This phone number is already linked to another account.",
+      });
     });
   });
 });

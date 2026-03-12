@@ -6,7 +6,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 export const metadata: Metadata = {
   title: "Promotions & Events",
   description:
-    "Discover promotions, launches, deals, and events from verified sellers across South Africa.",
+    "Discover promotions, launches, deals, and events from verified businesses and advertisers across South Africa.",
   alternates: {
     canonical: `${BASE_URL}/promotions`,
   },

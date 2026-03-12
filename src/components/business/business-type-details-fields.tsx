@@ -12,21 +12,12 @@ import { Textarea } from "@/components/ui/textarea";
 import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessType } from "@/types/enums";
 
-interface MallOption {
-  id: string;
-  name: string;
-  location_city: string | null;
-}
-
 interface BusinessTypeDetailsFieldsProps {
   businessType: BusinessType;
   businessDetails: BusinessDetails;
   onBusinessDetailsChange: (name: string, value: unknown) => void;
   storeNumber: string;
   onStoreNumberChange: (value: string) => void;
-  mallId: string;
-  malls: MallOption[];
-  onMallIdChange: (value: string) => void;
   serviceAreasInput: string;
   onServiceAreasChange: (value: string) => void;
   mapDirections: string;
@@ -48,9 +39,6 @@ export function BusinessTypeDetailsFields({
   onBusinessDetailsChange,
   storeNumber,
   onStoreNumberChange,
-  mallId,
-  malls,
-  onMallIdChange,
   serviceAreasInput,
   onServiceAreasChange,
   mapDirections,
@@ -68,7 +56,7 @@ export function BusinessTypeDetailsFields({
       </div>
 
       {businessType === "mall_store" && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4">
           <div className="space-y-2">
             <Label htmlFor="storeNumber">Store Number *</Label>
             <Input
@@ -82,24 +70,6 @@ export function BusinessTypeDetailsFields({
             {fieldErrors.store_number && (
               <p className="inline-form-error">{fieldErrors.store_number}</p>
             )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="mallId">Mall (optional)</Label>
-            <select
-              id="mallId"
-              aria-label="Mall"
-              className={selectClassName}
-              value={mallId}
-              onChange={(event) => onMallIdChange(event.target.value)}
-            >
-              <option value="">Independent / Not in a mall</option>
-              {malls.map((mall) => (
-                <option key={mall.id} value={mall.id}>
-                  {mall.name}
-                  {mall.location_city ? ` (${mall.location_city})` : ""}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
       )}

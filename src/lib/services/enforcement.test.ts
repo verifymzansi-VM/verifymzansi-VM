@@ -10,7 +10,7 @@ const mockUpdate = vi.fn().mockReturnValue({
 const mockInsert = vi.fn().mockResolvedValue({ error: null });
 
 const mockFrom = vi.fn().mockImplementation((table: string) => {
-  if (table === "seller_profiles") {
+  if (table === "account_profiles") {
     return {
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockResolvedValue({ error: null }),
@@ -55,7 +55,7 @@ describe("enforcement service", () => {
 
   it("creates moderation action record", async () => {
     await enforceAction({
-      sellerId: "seller-1",
+      ownerId: "seller-1",
       action: "warning",
       reason: "First offense",
       moderatorId: "mod-1",
@@ -64,7 +64,7 @@ describe("enforcement service", () => {
     expect(mockFrom).toHaveBeenCalledWith("moderation_actions");
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        target_seller_id: "seller-1",
+        target_owner_id: "seller-1",
         action: "warning",
         reason: "First offense",
         actor_id: "mod-1",
@@ -72,20 +72,20 @@ describe("enforcement service", () => {
     );
   });
 
-  it("updates seller_profiles account status for ban", async () => {
+  it("updates account profile status for ban", async () => {
     await enforceAction({
-      sellerId: "seller-2",
+      ownerId: "seller-2",
       action: "ban",
       reason: "Fraud",
       moderatorId: "mod-1",
     });
 
-    expect(mockFrom).toHaveBeenCalledWith("seller_profiles");
+    expect(mockFrom).toHaveBeenCalledWith("account_profiles");
   });
 
   it("updates listings and businesses to hidden on ban", async () => {
     await enforceAction({
-      sellerId: "seller-2",
+      ownerId: "seller-2",
       action: "ban",
       reason: "Fraud",
       moderatorId: "mod-1",
@@ -99,7 +99,7 @@ describe("enforcement service", () => {
     const { logAuditEvent } = await import("./audit");
 
     await enforceAction({
-      sellerId: "seller-2",
+      ownerId: "seller-2",
       action: "ban",
       reason: "Fraud",
       moderatorId: "mod-1",
@@ -110,7 +110,7 @@ describe("enforcement service", () => {
         actorId: "mod-1",
         actorRole: "moderator",
         action: "account_banned",
-        targetType: "seller_profile",
+        targetType: "account_profile",
         targetId: "seller-2",
       })
     );
@@ -118,7 +118,7 @@ describe("enforcement service", () => {
 
   it("resolves linked report when reportId is provided", async () => {
     await enforceAction({
-      sellerId: "seller-3",
+      ownerId: "seller-3",
       action: "suspend",
       reason: "Suspicious activity",
       moderatorId: "mod-2",
@@ -128,10 +128,10 @@ describe("enforcement service", () => {
     expect(mockFrom).toHaveBeenCalledWith("reports");
   });
 
-  it("throws when unban target seller profile not found", async () => {
-    // Override the mock so seller_profiles SELECT returns null
+  it("throws when unban target account profile not found", async () => {
+    // Override the mock so account_profiles SELECT returns null
     mockFrom.mockImplementation((table: string) => {
-      if (table === "seller_profiles") {
+      if (table === "account_profiles") {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -148,15 +148,15 @@ describe("enforcement service", () => {
 
     await expect(
       enforceAction({
-        sellerId: "nonexistent-seller",
+        ownerId: "nonexistent-seller",
         action: "unban",
         reason: "Reversal",
         moderatorId: "mod-1",
       })
-    ).rejects.toThrow("Seller profile not found for unban");
+    ).rejects.toThrow("Account profile not found for unban");
   });
 
-  it("throws when seller profile update fails", async () => {
+  it("throws when account profile update fails", async () => {
     // Override the mock for this test to return an error
     mockFrom.mockImplementationOnce(() => ({
       update: vi.fn().mockReturnValue({
@@ -168,7 +168,7 @@ describe("enforcement service", () => {
 
     await expect(
       enforceAction({
-        sellerId: "seller-4",
+        ownerId: "seller-4",
         action: "ban",
         reason: "Test",
         moderatorId: "mod-1",

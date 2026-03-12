@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     "South Africa",
     "marketplace",
     "classifieds",
-    "verified sellers",
+    "verified accounts",
     "buy and sell",
     "Mzansi",
     "trusted marketplace",
@@ -57,7 +57,6 @@ export const metadata: Metadata = {
     icon: [
       { url: "/favicon.ico?v=7", sizes: "32x32", type: "image/x-icon" },
       { url: "/icons/icon-16.png?v=7", sizes: "16x16", type: "image/png" },
-      { url: "/icons/icon-32.png?v=7", sizes: "32x32", type: "image/png" },
       { url: "/icons/icon-192.png?v=7", sizes: "192x192", type: "image/png" },
     ],
     apple: "/icons/icon-192.png?v=7",
@@ -76,10 +75,13 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const turbopackNamePolyfill =
+    'if(typeof globalThis.__name!=="function"){globalThis.__name=function(fn,name){Object.defineProperty(fn,"name",{value:name,configurable:true});return fn;};}var __name=globalThis.__name;';
 
   return (
     <html lang="en-ZA" suppressHydrationWarning>
       <body className="min-h-screen antialiased">
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: turbopackNamePolyfill }} />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"
@@ -100,12 +102,33 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </ThemeProvider>
         <noscript>
           <div
-            style={{ padding: "2rem", textAlign: "center", fontFamily: "system-ui, sans-serif" }}
+            style={{
+              padding: "2rem",
+              textAlign: "center",
+              fontFamily: "system-ui, sans-serif",
+              maxWidth: "600px",
+              margin: "0 auto",
+            }}
           >
             <h1>JavaScript Required</h1>
             <p>
               VerifyMzansi requires JavaScript to function. Please enable JavaScript in your browser
               settings and reload the page.
+            </p>
+            <p style={{ marginTop: "1rem", fontSize: "0.875rem", color: "#666" }}>
+              You can still reach us at{" "}
+              <a href="mailto:hello@verifymzansi.com" style={{ color: "#16a34a" }}>
+                hello@verifymzansi.com
+              </a>{" "}
+              or visit our{" "}
+              <a href="/privacy" style={{ color: "#16a34a" }}>
+                Privacy Policy
+              </a>{" "}
+              and{" "}
+              <a href="/terms" style={{ color: "#16a34a" }}>
+                Terms of Service
+              </a>
+              .
             </p>
           </div>
         </noscript>

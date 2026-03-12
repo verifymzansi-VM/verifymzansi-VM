@@ -60,7 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Fetch current promotion
     const { data: promotion } = await admin
       .from("promotions")
-      .select("id, status, seller_id, title, published_at")
+      .select("id, status, owner_id, title, published_at")
       .eq("id", promotionId)
       .maybeSingle();
 

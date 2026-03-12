@@ -305,7 +305,7 @@ export function ShowroomHero({
           title: fallbackTitle || "Welcome to VerifyMzansi Showroom",
           description:
             fallbackDescription ||
-            "Explore fully verified sellers, businesses, and mall shops directly.",
+            "Explore verified accounts, businesses, and mall shops directly.",
           location: "South Africa",
           mediaUrl: fallbackMedia || "/images/fallbacks/hero-shop.svg",
           price: null,

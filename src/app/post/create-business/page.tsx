@@ -27,7 +27,6 @@ import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { useToast } from "@/hooks/use-toast";
-import { createClient } from "@/lib/supabase/client";
 import { MediaUpload } from "@/components/ui/media-upload";
 import {
   PlanGate,
@@ -155,10 +154,6 @@ function CreateBusinessContent() {
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [storeNumber, setStoreNumber] = useState("");
-  const [mallId, setMallId] = useState("");
-  const [malls, setMalls] = useState<{ id: string; name: string; location_city: string | null }[]>(
-    []
-  );
   const [serviceAreasInput, setServiceAreasInput] = useState("");
   const [mapDirections, setMapDirections] = useState("");
   const [phone, setPhone] = useState("");
@@ -179,6 +174,7 @@ function CreateBusinessContent() {
   const [logoFile, setLogoFile] = useState<File[]>([]);
   const [coverFile, setCoverFile] = useState<File[]>([]);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [mallPhotoFiles, setMallPhotoFiles] = useState<File[]>([]);
   const [promoVideoFile, setPromoVideoFile] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -202,6 +198,10 @@ function CreateBusinessContent() {
   const galleryPreviewUrls = useMemo(
     () => galleryFiles.map((file) => URL.createObjectURL(file)),
     [galleryFiles]
+  );
+  const mallPhotoPreviewUrls = useMemo(
+    () => mallPhotoFiles.map((file) => URL.createObjectURL(file)),
+    [mallPhotoFiles]
   );
   const promoVideoPreviewUrl = useMemo(
     () => (promoVideoFile.length > 0 ? URL.createObjectURL(promoVideoFile[0]) : null),
@@ -231,6 +231,12 @@ function CreateBusinessContent() {
   );
   useEffect(
     () => () => {
+      mallPhotoPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [mallPhotoPreviewUrls]
+  );
+  useEffect(
+    () => () => {
       if (promoVideoPreviewUrl) URL.revokeObjectURL(promoVideoPreviewUrl);
     },
     [promoVideoPreviewUrl]
@@ -241,20 +247,6 @@ function CreateBusinessContent() {
     },
     [videoThumbnailPreviewUrl]
   );
-
-  useEffect(() => {
-    if (businessType === "mall_store") {
-      async function fetchMalls() {
-        const supabase = createClient();
-        const { data } = await supabase
-          .from("malls")
-          .select("id, name, location_city")
-          .order("name");
-        if (data) setMalls(data);
-      }
-      fetchMalls();
-    }
-  }, [businessType]);
 
   useEffect(() => {
     if (!slugManual && businessName) {
@@ -447,10 +439,11 @@ function CreateBusinessContent() {
     clearErrors();
     setIsSubmitting(true);
     try {
-      const [logoUrls, coverUrls, galleryUrls, videoUrls] = await Promise.all([
+      const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrls] = await Promise.all([
         uploadMedia(logoFile, "business_logo"),
         uploadMedia(coverFile, "business_cover"),
         uploadMedia(galleryFiles, "business_gallery"),
+        uploadMedia(mallPhotoFiles, "business_gallery"),
         uploadMedia(promoVideoFile, "business_cover"),
       ]);
       const finalCoverPhoto = coverUrls[0] || null;
@@ -475,6 +468,13 @@ function CreateBusinessContent() {
               areas: parseServiceAreas(serviceAreasInput),
             }
           : undefined;
+      const normalizedBusinessDetails = businessType
+        ? coerceBusinessDetails(businessType, businessDetails)
+        : undefined;
+      const finalBusinessDetails =
+        normalizedBusinessDetails?.type === "mall_store"
+          ? { ...normalizedBusinessDetails, mall_photos: mallPhotoUrls }
+          : normalizedBusinessDetails;
       const body = {
         business_name: businessName.trim(),
         slug: (slug || generateSlug(businessName)).trim(),
@@ -484,7 +484,6 @@ function CreateBusinessContent() {
         location_province: province,
         location_city: city,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
-        mall_id: businessType === "mall_store" && mallId ? mallId : undefined,
         map_directions: mapDirections || undefined,
         phone: phone || undefined,
         whatsapp: whatsapp || undefined,
@@ -497,9 +496,7 @@ function CreateBusinessContent() {
         gallery_photos: galleryUrls.length > 0 ? galleryUrls : undefined,
         services_offered: services.length > 0 ? services : undefined,
         service_areas: serviceAreas,
-        business_details: businessType
-          ? coerceBusinessDetails(businessType, businessDetails)
-          : undefined,
+        business_details: finalBusinessDetails,
         operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
         payment_methods_accepted: paymentMethods.length > 0 ? paymentMethods : undefined,
         delivery_options: deliveryOptions.length > 0 ? deliveryOptions : undefined,
@@ -529,7 +526,6 @@ function CreateBusinessContent() {
 
   function renderReview() {
     const selectedType = BUSINESS_TYPE_OPTIONS.find((option) => option.value === businessType);
-    const linkedMall = malls.find((mall) => mall.id === mallId);
     const serviceAreas = parseServiceAreas(serviceAreasInput);
     const socialLinks = Object.fromEntries(
       Object.entries({
@@ -539,6 +535,13 @@ function CreateBusinessContent() {
         tiktok: socialTiktok,
       }).filter(([, value]) => value.trim().length > 0)
     );
+    const previewBusinessDetails = businessType
+      ? coerceBusinessDetails(businessType, businessDetails)
+      : businessDetails;
+    const previewMallDetails =
+      previewBusinessDetails?.type === "mall_store"
+        ? { ...previewBusinessDetails, mall_photos: mallPhotoPreviewUrls }
+        : previewBusinessDetails;
 
     return (
       <div className="rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
@@ -549,7 +552,7 @@ function CreateBusinessContent() {
         <BusinessDetailContent
           business={{
             id: "preview-business",
-            seller_id: "preview-seller",
+            owner_id: "preview-seller",
             business_name: businessName || "Your business name",
             description: description || "Your business description will appear here.",
             status: "preview",
@@ -577,15 +580,11 @@ function CreateBusinessContent() {
             email: email || null,
             website: website || null,
             store_number: storeNumber || null,
-            mall_id: mallId || null,
             map_directions: mapDirections || null,
-            business_details: businessType
-              ? coerceBusinessDetails(businessType, businessDetails)
-              : businessDetails,
+            business_details: previewMallDetails,
           }}
           trustLevel={null}
-          seller={{ display_name: "You" }}
-          linkedMall={linkedMall ? { id: linkedMall.id, name: linkedMall.name } : null}
+          ownerProfile={{ display_name: "You" }}
           promotions={[]}
           showPromotions={false}
           showPublicActions={false}
@@ -650,7 +649,7 @@ function CreateBusinessContent() {
                                 setBusinessDetails(getDefaultBusinessDetails(option.value));
                                 if (option.value !== "mall_store") {
                                   setStoreNumber("");
-                                  setMallId("");
+                                  setMallPhotoFiles([]);
                                 }
                                 if (option.value !== "mobile_service") {
                                   setServiceAreasInput("");
@@ -718,9 +717,6 @@ function CreateBusinessContent() {
                           setStoreNumber(value);
                           clearErrors("store_number");
                         }}
-                        mallId={mallId}
-                        malls={malls}
-                        onMallIdChange={setMallId}
                         serviceAreasInput={serviceAreasInput}
                         onServiceAreasChange={(value) => {
                           setServiceAreasInput(value);
@@ -1163,6 +1159,23 @@ function CreateBusinessContent() {
                         <p className="inline-form-error">{fieldErrors.gallery_photos}</p>
                       )}
                     </div>
+
+                    {businessType === "mall_store" && (
+                      <div className="space-y-2 rounded-lg">
+                        <MediaUpload
+                          label="Mall photos (optional, up to 5)"
+                          maxFiles={5}
+                          files={mallPhotoFiles}
+                          onChange={setMallPhotoFiles}
+                          accept="image/*"
+                        />
+                        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Camera className="h-3 w-3" />
+                          Add optional photos of the mall entrance, corridors, or landmarks that
+                          help customers find you.
+                        </p>
+                      </div>
+                    )}
 
                     <div id="business-cover-video" className="space-y-2 rounded-lg">
                       <MediaUpload

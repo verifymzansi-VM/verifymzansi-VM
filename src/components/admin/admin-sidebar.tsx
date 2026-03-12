@@ -62,7 +62,7 @@ export function AdminSidebar({
       items: [
         {
           href: "/admin/verification",
-          label: "Verify Sellers",
+          label: "Verify Accounts",
           icon: ShieldCheck,
           badgeCount: pendingVerifications > 0 ? pendingVerifications : undefined,
         },

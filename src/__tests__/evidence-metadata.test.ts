@@ -87,8 +87,8 @@ const MOCK_ARTIFACT = {
 };
 
 const MOCK_SELLER_PROFILE = {
-  display_name: "Test Seller",
-  seller_verification_status: "pending",
+  display_name: "Test Account",
+  account_verification_status: "pending_review",
   account_status: "active",
   strikes: 0,
   legal_hold: false,
@@ -219,7 +219,7 @@ describe("Evidence Metadata API", () => {
             return chainStub([]);
           case "kyc_risk_signals":
             return chainStub([]);
-          case "seller_profiles":
+          case "account_profiles":
             return chainStub(MOCK_SELLER_PROFILE);
           case "kyc_evidence_access_logs":
             return chainStub([]);
@@ -240,7 +240,9 @@ describe("Evidence Metadata API", () => {
       expect(body.steps[0].id).toBe("step-1");
       expect(body.artifacts).toHaveLength(1);
       expect(body.artifacts[0].id).toBe("art-1");
-      expect(body.sellerProfile.display_name).toBe("Test Seller");
+      expect(body.accountProfile.display_name).toBe("Test Account");
+      expect(body.accountProfile.account_verification_status).toBe("pending_review");
+      expect(body.sellerProfile.display_name).toBe("Test Account");
       expect(body.riskSignals).toEqual([]);
       expect(body.providerResults).toEqual([]);
       expect(body.accessLog).toEqual([]);
@@ -259,7 +261,7 @@ describe("Evidence Metadata API", () => {
             return chainStub([]);
           case "kyc_risk_signals":
             return chainStub([]);
-          case "seller_profiles":
+          case "account_profiles":
             return chainStub(MOCK_SELLER_PROFILE);
           case "kyc_evidence_access_logs":
             return chainStub([]);
@@ -296,7 +298,7 @@ describe("Evidence Metadata API", () => {
             return chainStub([]);
           case "kyc_risk_signals":
             return chainStub([]);
-          case "seller_profiles":
+          case "account_profiles":
             return chainStub(MOCK_SELLER_PROFILE);
           case "kyc_evidence_access_logs":
             return chainStub([]);

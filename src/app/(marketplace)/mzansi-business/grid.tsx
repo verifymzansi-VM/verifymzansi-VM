@@ -47,9 +47,15 @@ export function MzansiBusinessGrid() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const fetchGenRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchBusinesses = useCallback(
     async (gen: number) => {
+      // Abort any in-flight request
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       setLoading(true);
 
       const params = new URLSearchParams({
@@ -77,13 +83,10 @@ export function MzansiBusinessGrid() {
         params.set("city", filters.city);
       }
 
-      if (filters.mall) {
-        params.set("mall", filters.mall);
-      }
-
       try {
         const response = await fetch(`/api/businesses?${params.toString()}`, {
           cache: "no-store",
+          signal: controller.signal,
         });
         const payload = (await response.json()) as BusinessesResponse;
 
@@ -124,7 +127,6 @@ export function MzansiBusinessGrid() {
       filters.query,
       filters.province,
       filters.city,
-      filters.mall,
       page,
     ]
   );
@@ -142,7 +144,6 @@ export function MzansiBusinessGrid() {
     filters.query,
     filters.province,
     filters.city,
-    filters.mall,
   ].filter(Boolean).length;
 
   const handleRetry = () => {
@@ -238,7 +239,8 @@ export function MzansiBusinessGrid() {
         {businesses.map((business, index) => (
           <div
             key={business.id}
-            className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
+            className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms]"
+            style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
           >
             <BusinessCard
               id={business.id}

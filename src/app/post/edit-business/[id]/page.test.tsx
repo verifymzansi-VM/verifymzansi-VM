@@ -97,7 +97,6 @@ describe("EditBusinessPage", () => {
             location_province: "Gauteng",
             location_city: "Johannesburg",
             store_number: null,
-            mall_id: null,
             map_directions: "https://maps.example.com/home-studio",
             phone: "0821234567",
             whatsapp: "",

@@ -16,7 +16,7 @@ export interface ModerationItem {
   status: string;
   created_at: string;
   category?: string;
-  seller_id?: string;
+  owner_id?: string;
   area: string;
   areaLabel: string;
   itemType: string;
@@ -318,18 +318,18 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
           </div>
         )}
 
-        {/* ── Seller Info ──────────────────────────── */}
+        {/* ── Account Info ─────────────────────────── */}
         <Separator />
         <div className="space-y-1.5">
           <h4 className="text-sm font-semibold flex items-center gap-1.5">
             <User className="h-3.5 w-3.5" />
-            Seller
+            Account
           </h4>
           <div className="text-sm text-muted-foreground space-y-1">
             <p>
               <span className="text-muted-foreground">ID:</span>{" "}
               <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                {item.seller_id?.slice(0, 12)}…
+                {item.owner_id?.slice(0, 12)}…
               </code>
             </p>
             {item.buyer_verification_required && (

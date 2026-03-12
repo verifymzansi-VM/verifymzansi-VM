@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MarketPreviewCard } from "./market-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
+import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
@@ -14,16 +15,20 @@ export async function HomeMzansiMarketShowcase() {
   const { data: listings } = await supabase
     .from("listings")
     .select(
-      "id, title, price_cents, photos, videos, video_thumbnail, location_province, location_city, boost_until"
+      "id, title, description, price_cents, photos, videos, video_thumbnail, location_province, location_city, boost_until"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_MARKET")
+    .not("title", "ilike", "%seed%")
+    .not("title", "ilike", "%[seed]%")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured", { ascending: false })
     .order("created_at", { ascending: false })
-    .limit(8);
+    .limit(16);
 
-  const items = listings ?? [];
+  const items = (listings ?? [])
+    .filter((listing) => !isPlaceholderMarketplaceContent(listing.title, listing.description))
+    .slice(0, 8);
   if (items.length === 0) return null;
 
   return (

@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -46,7 +47,7 @@ import { formatZAR } from "@/lib/utils/format";
 
 interface PromotionRow {
   id: string;
-  seller_id: string;
+  owner_id: string;
   business_id: string | null;
   title: string;
   promotion_type: PromotionType;
@@ -67,7 +68,7 @@ interface PromotionRow {
   created_at: string;
 }
 
-interface SellerSummary {
+interface AccountProfileSummary {
   user_id: string;
   display_name: string;
   trust: TrustLevel;
@@ -80,7 +81,8 @@ interface BusinessSummary {
 
 interface PromotionsResponse {
   promotions?: PromotionRow[];
-  sellers?: SellerSummary[];
+  accountProfiles?: AccountProfileSummary[];
+  sellers?: AccountProfileSummary[];
   businesses?: BusinessSummary[];
   total?: number;
   page?: number;
@@ -130,6 +132,7 @@ export function PromotionsExplorer() {
   const currentSearchParams = useMemo(() => new URLSearchParams(searchParamKey), [searchParamKey]);
   const [response, setResponse] = useState<PromotionsResponse>({
     promotions: [],
+    accountProfiles: [],
     sellers: [],
     businesses: [],
     total: 0,
@@ -214,6 +217,7 @@ export function PromotionsExplorer() {
           setError(payload.error || "Failed to load promotions.");
           setResponse({
             promotions: [],
+            accountProfiles: [],
             sellers: [],
             businesses: [],
             total: 0,
@@ -232,6 +236,7 @@ export function PromotionsExplorer() {
         setError(loadError instanceof Error ? loadError.message : "Failed to load promotions.");
         setResponse({
           promotions: [],
+          accountProfiles: [],
           sellers: [],
           businesses: [],
           total: 0,
@@ -249,9 +254,15 @@ export function PromotionsExplorer() {
     };
   }, [searchParamKey]);
 
-  const sellerMap = useMemo(
-    () => new Map((response.sellers ?? []).map((seller) => [seller.user_id, seller])),
-    [response.sellers]
+  const accountProfileMap = useMemo(
+    () =>
+      new Map(
+        (response.accountProfiles ?? response.sellers ?? []).map((accountProfile) => [
+          accountProfile.user_id,
+          accountProfile,
+        ])
+      ),
+    [response.accountProfiles, response.sellers]
   );
   const businessMap = useMemo(
     () =>
@@ -294,9 +305,16 @@ export function PromotionsExplorer() {
     <div className="container mx-auto px-4 py-6 space-y-5 max-w-7xl">
       <PageHeader
         title="Promotions & Events"
-        description="Deals, promotions, launches, and events from verified South African sellers."
+        description="Deals, promotions, launches, and events from verified South African businesses and advertisers."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Promotions & Events" }]}
-      />
+      >
+        <Button asChild size="sm" className="gap-1">
+          <Link href="/advertise">
+            Advertise
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Button>
+      </PageHeader>
 
       {/* ── Type Tabs (horizontal scroll on mobile) ── */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
@@ -326,14 +344,16 @@ export function PromotionsExplorer() {
 
       {/* ── Featured Hero Card ── */}
       {featuredPromotion && !loading && (
-        <FeaturedHeroCard
-          promotion={featuredPromotion}
-          businessName={
-            featuredPromotion.business_id
-              ? businessMap.get(featuredPromotion.business_id)
-              : undefined
-          }
-        />
+        <div className="hidden sm:block">
+          <FeaturedHeroCard
+            promotion={featuredPromotion}
+            businessName={
+              featuredPromotion.business_id
+                ? businessMap.get(featuredPromotion.business_id)
+                : undefined
+            }
+          />
+        </div>
       )}
 
       {/* ── Desktop Filters ── */}
@@ -543,6 +563,7 @@ export function PromotionsExplorer() {
             <Button
               size="lg"
               className="rounded-full shadow-lg h-14 w-14 bg-red-500 hover:bg-red-600 relative"
+              aria-label="Open promotion filters"
             >
               <SlidersHorizontal className="h-5 w-5" />
               {activeFilterCount > 0 && (
@@ -553,9 +574,15 @@ export function PromotionsExplorer() {
             </Button>
           </SheetTrigger>
         </div>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl pb-24">
+        <SheetContent
+          side="bottom"
+          className="max-h-[85vh] overflow-y-auto rounded-t-2xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
+        >
           <SheetHeader>
             <SheetTitle>Filter Promotions</SheetTitle>
+            <SheetDescription>
+              Search and refine promotions without hiding the cards behind extra page chrome.
+            </SheetDescription>
           </SheetHeader>
           <div className="space-y-4 mt-4">
             <div className="space-y-1.5">
@@ -572,8 +599,10 @@ export function PromotionsExplorer() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Category</Label>
+              <Label htmlFor="promotion-category-mobile">Category</Label>
               <select
+                id="promotion-category-mobile"
+                aria-label="Category"
                 className={selectClass}
                 value={filters.category || ""}
                 onChange={(e) => updateFilters({ category: normalizeValue(e.target.value) })}
@@ -588,8 +617,10 @@ export function PromotionsExplorer() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Province</Label>
+                <Label htmlFor="promotion-province-mobile">Province</Label>
                 <select
+                  id="promotion-province-mobile"
+                  aria-label="Province"
                   className={selectClass}
                   value={filters.province || ""}
                   onChange={(e) =>
@@ -608,8 +639,10 @@ export function PromotionsExplorer() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label>City</Label>
+                <Label htmlFor="promotion-city-mobile">City</Label>
                 <select
+                  id="promotion-city-mobile"
+                  aria-label="City"
                   className={selectClass}
                   value={filters.city || ""}
                   onChange={(e) => updateFilters({ city: normalizeValue(e.target.value) })}
@@ -626,8 +659,10 @@ export function PromotionsExplorer() {
             </div>
             {filters.type === "event" && (
               <div className="space-y-1.5">
-                <Label>Event state</Label>
+                <Label htmlFor="promotion-event-state-mobile">Event state</Label>
                 <select
+                  id="promotion-event-state-mobile"
+                  aria-label="Event state"
                   className={selectClass}
                   value={filters.eventState || ""}
                   onChange={(e) => updateFilters({ event_state: normalizeValue(e.target.value) })}
@@ -642,12 +677,12 @@ export function PromotionsExplorer() {
               </div>
             )}
           </div>
-          <div className="fixed bottom-0 inset-x-0 p-4 bg-background border-t flex gap-3">
+          <div className="sticky bottom-0 inset-x-0 flex gap-3 border-t bg-background/95 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur">
             <Button variant="outline" className="flex-1" onClick={clearAllFilters}>
               Clear all
             </Button>
             <SheetClose asChild>
-              <Button className="flex-1">Show results</Button>
+              <Button className="flex-1">View results</Button>
             </SheetClose>
           </div>
         </SheetContent>
@@ -660,7 +695,7 @@ export function PromotionsExplorer() {
           {total === 1 ? "" : "s"} found
         </p>
         <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex gap-1">
-          <Link href="/post/create">
+          <Link href="/advertise">
             Start Advertising
             <ArrowRight className="h-4 w-4" />
           </Link>
@@ -699,7 +734,7 @@ export function PromotionsExplorer() {
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {gridPromotions.map((promotion, index) => {
-              const seller = sellerMap.get(promotion.seller_id);
+              const accountProfile = accountProfileMap.get(promotion.owner_id);
               const businessName = promotion.business_id
                 ? businessMap.get(promotion.business_id)
                 : undefined;
@@ -730,8 +765,8 @@ export function PromotionsExplorer() {
                     city={promotion.location_city}
                     promotionType={promotion.promotion_type}
                     createdAt={promotion.created_at}
-                    sellerTrustLevel={seller?.trust}
-                    sellerName={seller?.display_name}
+                    ownerTrustLevel={accountProfile?.trust}
+                    ownerName={accountProfile?.display_name}
                     viewCount={promotion.view_count}
                     boosted={isBoosted}
                     featured={isFeatured}

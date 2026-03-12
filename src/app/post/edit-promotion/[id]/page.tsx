@@ -543,7 +543,7 @@ export default function EditPromotionPage() {
                 <PromotionDetailContent
                   promotion={{
                     id: promotionId,
-                    seller_id: "preview-seller",
+                    owner_id: "preview-seller",
                     business_id: businessId || null,
                     title: title || "Your promotion title",
                     description: description || "Your promotion description will appear here.",
@@ -565,9 +565,9 @@ export default function EditPromotionPage() {
                     view_count: null,
                     created_at: new Date().toISOString(),
                   }}
-                  seller={{
+                  advertiserProfile={{
                     display_name: "You",
-                    seller_verification_status: null,
+                    account_verification_status: null,
                     phone: null,
                     masked_phone_public: null,
                   }}

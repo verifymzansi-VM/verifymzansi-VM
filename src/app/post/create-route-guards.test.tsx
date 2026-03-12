@@ -34,7 +34,7 @@ describe("create route guards", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { seller_verification_status: status },
+          data: { account_verification_status: status },
         }),
       }),
     });

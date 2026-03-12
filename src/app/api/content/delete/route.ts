@@ -25,7 +25,7 @@ const tableMap: Record<string, string> = {
 
 /**
  * POST /api/content/delete
- * Allows the seller to permanently delete their own content.
+ * Allows the account holder to permanently delete their own content.
  */
 export async function POST(request: Request) {
   try {
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     // Verify the item exists and belongs to this user
     const { data: item, error: fetchError } = await admin
       .from(table)
-      .select("id, status, seller_id")
+      .select("id, status, owner_id")
       .eq("id", itemId)
       .single();
 
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Content item not found" }, { status: 404 });
     }
 
-    if (item.seller_id !== user.id) {
+    if (item.owner_id !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -95,13 +95,13 @@ export async function POST(request: Request) {
     };
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: (actionMap[targetType] || "listing_deleted") as Parameters<
         typeof logAuditEvent
       >[0]["action"],
       targetType,
       targetId: itemId,
-      metadata: { action: "seller_delete", area, previousStatus: item.status },
+      metadata: { action: "account_delete", area, previousStatus: item.status },
     });
 
     return NextResponse.json({ success: true });

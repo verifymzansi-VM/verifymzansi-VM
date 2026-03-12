@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseJsonRequest } from "@/lib/utils/api";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
@@ -53,23 +54,23 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient();
     const { data: profile, error: profileError } = await admin
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (profileError) {
-      return NextResponse.json({ error: "Failed to load seller profile" }, { status: 500 });
+      return NextResponse.json({ error: "Failed to load account profile" }, { status: 500 });
     }
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
     const { province, city } = parsed.data;
 
     const { error: profileUpdateError } = await admin
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
         location_province: province,
         location_city: city,
@@ -106,10 +107,12 @@ export async function POST(request: NextRequest) {
     );
 
     await admin
-      .from("seller_profiles")
-      .update({ seller_verification_status: "pending_review" })
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
+      .update({
+        account_verification_status: "pending_review",
+      })
       .eq("id", profile.id)
-      .in("seller_verification_status", ["incomplete", "rejected"]);
+      .in("account_verification_status", ["incomplete", "rejected"]);
 
     return NextResponse.json({ success: true });
   } catch {

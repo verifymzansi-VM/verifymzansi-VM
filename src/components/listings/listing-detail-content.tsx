@@ -8,16 +8,17 @@ import { Separator } from "@/components/ui/separator";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { ListingCard } from "@/components/listings/listing-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { readOwnerId } from "@/lib/account/compat";
 import { formatZAR } from "@/lib/utils/format";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ListingDetailClient } from "@/app/listing/[id]/client";
 import { ListingContactActions } from "@/app/listing/[id]/listing-contact-actions";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
-import type { SellerVerificationStatus } from "@/types/enums";
+import type { AccountVerificationStatus } from "@/types/enums";
 
 export interface ListingDetailRecord {
   id: string;
-  seller_id: string;
+  owner_id?: string | null;
   title: string;
   description: string | null;
   price_cents: number | null;
@@ -39,12 +40,12 @@ export interface ListingSellerRecord {
   display_name: string | null;
   location_province: string | null;
   location_city: string | null;
-  seller_verification_status: SellerVerificationStatus | null;
+  account_verification_status: AccountVerificationStatus | null;
   phone?: string | null;
   masked_phone_public?: string | null;
 }
 
-interface SimilarListingRow {
+export interface SimilarListingRow {
   id: string;
   title: string;
   price_cents: number | null;
@@ -58,13 +59,13 @@ interface SimilarListingRow {
   created_at: string;
   boost_until: string | null;
   featured: boolean;
-  seller_id: string;
+  owner_id?: string | null;
 }
 
-interface SimilarSellerRow {
+export interface SimilarSellerRow {
   user_id: string;
   display_name: string;
-  seller_verification_status: SellerVerificationStatus | null;
+  account_verification_status: AccountVerificationStatus | null;
 }
 
 export function ListingDetailContent({
@@ -82,7 +83,7 @@ export function ListingDetailContent({
   similarItems?: SimilarListingRow[];
   similarSellers?: Map<string, SimilarSellerRow>;
 }) {
-  const trustLevel = seller ? computeTrustLevel(seller.seller_verification_status ?? null) : null;
+  const trustLevel = seller ? computeTrustLevel(seller.account_verification_status ?? null) : null;
   const createdAt = new Date(listing.created_at).toLocaleDateString("en-ZA", {
     day: "numeric",
     month: "long",
@@ -282,8 +283,9 @@ export function ListingDetailContent({
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {similarItems.map((item) => {
-              const itemSeller = similarSellers.get(item.seller_id);
-              const itemTrust = computeTrustLevel(itemSeller?.seller_verification_status ?? null);
+              const itemOwnerId = readOwnerId(item);
+              const itemSeller = itemOwnerId ? similarSellers.get(itemOwnerId) : undefined;
+              const itemTrust = computeTrustLevel(itemSeller?.account_verification_status ?? null);
 
               return (
                 <ListingCard
@@ -299,8 +301,8 @@ export function ListingDetailContent({
                   attributes={item.attributes}
                   condition={item.condition ?? undefined}
                   createdAt={item.created_at}
-                  sellerTrustLevel={itemTrust}
-                  sellerName={itemSeller?.display_name}
+                  ownerTrustLevel={itemTrust}
+                  ownerName={itemSeller?.display_name}
                   boosted={item.boost_until ? new Date(item.boost_until) > new Date() : false}
                   featured={item.featured}
                 />

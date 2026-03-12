@@ -4,6 +4,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizeUserRole } from "@/lib/account/compat";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("Audit");
@@ -41,6 +42,7 @@ export type AuditAction =
   | "account_banned"
   | "account_unbanned"
   | "dsar_requested"
+  | "dsar_started"
   | "dsar_completed"
   | "dsar_rejected"
   | "consent_updated"
@@ -57,7 +59,7 @@ export type AuditAction =
 
 interface AuditLogEntry {
   actorId: string;
-  actorRole?: "seller" | "moderator" | "admin" | "system";
+  actorRole?: "member" | "moderator" | "admin" | "system" | "owner";
   action: AuditAction;
   targetType?: string;
   targetId?: string;
@@ -87,10 +89,14 @@ export function resetAuditFailureCount(): void {
 export async function logAuditEvent(entry: AuditLogEntry): Promise<void> {
   try {
     const supabase = createAdminClient();
+    const actorRole =
+      entry.actorRole === "system"
+        ? "system"
+        : (normalizeUserRole(entry.actorRole) ?? entry.actorRole ?? "system");
 
     const { error } = await supabase.from("audit_logs").insert({
       actor_id: entry.actorId,
-      actor_role: entry.actorRole || "system",
+      actor_role: actorRole,
       action: entry.action,
       target_type: entry.targetType || "unknown",
       target_id: entry.targetId || "00000000-0000-0000-0000-000000000000",

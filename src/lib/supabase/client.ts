@@ -1,8 +1,10 @@
 import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-stub";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("SupabaseClient");
-let _client: ReturnType<typeof createBrowserClient> | null = null;
+let _client: SupabaseClient | null = null;
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -20,7 +22,7 @@ function createPlaceholderClient() {
       autoRefreshToken: false,
       detectSessionInUrl: false,
     },
-  });
+  }) as SupabaseClient;
 }
 
 /**
@@ -31,8 +33,13 @@ function createPlaceholderClient() {
  * Session persistence, auto-refresh, and URL detection are disabled
  * because auth state is managed server-side via middleware cookies.
  */
-export function createClient() {
+export function createClient(): SupabaseClient {
   if (_client) return _client;
+
+  if (isPlaywrightSupabaseStubMode()) {
+    _client = createPlaceholderClient();
+    return _client;
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -59,7 +66,7 @@ export function createClient() {
       autoRefreshToken: false,
       detectSessionInUrl: false,
     },
-  });
+  }) as SupabaseClient;
 
   return _client;
 }

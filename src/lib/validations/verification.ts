@@ -47,9 +47,9 @@ export const verificationLocationSubmitSchema = z.object({
 
 // ── V2M Buyer verification ──────────────────────────────────
 
-/** Zod schema for buyer-initiated verification of a seller profile. */
+/** Zod schema for buyer-initiated verification of an account profile. */
 export const buyerVerifySchema = z.object({
-  sellerProfileId: z.string().uuid(),
+  accountProfileId: z.string().uuid(),
   turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
 });
 

@@ -38,7 +38,6 @@ describe("BusinessDiscoveryBar", () => {
         businessType: undefined,
         province: undefined,
         city: undefined,
-        mall: undefined,
       },
       setFilter,
       resetFilters,
@@ -46,7 +45,7 @@ describe("BusinessDiscoveryBar", () => {
   });
 
   it("renders the category select with shared business category options", () => {
-    render(<BusinessDiscoveryBar malls={[]} />);
+    render(<BusinessDiscoveryBar />);
 
     const categorySelect = screen.getByLabelText("Category");
     expect(categorySelect).toBeInTheDocument();
@@ -60,7 +59,7 @@ describe("BusinessDiscoveryBar", () => {
   });
 
   it("updates and clears the business category filter from the dropdown", () => {
-    render(<BusinessDiscoveryBar malls={[]} />);
+    render(<BusinessDiscoveryBar />);
 
     const categorySelect = screen.getByLabelText("Category");
     fireEvent.change(categorySelect, { target: { value: "food_dining" } });
@@ -80,13 +79,12 @@ describe("BusinessDiscoveryBar", () => {
         businessType: undefined,
         province: undefined,
         city: undefined,
-        mall: undefined,
       },
       setFilter,
       resetFilters,
     });
 
-    render(<BusinessDiscoveryBar malls={[]} />);
+    render(<BusinessDiscoveryBar />);
 
     expect(screen.getByText("Fashion & Accessories", { selector: "div" })).toBeInTheDocument();
 
@@ -104,13 +102,12 @@ describe("BusinessDiscoveryBar", () => {
         businessType: undefined,
         province: undefined,
         city: undefined,
-        mall: undefined,
       },
       setFilter,
       resetFilters,
     });
 
-    render(<BusinessDiscoveryBar malls={[]} />);
+    render(<BusinessDiscoveryBar />);
 
     fireEvent.click(screen.getByRole("button", { name: /remove query filter coffee/i }));
 

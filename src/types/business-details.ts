@@ -14,6 +14,10 @@ export type PrimaryOrderChannel =
 
 export interface MallStoreBusinessDetails {
   type: "mall_store";
+  mall_name?: string;
+  mall_address?: string;
+  mall_summary?: string;
+  mall_photos?: string[];
   floor_or_wing?: string;
   nearest_entrance?: string;
   parking_notes?: string;

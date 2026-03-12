@@ -8,6 +8,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { getRoleFromUser, isModeratorOrAdmin, asAdminRole } from "@/lib/auth/roles";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("AdminVerification");
 
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // If approved, check if all 4 steps are now approved → update seller to verified
+    // If approved, check if all 4 steps are now approved → update the account to verified
     if (decision === "approved") {
       const { data: allSteps } = await admin
         .from("verification_steps")
@@ -129,8 +130,10 @@ export async function POST(request: Request) {
 
       if (allApproved) {
         await admin
-          .from("seller_profiles")
-          .update({ seller_verification_status: "verified" })
+          .from(ACCOUNT_PROFILE_WRITE_TABLE)
+          .update({
+            account_verification_status: "verified",
+          })
           .eq("user_id", step.user_id);
 
         // Set purge_after = NOW + 30 days on all KYC artifacts for this user
@@ -152,27 +155,32 @@ export async function POST(request: Request) {
             actorId: user.id,
             actorRole: adminRole,
             action: "kyc_purge_scheduled",
-            targetType: "seller_profile",
+            targetType: "account_profile",
             targetId: step.user_id,
             metadata: {
               purge_after: purgeAfter,
               step_count: approvedSteps.length,
+              owner_user_id: step.user_id,
             },
           });
         }
       } else {
         await admin
-          .from("seller_profiles")
-          .update({ seller_verification_status: "pending_review" })
+          .from(ACCOUNT_PROFILE_WRITE_TABLE)
+          .update({
+            account_verification_status: "pending_review",
+          })
           .eq("user_id", step.user_id)
-          .in("seller_verification_status", ["incomplete", "pending_review", "rejected"]);
+          .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
       }
     } else {
       await admin
-        .from("seller_profiles")
-        .update({ seller_verification_status: "rejected" })
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .update({
+          account_verification_status: "rejected",
+        })
         .eq("user_id", step.user_id)
-        .in("seller_verification_status", ["incomplete", "pending_review", "rejected"]);
+        .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
     }
 
     // Log audit event
@@ -200,11 +208,11 @@ export async function POST(request: Request) {
         overrideReasonCode,
         risk_level: step.risk_level,
         risk_score: step.risk_score,
-        seller_user_id: step.user_id,
+        owner_user_id: step.user_id,
       },
     });
 
-    // Notify the seller about the verification decision
+    // Notify the account holder about the verification decision
     try {
       const stepLabel =
         step.step_type === "id_doc"

@@ -8,6 +8,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { z } from "zod";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("Checkout");
 
@@ -22,7 +23,7 @@ const checkoutSchema = z.object({
  * POST /api/billing/create-checkout
  *
  * Create a PayFast checkout session and return the redirect URL.
- * Requires authenticated user with a seller profile.
+ * Requires an authenticated user with an account profile.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -59,16 +60,16 @@ export async function POST(request: NextRequest) {
 
     const { planId } = parsed.data;
 
-    // ── Get seller profile ───────────────────────────────────
+    // ── Get account profile ──────────────────────────────────
     const admin = createAdminClient();
     const { data: profile } = await admin
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id, display_name")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: "Account profile not found" }, { status: 404 });
     }
 
     // ── Fetch plan ───────────────────────────────────────────
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
     // ── Audit log ────────────────────────────────────────────
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: "checkout_initiated",
       targetType: "payment",
       targetId: payment.id,

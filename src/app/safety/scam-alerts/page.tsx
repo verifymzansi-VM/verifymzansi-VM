@@ -32,23 +32,23 @@ const SCAM_TYPES = [
   },
   {
     icon: Phone,
-    title: "Fake Seller Profiles",
+    title: "Fake Account Profiles",
     description:
       "Look for the VerifyMzansi trust badge. Unverified profiles may use stolen photos.",
     tips: [
-      "Check the seller's verification status",
+      "Check the account's verification status",
       "Reverse-search profile photos",
-      "Ask questions only a real seller would know",
+      "Ask questions only a real owner would know",
     ],
   },
   {
     icon: MapPin,
     title: "Location Bait",
-    description: "Sellers who keep making excuses not to meet may be running a scam.",
+    description: "People who keep making excuses not to meet may be running a scam.",
     tips: [
       "Insist on meeting face-to-face in public",
       "Use our Meeting Safety Checklist",
-      "Be wary of sellers who refuse video calls",
+      "Be wary of people who refuse video calls",
     ],
   },
   {
@@ -58,7 +58,7 @@ const SCAM_TYPES = [
     tips: [
       "Compare prices across multiple listings",
       "Be suspicious of prices 50%+ below market value",
-      "Check how long the seller has been on the platform",
+      "Check how long the account has been on the platform",
     ],
   },
   {
@@ -68,7 +68,7 @@ const SCAM_TYPES = [
       "Scammers often ask to move to WhatsApp or Telegram to avoid platform protections.",
     tips: [
       "Keep communication on VerifyMzansi",
-      "Report sellers insisting on off-platform deals",
+      "Report accounts insisting on off-platform deals",
       "Screenshot conversations as evidence",
     ],
   },
@@ -138,7 +138,7 @@ export default function ScamAlertsPage() {
               </Badge>
             </p>
             <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 list-decimal list-inside text-xs text-muted-foreground">
-              <li>Always deal with verified sellers (green shield)</li>
+              <li>Always deal with verified accounts, businesses, or advertisers (green shield)</li>
               <li>Never pay before inspecting the item</li>
               <li>Meet in public, well-lit places</li>
               <li>Tell someone where you&apos;re going</li>

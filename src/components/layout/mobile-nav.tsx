@@ -5,18 +5,41 @@ import { usePathname } from "next/navigation";
 import { Home, Search, PlusCircle, MessageSquare, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotificationStore } from "@/stores/notification-store";
+import { useAuth } from "@/hooks/use-auth";
 
-const TABS = [
+interface TabDef {
+  href: string;
+  icon: typeof Home;
+  label: string;
+  dotSource?: "leads" | "profile";
+  requiresAuth?: boolean;
+}
+
+const TABS: TabDef[] = [
   { href: "/", icon: Home, label: "Home" },
   { href: "/mzansi-market", icon: Search, label: "Browse" },
-  { href: "/post/create", icon: PlusCircle, label: "Post" },
-  { href: "/dashboard/leads", icon: MessageSquare, label: "Leads", showDot: true },
-  { href: "/dashboard", icon: User, label: "Profile", showDot: true },
-] as const;
+  { href: "/post/create", icon: PlusCircle, label: "Post", requiresAuth: true },
+  {
+    href: "/dashboard/leads",
+    icon: MessageSquare,
+    label: "Leads",
+    dotSource: "leads",
+    requiresAuth: true,
+  },
+  { href: "/dashboard", icon: User, label: "Profile", dotSource: "profile" },
+];
+
+/** Marketplace prefixes the Browse tab should match */
+const BROWSE_PREFIXES = ["/mzansi-market", "/mzansi-business", "/promotions"];
 
 export function MobileNav() {
   const pathname = usePathname();
   const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const { isAuthenticated } = useAuth();
+
+  // Resolve the Browse tab href to the user's current marketplace area
+  const browseHref =
+    BROWSE_PREFIXES.find((prefix) => pathname.startsWith(prefix)) || "/mzansi-market";
 
   return (
     <nav
@@ -25,14 +48,16 @@ export function MobileNav() {
     >
       <div className="flex items-center justify-around h-16 px-2">
         {TABS.map((tab) => {
-          const isActive = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
+          const href = tab.label === "Browse" ? browseHref : tab.href;
+          const resolvedHref = tab.requiresAuth && !isAuthenticated ? "/login" : href;
+          const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
           const Icon = tab.icon;
-          const showRedDot = "showDot" in tab && tab.showDot && unreadCount > 0;
+          const showRedDot = tab.dotSource === "leads" && unreadCount > 0;
 
           return (
             <Link
-              key={tab.href}
-              href={tab.href}
+              key={tab.label}
+              href={resolvedHref}
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-0.5 flex-1 py-1 transition-colors",
@@ -40,7 +65,7 @@ export function MobileNav() {
               )}
             >
               <span className="relative">
-                <Icon className={cn("h-5 w-5", tab.href === "/post/create" && "h-6 w-6")} />
+                <Icon className={cn("h-5 w-5", tab.label === "Post" && "h-6 w-6")} />
                 {showRedDot && (
                   <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-destructive border-2 border-background" />
                 )}

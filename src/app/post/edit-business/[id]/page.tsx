@@ -91,10 +91,6 @@ export default function EditBusinessPage() {
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [storeNumber, setStoreNumber] = useState("");
-  const [mallId, setMallId] = useState("");
-  const [malls, setMalls] = useState<{ id: string; name: string; location_city: string | null }[]>(
-    []
-  );
   const [serviceAreasInput, setServiceAreasInput] = useState("");
   const [mapDirections, setMapDirections] = useState("");
 
@@ -125,14 +121,17 @@ export default function EditBusinessPage() {
   const [existingCoverVideo, setExistingCoverVideo] = useState("");
   const [existingVideoThumbnail, setExistingVideoThumbnail] = useState("");
   const [existingGalleryPhotos, setExistingGalleryPhotos] = useState<string[]>([]);
+  const [existingMallPhotos, setExistingMallPhotos] = useState<string[]>([]);
 
   // Media — new files
   const [newLogoFile, setNewLogoFile] = useState<File[]>([]);
   const [newCoverFile, setNewCoverFile] = useState<File[]>([]);
   const [newGalleryFiles, setNewGalleryFiles] = useState<File[]>([]);
+  const [newMallPhotoFiles, setNewMallPhotoFiles] = useState<File[]>([]);
   const [newPromoVideoFile, setNewPromoVideoFile] = useState<File[]>([]);
   const [newVideoThumbnailFile, setNewVideoThumbnailFile] = useState<File[]>([]);
   const [removeGallery, setRemoveGallery] = useState(false);
+  const [removeMallPhotos, setRemoveMallPhotos] = useState(false);
   const [removeVideo, setRemoveVideo] = useState(false);
 
   const provinces = getProvinceNames();
@@ -150,6 +149,10 @@ export default function EditBusinessPage() {
   const previewGalleryUrls = useMemo(
     () => newGalleryFiles.map((file) => URL.createObjectURL(file)),
     [newGalleryFiles]
+  );
+  const previewMallPhotoUrls = useMemo(
+    () => newMallPhotoFiles.map((file) => URL.createObjectURL(file)),
+    [newMallPhotoFiles]
   );
   const previewPromoVideoUrl = useMemo(
     () => (newPromoVideoFile.length > 0 ? URL.createObjectURL(newPromoVideoFile[0]) : null),
@@ -180,7 +183,6 @@ export default function EditBusinessPage() {
         setProvince(b.location_province || "");
         setCity(b.location_city || "");
         setStoreNumber(b.store_number || "");
-        setMallId(b.mall_id || "");
         setMapDirections(b.map_directions || "");
         setPhone(b.phone || "");
         setWhatsapp(b.whatsapp || "");
@@ -194,6 +196,9 @@ export default function EditBusinessPage() {
         setExistingCoverVideo(b.cover_video || "");
         setExistingVideoThumbnail(b.video_thumbnail || "");
         setExistingGalleryPhotos(b.gallery_photos || []);
+        setExistingMallPhotos(
+          b.business_details?.type === "mall_store" ? (b.business_details.mall_photos ?? []) : []
+        );
         setServices(b.services_offered || []);
         setPaymentMethods(b.payment_methods_accepted || []);
         setDeliveryOptions(b.delivery_options || []);
@@ -222,22 +227,7 @@ export default function EditBusinessPage() {
       }
     }
 
-    async function fetchMalls() {
-      try {
-        const { createClient } = await import("@/lib/supabase/client");
-        const supabase = createClient();
-        const { data } = await supabase
-          .from("malls")
-          .select("id, name, location_city")
-          .order("name");
-        if (data) setMalls(data);
-      } catch {
-        // non-critical
-      }
-    }
-
     load();
-    fetchMalls();
   }, [businessId]);
 
   useEffect(
@@ -259,6 +249,12 @@ export default function EditBusinessPage() {
       previewGalleryUrls.forEach((url) => URL.revokeObjectURL(url));
     },
     [previewGalleryUrls]
+  );
+  useEffect(
+    () => () => {
+      previewMallPhotoUrls.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [previewMallPhotoUrls]
   );
 
   useEffect(
@@ -379,6 +375,7 @@ export default function EditBusinessPage() {
       let finalCoverVideo = existingCoverVideo;
       let finalVideoThumbnail = existingVideoThumbnail;
       let finalGalleryPhotos = existingGalleryPhotos;
+      let finalMallPhotos = existingMallPhotos;
 
       if (newCoverFile.length > 0) {
         const urls = await uploadMedia(newCoverFile, "business_cover");
@@ -404,6 +401,12 @@ export default function EditBusinessPage() {
         const urls = await uploadMedia(newGalleryFiles, "business_gallery");
         if (urls.length > 0) finalGalleryPhotos = urls;
       }
+      if (removeMallPhotos) {
+        finalMallPhotos = [];
+      } else if (newMallPhotoFiles.length > 0) {
+        const urls = await uploadMedia(newMallPhotoFiles, "business_gallery");
+        if (urls.length > 0) finalMallPhotos = urls;
+      }
 
       // Build social links
       const socialLinks: Record<string, string> = {};
@@ -425,6 +428,11 @@ export default function EditBusinessPage() {
               areas: parseServiceAreas(serviceAreasInput),
             }
           : undefined;
+      const normalizedBusinessDetails = coerceBusinessDetails(businessType, businessDetails);
+      const finalBusinessDetails =
+        normalizedBusinessDetails.type === "mall_store"
+          ? { ...normalizedBusinessDetails, mall_photos: finalMallPhotos }
+          : normalizedBusinessDetails;
 
       const body = {
         business_name: businessName,
@@ -435,7 +443,6 @@ export default function EditBusinessPage() {
         location_province: province,
         location_city: city,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
-        mall_id: businessType === "mall_store" && mallId ? mallId : undefined,
         map_directions: mapDirections || undefined,
         phone: phone || undefined,
         whatsapp: whatsapp || undefined,
@@ -448,7 +455,7 @@ export default function EditBusinessPage() {
         gallery_photos: finalGalleryPhotos.length > 0 ? finalGalleryPhotos : [],
         services_offered: services,
         service_areas: serviceAreas,
-        business_details: coerceBusinessDetails(businessType, businessDetails),
+        business_details: finalBusinessDetails,
         operating_hours: operatingHours,
         payment_methods_accepted: paymentMethods,
         delivery_options: deliveryOptions,
@@ -494,7 +501,6 @@ export default function EditBusinessPage() {
     );
   }
 
-  const linkedMall = mallId ? (malls.find((mall) => mall.id === mallId) ?? null) : null;
   const socialLinks = Object.fromEntries(
     Object.entries({
       facebook: socialFacebook,
@@ -505,12 +511,23 @@ export default function EditBusinessPage() {
   );
   const previewGalleryPhotos =
     previewGalleryUrls.length > 0 ? previewGalleryUrls : removeGallery ? [] : existingGalleryPhotos;
+  const previewMallPhotos =
+    previewMallPhotoUrls.length > 0
+      ? previewMallPhotoUrls
+      : removeMallPhotos
+        ? []
+        : existingMallPhotos;
   const previewCoverVideo = removeVideo
     ? null
     : (previewPromoVideoUrl ?? existingCoverVideo ?? null);
   const previewVideoThumbnail = removeVideo
     ? null
     : (previewVideoThumbnailUrl ?? existingVideoThumbnail ?? null);
+  const previewBusinessDetails = coerceBusinessDetails(businessType, businessDetails);
+  const previewMallDetails =
+    previewBusinessDetails.type === "mall_store"
+      ? { ...previewBusinessDetails, mall_photos: previewMallPhotos }
+      : previewBusinessDetails;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -659,9 +676,6 @@ export default function EditBusinessPage() {
                   setStoreNumber(value);
                   clearErrors("store_number");
                 }}
-                mallId={mallId}
-                malls={malls}
-                onMallIdChange={setMallId}
                 serviceAreasInput={serviceAreasInput}
                 onServiceAreasChange={(value) => {
                   setServiceAreasInput(value);
@@ -816,7 +830,8 @@ export default function EditBusinessPage() {
               {(existingLogo ||
                 existingCoverPhoto ||
                 existingCoverVideo ||
-                existingGalleryPhotos.length > 0) && (
+                existingGalleryPhotos.length > 0 ||
+                existingMallPhotos.length > 0) && (
                 <div className="space-y-3">
                   <Label>Current Media</Label>
                   <div className="flex flex-wrap gap-4">
@@ -895,6 +910,39 @@ export default function EditBusinessPage() {
                       </div>
                     </div>
                   )}
+                  {businessType === "mall_store" &&
+                    existingMallPhotos.length > 0 &&
+                    !removeMallPhotos && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Camera className="h-3 w-3" /> Mall Photos ({existingMallPhotos.length})
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setRemoveMallPhotos(true)}
+                            className="text-xs text-destructive hover:underline"
+                          >
+                            Replace all
+                          </button>
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                          {existingMallPhotos.map((url, i) => (
+                            <div
+                              key={`mall-${i}`}
+                              className="h-12 w-12 rounded-lg overflow-hidden border flex-shrink-0"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={normalizeMediaUrl(url)}
+                                alt={`Mall photo ${i + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                 </div>
               )}
 
@@ -981,6 +1029,26 @@ export default function EditBusinessPage() {
                   )}
                 </div>
 
+                {businessType === "mall_store" && (
+                  <div className="space-y-2">
+                    <MediaUpload
+                      label={
+                        removeMallPhotos || existingMallPhotos.length === 0
+                          ? "Mall Photos (up to 5)"
+                          : "Replace Mall Photos (up to 5)"
+                      }
+                      maxFiles={5}
+                      files={newMallPhotoFiles}
+                      onChange={setNewMallPhotoFiles}
+                      accept="image/*"
+                    />
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Camera className="h-3 w-3" />
+                      Add optional mall entrance or landmark photos to help customers locate you.
+                    </p>
+                  </div>
+                )}
+
                 {/* Promo Video */}
                 <div className="space-y-2">
                   <MediaUpload
@@ -1060,7 +1128,7 @@ export default function EditBusinessPage() {
                 <BusinessDetailContent
                   business={{
                     id: businessId,
-                    seller_id: "preview-seller",
+                    owner_id: "preview-seller",
                     business_name: businessName || "Your business name",
                     description: description || "Your business description will appear here.",
                     status: "preview",
@@ -1091,13 +1159,11 @@ export default function EditBusinessPage() {
                     email: email || null,
                     website: website || null,
                     store_number: storeNumber || null,
-                    mall_id: mallId || null,
                     map_directions: mapDirections || null,
-                    business_details: coerceBusinessDetails(businessType, businessDetails),
+                    business_details: previewMallDetails,
                   }}
                   trustLevel={null}
-                  seller={{ display_name: "You" }}
-                  linkedMall={linkedMall ? { id: linkedMall.id, name: linkedMall.name } : null}
+                  ownerProfile={{ display_name: "You" }}
                   promotions={[]}
                   showPromotions={false}
                   showPublicActions={false}

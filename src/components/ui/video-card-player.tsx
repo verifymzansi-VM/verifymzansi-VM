@@ -41,6 +41,8 @@ export interface VideoCardPlayerProps {
   mediaClassName?: string;
   /** Whether to show the hover‑scale effect */
   hoverScale?: boolean;
+  /** Object-fit classes for poster/image/video media */
+  mediaFitClassName?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -71,6 +73,7 @@ export function VideoCardPlayer({
   className,
   mediaClassName,
   hoverScale = true,
+  mediaFitClassName = "object-cover",
 }: VideoCardPlayerProps) {
   const isVideo = isVideoUrl(src);
   const normalizedSrc = src ? normalizeMediaUrl(src) : undefined;
@@ -173,7 +176,7 @@ export function VideoCardPlayer({
         alt={alt}
         fill
         className={cn(
-          "object-cover",
+          mediaFitClassName,
           hoverScale && "transition-transform duration-500 group-hover:scale-110",
           mediaClassName
         )}
@@ -197,7 +200,8 @@ export function VideoCardPlayer({
           alt={alt || "Video cover"}
           fill
           className={cn(
-            "object-cover absolute inset-0 z-[1] transition-opacity duration-300",
+            "absolute inset-0 z-[1] transition-opacity duration-300",
+            mediaFitClassName,
             videoReady && !hasError ? "opacity-0" : "opacity-100"
           )}
           sizes={sizes}
@@ -218,7 +222,8 @@ export function VideoCardPlayer({
         aria-label={alt ? `${alt} video` : "Video preview"}
         onError={handleError}
         className={cn(
-          "h-full w-full object-cover",
+          "h-full w-full",
+          mediaFitClassName,
           scaleClass,
           !videoReady || hasError ? "opacity-0" : "opacity-100",
           "z-[2] relative"

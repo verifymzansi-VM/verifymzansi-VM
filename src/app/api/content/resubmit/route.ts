@@ -25,7 +25,7 @@ const tableMap: Record<string, string> = {
 
 /**
  * POST /api/content/resubmit
- * Allows the seller to resubmit rejected content for moderation after editing.
+ * Allows the account holder to resubmit rejected content for moderation after editing.
  */
 export async function POST(request: Request) {
   try {
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     // Verify the item exists, belongs to this user, and is currently rejected
     const { data: item, error: fetchError } = await admin
       .from(table)
-      .select("id, status, seller_id")
+      .select("id, status, owner_id")
       .eq("id", itemId)
       .single();
 
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Content item not found" }, { status: 404 });
     }
 
-    if (item.seller_id !== user.id) {
+    if (item.owner_id !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     };
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: (actionMap[targetType] || "listing_updated") as Parameters<
         typeof logAuditEvent
       >[0]["action"],

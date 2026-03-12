@@ -6,10 +6,30 @@ import { cn } from "@/lib/utils";
 
 export function MobilePostSticker() {
   const pathname = usePathname();
+
+  // Hide on auth, admin, and error pages where it's not relevant
+  const isHidden =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/banned");
+
   const isActive = pathname.startsWith("/post/create");
+  const hasNearbyFilterFab =
+    pathname.startsWith("/mzansi-market") ||
+    pathname.startsWith("/mzansi-business") ||
+    pathname.startsWith("/promotions");
+
+  if (isHidden || hasNearbyFilterFab) return null;
 
   return (
-    <div className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[60]">
+    <div
+      className={cn(
+        "pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[60]"
+      )}
+    >
       <Link
         href="/post/create"
         aria-current={isActive ? "page" : undefined}

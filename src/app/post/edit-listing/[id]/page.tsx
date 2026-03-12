@@ -599,7 +599,7 @@ export default function EditListingPage() {
                     <ListingDetailContent
                       listing={{
                         id,
-                        seller_id: "preview-seller",
+                        owner_id: "preview-seller",
                         title: title || "Your listing title",
                         description: description || "Your listing description will appear here.",
                         price_cents: price ? Math.round(parseFloat(price || "0") * 100) : 0,
@@ -620,7 +620,7 @@ export default function EditListingPage() {
                         display_name: "You",
                         location_province: province || null,
                         location_city: city || null,
-                        seller_verification_status: null,
+                        account_verification_status: null,
                         phone: null,
                         masked_phone_public: null,
                       }}

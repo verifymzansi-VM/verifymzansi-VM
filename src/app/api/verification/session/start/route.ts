@@ -85,7 +85,7 @@ export async function POST(_request: NextRequest) {
 
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "kyc_session_started",
         targetType: "verification_session",
         targetId: session.id,

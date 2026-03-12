@@ -63,18 +63,6 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
     province === "Gauteng" ? ["Johannesburg", "Pretoria"] : [],
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
-    from: () => ({
-      select: () => ({
-        order: vi.fn().mockResolvedValue({
-          data: [{ id: "mall-1", name: "Maponya Mall", location_city: "Johannesburg" }],
-        }),
-      }),
-    }),
-  }),
-}));
-
 describe("CreateBusinessPage", () => {
   const mockPush = vi.fn();
   const mockToast = vi.fn();
@@ -174,10 +162,26 @@ describe("CreateBusinessPage", () => {
 
     await selectBusinessType(/Mall Store/i);
     fillCoreBusinessFields({ businessName: "Mall Biz", slug: "mall-biz" });
+    fireEvent.change(screen.getByLabelText(/Mall name/i), {
+      target: { value: "Maponya Mall" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(screen.getByText("Store number is required for mall stores.")).toBeInTheDocument();
     expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
+  });
+
+  it("requires mall name for mall stores on step 1", async () => {
+    render(<CreateBusinessPage />);
+
+    await selectBusinessType(/Mall Store/i);
+    fillCoreBusinessFields({ businessName: "Mall Biz", slug: "mall-biz" });
+    fireEvent.change(screen.getByLabelText(/Store Number/i), {
+      target: { value: "12A" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Mall name is required.")).toBeInTheDocument();
   });
 
   it("requires service areas for mobile services on step 1", async () => {

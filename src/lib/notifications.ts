@@ -19,7 +19,7 @@ export interface CreateNotificationInput {
  * @example
  * ```ts
  * await createNotification({
- *   userId: sellerId,
+ *   userId: ownerId,
  *   type: "success",
  *   title: "Your listing was approved!",
  *   message: "Your listing 'Red Sneakers' is now live.",

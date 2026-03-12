@@ -14,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buildPostCategoryHref } from "@/app/post/_lib/post-access";
 import { useAuth } from "@/hooks/use-auth";
-import type { SellerVerificationStatus } from "@/types/enums";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
+import type { AccountVerificationStatus } from "@/types/enums";
 
 const POST_OPTIONS = [
   {
@@ -58,7 +59,7 @@ const POST_OPTIONS = [
   },
 ] as const;
 
-function getVerificationNote(status: SellerVerificationStatus | null | undefined) {
+function getVerificationNote(status: AccountVerificationStatus | null | undefined) {
   switch (status) {
     case "pending_review":
       return "Your verification is under review. You can compare the categories now, but approval is required before you open a posting form.";
@@ -72,7 +73,7 @@ function getVerificationNote(status: SellerVerificationStatus | null | undefined
 
 export function PostCreateClient() {
   const { isLoading, isVerified, profile } = useAuth();
-  const verificationStatus = profile?.seller_verification_status ?? null;
+  const verificationStatus = readAccountVerificationStatus(profile);
 
   return (
     <div className="space-y-4">

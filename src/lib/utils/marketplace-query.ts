@@ -148,7 +148,6 @@ export interface BusinessFiltersFromParams {
   businessType?: BusinessType;
   province?: string;
   city?: string;
-  mall?: string;
   page: number;
 }
 
@@ -191,7 +190,6 @@ export function parseBusinessFiltersFromSearchParams(
     businessType: normalizeBusinessTypeParam(searchParams.get("type")),
     province: normalizeParamValue(searchParams.get("province")),
     city: normalizeParamValue(searchParams.get("city")),
-    mall: normalizeParamValue(searchParams.get("mall")),
     page: normalizeIntegerParam(searchParams.get("page")) ?? 1,
   };
 }
@@ -214,7 +212,6 @@ export interface BusinessFiltersForUrl {
   businessType?: string;
   province?: string;
   city?: string;
-  mall?: string;
 }
 
 function appendIfPresent(params: URLSearchParams, key: string, value: string | number | undefined) {
@@ -264,7 +261,6 @@ export function serializeBusinessFiltersToSearchParams(
   appendIfPresent(params, "type", filters.businessType);
   appendIfPresent(params, "province", filters.province);
   appendIfPresent(params, "city", filters.city);
-  appendIfPresent(params, "mall", filters.mall);
 
   if (page > 1) {
     params.set("page", String(page));

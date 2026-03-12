@@ -9,9 +9,14 @@ import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { isPostingLimitBypassEnabled } from "../../../lib/utils/posting-limit-bypass";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  readAccountVerificationStatus,
+} from "@/lib/account/compat";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
-import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
+import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
+import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
@@ -116,6 +121,10 @@ function matchesAttributeFilters(
   );
 }
 
+function isPlaceholderListing(listing: { title: string | null; description?: string | null }) {
+  return isPlaceholderMarketplaceContent(listing.title, listing.description);
+}
+
 /**
  * GET /api/listings
  *
@@ -131,7 +140,7 @@ export async function GET(request: NextRequest) {
     );
     const offset = (filters.page - 1) * limit;
     const selectClause =
-      "id, seller_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured";
+      "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured";
     const hasAttributeFilters = Object.keys(filters.attributes).length > 0;
 
     let listings: Record<string, unknown>[] = [];
@@ -143,7 +152,15 @@ export async function GET(request: NextRequest) {
 
       while (true) {
         const batchQuery = applyBaseMarketFilters(
-          admin.from("listings").select(selectClause).eq("status", "live").eq("area", AREA),
+          admin
+            .from("listings")
+            .select(selectClause)
+            .eq("status", "live")
+            .eq("area", AREA)
+            .not("title", "ilike", "%seed%")
+            .not("title", "ilike", "%[seed]%")
+            .not("title", "ilike", "%demo%")
+            .not("title", "ilike", "%sample%"),
           filters
         ).range(from, from + batchSize - 1);
 
@@ -178,11 +195,16 @@ export async function GET(request: NextRequest) {
         from += batchSize;
       }
 
-      listings = listings.filter((listing) =>
-        matchesAttributeFilters(
-          (listing.attributes as Record<string, unknown> | null | undefined) ?? {},
-          filters.attributes
-        )
+      listings = listings.filter(
+        (listing) =>
+          !isPlaceholderListing({
+            title: String(listing.title ?? ""),
+            description: typeof listing.description === "string" ? listing.description : null,
+          }) &&
+          matchesAttributeFilters(
+            (listing.attributes as Record<string, unknown> | null | undefined) ?? {},
+            filters.attributes
+          )
       );
       total = listings.length;
       listings = listings.slice(offset, offset + limit);
@@ -192,7 +214,11 @@ export async function GET(request: NextRequest) {
           .from("listings")
           .select(selectClause, { count: "exact" })
           .eq("status", "live")
-          .eq("area", AREA),
+          .eq("area", AREA)
+          .not("title", "ilike", "%seed%")
+          .not("title", "ilike", "%[seed]%")
+          .not("title", "ilike", "%demo%")
+          .not("title", "ilike", "%sample%"),
         filters
       ).range(offset, offset + limit - 1);
 
@@ -218,24 +244,42 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
       }
 
-      listings = (data ?? []) as Record<string, unknown>[];
-      total = count ?? 0;
+      const filteredListings = ((data ?? []) as Record<string, unknown>[]).filter(
+        (listing) =>
+          !isPlaceholderListing({
+            title: String(listing.title ?? ""),
+            description: typeof listing.description === "string" ? listing.description : null,
+          })
+      );
+
+      listings = filteredListings;
+      total = Math.max(
+        0,
+        (count ?? filteredListings.length) - ((data?.length ?? 0) - filteredListings.length)
+      );
     }
 
     const sellerIds = Array.from(
-      new Set(listings.map((listing) => String(listing.seller_id)).filter(Boolean))
+      new Set(listings.map((listing) => String(listing.owner_id)).filter(Boolean))
     );
 
     const { data: sellers } = sellerIds.length
       ? await admin
-          .from("seller_profiles")
-          .select("user_id, display_name, seller_verification_status")
+          .from("account_profiles")
+          .select("user_id, display_name, account_verification_status")
           .in("user_id", sellerIds)
       : { data: [] as Array<Record<string, unknown>> };
 
+    const serializedSellers =
+      sellers?.map((seller) => ({
+        user_id: seller.user_id,
+        display_name: seller.display_name,
+        account_verification_status: readAccountVerificationStatus(seller),
+      })) ?? [];
+
     return NextResponse.json({
       listings,
-      sellers: sellers ?? [],
+      sellers: serializedSellers,
       total,
       page: filters.page,
       limit,
@@ -282,18 +326,18 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient();
 
-    // ── Get seller profile ───────────────────────────────────
+    // ── Get account profile ──────────────────────────────────
     const { data: profile } = await admin
-      .from("seller_profiles")
-      .select("id, seller_verification_status")
+      .from("account_profiles")
+      .select("id, account_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedSeller(profile.seller_verification_status ?? null)) {
+    if (!isVerifiedMember(readAccountVerificationStatus(profile))) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
@@ -365,7 +409,7 @@ export async function POST(request: NextRequest) {
       const { count } = await admin
         .from("listings")
         .select("id", { count: "exact", head: true })
-        .eq("seller_id", user.id)
+        .eq("owner_id", user.id)
         .neq("status", "rejected");
 
       const currentCount = count ?? 0;
@@ -423,7 +467,7 @@ export async function POST(request: NextRequest) {
     const priceCents = Math.round(data.price_zar * 100);
 
     const listingRecord = {
-      seller_id: user.id,
+      owner_id: user.id,
       title: data.title,
       description: data.description,
       price_cents: priceCents,
@@ -478,7 +522,7 @@ export async function POST(request: NextRequest) {
     // ── Audit log ────────────────────────────────────────────
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: "listing_created",
       targetType: "listing",
       targetId: newListing.id,

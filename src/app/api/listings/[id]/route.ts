@@ -87,7 +87,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // ── Check listing exists and user owns it ────────────────
     const { data: listing } = await admin
       .from("listings")
-      .select("id, seller_id, status, area, photos, videos, video_thumbnail")
+      .select("id, owner_id, status, area, photos, videos, video_thumbnail")
       .eq("id", listingId)
       .maybeSingle();
 
@@ -95,7 +95,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
 
-    if (listing.seller_id !== user.id) {
+    if (listing.owner_id !== user.id) {
       return NextResponse.json(
         { error: "Forbidden — you do not own this listing" },
         { status: 403 }
@@ -201,7 +201,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       .from("listings")
       .update(updateRecord)
       .eq("id", listingId)
-      .eq("seller_id", user.id); // Double-check ownership at DB level
+      .eq("owner_id", user.id); // Double-check ownership at DB level
 
     if (updateError) {
       log.error("Failed to update listing", {
@@ -229,7 +229,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // ── Audit log ────────────────────────────────────────────
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: "listing_updated",
       targetType: "listing",
       targetId: listingId,

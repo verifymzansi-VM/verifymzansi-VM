@@ -9,8 +9,14 @@ import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  ACCOUNT_PROFILE_WRITE_TABLE,
+  readAccountVerificationStatus,
+} from "@/lib/account/compat";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
-import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
+import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
+import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -19,7 +25,7 @@ const AREA: MarketplaceArea = "MZANSI_BUSINESS";
  * POST /api/businesses
  *
  * Create a new Mzansi Business listing.
- * Requires authenticated, verified seller.
+ * Requires an authenticated, verified account.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -46,18 +52,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check seller profile exists
+    // Check account profile exists
     const { data: profile } = await admin
-      .from("seller_profiles")
-      .select("id, seller_verification_status")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
+      .select("id, account_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedSeller(profile.seller_verification_status ?? null)) {
+    if (!isVerifiedMember(readAccountVerificationStatus(profile))) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
@@ -117,7 +123,7 @@ export async function POST(request: NextRequest) {
       const { count } = await admin
         .from("businesses")
         .select("id", { count: "exact", head: true })
-        .eq("seller_id", user.id)
+        .eq("owner_id", user.id)
         .neq("status", "rejected");
 
       const check = canCreateListing(count ?? 0, tier as PlanTier, AREA);
@@ -156,7 +162,7 @@ export async function POST(request: NextRequest) {
     const { data: business, error: insertError } = await admin
       .from("businesses")
       .insert({
-        seller_id: user.id,
+        owner_id: user.id,
         area: AREA,
         business_type: data.business_type,
         business_name: data.business_name,
@@ -171,7 +177,6 @@ export async function POST(request: NextRequest) {
         location_province: data.location_province,
         location_city: data.location_city,
         store_number: data.store_number || null,
-        mall_id: data.mall_id || null,
         map_directions: data.map_directions || null,
         phone: data.phone || null,
         whatsapp: data.whatsapp || null,
@@ -211,7 +216,7 @@ export async function POST(request: NextRequest) {
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "listing_created",
         targetType: "business",
         targetId: business.id,
@@ -251,11 +256,15 @@ export async function GET(request: NextRequest) {
         // Fallback: manual query
         const { data: businesses } = await admin
           .from("businesses")
-          .select("category")
-          .eq("status", "live");
+          .select("category, business_name, description")
+          .eq("status", "live")
+          .eq("area", "MZANSI_BUSINESS");
 
         const categoryCounts: Record<string, number> = {};
         for (const b of businesses ?? []) {
+          if (isPlaceholderMarketplaceContent(b.business_name, b.description)) {
+            continue;
+          }
           categoryCounts[b.category] = (categoryCounts[b.category] || 0) + 1;
         }
         return NextResponse.json({ categoryCounts });
@@ -284,7 +293,7 @@ export async function GET(request: NextRequest) {
       const { data: myBusinesses } = await admin
         .from("businesses")
         .select("id, business_name, business_type, category, status, created_at")
-        .eq("seller_id", user.id)
+        .eq("owner_id", user.id)
         .order("created_at", { ascending: false })
         .limit(mineLimit);
 
@@ -296,22 +305,25 @@ export async function GET(request: NextRequest) {
     const province = searchParams.get("province");
     const city = searchParams.get("city");
     const search = searchParams.get("q");
-    const mallId = searchParams.get("mall");
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
     const offset = (page - 1) * limit;
 
     const primarySelect =
-      "id, seller_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at";
+      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at";
     const fallbackSelect =
-      "id, seller_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at";
+      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at";
 
     const buildQuery = (selectClause: string) => {
       let query = admin
         .from("businesses")
         .select(selectClause, { count: "exact" })
         .eq("status", "live")
-        .eq("area", "MZANSI_BUSINESS");
+        .eq("area", "MZANSI_BUSINESS")
+        .not("business_name", "ilike", "%seed%")
+        .not("business_name", "ilike", "%[seed]%")
+        .not("business_name", "ilike", "%demo%")
+        .not("business_name", "ilike", "%sample%");
 
       if (businessType) {
         query = query.eq("business_type", businessType);
@@ -324,9 +336,6 @@ export async function GET(request: NextRequest) {
       }
       if (city) {
         query = query.eq("location_city", city);
-      }
-      if (mallId) {
-        query = query.eq("mall_id", mallId);
       }
       if (search) {
         // Escape PostgREST special characters to prevent filter injection

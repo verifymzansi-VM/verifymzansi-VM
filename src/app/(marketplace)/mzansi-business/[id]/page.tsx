@@ -4,6 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import {
+  ACCOUNT_PROFILE_TABLE,
+  readAccountVerificationStatus,
+  readOwnerId,
+} from "@/lib/account/compat";
 import { BusinessDetailContent } from "@/components/business/business-detail-content";
 
 interface BusinessDetailPageProps {
@@ -44,16 +49,14 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
     notFound();
   }
 
-  const linkedMall = business.mall_id
-    ? (await supabase.from("malls").select("id, name").eq("id", business.mall_id).maybeSingle())
-        .data
-    : null;
-
-  const { data: seller } = await supabase
-    .from("seller_profiles")
-    .select("display_name, seller_verification_status")
-    .eq("user_id", business.seller_id)
-    .maybeSingle();
+  const businessOwnerId = readOwnerId(business);
+  const { data: ownerProfile } = businessOwnerId
+    ? await supabase
+        .from(ACCOUNT_PROFILE_TABLE)
+        .select("display_name, account_verification_status")
+        .eq("user_id", businessOwnerId)
+        .maybeSingle()
+    : { data: null };
 
   const { data: promotions } = await supabase
     .from("promotions")
@@ -65,7 +68,9 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
     .order("created_at", { ascending: false })
     .limit(12);
 
-  const trustLevel = seller ? computeTrustLevel(seller.seller_verification_status ?? null) : null;
+  const trustLevel = ownerProfile
+    ? computeTrustLevel(readAccountVerificationStatus(ownerProfile))
+    : null;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -94,8 +99,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
           <BusinessDetailContent
             business={business}
             trustLevel={trustLevel}
-            seller={seller}
-            linkedMall={linkedMall}
+            ownerProfile={ownerProfile}
             promotions={promotions ?? []}
           />
         </div>

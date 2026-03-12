@@ -239,7 +239,7 @@ function MediaRender({
       el.removeEventListener("pause", onPause);
       el.removeEventListener("playing", onPlaying);
     };
-  });
+  }, [videoRef]);
 
   const handleVideoError = () => {
     setHasError(true);
@@ -451,7 +451,7 @@ export function HeroBanner({
           type: "promotion" as const,
           id: promotion.id,
           title: promotion.title,
-          description: promotion.description || "Latest promotion from a verified seller.",
+          description: promotion.description || "Latest promotion from a verified advertiser.",
           location: promotion.location_city || "South Africa",
           mediaUrl: normalizeMediaUrl(
             usesVideo
@@ -545,7 +545,10 @@ export function HeroBanner({
                   >
                     {activeSlide.promotions && activeSlide.promotions.length > 0 && (
                       <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-red-500/90 text-white text-xs font-bold animate-pulse">
-                        🔥 {activeSlide.promotions[0].title}
+                        <span role="img" aria-label="Hot deal">
+                          🔥
+                        </span>{" "}
+                        {activeSlide.promotions[0].title}
                       </div>
                     )}
 

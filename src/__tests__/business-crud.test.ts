@@ -20,7 +20,7 @@ vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 
-import { POST } from "@/app/api/businesses/route";
+import { GET, POST } from "@/app/api/businesses/route";
 
 const USER_ID = "user-1";
 
@@ -60,12 +60,15 @@ describe("POST /api/businesses", () => {
   it("blocks a second free post when no paid plan exists", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
             }),
           };
         }
@@ -104,12 +107,15 @@ describe("POST /api/businesses", () => {
   it("blocks cover video uploads when the plan does not allow them", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
             }),
           };
         }
@@ -157,12 +163,15 @@ describe("POST /api/businesses", () => {
 
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
             }),
           };
         }
@@ -216,12 +225,15 @@ describe("POST /api/businesses", () => {
   it("rejects business media hosted outside the platform", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "verified" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
             }),
           };
         }
@@ -246,15 +258,18 @@ describe("POST /api/businesses", () => {
     });
   });
 
-  it("returns verification_required for unverified sellers", async () => {
+  it("returns verification_required for unverified accounts", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
-        if (table === "seller_profiles") {
+        if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: "seller-1", seller_verification_status: "rejected" },
+              data: {
+                id: "seller-1",
+                account_verification_status: "rejected",
+              },
             }),
           };
         }
@@ -273,5 +288,42 @@ describe("POST /api/businesses", () => {
       error: "Verification required",
       code: "verification_required",
     });
+  });
+});
+
+describe("GET /api/businesses", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("applies placeholder-content exclusions to public business queries", async () => {
+    const rangeSpy = vi.fn().mockResolvedValue({ data: [], count: 0, error: null });
+    const orderSpy = vi.fn().mockReturnThis();
+    const notSpy = vi.fn().mockReturnThis();
+    const eqSpy = vi.fn().mockReturnThis();
+    const selectSpy = vi.fn().mockReturnThis();
+    const fromSpy = vi.fn().mockReturnValue({
+      select: selectSpy,
+      eq: eqSpy,
+      not: notSpy,
+      order: orderSpy,
+      range: rangeSpy,
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: fromSpy,
+    });
+
+    const request = {
+      nextUrl: new URL("http://localhost:3000/api/businesses?page=1&limit=24"),
+    } as NextRequest;
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    expect(notSpy).toHaveBeenCalledWith("business_name", "ilike", "%seed%");
+    expect(notSpy).toHaveBeenCalledWith("business_name", "ilike", "%[seed]%");
+    expect(notSpy).toHaveBeenCalledWith("business_name", "ilike", "%demo%");
+    expect(notSpy).toHaveBeenCalledWith("business_name", "ilike", "%sample%");
   });
 });

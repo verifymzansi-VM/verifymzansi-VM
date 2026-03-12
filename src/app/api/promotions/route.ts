@@ -8,11 +8,21 @@ import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
-import { type MarketplaceArea, type PlanTier, type PromotionEventState } from "@/types/enums";
+import {
+  type MarketplaceArea,
+  type PlanTier,
+  type PromotionEventState,
+  type PromotionType,
+} from "@/types/enums";
 import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
 import { normalizeBusinessCategoryParam } from "@/lib/utils/marketplace-query";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import { createVerificationRequiredPayload, isVerifiedSeller } from "@/app/post/_lib/post-access";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  readAccountVerificationStatus,
+} from "@/lib/account/compat";
+import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
+import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -22,6 +32,33 @@ type PromotionQueryOps = {
   gt: (column: string, value: string) => PromotionQueryOps;
   lt: (column: string, value: string) => PromotionQueryOps;
   or: (filters: string) => PromotionQueryOps;
+};
+
+type PromotionResultRow = {
+  id: string;
+  owner_id?: string | null;
+  seller_id?: string | null;
+  business_id?: string | null;
+  title: string | null;
+  description?: string | null;
+  promotion_type: string;
+  category?: string | null;
+  category_key?: string | null;
+  photos?: string[] | null;
+  videos?: string[] | null;
+  video_thumbnail?: string | null;
+  price_cents?: number | null;
+  price_negotiable?: boolean;
+  location_province?: string;
+  location_city?: string;
+  contact_methods?: string[] | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  boost_until?: string | null;
+  featured_until?: string | null;
+  view_count?: number | null;
+  published_at?: string | null;
+  created_at: string;
 };
 
 function normalizeEventStateParam(value: string | null): PromotionEventState | null {
@@ -55,11 +92,15 @@ function applyEventStateFilter<T>(query: T, eventState: PromotionEventState, now
   }
 }
 
+function isPlaceholderPromotion(promotion: { title: string | null; description?: string | null }) {
+  return isPlaceholderMarketplaceContent(promotion.title, promotion.description);
+}
+
 /**
  * POST /api/promotions
  *
  * Create a new standalone promotion / advertisement.
- * Requires authenticated, verified seller with a valid entitlement or free post.
+ * Requires an authenticated, verified account with a valid entitlement or free post.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -86,18 +127,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check seller profile exists
+    // Check account profile exists
     const { data: profile } = await admin
-      .from("seller_profiles")
-      .select("id, seller_verification_status")
+      .from("account_profiles")
+      .select("id, account_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedSeller(profile.seller_verification_status ?? null)) {
+    if (!isVerifiedMember(readAccountVerificationStatus(profile))) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
@@ -143,7 +184,7 @@ export async function POST(request: NextRequest) {
       const { count } = await admin
         .from("promotions")
         .select("id", { count: "exact", head: true })
-        .eq("seller_id", user.id)
+        .eq("owner_id", user.id)
         .neq("status", "rejected");
 
       const currentCount = count ?? 0;
@@ -216,7 +257,7 @@ export async function POST(request: NextRequest) {
     const { data: promotion, error: insertError } = await admin
       .from("promotions")
       .insert({
-        seller_id: user.id,
+        owner_id: user.id,
         title: data.title,
         description: data.description,
         promotion_type: data.promotion_type,
@@ -261,7 +302,7 @@ export async function POST(request: NextRequest) {
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "listing_created",
         targetType: "promotion",
         targetId: promotion.id,
@@ -309,81 +350,150 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
     const nowIso = new Date().toISOString();
 
-    let query = admin
-      .from("promotions")
-      .select(
-        "id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
-        { count: "exact" }
-      )
-      .eq("status", "live");
+    const buildQuery = (selectClause: string) => {
+      let query = admin
+        .from("promotions")
+        .select(selectClause, { count: "exact" })
+        .eq("status", "live")
+        .not("title", "ilike", "%seed%")
+        .not("title", "ilike", "%[seed]%")
+        .not("title", "ilike", "%demo%")
+        .not("title", "ilike", "%sample%");
 
-    if (promotionType) {
-      query = query.eq("promotion_type", promotionType);
-    }
-    if (businessId) {
-      query = query.eq("business_id", businessId);
-    }
-    if (categoryKey) {
-      query = query.eq("category_key", categoryKey);
-    }
-    if (province) {
-      query = query.eq("location_province", province);
-    }
-    if (city) {
-      query = query.eq("location_city", city);
-    }
-    if (search) {
-      // Escape PostgREST special characters to prevent filter injection
-      const safeSearch = search.replace(/[,.()\\/]/g, "");
-      if (safeSearch) {
-        query = query.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
+      if (promotionType) {
+        query = query.eq("promotion_type", promotionType);
+      }
+      if (businessId) {
+        query = query.eq("business_id", businessId);
+      }
+      if (categoryKey && selectClause.includes("category_key")) {
+        query = query.eq("category_key", categoryKey);
+      }
+      if (province) {
+        query = query.eq("location_province", province);
+      }
+      if (city) {
+        query = query.eq("location_city", city);
+      }
+      if (search) {
+        const safeSearch = search.replace(/[,.()\\/]/g, "");
+        if (safeSearch) {
+          query = query.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
+        }
+      }
+      if (eventState) {
+        query = applyEventStateFilter(query, eventState, nowIso);
+      }
+
+      return query
+        .order("boost_until", { ascending: false, nullsFirst: false })
+        .order("featured_until", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+    };
+
+    const primarySelect =
+      "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at";
+    const fallbackWithoutCategoryKey =
+      "id, owner_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at";
+    const legacyOwnerSelect =
+      "id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at";
+    const legacyOwnerWithoutCategoryKey =
+      "id, seller_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at";
+
+    const attempts: Array<{ select: string; usesLegacyOwner: boolean; hasCategoryKey: boolean }> = [
+      { select: primarySelect, usesLegacyOwner: false, hasCategoryKey: true },
+      { select: fallbackWithoutCategoryKey, usesLegacyOwner: false, hasCategoryKey: false },
+      { select: legacyOwnerSelect, usesLegacyOwner: true, hasCategoryKey: true },
+      { select: legacyOwnerWithoutCategoryKey, usesLegacyOwner: true, hasCategoryKey: false },
+    ];
+
+    let promotions: PromotionResultRow[] | null = null;
+    let count: number | null = null;
+    let error: { message: string } | null = null;
+    let selectedAttempt = attempts[0];
+
+    for (const attempt of attempts) {
+      const result = await buildQuery(attempt.select);
+      if (!result.error) {
+        promotions = (result.data ?? []) as unknown as PromotionResultRow[];
+        count = result.count;
+        error = null;
+        selectedAttempt = attempt;
+        break;
+      }
+
+      error = result.error;
+
+      const message = result.error.message.toLowerCase();
+      const canRetry =
+        message.includes("category_key") ||
+        message.includes("owner_id") ||
+        message.includes("seller_id");
+
+      if (!canRetry || attempt === attempts[attempts.length - 1]) {
+        break;
       }
     }
-    if (eventState) {
-      query = applyEventStateFilter(query, eventState, nowIso);
-    }
-
-    // Order: boosted first, then featured, then newest
-    query = query
-      .order("boost_until", { ascending: false, nullsFirst: false })
-      .order("featured_until", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    const { data: promotions, count, error } = await query;
 
     if (error) {
       log.error("Failed to fetch promotions", { error: error.message });
       return NextResponse.json({ error: "Failed to fetch promotions" }, { status: 500 });
     }
 
-    const sellerIds = Array.from(
-      new Set((promotions ?? []).map((promotion) => promotion.seller_id).filter(Boolean))
+    const normalizedPromotions = (promotions ?? []).map((promotion) => {
+      const normalizedCategoryKey = selectedAttempt.hasCategoryKey
+        ? (promotion.category_key ?? null)
+        : inferPromotionCategoryKey(
+            promotion.category ?? null,
+            promotion.promotion_type as PromotionType
+          );
+      const ownerId = selectedAttempt.usesLegacyOwner
+        ? (promotion.seller_id ?? null)
+        : (promotion.owner_id ?? null);
+
+      return {
+        ...promotion,
+        owner_id: ownerId,
+        category_key: normalizedCategoryKey,
+      };
+    });
+
+    const filteredPromotions = normalizedPromotions.filter(
+      (promotion) => !isPlaceholderPromotion(promotion)
+    );
+    const removedCount = (promotions?.length ?? 0) - filteredPromotions.length;
+
+    const accountIds = Array.from(
+      new Set(filteredPromotions.map((promotion) => promotion.owner_id).filter(Boolean))
     );
     const businessIds = Array.from(
-      new Set((promotions ?? []).map((promotion) => promotion.business_id).filter(Boolean))
+      new Set(filteredPromotions.map((promotion) => promotion.business_id).filter(Boolean))
     ) as string[];
 
-    const { data: sellers } = sellerIds.length
+    const { data: accountProfiles } = accountIds.length
       ? await admin
-          .from("seller_profiles")
-          .select("user_id, display_name, seller_verification_status")
-          .in("user_id", sellerIds)
+          .from("account_profiles")
+          .select("user_id, display_name, account_verification_status")
+          .in("user_id", accountIds)
       : { data: [] };
     const { data: businesses } = businessIds.length
       ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
       : { data: [] };
 
+    const serializedAccountProfiles =
+      accountProfiles?.map((accountProfile) => ({
+        user_id: accountProfile.user_id,
+        display_name: accountProfile.display_name,
+        trust: computeTrustLevel(readAccountVerificationStatus(accountProfile)),
+      })) ?? [];
+
     return NextResponse.json({
-      promotions: promotions ?? [],
-      sellers:
-        sellers?.map((seller) => ({
-          user_id: seller.user_id,
-          display_name: seller.display_name,
-          trust: computeTrustLevel(seller.seller_verification_status ?? null),
-        })) ?? [],
+      promotions: filteredPromotions,
+      accountProfiles: serializedAccountProfiles,
+      sellers: serializedAccountProfiles,
       businesses: businesses ?? [],
-      total: count ?? 0,
+      total: Math.max(0, (count ?? filteredPromotions.length) - removedCount),
       page,
       limit,
     });

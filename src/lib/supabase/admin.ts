@@ -1,6 +1,10 @@
 import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  createPlaywrightStubSupabaseClient,
+  isPlaywrightSupabaseStubMode,
+} from "@/lib/supabase/playwright-stub";
 
 /**
  * Service-role Supabase client for server-only operations.
@@ -14,6 +18,10 @@ let cachedUrl: string | null = null;
 let cachedKey: string | null = null;
 
 export function createAdminClient(): SupabaseClient {
+  if (isPlaywrightSupabaseStubMode()) {
+    return createPlaywrightStubSupabaseClient() as unknown as SupabaseClient;
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 

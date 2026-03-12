@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useTransition, useRef } from "react";
 import { ListingCard } from "@/components/listings/listing-card";
 import { ListingCardList } from "@/components/listings/listing-card-list";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import type { ListingCondition, SellerVerificationStatus } from "@/types/enums";
+import type { ListingCondition, AccountVerificationStatus } from "@/types/enums";
 import { useMarketplaceStore } from "@/stores";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { PackageOpen, Plus, AlertTriangle, LayoutGrid, List } from "lucide-react";
@@ -35,18 +35,18 @@ interface ListingRow {
   video_thumbnail: string | null;
   boost_until: string | null;
   featured: boolean;
-  seller_id: string;
+  owner_id: string;
 }
 
-interface SellerRow {
+interface OwnerRow {
   user_id: string;
   display_name: string;
-  seller_verification_status: string;
+  account_verification_status: string;
 }
 
 interface ListingsResponse {
   listings?: ListingRow[];
-  sellers?: SellerRow[];
+  sellers?: OwnerRow[];
   total?: number;
   page?: number;
   limit?: number;
@@ -66,16 +66,22 @@ type ViewMode = "grid" | "list";
 export function MzansiMarketGrid() {
   const { filters, page, setPage, setFilter, resetFilters } = useMarketplaceStore();
   const [listings, setListings] = useState<ListingRow[]>([]);
-  const [sellers, setSellers] = useState<Map<string, SellerRow>>(new Map());
+  const [sellers, setSellers] = useState<Map<string, OwnerRow>>(new Map());
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<GridFetchError | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [, startTransition] = useTransition();
   const fetchGenRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchListings = useCallback(
     async (gen: number) => {
+      // Abort any in-flight request
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       setLoading(true);
 
       const params = serializeMarketplaceFiltersToSearchParams(
@@ -97,6 +103,7 @@ export function MzansiMarketGrid() {
       try {
         const response = await fetch(`/api/listings?${params.toString()}`, {
           cache: "no-store",
+          signal: controller.signal,
         });
         const payload = (await response.json()) as ListingsResponse;
 
@@ -275,7 +282,7 @@ export function MzansiMarketGrid() {
 
         {!hasFilters && !hasQueryError && (
           <Button asChild size="lg" className="mt-2 shadow-md">
-            <Link href="/post/create-listing">
+            <Link href="/post/create">
               <Plus className="mr-1.5 h-4 w-4" />
               Post Your First Ad
             </Link>
@@ -336,9 +343,9 @@ export function MzansiMarketGrid() {
             const videoUrl = listing.videos?.[0];
             const displayUrl = videoUrl || listing.photos?.[0];
             const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
-            const seller = sellers.get(listing.seller_id);
+            const seller = sellers.get(listing.owner_id);
             const trustLevel = computeTrustLevel(
-              (seller?.seller_verification_status ?? null) as SellerVerificationStatus | null
+              (seller?.account_verification_status ?? null) as AccountVerificationStatus | null
             );
             const isBoosted = listing.boost_until
               ? new Date(listing.boost_until) > new Date()
@@ -347,7 +354,8 @@ export function MzansiMarketGrid() {
             return (
               <div
                 key={listing.id}
-                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms]"
+                style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
               >
                 <ListingCard
                   id={listing.id}
@@ -362,8 +370,8 @@ export function MzansiMarketGrid() {
                   attributes={listing.attributes}
                   condition={listing.condition ?? undefined}
                   createdAt={listing.created_at}
-                  sellerTrustLevel={trustLevel}
-                  sellerName={seller?.display_name}
+                  ownerTrustLevel={trustLevel}
+                  ownerName={seller?.display_name}
                   boosted={isBoosted}
                   featured={listing.featured}
                 />
@@ -377,9 +385,9 @@ export function MzansiMarketGrid() {
             const videoUrl = listing.videos?.[0];
             const displayUrl = videoUrl || listing.photos?.[0];
             const posterSrc = listing.video_thumbnail || listing.photos?.[0] || undefined;
-            const seller = sellers.get(listing.seller_id);
+            const seller = sellers.get(listing.owner_id);
             const trustLevel = computeTrustLevel(
-              (seller?.seller_verification_status ?? null) as SellerVerificationStatus | null
+              (seller?.account_verification_status ?? null) as AccountVerificationStatus | null
             );
             const isBoosted = listing.boost_until
               ? new Date(listing.boost_until) > new Date()
@@ -388,7 +396,8 @@ export function MzansiMarketGrid() {
             return (
               <div
                 key={listing.id}
-                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms]"
+                style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
               >
                 <ListingCardList
                   id={listing.id}
@@ -403,8 +412,8 @@ export function MzansiMarketGrid() {
                   attributes={listing.attributes}
                   condition={listing.condition ?? undefined}
                   createdAt={listing.created_at}
-                  sellerTrustLevel={trustLevel}
-                  sellerName={seller?.display_name}
+                  ownerTrustLevel={trustLevel}
+                  ownerName={seller?.display_name}
                   viewCount={undefined}
                   boosted={isBoosted}
                   featured={listing.featured}

@@ -12,6 +12,7 @@ import {
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
 import crypto from "crypto";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("VerificationUpload");
 
@@ -29,10 +30,10 @@ function getDefaultDisplayName(user: { email?: string | null; user_metadata?: un
   }
 
   if (user.email) {
-    return user.email.split("@")[0] || "New Seller";
+    return user.email.split("@")[0] || "New Member";
   }
 
-  return "New Seller";
+  return "New Member";
 }
 
 /**
@@ -129,17 +130,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: fileValidation.error }, { status: 400 });
     }
 
-    // ── Get seller profile ───────────────────────────────────
+    // ── Get account profile ──────────────────────────────────
     const admin = createAdminClient();
     let { data: profile } = await admin
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!profile) {
       const { data: createdProfile, error: createProfileError } = await admin
-        .from("seller_profiles")
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .upsert(
           {
             user_id: user.id,
@@ -151,9 +152,11 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (createProfileError || !createdProfile) {
-        log.error("Failed to auto-create seller profile", { error: createProfileError?.message });
+        log.error("Failed to auto-create account profile", {
+          error: createProfileError?.message,
+        });
         return NextResponse.json(
-          { error: "Failed to initialize seller profile. Please try again." },
+          { error: "Failed to initialize account profile. Please try again." },
           { status: 500 }
         );
       }
@@ -364,22 +367,26 @@ export async function POST(request: NextRequest) {
         .is("finalized_at", null); // CAS guard: prevent double finalization
     }
 
-    // ── Update seller verification status to pending_review ──
+    // ── Update account verification status to pending_review ─
     const { data: statusUpdated } = await admin
-      .from("seller_profiles")
-      .update({ seller_verification_status: "pending_review" })
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
+      .update({
+        account_verification_status: "pending_review",
+      })
       .eq("id", profile.id)
-      .in("seller_verification_status", ["incomplete", "rejected"])
+      .in("account_verification_status", ["incomplete", "rejected"])
       .select("id");
 
     if (statusUpdated?.length) {
-      log.info("Seller status promoted to pending_review", { profileId: profile.id });
+      log.info("Account verification status promoted to pending_review", {
+        profileId: profile.id,
+      });
     }
 
     // ── Audit log ────────────────────────────────────────────
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: "verification_submitted",
       targetType: "kyc_artifact",
       targetId: artifact.id,

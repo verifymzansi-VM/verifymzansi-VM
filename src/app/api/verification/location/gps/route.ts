@@ -11,6 +11,7 @@ import { reverseGeocode, computeLocationConfidence } from "@/lib/services/geocod
 import { logAuditEvent } from "@/lib/services/audit";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { createLogger } from "@/lib/utils/logger";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 
 const log = createLogger("GpsVerification");
 import { parseJsonRequest } from "@/lib/utils/api";
@@ -95,15 +96,15 @@ export async function POST(request: NextRequest) {
 
     const adminClient = createAdminClient();
 
-    // Check seller profile exists
+    // Check account profile exists
     const { data: profile } = await adminClient
-      .from("seller_profiles")
+      .from("account_profiles")
       .select("id")
       .eq("user_id", user.id)
       .single();
 
     if (!profile) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
     // Reverse geocode
@@ -207,9 +208,9 @@ export async function POST(request: NextRequest) {
       { onConflict: "user_id" }
     );
 
-    // Update seller profile
+    // Update account profile
     await adminClient
-      .from("seller_profiles")
+      .from("account_profiles")
       .update({
         location_province: province,
         location_city: city,
@@ -218,15 +219,17 @@ export async function POST(request: NextRequest) {
 
     // Set pending_review if currently incomplete
     await adminClient
-      .from("seller_profiles")
-      .update({ seller_verification_status: "pending_review" })
+      .from("account_profiles")
+      .update({
+        account_verification_status: "pending_review",
+      })
       .eq("user_id", user.id)
-      .in("seller_verification_status", ["incomplete", "rejected"]);
+      .in("account_verification_status", ["incomplete", "rejected"]);
 
     // Audit log
     await logAuditEvent({
       actorId: user.id,
-      actorRole: "seller",
+      actorRole: "member",
       action: "kyc_gps_submitted",
       targetType: "verification_step",
       targetId: step.id,

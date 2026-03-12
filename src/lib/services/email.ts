@@ -106,7 +106,7 @@ async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
  */
 export async function sendVerificationApprovedEmail(
   email: string,
-  sellerName: string
+  accountName: string
 ): Promise<SendEmailResult> {
   const subject = "🎉 Your VerifyMzansi Account is Verified!";
   const html = `
@@ -129,7 +129,7 @@ export async function sendVerificationApprovedEmail(
             <h1 style="margin: 0;">✅ Verification Approved</h1>
           </div>
           <div class="content">
-            <p>Hi ${escapeHtml(sellerName)},</p>
+            <p>Hi ${escapeHtml(accountName)},</p>
             <p>Great news! Your VerifyMzansi account has been successfully verified.</p>
             <p>You can now:</p>
             <ul>
@@ -152,7 +152,7 @@ export async function sendVerificationApprovedEmail(
     </html>
   `;
 
-  const text = `Hi ${sellerName},\n\nGreat news! Your VerifyMzansi account has been successfully verified.\n\nYou can now create listings, set up profiles, and connect with buyers.\n\nVisit your dashboard: ${sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL)}/dashboard\n\nThank you for choosing VerifyMzansi.`;
+  const text = `Hi ${accountName},\n\nGreat news! Your VerifyMzansi account has been successfully verified.\n\nYou can now create listings, set up profiles, and connect with buyers.\n\nVisit your dashboard: ${sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL)}/dashboard\n\nThank you for choosing VerifyMzansi.`;
 
   return sendEmail({ to: email, subject, html, text });
 }
@@ -162,7 +162,7 @@ export async function sendVerificationApprovedEmail(
  */
 export async function sendVerificationRejectedEmail(
   email: string,
-  sellerName: string,
+  accountName: string,
   reason: string
 ): Promise<SendEmailResult> {
   const subject = "VerifyMzansi Verification Update";
@@ -186,7 +186,7 @@ export async function sendVerificationRejectedEmail(
             <h1 style="margin: 0;">Verification Review Required</h1>
           </div>
           <div class="content">
-            <p>Hi ${escapeHtml(sellerName)},</p>
+            <p>Hi ${escapeHtml(accountName)},</p>
             <p>We've reviewed your verification submission, and unfortunately we need you to resubmit some information.</p>
             <p><strong>Reason:</strong> ${escapeHtml(reason)}</p>
             <p>Please review the requirements and submit again:</p>
@@ -204,7 +204,7 @@ export async function sendVerificationRejectedEmail(
     </html>
   `;
 
-  const text = `Hi ${sellerName},\n\nWe've reviewed your verification submission and need you to resubmit some information.\n\nReason: ${reason}\n\nPlease resubmit at: ${sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL)}/verification\n\nContact us if you have questions.`;
+  const text = `Hi ${accountName},\n\nWe've reviewed your verification submission and need you to resubmit some information.\n\nReason: ${reason}\n\nPlease resubmit at: ${sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL)}/verification\n\nContact us if you have questions.`;
 
   return sendEmail({ to: email, subject, html, text });
 }
@@ -214,7 +214,7 @@ export async function sendVerificationRejectedEmail(
  */
 export async function sendPaymentReceiptEmail(
   email: string,
-  sellerName: string,
+  accountName: string,
   amount: number,
   planName: string,
   invoiceUrl?: string
@@ -243,7 +243,7 @@ export async function sendPaymentReceiptEmail(
             <h1 style="margin: 0;">✅ Payment Received</h1>
           </div>
           <div class="content">
-            <p>Hi ${escapeHtml(sellerName)},</p>
+            <p>Hi ${escapeHtml(accountName)},</p>
             <p>Thank you for your payment. Your subscription is now active!</p>
             <div class="receipt">
               <div class="row">
@@ -283,17 +283,17 @@ export async function sendPaymentReceiptEmail(
     </html>
   `;
 
-  const text = `Hi ${sellerName},\n\nThank you for your payment!\n\nPlan: ${planName}\nAmount: R ${amount.toFixed(2)}\nStatus: Active\n\nYour subscription will renew automatically in 30 days.\n\nBest regards,\nThe VerifyMzansi Team`;
+  const text = `Hi ${accountName},\n\nThank you for your payment!\n\nPlan: ${planName}\nAmount: R ${amount.toFixed(2)}\nStatus: Active\n\nYour subscription will renew automatically in 30 days.\n\nBest regards,\nThe VerifyMzansi Team`;
 
   return sendEmail({ to: email, subject, html, text });
 }
 
 /**
- * Send contact form submission notification to seller
+ * Send contact form submission notification to the listing owner
  */
 export async function sendContactFormNotification(
   email: string,
-  sellerName: string,
+  ownerName: string,
   buyerName: string,
   buyerEmail: string,
   message: string,
@@ -321,7 +321,7 @@ export async function sendContactFormNotification(
             <h1 style="margin: 0;">📬 New Inquiry</h1>
           </div>
           <div class="content">
-            <p>Hi ${escapeHtml(sellerName)},</p>
+            <p>Hi ${escapeHtml(ownerName)},</p>
             <p>You have a new inquiry about your listing: <strong>${escapeHtml(listingTitle)}</strong></p>
             <p><strong>From:</strong> ${escapeHtml(buyerName)}<br>
             <strong>Email:</strong> ${escapeHtml(buyerEmail)}</p>
@@ -342,7 +342,7 @@ export async function sendContactFormNotification(
     </html>
   `;
 
-  const text = `Hi ${sellerName},\n\nYou have a new inquiry about: ${listingTitle}\n\nFrom: ${buyerName}\nEmail: ${buyerEmail}\n\nMessage:\n${message}\n\nReply to this email to respond.\n\nView all leads: ${sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL)}/dashboard/leads`;
+  const text = `Hi ${ownerName},\n\nYou have a new inquiry about: ${listingTitle}\n\nFrom: ${buyerName}\nEmail: ${buyerEmail}\n\nMessage:\n${message}\n\nReply to this email to respond.\n\nView all leads: ${sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL)}/dashboard/leads`;
 
   return sendEmail({ to: email, subject, html, text });
 }

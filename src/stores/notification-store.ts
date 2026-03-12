@@ -19,7 +19,7 @@ interface NotificationState {
     n: Omit<Notification, "id" | "read" | "createdAt"> & { id?: string; createdAt?: string }
   ) => void;
   /** Replace the entire notification list (used for initial API hydration). */
-  hydrateNotifications: (notifications: Notification[]) => void;
+  hydrateNotifications: (notifications: Notification[], unreadCount?: number) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
   removeNotification: (id: string) => void;
@@ -50,27 +50,31 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       const notifications = [notification, ...state.notifications].slice(0, 50);
       return {
         notifications,
-        unreadCount: notifications.filter((x) => !x.read).length,
+        unreadCount: state.unreadCount + 1,
       };
     }),
 
-  hydrateNotifications: (incoming) =>
+  hydrateNotifications: (incoming, unreadCount) =>
     set(() => {
       const notifications = incoming.slice(0, 50);
       return {
         notifications,
-        unreadCount: notifications.filter((x) => !x.read).length,
+        unreadCount: unreadCount ?? notifications.filter((x) => !x.read).length,
       };
     }),
 
   markRead: (id) =>
     set((state) => {
+      const target = state.notifications.find((n) => n.id === id);
+      if (!target || target.read) {
+        return state;
+      }
       const notifications = state.notifications.map((n) =>
         n.id === id ? { ...n, read: true } : n
       );
       return {
         notifications,
-        unreadCount: notifications.filter((x) => !x.read).length,
+        unreadCount: Math.max(0, state.unreadCount - 1),
       };
     }),
 
@@ -82,10 +86,12 @@ export const useNotificationStore = create<NotificationState>((set) => ({
 
   removeNotification: (id) =>
     set((state) => {
+      const removed = state.notifications.find((n) => n.id === id);
       const notifications = state.notifications.filter((n) => n.id !== id);
       return {
         notifications,
-        unreadCount: notifications.filter((x) => !x.read).length,
+        unreadCount:
+          removed && !removed.read ? Math.max(0, state.unreadCount - 1) : state.unreadCount,
       };
     }),
 

@@ -3,14 +3,18 @@ import { Calendar } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { PastEventsAccordion } from "./past-events-accordion";
+import Link from "next/link";
 
 export const metadata = {
   title: "Events",
   description:
-    "Discover upcoming events, gatherings, and happenings from verified businesses and sellers across South Africa.",
+    "Discover upcoming events, gatherings, and happenings from verified businesses and advertisers across South Africa.",
 };
 
 export const revalidate = 60;
@@ -40,6 +44,10 @@ function groupByMonth(
     }));
 }
 
+function isPlaceholderEvent(event: { title: string | null; description?: string | null }) {
+  return isPlaceholderMarketplaceContent(event.title, event.description);
+}
+
 export default async function EventsPage() {
   const admin = createAdminClient();
   const now = new Date().toISOString();
@@ -48,12 +56,16 @@ export default async function EventsPage() {
   const { data: events } = await admin
     .from("promotions")
     .select(
-      `id, seller_id, business_id, title, description, promotion_type, category,
+      `id, owner_id, business_id, title, description, promotion_type, category,
        photos, videos, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, boost_until, featured_until, view_count, created_at`
     )
     .eq("status", "live")
     .eq("promotion_type", "event")
+    .not("title", "ilike", "%seed%")
+    .not("title", "ilike", "%[seed]%")
+    .not("title", "ilike", "%demo%")
+    .not("title", "ilike", "%sample%")
     .or(`end_date.is.null,end_date.gte.${now}`)
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
@@ -65,32 +77,38 @@ export default async function EventsPage() {
   const { data: pastEvents } = await admin
     .from("promotions")
     .select(
-      `id, seller_id, business_id, title, promotion_type,
+      `id, owner_id, business_id, title, promotion_type,
        photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, view_count, created_at`
     )
     .eq("status", "live")
     .eq("promotion_type", "event")
+    .not("title", "ilike", "%seed%")
+    .not("title", "ilike", "%[seed]%")
+    .not("title", "ilike", "%demo%")
+    .not("title", "ilike", "%sample%")
     .lt("end_date", now)
     .order("end_date", { ascending: false })
     .limit(24);
 
-  // Gather unique seller IDs for trust levels
-  const allEvents = [...(events ?? []), ...(pastEvents ?? [])];
-  const sellerIds = [...new Set(allEvents.map((e) => e.seller_id))];
-  const { data: sellers } = sellerIds.length
+  // Gather unique account IDs for trust levels
+  const upcoming = (events ?? []).filter((event) => !isPlaceholderEvent(event));
+  const past = (pastEvents ?? []).filter((event) => !isPlaceholderEvent(event));
+  const allEvents = [...upcoming, ...past];
+  const accountIds = [...new Set(allEvents.map((event) => event.owner_id))];
+  const { data: accountProfiles } = accountIds.length
     ? await admin
-        .from("seller_profiles")
-        .select("user_id, display_name, seller_verification_status")
-        .in("user_id", sellerIds)
+        .from(ACCOUNT_PROFILE_TABLE)
+        .select("user_id, display_name, account_verification_status")
+        .in("user_id", accountIds)
     : { data: [] };
 
-  const sellerMap = new Map(
-    (sellers ?? []).map((s) => [
-      s.user_id,
+  const accountProfileMap = new Map(
+    (accountProfiles ?? []).map((accountProfile) => [
+      accountProfile.user_id,
       {
-        name: s.display_name,
-        trust: computeTrustLevel(s.seller_verification_status ?? null),
+        name: accountProfile.display_name,
+        trust: computeTrustLevel(readAccountVerificationStatus(accountProfile)),
       },
     ])
   );
@@ -102,9 +120,6 @@ export default async function EventsPage() {
     : { data: [] };
 
   const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
-
-  const upcoming = events ?? [];
-  const past = pastEvents ?? [];
 
   // Group upcoming events by month
   const monthGroups = groupByMonth(
@@ -126,7 +141,11 @@ export default async function EventsPage() {
           { label: "Promotions & Events", href: "/promotions" },
           { label: "Events" },
         ]}
-      />
+      >
+        <Button asChild size="sm" className="gap-1">
+          <Link href="/advertise">Advertise an event</Link>
+        </Button>
+      </PageHeader>
 
       {/* Upcoming Events — grouped by month */}
       {upcoming.length > 0 ? (
@@ -143,7 +162,7 @@ export default async function EventsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {group.events.map((event, index) => {
-                  const seller = sellerMap.get(event.seller_id as string);
+                  const accountProfile = accountProfileMap.get(event.owner_id as string);
                   const businessName = event.business_id
                     ? businessMap.get(event.business_id as string)
                     : undefined;
@@ -173,8 +192,8 @@ export default async function EventsPage() {
                         city={event.location_city as string}
                         promotionType="event"
                         createdAt={event.created_at}
-                        sellerTrustLevel={seller?.trust}
-                        sellerName={seller?.name}
+                        ownerTrustLevel={accountProfile?.trust}
+                        ownerName={accountProfile?.name}
                         viewCount={event.view_count as number}
                         boosted={isBoosted}
                         featured={isFeatured}
@@ -205,7 +224,7 @@ export default async function EventsPage() {
       {past.length > 0 && (
         <PastEventsAccordion
           events={past.map((event) => {
-            const seller = sellerMap.get(event.seller_id);
+            const accountProfile = accountProfileMap.get(event.owner_id);
             const videos = event.videos as string[] | null;
             const photos = event.photos as string[] | null;
             return {
@@ -220,8 +239,8 @@ export default async function EventsPage() {
               province: event.location_province,
               city: event.location_city,
               createdAt: event.created_at,
-              sellerTrustLevel: seller?.trust,
-              sellerName: seller?.name,
+              ownerTrustLevel: accountProfile?.trust,
+              ownerName: accountProfile?.name,
               startDate: event.start_date,
               endDate: event.end_date,
             };

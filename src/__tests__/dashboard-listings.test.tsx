@@ -64,7 +64,7 @@ describe("ListingsPage", () => {
 
     // Switch implementations based on requested tables
     mockSupabase.from.mockImplementation((table) => {
-      if (table === "seller_profiles") return queryBuilderProfile;
+      if (table === "account_profiles") return queryBuilderProfile;
       if (table === "listings") return queryBuilderListings;
     });
 
@@ -81,7 +81,7 @@ describe("ListingsPage", () => {
     // Setup valid user
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "u-123" } } });
 
-    // Simulate user who doesn't have a seller profile (returns null)
+    // Simulate user who doesn't have an account profile (returns null)
     const queryBuilderProfile = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -95,7 +95,7 @@ describe("ListingsPage", () => {
     };
 
     mockSupabase.from.mockImplementation((table) => {
-      if (table === "seller_profiles") return queryBuilderProfile;
+      if (table === "account_profiles") return queryBuilderProfile;
       if (table === "listings") return queryBuilderListings; // This shouldn't be called!
     });
 
@@ -103,7 +103,7 @@ describe("ListingsPage", () => {
     render(ui);
 
     // Profile is missing, so it shouldn't try querying listings with empty UUIDs
-    expect(queryBuilderListings.eq).not.toHaveBeenCalledWith("seller_id", "");
+    expect(queryBuilderListings.eq).not.toHaveBeenCalledWith("owner_id", "");
     expect(screen.getByText(/Active \(0\)/)).toBeDefined();
   });
 });

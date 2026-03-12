@@ -30,7 +30,7 @@ BEGIN
     WHERE seller_verification_status = 'verified'
       AND account_status = 'active'
     ORDER BY user_id
-    LIMIT 4
+    LIMIT 1
   ),
   seller_count AS (
     SELECT COUNT(*) AS total FROM seed_sellers
@@ -197,7 +197,7 @@ BEGIN
     WHERE seller_verification_status = 'verified'
       AND account_status = 'active'
     ORDER BY user_id
-    LIMIT 4
+    LIMIT 1
   ),
   seller_count AS (
     SELECT COUNT(*) AS total FROM seed_sellers

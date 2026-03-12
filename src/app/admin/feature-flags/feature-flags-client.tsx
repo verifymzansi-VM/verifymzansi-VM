@@ -33,7 +33,13 @@ const MODE_LABELS: Record<FlagMode, string> = {
   allowlist: "Role Allowlist",
 };
 
-const AVAILABLE_ROLES = ["admin", "moderator", "seller", "buyer"];
+const AVAILABLE_ROLES = ["admin", "moderator", "member", "buyer"];
+const ROLE_LABELS: Record<string, string> = {
+  admin: "admin",
+  moderator: "moderator",
+  member: "member",
+  buyer: "buyer",
+};
 
 export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
   const [flags, setFlags] = useState<FeatureFlag[]>(initialFlags);
@@ -321,7 +327,7 @@ function FlagCard({
                           );
                         }}
                       />
-                      {role}
+                      {ROLE_LABELS[role] ?? role}
                     </label>
                   ))}
                 </div>

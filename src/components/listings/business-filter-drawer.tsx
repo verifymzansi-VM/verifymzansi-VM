@@ -5,6 +5,7 @@ import { SlidersHorizontal, Search } from "lucide-react";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -18,14 +19,10 @@ import { useMarketplaceStore } from "@/stores";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 
-interface BusinessFilterDrawerProps {
-  malls: { id: string; name: string }[];
-}
-
 const selectClassName =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
-export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
+export function BusinessFilterDrawer() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
   const [localQuery, setLocalQuery] = useState(filters.query || "");
 
@@ -48,7 +45,6 @@ export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
     filters.businessType,
     filters.province,
     filters.city,
-    filters.mall,
   ].filter(Boolean).length;
 
   const clearAllFilters = () => {
@@ -64,6 +60,7 @@ export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
           <Button
             size="lg"
             className="rounded-full shadow-lg h-14 w-14 bg-brand-blue hover:bg-brand-blue/90"
+            aria-label="Open business filters"
           >
             <SlidersHorizontal className="h-5 w-5" />
             {activeFilterCount > 0 && (
@@ -75,9 +72,15 @@ export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
         </SheetTrigger>
       </div>
 
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
+      <SheetContent
+        side="bottom"
+        className="max-h-[85vh] overflow-y-auto rounded-t-2xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
+      >
         <SheetHeader className="mb-4">
           <SheetTitle>Filter Businesses</SheetTitle>
+          <SheetDescription>
+            Search and narrow the business list without leaving the page.
+          </SheetDescription>
         </SheetHeader>
 
         <div className="space-y-4">
@@ -90,6 +93,7 @@ export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
                 id="drawer-business-search"
                 type="search"
                 placeholder="Search businesses, services, or brands"
+                aria-label="Search businesses"
                 className="pl-9"
                 value={localQuery}
                 onChange={(event) => {
@@ -194,28 +198,8 @@ export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
                 ))}
             </select>
           </div>
-
-          {/* Mall */}
-          <div className="space-y-1.5">
-            <Label htmlFor="drawer-business-mall">Mall</Label>
-            <select
-              id="drawer-business-mall"
-              aria-label="Mall"
-              className={selectClassName}
-              value={filters.mall || ""}
-              onChange={(event) => setFilter("mall", event.target.value || undefined)}
-            >
-              <option value="">All malls</option>
-              {malls.map((mall) => (
-                <option key={mall.id} value={mall.id}>
-                  {mall.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Actions */}
-          <div className="flex gap-3 pt-2">
+          <div className="sticky bottom-0 flex gap-3 border-t bg-background/95 px-0 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] pt-4 backdrop-blur">
             <Button
               variant="outline"
               className="flex-1"
@@ -225,7 +209,7 @@ export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
               Clear all
             </Button>
             <SheetClose asChild>
-              <Button className="flex-1 bg-brand-blue hover:bg-brand-blue/90">Show results</Button>
+              <Button className="flex-1 bg-brand-blue hover:bg-brand-blue/90">View results</Button>
             </SheetClose>
           </div>
         </div>

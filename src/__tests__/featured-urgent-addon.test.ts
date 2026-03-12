@@ -89,7 +89,7 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
 function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_until") {
   mockAuth({ id: USER_ID, email: "seller@test.com" });
   mockAdmin({
-    seller_profiles: {
+    account_profiles: {
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
     },
     listings: {
@@ -99,7 +99,7 @@ function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_u
           title: "Test Listing",
           status: "live",
           area: "MZANSI_MARKET",
-          seller_id: USER_ID,
+          owner_id: USER_ID,
           [addonField]: null,
         },
       }),
@@ -129,11 +129,11 @@ describe("POST /api/listings/[id]/featured", () => {
     expect(res.status).toBe(401);
   });
 
-  // FIX: This now correctly tests "listing not found" (seller profile present, listing absent)
+  // FIX: This now correctly tests "listing not found" (account profile present, listing absent)
   it("returns 404 when listing not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: {
+      account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
       listings: {
@@ -147,21 +147,21 @@ describe("POST /api/listings/[id]/featured", () => {
     expect(body.error).toBe("Listing not found");
   });
 
-  it("returns 404 when seller profile not found", async () => {
+  it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: null }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: null }) },
     });
     const req = createRequest(`http://localhost:3000/api/listings/${UUID}/featured`);
     const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
     expect(res.status).toBe(404);
-    expect((await res.json()).error).toBe("Seller profile not found");
+    expect((await res.json()).error).toBe("Account profile not found");
   });
 
   it("returns 403 when user does not own listing", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -169,7 +169,7 @@ describe("POST /api/listings/[id]/featured", () => {
             title: "X",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: "other-user",
+            owner_id: "other-user",
             featured_until: null,
           },
         }),
@@ -184,7 +184,7 @@ describe("POST /api/listings/[id]/featured", () => {
   it("returns 400 when listing is not live", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -192,7 +192,7 @@ describe("POST /api/listings/[id]/featured", () => {
             title: "X",
             status: "draft",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             featured_until: null,
           },
         }),
@@ -208,7 +208,7 @@ describe("POST /api/listings/[id]/featured", () => {
     mockAuth({ id: USER_ID });
     const futureDate = new Date(Date.now() + 86_400_000).toISOString();
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -216,7 +216,7 @@ describe("POST /api/listings/[id]/featured", () => {
             title: "X",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             featured_until: futureDate,
           },
         }),
@@ -241,7 +241,7 @@ describe("POST /api/listings/[id]/featured", () => {
   it("returns 500 when payment insert fails", async () => {
     mockAuth({ id: USER_ID, email: "seller@test.com" });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -249,7 +249,7 @@ describe("POST /api/listings/[id]/featured", () => {
             title: "Test",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             featured_until: null,
           },
         }),
@@ -295,21 +295,21 @@ describe("POST /api/listings/[id]/urgent", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 404 when seller profile not found", async () => {
+  it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: null }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: null }) },
     });
     const req = createRequest(`http://localhost:3000/api/listings/${UUID}/urgent`);
     const res = await UrgentPOST(req, { params: Promise.resolve({ id: UUID }) });
     expect(res.status).toBe(404);
-    expect((await res.json()).error).toBe("Seller profile not found");
+    expect((await res.json()).error).toBe("Account profile not found");
   });
 
   it("returns 403 when user does not own listing", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -317,7 +317,7 @@ describe("POST /api/listings/[id]/urgent", () => {
             title: "X",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: "other-user",
+            owner_id: "other-user",
             urgent_until: null,
           },
         }),
@@ -332,7 +332,7 @@ describe("POST /api/listings/[id]/urgent", () => {
   it("returns 400 when listing is not live", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -340,7 +340,7 @@ describe("POST /api/listings/[id]/urgent", () => {
             title: "X",
             status: "draft",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             urgent_until: null,
           },
         }),
@@ -356,7 +356,7 @@ describe("POST /api/listings/[id]/urgent", () => {
     mockAuth({ id: USER_ID });
     const futureDate = new Date(Date.now() + 86_400_000).toISOString();
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -364,7 +364,7 @@ describe("POST /api/listings/[id]/urgent", () => {
             title: "X",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             urgent_until: futureDate,
           },
         }),
@@ -389,7 +389,7 @@ describe("POST /api/listings/[id]/urgent", () => {
   it("returns 500 when payment insert fails", async () => {
     mockAuth({ id: USER_ID, email: "seller@test.com" });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -397,7 +397,7 @@ describe("POST /api/listings/[id]/urgent", () => {
             title: "Test",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             urgent_until: null,
           },
         }),
@@ -443,21 +443,21 @@ describe("POST /api/listings/[id]/boost", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 404 when seller profile not found", async () => {
+  it("returns 404 when account profile not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: null }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: null }) },
     });
     const req = createRequest(`http://localhost:3000/api/listings/${UUID}/boost`);
     const res = await BoostPOST(req, { params: Promise.resolve({ id: UUID }) });
     expect(res.status).toBe(404);
-    expect((await res.json()).error).toBe("Seller profile not found");
+    expect((await res.json()).error).toBe("Account profile not found");
   });
 
   it("returns 403 when user does not own listing", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -465,7 +465,7 @@ describe("POST /api/listings/[id]/boost", () => {
             title: "X",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: "other-user",
+            owner_id: "other-user",
             boost_until: null,
           },
         }),
@@ -480,7 +480,7 @@ describe("POST /api/listings/[id]/boost", () => {
   it("returns 400 when listing is not live", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -488,7 +488,7 @@ describe("POST /api/listings/[id]/boost", () => {
             title: "X",
             status: "draft",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             boost_until: null,
           },
         }),
@@ -504,7 +504,7 @@ describe("POST /api/listings/[id]/boost", () => {
     mockAuth({ id: USER_ID });
     const futureDate = new Date(Date.now() + 86_400_000).toISOString();
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -512,7 +512,7 @@ describe("POST /api/listings/[id]/boost", () => {
             title: "X",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             boost_until: futureDate,
           },
         }),
@@ -537,7 +537,7 @@ describe("POST /api/listings/[id]/boost", () => {
   it("returns 500 when payment insert fails", async () => {
     mockAuth({ id: USER_ID, email: "seller@test.com" });
     mockAdmin({
-      seller_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
+      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
       listings: {
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
@@ -545,7 +545,7 @@ describe("POST /api/listings/[id]/boost", () => {
             title: "Test",
             status: "live",
             area: "MZANSI_MARKET",
-            seller_id: USER_ID,
+            owner_id: USER_ID,
             boost_until: null,
           },
         }),

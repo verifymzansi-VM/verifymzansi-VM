@@ -18,7 +18,7 @@ export const registerSchema = z
     displayName: z
       .string()
       .min(2, "Name must be at least 2 characters")
-      .max(60, "Name is too long")
+      .max(50, "Name is too long")
       .regex(/^[\p{L}\s'-]+$/u, "Name contains invalid characters"),
     email: emailSchema,
     phone: saPhoneSchema,
@@ -60,6 +60,18 @@ export const otpVerifySchema = z.object({
     .regex(/^\d{6}$/, "OTP must be numeric"),
 });
 
+/** Zod schema for changing password (current + new + confirmation). */
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: passwordSchema,
+    confirmNewPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmNewPassword, {
+    message: "Passwords do not match",
+    path: ["confirmNewPassword"],
+  });
+
 /** Inferred input type for {@link loginSchema}. */
 export type LoginInput = z.infer<typeof loginSchema>;
 /** Inferred input type for {@link registerSchema}. */
@@ -70,3 +82,5 @@ export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 /** Inferred input type for {@link otpVerifySchema}. */
 export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
+/** Inferred input type for {@link changePasswordSchema}. */
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

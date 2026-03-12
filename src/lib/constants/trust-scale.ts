@@ -1,10 +1,10 @@
 /* ══════════════════════════════════════════════════════════════
    TRUST VERIFICATION SCALE
-   5-tier visual system that communicates seller trustworthiness.
+   5-tier visual system that communicates account trustworthiness.
    Maps DB status + entitlement tier → visual treatment.
    ══════════════════════════════════════════════════════════════ */
 
-import type { TrustLevel, SellerVerificationStatus, PlanTier, AccountStatus } from "@/types/enums";
+import type { TrustLevel, AccountVerificationStatus, PlanTier, AccountStatus } from "@/types/enums";
 
 export interface TrustTier {
   level: TrustLevel;
@@ -21,7 +21,7 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   0: {
     level: 0,
     label: "Unregistered",
-    description: "No seller profile",
+    description: "No verified account profile",
     badgeClass: "trust-badge-0",
     cardClass: "trust-card-0",
     borderColor: "border-warm-200",
@@ -61,7 +61,7 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   4: {
     level: 4,
     label: "Verified Pro",
-    description: "Verified seller with Pro subscription",
+    description: "Verified account with Pro subscription",
     badgeClass: "trust-badge-4",
     cardClass: "trust-card-4",
     borderColor: "border-brand-green-400",
@@ -71,11 +71,11 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
 };
 
 /**
- * Compute the trust level from seller verification status, plan tier,
+ * Compute the trust level from account verification status, plan tier,
  * and account penalties (strikes, suspension, ban, legal hold).
  */
 export function computeTrustLevel(
-  verificationStatus: SellerVerificationStatus | null,
+  verificationStatus: AccountVerificationStatus | null,
   planTier?: PlanTier | null,
   accountStatus?: AccountStatus | null,
   options?: { strikes?: number; legalHold?: boolean }
@@ -100,7 +100,7 @@ export function computeTrustLevel(
 }
 
 function computeBaseLevel(
-  verificationStatus: SellerVerificationStatus,
+  verificationStatus: AccountVerificationStatus,
   planTier?: PlanTier | null
 ): TrustLevel {
   switch (verificationStatus) {

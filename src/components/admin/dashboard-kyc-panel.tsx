@@ -260,6 +260,10 @@ export function DashboardKycPanel({
             const waitMs = Date.now() - new Date(waitTime).getTime();
             const waitHours = waitMs / (1000 * 60 * 60);
             const isUrgent = waitHours > 24;
+            const displayName = item.account_display_name ?? null;
+            const verificationStatus = item.account_verification_status ?? null;
+            const accountStatus = item.account_status ?? null;
+            const strikeCount = item.account_strikes ?? 0;
 
             return (
               <Card
@@ -278,7 +282,7 @@ export function DashboardKycPanel({
                       {/* Header row */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold">
-                          {item.seller_display_name || (
+                          {displayName || (
                             <span className="text-muted-foreground font-normal flex items-center gap-1">
                               <User className="h-3 w-3" />
                               {item.user_id.slice(0, 8)}…
@@ -377,15 +381,15 @@ export function DashboardKycPanel({
                         </p>
                       )}
 
-                      {/* Seller account status row */}
+                      {/* Account status row */}
                       <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-border/50">
-                        <span className="text-xs text-muted-foreground">Seller:</span>
-                        <AccountStatusBadge status={item.seller_account_status} />
-                        <VerificationStatusBadge status={item.seller_verification_status} />
-                        {item.seller_strikes > 0 && (
+                        <span className="text-xs text-muted-foreground">Account:</span>
+                        <AccountStatusBadge status={accountStatus} />
+                        <VerificationStatusBadge status={verificationStatus} />
+                        {strikeCount > 0 && (
                           <span className="inline-flex items-center gap-0.5 text-xs font-medium text-destructive">
                             <AlertTriangle className="h-3 w-3" />
-                            {item.seller_strikes} strike{item.seller_strikes !== 1 ? "s" : ""}
+                            {strikeCount} strike{strikeCount !== 1 ? "s" : ""}
                           </span>
                         )}
                       </div>
@@ -468,7 +472,9 @@ export function DashboardKycPanel({
                 <>
                   {STEP_LABELS[dialog.step.step_type] || dialog.step.step_type} for{" "}
                   <strong>
-                    {dialog.step.seller_display_name || dialog.step.user_id.slice(0, 8) + "…"}
+                    {dialog.step.account_display_name ||
+                      dialog.step.account_display_name ||
+                      dialog.step.user_id.slice(0, 8) + "…"}
                   </strong>
                 </>
               )}
@@ -478,7 +484,7 @@ export function DashboardKycPanel({
           {dialog?.decision === "approved" ? (
             <p className="text-sm text-muted-foreground">
               This will mark the step as approved. If all 4 steps (phone, ID document, selfie,
-              location) are approved, the seller will be marked as verified.
+              location) are approved, the account will be marked as verified.
             </p>
           ) : (
             <div className="space-y-4">
@@ -506,7 +512,7 @@ export function DashboardKycPanel({
                 <Textarea
                   value={reasonNote}
                   onChange={(e) => setReasonNote(e.target.value)}
-                  placeholder="Optional: add detail to help the seller resubmit correctly…"
+                  placeholder="Optional: add detail to help the account holder resubmit correctly…"
                   rows={3}
                   className="mt-1.5"
                 />

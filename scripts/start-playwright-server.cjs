@@ -7,9 +7,10 @@ function createDeterministicEnv() {
   const deterministicValues = {
     PORT: String(PLAYWRIGHT_PORT),
     PLAYWRIGHT_TEST_MODE: "1",
+    PLAYWRIGHT_SUPABASE_MODE: "stub",
     VERIFYMZANSI_RUNTIME_MODE: "e2e",
     VERIFYMZANSI_VALIDATION_MODE: "e2e",
-    NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+    NEXT_PUBLIC_SUPABASE_URL: "https://playwright.supabase.stub",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.playwright-anon-key",
     SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.playwright-service-role",
     R2_ACCOUNT_ID: "playwright-r2-account",

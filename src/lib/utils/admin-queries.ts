@@ -4,12 +4,14 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
 
 // ── Types ────────────────────────────────────────────────────
 
 export interface AdminDashboardStats {
-  totalSellers: number;
+  totalAccounts: number;
+  totalMembers: number;
   totalListings: number;
   openReports: number;
   pendingVerifications: number;
@@ -34,8 +36,10 @@ export interface PendingVerification {
   risk_level: string | null;
   risk_score: number | null;
   auto_status: string | null;
-  seller_display_name: string | null;
-  seller_verification_status: string | null;
+  account_display_name?: string | null;
+  account_verification_status?: string | null;
+  /** @deprecated Use account_display_name */
+  /** @deprecated Use account_verification_status */
 }
 
 export interface AuditLogEntry {
@@ -49,6 +53,32 @@ export interface AuditLogEntry {
   created_at: string;
 }
 
+async function getPendingModerationCountInternal() {
+  const supabase = createAdminClient();
+
+  const [{ count: pendingListings }, { count: pendingBusinesses }, { count: pendingPromotions }] =
+    await Promise.all([
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+      supabase
+        .from("businesses")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+      supabase
+        .from("promotions")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+    ]);
+
+  return (pendingListings || 0) + (pendingBusinesses || 0) + (pendingPromotions || 0);
+}
+
+export async function getPendingModerationCount(): Promise<number> {
+  return getPendingModerationCountInternal();
+}
+
 // ── Queries ──────────────────────────────────────────────────
 
 /** Fetch all high-level stats for the admin dashboard */
@@ -56,14 +86,14 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   const supabase = createAdminClient();
 
   const [
-    { count: totalSellers },
+    { count: totalMembers },
     { count: totalListings },
     { count: openReports },
     { count: pendingVerifications },
     { count: activeSuspensions },
-    { count: pendingModeration },
+    pendingModeration,
   ] = await Promise.all([
-    supabase.from("seller_profiles").select("*", { count: "exact", head: true }),
+    supabase.from(ACCOUNT_PROFILE_WRITE_TABLE).select("*", { count: "exact", head: true }),
     supabase.from("listings").select("*", { count: "exact", head: true }),
     supabase.from("reports").select("*", { count: "exact", head: true }).eq("status", "open"),
     supabase
@@ -71,22 +101,20 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
       .select("*", { count: "exact", head: true })
       .eq("status", "pending"),
     supabase
-      .from("seller_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("*", { count: "exact", head: true })
       .eq("account_status", "suspended"),
-    supabase
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending_moderation"),
+    getPendingModerationCountInternal(),
   ]);
 
   return {
-    totalSellers: totalSellers || 0,
+    totalAccounts: totalMembers || 0,
+    totalMembers: totalMembers || 0,
     totalListings: totalListings || 0,
     openReports: openReports || 0,
     pendingVerifications: pendingVerifications || 0,
     activeSuspensions: activeSuspensions || 0,
-    pendingModeration: pendingModeration || 0,
+    pendingModeration,
   };
 }
 
@@ -128,7 +156,8 @@ export async function getAreaCardCounts(): Promise<
     PROMOTIONS_EVENTS: 0,
   };
   for (const r of openReports || []) {
-    if (r.target_type === "listing") flagCounts.MZANSI_MARKET++;
+    if (r.target_type === "listing" || r.target_type === "account_profile")
+      flagCounts.MZANSI_MARKET++;
     if (
       r.target_type === "business_profile" ||
       r.target_type === "storefront" ||
@@ -291,7 +320,7 @@ function buildCategoryBreakdown(
     .sort((a, b) => b.count - a.count);
 }
 
-/** Get pending verification steps with seller display name */
+/** Get pending verification steps with account display name */
 export async function getPendingVerifications(limit = 50): Promise<PendingVerification[]> {
   const supabase = createAdminClient();
 
@@ -304,12 +333,12 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
 
   if (!steps?.length) return [];
 
-  // Get seller profiles for each user
+  // Get account profiles for each user
 
   const userIds = Array.from(new Set(steps.map((s) => s.user_id))) as string[];
   const { data: profiles } = await supabase
-    .from("seller_profiles")
-    .select("user_id, display_name, seller_verification_status")
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
+    .select("user_id, display_name, account_verification_status")
     .in("user_id", userIds);
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p] as const));
@@ -318,8 +347,8 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
     const profile = profileMap.get(s.user_id);
     return {
       ...s,
-      seller_display_name: profile?.display_name || null,
-      seller_verification_status: profile?.seller_verification_status || null,
+      account_display_name: profile?.display_name || null,
+      account_verification_status: readAccountVerificationStatus(profile),
     };
   });
 }
@@ -346,19 +375,18 @@ export async function getRecentActivity(limit = 20, area?: string): Promise<Audi
 export async function getAreaReports(area: MarketplaceArea) {
   const supabase = createAdminClient();
 
-  // Map area to target_type
-  const targetTypeMap: Record<MarketplaceArea, string> = {
-    MZANSI_MARKET: "listing",
-    BUSINESS_ADS: "business",
-    MALL_SHOPS: "business",
-    MZANSI_BUSINESS: "business",
-    PROMOTIONS_EVENTS: "promotion",
+  const targetTypeMap: Record<MarketplaceArea, string[]> = {
+    MZANSI_MARKET: ["listing", "account_profile"],
+    BUSINESS_ADS: ["business"],
+    MALL_SHOPS: ["business"],
+    MZANSI_BUSINESS: ["business", "business_profile", "storefront"],
+    PROMOTIONS_EVENTS: ["promotion"],
   };
 
   const { data } = await supabase
     .from("reports")
     .select("*")
-    .eq("target_type", targetTypeMap[area])
+    .in("target_type", targetTypeMap[area])
     .in("status", ["open", "in_progress"])
     .order("created_at", { ascending: true })
     .limit(100);
@@ -406,10 +434,14 @@ export interface DashboardKycItem {
   risk_level: string | null;
   risk_score: number | null;
   auto_status: string | null;
-  seller_display_name: string | null;
-  seller_verification_status: string | null;
-  seller_account_status: string | null;
-  seller_strikes: number;
+  account_display_name?: string | null;
+  account_verification_status?: string | null;
+  account_status?: string | null;
+  account_strikes?: number;
+  /** @deprecated Use account_display_name */
+  /** @deprecated Use account_verification_status */
+  /** @deprecated Use account_status */
+  /** @deprecated Use account_strikes */
 }
 
 /** Get pending KYC steps with full metadata for the dashboard command centre */
@@ -430,8 +462,8 @@ export async function getDashboardKycQueue(limit = 50): Promise<DashboardKycItem
   const userIds = Array.from(new Set(steps.map((s) => s.user_id))) as string[];
 
   const { data: profiles } = await supabase
-    .from("seller_profiles")
-    .select("user_id, display_name, seller_verification_status, account_status, strikes")
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
+    .select("user_id, display_name, account_verification_status, account_status, strikes")
     .in("user_id", userIds);
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p] as const));
@@ -440,10 +472,10 @@ export async function getDashboardKycQueue(limit = 50): Promise<DashboardKycItem
     const profile = profileMap.get(s.user_id);
     return {
       ...s,
-      seller_display_name: profile?.display_name || null,
-      seller_verification_status: profile?.seller_verification_status || null,
-      seller_account_status: profile?.account_status || null,
-      seller_strikes: profile?.strikes || 0,
+      account_display_name: profile?.display_name || null,
+      account_verification_status: readAccountVerificationStatus(profile),
+      account_status: profile?.account_status || null,
+      account_strikes: profile?.strikes || 0,
     };
   });
 }
@@ -491,7 +523,7 @@ export interface DashboardContentItem {
   areaLabel: string;
   itemType: string;
   category: string | null;
-  seller_id: string | null;
+  owner_id: string | null;
   created_at: string;
   status: string;
 }
@@ -503,13 +535,13 @@ export async function getDashboardContentQueue(): Promise<DashboardContentItem[]
   const [{ data: pendingListings }, { data: pendingBusinesses }] = await Promise.all([
     supabase
       .from("listings")
-      .select("id, title, status, created_at, category, seller_id")
+      .select("id, title, status, created_at, category, owner_id")
       .eq("status", "pending_moderation")
       .order("created_at", { ascending: true })
       .limit(30),
     supabase
       .from("businesses")
-      .select("id, business_name, business_type, status, created_at, category, seller_id")
+      .select("id, business_name, business_type, status, created_at, category, owner_id")
       .eq("status", "pending_moderation")
       .order("created_at", { ascending: true })
       .limit(30),
@@ -523,7 +555,7 @@ export async function getDashboardContentQueue(): Promise<DashboardContentItem[]
       areaLabel: "Mzansi Market",
       itemType: "Listing",
       category: l.category || null,
-      seller_id: l.seller_id || null,
+      owner_id: l.owner_id || null,
       created_at: l.created_at,
       status: l.status,
     })),
@@ -534,7 +566,7 @@ export async function getDashboardContentQueue(): Promise<DashboardContentItem[]
       areaLabel: "Mzansi Business",
       itemType: "Business",
       category: b.category || null,
-      seller_id: b.seller_id || null,
+      owner_id: b.owner_id || null,
       created_at: b.created_at,
       status: b.status,
     })),
@@ -572,35 +604,47 @@ export async function getVerificationStepCounts(): Promise<VerificationStepCount
 }
 
 export interface ExtendedPlatformStats {
-  verifiedSellers: number;
-  bannedSellers: number;
+  verifiedAccounts: number;
+  bannedAccounts: number;
+  verifiedMembers: number;
+  bannedMembers: number;
   liveListings: number;
   hiddenListings: number;
+}
+
+async function getContentStatusTotalsInternal(status: "live" | "hidden") {
+  const supabase = createAdminClient();
+
+  const [{ count: listings }, { count: businesses }, { count: promotions }] = await Promise.all([
+    supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", status),
+    supabase.from("businesses").select("*", { count: "exact", head: true }).eq("status", status),
+    supabase.from("promotions").select("*", { count: "exact", head: true }).eq("status", status),
+  ]);
+
+  return (listings || 0) + (businesses || 0) + (promotions || 0);
 }
 
 /** Get extended platform stats beyond the basic dashboard stats */
 export async function getExtendedPlatformStats(): Promise<ExtendedPlatformStats> {
   const supabase = createAdminClient();
-  const [
-    { count: verifiedSellers },
-    { count: bannedSellers },
-    { count: liveListings },
-    { count: hiddenListings },
-  ] = await Promise.all([
-    supabase
-      .from("seller_profiles")
-      .select("*", { count: "exact", head: true })
-      .eq("seller_verification_status", "verified"),
-    supabase
-      .from("seller_profiles")
-      .select("*", { count: "exact", head: true })
-      .eq("account_status", "banned"),
-    supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
-    supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "hidden"),
-  ]);
+  const [{ count: verifiedAccounts }, { count: bannedMembers }, liveListings, hiddenListings] =
+    await Promise.all([
+      supabase
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("*", { count: "exact", head: true })
+        .or("account_verification_status.eq.verified"),
+      supabase
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("*", { count: "exact", head: true })
+        .eq("account_status", "banned"),
+      getContentStatusTotalsInternal("live"),
+      getContentStatusTotalsInternal("hidden"),
+    ]);
   return {
-    verifiedSellers: verifiedSellers || 0,
-    bannedSellers: bannedSellers || 0,
+    verifiedAccounts: verifiedAccounts || 0,
+    bannedAccounts: bannedMembers || 0,
+    verifiedMembers: verifiedAccounts || 0,
+    bannedMembers: bannedMembers || 0,
     liveListings: liveListings || 0,
     hiddenListings: hiddenListings || 0,
   };

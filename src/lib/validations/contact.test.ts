@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { contactSellerSchema, reportSchema } from "./contact";
+import { contactAccountHolderSchema, reportSchema } from "./contact";
 
-// ── Contact Seller Schema ───────────────────────────────────────────────────
+// ── Contact Listing Owner Schema ────────────────────────────────────────────
 
-describe("contactSellerSchema", () => {
+describe("contactAccountHolderSchema", () => {
   const valid = {
     listingId: "550e8400-e29b-41d4-a716-446655440000",
     message: "Hello, is this still available?",
@@ -12,27 +12,31 @@ describe("contactSellerSchema", () => {
   };
 
   it("accepts valid contact request", () => {
-    expect(contactSellerSchema.safeParse(valid).success).toBe(true);
+    expect(contactAccountHolderSchema.safeParse(valid).success).toBe(true);
   });
 
   it("accepts whatsapp and call contact methods", () => {
-    expect(contactSellerSchema.safeParse({ ...valid, contactMethod: "whatsapp" }).success).toBe(
+    expect(
+      contactAccountHolderSchema.safeParse({ ...valid, contactMethod: "whatsapp" }).success
+    ).toBe(true);
+    expect(contactAccountHolderSchema.safeParse({ ...valid, contactMethod: "call" }).success).toBe(
       true
     );
-    expect(contactSellerSchema.safeParse({ ...valid, contactMethod: "call" }).success).toBe(true);
   });
 
   it('accepts canonical "form" contact method', () => {
-    expect(contactSellerSchema.safeParse({ ...valid, contactMethod: "form" }).success).toBe(true);
+    expect(contactAccountHolderSchema.safeParse({ ...valid, contactMethod: "form" }).success).toBe(
+      true
+    );
   });
 
   it("rejects message too short", () => {
-    expect(contactSellerSchema.safeParse({ ...valid, message: "Hi" }).success).toBe(false);
+    expect(contactAccountHolderSchema.safeParse({ ...valid, message: "Hi" }).success).toBe(false);
   });
 
   it("rejects message too long", () => {
     expect(
-      contactSellerSchema.safeParse({
+      contactAccountHolderSchema.safeParse({
         ...valid,
         message: "x".repeat(1001),
       }).success
@@ -40,13 +44,15 @@ describe("contactSellerSchema", () => {
   });
 
   it("rejects invalid UUID", () => {
-    expect(contactSellerSchema.safeParse({ ...valid, listingId: "not-a-uuid" }).success).toBe(
-      false
-    );
+    expect(
+      contactAccountHolderSchema.safeParse({ ...valid, listingId: "not-a-uuid" }).success
+    ).toBe(false);
   });
 
   it("rejects missing captcha token", () => {
-    expect(contactSellerSchema.safeParse({ ...valid, turnstileToken: "" }).success).toBe(false);
+    expect(contactAccountHolderSchema.safeParse({ ...valid, turnstileToken: "" }).success).toBe(
+      false
+    );
   });
 });
 
@@ -65,14 +71,14 @@ describe("reportSchema", () => {
     expect(reportSchema.safeParse(valid).success).toBe(true);
   });
 
-  it("accepts all legacy target types", () => {
-    for (const t of ["listing", "seller", "storefront", "business"]) {
+  it("accepts the supported target types", () => {
+    for (const t of ["listing", "storefront", "business", "account_profile"]) {
       expect(reportSchema.safeParse({ ...valid, targetType: t }).success).toBe(true);
     }
   });
 
-  it("accepts canonical target types (seller_profile, business_profile)", () => {
-    expect(reportSchema.safeParse({ ...valid, targetType: "seller_profile" }).success).toBe(true);
+  it("accepts canonical profile target types", () => {
+    expect(reportSchema.safeParse({ ...valid, targetType: "account_profile" }).success).toBe(true);
     expect(reportSchema.safeParse({ ...valid, targetType: "business_profile" }).success).toBe(true);
   });
 

@@ -11,16 +11,7 @@ import { useMarketplaceStore } from "@/stores";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 
-interface MallOption {
-  id: string;
-  name: string;
-}
-
-interface BusinessDiscoveryBarProps {
-  malls: MallOption[];
-}
-
-export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
+export function BusinessDiscoveryBar() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
   const [localQuery, setLocalQuery] = useState(filters.query || "");
   const debouncedSetQuery = useDebouncedCallback(
@@ -53,12 +44,11 @@ export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
     filters.businessType,
     filters.province,
     filters.city,
-    filters.mall,
   ].filter(Boolean).length;
 
   return (
     <section className="space-y-4 rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_repeat(5,minmax(0,1fr))]">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))]">
         <div className="space-y-1.5">
           <Label htmlFor="business-search">Search</Label>
           <div className="relative">
@@ -165,24 +155,6 @@ export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
               ))}
           </select>
         </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="business-mall">Mall</Label>
-          <select
-            id="business-mall"
-            aria-label="Mall"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            value={filters.mall || ""}
-            onChange={(event) => setFilter("mall", event.target.value || undefined)}
-          >
-            <option value="">All malls</option>
-            {malls.map((mall) => (
-              <option key={mall.id} value={mall.id}>
-                {mall.name}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
       {hasActiveFilters > 0 && (
@@ -243,20 +215,6 @@ export function BusinessDiscoveryBar({ malls }: BusinessDiscoveryBarProps) {
               </button>
             </Badge>
           )}
-          {filters.mall && (
-            <Badge variant="secondary" className="gap-1">
-              {malls.find((mall) => mall.id === filters.mall)?.name || "Mall"}
-              <button
-                type="button"
-                className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Remove mall filter"
-                onClick={() => setFilter("mall", undefined)}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-
           <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearAllFilters}>
             Clear all
           </Button>

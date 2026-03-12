@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
@@ -52,14 +53,14 @@ function mockAuth(user: { id: string; app_metadata?: Record<string, unknown> } |
 }
 
 const STEP_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
-const SELLER_UUID = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
+const MEMBER_UUID = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
 const ADMIN_UUID = "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33";
 const MOD_UUID = "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380a44";
 const NONEXISTENT_UUID = "e4eebc99-9c0b-4ef8-bb6d-6bb9bd380a55";
 
 const baseStep = {
   id: STEP_UUID,
-  user_id: SELLER_UUID,
+  user_id: MEMBER_UUID,
   step_type: "id_doc",
   status: "pending",
   risk_level: "low",
@@ -83,7 +84,7 @@ describe("POST /api/admin/verification/decide", () => {
   });
 
   it("returns 403 when user is not admin or moderator", async () => {
-    mockAuth({ id: SELLER_UUID, app_metadata: { role: "seller" } });
+    mockAuth({ id: MEMBER_UUID, app_metadata: { role: "member" } });
     const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
     expect(response.status).toBe(403);
   });
@@ -150,7 +151,7 @@ describe("POST /api/admin/verification/decide", () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 
     const highRiskStep = { ...baseStep, risk_level: "high", risk_score: 65 };
-    const sellerUpdate = vi.fn().mockReturnValue({
+    const profileUpdate = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         in: vi.fn().mockResolvedValue({ error: null }),
       }),
@@ -186,9 +187,9 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
-          update: sellerUpdate,
+          update: profileUpdate,
         };
       }
       if (table === "kyc_artifacts") {
@@ -255,7 +256,7 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({ error: null }),
@@ -288,7 +289,7 @@ describe("POST /api/admin/verification/decide", () => {
   it("rejects step with reason code", async () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 
-    const sellerUpdate = vi.fn().mockReturnValue({
+    const profileUpdate = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         in: vi.fn().mockResolvedValue({ error: null }),
       }),
@@ -312,9 +313,9 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
-          update: sellerUpdate,
+          update: profileUpdate,
         };
       }
       return {};
@@ -331,12 +332,14 @@ describe("POST /api/admin/verification/decide", () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.decision).toBe("rejected");
-    expect(sellerUpdate).toHaveBeenCalledWith({ seller_verification_status: "rejected" });
+    expect(profileUpdate).toHaveBeenCalledWith({
+      account_verification_status: "rejected",
+    });
   });
 
   it("moderator can also make decisions", async () => {
     mockAuth({ id: MOD_UUID, app_metadata: { role: "moderator" } });
-    const sellerUpdate = vi.fn().mockReturnValue({
+    const profileUpdate = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         in: vi.fn().mockResolvedValue({ error: null }),
       }),
@@ -372,9 +375,9 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
-          update: sellerUpdate,
+          update: profileUpdate,
         };
       }
       return {};
@@ -427,7 +430,7 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({ error: null }),
@@ -459,7 +462,7 @@ describe("POST /api/admin/verification/decide", () => {
 
   it("accepts legacy 'resubmit' and normalizes to 'needs_resubmission'", async () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
-    const sellerUpdate = vi.fn().mockReturnValue({
+    const profileUpdate = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         in: vi.fn().mockResolvedValue({ error: null }),
       }),
@@ -495,9 +498,9 @@ describe("POST /api/admin/verification/decide", () => {
           update: updateMock,
         };
       }
-      if (table === "seller_profiles") {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
-          update: sellerUpdate,
+          update: profileUpdate,
         };
       }
       return {};

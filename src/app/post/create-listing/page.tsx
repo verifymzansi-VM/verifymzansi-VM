@@ -367,7 +367,7 @@ export default function CreateListingPage() {
         <ListingDetailContent
           listing={{
             id: "preview-listing",
-            seller_id: "preview-seller",
+            owner_id: "preview-owner",
             title: title || "Your listing title",
             description: description || "Your listing description will appear here.",
             price_cents:
@@ -389,7 +389,7 @@ export default function CreateListingPage() {
             display_name: "You",
             location_province: province || null,
             location_city: city || null,
-            seller_verification_status: null,
+            account_verification_status: null,
           }}
           showContactActions={false}
           showSimilarListings={false}

@@ -20,17 +20,25 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 
 interface ListingContactActionsProps {
   listingId: string;
-  /** Seller's phone from contact_methods if available */
+  /** Owner's phone from contact_methods if available */
+  ownerPhone?: string | null;
+  /** Owner's whatsapp from contact_methods if available */
+  ownerWhatsapp?: string | null;
+  /** @deprecated Use ownerPhone instead */
   sellerPhone?: string | null;
-  /** Seller's whatsapp from contact_methods if available */
+  /** @deprecated Use ownerWhatsapp instead */
   sellerWhatsapp?: string | null;
 }
 
 export function ListingContactActions({
   listingId,
+  ownerPhone,
+  ownerWhatsapp,
   sellerPhone,
   sellerWhatsapp,
 }: ListingContactActionsProps) {
+  const contactPhone = ownerPhone ?? sellerPhone;
+  const contactWhatsapp = ownerWhatsapp ?? sellerWhatsapp;
   /* ── state ─────────────────────────────────────────────── */
   const [showContact, setShowContact] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
@@ -173,13 +181,13 @@ export function ListingContactActions({
       <div className="space-y-2">
         <Button className="w-full gap-2" size="lg" onClick={handleShowContact}>
           <Phone className="h-4 w-4" />
-          {showContact && sellerPhone ? sellerPhone : "Show Contact"}
+          {showContact && contactPhone ? contactPhone : "Show Contact"}
         </Button>
 
-        {showContact && sellerWhatsapp && (
+        {showContact && contactWhatsapp && (
           <Button variant="outline" className="w-full gap-2" size="lg" asChild>
             <a
-              href={`https://wa.me/${sellerWhatsapp.replace(/\D/g, "")}`}
+              href={`https://wa.me/${contactWhatsapp.replace(/\D/g, "")}`}
               target="_blank"
               rel="noopener noreferrer nofollow ugc"
             >
@@ -231,7 +239,7 @@ export function ListingContactActions({
           <DialogHeader>
             <DialogTitle>Send a Message</DialogTitle>
             <DialogDescription>
-              Your message will be sent to the seller. They will see your email if you are logged
+              Your message will be sent to the member. They will see your email if you are logged
               in.
             </DialogDescription>
           </DialogHeader>
@@ -240,7 +248,7 @@ export function ListingContactActions({
             <div className="flex flex-col items-center gap-3 py-6">
               <CheckCircle className="h-10 w-10 text-brand-green" />
               <p className="font-medium">Message sent!</p>
-              <p className="text-sm text-muted-foreground">The seller has been notified.</p>
+              <p className="text-sm text-muted-foreground">The member has been notified.</p>
               <DialogClose asChild>
                 <Button variant="outline" size="sm">
                   Close

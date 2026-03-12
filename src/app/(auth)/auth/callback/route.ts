@@ -2,6 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  ACCOUNT_PROFILE_TABLE,
+  ACCOUNT_PROFILE_WRITE_TABLE,
+} from "@/lib/account/compat";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("AuthCallback");
@@ -17,51 +22,58 @@ export async function GET(request: Request) {
     const { error, data } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // For email signup confirmations, redirect to home page with success indicator
+      // For email signup confirmations, honor the requested success route.
+      // Legacy links without `next` still fall back to the login success state.
       if (type === "signup") {
-        return NextResponse.redirect(`${origin}/?confirmed=true`);
+        const confirmedPath = next === "/dashboard" ? "/login?confirmed=true" : next;
+        return NextResponse.redirect(`${origin}${confirmedPath}`);
       }
 
       // For OAuth logins (Google, etc.), check if this is a new user
-      // and ensure they have a seller_profiles row.
+      // and ensure they have an account profile row.
       const user = data?.session?.user;
       if (user?.app_metadata?.provider && user.app_metadata.provider !== "email") {
+        let isNewOAuthUser = false;
         try {
           const admin = createAdminClient();
           const { data: profile } = await admin
-            .from("seller_profiles")
+            .from(ACCOUNT_PROFILE_TABLE)
             .select("user_id")
             .eq("user_id", user.id)
             .maybeSingle();
 
-          // Auto-create seller profile for new OAuth users
+          // Auto-create an account profile for new OAuth users.
           if (!profile) {
+            isNewOAuthUser = true;
             const displayName =
               user.user_metadata?.full_name ||
               user.user_metadata?.name ||
               user.email?.split("@")[0] ||
               "User";
 
-            await admin.from("seller_profiles").upsert(
+            await admin.from(ACCOUNT_PROFILE_WRITE_TABLE).upsert(
               {
                 user_id: user.id,
                 display_name: displayName,
-                seller_verification_status: "incomplete",
+                account_verification_status: "incomplete",
                 account_status: "active",
               },
               { onConflict: "user_id" }
             );
           }
         } catch (err) {
-          // Non-blocking: OAuth user can still proceed; profile can be created later
-          log.warn("Failed to create seller profile for OAuth user", {
+          // Non-blocking: OAuth users can still proceed; the account profile can be created later.
+          log.warn("Failed to create account profile for OAuth user", {
             userId: user.id,
+            message: ACCOUNT_PROFILE_NOT_FOUND_ERROR,
             error: err instanceof Error ? err.message : "Unknown",
           });
         }
 
-        // OAuth users go straight to dashboard
-        return NextResponse.redirect(`${origin}${next || "/dashboard"}`);
+        // New OAuth users go to complete-profile to add their phone number;
+        // returning users go to their requested destination.
+        const oauthDest = isNewOAuthUser ? "/dashboard/complete-profile" : next || "/dashboard";
+        return NextResponse.redirect(`${origin}${oauthDest}`);
       }
 
       return NextResponse.redirect(`${origin}${next}`);

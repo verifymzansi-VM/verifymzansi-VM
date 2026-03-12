@@ -8,6 +8,7 @@ import { ADDON_PRICES, BOOST_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("BoostBusiness");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,19 +37,19 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     const admin = createAdminClient();
 
-    const { data: seller } = await admin
-      .from("seller_profiles")
+    const { data: accountProfile } = await admin
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (!seller) {
-      return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
+    if (!accountProfile) {
+      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
     const { data: business } = await admin
       .from("businesses")
-      .select("id, business_name, status, seller_id, boost_until")
+      .select("id, business_name, status, owner_id, boost_until")
       .eq("id", businessId)
       .maybeSingle();
 
@@ -56,7 +57,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
-    if (business.seller_id !== user.id) {
+    if (business.owner_id !== user.id) {
       return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 
@@ -126,7 +127,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "seller",
+        actorRole: "member",
         action: "business_boosted",
         targetType: "business",
         targetId: businessId,

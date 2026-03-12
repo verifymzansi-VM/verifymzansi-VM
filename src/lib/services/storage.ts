@@ -109,13 +109,13 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
 /**
  * Generate a unique key for uploaded files.
  */
-export function generateStorageKey(prefix: string, sellerId: string, filename: string): string {
+export function generateStorageKey(prefix: string, ownerId: string, filename: string): string {
   // Sanitize inputs to prevent path traversal in R2 keys.
   // Only allow UUID-safe characters (alphanumeric, hyphens, underscores, slashes for prefix).
   const safePrefix = prefix.replace(/[^a-zA-Z0-9/_-]/g, "");
-  const safeSellerId = sellerId.replace(/[^a-zA-Z0-9-]/g, "");
-  if (!safeSellerId) {
-    throw new Error("Invalid sellerId for storage key");
+  const safeOwnerId = ownerId.replace(/[^a-zA-Z0-9-]/g, "");
+  if (!safeOwnerId) {
+    throw new Error("Invalid ownerId for storage key");
   }
   if (safePrefix.includes("..")) {
     throw new Error("Invalid prefix for storage key");
@@ -123,7 +123,7 @@ export function generateStorageKey(prefix: string, sellerId: string, filename: s
   const ext = (filename.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "");
   const timestamp = Date.now();
   const random = crypto.randomUUID().slice(0, 8);
-  return `${safePrefix}/${safeSellerId}/${timestamp}-${random}.${ext}`;
+  return `${safePrefix}/${safeOwnerId}/${timestamp}-${random}.${ext}`;
 }
 
 /**
@@ -188,13 +188,13 @@ export async function generatePresignedDownloadUrl(
  * Documents are encrypted before upload for POPIA compliance.
  *
  * @param file - The KYC document file
- * @param sellerId - The seller's profile ID
+ * @param ownerId - The account profile ID
  * @param docType - Type of document (e.g., "id_document", "selfie_id", "proof_location")
  * @returns Upload result with key for database storage
  */
 export async function uploadKycDocument(
   file: File | Blob,
-  sellerId: string,
+  ownerId: string,
   docType: string
 ): Promise<UploadResult> {
   const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
@@ -203,7 +203,7 @@ export async function uploadKycDocument(
   const encryptedBuffer = await encryptFile(file);
 
   // Generate storage key
-  const key = generateStorageKey(`kyc/${docType}`, sellerId, "encrypted.bin");
+  const key = generateStorageKey(`kyc/${docType}`, ownerId, "encrypted.bin");
 
   const client = getR2Client();
   const command = new PutObjectCommand({
@@ -212,7 +212,7 @@ export async function uploadKycDocument(
     Body: encryptedBuffer,
     ContentType: "application/octet-stream",
     Metadata: {
-      sellerId: sellerId,
+      ownerId: ownerId,
       docType: docType,
       encrypted: "true",
     },

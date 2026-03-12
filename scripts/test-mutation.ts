@@ -76,7 +76,7 @@ const canaries: Canary[] = [
     run: () =>
       getRoleFromUser({ app_metadata: { role: "admin" } } as never) === "admin" &&
       isModeratorOrAdmin({ app_metadata: { role: "moderator" } } as never) &&
-      !isModeratorOrAdmin({ app_metadata: { role: "seller" } } as never),
+      !isModeratorOrAdmin({ app_metadata: { role: "member" } } as never),
   },
   {
     name: "PayFast signature verifier fails on tampered amount",

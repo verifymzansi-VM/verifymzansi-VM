@@ -66,14 +66,6 @@ describe("mapLegacyReportValues", () => {
     );
   });
 
-  it('maps legacy "seller" targetType to "seller_profile"', () => {
-    const result = mapLegacyReportValues({
-      reason: "scam",
-      targetType: "seller",
-    });
-    expect(result.targetType).toBe("seller_profile");
-  });
-
   it('maps legacy "business" targetType to "business"', () => {
     const result = mapLegacyReportValues({
       reason: "scam",
@@ -86,9 +78,9 @@ describe("mapLegacyReportValues", () => {
     expect(mapLegacyReportValues({ reason: "scam", targetType: "listing" }).targetType).toBe(
       "listing"
     );
-    expect(mapLegacyReportValues({ reason: "scam", targetType: "seller_profile" }).targetType).toBe(
-      "seller_profile"
-    );
+    expect(
+      mapLegacyReportValues({ reason: "scam", targetType: "account_profile" }).targetType
+    ).toBe("account_profile");
     expect(mapLegacyReportValues({ reason: "scam", targetType: "storefront" }).targetType).toBe(
       "business"
     );
@@ -101,7 +93,7 @@ describe("mapLegacyReportValues", () => {
     expect(mapLegacyReportValues({ reason: "scam", targetType: "listing" }).area).toBe(
       "MZANSI_MARKET"
     );
-    expect(mapLegacyReportValues({ reason: "scam", targetType: "seller" }).area).toBe(
+    expect(mapLegacyReportValues({ reason: "scam", targetType: "account_profile" }).area).toBe(
       "MZANSI_MARKET"
     );
     expect(mapLegacyReportValues({ reason: "scam", targetType: "storefront" }).area).toBe(

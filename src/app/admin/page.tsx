@@ -60,15 +60,18 @@ export default async function AdminPage() {
         : "healthy";
 
   // ── Overview metrics ───────────────────────────────────────
+  const totalAccounts = stats.totalAccounts;
+  const verifiedAccounts = extended?.verifiedAccounts ?? 0;
+  const bannedAccounts = extended?.bannedAccounts ?? 0;
   const verifiedPct =
-    isAdminRole && extended && stats.totalSellers > 0
-      ? Math.round((extended.verifiedSellers / stats.totalSellers) * 100)
+    isAdminRole && extended && totalAccounts > 0
+      ? Math.round((verifiedAccounts / totalAccounts) * 100)
       : null;
 
   const overviewMetrics = [
-    { label: "Sellers", value: stats.totalSellers },
+    { label: "Accounts", value: totalAccounts },
     ...(verifiedPct !== null ? [{ label: "Verified", value: `${verifiedPct}%` }] : []),
-    ...(isAdminRole && extended ? [{ label: "Live", value: extended.liveListings }] : []),
+    ...(isAdminRole && extended ? [{ label: "Live Content", value: extended.liveListings }] : []),
     { label: "KYC queue", value: stats.pendingVerifications },
     { label: "Reports", value: stats.openReports },
     { label: "Moderation", value: stats.pendingModeration },
@@ -114,7 +117,7 @@ export default async function AdminPage() {
           enforcementStats={{
             hidden: extended.hiddenListings,
             suspended: stats.activeSuspensions,
-            banned: extended.bannedSellers,
+            banned: bannedAccounts,
           }}
         />
       )}

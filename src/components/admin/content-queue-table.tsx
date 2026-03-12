@@ -27,7 +27,7 @@ interface ContentItem {
   status: string;
   created_at: string;
   category?: string;
-  seller_id?: string;
+  owner_id?: string;
 }
 
 interface ContentQueueTableProps {
@@ -173,7 +173,7 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
                 <>
                   {decision === "approve"
                     ? "This will publish the content and make it visible to the public."
-                    : "This will reject the content. The seller will be notified."}
+                    : "This will reject the content. The account holder will be notified."}
                 </>
               )}
             </DialogDescription>

@@ -3,7 +3,18 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useCallback } from "react";
-import { Menu, X, ShieldAlert, LayoutDashboard, Settings, LogOut, Sun, Moon } from "lucide-react";
+import {
+  Menu,
+  X,
+  ShieldAlert,
+  LayoutDashboard,
+  Settings,
+  LogOut,
+  Loader2,
+  Sun,
+  Moon,
+  Megaphone,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -35,6 +46,7 @@ export function Header({
   trustLevel: trustLevelProp = 0,
 }: HeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const { theme, setTheme } = useTheme();
 
   // Use the shared auth store via useAuth() instead of a duplicate Supabase subscription
@@ -66,7 +78,20 @@ export function Header({
     return () => document.removeEventListener("keydown", handleEscape);
   }, [handleEscape]);
 
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
+
   async function handleSignOut() {
+    setSigningOut(true);
     await auth.signOut();
   }
 
@@ -98,6 +123,18 @@ export function Header({
 
         {/* Desktop Right — Auth */}
         <div className="hidden md:flex items-center gap-2">
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="border-brand-gold/60 text-foreground hover:bg-brand-gold/10"
+          >
+            <Link href="/advertise">
+              <Megaphone className="h-4 w-4" />
+              Advertise
+            </Link>
+          </Button>
+
           {/* Theme toggle */}
           <Button
             variant="ghost"
@@ -170,13 +207,18 @@ export function Header({
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="cursor-pointer text-destructive focus:text-destructive"
+                    disabled={signingOut}
                     onSelect={(e) => {
                       e.preventDefault();
                       handleSignOut();
                     }}
                   >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sign Out
+                    {signingOut ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogOut className="mr-2 h-4 w-4" />
+                    )}
+                    {signingOut ? "Signing out…" : "Sign Out"}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -203,7 +245,6 @@ export function Header({
           className="md:hidden p-2"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          aria-expanded={mobileOpen ? "true" : "false"}
           aria-controls="mobile-nav-menu"
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -275,18 +316,29 @@ export function Header({
                     </Link>
                   </Button>
                   <button
-                    className="flex items-center gap-2 py-2 text-sm font-medium text-destructive"
+                    className="flex items-center gap-2 py-2 text-sm font-medium text-destructive disabled:opacity-50"
+                    disabled={signingOut}
                     onClick={() => {
                       setMobileOpen(false);
                       handleSignOut();
                     }}
                   >
-                    <LogOut className="h-4 w-4" />
-                    Sign Out
+                    {signingOut ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogOut className="h-4 w-4" />
+                    )}
+                    {signingOut ? "Signing out…" : "Sign Out"}
                   </button>
                 </>
               ) : (
                 <>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/advertise" onClick={() => setMobileOpen(false)}>
+                      <Megaphone className="h-4 w-4" />
+                      Advertise
+                    </Link>
+                  </Button>
                   <Button asChild variant="outline" className="w-full">
                     <Link href="/login" onClick={() => setMobileOpen(false)}>
                       Sign In

@@ -5,6 +5,7 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
+import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -96,14 +97,21 @@ export async function GET(request: NextRequest) {
       .eq("user_id", targetUserId)
       .order("created_at", { ascending: false });
 
-    // Fetch seller profile
-    const { data: sellerProfile } = await adminClient
-      .from("seller_profiles")
+    // Fetch account profile
+    const { data: accountProfile } = await adminClient
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select(
-        "display_name, seller_verification_status, account_status, strikes, legal_hold, location_province, location_city"
+        "display_name, account_verification_status, account_status, strikes, legal_hold, location_province, location_city"
       )
       .eq("user_id", targetUserId)
       .single();
+
+    const accountProfilePayload = accountProfile
+      ? {
+          ...accountProfile,
+          account_verification_status: readAccountVerificationStatus(accountProfile),
+        }
+      : null;
 
     // Fetch evidence access log (recent 20 entries)
     const { data: accessLog } = await adminClient
@@ -132,7 +140,8 @@ export async function GET(request: NextRequest) {
       artifacts: artifacts || [],
       providerResults,
       riskSignals: riskSignals || [],
-      sellerProfile,
+      accountProfile: accountProfilePayload,
+      sellerProfile: accountProfilePayload,
       accessLog: accessLog || [],
     });
   } catch (err) {

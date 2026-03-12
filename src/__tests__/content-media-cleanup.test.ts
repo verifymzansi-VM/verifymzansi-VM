@@ -83,7 +83,7 @@ describe("content media cleanup queueing", () => {
               maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   id: VALID_UUID,
-                  seller_id: USER_ID,
+                  owner_id: USER_ID,
                   status: "live",
                   area: "MZANSI_MARKET",
                   photos: ["https://media.verifymzansi.com/listings/old-photo.jpg"],
@@ -174,7 +174,7 @@ describe("content media cleanup queueing", () => {
               maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   id: VALID_UUID,
-                  seller_id: USER_ID,
+                  owner_id: USER_ID,
                   status: "live",
                   photos: ["https://media.verifymzansi.com/promotions/old-photo.jpg"],
                   videos: ["https://media.verifymzansi.com/promotions/old-video.mp4"],
@@ -252,7 +252,7 @@ describe("content media cleanup queueing", () => {
               maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   id: VALID_UUID,
-                  seller_id: USER_ID,
+                  owner_id: USER_ID,
                   status: "draft",
                   logo_url: "https://media.verifymzansi.com/business/logo.jpg",
                   cover_photo: "https://media.verifymzansi.com/business/cover.jpg",
@@ -343,7 +343,7 @@ describe("content media cleanup queueing", () => {
               maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   id: VALID_UUID,
-                  seller_id: USER_ID,
+                  owner_id: USER_ID,
                   status: "live",
                   logo_url: null,
                   cover_photo: "https://media.verifymzansi.com/business/old-cover.jpg",

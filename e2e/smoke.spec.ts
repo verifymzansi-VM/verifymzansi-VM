@@ -51,18 +51,30 @@ test.describe("Platform Smoke", () => {
   test("@smoke mzansi business filters can be cleared from the keyboard", async ({ page }) => {
     await page.goto("/mzansi-business");
 
-    const search = page.getByLabel("Search");
+    const isMobileViewport = (page.viewportSize()?.width ?? 1280) < 1024;
+    if (isMobileViewport) {
+      await page.getByRole("button", { name: "Open business filters" }).click();
+    }
+
+    const search = isMobileViewport
+      ? page.getByLabel("Search businesses")
+      : page.getByLabel("Search");
     await expect(search).toBeVisible();
 
     await search.fill("coffee");
     await page.waitForTimeout(350);
     await expect(page).toHaveURL(/q=coffee/);
 
-    const clearQuery = page.getByRole("button", { name: /remove query filter coffee/i });
-    await clearQuery.focus();
-    await page.keyboard.press("Enter");
+    if (isMobileViewport) {
+      await page.getByRole("button", { name: "Clear all" }).click();
+      await expect(search).toHaveValue("");
+    } else {
+      const clearQuery = page.getByRole("button", { name: /remove query filter coffee/i });
+      await clearQuery.focus();
+      await page.keyboard.press("Enter");
+      await expect(search).toHaveValue("");
+    }
 
-    await expect(search).toHaveValue("");
     await expect(page).not.toHaveURL(/q=coffee/);
   });
 });
