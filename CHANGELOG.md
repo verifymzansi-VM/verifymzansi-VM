@@ -1,5 +1,37 @@
 # VerifyMzansi — Recent Development Log
 
+## Cloudflare Warning Cleanup Without Runtime Migration (2026-03-12)
+
+- **Toolchain upgrades:** Bumped `@opennextjs/cloudflare` from `1.16.5` to
+  `1.17.1` and `wrangler` from `4.69.0` to `4.72.0` to pick up current
+  Cloudflare/OpenNext fixes without changing app behavior.
+- **WSL build + deploy:** Native Windows remained intentionally blocked by
+  `scripts/preflight-cloudflare.js`, so the Cloudflare bundle and deploy ran
+  from an Ubuntu ext4 copy in WSL. Deploy succeeded with version ID
+  `db5d5a11-f1b5-49fb-9b03-0407aeb0c77a`.
+- **Runtime state:** Production remained healthy before cleanup, with
+  `/api/health` reporting `status: "ok"` and successful Supabase probe, config,
+  and audit checks.
+- **Durable Objects:** Kept the OpenNext cache bindings and migrations in
+  `wrangler.toml` unchanged (`DOQueueHandler`, `DOShardedTagCache`,
+  `BucketCachePurge`). Generated worker output still exports those classes, so
+  any remaining deploy-time DO startup warnings are treated as non-blocking
+  adapter/workerd noise unless a later build proves otherwise.
+- **Warning delta:** The Cloudflare build reduced to the expected Next.js
+  `middleware` deprecation warning only. Deploy-time warnings still include the
+  OpenNext internal Durable Object startup noise plus generated
+  `duplicate-object-key` warnings inside
+  `.open-next/server-functions/default/handler.mjs`.
+- **Deferred migration:** Kept `src/middleware.ts` in place and did not migrate
+  back to `src/proxy.ts`, because Next.js 16 `proxy` currently changes runtime
+  behavior in a way that is riskier than tolerating the deprecation warning on
+  this Cloudflare stack.
+- **Post-deploy follow-up:** Public routing and auth-gated redirects still
+  worked, but `/api/health` returned `status: "degraded"` after deploy because
+  launch validation now reports `PayFast` and `Dev-only flags` failures in
+  production. That needs environment cleanup in Cloudflare, not code changes in
+  this warning-cleanup pass.
+
 ## Cloudflare Middleware Compatibility Fix (2026-03-12)
 
 - **Root cause fixed:** Next.js 16 `src/proxy.ts` runs on the Node.js runtime,
