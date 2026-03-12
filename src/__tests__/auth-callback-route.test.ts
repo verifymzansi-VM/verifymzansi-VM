@@ -103,7 +103,10 @@ describe("GET /auth/callback", () => {
     );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("https://verifymzansi.com/dashboard");
+    // New OAuth users are redirected to complete-profile to add their phone number.
+    expect(response.headers.get("location")).toBe(
+      "https://verifymzansi.com/dashboard/complete-profile"
+    );
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         user_id: "oauth-user-1",

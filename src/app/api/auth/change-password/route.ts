@@ -43,7 +43,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Verify current password by attempting sign-in
+  // Verify current password by attempting sign-in.
+  // NOTE: signInWithPassword() refreshes the current session as a side-effect.
+  // This is acceptable because the user is already authenticated; the session
+  // simply gets a new token pair. Supabase does not expose a dedicated
+  // "verify password" endpoint, so this is the standard approach.
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: user.email,
     password: parsed.data.currentPassword,

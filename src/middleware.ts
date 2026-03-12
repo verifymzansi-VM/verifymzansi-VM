@@ -240,6 +240,29 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
+  // -- Phone-missing gate: require phone number on profile --------------------
+  // OAuth users may have an account profile without a phone number.
+  // Redirect them to complete-profile so they add one before using the platform.
+  const phoneGatedPrefixes = ["/dashboard", "/post", "/billing", "/verification"];
+  const isPhoneGatedRoute = phoneGatedPrefixes.some((p) => pathname.startsWith(p));
+  const isCompleteProfileRoute = pathname === "/dashboard/complete-profile";
+
+  if (isRealUser && user && isPhoneGatedRoute && !isCompleteProfileRoute && !isApiRoute) {
+    try {
+      const { data: phoneProfile } = await supabase
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("phone")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (phoneProfile && !phoneProfile.phone) {
+        return NextResponse.redirect(new URL("/dashboard/complete-profile", request.url));
+      }
+    } catch {
+      // Non-blocking: if we can't check, let the user through.
+    }
+  }
+
   // -- Protected routes: require authentication -----------------------------
   const isProtectedRoute = protectedPrefixes
     .filter((prefix) => prefix !== "/admin" && prefix !== "/api/admin")

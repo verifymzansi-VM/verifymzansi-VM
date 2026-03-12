@@ -33,6 +33,7 @@ export async function GET(request: Request) {
       // and ensure they have an account profile row.
       const user = data?.session?.user;
       if (user?.app_metadata?.provider && user.app_metadata.provider !== "email") {
+        let isNewOAuthUser = false;
         try {
           const admin = createAdminClient();
           const { data: profile } = await admin
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
 
           // Auto-create an account profile for new OAuth users.
           if (!profile) {
+            isNewOAuthUser = true;
             const displayName =
               user.user_metadata?.full_name ||
               user.user_metadata?.name ||
@@ -68,8 +70,10 @@ export async function GET(request: Request) {
           });
         }
 
-        // OAuth users go straight to dashboard
-        return NextResponse.redirect(`${origin}${next || "/dashboard"}`);
+        // New OAuth users go to complete-profile to add their phone number;
+        // returning users go to their requested destination.
+        const oauthDest = isNewOAuthUser ? "/dashboard/complete-profile" : next || "/dashboard";
+        return NextResponse.redirect(`${origin}${oauthDest}`);
       }
 
       return NextResponse.redirect(`${origin}${next}`);

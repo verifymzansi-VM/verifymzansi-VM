@@ -160,6 +160,16 @@ export async function POST(request: NextRequest) {
         throw profileError;
       }
     } catch (profileError) {
+      // Surface phone-uniqueness violations so the user gets a clear error
+      // instead of a generic "something went wrong" message.
+      if (
+        profileError instanceof Error &&
+        "code" in profileError &&
+        (profileError as unknown as { code: string }).code === "23505"
+      ) {
+        return NextResponse.json({ error: ACCOUNT_PHONE_IN_USE_ERROR }, { status: 409 });
+      }
+
       // Non-blocking: the user can still confirm email; the account profile can be created later.
       log.warn("Failed to create account profile on registration", {
         userId: signUpData.user.id,

@@ -213,9 +213,18 @@ describe("middleware — authenticated routing", () => {
       },
     });
 
+    // The phone-missing gate calls from("account_profiles") to check for a phone.
+    // Return a profile that already has a phone set so the gate lets the request through.
+    mockFrom.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () => Promise.resolve({ data: { phone: "+27600000000" }, error: null }),
+        }),
+      }),
+    });
+
     const res = await routeRequest(createMockRequest("/post/create"));
     expect(res.status).toBe(200);
-    expect(mockFrom).not.toHaveBeenCalled();
   });
 
   it("allows legacy /api/post/create paths through middleware without legacy seller gating", async () => {
