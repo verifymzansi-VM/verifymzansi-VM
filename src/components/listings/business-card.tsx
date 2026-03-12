@@ -89,6 +89,7 @@ export function BusinessCard({
                 alt={businessName}
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                 hoverScale={false}
+                mediaFitClassName="object-contain sm:object-cover"
                 mediaClassName="transition-transform duration-500 group-hover:scale-105"
               />
             ) : (
@@ -96,7 +97,7 @@ export function BusinessCard({
                 src={normalizedCoverPhoto}
                 alt={businessName}
                 fill
-                className="object-cover transition-transform duration-500 group-hover:scale-105"
+                className="object-contain sm:object-cover transition-transform duration-500 group-hover:scale-105"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
               />
             )

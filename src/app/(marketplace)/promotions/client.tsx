@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -343,14 +344,16 @@ export function PromotionsExplorer() {
 
       {/* ── Featured Hero Card ── */}
       {featuredPromotion && !loading && (
-        <FeaturedHeroCard
-          promotion={featuredPromotion}
-          businessName={
-            featuredPromotion.business_id
-              ? businessMap.get(featuredPromotion.business_id)
-              : undefined
-          }
-        />
+        <div className="hidden sm:block">
+          <FeaturedHeroCard
+            promotion={featuredPromotion}
+            businessName={
+              featuredPromotion.business_id
+                ? businessMap.get(featuredPromotion.business_id)
+                : undefined
+            }
+          />
+        </div>
       )}
 
       {/* ── Desktop Filters ── */}
@@ -571,9 +574,15 @@ export function PromotionsExplorer() {
             </Button>
           </SheetTrigger>
         </div>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl pb-24">
+        <SheetContent
+          side="bottom"
+          className="max-h-[85vh] overflow-y-auto rounded-t-2xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
+        >
           <SheetHeader>
             <SheetTitle>Filter Promotions</SheetTitle>
+            <SheetDescription>
+              Search and refine promotions without hiding the cards behind extra page chrome.
+            </SheetDescription>
           </SheetHeader>
           <div className="space-y-4 mt-4">
             <div className="space-y-1.5">
@@ -668,12 +677,12 @@ export function PromotionsExplorer() {
               </div>
             )}
           </div>
-          <div className="fixed bottom-0 inset-x-0 p-4 bg-background border-t flex gap-3">
+          <div className="sticky bottom-0 inset-x-0 flex gap-3 border-t bg-background/95 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur">
             <Button variant="outline" className="flex-1" onClick={clearAllFilters}>
               Clear all
             </Button>
             <SheetClose asChild>
-              <Button className="flex-1">Show results</Button>
+              <Button className="flex-1">View results</Button>
             </SheetClose>
           </div>
         </SheetContent>

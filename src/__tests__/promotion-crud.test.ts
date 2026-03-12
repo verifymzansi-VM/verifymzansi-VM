@@ -447,6 +447,59 @@ describe("GET /api/promotions", () => {
     expect(json.total).toBe(1);
     expect(json.accountProfiles).toHaveLength(1);
   });
+
+  it("falls back when the category_key column is unavailable", async () => {
+    const promotionsRange = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: null,
+        count: null,
+        error: { message: "column promotions.category_key does not exist" },
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: VALID_UUID,
+            owner_id: USER_ID,
+            title: "Summer Sale",
+            description: "Verified promotion",
+            promotion_type: "deal",
+            category: "Food & Dining",
+            business_id: null,
+          },
+        ],
+        count: 1,
+        error: null,
+      });
+
+    mockAdmin({
+      promotions: {
+        range: promotionsRange,
+      },
+      account_profiles: {
+        in: vi.fn().mockResolvedValue({
+          data: [
+            {
+              user_id: USER_ID,
+              display_name: "Nomsa",
+              account_verification_status: "verified",
+            },
+          ],
+        }),
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+
+    const json = await res.json();
+    expect(promotionsRange).toHaveBeenCalledTimes(2);
+    expect(json.promotions[0]).toMatchObject({
+      id: VALID_UUID,
+      category_key: "food_dining",
+    });
+  });
 });
 
 describe("GET /api/promotions/[id]", () => {

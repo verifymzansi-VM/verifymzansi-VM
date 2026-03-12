@@ -22,13 +22,12 @@ export function MobilePostSticker() {
     pathname.startsWith("/mzansi-business") ||
     pathname.startsWith("/promotions");
 
-  if (isHidden) return null;
+  if (isHidden || hasNearbyFilterFab) return null;
 
   return (
     <div
       className={cn(
-        "pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[60]",
-        hasNearbyFilterFab ? "left-4 right-auto" : "right-4"
+        "pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[60]"
       )}
     >
       <Link

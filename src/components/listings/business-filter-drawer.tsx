@@ -5,6 +5,7 @@ import { SlidersHorizontal, Search } from "lucide-react";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -71,9 +72,15 @@ export function BusinessFilterDrawer() {
         </SheetTrigger>
       </div>
 
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
+      <SheetContent
+        side="bottom"
+        className="max-h-[85vh] overflow-y-auto rounded-t-2xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
+      >
         <SheetHeader className="mb-4">
           <SheetTitle>Filter Businesses</SheetTitle>
+          <SheetDescription>
+            Search and narrow the business list without leaving the page.
+          </SheetDescription>
         </SheetHeader>
 
         <div className="space-y-4">
@@ -192,7 +199,7 @@ export function BusinessFilterDrawer() {
             </select>
           </div>
           {/* Actions */}
-          <div className="flex gap-3 pt-2">
+          <div className="sticky bottom-0 flex gap-3 border-t bg-background/95 px-0 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] pt-4 backdrop-blur">
             <Button
               variant="outline"
               className="flex-1"
@@ -202,7 +209,7 @@ export function BusinessFilterDrawer() {
               Clear all
             </Button>
             <SheetClose asChild>
-              <Button className="flex-1 bg-brand-blue hover:bg-brand-blue/90">Show results</Button>
+              <Button className="flex-1 bg-brand-blue hover:bg-brand-blue/90">View results</Button>
             </SheetClose>
           </div>
         </div>

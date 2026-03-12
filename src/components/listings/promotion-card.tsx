@@ -124,13 +124,14 @@ export const PromotionCard = memo(function PromotionCard({
                 posterUrl={normalizedPosterUrl}
                 alt={title}
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                mediaFitClassName="object-contain sm:object-cover"
               />
             ) : (
               <Image
                 src={normalizedImageUrl}
                 alt={title}
                 fill
-                className="object-cover transition-transform duration-500 group-hover:scale-110"
+                className="object-contain sm:object-cover transition-transform duration-500 group-hover:scale-110"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
               />
             )
