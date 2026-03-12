@@ -4,7 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
-import { ACCOUNT_PROFILE_TABLE, readOwnerId } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_TABLE, normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
 import type { Metadata } from "next";
 
 interface PromotionDetailPageProps {
@@ -35,12 +35,14 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
   const supabase = await createClient();
 
   // Fetch promotion
-  const { data: promotion } = await supabase
+  const { data: rawPromotion } = await supabase
     .from("promotions")
     .select("*")
     .eq("id", id)
     .eq("status", "live")
     .single();
+
+  const promotion = rawPromotion ? normalizeOwnerRecord(rawPromotion) : null;
 
   if (!promotion) notFound();
 

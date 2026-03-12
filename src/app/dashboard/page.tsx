@@ -19,7 +19,12 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { VerificationProgress } from "@/components/trust/verification-progress";
-import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import {
+  ACCOUNT_PROFILE_TABLE,
+  applyOwnerFilter,
+  getOwnerColumn,
+  readAccountVerificationStatus,
+} from "@/lib/account/compat";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { AttentionBanner } from "@/components/dashboard/attention-banner";
 import { NeedsAttention } from "@/components/dashboard/needs-attention";
@@ -46,6 +51,13 @@ export default async function DashboardPage() {
   const now = nowDate.toISOString();
   const sevenDaysFromNow = new Date(nowDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const fortyEightHoursFromNow = new Date(nowDate.getTime() + 48 * 60 * 60 * 1000).toISOString();
+  const [listingOwnerColumn, businessOwnerColumn, leadsOwnerColumn, contactOwnerColumn] =
+    await Promise.all([
+      getOwnerColumn(supabase, "listings"),
+      getOwnerColumn(supabase, "businesses"),
+      getOwnerColumn(supabase, "leads"),
+      getOwnerColumn(supabase, "contact_events"),
+    ]);
 
   // Fetch all data in parallel for maximum performance
   const [
@@ -69,81 +81,110 @@ export default async function DashboardPage() {
     // Verification steps
     supabase.from("verification_steps").select("step_type, status").eq("user_id", user.id),
     // Active listings count
-    supabase
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", user.id)
-      .eq("status", "live"),
+    applyOwnerFilter(
+      supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
+      listingOwnerColumn,
+      user.id
+    ),
     // All listing records for views and activity
-    supabase
-      .from("listings")
-      .select("id, title, status, created_at, updated_at")
-      .eq("owner_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(50),
+    applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select("id, title, status, created_at, updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(50),
+      listingOwnerColumn,
+      user.id
+    ),
     // Unread leads count (NEW — the key actionable metric)
-    supabase
-      .from("leads")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", user.id)
-      .eq("status", "new"),
+    applyOwnerFilter(
+      supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "new"),
+      leadsOwnerColumn,
+      user.id
+    ),
     // Total leads count
-    supabase
-      .from("contact_events")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", user.id),
+    applyOwnerFilter(
+      supabase.from("contact_events").select("*", { count: "exact", head: true }),
+      contactOwnerColumn,
+      user.id
+    ),
     // Active promotions count
-    supabase
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", user.id)
-      .eq("status", "live")
-      .or(`boost_until.gt.${now},featured_until.gt.${now},urgent_until.gt.${now}`),
+    applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "live")
+        .or(`boost_until.gt.${now},featured_until.gt.${now},urgent_until.gt.${now}`),
+      listingOwnerColumn,
+      user.id
+    ),
     // Rejected listings count (NEW — needs attention)
-    supabase
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", user.id)
-      .eq("status", "rejected"),
+    applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "rejected"),
+      listingOwnerColumn,
+      user.id
+    ),
     // Pending moderation count (NEW — needs attention)
-    supabase
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", user.id)
-      .in("status", ["pending_moderation", "flagged_for_review"]),
+    applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .in("status", ["pending_moderation", "flagged_for_review"]),
+      listingOwnerColumn,
+      user.id
+    ),
     // Expiring listings count (NEW — within 7 days)
-    supabase
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", user.id)
-      .eq("status", "live")
-      .lt("expires_at", sevenDaysFromNow)
-      .gt("expires_at", now),
+    applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "live")
+        .lt("expires_at", sevenDaysFromNow)
+        .gt("expires_at", now),
+      listingOwnerColumn,
+      user.id
+    ),
     // Expiring promotions count (NEW — within 48 hours)
-    supabase
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", user.id)
-      .eq("status", "live")
-      .or(
-        `and(boost_until.gt.${now},boost_until.lt.${fortyEightHoursFromNow}),and(featured_until.gt.${now},featured_until.lt.${fortyEightHoursFromNow}),and(urgent_until.gt.${now},urgent_until.lt.${fortyEightHoursFromNow})`
-      ),
+    applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "live")
+        .or(
+          `and(boost_until.gt.${now},boost_until.lt.${fortyEightHoursFromNow}),and(featured_until.gt.${now},featured_until.lt.${fortyEightHoursFromNow}),and(urgent_until.gt.${now},urgent_until.lt.${fortyEightHoursFromNow})`
+        ),
+      listingOwnerColumn,
+      user.id
+    ),
     // Business count (for quick actions)
-    supabase.from("businesses").select("*", { count: "exact", head: true }).eq("owner_id", user.id),
+    applyOwnerFilter(
+      supabase.from("businesses").select("*", { count: "exact", head: true }),
+      businessOwnerColumn,
+      user.id
+    ),
     // Recent leads for activity feed
-    supabase
-      .from("leads")
-      .select("id, buyer_name, message, created_at")
-      .eq("owner_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(5),
+    applyOwnerFilter(
+      supabase
+        .from("leads")
+        .select("id, buyer_name, message, created_at")
+        .order("created_at", { ascending: false })
+        .limit(5),
+      leadsOwnerColumn,
+      user.id
+    ),
     // Recent listing status changes for activity feed
-    supabase
-      .from("listings")
-      .select("id, title, status, created_at, updated_at")
-      .eq("owner_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(5),
+    applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select("id, title, status, created_at, updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(5),
+      listingOwnerColumn,
+      user.id
+    ),
   ]);
 
   const profile = profileResult.data;

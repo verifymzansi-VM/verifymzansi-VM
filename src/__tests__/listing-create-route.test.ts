@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
+import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
 const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockCheckRateLimit } =
   vi.hoisted(() => ({
@@ -57,6 +58,7 @@ function createGetRequest(url: string): NextRequest {
 describe("POST /api/listings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
     mockCreateClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
     });
@@ -91,7 +93,7 @@ describe("POST /api/listings", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            neq: vi.fn().mockResolvedValue({ count: 0 }),
+            neq: vi.fn().mockReturnThis(),
           };
         }
         return {
@@ -138,7 +140,7 @@ describe("POST /api/listings", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            neq: vi.fn().mockResolvedValue({ count: 0 }),
+            neq: vi.fn().mockReturnThis(),
           };
         }
         return {
@@ -225,11 +227,92 @@ describe("POST /api/listings", () => {
       code: "verification_required",
     });
   });
+
+  it("writes seller_id when listings still use the legacy owner column", async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({
+        single: vi.fn().mockResolvedValue({ data: { id: "listing-1" }, error: null }),
+      }),
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            upsert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+        if (table === "listings") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({
+                    error: { code: "42703", message: "column listings.owner_id does not exist" },
+                  }),
+                };
+              }
+              if (fields === "id, seller_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+              return {
+                neq: vi.fn().mockResolvedValue({ count: 0 }),
+              };
+            }),
+            insert: insertSpy,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(201);
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        seller_id: USER_ID,
+      })
+    );
+    expect(insertSpy).not.toHaveBeenCalledWith(expect.objectContaining({ owner_id: USER_ID }));
+  });
 });
 
 describe("GET /api/listings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
   });
 
   it("applies placeholder-content exclusions to public listing queries", async () => {
@@ -327,5 +410,88 @@ describe("GET /api/listings", () => {
     expect(json.listings[0].id).toBe("listing-live");
     expect(json.total).toBe(1);
     expect(json.sellers).toHaveLength(1);
+  });
+
+  it("falls back to seller_id and normalizes public results back to owner_id", async () => {
+    const rangeSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "listing-live",
+          seller_id: USER_ID,
+          title: "Toyota Corolla",
+          description: "Verified listing",
+        },
+      ],
+      count: 1,
+      error: null,
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "listings") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({
+                    error: { code: "42703", message: "column listings.owner_id does not exist" },
+                  }),
+                };
+              }
+              if (fields === "id, seller_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+              return {
+                eq: vi.fn().mockReturnThis(),
+                not: vi.fn().mockReturnThis(),
+                order: vi.fn().mockReturnThis(),
+                range: rangeSpy,
+              };
+            }),
+          };
+        }
+
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  user_id: USER_ID,
+                  display_name: "Nomsa",
+                  account_verification_status: "verified",
+                },
+              ],
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/listings?page=1&limit=24")
+    );
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.listings[0]).toMatchObject({
+      id: "listing-live",
+      owner_id: USER_ID,
+      seller_id: USER_ID,
+    });
+    expect(json.sellers).toMatchObject([
+      {
+        user_id: USER_ID,
+        display_name: "Nomsa",
+      },
+    ]);
   });
 });

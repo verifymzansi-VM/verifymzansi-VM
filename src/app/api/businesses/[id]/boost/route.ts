@@ -8,10 +8,24 @@ import { ADDON_PRICES, BOOST_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  ACCOUNT_PROFILE_WRITE_TABLE,
+  getOwnerColumn,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
 
 const log = createLogger("BoostBusiness");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+type BusinessCheckoutRow = {
+  id: string;
+  business_name: string;
+  status: string;
+  boost_until?: string | null;
+  owner_id?: string | null;
+  seller_id?: string | null;
+};
 
 /**
  * POST /api/businesses/[id]/boost
@@ -36,6 +50,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "businesses");
 
     const { data: accountProfile } = await admin
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
@@ -47,17 +62,18 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    const { data: business } = await admin
+    const { data: rawBusiness } = await admin
       .from("businesses")
-      .select("id, business_name, status, owner_id, boost_until")
+      .select(withOwnerColumn("id, business_name, status, owner_id, boost_until", ownerColumn))
       .eq("id", businessId)
       .maybeSingle();
+    const business = rawBusiness as BusinessCheckoutRow | null;
 
     if (!business) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
-    if (business.owner_id !== user.id) {
+    if (readOwnerId(business) !== user.id) {
       return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 

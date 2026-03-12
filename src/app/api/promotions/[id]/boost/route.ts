@@ -6,9 +6,22 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { ADDON_PRICES, BOOST_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  getOwnerColumn,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
 
 const log = createLogger("PromotionBoostCheckout");
+type PromotionCheckoutRow = {
+  id: string;
+  title: string;
+  status: string;
+  boost_until?: string | null;
+  owner_id?: string | null;
+  seller_id?: string | null;
+};
 
 /**
  * POST /api/promotions/[id]/boost
@@ -36,6 +49,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "promotions");
 
     // Check account profile
     const { data: profile } = await admin
@@ -49,17 +63,18 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     // Check promotion exists and belongs to user
-    const { data: promotion } = await admin
+    const { data: rawPromotion } = await admin
       .from("promotions")
-      .select("id, title, status, owner_id, boost_until")
+      .select(withOwnerColumn("id, title, status, owner_id, boost_until", ownerColumn))
       .eq("id", promotionId)
       .maybeSingle();
+    const promotion = rawPromotion as PromotionCheckoutRow | null;
 
     if (!promotion) {
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
     }
 
-    if (promotion.owner_id !== user.id) {
+    if (readOwnerId(promotion) !== user.id) {
       return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 

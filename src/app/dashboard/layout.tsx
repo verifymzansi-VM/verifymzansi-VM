@@ -4,7 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import {
+  ACCOUNT_PROFILE_TABLE,
+  applyOwnerFilter,
+  getOwnerColumn,
+  readAccountVerificationStatus,
+} from "@/lib/account/compat";
 import {
   DashboardSidebar,
   type DashboardSidebarBadges,
@@ -25,6 +30,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         } = await supabase.auth.getUser();
         if (!user) return;
 
+        const [leadOwnerColumn, listingOwnerColumn] = await Promise.all([
+          getOwnerColumn(supabase, "leads"),
+          getOwnerColumn(supabase, "listings"),
+        ]);
+
         const [
           unreadLeads,
           rejectedListings,
@@ -32,21 +42,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           verificationSteps,
           accountProfile,
         ] = await Promise.all([
-          supabase
-            .from("leads")
-            .select("*", { count: "exact", head: true })
-            .eq("owner_id", user.id)
-            .eq("status", "new"),
-          supabase
-            .from("listings")
-            .select("*", { count: "exact", head: true })
-            .eq("owner_id", user.id)
-            .eq("status", "rejected"),
-          supabase
-            .from("listings")
-            .select("*", { count: "exact", head: true })
-            .eq("owner_id", user.id)
-            .in("status", ["pending_moderation", "flagged_for_review"]),
+          applyOwnerFilter(
+            supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "new"),
+            leadOwnerColumn,
+            user.id
+          ),
+          applyOwnerFilter(
+            supabase
+              .from("listings")
+              .select("*", { count: "exact", head: true })
+              .eq("status", "rejected"),
+            listingOwnerColumn,
+            user.id
+          ),
+          applyOwnerFilter(
+            supabase
+              .from("listings")
+              .select("*", { count: "exact", head: true })
+              .in("status", ["pending_moderation", "flagged_for_review"]),
+            listingOwnerColumn,
+            user.id
+          ),
           supabase
             .from("verification_steps")
             .select("status")

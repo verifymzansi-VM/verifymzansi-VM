@@ -9,7 +9,14 @@ import {
   type SimilarSellerRow,
 } from "@/components/listings/listing-detail-content";
 import type { Metadata } from "next";
-import { ACCOUNT_PROFILE_TABLE, readOwnerId } from "@/lib/account/compat";
+import {
+  ACCOUNT_PROFILE_TABLE,
+  getOwnerColumn,
+  normalizeOwnerRecord,
+  normalizeOwnerRecords,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
 
 interface ListingDetailPageProps {
   params: Promise<{ id: string }>;
@@ -37,14 +44,17 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
 export default async function ListingDetailPage({ params }: ListingDetailPageProps) {
   const { id } = await params;
   const supabase = await createClient();
+  const listingOwnerColumn = await getOwnerColumn(supabase, "listings");
 
   // Fetch listing
-  const { data: listing } = await supabase
+  const { data: rawListing } = await supabase
     .from("listings")
     .select("*")
     .eq("id", id)
     .eq("status", "live")
     .single();
+
+  const listing = rawListing ? normalizeOwnerRecord(rawListing) : null;
 
   if (!listing) notFound();
 
@@ -73,7 +83,10 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   const { data: similarListings } = await supabase
     .from("listings")
     .select(
-      "id, title, price_cents, price_negotiable, condition, photos, location_province, location_city, category, attributes, created_at, boost_until, featured, owner_id"
+      withOwnerColumn(
+        "id, title, price_cents, price_negotiable, condition, photos, location_province, location_city, category, attributes, created_at, boost_until, featured, owner_id",
+        listingOwnerColumn
+      )
     )
     .eq("status", "live")
     .eq("area", "MZANSI_MARKET")
@@ -83,7 +96,11 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     .limit(4);
 
   // Fetch owner profiles for similar listings
-  const similarItems = (similarListings ?? []) as SimilarListingRow[];
+  const similarItems = normalizeOwnerRecords(
+    (similarListings ?? []) as unknown as Array<
+      SimilarListingRow & { owner_id?: string | null; seller_id?: string | null }
+    >
+  ) as SimilarListingRow[];
   let similarSellers = new Map<string, SimilarSellerRow>();
   if (similarItems.length > 0) {
     const ownerIds = Array.from(

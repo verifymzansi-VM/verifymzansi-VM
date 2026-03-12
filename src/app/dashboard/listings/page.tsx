@@ -21,6 +21,7 @@ import {
   canFeatured as checkCanFeatured,
   canUrgent as checkCanUrgent,
 } from "@/lib/services/entitlements";
+import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import type { PlanTier, MarketplaceArea } from "@/types/enums";
 
@@ -41,11 +42,13 @@ export default async function ListingsPage() {
 
   let listings: BaseListing[] = [];
   if (user) {
-    const { data } = await supabase
-      .from("listings")
-      .select("*")
-      .eq("owner_id", user.id)
-      .order("created_at", { ascending: false });
+    const listingOwnerColumn = await getOwnerColumn(supabase, "listings");
+    const query = applyOwnerFilter(
+      supabase.from("listings").select("*").order("created_at", { ascending: false }),
+      listingOwnerColumn,
+      user.id
+    );
+    const { data } = await query;
     listings = data || [];
   }
 

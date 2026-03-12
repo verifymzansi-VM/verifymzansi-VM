@@ -12,7 +12,11 @@ import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
   ACCOUNT_PROFILE_WRITE_TABLE,
+  getOwnerColumn,
+  normalizeOwnerRecords,
   readAccountVerificationStatus,
+  withOwnerColumn,
+  withOwnerField,
 } from "@/lib/account/compat";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
@@ -39,6 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "businesses");
     const ip = getClientIp(request);
     const rl = await checkRateLimit({
       key: user.id,
@@ -120,11 +125,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
-      const { count } = await admin
+      const countQuery = admin
         .from("businesses")
         .select("id", { count: "exact", head: true })
-        .eq("owner_id", user.id)
         .neq("status", "rejected");
+
+      const { count } = await countQuery.eq(ownerColumn, user.id);
 
       const check = canCreateListing(count ?? 0, tier as PlanTier, AREA);
       if (!check.allowed) {
@@ -159,38 +165,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const businessPayload = {
+      area: AREA,
+      business_type: data.business_type,
+      business_name: data.business_name,
+      slug: data.slug,
+      description: data.description,
+      category: data.category,
+      logo_url: data.logo_url || null,
+      cover_photo: data.cover_photo || null,
+      cover_video: data.cover_video || null,
+      video_thumbnail: data.video_thumbnail || null,
+      gallery_photos: data.gallery_photos || [],
+      location_province: data.location_province,
+      location_city: data.location_city,
+      store_number: data.store_number || null,
+      map_directions: data.map_directions || null,
+      phone: data.phone || null,
+      whatsapp: data.whatsapp || null,
+      email: data.email || null,
+      website: data.website || null,
+      social_links: data.social_links || null,
+      services_offered: data.services_offered,
+      service_areas: data.service_areas || null,
+      business_details: data.business_details || null,
+      operating_hours: data.operating_hours,
+      payment_methods_accepted: data.payment_methods_accepted,
+      delivery_options: data.delivery_options,
+      status: "pending_moderation" as const,
+    };
+
     const { data: business, error: insertError } = await admin
       .from("businesses")
-      .insert({
-        owner_id: user.id,
-        area: AREA,
-        business_type: data.business_type,
-        business_name: data.business_name,
-        slug: data.slug,
-        description: data.description,
-        category: data.category,
-        logo_url: data.logo_url || null,
-        cover_photo: data.cover_photo || null,
-        cover_video: data.cover_video || null,
-        video_thumbnail: data.video_thumbnail || null,
-        gallery_photos: data.gallery_photos || [],
-        location_province: data.location_province,
-        location_city: data.location_city,
-        store_number: data.store_number || null,
-        map_directions: data.map_directions || null,
-        phone: data.phone || null,
-        whatsapp: data.whatsapp || null,
-        email: data.email || null,
-        website: data.website || null,
-        social_links: data.social_links || null,
-        services_offered: data.services_offered,
-        service_areas: data.service_areas || null,
-        business_details: data.business_details || null,
-        operating_hours: data.operating_hours,
-        payment_methods_accepted: data.payment_methods_accepted,
-        delivery_options: data.delivery_options,
-        status: "pending_moderation",
-      })
+      .insert(withOwnerField(businessPayload, ownerColumn, user.id))
       .select("id")
       .single();
 
@@ -246,6 +253,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "businesses");
     const { searchParams } = request.nextUrl;
 
     // Category counts mode — for auto-hiding empty categories
@@ -290,12 +298,13 @@ export async function GET(request: NextRequest) {
       }
 
       const mineLimit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
-      const { data: myBusinesses } = await admin
+      const myBusinessesQuery = admin
         .from("businesses")
         .select("id, business_name, business_type, category, status, created_at")
-        .eq("owner_id", user.id)
         .order("created_at", { ascending: false })
         .limit(mineLimit);
+
+      const { data: myBusinesses } = await myBusinessesQuery.eq(ownerColumn, user.id);
 
       return NextResponse.json({ businesses: myBusinesses ?? [] });
     }
@@ -309,10 +318,14 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
     const offset = (page - 1) * limit;
 
-    const primarySelect =
-      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at";
-    const fallbackSelect =
-      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at";
+    const primarySelect = withOwnerColumn(
+      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
+      ownerColumn
+    );
+    const fallbackSelect = withOwnerColumn(
+      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
+      ownerColumn
+    );
 
     const buildQuery = (selectClause: string) => {
       let query = admin
@@ -373,7 +386,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      businesses: businesses ?? [],
+      businesses: normalizeOwnerRecords(businesses as Array<Record<string, unknown>>),
       total: count ?? 0,
       page,
       limit,

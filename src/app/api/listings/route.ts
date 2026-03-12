@@ -11,7 +11,12 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { isPostingLimitBypassEnabled } from "../../../lib/utils/posting-limit-bypass";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  applyOwnerFilter,
+  getOwnerColumn,
+  normalizeOwnerRecords,
   readAccountVerificationStatus,
+  withOwnerColumn,
+  withOwnerField,
 } from "@/lib/account/compat";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
@@ -133,14 +138,17 @@ function isPlaceholderListing(listing: { title: string | null; description?: str
 export async function GET(request: NextRequest) {
   try {
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "listings");
     const filters = parseMarketplaceFiltersFromSearchParams(request.nextUrl.searchParams);
     const limit = Math.min(
       50,
       Math.max(1, parseInt(request.nextUrl.searchParams.get("limit") || "24", 10))
     );
     const offset = (filters.page - 1) * limit;
-    const selectClause =
-      "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured";
+    const selectClause = withOwnerColumn(
+      "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured",
+      ownerColumn
+    );
     const hasAttributeFilters = Object.keys(filters.attributes).length > 0;
 
     let listings: Record<string, unknown>[] = [];
@@ -185,7 +193,7 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
         }
 
-        const batch = (data ?? []) as Record<string, unknown>[];
+        const batch = (data ?? []) as unknown as Record<string, unknown>[];
         listings.push(...batch);
 
         if (batch.length < batchSize) {
@@ -244,7 +252,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
       }
 
-      const filteredListings = ((data ?? []) as Record<string, unknown>[]).filter(
+      const filteredListings = ((data ?? []) as unknown as Record<string, unknown>[]).filter(
         (listing) =>
           !isPlaceholderListing({
             title: String(listing.title ?? ""),
@@ -252,12 +260,14 @@ export async function GET(request: NextRequest) {
           })
       );
 
-      listings = filteredListings;
+      listings = normalizeOwnerRecords(filteredListings);
       total = Math.max(
         0,
         (count ?? filteredListings.length) - ((data?.length ?? 0) - filteredListings.length)
       );
     }
+
+    listings = normalizeOwnerRecords(listings);
 
     const sellerIds = Array.from(
       new Set(listings.map((listing) => String(listing.owner_id)).filter(Boolean))
@@ -325,6 +335,7 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "listings");
 
     // ── Get account profile ──────────────────────────────────
     const { data: profile } = await admin
@@ -406,11 +417,16 @@ export async function POST(request: NextRequest) {
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       // Paid plan — check listing count against plan limits
-      const { count } = await admin
-        .from("listings")
-        .select("id", { count: "exact", head: true })
-        .eq("owner_id", user.id)
-        .neq("status", "rejected");
+      const countQuery = applyOwnerFilter(
+        admin
+          .from("listings")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "rejected"),
+        ownerColumn,
+        user.id
+      );
+
+      const { count } = await countQuery;
 
       const currentCount = count ?? 0;
       const check = canCreateListing(currentCount, tier as PlanTier, AREA);
@@ -466,25 +482,28 @@ export async function POST(request: NextRequest) {
     // ── Prepare listing record ───────────────────────────────
     const priceCents = Math.round(data.price_zar * 100);
 
-    const listingRecord = {
-      owner_id: user.id,
-      title: data.title,
-      description: data.description,
-      price_cents: priceCents,
-      price_negotiable: data.negotiable,
-      category: data.category,
-      attributes: "attributes" in data ? data.attributes : {},
-      condition: data.condition || null,
-      location_province: data.province || null,
-      location_city: data.city || null,
-      location_suburb: (body as Record<string, unknown>).town || null,
-      status: "pending_moderation",
-      area: AREA,
-      photos: data.images,
-      videos: rawVideos,
-      video_thumbnail: (body as Record<string, unknown>).videoThumbnail || null,
-      contact_methods: (body as Record<string, unknown>).contactMethods || ["call"],
-    };
+    const listingRecord = withOwnerField(
+      {
+        title: data.title,
+        description: data.description,
+        price_cents: priceCents,
+        price_negotiable: data.negotiable,
+        category: data.category,
+        attributes: "attributes" in data ? data.attributes : {},
+        condition: data.condition || null,
+        location_province: data.province || null,
+        location_city: data.city || null,
+        location_suburb: (body as Record<string, unknown>).town || null,
+        status: "pending_moderation",
+        area: AREA,
+        photos: data.images,
+        videos: rawVideos,
+        video_thumbnail: (body as Record<string, unknown>).videoThumbnail || null,
+        contact_methods: (body as Record<string, unknown>).contactMethods || ["call"],
+      },
+      ownerColumn,
+      user.id
+    );
 
     // ── Insert listing ───────────────────────────────────────
     const { data: newListing, error: insertError } = await admin

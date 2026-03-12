@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
+import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
 const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -90,7 +91,10 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
 }
 
 describe("POST /api/promotions", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+  });
 
   it("rejects unauthenticated requests", async () => {
     mockAuth(null);
@@ -246,7 +250,7 @@ describe("POST /api/promotions", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            neq: vi.fn().mockResolvedValue({ count: 0 }),
+            neq: vi.fn().mockReturnThis(),
           };
         }
         return {
@@ -323,7 +327,7 @@ describe("POST /api/promotions", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            neq: vi.fn().mockResolvedValue({ count: 0 }),
+            neq: vi.fn().mockReturnThis(),
           };
         }
         return {
@@ -352,7 +356,10 @@ describe("POST /api/promotions", () => {
 });
 
 describe("GET /api/promotions", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+  });
 
   it("returns promotions list", async () => {
     mockAdmin({
@@ -503,7 +510,10 @@ describe("GET /api/promotions", () => {
 });
 
 describe("GET /api/promotions/[id]", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+  });
 
   it("rejects invalid UUID", async () => {
     const req = createRequest("http://localhost:3000/api/promotions/bad-id");
@@ -544,7 +554,10 @@ describe("GET /api/promotions/[id]", () => {
 });
 
 describe("PUT /api/promotions/[id]", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+  });
 
   it("rejects unauthenticated requests", async () => {
     mockAuth(null);
@@ -595,7 +608,7 @@ describe("PUT /api/promotions/[id]", () => {
         eq: vi.fn().mockResolvedValue({ error: null }),
       }),
     });
-    // PUT calls from("promotions") twice: once for select, once for update
+    // PUT calls from("promotions") three times: probe, select, update
     let callCount = 0;
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
@@ -612,6 +625,13 @@ describe("PUT /api/promotions/[id]", () => {
         if (table === "promotions") {
           callCount++;
           if (callCount === 1) {
+            return {
+              select: vi.fn(() => ({
+                limit: vi.fn().mockResolvedValue({ error: null }),
+              })),
+            };
+          }
+          if (callCount === 2) {
             // First call: ownership check
             return {
               select: vi.fn().mockReturnThis(),
@@ -621,7 +641,7 @@ describe("PUT /api/promotions/[id]", () => {
               }),
             };
           }
-          // Second call: update
+          // Third call: update
           return {
             update: updateSpy,
           };
@@ -650,7 +670,10 @@ describe("PUT /api/promotions/[id]", () => {
 });
 
 describe("DELETE /api/promotions/[id]", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+  });
 
   it("rejects unauthenticated requests", async () => {
     mockAuth(null);
@@ -695,13 +718,20 @@ describe("DELETE /api/promotions/[id]", () => {
 
   it("deletes draft promotion successfully", async () => {
     mockAuth({ id: USER_ID });
-    // DELETE calls from("promotions") twice: once for select, once for delete
+    // DELETE calls from("promotions") three times: probe, select, delete
     let callCount = 0;
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
         if (table === "promotions") {
           callCount++;
           if (callCount === 1) {
+            return {
+              select: vi.fn(() => ({
+                limit: vi.fn().mockResolvedValue({ error: null }),
+              })),
+            };
+          }
+          if (callCount === 2) {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
@@ -742,6 +772,13 @@ describe("DELETE /api/promotions/[id]", () => {
         if (table === "promotions") {
           callCount++;
           if (callCount === 1) {
+            return {
+              select: vi.fn(() => ({
+                limit: vi.fn().mockResolvedValue({ error: null }),
+              })),
+            };
+          }
+          if (callCount === 2) {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
+import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
 const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockCheckRateLimit } =
   vi.hoisted(() => ({
@@ -52,6 +53,7 @@ function createRequest(body: unknown): NextRequest {
 describe("POST /api/businesses", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
     mockCreateClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
     });
@@ -133,7 +135,7 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            neq: vi.fn().mockResolvedValue({ count: 0 }),
+            neq: vi.fn().mockReturnThis(),
           };
         }
         return {
@@ -189,7 +191,7 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            neq: vi.fn().mockResolvedValue({ count: 0 }),
+            neq: vi.fn().mockReturnThis(),
             insert: insertSpy,
             single: singleSpy,
           };
@@ -289,11 +291,95 @@ describe("POST /api/businesses", () => {
       code: "verification_required",
     });
   });
+
+  it("writes seller_id when businesses still use the legacy owner column", async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({
+        single: vi.fn().mockResolvedValue({ data: { id: "business-1" }, error: null }),
+      }),
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            upsert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+        if (table === "businesses") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({
+                    error: {
+                      code: "42703",
+                      message: "column businesses.owner_id does not exist",
+                    },
+                  }),
+                };
+              }
+              if (fields === "id, seller_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+              return {
+                neq: vi.fn().mockResolvedValue({ count: 0 }),
+              };
+            }),
+            insert: insertSpy,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(201);
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        seller_id: USER_ID,
+      })
+    );
+    expect(insertSpy).not.toHaveBeenCalledWith(expect.objectContaining({ owner_id: USER_ID }));
+  });
 });
 
 describe("GET /api/businesses", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
   });
 
   it("applies placeholder-content exclusions to public business queries", async () => {
@@ -325,5 +411,69 @@ describe("GET /api/businesses", () => {
     expect(notSpy).toHaveBeenCalledWith("business_name", "ilike", "%[seed]%");
     expect(notSpy).toHaveBeenCalledWith("business_name", "ilike", "%demo%");
     expect(notSpy).toHaveBeenCalledWith("business_name", "ilike", "%sample%");
+  });
+
+  it("falls back to seller_id and normalizes business responses back to owner_id", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "businesses") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({
+                    error: {
+                      code: "42703",
+                      message: "column businesses.owner_id does not exist",
+                    },
+                  }),
+                };
+              }
+              if (fields === "id, seller_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+              return {
+                eq: vi.fn().mockReturnThis(),
+                not: vi.fn().mockReturnThis(),
+                order: vi.fn().mockReturnThis(),
+                range: vi.fn().mockResolvedValue({
+                  data: [
+                    {
+                      id: "business-1",
+                      seller_id: USER_ID,
+                      business_name: "Nomsa Fashion",
+                      description: "A valid business profile description.",
+                    },
+                  ],
+                  count: 1,
+                  error: null,
+                }),
+              };
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const request = {
+      nextUrl: new URL("http://localhost:3000/api/businesses?page=1&limit=24"),
+    } as NextRequest;
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.businesses[0]).toMatchObject({
+      id: "business-1",
+      owner_id: USER_ID,
+      seller_id: USER_ID,
+    });
   });
 });

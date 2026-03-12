@@ -19,7 +19,12 @@ import { normalizeBusinessCategoryParam } from "@/lib/utils/marketplace-query";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  applyOwnerFilter,
+  getOwnerColumn,
+  normalizeOwnerRecords,
   readAccountVerificationStatus,
+  withOwnerColumn,
+  withOwnerField,
 } from "@/lib/account/compat";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
@@ -114,6 +119,7 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "promotions");
     const ip = getClientIp(request);
     const rl = await checkRateLimit({
       key: user.id,
@@ -181,11 +187,16 @@ export async function POST(request: NextRequest) {
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       // Paid plan — check promotion count against plan limits
-      const { count } = await admin
-        .from("promotions")
-        .select("id", { count: "exact", head: true })
-        .eq("owner_id", user.id)
-        .neq("status", "rejected");
+      const countQuery = applyOwnerFilter(
+        admin
+          .from("promotions")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "rejected"),
+        ownerColumn,
+        user.id
+      );
+
+      const { count } = await countQuery;
 
       const currentCount = count ?? 0;
       const check = canCreateListing(currentCount, tier as PlanTier, AREA);
@@ -256,26 +267,31 @@ export async function POST(request: NextRequest) {
 
     const { data: promotion, error: insertError } = await admin
       .from("promotions")
-      .insert({
-        owner_id: user.id,
-        title: data.title,
-        description: data.description,
-        promotion_type: data.promotion_type,
-        category: data.category || null,
-        category_key: categoryKey,
-        photos: data.images,
-        videos: data.videos,
-        video_thumbnail: data.video_thumbnail || null,
-        price_cents: priceCents,
-        price_negotiable: data.negotiable,
-        location_province: data.province,
-        location_city: data.city,
-        contact_methods: data.contact_methods,
-        start_date: data.start_date || null,
-        end_date: data.end_date || null,
-        business_id: data.business_id || null,
-        status: "pending_moderation",
-      })
+      .insert(
+        withOwnerField(
+          {
+            title: data.title,
+            description: data.description,
+            promotion_type: data.promotion_type,
+            category: data.category || null,
+            category_key: categoryKey,
+            photos: data.images,
+            videos: data.videos,
+            video_thumbnail: data.video_thumbnail || null,
+            price_cents: priceCents,
+            price_negotiable: data.negotiable,
+            location_province: data.province,
+            location_city: data.city,
+            contact_methods: data.contact_methods,
+            start_date: data.start_date || null,
+            end_date: data.end_date || null,
+            business_id: data.business_id || null,
+            status: "pending_moderation",
+          },
+          ownerColumn,
+          user.id
+        )
+      )
       .select("id")
       .single();
 
@@ -336,6 +352,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "promotions");
     const { searchParams } = request.nextUrl;
 
     const promotionType = searchParams.get("type");
@@ -392,20 +409,18 @@ export async function GET(request: NextRequest) {
         .range(offset, offset + limit - 1);
     };
 
-    const primarySelect =
-      "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at";
-    const fallbackWithoutCategoryKey =
-      "id, owner_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at";
-    const legacyOwnerSelect =
-      "id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at";
-    const legacyOwnerWithoutCategoryKey =
-      "id, seller_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at";
+    const primarySelect = withOwnerColumn(
+      "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
+      ownerColumn
+    );
+    const fallbackWithoutCategoryKey = withOwnerColumn(
+      "id, owner_id, business_id, title, description, promotion_type, category, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, view_count, published_at, created_at",
+      ownerColumn
+    );
 
-    const attempts: Array<{ select: string; usesLegacyOwner: boolean; hasCategoryKey: boolean }> = [
-      { select: primarySelect, usesLegacyOwner: false, hasCategoryKey: true },
-      { select: fallbackWithoutCategoryKey, usesLegacyOwner: false, hasCategoryKey: false },
-      { select: legacyOwnerSelect, usesLegacyOwner: true, hasCategoryKey: true },
-      { select: legacyOwnerWithoutCategoryKey, usesLegacyOwner: true, hasCategoryKey: false },
+    const attempts: Array<{ select: string; hasCategoryKey: boolean }> = [
+      { select: primarySelect, hasCategoryKey: true },
+      { select: fallbackWithoutCategoryKey, hasCategoryKey: false },
     ];
 
     let promotions: PromotionResultRow[] | null = null;
@@ -426,10 +441,7 @@ export async function GET(request: NextRequest) {
       error = result.error;
 
       const message = result.error.message.toLowerCase();
-      const canRetry =
-        message.includes("category_key") ||
-        message.includes("owner_id") ||
-        message.includes("seller_id");
+      const canRetry = message.includes("category_key");
 
       if (!canRetry || attempt === attempts[attempts.length - 1]) {
         break;
@@ -441,20 +453,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch promotions" }, { status: 500 });
     }
 
-    const normalizedPromotions = (promotions ?? []).map((promotion) => {
+    const normalizedPromotions = normalizeOwnerRecords(promotions ?? []).map((promotion) => {
       const normalizedCategoryKey = selectedAttempt.hasCategoryKey
         ? (promotion.category_key ?? null)
         : inferPromotionCategoryKey(
             promotion.category ?? null,
             promotion.promotion_type as PromotionType
           );
-      const ownerId = selectedAttempt.usesLegacyOwner
-        ? (promotion.seller_id ?? null)
-        : (promotion.owner_id ?? null);
 
       return {
         ...promotion,
-        owner_id: ownerId,
         category_key: normalizedCategoryKey,
       };
     });

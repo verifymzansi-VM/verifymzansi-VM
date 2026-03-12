@@ -6,6 +6,7 @@ import { Footer } from "@/components/layout/footer";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import {
   ACCOUNT_PROFILE_TABLE,
+  normalizeOwnerRecord,
   readAccountVerificationStatus,
   readOwnerId,
 } from "@/lib/account/compat";
@@ -38,12 +39,14 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: business } = await supabase
+  const { data: rawBusiness } = await supabase
     .from("businesses")
     .select("*")
     .eq("id", id)
     .eq("status", "live")
     .single();
+
+  const business = rawBusiness ? normalizeOwnerRecord(rawBusiness) : null;
 
   if (!business) {
     notFound();

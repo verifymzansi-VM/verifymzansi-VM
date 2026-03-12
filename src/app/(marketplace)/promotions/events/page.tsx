@@ -6,7 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import {
+  ACCOUNT_PROFILE_TABLE,
+  getOwnerColumn,
+  normalizeOwnerRecords,
+  readAccountVerificationStatus,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { PastEventsAccordion } from "./past-events-accordion";
 import Link from "next/link";
@@ -18,6 +25,27 @@ export const metadata = {
 };
 
 export const revalidate = 60;
+type EventRow = {
+  id: string;
+  owner_id?: string | null;
+  seller_id?: string | null;
+  business_id?: string | null;
+  title: string | null;
+  description?: string | null;
+  photos?: string[] | null;
+  videos?: string[] | null;
+  video_thumbnail?: string | null;
+  price_cents?: number | null;
+  price_negotiable?: boolean | null;
+  location_province?: string | null;
+  location_city?: string | null;
+  start_date: string | null;
+  end_date?: string | null;
+  boost_until?: string | null;
+  featured_until?: string | null;
+  view_count?: number | null;
+  created_at: string;
+};
 
 function groupByMonth(
   events: Array<{
@@ -50,15 +78,19 @@ function isPlaceholderEvent(event: { title: string | null; description?: string 
 
 export default async function EventsPage() {
   const admin = createAdminClient();
+  const promotionOwnerColumn = await getOwnerColumn(admin, "promotions");
   const now = new Date().toISOString();
 
   // Fetch event promotions — prioritise upcoming (end_date in the future), boosted first
   const { data: events } = await admin
     .from("promotions")
     .select(
-      `id, owner_id, business_id, title, description, promotion_type, category,
+      withOwnerColumn(
+        `id, owner_id, business_id, title, description, promotion_type, category,
        photos, videos, price_cents, price_negotiable, location_province, location_city,
-       start_date, end_date, boost_until, featured_until, view_count, created_at`
+       start_date, end_date, boost_until, featured_until, view_count, created_at`,
+        promotionOwnerColumn
+      )
     )
     .eq("status", "live")
     .eq("promotion_type", "event")
@@ -77,9 +109,12 @@ export default async function EventsPage() {
   const { data: pastEvents } = await admin
     .from("promotions")
     .select(
-      `id, owner_id, business_id, title, promotion_type,
+      withOwnerColumn(
+        `id, owner_id, business_id, title, promotion_type,
        photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city,
-       start_date, end_date, view_count, created_at`
+       start_date, end_date, view_count, created_at`,
+        promotionOwnerColumn
+      )
     )
     .eq("status", "live")
     .eq("promotion_type", "event")
@@ -92,10 +127,14 @@ export default async function EventsPage() {
     .limit(24);
 
   // Gather unique account IDs for trust levels
-  const upcoming = (events ?? []).filter((event) => !isPlaceholderEvent(event));
-  const past = (pastEvents ?? []).filter((event) => !isPlaceholderEvent(event));
+  const upcoming = normalizeOwnerRecords((events ?? []) as unknown as EventRow[]).filter(
+    (event) => !isPlaceholderEvent(event)
+  );
+  const past = normalizeOwnerRecords((pastEvents ?? []) as unknown as EventRow[]).filter(
+    (event) => !isPlaceholderEvent(event)
+  );
   const allEvents = [...upcoming, ...past];
-  const accountIds = [...new Set(allEvents.map((event) => event.owner_id))];
+  const accountIds = [...new Set(allEvents.map((event) => readOwnerId(event)).filter(Boolean))];
   const { data: accountProfiles } = accountIds.length
     ? await admin
         .from(ACCOUNT_PROFILE_TABLE)
@@ -122,14 +161,7 @@ export default async function EventsPage() {
   const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
 
   // Group upcoming events by month
-  const monthGroups = groupByMonth(
-    upcoming as Array<{
-      id: string;
-      start_date: string | null;
-      created_at: string;
-      [key: string]: unknown;
-    }>
-  );
+  const monthGroups = groupByMonth(upcoming);
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6 max-w-7xl">
@@ -162,7 +194,7 @@ export default async function EventsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {group.events.map((event, index) => {
-                  const accountProfile = accountProfileMap.get(event.owner_id as string);
+                  const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
                   const businessName = event.business_id
                     ? businessMap.get(event.business_id as string)
                     : undefined;
@@ -224,20 +256,20 @@ export default async function EventsPage() {
       {past.length > 0 && (
         <PastEventsAccordion
           events={past.map((event) => {
-            const accountProfile = accountProfileMap.get(event.owner_id);
+            const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
             const videos = event.videos as string[] | null;
             const photos = event.photos as string[] | null;
             return {
               id: event.id,
-              title: event.title,
-              price: event.price_cents,
+              title: event.title ?? "Untitled event",
+              price: event.price_cents ?? null,
               negotiable: event.price_negotiable as boolean,
               imageUrl: photos?.[0] || videos?.[0],
               posterUrl: videos?.[0]
                 ? (event.video_thumbnail as string | null) || photos?.[0] || undefined
                 : undefined,
-              province: event.location_province,
-              city: event.location_city,
+              province: event.location_province ?? "",
+              city: event.location_city ?? "",
               createdAt: event.created_at,
               ownerTrustLevel: accountProfile?.trust,
               ownerName: accountProfile?.name,

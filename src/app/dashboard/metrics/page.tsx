@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Eye, TrendingUp, MessageSquare, Package, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
+import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 
 export const metadata = {
   title: "Metrics",
@@ -18,6 +19,10 @@ export default async function MetricsPage() {
 
   // Use user.id directly — listings.owner_id references auth.users(id)
   const ownerId = user.id;
+  const [listingOwnerColumn, contactOwnerColumn] = await Promise.all([
+    getOwnerColumn(supabase, "listings"),
+    getOwnerColumn(supabase, "contact_events"),
+  ]);
 
   // Fetch stats
   const [
@@ -26,17 +31,22 @@ export default async function MetricsPage() {
     { count: leadCount },
     { count: totalListings },
   ] = await Promise.all([
-    supabase
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", ownerId)
-      .eq("status", "live"),
-    supabase.from("listings").select("view_count").eq("owner_id", ownerId),
-    supabase
-      .from("contact_events")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", ownerId),
-    supabase.from("listings").select("*", { count: "exact", head: true }).eq("owner_id", ownerId),
+    applyOwnerFilter(
+      supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
+      listingOwnerColumn,
+      ownerId
+    ),
+    applyOwnerFilter(supabase.from("listings").select("view_count"), listingOwnerColumn, ownerId),
+    applyOwnerFilter(
+      supabase.from("contact_events").select("*", { count: "exact", head: true }),
+      contactOwnerColumn,
+      ownerId
+    ),
+    applyOwnerFilter(
+      supabase.from("listings").select("*", { count: "exact", head: true }),
+      listingOwnerColumn,
+      ownerId
+    ),
   ]);
 
   const totalViews =

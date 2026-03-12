@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { timeAgo, expiresIn } from "@/lib/utils/format";
 import { PROMOTION_TYPE_LABELS, type PromotionType } from "@/types/enums";
+import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 
 interface DashboardListing {
   id: string;
@@ -44,46 +45,62 @@ export default async function MyPromotionsPage() {
 
   const now = new Date().toISOString();
   const admin = createAdminClient();
+  const [listingOwnerColumn, promotionOwnerColumn] = await Promise.all([
+    getOwnerColumn(supabase, "listings"),
+    getOwnerColumn(admin, "promotions"),
+  ]);
 
   // ── Fetch all user's active promotions in parallel ───────
   const [boostedRes, featuredRes, urgentRes, myPromotionsRes] = await Promise.all([
     // Boosted listings
-    supabase
-      .from("listings")
-      .select("id, title, boost_until, area")
-      .eq("owner_id", user.id)
-      .eq("status", "live")
-      .gt("boost_until", now)
-      .order("boost_until", { ascending: true }),
+    applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select("id, title, boost_until, area")
+        .eq("status", "live")
+        .gt("boost_until", now)
+        .order("boost_until", { ascending: true }),
+      listingOwnerColumn,
+      user.id
+    ),
 
     // Featured listings
-    supabase
-      .from("listings")
-      .select("id, title, featured_until, area")
-      .eq("owner_id", user.id)
-      .eq("status", "live")
-      .gt("featured_until", now)
-      .order("featured_until", { ascending: true }),
+    applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select("id, title, featured_until, area")
+        .eq("status", "live")
+        .gt("featured_until", now)
+        .order("featured_until", { ascending: true }),
+      listingOwnerColumn,
+      user.id
+    ),
 
     // Urgent listings
-    supabase
-      .from("listings")
-      .select("id, title, urgent_until, area")
-      .eq("owner_id", user.id)
-      .eq("status", "live")
-      .gt("urgent_until", now)
-      .order("urgent_until", { ascending: true }),
+    applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select("id, title, urgent_until, area")
+        .eq("status", "live")
+        .gt("urgent_until", now)
+        .order("urgent_until", { ascending: true }),
+      listingOwnerColumn,
+      user.id
+    ),
 
     // User's promotions (unified — includes migrated storefront_posts + business_posts)
-    admin
-      .from("promotions")
-      .select(
-        "id, title, promotion_type, business_id, status, boost_until, featured_until, created_at"
-      )
-      .eq("owner_id", user.id)
-      .in("status", ["live", "pending_moderation", "draft"])
-      .order("created_at", { ascending: false })
-      .limit(50),
+    applyOwnerFilter(
+      admin
+        .from("promotions")
+        .select(
+          "id, title, promotion_type, business_id, status, boost_until, featured_until, created_at"
+        )
+        .in("status", ["live", "pending_moderation", "draft"])
+        .order("created_at", { ascending: false })
+        .limit(50),
+      promotionOwnerColumn,
+      user.id
+    ),
   ]);
 
   const boosted = (boostedRes.data ?? []) as unknown as DashboardListing[];

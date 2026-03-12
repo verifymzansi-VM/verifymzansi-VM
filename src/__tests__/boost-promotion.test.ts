@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
+import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
 const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -97,7 +98,10 @@ function setupHappyPath() {
 }
 
 describe("POST /api/promotions/[id]/boost", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+  });
 
   it("rejects invalid UUID", async () => {
     mockAuth({ id: USER_ID });
@@ -171,6 +175,76 @@ describe("POST /api/promotions/[id]/boost", () => {
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.error).toContain("don't own");
+  });
+
+  it("accepts legacy seller_id ownership when promotions still use the old column", async () => {
+    mockAuth({ id: USER_ID });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
+          };
+        }
+        if (table === "promotions") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({
+                    error: {
+                      code: "42703",
+                      message: "column promotions.owner_id does not exist",
+                    },
+                  }),
+                };
+              }
+              if (fields === "id, seller_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+              return {
+                eq: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    id: VALID_UUID,
+                    title: "Legacy Promo",
+                    status: "live",
+                    seller_id: USER_ID,
+                    boost_until: null,
+                  },
+                }),
+              };
+            }),
+          };
+        }
+        if (table === "payments") {
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: "payment-1" }, error: null }),
+              }),
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
+    const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.paymentId).toBe("payment-1");
   });
 
   it("returns 400 when promotion is not live", async () => {

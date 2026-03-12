@@ -8,6 +8,13 @@ import { toFieldErrorMap } from "@/lib/validations/zod-errors";
 import { getEntitlements } from "@/lib/services/entitlements";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import {
+  applyOwnerFilter,
+  getOwnerColumn,
+  normalizeOwnerRecord,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
+import {
   collectMediaUrls,
   diffRemovedMediaUrls,
   queuePublicMediaCleanup,
@@ -17,6 +24,18 @@ import type { BusinessDetails } from "@/types/business-details";
 
 const log = createLogger("BusinessDetail");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+type BusinessOwnerRow = {
+  id: string;
+  status: string;
+  owner_id?: string | null;
+  seller_id?: string | null;
+  logo_url?: string | null;
+  cover_photo?: string | null;
+  cover_video?: string | null;
+  video_thumbnail?: string | null;
+  gallery_photos?: string[] | null;
+  business_details?: BusinessDetails | null;
+};
 
 function getMallPhotoUrls(details: BusinessDetails | null | undefined): string[] {
   return details?.type === "mall_store" ? (details.mall_photos ?? []) : [];
@@ -47,14 +66,16 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
+    const normalizedBusiness = normalizeOwnerRecord(business as BusinessOwnerRow);
+
     // Only allow public access to live businesses
-    if (business.status !== "live") {
+    if (normalizedBusiness.status !== "live") {
       const supabase = await createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user || user.id !== business.owner_id) {
+      if (!user || user.id !== readOwnerId(normalizedBusiness)) {
         return NextResponse.json({ error: "Business not found" }, { status: 404 });
       }
     }
@@ -80,7 +101,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       })
       .then(() => {});
 
-    return NextResponse.json({ business, promotions: promotions ?? [] });
+    return NextResponse.json({ business: normalizedBusiness, promotions: promotions ?? [] });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
     return NextResponse.json({ error: "Failed to fetch business" }, { status: 500 });
@@ -110,21 +131,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "businesses");
 
     // Check ownership
-    const { data: existing } = await admin
+    const { data: rawExisting } = await admin
       .from("businesses")
       .select(
-        "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details"
+        withOwnerColumn(
+          "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details",
+          ownerColumn
+        )
       )
       .eq("id", id)
       .maybeSingle();
+    const existing = rawExisting as BusinessOwnerRow | null;
 
     if (!existing) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
-    if (existing.owner_id !== user.id) {
+    if (readOwnerId(existing) !== user.id) {
       return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 
@@ -202,39 +228,44 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       nextMediaUrls
     );
 
-    const { error: updateError } = await admin
-      .from("businesses")
-      .update({
-        business_type: data.business_type,
-        business_name: data.business_name,
-        slug: data.slug,
-        description: data.description,
-        category: data.category,
-        logo_url: data.logo_url || null,
-        cover_photo: data.cover_photo || null,
-        cover_video: data.cover_video || null,
-        video_thumbnail: data.video_thumbnail || null,
-        gallery_photos: data.gallery_photos || [],
-        location_province: data.location_province,
-        location_city: data.location_city,
-        store_number: data.store_number || null,
-        map_directions: data.map_directions || null,
-        phone: data.phone || null,
-        whatsapp: data.whatsapp || null,
-        email: data.email || null,
-        website: data.website || null,
-        social_links: data.social_links || null,
-        services_offered: data.services_offered,
-        service_areas: data.service_areas || null,
-        business_details: data.business_details || null,
-        operating_hours: data.operating_hours,
-        payment_methods_accepted: data.payment_methods_accepted,
-        delivery_options: data.delivery_options,
-        // Re-trigger moderation on edit so changed content is reviewed
-        status: "pending_moderation",
-      })
-      .eq("id", id)
-      .eq("owner_id", user.id);
+    const updateQuery = applyOwnerFilter(
+      admin
+        .from("businesses")
+        .update({
+          business_type: data.business_type,
+          business_name: data.business_name,
+          slug: data.slug,
+          description: data.description,
+          category: data.category,
+          logo_url: data.logo_url || null,
+          cover_photo: data.cover_photo || null,
+          cover_video: data.cover_video || null,
+          video_thumbnail: data.video_thumbnail || null,
+          gallery_photos: data.gallery_photos || [],
+          location_province: data.location_province,
+          location_city: data.location_city,
+          store_number: data.store_number || null,
+          map_directions: data.map_directions || null,
+          phone: data.phone || null,
+          whatsapp: data.whatsapp || null,
+          email: data.email || null,
+          website: data.website || null,
+          social_links: data.social_links || null,
+          services_offered: data.services_offered,
+          service_areas: data.service_areas || null,
+          business_details: data.business_details || null,
+          operating_hours: data.operating_hours,
+          payment_methods_accepted: data.payment_methods_accepted,
+          delivery_options: data.delivery_options,
+          // Re-trigger moderation on edit so changed content is reviewed
+          status: "pending_moderation",
+        })
+        .eq("id", id),
+      ownerColumn,
+      user.id
+    );
+
+    const { error: updateError } = await updateQuery;
 
     if (updateError) {
       log.error("Failed to update business", { error: updateError.message });
@@ -299,20 +330,25 @@ export async function DELETE(
     }
 
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "businesses");
 
-    const { data: existing } = await admin
+    const { data: rawExisting } = await admin
       .from("businesses")
       .select(
-        "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details"
+        withOwnerColumn(
+          "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details",
+          ownerColumn
+        )
       )
       .eq("id", id)
       .maybeSingle();
+    const existing = rawExisting as BusinessOwnerRow | null;
 
     if (!existing) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
-    if (existing.owner_id !== user.id) {
+    if (readOwnerId(existing) !== user.id) {
       return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 
@@ -323,11 +359,13 @@ export async function DELETE(
       );
     }
 
-    const { error: deleteError } = await admin
-      .from("businesses")
-      .delete()
-      .eq("id", id)
-      .eq("owner_id", user.id);
+    const deleteQuery = applyOwnerFilter(
+      admin.from("businesses").delete().eq("id", id),
+      ownerColumn,
+      user.id
+    );
+
+    const { error: deleteError } = await deleteQuery;
 
     if (deleteError) {
       log.error("Failed to delete business", { error: deleteError.message });

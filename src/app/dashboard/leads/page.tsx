@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils/format";
-import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_TABLE, applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 
 interface LeadRow {
   id: string;
@@ -36,10 +36,12 @@ export default async function LeadsPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const { data: leads } = await supabase
-    .from("leads")
-    .select(
-      `
+  const leadsOwnerColumn = await getOwnerColumn(supabase, "leads");
+  const leadsQuery = applyOwnerFilter(
+    supabase
+      .from("leads")
+      .select(
+        `
       id,
       target_type,
       message,
@@ -51,10 +53,14 @@ export default async function LeadsPage() {
         title
       )
     `
-    )
-    .eq("owner_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(50);
+      )
+      .order("created_at", { ascending: false })
+      .limit(50),
+    leadsOwnerColumn,
+    user.id
+  );
+
+  const { data: leads } = await leadsQuery;
 
   return (
     <div className="space-y-6">

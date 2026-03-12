@@ -17,6 +17,9 @@ export const REQUIRED_TABLES = [
   "kyc_artifacts",
 ] as const;
 
+export const OWNER_COMPAT_TABLES = ["listings", "promotions", "businesses"] as const;
+export type OwnerCompatibilityMode = "owner_id" | "seller_id";
+
 type SchemaTableCheck = {
   table: string;
   ok: boolean;
@@ -24,11 +27,21 @@ type SchemaTableCheck = {
   errorMessage: string | null;
 };
 
+type OwnerColumnCheck = {
+  table: (typeof OWNER_COMPAT_TABLES)[number];
+  ok: boolean;
+  mode: OwnerCompatibilityMode | null;
+  ownerIdError: string | null;
+  sellerIdError: string | null;
+};
+
 export type SchemaVerificationResult = {
   ok: boolean;
   projectUrl: string;
   checks: SchemaTableCheck[];
+  ownerColumnChecks: OwnerColumnCheck[];
   missingTables: string[];
+  missingOwnerColumns: string[];
   otherErrors: Array<{ table: string; code: string; message: string }>;
 };
 
@@ -81,11 +94,35 @@ export async function verifySupabaseSchema(
       message: item.errorMessage ?? "Unknown error",
     }));
 
+  const ownerColumnChecks: OwnerColumnCheck[] = [];
+  for (const table of OWNER_COMPAT_TABLES) {
+    const ownerResult = await supabase.from(table).select("id, owner_id").limit(1);
+    const sellerResult = await supabase.from(table).select("id, seller_id").limit(1);
+
+    const ownerWorks = !ownerResult.error;
+    const sellerWorks = !sellerResult.error;
+    const mode = ownerWorks ? "owner_id" : sellerWorks ? "seller_id" : null;
+
+    ownerColumnChecks.push({
+      table,
+      ok: mode !== null,
+      mode,
+      ownerIdError: ownerResult.error?.message ?? null,
+      sellerIdError: sellerResult.error?.message ?? null,
+    });
+  }
+
+  const missingOwnerColumns = ownerColumnChecks
+    .filter((item) => !item.ok)
+    .map((item) => item.table);
+
   return {
-    ok: missingTables.length === 0 && otherErrors.length === 0,
+    ok: missingTables.length === 0 && otherErrors.length === 0 && missingOwnerColumns.length === 0,
     projectUrl,
     checks,
+    ownerColumnChecks,
     missingTables,
+    missingOwnerColumns,
     otherErrors,
   };
 }
@@ -107,6 +144,19 @@ export function printSchemaVerificationResult(result: SchemaVerificationResult):
     console.log(`  [FAIL] ${check.table} (${code}) ${message}`);
   }
 
+  console.log("");
+  console.log("Ownership column compatibility");
+  for (const check of result.ownerColumnChecks) {
+    if (check.ok && check.mode) {
+      console.log(`  [OK] ${check.table} -> ${check.mode}`);
+      continue;
+    }
+
+    console.log(
+      `  [FAIL] ${check.table} (owner_id: ${check.ownerIdError || "missing"}, seller_id: ${check.sellerIdError || "missing"})`
+    );
+  }
+
   if (result.ok) {
     console.log("");
     console.log("Schema verification passed.");
@@ -123,6 +173,11 @@ export function printSchemaVerificationResult(result: SchemaVerificationResult):
     );
     console.log("  1) supabase db push");
     console.log("  2) NOTIFY pgrst, 'reload schema';");
+  }
+
+  if (result.missingOwnerColumns.length > 0) {
+    console.log(`Ownership compatibility missing on: ${result.missingOwnerColumns.join(", ")}`);
+    console.log("Each marketplace table must expose either owner_id or seller_id.");
   }
 
   if (result.otherErrors.length > 0) {

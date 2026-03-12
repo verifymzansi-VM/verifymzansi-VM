@@ -13,9 +13,27 @@ import {
   diffRemovedMediaUrls,
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
+import {
+  applyOwnerFilter,
+  getOwnerColumn,
+  normalizeOwnerRecord,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
 
 const log = createLogger("PromotionDetail");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+type PromotionOwnerRow = {
+  id: string;
+  status: string;
+  owner_id?: string | null;
+  seller_id?: string | null;
+  title?: string | null;
+  photos?: string[] | null;
+  videos?: string[] | null;
+  video_thumbnail?: string | null;
+  view_count?: number | null;
+};
 
 /**
  * GET /api/promotions/[id]
@@ -43,15 +61,17 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
     }
 
+    const normalizedPromotion = normalizeOwnerRecord(promotion as PromotionOwnerRow);
+
     // Only allow public access to live promotions
-    if (promotion.status !== "live") {
+    if (normalizedPromotion.status !== "live") {
       // Check if the current user is the owner
       const supabase = await createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user || user.id !== promotion.owner_id) {
+      if (!user || user.id !== readOwnerId(normalizedPromotion)) {
         return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
       }
     }
@@ -60,11 +80,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     // Uses raw SQL to avoid read-modify-write race condition.
     admin
       .from("promotions")
-      .update({ view_count: (promotion.view_count ?? 0) + 1 } as Record<string, unknown>)
+      .update({ view_count: (normalizedPromotion.view_count ?? 0) + 1 } as Record<string, unknown>)
       .eq("id", id)
       .then(() => {});
 
-    return NextResponse.json({ promotion });
+    return NextResponse.json({ promotion: normalizedPromotion });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
     return NextResponse.json({ error: "Failed to fetch promotion" }, { status: 500 });
@@ -94,19 +114,21 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "promotions");
 
     // Check ownership
-    const { data: existing } = await admin
+    const { data: rawExisting } = await admin
       .from("promotions")
-      .select("id, owner_id, status, photos, videos, video_thumbnail")
+      .select(withOwnerColumn("id, owner_id, status, photos, videos, video_thumbnail", ownerColumn))
       .eq("id", id)
       .maybeSingle();
+    const existing = rawExisting as PromotionOwnerRow | null;
 
     if (!existing) {
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
     }
 
-    if (existing.owner_id !== user.id) {
+    if (readOwnerId(existing) !== user.id) {
       return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
@@ -179,30 +201,35 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
 
-    const { error: updateError } = await admin
-      .from("promotions")
-      .update({
-        title: data.title,
-        description: data.description,
-        promotion_type: data.promotion_type,
-        category: data.category || null,
-        category_key: categoryKey,
-        business_id: data.business_id || null,
-        photos: data.images,
-        videos: data.videos,
-        video_thumbnail: data.video_thumbnail || null,
-        price_cents: priceCents,
-        price_negotiable: data.negotiable,
-        location_province: data.province,
-        location_city: data.city,
-        contact_methods: data.contact_methods,
-        start_date: data.start_date || null,
-        end_date: data.end_date || null,
-        // Re-trigger moderation on edit so changed content is reviewed
-        status: "pending_moderation",
-      })
-      .eq("id", id)
-      .eq("owner_id", user.id);
+    const updateQuery = applyOwnerFilter(
+      admin
+        .from("promotions")
+        .update({
+          title: data.title,
+          description: data.description,
+          promotion_type: data.promotion_type,
+          category: data.category || null,
+          category_key: categoryKey,
+          business_id: data.business_id || null,
+          photos: data.images,
+          videos: data.videos,
+          video_thumbnail: data.video_thumbnail || null,
+          price_cents: priceCents,
+          price_negotiable: data.negotiable,
+          location_province: data.province,
+          location_city: data.city,
+          contact_methods: data.contact_methods,
+          start_date: data.start_date || null,
+          end_date: data.end_date || null,
+          // Re-trigger moderation on edit so changed content is reviewed
+          status: "pending_moderation",
+        })
+        .eq("id", id),
+      ownerColumn,
+      user.id
+    );
+
+    const { error: updateError } = await updateQuery;
 
     if (updateError) {
       log.error("Failed to update promotion", { error: updateError.message });
@@ -266,18 +293,20 @@ export async function DELETE(
     }
 
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "promotions");
 
-    const { data: existing } = await admin
+    const { data: rawExisting } = await admin
       .from("promotions")
-      .select("id, owner_id, status, photos, videos, video_thumbnail")
+      .select(withOwnerColumn("id, owner_id, status, photos, videos, video_thumbnail", ownerColumn))
       .eq("id", id)
       .maybeSingle();
+    const existing = rawExisting as PromotionOwnerRow | null;
 
     if (!existing) {
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
     }
 
-    if (existing.owner_id !== user.id) {
+    if (readOwnerId(existing) !== user.id) {
       return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
@@ -288,11 +317,13 @@ export async function DELETE(
       );
     }
 
-    const { error: deleteError } = await admin
-      .from("promotions")
-      .delete()
-      .eq("id", id)
-      .eq("owner_id", user.id);
+    const deleteQuery = applyOwnerFilter(
+      admin.from("promotions").delete().eq("id", id),
+      ownerColumn,
+      user.id
+    );
+
+    const { error: deleteError } = await deleteQuery;
 
     if (deleteError) {
       log.error("Failed to delete promotion", { error: deleteError.message });

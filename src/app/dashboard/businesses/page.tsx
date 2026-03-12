@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { timeAgo, expiresIn } from "@/lib/utils/format";
+import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 import {
   BUSINESS_TYPE_LABELS,
   BUSINESS_CATEGORY_LABELS,
@@ -39,16 +40,22 @@ export default async function MyBusinessesPage() {
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
+  const businessOwnerColumn = await getOwnerColumn(admin, "businesses");
 
-  const { data: businesses } = await admin
-    .from("businesses")
-    .select(
-      "id, business_name, business_type, category, status, boost_until, featured_until, created_at"
-    )
-    .eq("owner_id", user.id)
-    .in("status", ["live", "pending_moderation", "draft", "rejected"])
-    .order("created_at", { ascending: false })
-    .limit(50);
+  const businessesQuery = applyOwnerFilter(
+    admin
+      .from("businesses")
+      .select(
+        "id, business_name, business_type, category, status, boost_until, featured_until, created_at"
+      )
+      .in("status", ["live", "pending_moderation", "draft", "rejected"])
+      .order("created_at", { ascending: false })
+      .limit(50),
+    businessOwnerColumn,
+    user.id
+  );
+
+  const { data: businesses } = await businessesQuery;
 
   const myBusinesses = (businesses ?? []) as unknown as DashboardBusiness[];
 

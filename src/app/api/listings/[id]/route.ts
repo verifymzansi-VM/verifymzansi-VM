@@ -14,10 +14,26 @@ import {
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import {
+  applyOwnerFilter,
+  getOwnerColumn,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
 
 const log = createLogger("ListingUpdate");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const AREA: MarketplaceArea = "MZANSI_MARKET";
+type ListingUpdateRow = {
+  id: string;
+  status: string;
+  area?: MarketplaceArea | null;
+  photos?: string[] | null;
+  videos?: string[] | null;
+  video_thumbnail?: string | null;
+  owner_id?: string | null;
+  seller_id?: string | null;
+};
 
 /**
  * PUT /api/listings/[id]
@@ -83,19 +99,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const data = parsed.data;
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "listings");
 
     // ── Check listing exists and user owns it ────────────────
-    const { data: listing } = await admin
+    const { data: rawListing } = await admin
       .from("listings")
-      .select("id, owner_id, status, area, photos, videos, video_thumbnail")
+      .select(
+        withOwnerColumn("id, owner_id, status, area, photos, videos, video_thumbnail", ownerColumn)
+      )
       .eq("id", listingId)
       .maybeSingle();
+    const listing = rawListing as ListingUpdateRow | null;
 
     if (!listing) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
 
-    if (listing.owner_id !== user.id) {
+    if (readOwnerId(listing) !== user.id) {
       return NextResponse.json(
         { error: "Forbidden — you do not own this listing" },
         { status: 403 }
@@ -197,11 +217,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     );
 
     // ── Update listing ───────────────────────────────────────
-    const { error: updateError } = await admin
-      .from("listings")
-      .update(updateRecord)
-      .eq("id", listingId)
-      .eq("owner_id", user.id); // Double-check ownership at DB level
+    const updateQuery = applyOwnerFilter(
+      admin.from("listings").update(updateRecord).eq("id", listingId),
+      ownerColumn,
+      user.id
+    ); // Double-check ownership at DB level
+
+    const { error: updateError } = await updateQuery;
 
     if (updateError) {
       log.error("Failed to update listing", {

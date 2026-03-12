@@ -8,10 +8,24 @@ import { ADDON_PRICES, BOOST_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
+import {
+  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  getOwnerColumn,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
 
 const log = createLogger("BoostCheckout");
+type ListingCheckoutRow = {
+  id: string;
+  title: string;
+  status: string;
+  area?: MarketplaceArea | null;
+  boost_until?: string | null;
+  owner_id?: string | null;
+  seller_id?: string | null;
+};
 
 /**
  * POST /api/listings/[id]/boost
@@ -40,6 +54,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "listings");
 
     // ── Get account profile ──────────────────────────────────
     const { data: profile } = await admin
@@ -53,17 +68,18 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     // ── Check listing exists and belongs to user ─────────────
-    const { data: listing } = await admin
+    const { data: rawListing } = await admin
       .from("listings")
-      .select("id, title, status, area, owner_id, boost_until")
+      .select(withOwnerColumn("id, title, status, area, owner_id, boost_until", ownerColumn))
       .eq("id", listingId)
       .maybeSingle();
+    const listing = rawListing as ListingCheckoutRow | null;
 
     if (!listing) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
 
-    if (listing.owner_id !== user.id) {
+    if (readOwnerId(listing) !== user.id) {
       return NextResponse.json({ error: "You don't own this listing" }, { status: 403 });
     }
 
