@@ -1,12 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReportsClient } from "./reports-client";
+import type { Report } from "@/types/database";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
-function createReport(id: string, status: "open" | "resolved") {
+function createReport(id: string, status: Report["status"]): Report {
   return {
     id,
     target_id: `target-${id}`,
