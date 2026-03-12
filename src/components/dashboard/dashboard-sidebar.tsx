@@ -10,7 +10,7 @@ import {
   CreditCard,
   Building2,
   Megaphone,
-  Settings,
+  User,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/promotions", icon: Megaphone, label: "Promotions" },
   { href: "/verification", icon: ShieldCheck, label: "Verification" },
   { href: "/billing", icon: CreditCard, label: "Billing" },
-  { href: "/dashboard/settings", icon: Settings, label: "Settings" },
+  { href: "/dashboard/profile", icon: User, label: "My Profile" },
 ];
 
 export interface DashboardSidebarBadges {

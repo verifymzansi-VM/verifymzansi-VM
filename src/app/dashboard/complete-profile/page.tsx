@@ -96,7 +96,7 @@ export default function CompleteProfilePage() {
       }
 
       toast({ title: "Phone number saved!", variant: "success" });
-      router.push("/dashboard");
+      router.push("/dashboard/profile");
     } catch {
       toast({ title: "Something went wrong", variant: "destructive" });
     } finally {

@@ -15,6 +15,7 @@ export const profileUpdateSchema = z.object({
   phone: z.union([saPhoneSchema, z.literal("")]).optional(),
   province: z.string().max(100, "Province value is too long").optional().or(z.literal("")),
   city: z.string().max(100, "City value is too long").optional().or(z.literal("")),
+  avatarUrl: z.string().url("Invalid avatar URL").max(500).optional().or(z.literal("")),
 });
 
 /** Inferred type for profile update payloads. */

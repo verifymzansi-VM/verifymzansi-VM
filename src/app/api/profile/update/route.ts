@@ -82,6 +82,11 @@ export async function POST(request: NextRequest) {
     location_city: parsed.data.city || null,
   };
 
+  // Persist avatar URL if provided
+  if (typeof parsed.data.avatarUrl === "string") {
+    updatePayload.avatar_url = parsed.data.avatarUrl || null;
+  }
+
   // Only set phone if it was provided (to avoid clearing it unintentionally)
   if (parsed.data.phone !== undefined) {
     updatePayload.phone = normalizedPhone;
