@@ -60,7 +60,6 @@ vi.mock("@/components/trust/trust-badge", () => ({
 function buildClient(
   business: Record<string, unknown>,
   options?: {
-    mall?: { id: string; name: string } | null;
     promotions?: Array<Record<string, unknown>>;
   }
 ) {
@@ -72,17 +71,6 @@ function buildClient(
             eq: () => ({
               eq: () => ({
                 single: async () => ({ data: business }),
-              }),
-            }),
-          }),
-        };
-      }
-      if (table === "malls") {
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({
-                data: options?.mall ?? null,
               }),
             }),
           }),
@@ -248,7 +236,6 @@ describe("BusinessDetailPage", () => {
         email: null,
         website: "https://nomsa.example.com",
         store_number: null,
-        mall_id: null,
         map_directions: null,
         business_details: {
           type: "standalone_shop",
@@ -266,44 +253,44 @@ describe("BusinessDetailPage", () => {
 
   it("renders the linked mall name for mall stores", async () => {
     mockCreateClient.mockResolvedValue(
-      buildClient(
-        {
-          id: "business-4",
-          owner_id: "owner-1",
-          business_name: "Mall Style",
-          description: "A mall store.",
-          status: "live",
-          business_type: "mall_store",
-          category: "fashion_accessories",
-          cover_photo: null,
-          logo_url: null,
-          cover_video: null,
-          video_thumbnail: null,
-          gallery_photos: [],
-          social_links: {},
-          operating_hours: {},
-          services_offered: [],
-          payment_methods_accepted: [],
-          delivery_options: [],
-          service_areas: null,
-          location_city: "Johannesburg",
-          location_province: "Gauteng",
-          phone: null,
-          whatsapp: null,
-          email: null,
-          website: null,
-          store_number: "12A",
-          mall_id: "mall-1",
-          map_directions: null,
-          business_details: {
-            type: "mall_store",
-            floor_or_wing: "Upper Level",
-            nearest_entrance: "Entrance 3",
-            parking_notes: "",
-          },
+      buildClient({
+        id: "business-4",
+        owner_id: "owner-1",
+        business_name: "Mall Style",
+        description: "A mall store.",
+        status: "live",
+        business_type: "mall_store",
+        category: "fashion_accessories",
+        cover_photo: null,
+        logo_url: null,
+        cover_video: null,
+        video_thumbnail: null,
+        gallery_photos: [],
+        social_links: {},
+        operating_hours: {},
+        services_offered: [],
+        payment_methods_accepted: [],
+        delivery_options: [],
+        service_areas: null,
+        location_city: "Johannesburg",
+        location_province: "Gauteng",
+        phone: null,
+        whatsapp: null,
+        email: null,
+        website: null,
+        store_number: "12A",
+        map_directions: null,
+        business_details: {
+          type: "mall_store",
+          mall_name: "Maponya Mall",
+          mall_address: "2127 Chris Hani Rd, Soweto",
+          mall_summary: "Near the cinema entrance.",
+          mall_photos: [],
+          floor_or_wing: "Upper Level",
+          nearest_entrance: "Entrance 3",
+          parking_notes: "",
         },
-        { mall: { id: "mall-1", name: "Maponya Mall" } }
-      )
+      })
     );
 
     render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-4" }) }));
@@ -341,7 +328,6 @@ describe("BusinessDetailPage", () => {
           email: null,
           website: null,
           store_number: null,
-          mall_id: null,
           map_directions: null,
           business_details: {
             type: "standalone_shop",

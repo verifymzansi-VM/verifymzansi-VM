@@ -150,7 +150,6 @@ export const businessSchema = z
     location_province: z.string().min(1, "Province is required"),
     location_city: z.string().min(1, "City is required"),
     store_number: z.string().trim().max(20).optional(),
-    mall_id: z.string().uuid().optional(),
     map_directions: z
       .string()
       .url("Enter a valid map directions URL.")

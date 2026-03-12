@@ -46,7 +46,6 @@ describe("MzansiBusinessFilterSync", () => {
             businessType: undefined,
             province: undefined,
             city: undefined,
-            mall: undefined,
           },
           page: 1,
         })

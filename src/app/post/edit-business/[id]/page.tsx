@@ -676,9 +676,6 @@ export default function EditBusinessPage() {
                   setStoreNumber(value);
                   clearErrors("store_number");
                 }}
-                mallId={mallId}
-                malls={malls}
-                onMallIdChange={setMallId}
                 serviceAreasInput={serviceAreasInput}
                 onServiceAreasChange={(value) => {
                   setServiceAreasInput(value);
@@ -833,7 +830,8 @@ export default function EditBusinessPage() {
               {(existingLogo ||
                 existingCoverPhoto ||
                 existingCoverVideo ||
-                existingGalleryPhotos.length > 0) && (
+                existingGalleryPhotos.length > 0 ||
+                existingMallPhotos.length > 0) && (
                 <div className="space-y-3">
                   <Label>Current Media</Label>
                   <div className="flex flex-wrap gap-4">
@@ -912,37 +910,39 @@ export default function EditBusinessPage() {
                       </div>
                     </div>
                   )}
-                  {businessType === "mall_store" && existingMallPhotos.length > 0 && !removeMallPhotos && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Camera className="h-3 w-3" /> Mall Photos ({existingMallPhotos.length})
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setRemoveMallPhotos(true)}
-                          className="text-xs text-destructive hover:underline"
-                        >
-                          Replace all
-                        </button>
-                      </div>
-                      <div className="flex gap-2 overflow-x-auto pb-1">
-                        {existingMallPhotos.map((url, i) => (
-                          <div
-                            key={`mall-${i}`}
-                            className="h-12 w-12 rounded-lg overflow-hidden border flex-shrink-0"
+                  {businessType === "mall_store" &&
+                    existingMallPhotos.length > 0 &&
+                    !removeMallPhotos && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Camera className="h-3 w-3" /> Mall Photos ({existingMallPhotos.length})
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setRemoveMallPhotos(true)}
+                            className="text-xs text-destructive hover:underline"
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={normalizeMediaUrl(url)}
-                              alt={`Mall photo ${i + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        ))}
+                            Replace all
+                          </button>
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                          {existingMallPhotos.map((url, i) => (
+                            <div
+                              key={`mall-${i}`}
+                              className="h-12 w-12 rounded-lg overflow-hidden border flex-shrink-0"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={normalizeMediaUrl(url)}
+                                alt={`Mall photo ${i + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
                 </div>
               )}
 

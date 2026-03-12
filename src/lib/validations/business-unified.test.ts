@@ -19,12 +19,30 @@ describe("businessSchema", () => {
         store_number: "12A",
         business_details: {
           type: "mall_store",
+          mall_name: "Maponya Mall",
+          mall_address: "2127 Chris Hani Rd, Soweto",
+          mall_summary: "Near the cinema entrance.",
+          mall_photos: ["https://media.verifymzansi.com/business/mall-photo-1.jpg"],
           floor_or_wing: "Upper level",
           nearest_entrance: "Entrance 3",
           parking_notes: "Park near Woolworths.",
         },
       }).success
     ).toBe(true);
+  });
+
+  it("requires mall_name for mall stores", () => {
+    const result = businessSchema.safeParse({
+      ...base,
+      business_type: "mall_store",
+      store_number: "12A",
+      business_details: {
+        type: "mall_store",
+        mall_name: "",
+      },
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it("requires address details for standalone shops", () => {
