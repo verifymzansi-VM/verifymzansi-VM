@@ -44,6 +44,18 @@ const serviceAreasSchema = z.object({
 
 const mallStoreDetailsSchema = z.object({
   type: z.literal("mall_store"),
+  mall_name: z.string().trim().min(1, "Mall name is required.").max(120),
+  mall_address: optionalText(200),
+  mall_summary: optionalText(600),
+  mall_photos: z
+    .array(
+      z.string().url().refine(isTrustedPlatformMediaUrl, {
+        message: "Mall photos must be hosted on the VerifyMzansi platform",
+      })
+    )
+    .max(5, "Maximum 5 mall photos")
+    .optional()
+    .default([]),
   floor_or_wing: optionalText(80),
   nearest_entrance: optionalText(120),
   parking_notes: optionalText(300),
@@ -211,6 +223,7 @@ export const businessSchema = z
     }
 
     const requiredDetailFields: Partial<Record<(typeof BUSINESS_TYPES)[number], string[]>> = {
+      mall_store: ["mall_name"],
       standalone_shop: ["street_address", "suburb"],
       home_business: ["service_suburb"],
       online_only: ["primary_order_channel", "order_url", "delivery_regions"],

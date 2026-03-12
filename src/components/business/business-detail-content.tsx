@@ -77,18 +77,12 @@ export interface BusinessDetailRecord {
   email: string | null;
   website: string | null;
   store_number: string | null;
-  mall_id: string | null;
   map_directions: string | null;
   business_details: BusinessDetails | null;
 }
 
 export interface BusinessOwnerRecord {
   display_name: string | null;
-}
-
-export interface BusinessLinkedMallRecord {
-  id: string;
-  name: string;
 }
 
 export interface BusinessPromotionRecord {
@@ -272,16 +266,18 @@ function BusinessDetailsCard({
   business,
   businessType,
   businessDetails,
-  linkedMall,
   serviceAreas,
 }: {
   business: BusinessDetailRecord;
   businessType: BusinessType;
   businessDetails: BusinessDetails | null;
-  linkedMall: BusinessLinkedMallRecord | null;
   serviceAreas: { areas?: string[] } | null;
 }) {
   const canShowMapDirections = businessType !== "home_business";
+  const mallDetails =
+    businessType === "mall_store" && businessDetails?.type === "mall_store"
+      ? businessDetails
+      : null;
 
   if (
     !(
@@ -302,34 +298,46 @@ function BusinessDetailsCard({
       <CardContent className="space-y-3 text-sm">
         {businessType === "mall_store" && (
           <>
+            {mallDetails?.mall_name && (
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-muted-foreground">Mall</span>
+                <span className="text-right font-medium">{mallDetails.mall_name}</span>
+              </div>
+            )}
             {business.store_number && (
               <div className="flex items-start justify-between gap-4">
                 <span className="text-muted-foreground">Store number</span>
                 <span className="text-right font-medium">{business.store_number}</span>
               </div>
             )}
-            {linkedMall?.name && (
-              <div className="flex items-start justify-between gap-4">
-                <span className="text-muted-foreground">Mall</span>
-                <span className="text-right font-medium">{linkedMall.name}</span>
+            {mallDetails?.mall_address && (
+              <div className="space-y-1">
+                <p className="text-muted-foreground">Mall address</p>
+                <p className="font-medium">{mallDetails.mall_address}</p>
               </div>
             )}
-            {businessDetails?.type === "mall_store" && businessDetails.floor_or_wing && (
+            {mallDetails?.floor_or_wing && (
               <div className="flex items-start justify-between gap-4">
                 <span className="text-muted-foreground">Floor / wing</span>
-                <span className="text-right font-medium">{businessDetails.floor_or_wing}</span>
+                <span className="text-right font-medium">{mallDetails.floor_or_wing}</span>
               </div>
             )}
-            {businessDetails?.type === "mall_store" && businessDetails.nearest_entrance && (
+            {mallDetails?.nearest_entrance && (
               <div className="flex items-start justify-between gap-4">
                 <span className="text-muted-foreground">Nearest entrance</span>
-                <span className="text-right font-medium">{businessDetails.nearest_entrance}</span>
+                <span className="text-right font-medium">{mallDetails.nearest_entrance}</span>
               </div>
             )}
-            {businessDetails?.type === "mall_store" && businessDetails.parking_notes && (
+            {mallDetails?.parking_notes && (
               <div className="space-y-1">
                 <p className="text-muted-foreground">Parking notes</p>
-                <p className="font-medium">{businessDetails.parking_notes}</p>
+                <p className="font-medium">{mallDetails.parking_notes}</p>
+              </div>
+            )}
+            {mallDetails?.mall_summary && (
+              <div className="space-y-1">
+                <p className="text-muted-foreground">Mall information</p>
+                <p className="font-medium whitespace-pre-wrap">{mallDetails.mall_summary}</p>
               </div>
             )}
           </>
@@ -515,7 +523,6 @@ export function BusinessDetailContent({
   business,
   trustLevel,
   ownerProfile,
-  linkedMall,
   promotions = [],
   showPromotions = true,
   showPublicActions = true,
@@ -523,7 +530,6 @@ export function BusinessDetailContent({
   business: BusinessDetailRecord;
   trustLevel: TrustLevel | null;
   ownerProfile: BusinessOwnerRecord | null;
-  linkedMall: BusinessLinkedMallRecord | null;
   promotions?: BusinessPromotionRecord[];
   showPromotions?: boolean;
   showPublicActions?: boolean;
@@ -542,6 +548,11 @@ export function BusinessDetailContent({
   );
   const businessType = business.business_type as BusinessType;
   const businessCategory = business.category as BusinessCategory;
+  const mallDetails =
+    businessType === "mall_store" && businessDetails?.type === "mall_store"
+      ? businessDetails
+      : null;
+  const mallPhotos = mallDetails?.mall_photos ?? [];
 
   return (
     <>
@@ -648,9 +659,15 @@ export function BusinessDetailContent({
             business={business}
             businessType={businessType}
             businessDetails={businessDetails}
-            linkedMall={linkedMall}
             serviceAreas={serviceAreas}
           />
+
+          {mallPhotos.length > 0 && (
+            <BusinessGallery
+              photos={mallPhotos.map((url) => normalizeMediaUrl(url))}
+              businessName={`${business.business_name} mall`}
+            />
+          )}
 
           {business.services_offered && business.services_offered.length > 0 && (
             <Card>

@@ -83,10 +83,6 @@ export function MzansiBusinessGrid() {
         params.set("city", filters.city);
       }
 
-      if (filters.mall) {
-        params.set("mall", filters.mall);
-      }
-
       try {
         const response = await fetch(`/api/businesses?${params.toString()}`, {
           cache: "no-store",
@@ -131,7 +127,6 @@ export function MzansiBusinessGrid() {
       filters.query,
       filters.province,
       filters.city,
-      filters.mall,
       page,
     ]
   );
@@ -149,7 +144,6 @@ export function MzansiBusinessGrid() {
     filters.query,
     filters.province,
     filters.city,
-    filters.mall,
   ].filter(Boolean).length;
 
   const handleRetry = () => {

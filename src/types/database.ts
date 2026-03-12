@@ -242,7 +242,6 @@ export interface Business {
   location_province: string;
   location_city: string;
   store_number: string | null;
-  mall_id: string | null;
   map_directions: string | null;
   phone: string | null;
   whatsapp: string | null;

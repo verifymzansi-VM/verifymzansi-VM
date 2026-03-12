@@ -18,14 +18,10 @@ import { useMarketplaceStore } from "@/stores";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 
-interface BusinessFilterDrawerProps {
-  malls: { id: string; name: string }[];
-}
-
 const selectClassName =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
-export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
+export function BusinessFilterDrawer() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
   const [localQuery, setLocalQuery] = useState(filters.query || "");
 
@@ -48,7 +44,6 @@ export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
     filters.businessType,
     filters.province,
     filters.city,
-    filters.mall,
   ].filter(Boolean).length;
 
   const clearAllFilters = () => {
@@ -196,26 +191,6 @@ export function BusinessFilterDrawer({ malls }: BusinessFilterDrawerProps) {
                 ))}
             </select>
           </div>
-
-          {/* Mall */}
-          <div className="space-y-1.5">
-            <Label htmlFor="drawer-business-mall">Mall</Label>
-            <select
-              id="drawer-business-mall"
-              aria-label="Mall"
-              className={selectClassName}
-              value={filters.mall || ""}
-              onChange={(event) => setFilter("mall", event.target.value || undefined)}
-            >
-              <option value="">All malls</option>
-              {malls.map((mall) => (
-                <option key={mall.id} value={mall.id}>
-                  {mall.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Actions */}
           <div className="flex gap-3 pt-2">
             <Button

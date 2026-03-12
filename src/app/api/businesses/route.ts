@@ -177,7 +177,6 @@ export async function POST(request: NextRequest) {
         location_province: data.location_province,
         location_city: data.location_city,
         store_number: data.store_number || null,
-        mall_id: data.mall_id || null,
         map_directions: data.map_directions || null,
         phone: data.phone || null,
         whatsapp: data.whatsapp || null,
@@ -306,15 +305,14 @@ export async function GET(request: NextRequest) {
     const province = searchParams.get("province");
     const city = searchParams.get("city");
     const search = searchParams.get("q");
-    const mallId = searchParams.get("mall");
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
     const offset = (page - 1) * limit;
 
     const primarySelect =
-      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at";
+      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at";
     const fallbackSelect =
-      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, mall_id, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at";
+      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at";
 
     const buildQuery = (selectClause: string) => {
       let query = admin
@@ -338,9 +336,6 @@ export async function GET(request: NextRequest) {
       }
       if (city) {
         query = query.eq("location_city", city);
-      }
-      if (mallId) {
-        query = query.eq("mall_id", mallId);
       }
       if (search) {
         // Escape PostgREST special characters to prevent filter injection

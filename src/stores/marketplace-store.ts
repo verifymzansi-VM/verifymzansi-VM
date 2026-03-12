@@ -20,7 +20,6 @@ interface Filters {
   /** Mzansi Business specific filters */
   businessType?: BusinessType;
   businessCategory?: BusinessCategory;
-  mall?: string;
 }
 
 interface MarketplaceState {
@@ -89,7 +88,6 @@ export const useMarketplaceStore = create<MarketplaceState>((set) => ({
         attributes: {},
         businessType: undefined,
         businessCategory: undefined,
-        mall: undefined,
       },
       page: 1,
     }),

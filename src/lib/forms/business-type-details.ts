@@ -70,8 +70,27 @@ export const PRIMARY_ORDER_CHANNEL_LABELS: Record<PrimaryOrderChannel, string> =
 export const BUSINESS_DETAILS_SECTIONS: Record<BusinessType, BusinessDetailsSectionConfig> = {
   mall_store: {
     title: "Mall Store Details",
-    description: "Add access cues customers can use once they arrive at the mall.",
+    description: "Add the mall name and the access cues customers can use once they arrive.",
     fields: [
+      {
+        name: "mall_name",
+        label: "Mall name",
+        kind: "text",
+        required: true,
+        placeholder: "e.g. Maponya Mall",
+      },
+      {
+        name: "mall_address",
+        label: "Mall address",
+        kind: "textarea",
+        placeholder: "e.g. 2127 Chris Hani Rd, Soweto",
+      },
+      {
+        name: "mall_summary",
+        label: "Mall information",
+        kind: "textarea",
+        placeholder: "Optional notes about the mall, access, or amenities.",
+      },
       {
         name: "floor_or_wing",
         label: "Floor or wing",
@@ -252,7 +271,16 @@ export const BUSINESS_DETAILS_SECTIONS: Record<BusinessType, BusinessDetailsSect
 export function getDefaultBusinessDetails(type: BusinessType): BusinessDetails {
   switch (type) {
     case "mall_store":
-      return { type, floor_or_wing: "", nearest_entrance: "", parking_notes: "" };
+      return {
+        type,
+        mall_name: "",
+        mall_address: "",
+        mall_summary: "",
+        mall_photos: [],
+        floor_or_wing: "",
+        nearest_entrance: "",
+        parking_notes: "",
+      };
     case "standalone_shop":
       return { type, street_address: "", suburb: "", landmark: "", walk_in_policy: undefined };
     case "home_business":

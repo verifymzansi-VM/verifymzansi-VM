@@ -49,11 +49,6 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
     notFound();
   }
 
-  const linkedMall = business.mall_id
-    ? (await supabase.from("malls").select("id, name").eq("id", business.mall_id).maybeSingle())
-        .data
-    : null;
-
   const businessOwnerId = readOwnerId(business);
   const { data: ownerProfile } = businessOwnerId
     ? await supabase
@@ -105,7 +100,6 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
             business={business}
             trustLevel={trustLevel}
             ownerProfile={ownerProfile}
-            linkedMall={linkedMall}
             promotions={promotions ?? []}
           />
         </div>

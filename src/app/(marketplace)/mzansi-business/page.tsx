@@ -31,7 +31,7 @@ export default async function MzansiBusinessPage() {
   const supabase = await createClient();
 
   // Fetch top businesses for showroom hero
-  const [{ data: topBusinesses }, { data: allLive }, { data: malls }] = await Promise.all([
+  const [{ data: topBusinesses }, { data: allLive }] = await Promise.all([
     supabase
       .from("businesses")
       .select(
@@ -51,7 +51,6 @@ export default async function MzansiBusinessPage() {
       .eq("area", "MZANSI_BUSINESS")
       .not("business_name", "ilike", "%seed%")
       .not("business_name", "ilike", "%[seed]%"),
-    supabase.from("malls").select("id, name").order("name"),
   ]);
 
   const visibleTopBusinesses = (topBusinesses ?? [])
@@ -131,7 +130,7 @@ export default async function MzansiBusinessPage() {
 
         {/* Desktop discovery bar (hidden on mobile — mobile uses the filter drawer) */}
         <div className="hidden lg:block">
-          <BusinessDiscoveryBar malls={malls ?? []} />
+          <BusinessDiscoveryBar />
         </div>
 
         <BusinessCategoryStrip categoryCounts={categoryCounts} />
@@ -144,7 +143,7 @@ export default async function MzansiBusinessPage() {
       </div>
 
       {/* Mobile filter FAB + drawer */}
-      <BusinessFilterDrawer malls={malls ?? []} />
+      <BusinessFilterDrawer />
     </div>
   );
 }

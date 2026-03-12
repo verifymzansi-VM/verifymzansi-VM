@@ -13,9 +13,14 @@ import {
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
 import type { PlanTier } from "@/types/enums";
+import type { BusinessDetails } from "@/types/business-details";
 
 const log = createLogger("BusinessDetail");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function getMallPhotoUrls(details: BusinessDetails | null | undefined): string[] {
+  return details?.type === "mall_store" ? (details.mall_photos ?? []) : [];
+}
 
 /**
  * GET /api/businesses/[id]
@@ -110,7 +115,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { data: existing } = await admin
       .from("businesses")
       .select(
-        "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos"
+        "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details"
       )
       .eq("id", id)
       .maybeSingle();
@@ -182,7 +187,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       data.cover_photo || null,
       data.cover_video || null,
       data.video_thumbnail || null,
-      data.gallery_photos || []
+      data.gallery_photos || [],
+      getMallPhotoUrls(data.business_details)
     );
     const removedMediaUrls = diffRemovedMediaUrls(
       collectMediaUrls(
@@ -190,7 +196,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         existing.cover_photo,
         existing.cover_video,
         existing.video_thumbnail,
-        existing.gallery_photos
+        existing.gallery_photos,
+        getMallPhotoUrls(existing.business_details as BusinessDetails | null | undefined)
       ),
       nextMediaUrls
     );
@@ -211,7 +218,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         location_province: data.location_province,
         location_city: data.location_city,
         store_number: data.store_number || null,
-        mall_id: data.mall_id || null,
         map_directions: data.map_directions || null,
         phone: data.phone || null,
         whatsapp: data.whatsapp || null,
@@ -297,7 +303,7 @@ export async function DELETE(
     const { data: existing } = await admin
       .from("businesses")
       .select(
-        "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos"
+        "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details"
       )
       .eq("id", id)
       .maybeSingle();
@@ -333,7 +339,8 @@ export async function DELETE(
       existing.cover_photo,
       existing.cover_video,
       existing.video_thumbnail,
-      existing.gallery_photos
+      existing.gallery_photos,
+      getMallPhotoUrls(existing.business_details as BusinessDetails | null | undefined)
     );
 
     if (deletedMediaUrls.length > 0) {
