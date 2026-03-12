@@ -26,6 +26,10 @@ describe("Health route", () => {
     const response = await GET();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-store, no-cache, must-revalidate"
+    );
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     await expect(response.json()).resolves.toMatchObject({ status: "ok" });
   });
 

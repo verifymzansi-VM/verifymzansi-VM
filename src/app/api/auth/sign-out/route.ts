@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { createLogger } from "@/lib/utils/logger";
+import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
 
 const log = createLogger("SignOut");
 
@@ -13,6 +14,5 @@ export async function POST(request: Request) {
     // Continue to redirect even if sign-out fails
   }
 
-  const { origin } = new URL(request.url);
-  return NextResponse.redirect(`${origin}/`, { status: 302 });
+  return NextResponse.redirect(`${resolveAppOrigin(request)}/`, { status: 302 });
 }

@@ -172,10 +172,15 @@ export function withOwnerColumn(selectClause: string, ownerColumn: OwnerColumn):
 }
 
 export function applyOwnerFilter<T>(query: T, ownerColumn: OwnerColumn, ownerId: string): T {
-  return (query as T & { eq: (column: string, value: unknown) => unknown }).eq(
-    ownerColumn,
-    ownerId
-  ) as T;
+  const maybeQuery = query as T & {
+    eq?: (column: string, value: unknown) => unknown;
+  };
+
+  if (typeof maybeQuery.eq !== "function") {
+    return query;
+  }
+
+  return maybeQuery.eq(ownerColumn, ownerId) as T;
 }
 
 export function withOwnerField<T extends Record<string, unknown>>(

@@ -10,5 +10,9 @@ export async function GET() {
 
   return NextResponse.json(snapshot, {
     status: snapshot.status === "ok" ? 200 : 503,
+    headers: {
+      "Cache-Control": "private, no-store, no-cache, must-revalidate",
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }

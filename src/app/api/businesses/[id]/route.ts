@@ -3,8 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { businessSchema } from "@/lib/validations/business-unified";
-import { toFieldErrorMap } from "@/lib/validations/zod-errors";
 import { getEntitlements } from "@/lib/services/entitlements";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import {
@@ -154,23 +154,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 
-    // Parse and validate body
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    const parsedBody = await parseAndValidateJsonRequest(request, businessSchema, {
+      invalidJsonMessage: "Invalid JSON body",
+      validationErrorMessage: "Validation failed",
+    });
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
-    const parsed = businessSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Validation failed", details: toFieldErrorMap(parsed.error) },
-        { status: 400 }
-      );
-    }
-
-    const data = parsed.data;
+    const data = parsedBody.data;
     const { data: activeEntitlement } = await admin
       .from("entitlements")
       .select("tier")

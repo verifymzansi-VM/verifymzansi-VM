@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
 const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockCheckRateLimit } =
   vi.hoisted(() => ({
@@ -27,6 +28,35 @@ vi.mock("@/lib/utils/api", () => ({
       return null;
     }
   }),
+  parseAndValidateJsonRequest: vi.fn(
+    async (
+      req: { json: () => Promise<unknown> },
+      schema: {
+        safeParse: (value: unknown) => { success: boolean; data?: unknown; error?: unknown };
+      }
+    ) => {
+      try {
+        const body = await req.json();
+        const parsed = schema.safeParse(body);
+        if (!parsed.success) {
+          return {
+            success: false as const,
+            response: NextResponse.json({ error: "Validation failed" }, { status: 400 }),
+          };
+        }
+
+        return {
+          success: true as const,
+          data: parsed.data,
+        };
+      } catch {
+        return {
+          success: false as const,
+          response: NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }),
+        };
+      }
+    }
+  ),
 }));
 
 import { PUT as updateListing } from "@/app/api/listings/[id]/route";
@@ -35,6 +65,13 @@ import { PUT as updatePromotion } from "@/app/api/promotions/[id]/route";
 
 const USER_ID = "user-1";
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
+
+function createProbeBuilder() {
+  return {
+    select: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockResolvedValue({ error: null }),
+  };
+}
 
 function createRequest(url: string, method: string, body?: unknown): NextRequest {
   return {
@@ -47,6 +84,7 @@ function createRequest(url: string, method: string, body?: unknown): NextRequest
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetOwnerColumnCacheForTesting();
   mockCreateClient.mockResolvedValue({
     auth: {
       getUser: vi.fn().mockResolvedValue({
@@ -77,6 +115,10 @@ describe("content media cleanup queueing", () => {
         if (table === "listings") {
           listingCallCount += 1;
           if (listingCallCount === 1) {
+            return createProbeBuilder();
+          }
+
+          if (listingCallCount === 2) {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
@@ -168,6 +210,10 @@ describe("content media cleanup queueing", () => {
         if (table === "promotions") {
           promotionCallCount += 1;
           if (promotionCallCount === 1) {
+            return createProbeBuilder();
+          }
+
+          if (promotionCallCount === 2) {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
@@ -246,6 +292,10 @@ describe("content media cleanup queueing", () => {
         if (table === "businesses") {
           businessCallCount += 1;
           if (businessCallCount === 1) {
+            return createProbeBuilder();
+          }
+
+          if (businessCallCount === 2) {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
@@ -337,6 +387,10 @@ describe("content media cleanup queueing", () => {
         if (table === "businesses") {
           businessCallCount += 1;
           if (businessCallCount === 1) {
+            return createProbeBuilder();
+          }
+
+          if (businessCallCount === 2) {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),

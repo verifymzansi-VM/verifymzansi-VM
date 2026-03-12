@@ -5,6 +5,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { UPLOAD_AREAS } from "@/types/enums";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 
 const log = createLogger("MediaUpload");
 
@@ -34,6 +35,23 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const ip =
+      typeof (request as { headers?: { get?: unknown } }).headers?.get === "function"
+        ? getClientIp(request)
+        : "unknown";
+    const rateCheck = await checkRateLimit({
+      key: user.id,
+      action: "media:upload",
+      deviceId: ip,
+    });
+
+    if (rateCheck.limited) {
+      return NextResponse.json(
+        { error: "Too many upload attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+      );
     }
 
     // ── Get account profile ──────────────────────────────────

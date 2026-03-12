@@ -1,5 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { z } from "zod";
+import { createLogger } from "@/lib/utils/logger";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+
+const log = createLogger("NotificationsRoute");
+
+const notificationMutationSchema = z.union([
+  z.object({ all: z.literal(true) }),
+  z.object({ id: z.string().uuid("Notification ID must be a valid UUID") }),
+]);
 
 /**
  * GET /api/notifications
@@ -19,7 +29,14 @@ export async function GET(request: NextRequest) {
 
     const url = new URL(request.url);
     const unreadOnly = url.searchParams.get("unread") === "true";
-    const limit = Math.min(Number(url.searchParams.get("limit")) || 25, 50);
+    const rawLimit = url.searchParams.get("limit");
+    const parsedLimit = rawLimit ? Number(rawLimit) : 25;
+
+    if (!Number.isFinite(parsedLimit) || parsedLimit < 1) {
+      return NextResponse.json({ error: "limit must be a positive number" }, { status: 400 });
+    }
+
+    const limit = Math.min(parsedLimit, 50);
 
     let query = supabase
       .from("notifications")
@@ -35,7 +52,8 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      log.error("Failed to fetch notifications", { error: error.message, userId: user.id });
+      return NextResponse.json({ error: "Failed to fetch notifications" }, { status: 500 });
     }
 
     // Also get unread count
@@ -49,8 +67,9 @@ export async function GET(request: NextRequest) {
       notifications: data || [],
       unreadCount: unreadCount || 0,
     });
-  } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    logApiError(log, "Unexpected notifications fetch error", error);
+    return internalApiError();
   }
 }
 
@@ -71,9 +90,17 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const parsedBody = await parseAndValidateJsonRequest(request, notificationMutationSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Must provide 'id' or 'all: true'",
+      includeValidationDetails: false,
+    });
 
-    if (body.all === true) {
+    if (!parsedBody.success) {
+      return parsedBody.response;
+    }
+
+    if ("all" in parsedBody.data && parsedBody.data.all === true) {
       const { error } = await supabase
         .from("notifications")
         .update({ read: true })
@@ -81,29 +108,38 @@ export async function PATCH(request: NextRequest) {
         .eq("read", false);
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        log.error("Failed to mark all notifications as read", {
+          error: error.message,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to update notifications" }, { status: 500 });
       }
 
       return NextResponse.json({ success: true, message: "All notifications marked as read" });
     }
 
-    if (body.id) {
+    if ("id" in parsedBody.data) {
       const { error } = await supabase
         .from("notifications")
         .update({ read: true })
-        .eq("id", body.id)
+        .eq("id", parsedBody.data.id)
         .eq("user_id", user.id);
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        log.error("Failed to mark notification as read", {
+          error: error.message,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to update notifications" }, { status: 500 });
       }
 
       return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: "Must provide 'id' or 'all: true'" }, { status: 400 });
-  } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    logApiError(log, "Unexpected notifications update error", error);
+    return internalApiError();
   }
 }
 
@@ -124,34 +160,51 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const parsedBody = await parseAndValidateJsonRequest(request, notificationMutationSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Must provide 'id' or 'all: true'",
+      includeValidationDetails: false,
+    });
 
-    if (body.all === true) {
+    if (!parsedBody.success) {
+      return parsedBody.response;
+    }
+
+    if ("all" in parsedBody.data && parsedBody.data.all === true) {
       const { error } = await supabase.from("notifications").delete().eq("user_id", user.id);
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        log.error("Failed to clear notifications", {
+          error: error.message,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to delete notifications" }, { status: 500 });
       }
 
       return NextResponse.json({ success: true, message: "All notifications cleared" });
     }
 
-    if (body.id) {
+    if ("id" in parsedBody.data) {
       const { error } = await supabase
         .from("notifications")
         .delete()
-        .eq("id", body.id)
+        .eq("id", parsedBody.data.id)
         .eq("user_id", user.id);
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        log.error("Failed to delete notification", {
+          error: error.message,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to delete notifications" }, { status: 500 });
       }
 
       return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: "Must provide 'id' or 'all: true'" }, { status: 400 });
-  } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    logApiError(log, "Unexpected notifications delete error", error);
+    return internalApiError();
   }
 }

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { promotionSchema } from "@/lib/validations/promotion";
 import { getEntitlements } from "@/lib/services/entitlements";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
@@ -132,23 +133,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
-    // Parse and validate body
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    const parsedBody = await parseAndValidateJsonRequest(request, promotionSchema, {
+      invalidJsonMessage: "Invalid JSON body",
+      validationErrorMessage: "Validation failed",
+    });
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
-    const parsed = promotionSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
-        { status: 400 }
-      );
-    }
-
-    const data = parsed.data;
+    const data = parsedBody.data;
     const categoryKey =
       data.category_key ?? inferPromotionCategoryKey(data.category, data.promotion_type);
     const { data: activeEntitlement } = await admin

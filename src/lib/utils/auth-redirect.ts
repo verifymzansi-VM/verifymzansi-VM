@@ -9,7 +9,7 @@ function isLoopbackOrigin(rawOrigin: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
-function resolveBaseOrigin(request: Pick<Request, "url">): string {
+export function resolveAppOrigin(request: Pick<Request, "url">): string {
   const requestOrigin = toOrigin(request.url);
   const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
 
@@ -33,7 +33,7 @@ function resolveBaseOrigin(request: Pick<Request, "url">): string {
 }
 
 export function buildAuthCallbackUrl(request: Pick<Request, "url">, nextPath: string): string {
-  const callbackUrl = new URL(AUTH_CALLBACK_PATH, resolveBaseOrigin(request));
+  const callbackUrl = new URL(AUTH_CALLBACK_PATH, resolveAppOrigin(request));
   callbackUrl.searchParams.set("next", nextPath);
   return callbackUrl.toString();
 }

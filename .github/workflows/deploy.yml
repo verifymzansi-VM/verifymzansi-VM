@@ -60,8 +60,16 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
+      - name: Secret scan
+        run: pnpm run secret-scan
+      - name: Security audit
+        run: pnpm run security:audit
+      - name: License policy check
+        run: pnpm run licenses:check
       - name: Validate production launch env
         run: pnpm exec tsx scripts/validate-launch-env.ts --mode=production
+      - name: Run production preflight
+        run: pnpm run preflight:prod
       - name: Build for Cloudflare
         run: pnpm run build:cloudflare
 

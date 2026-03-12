@@ -1,14 +1,24 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { generateStorageKey, generatePresignedUploadUrl } from "@/lib/services/storage";
 import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 import { UPLOAD_AREAS } from "@/types/enums";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("MediaUploadUrl");
 
 const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
+
+const uploadUrlRequestSchema = z.object({
+  filename: z.string().trim().min(1, "filename is required").max(255, "filename is too long"),
+  contentType: z.string().trim().min(1, "contentType is required"),
+  size: z.coerce.number().int().positive("size must be a positive number"),
+  area: z.enum(UPLOAD_AREAS).optional().default("listing"),
+});
 
 /**
  * POST /api/media/upload-url
@@ -39,38 +49,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const ip = getClientIp(request);
+    const rateCheck = await checkRateLimit({
+      key: user.id,
+      action: "media:upload-url",
+      deviceId: ip,
+    });
+
+    if (rateCheck.limited) {
+      return NextResponse.json(
+        { error: "Too many upload URL requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+      );
+    }
+
     // ── Get account profile ──────────────────────────────────
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("account_profiles")
       .select("id")
       .eq("user_id", user.id)
       .single();
+
+    if (profileError) {
+      log.error("Failed to fetch account profile for upload URL", {
+        error: profileError.message,
+        userId: user.id,
+      });
+      return NextResponse.json({ error: "Failed to verify account profile" }, { status: 500 });
+    }
 
     if (!profile) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
     // ── Parse request body ───────────────────────────────────
-    let body: {
-      filename?: string;
-      contentType?: string;
-      size?: number;
-      area?: string;
-    };
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    const parsedBody = await parseAndValidateJsonRequest(request, uploadUrlRequestSchema, {
+      invalidJsonMessage: "Invalid JSON body",
+      validationErrorMessage: "Validation failed",
+    });
+
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
-    const { filename, contentType, size, area = "listing" } = body;
-
-    if (!filename || !contentType || !size) {
-      return NextResponse.json(
-        { error: "Missing required fields: filename, contentType, size" },
-        { status: 400 }
-      );
-    }
+    const { filename, contentType, size, area } = parsedBody.data;
 
     // ── Validate ─────────────────────────────────────────────
     if (!VIDEO_TYPES.has(contentType)) {
@@ -85,15 +107,6 @@ export async function POST(request: NextRequest) {
     if (size > MAX_VIDEO_SIZE) {
       return NextResponse.json(
         { error: "File too large. Maximum video size is 50 MB." },
-        { status: 400 }
-      );
-    }
-
-    if (!(UPLOAD_AREAS as readonly string[]).includes(area)) {
-      return NextResponse.json(
-        {
-          error: `Invalid area. Must be one of: ${UPLOAD_AREAS.join(", ")}`,
-        },
         { status: 400 }
       );
     }

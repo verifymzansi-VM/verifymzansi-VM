@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { createLogger } from "@/lib/utils/logger";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 
@@ -9,6 +10,7 @@ const verifyBuyerSchema = z.object({
 });
 
 type BuyerVerificationStatus = "valid" | "expired" | "revoked";
+const log = createLogger("VerifyBuyerRoute");
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,27 +24,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-
-    const parsed = verifyBuyerSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? "Invalid token" },
-        { status: 400 }
-      );
+    const parsedBody = await parseAndValidateJsonRequest(request, verifyBuyerSchema, {
+      validationErrorMessage: "Invalid token",
+      includeValidationDetails: false,
+    });
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
     const admin = createAdminClient();
     const { data, error } = await admin
       .from("buyer_verifications")
       .select("first_name_initial, issued_at, expires_at, status")
-      .eq("token", parsed.data.token)
+      .eq("token", parsedBody.data.token)
       .maybeSingle();
 
     if (error) {
+      log.error("Failed to verify buyer token", { error: error.message });
       return NextResponse.json({ error: "Failed to verify token" }, { status: 500 });
     }
 
@@ -73,7 +71,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ result: "not_found" as const });
-  } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    logApiError(log, "Unexpected buyer verification error", error);
+    return internalApiError();
   }
 }

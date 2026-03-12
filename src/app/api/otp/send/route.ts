@@ -164,13 +164,8 @@ export async function POST(request: NextRequest) {
       log.error("Failed to store OTP challenge", {
         error: challengeError.message,
         code: challengeError.code,
-        details: challengeError.details,
-        hint: challengeError.hint,
       });
-      return NextResponse.json(
-        { error: "Failed to generate OTP", detail: challengeError.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Failed to generate OTP" }, { status: 500 });
     }
 
     // Keep otp_logs as immutable audit trail.
@@ -210,6 +205,6 @@ export async function POST(request: NextRequest) {
       error: message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return NextResponse.json({ error: "Internal server error", detail: message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -5,6 +5,7 @@ import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { z } from "zod";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("PromotionModeration");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -38,23 +39,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Validate body
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    const parsedBody = await parseAndValidateJsonRequest(request, moderateSchema, {
+      invalidJsonMessage: "Invalid JSON body",
+      validationErrorMessage: "Validation failed",
+    });
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
-    const parsed = moderateSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
-        { status: 400 }
-      );
-    }
-
-    const { decision, reason } = parsed.data;
+    const { decision, reason } = parsedBody.data;
     const admin = createAdminClient();
 
     // Fetch current promotion
@@ -111,7 +104,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     return NextResponse.json({ success: true, status: newStatus });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
-    return NextResponse.json({ error: "Failed to moderate promotion" }, { status: 500 });
+    logApiError(log, "Unexpected error moderating promotion", err);
+    return internalApiError("Failed to moderate promotion");
   }
 }

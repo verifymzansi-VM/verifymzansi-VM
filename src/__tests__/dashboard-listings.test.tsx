@@ -31,40 +31,35 @@ describe("ListingsPage", () => {
     // Setup valid user
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "u-123" } } });
 
-    // Setup mock query resolution for profile
-    const queryBuilderProfile = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: "p-456" } }),
-    };
-
     // Setup mock query resolution for listings
     const queryBuilderListings = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({
-        data: [
-          {
-            id: "1",
-            title: "Car",
-            status: "active",
-            price_zar: 100,
-            created_at: "2023-01-01T00:00:00.000Z",
-          },
-          {
-            id: "2",
-            title: "Bike",
-            status: "pending_review",
-            price_zar: 50,
-            created_at: "2023-01-01T00:00:00.000Z",
-          },
-        ],
-      }),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ error: null }),
+      then: vi.fn((resolve) =>
+        resolve({
+          data: [
+            {
+              id: "1",
+              title: "Car",
+              status: "active",
+              price_zar: 100,
+              created_at: "2023-01-01T00:00:00.000Z",
+            },
+            {
+              id: "2",
+              title: "Bike",
+              status: "pending_review",
+              price_zar: 50,
+              created_at: "2023-01-01T00:00:00.000Z",
+            },
+          ],
+        })
+      ),
     };
 
-    // Switch implementations based on requested tables
     mockSupabase.from.mockImplementation((table) => {
-      if (table === "account_profiles") return queryBuilderProfile;
       if (table === "listings") return queryBuilderListings;
     });
 
@@ -81,29 +76,22 @@ describe("ListingsPage", () => {
     // Setup valid user
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "u-123" } } });
 
-    // Simulate user who doesn't have an account profile (returns null)
-    const queryBuilderProfile = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null }),
-    };
-
     const queryBuilderListings = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({ data: [] }),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ error: null }),
+      then: vi.fn((resolve) => resolve({ data: [] })),
     };
 
     mockSupabase.from.mockImplementation((table) => {
-      if (table === "account_profiles") return queryBuilderProfile;
-      if (table === "listings") return queryBuilderListings; // This shouldn't be called!
+      if (table === "listings") return queryBuilderListings;
     });
 
     const ui = await ListingsPage();
     render(ui);
 
-    // Profile is missing, so it shouldn't try querying listings with empty UUIDs
-    expect(queryBuilderListings.eq).not.toHaveBeenCalledWith("owner_id", "");
+    expect(queryBuilderListings.eq).toHaveBeenCalledWith("owner_id", "u-123");
     expect(screen.getByText(/Active \(0\)/)).toBeDefined();
   });
 });
