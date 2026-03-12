@@ -305,12 +305,12 @@ export function PromotionsExplorer() {
     <div className="container mx-auto px-4 py-6 space-y-5 max-w-7xl">
       <PageHeader
         title="Promotions & Events"
-        description="Deals, promotions, launches, and events from verified South African businesses and advertisers."
+        description="Deals, promotions, launches, and events from verified South African businesses and members."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Promotions & Events" }]}
       >
         <Button asChild size="sm" className="gap-1">
-          <Link href="/advertise">
-            Advertise
+          <Link href="/post/create">
+            Create a Post
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
@@ -695,8 +695,8 @@ export function PromotionsExplorer() {
           {total === 1 ? "" : "s"} found
         </p>
         <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex gap-1">
-          <Link href="/advertise">
-            Start Advertising
+          <Link href="/post/create">
+            Create a Post
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>

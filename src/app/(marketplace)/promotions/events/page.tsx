@@ -14,7 +14,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Events",
   description:
-    "Discover upcoming events, gatherings, and happenings from verified businesses and advertisers across South Africa.",
+    "Discover upcoming events, gatherings, and happenings from verified businesses and members across South Africa.",
 };
 
 export const revalidate = 60;
@@ -143,7 +143,7 @@ export default async function EventsPage() {
         ]}
       >
         <Button asChild size="sm" className="gap-1">
-          <Link href="/advertise">Advertise an event</Link>
+          <Link href="/post/create">Create a Post</Link>
         </Button>
       </PageHeader>
 

@@ -16,11 +16,11 @@ import { HomePromotionsShowcase } from "@/components/home/home-promotions-showca
 export const metadata: Metadata = {
   title: "VerifyMzansi — SA's Trusted Marketplace",
   description:
-    "Buy, sell, advertise, and discover trusted businesses with verified accounts. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
+    "Buy, sell, and discover trusted businesses, deals, and events with verified accounts. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
   openGraph: {
     title: "VerifyMzansi — SA's Trusted Marketplace",
     description:
-      "Buy, sell, advertise, and discover trusted businesses with verified accounts. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
+      "Buy, sell, and discover trusted businesses, deals, and events with verified accounts. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
     images: [{ url: "/icons/icon-512.png", width: 512, height: 512, alt: "VerifyMzansi" }],
   },
 };
@@ -49,7 +49,7 @@ export default async function HomePage() {
     },
     {
       title: "Promotions & Events",
-      description: "Discover current offers and events or advertise a new campaign.",
+      description: "Discover current offers and events or create a time-sensitive promotion.",
       href: "/promotions",
       icon: Megaphone,
       accentClass: "text-red-400",
@@ -138,8 +138,8 @@ export default async function HomePage() {
 
                     <p className="text-warm-100 text-base sm:text-lg max-w-2xl">
                       VerifyMzansi is for South Africans who want to buy, sell, find trusted
-                      businesses, or advertise promotions with more confidence through verified
-                      accounts.
+                      businesses, or discover promotions and events with more confidence through
+                      verified accounts.
                     </p>
                   </div>
 
@@ -185,18 +185,6 @@ export default async function HomePage() {
                     >
                       <Link href="/register">
                         Create your account
-                        <ArrowRight className="h-5 w-5" />
-                      </Link>
-                    </Button>
-
-                    <Button
-                      asChild
-                      size="lg"
-                      variant="outline"
-                      className="w-full sm:w-auto h-12 px-8 text-base rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10"
-                    >
-                      <Link href="/advertise">
-                        Advertise a promotion
                         <ArrowRight className="h-5 w-5" />
                       </Link>
                     </Button>

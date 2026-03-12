@@ -57,21 +57,21 @@ export async function HomePromotionsShowcase() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Megaphone className="h-6 w-6 text-red-500" />
-              <h2 className="font-display text-xl sm:text-2xl font-bold">Promotions & Ads</h2>
+              <h2 className="font-display text-xl sm:text-2xl font-bold">Promotions & Events</h2>
             </div>
           </div>
           <div className="rounded-2xl border border-dashed border-warm-300 dark:border-warm-700 bg-warm-50 dark:bg-warm-900 p-8 text-center space-y-3">
             <Megaphone className="h-10 w-10 text-red-400/50 mx-auto" />
             <p className="text-muted-foreground text-sm">
-              No promotions yet. Be the first to advertise your deal or event!
+              No promotions yet. Be the first to post a promotion or event.
             </p>
             <Button
               asChild
               size="sm"
               className="bg-red-700 hover:bg-red-800 text-white rounded-full"
             >
-              <Link href="/advertise">
-                Create a Promotion
+              <Link href="/post/create">
+                Create a Post
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Link>
             </Button>
@@ -87,7 +87,7 @@ export async function HomePromotionsShowcase() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Megaphone className="h-6 w-6 text-red-500" />
-            <h2 className="font-display text-xl sm:text-2xl font-bold">Promotions & Ads</h2>
+            <h2 className="font-display text-xl sm:text-2xl font-bold">Promotions & Events</h2>
           </div>
           <Button
             asChild
