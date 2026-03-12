@@ -7,6 +7,8 @@ type BrandLogoSize = "sm" | "md" | "lg" | "xl";
 type BrandLogoLayout = "horizontal" | "stacked";
 type BrandLogoTone = "default" | "inverse";
 
+const BRAND_LOGO_ASSET_VERSION = "20260312-logo-refresh";
+
 interface BrandLogoProps {
   className?: string;
   imageClassName?: string;
@@ -44,7 +46,10 @@ export function BrandLogo({
   priority = false,
 }: BrandLogoProps) {
   const styles = sizeStyles[size];
-  const logoSrc = tone === "inverse" ? "/images/logo-inverse.png" : "/images/logo-transparent.png";
+  const logoSrc =
+    tone === "inverse"
+      ? `/images/logo-inverse.png?v=${BRAND_LOGO_ASSET_VERSION}`
+      : `/images/logo-transparent.png?v=${BRAND_LOGO_ASSET_VERSION}`;
 
   return (
     <div
