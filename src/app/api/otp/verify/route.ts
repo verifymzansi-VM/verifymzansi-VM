@@ -10,7 +10,6 @@ import {
   buildAccountPhoneFields,
   normalizeSaPhone,
 } from "@/lib/utils/phone";
-import { isWhitelistedTestPhone, TEST_OTP_CODE } from "@/lib/utils/test-otp";
 
 const log = createLogger("OTPVerify");
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -224,23 +223,6 @@ export async function POST(request: NextRequest) {
 
     const now = new Date();
     const nowIso = now.toISOString();
-
-    if (isWhitelistedTestPhone(phone) && otp === TEST_OTP_CODE) {
-      const verificationResult = await finalizePhoneVerification(
-        adminSupabase,
-        user,
-        accountPhoneFields,
-        nowIso
-      );
-      if (!verificationResult.success) {
-        return NextResponse.json(
-          { error: verificationResult.error },
-          { status: verificationResult.status }
-        );
-      }
-      log.info("Test phone bypass verified", { phone, userId: user.id });
-      return NextResponse.json({ success: true, verified: true, testBypass: true });
-    }
 
     // Only challenge rows owned by this user+phone are eligible.
     const { data: challenge, error } = await adminSupabase

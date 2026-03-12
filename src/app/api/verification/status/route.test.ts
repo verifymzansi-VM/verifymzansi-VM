@@ -62,7 +62,17 @@ describe("GET /api/verification/status", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({
-              data: [{ step_type: "phone", status: "approved" }],
+              data: [
+                {
+                  step_type: "phone",
+                  status: "approved",
+                  reviewed_at: "2026-03-12T12:00:00.000Z",
+                  reason_code: null,
+                  reason_note: null,
+                  risk_level: null,
+                  submitted_at: "2026-03-12T11:59:00.000Z",
+                },
+              ],
             }),
           }),
         };
@@ -78,6 +88,11 @@ describe("GET /api/verification/status", () => {
     expect(body.accountVerificationStatus).toBe("verified");
     expect(body.overallStatus).toBe("verified");
     expect(body.steps).toHaveLength(1);
+    expect(body.steps[0]).toMatchObject({
+      step_type: "phone",
+      status: "approved",
+      reviewed_at: "2026-03-12T12:00:00.000Z",
+    });
   });
 
   it("falls back to the legacy seller verification status when needed", async () => {

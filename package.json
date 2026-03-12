@@ -102,7 +102,7 @@
     "png-to-ico": "^3.0.1",
     "postcss": "^8.5.6",
     "prettier": "^3.8.1",
-    "tailwindcss": "^3.4.19",
+    "tailwindcss": "3.4.19",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
@@ -117,10 +117,12 @@
       "workerd"
     ],
     "overrides": {
+      "tailwindcss": "3.4.19",
       "fast-xml-parser": ">=5.3.8"
     }
   },
   "overrides": {
+    "tailwindcss": "3.4.19",
     "@aws-sdk/xml-builder": "^3.972.5",
     "fast-xml-parser": ">=5.3.8"
   },

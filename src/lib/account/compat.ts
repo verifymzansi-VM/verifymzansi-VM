@@ -171,12 +171,11 @@ export function withOwnerColumn(selectClause: string, ownerColumn: OwnerColumn):
   return selectClause.replace(/\bowner_id\b/g, "seller_id");
 }
 
-export function applyOwnerFilter<T extends { eq: (column: string, value: unknown) => unknown }>(
-  query: T,
-  ownerColumn: OwnerColumn,
-  ownerId: string
-): ReturnType<T["eq"]> {
-  return query.eq(ownerColumn, ownerId) as ReturnType<T["eq"]>;
+export function applyOwnerFilter<T>(query: T, ownerColumn: OwnerColumn, ownerId: string): T {
+  return (query as T & { eq: (column: string, value: unknown) => unknown }).eq(
+    ownerColumn,
+    ownerId
+  ) as T;
 }
 
 export function withOwnerField<T extends Record<string, unknown>>(

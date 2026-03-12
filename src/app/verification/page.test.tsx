@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import VerificationPage from "./page";
 import { useSearchParams } from "next/navigation";
+import type { VerificationStatus } from "@/types/enums";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: vi.fn(),
@@ -40,43 +41,202 @@ vi.mock("@/components/layout/page-header", () => ({
   ),
 }));
 
-vi.mock("@/components/trust/verification-progress", () => ({
-  VerificationProgress: () => <div data-testid="verification-progress" />,
-}));
+type StepStatus = {
+  step_type: "phone" | "id_doc" | "selfie" | "location";
+  status: VerificationStatus;
+  reviewed_at?: string | null;
+  reason_code?: string | null;
+  reason_note?: string | null;
+  risk_level?: string | null;
+  submitted_at?: string | null;
+};
+
+function jsonResponse(body: unknown, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  };
+}
+
+function buildStatusPayload({
+  accountVerificationStatus = "incomplete",
+  steps = [],
+}: {
+  accountVerificationStatus?: "incomplete" | "pending_review" | "verified" | "rejected";
+  steps?: StepStatus[];
+}) {
+  return {
+    accountVerificationStatus,
+    overallStatus: accountVerificationStatus,
+    steps,
+  };
+}
 
 describe("VerificationPage", () => {
+  let sessionResponse: ReturnType<typeof jsonResponse>;
+  let statusResponse: ReturnType<typeof jsonResponse>;
+  let otpSendResponse: ReturnType<typeof jsonResponse>;
+
   beforeEach(() => {
     vi.clearAllMocks();
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    sessionResponse = jsonResponse(
+      {
         sessionId: "session-1",
-        completedSteps: ["phone", "id_doc", "selfie", "location"],
+        completedSteps: [],
         pendingSteps: [],
         requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: "2026-03-08T12:00:00.000Z",
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      }),
+        finalizedAt: null,
+        phoneVerifiedAt: null,
+      },
+      200
+    );
+    statusResponse = jsonResponse(buildStatusPayload({}), 200);
+    otpSendResponse = jsonResponse({ success: true }, 200);
+
+    (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(new URLSearchParams());
+
+    global.fetch = vi.fn((input: string | URL) => {
+      const url = String(input);
+      if (url.includes("/api/verification/session/start")) {
+        return Promise.resolve(sessionResponse);
+      }
+      if (url.includes("/api/verification/status")) {
+        return Promise.resolve(statusResponse);
+      }
+      if (url.includes("/api/otp/send")) {
+        return Promise.resolve(otpSendResponse);
+      }
+      return Promise.resolve(jsonResponse({}, 200));
     }) as unknown as typeof fetch;
   });
 
-  it("uses the supplied returnUrl on the completion card", async () => {
+  it("uses the supplied returnUrl on the completion card and shows the review summary", async () => {
     (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       new URLSearchParams("returnUrl=%2Fpost%2Fcreate-business")
+    );
+
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-1",
+        completedSteps: ["phone"],
+        pendingSteps: ["id_doc", "selfie", "location"],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: "2026-03-08T12:00:00.000Z",
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "pending_review",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "pending" },
+          { step_type: "selfie", status: "pending" },
+          { step_type: "location", status: "pending" },
+        ],
+      }),
+      200
     );
 
     render(<VerificationPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: /Return to Posting/i })).toHaveAttribute(
-        "href",
-        "/post/create-business"
-      );
+      expect(screen.getByRole("heading", { name: /Verification Submitted/i })).toBeInTheDocument();
     });
+    expect(
+      screen.getByText(/phone, documents, and location details are under admin review/i)
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/Pending review/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: /Return to Posting/i })).toHaveAttribute(
+      "href",
+      "/post/create-business"
+    );
+  });
+
+  it("surfaces resubmission reasons on the affected step", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-2",
+        completedSteps: ["phone"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: null,
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "rejected",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          {
+            step_type: "id_doc",
+            status: "needs_resubmission",
+            reason_note: "Please upload a clearer photo of the full ID card.",
+            reason_code: "blurry_image",
+          },
+        ],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Needs resubmission/i)).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/Please upload a clearer photo of the full ID card/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Action needed on id doc/i)).toBeInTheDocument();
+  });
+
+  it("never renders OTP helper hints after sending a real OTP", async () => {
+    sessionResponse = jsonResponse({ error: "New verification flow is not yet enabled" }, 404);
+    statusResponse = jsonResponse({ error: "Account profile not found" }, 404);
+
+    render(<VerificationPage />);
+
+    fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
+      target: { value: "0712345678" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Send OTP/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/6-digit OTP/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Codes expire after 5 minutes/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Dev OTP:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Test OTP:/i)).not.toBeInTheDocument();
   });
 
   it("falls back to /dashboard when no returnUrl is provided", async () => {
-    (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(new URLSearchParams());
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-1",
+        completedSteps: ["phone"],
+        pendingSteps: ["id_doc", "selfie", "location"],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: "2026-03-08T12:00:00.000Z",
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "pending_review",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "pending" },
+          { step_type: "selfie", status: "pending" },
+          { step_type: "location", status: "pending" },
+        ],
+      }),
+      200
+    );
 
     render(<VerificationPage />);
 
@@ -85,18 +245,6 @@ describe("VerificationPage", () => {
         "href",
         "/dashboard"
       );
-    });
-  });
-
-  it("uses a generic completion CTA for non-posting return paths", async () => {
-    (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
-      new URLSearchParams("returnUrl=%2Fbilling")
-    );
-
-    render(<VerificationPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("link", { name: /Continue/i })).toHaveAttribute("href", "/billing");
     });
   });
 });

@@ -74,7 +74,7 @@ function mockOtpDbSuccess() {
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
-describe("OTP send — dev exposure guard", () => {
+describe("OTP send — no OTP exposure", () => {
   const origNodeEnv = process.env.NODE_ENV;
   const origDevFlag = process.env.DEV_EXPOSE_OTP;
 
@@ -105,6 +105,7 @@ describe("OTP send — dev exposure guard", () => {
 
     expect(res.status).toBe(200);
     expect(body.devOtp).toBeUndefined();
+    expect(body.testOtp).toBeUndefined();
     expect(body.success).toBe(true);
   });
 
@@ -118,6 +119,7 @@ describe("OTP send — dev exposure guard", () => {
 
     expect(res.status).toBe(200);
     expect(body.devOtp).toBeUndefined();
+    expect(body.testOtp).toBeUndefined();
   });
 
   it("does NOT expose OTP on non-localhost hostnames", async () => {
@@ -130,9 +132,10 @@ describe("OTP send — dev exposure guard", () => {
 
     expect(res.status).toBe(200);
     expect(body.devOtp).toBeUndefined();
+    expect(body.testOtp).toBeUndefined();
   });
 
-  it("exposes OTP only when all three conditions are met", async () => {
+  it("does NOT expose OTP even when the old dev flag is enabled on localhost", async () => {
     (process.env as Record<string, string | undefined>).NODE_ENV = "test";
     process.env.DEV_EXPOSE_OTP = "true";
 
@@ -141,8 +144,8 @@ describe("OTP send — dev exposure guard", () => {
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body.devOtp).toBeDefined();
-    expect(body.devOtp).toMatch(/^\d{6}$/);
+    expect(body.devOtp).toBeUndefined();
+    expect(body.testOtp).toBeUndefined();
   });
 
   it("returns 401 for unauthenticated requests", async () => {

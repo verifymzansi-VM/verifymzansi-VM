@@ -6,7 +6,6 @@ import { saPhoneSchema } from "@/lib/validations/shared";
 import { sendOtpSms } from "@/lib/services/sms";
 import { createLogger } from "@/lib/utils/logger";
 import { normalizeSaPhone } from "@/lib/utils/phone";
-import { isWhitelistedTestPhone, TEST_OTP_CODE } from "@/lib/utils/test-otp";
 
 const log = createLogger("OTP");
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
@@ -54,20 +53,6 @@ async function hashOtp(otp: string): Promise<string> {
   return `${saltHex}:${hashHex}`;
 }
 
-function shouldExposeDevOtp(request: NextRequest): boolean {
-  // Never expose OTP in production — fail-safe guard
-  if (process.env.NODE_ENV === "production") {
-    if (process.env.DEV_EXPOSE_OTP === "true") {
-      log.error("DEV_EXPOSE_OTP is set in production — ignoring. Remove this env var immediately.");
-    }
-    return false;
-  }
-  const explicitFlag = process.env.DEV_EXPOSE_OTP === "true";
-  if (!explicitFlag) return false;
-  const hostname = (request as unknown as { nextUrl?: { hostname?: string } }).nextUrl?.hostname;
-  return hostname === "localhost" || hostname === "127.0.0.1";
-}
-
 async function checkExternalOtpRateLimit(
   request: NextRequest,
   phone: string
@@ -112,7 +97,6 @@ async function checkExternalOtpRateLimit(
 
 export async function POST(request: NextRequest) {
   try {
-    const exposeDevOtp = shouldExposeDevOtp(request);
     const body = await parseJsonRequest(request);
     if (!body) {
       return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
@@ -134,13 +118,6 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // ── Magic test phone bypass ──
-    // Whitelisted numbers skip SMS and are verified with TEST_OTP_CODE ("999999").
-    if (isWhitelistedTestPhone(phone)) {
-      log.info("Test phone bypass: SMS skipped", { phone, userId: user.id });
-      return NextResponse.json({ success: true, testOtp: TEST_OTP_CODE });
     }
 
     // otp_logs is service-only; use admin client to bypass RLS safely in this server route.
@@ -222,24 +199,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (!smsSucceeded) {
-      if (exposeDevOtp) {
-        log.debug("Dev OTP fallback — check server logs", { phone });
-        return NextResponse.json({
-          success: true,
-          warning: "SMS unavailable in local mode",
-          devOtp: otp,
-        });
-      }
-
-      // OTP is stored in DB — log it server-side for manual recovery if SMS fails
-      log.warn("SMS failed but OTP stored. OTP can be checked via /api/otp/health", { phone });
+      log.warn("SMS failed for OTP challenge", { phone, userId: user.id });
       return NextResponse.json({ error: "Failed to send OTP. Please try again." }, { status: 502 });
-    }
-
-    // In local/non-production mode, return OTP in response to unblock testing.
-    if (exposeDevOtp) {
-      log.info("OTP sent successfully", { phone });
-      return NextResponse.json({ success: true, devOtp: otp });
     }
 
     return NextResponse.json({ success: true });

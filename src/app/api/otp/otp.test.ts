@@ -116,7 +116,9 @@ describe("OTP Routes", () => {
       } as never);
 
       const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+      const data = await res.json();
       expect(res.status).toBe(200);
+      expect(data).toEqual({ success: true });
       expect(smsService.sendOtpSms).toHaveBeenCalledWith("+27821234567", expect.any(String));
     });
   });
@@ -148,6 +150,35 @@ describe("OTP Routes", () => {
 
       expect(res.status).toBe(400);
       expect(data.error).toBe("Invalid or expired OTP");
+    });
+
+    it("does not allow legacy bypass codes without a stored challenge", async () => {
+      const mockAdminClient = {
+        from: vi.fn((table: string) => {
+          if (table === "otp_challenges") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              is: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            };
+          }
+          return {};
+        }),
+      };
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+
+      const res = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "999999" })
+      );
+
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toMatchObject({
+        error: "Invalid or expired OTP",
+      });
     });
 
     it("persists phone verification to profile, step, and session on success", async () => {

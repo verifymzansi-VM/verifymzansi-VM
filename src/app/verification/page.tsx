@@ -34,18 +34,129 @@ import {
   extractGenderFromSaId,
 } from "@/lib/utils/sa-id-validation";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
-import type { VerificationStepType, LocationConfidence } from "@/types/enums";
+import type {
+  VerificationStepType,
+  LocationConfidence,
+  VerificationStatus,
+  AccountVerificationStatus,
+} from "@/types/enums";
 import { GPS_REQUEST_TIMEOUT_MS, GPS_MAX_AGE_MS } from "@/lib/constants/verification";
 
 type WizardStep = "phone" | "id_doc" | "selfie" | "location" | "complete";
 type UploadReceipt = { name: string; sizeBytes: number; uploadedAtIso: string };
+type StepStatusEntry = {
+  step_type: VerificationStepType;
+  status: VerificationStatus;
+  reviewed_at?: string | null;
+  reason_code?: string | null;
+  reason_note?: string | null;
+  risk_level?: string | null;
+  submitted_at?: string | null;
+};
 
 const STEP_ORDER: Exclude<WizardStep, "complete">[] = ["phone", "id_doc", "selfie", "location"];
+const REVIEWABLE_STEP_ORDER: VerificationStepType[] = ["phone", "id_doc", "selfie", "location"];
 
 const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"];
+
+const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
+  phone: "Use your real South African mobile number. We will send a one-time password by SMS.",
+  id_doc:
+    "Enter your 13-digit SA ID number and add a clear photo or PDF of your ID document. Accepted: JPG, PNG, WebP, PDF up to 5 MB.",
+  selfie: "Upload a clear selfie with your full face visible. Accepted: JPG, PNG, WebP up to 5 MB.",
+  location:
+    "Choose your province and city, then verify location by GPS or upload proof of address if GPS is unavailable.",
+};
+
+function formatReasonCode(reasonCode: string | null | undefined): string | null {
+  if (!reasonCode) return null;
+  return reasonCode
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatStatusLabel(status: VerificationStatus): string {
+  switch (status) {
+    case "approved":
+      return "Approved";
+    case "pending":
+      return "Pending review";
+    case "rejected":
+      return "Rejected";
+    case "needs_resubmission":
+      return "Needs resubmission";
+    default:
+      return status;
+  }
+}
+
+function getStatusBannerClasses(status: VerificationStatus): string {
+  switch (status) {
+    case "approved":
+      return "border-brand-green/30 bg-brand-green-50 text-brand-green-900";
+    case "pending":
+      return "border-brand-gold/30 bg-brand-gold-50 text-brand-gold-900";
+    case "rejected":
+    case "needs_resubmission":
+      return "border-destructive/30 bg-destructive/5 text-destructive";
+    default:
+      return "border-warm-200/70 bg-background text-foreground";
+  }
+}
+
+function getInitialWizardStep({
+  statusSteps,
+  phoneDone,
+  allSubmitted,
+  accountVerificationStatus,
+}: {
+  statusSteps: StepStatusEntry[];
+  phoneDone: boolean;
+  allSubmitted: boolean;
+  accountVerificationStatus: AccountVerificationStatus | null;
+}): WizardStep {
+  const stepStatusMap = new Map(statusSteps.map((entry) => [entry.step_type, entry.status]));
+  const needsAttention = REVIEWABLE_STEP_ORDER.find((stepType) => {
+    const status = stepStatusMap.get(stepType);
+    return status === "rejected" || status === "needs_resubmission";
+  });
+
+  if (needsAttention) {
+    return needsAttention;
+  }
+
+  const nonPhoneSubmitted = REVIEWABLE_STEP_ORDER.filter((stepType) => stepType !== "phone").every(
+    (stepType) => {
+      const status = stepStatusMap.get(stepType);
+      return status === "approved" || status === "pending";
+    }
+  );
+
+  if (
+    phoneDone &&
+    nonPhoneSubmitted &&
+    (allSubmitted ||
+      accountVerificationStatus === "pending_review" ||
+      accountVerificationStatus === "verified")
+  ) {
+    return "complete";
+  }
+
+  if (!phoneDone) {
+    return "phone";
+  }
+
+  const nextMissing = REVIEWABLE_STEP_ORDER.find((stepType) => {
+    if (stepType === "phone") return false;
+    return !stepStatusMap.has(stepType);
+  });
+
+  return nextMissing ?? "complete";
+}
 
 function formatFileSize(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
@@ -89,8 +200,6 @@ export default function VerificationPage() {
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
-  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
-  const [testOtpHint, setTestOtpHint] = useState<string | null>(null);
 
   const [idNumber, setIdNumber] = useState("");
   const [idFile, setIdFile] = useState<File | null>(null);
@@ -102,6 +211,9 @@ export default function VerificationPage() {
   const [_sessionId, setSessionId] = useState<string | null>(null);
   const [_sessionLoading, setSessionLoading] = useState(true);
   const [useV2Flow, setUseV2Flow] = useState(false);
+  const [serverSteps, setServerSteps] = useState<StepStatusEntry[]>([]);
+  const [accountVerificationStatus, setAccountVerificationStatus] =
+    useState<AccountVerificationStatus | null>(null);
 
   // GPS state
   const [gpsStatus, setGpsStatus] = useState<
@@ -151,30 +263,89 @@ export default function VerificationPage() {
     ? Boolean(province && city) &&
       (locationMode === "gps" || locationMode === "proof" || !gpsFeatureAvailable)
     : Boolean(province && city);
+  const serverStepMap = useMemo(
+    () => new Map(serverSteps.map((entry) => [entry.step_type, entry] as const)),
+    [serverSteps]
+  );
+  const allStepsResolved = useMemo(
+    () =>
+      REVIEWABLE_STEP_ORDER.every((stepType) => {
+        const status = serverStepMap.get(stepType)?.status;
+        return status === "approved" || status === "pending";
+      }),
+    [serverStepMap]
+  );
+
+  const syncVerificationStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/verification/status");
+      if (!res.ok) {
+        if (res.status === 404) {
+          setServerSteps([]);
+          setAccountVerificationStatus("incomplete");
+          return null;
+        }
+        throw new Error("Failed to load verification status");
+      }
+
+      const payload = await res.json();
+      const nextSteps = Array.isArray(payload.steps)
+        ? (payload.steps as StepStatusEntry[]).filter((stepEntry) =>
+            REVIEWABLE_STEP_ORDER.includes(stepEntry.step_type)
+          )
+        : [];
+
+      setServerSteps(nextSteps);
+      setAccountVerificationStatus(
+        (payload.accountVerificationStatus ??
+          payload.overallStatus ??
+          null) as AccountVerificationStatus | null
+      );
+
+      const approvedSteps = nextSteps
+        .filter((entry) => entry.status === "approved")
+        .map((entry) => entry.step_type);
+      setCompletedSteps(approvedSteps);
+      setPhoneVerified(
+        nextSteps.some((entry) => entry.step_type === "phone" && entry.status === "approved")
+      );
+
+      return {
+        steps: nextSteps,
+        accountStatus: (payload.accountVerificationStatus ??
+          payload.overallStatus ??
+          null) as AccountVerificationStatus | null,
+      };
+    } catch {
+      return null;
+    }
+  }, []);
 
   // Try to start a v2 session on mount
   useEffect(() => {
     let cancelled = false;
     async function initSession() {
+      let sessionData: {
+        completedSteps?: VerificationStepType[];
+        pendingSteps?: VerificationStepType[];
+        requiredSteps?: VerificationStepType[];
+        finalizedAt?: string | null;
+        phoneVerifiedAt?: string | null;
+      } | null = null;
+
       try {
         const res = await fetch("/api/verification/session/start", {
           method: "POST",
         });
         if (res.ok) {
           const data = await res.json();
+          sessionData = data;
           if (!cancelled) {
             setSessionId(data.sessionId);
             setUseV2Flow(true);
             // Restore completed steps from server
             if (data.completedSteps?.length > 0) {
               setCompletedSteps(data.completedSteps);
-            }
-            // If all steps are submitted (approved or pending review), show completion screen
-            const allSubmitted =
-              data.completedSteps?.length + (data.pendingSteps?.length ?? 0) >=
-              (data.requiredSteps?.length ?? 4);
-            if (allSubmitted && data.finalizedAt) {
-              setStep("complete");
             }
             if (data.phoneVerifiedAt) {
               setPhoneVerified(true);
@@ -194,6 +365,29 @@ export default function VerificationPage() {
       } catch {
         // Session start failed — fall back to legacy
       } finally {
+        const statusSnapshot = await syncVerificationStatus();
+
+        if (!cancelled) {
+          const phoneDone =
+            Boolean(sessionData?.phoneVerifiedAt) ||
+            Boolean(
+              statusSnapshot?.steps.some(
+                (entry) => entry.step_type === "phone" && entry.status === "approved"
+              )
+            );
+          const allSubmitted =
+            (sessionData?.completedSteps?.length ?? 0) + (sessionData?.pendingSteps?.length ?? 0) >=
+              (sessionData?.requiredSteps?.length ?? 4) && Boolean(sessionData?.finalizedAt);
+
+          setStep(
+            getInitialWizardStep({
+              statusSteps: statusSnapshot?.steps ?? [],
+              phoneDone,
+              allSubmitted,
+              accountVerificationStatus: statusSnapshot?.accountStatus ?? null,
+            })
+          );
+        }
         if (!cancelled) setSessionLoading(false);
       }
     }
@@ -201,8 +395,7 @@ export default function VerificationPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [syncVerificationStatus, toast]);
 
   // SA ID number validation effect
   useEffect(() => {
@@ -389,8 +582,6 @@ export default function VerificationPage() {
     }
 
     setIsLoading(true);
-    setDevOtpHint(null);
-    setTestOtpHint(null);
 
     try {
       const res = await fetch("/api/otp/send", {
@@ -404,21 +595,12 @@ export default function VerificationPage() {
         throw new Error((payload.error || "Failed to send OTP") + detail);
       }
 
-      const devOtp = typeof payload.devOtp === "string" ? payload.devOtp : null;
-      if (devOtp && process.env.NODE_ENV === "development") {
-        setOtp(devOtp);
-        setDevOtpHint(devOtp);
-      }
-
-      // Test phone number bypass — works on live site for whitelisted numbers
-      const testOtp = typeof payload.testOtp === "string" ? payload.testOtp : null;
-      if (testOtp) {
-        setOtp(testOtp);
-        setTestOtpHint(testOtp);
-      }
-
       setOtpSent(true);
-      toast({ title: "OTP sent", variant: "success" });
+      toast({
+        title: "OTP sent",
+        description: "Check your SMS inbox for the 6-digit code.",
+        variant: "success",
+      });
     } catch (err) {
       toast({
         title: "Failed to send OTP",
@@ -448,6 +630,7 @@ export default function VerificationPage() {
 
       setPhoneVerified(true);
       markStepComplete("phone");
+      await syncVerificationStatus();
       setStep("id_doc");
       toast({ title: "Phone verified", variant: "success" });
     } catch (err) {
@@ -596,10 +779,11 @@ export default function VerificationPage() {
       await uploadIdIfNeeded();
       await uploadSelfieIfNeeded();
       await submitLocation();
+      await syncVerificationStatus();
 
       toast({
         title: "Verification submitted",
-        description: "All checks were sent for review.",
+        description: "Your documents and location details were sent for admin review.",
         variant: "success",
       });
       setStep("complete");
@@ -615,14 +799,37 @@ export default function VerificationPage() {
   }
 
   const progressSteps = useMemo(() => {
-    const approved = completedSteps.map((type) => ({ type, status: "approved" as const }));
-    if (step === "complete") return approved;
-    const current = step as VerificationStepType;
-    if (approved.some((entry) => entry.type === current)) return approved;
-    return [...approved, { type: current, status: "pending" as const }];
-  }, [completedSteps, step]);
+    const entries = REVIEWABLE_STEP_ORDER.flatMap((stepType) => {
+      const persisted = serverStepMap.get(stepType);
+      if (persisted) {
+        return [{ type: stepType, status: persisted.status }];
+      }
+      if (completedSteps.includes(stepType)) {
+        return [{ type: stepType, status: "approved" as const }];
+      }
+      if (step !== "complete" && step === stepType) {
+        return [{ type: stepType, status: "pending" as const }];
+      }
+      return [];
+    });
+
+    if (!entries.length && step !== "complete") {
+      return [{ type: step as VerificationStepType, status: "pending" as const }];
+    }
+
+    return entries;
+  }, [completedSteps, serverStepMap, step]);
 
   const currentStepNumber = step === "complete" ? 4 : STEP_ORDER.indexOf(step) + 1;
+  const currentStepStatus = step === "complete" ? null : serverStepMap.get(step);
+  const reviewAttentionStep = useMemo(
+    () =>
+      REVIEWABLE_STEP_ORDER.find((stepType) => {
+        const status = serverStepMap.get(stepType)?.status;
+        return status === "rejected" || status === "needs_resubmission";
+      }) ?? null,
+    [serverStepMap]
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-warm-50/30 dark:bg-background">
@@ -646,10 +853,39 @@ export default function VerificationPage() {
                 </div>
                 <VerificationProgress steps={progressSteps} />
                 <p className="text-xs text-muted-foreground">
-                  {completedSteps.length} of 4 steps completed
+                  {progressSteps.length} of 4 steps{" "}
+                  {step === "complete" || allStepsResolved ? "submitted" : "captured"}
                 </p>
               </CardContent>
             </Card>
+
+            {(accountVerificationStatus || reviewAttentionStep) && (
+              <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
+                <CardContent className="space-y-2 p-4 text-sm">
+                  {reviewAttentionStep ? (
+                    <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive">
+                      <p className="font-medium">
+                        Action needed on {reviewAttentionStep.replace("_", " ")}.
+                      </p>
+                      <p className="mt-1 text-xs">
+                        Review the notes on that step, replace the document if needed, and submit
+                        again.
+                      </p>
+                    </div>
+                  ) : accountVerificationStatus === "verified" ? (
+                    <div className="rounded-md border border-brand-green/30 bg-brand-green-50 p-3 text-brand-green-900">
+                      Your verification is approved. You can still review the submitted details
+                      below.
+                    </div>
+                  ) : accountVerificationStatus === "pending_review" && allStepsResolved ? (
+                    <div className="rounded-md border border-brand-gold/30 bg-brand-gold-50 p-3 text-brand-gold-900">
+                      Your verification is in admin review. We will notify you if anything needs to
+                      be resubmitted.
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            )}
 
             {step === "phone" && (
               <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
@@ -660,6 +896,19 @@ export default function VerificationPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">{STEP_COPY.phone}</p>
+
+                  {currentStepStatus && (
+                    <div
+                      className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
+                    >
+                      <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
+                      {currentStepStatus.reason_note && (
+                        <p className="mt-1 text-xs">{currentStepStatus.reason_note}</p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <Label htmlFor="phone">SA mobile number</Label>
                     <Input
@@ -689,16 +938,9 @@ export default function VerificationPage() {
 
                   {otpSent && !phoneVerified && (
                     <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
-                      {process.env.NODE_ENV === "development" && devOtpHint && (
-                        <p className="text-xs text-muted-foreground">
-                          Dev OTP: <span className="font-mono font-semibold">{devOtpHint}</span>
-                        </p>
-                      )}
-                      {testOtpHint && (
-                        <p className="text-xs rounded bg-amber-50 dark:bg-amber-950 border border-amber-300 dark:border-amber-700 px-2 py-1 text-amber-800 dark:text-amber-200">
-                          Test OTP: <span className="font-mono font-semibold">{testOtpHint}</span>
-                        </p>
-                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Enter the 6-digit code sent to your phone. Codes expire after 5 minutes.
+                      </p>
                       <div className="space-y-2">
                         <Label htmlFor="otp">6-digit OTP</Label>
                         <Input
@@ -736,6 +978,24 @@ export default function VerificationPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">{STEP_COPY.id_doc}</p>
+
+                  {currentStepStatus && (
+                    <div
+                      className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
+                    >
+                      <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
+                      {currentStepStatus.reason_note && (
+                        <p className="mt-1 text-xs">{currentStepStatus.reason_note}</p>
+                      )}
+                      {!currentStepStatus.reason_note && currentStepStatus.reason_code && (
+                        <p className="mt-1 text-xs">
+                          Reason: {formatReasonCode(currentStepStatus.reason_code)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <Label htmlFor="idNumber">13-digit SA ID number</Label>
                     <Input
@@ -831,6 +1091,24 @@ export default function VerificationPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">{STEP_COPY.selfie}</p>
+
+                  {currentStepStatus && (
+                    <div
+                      className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
+                    >
+                      <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
+                      {currentStepStatus.reason_note && (
+                        <p className="mt-1 text-xs">{currentStepStatus.reason_note}</p>
+                      )}
+                      {!currentStepStatus.reason_note && currentStepStatus.reason_code && (
+                        <p className="mt-1 text-xs">
+                          Reason: {formatReasonCode(currentStepStatus.reason_code)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <Label htmlFor="selfieFile">Selfie image</Label>
                     <Input
@@ -893,6 +1171,24 @@ export default function VerificationPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">{STEP_COPY.location}</p>
+
+                    {currentStepStatus && (
+                      <div
+                        className={`rounded-md border p-3 text-sm ${getStatusBannerClasses(currentStepStatus.status)}`}
+                      >
+                        <p className="font-medium">{formatStatusLabel(currentStepStatus.status)}</p>
+                        {currentStepStatus.reason_note && (
+                          <p className="mt-1 text-xs">{currentStepStatus.reason_note}</p>
+                        )}
+                        {!currentStepStatus.reason_note && currentStepStatus.reason_code && (
+                          <p className="mt-1 text-xs">
+                            Reason: {formatReasonCode(currentStepStatus.reason_code)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {/* Province & City selectors */}
                     <div className="space-y-2">
                       <Label htmlFor="province">Province</Label>
@@ -955,7 +1251,8 @@ export default function VerificationPage() {
                           GPS Location Verification
                         </h4>
                         <p className="text-xs text-muted-foreground">
-                          Allow GPS to verify your province. Fastest method.
+                          Allow GPS to verify your province. If it fails or permission is denied,
+                          you can upload proof of address instead.
                         </p>
 
                         {gpsStatus === "idle" && (
@@ -1029,7 +1326,7 @@ export default function VerificationPage() {
                           </h4>
                           <p className="text-xs text-muted-foreground">
                             Upload a utility bill, bank statement, or government letter with your
-                            address.
+                            address. Accepted: JPG, PNG, WebP, PDF up to 5 MB.
                           </p>
                           <Input
                             type="file"
@@ -1065,7 +1362,7 @@ export default function VerificationPage() {
                           {proofUploaded && (
                             <div className="flex items-center gap-2 text-sm text-brand-green">
                               <CheckCircle2 className="h-4 w-4" />
-                              Proof of address uploaded — pending admin review
+                              Proof of address uploaded and ready for admin review
                             </div>
                           )}
                         </div>
@@ -1180,10 +1477,41 @@ export default function VerificationPage() {
                   <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-green-100 text-brand-green dark:bg-brand-green-900">
                     <ShieldCheck className="h-5 w-5" />
                   </div>
-                  <h2 className="font-display text-xl font-bold">Verification Submitted</h2>
+                  <h2 className="font-display text-xl font-bold">
+                    {accountVerificationStatus === "verified"
+                      ? "Verification Approved"
+                      : "Verification Submitted"}
+                  </h2>
                   <p className="mx-auto max-w-sm text-sm text-muted-foreground">
-                    Your details are under review.
+                    {accountVerificationStatus === "verified"
+                      ? "Your account is verified."
+                      : "Your phone, documents, and location details are under admin review."}
                   </p>
+                  <div className="mx-auto w-full max-w-lg space-y-2 text-left">
+                    {REVIEWABLE_STEP_ORDER.map((stepType) => {
+                      const statusEntry = serverStepMap.get(stepType);
+                      return (
+                        <div
+                          key={stepType}
+                          className="rounded-md border border-warm-200/70 dark:border-warm-700/70 bg-background/80 px-3 py-2 text-sm"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-medium capitalize">
+                              {stepType.replace("_", " ")}
+                            </span>
+                            <Badge variant="outline">
+                              {formatStatusLabel(statusEntry?.status ?? "pending")}
+                            </Badge>
+                          </div>
+                          {statusEntry?.reason_note && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {statusEntry.reason_note}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                   <Button variant="trust-verified" asChild className="gap-2">
                     <Link href={completionHref}>
                       {getCompletionCtaLabel(completionHref)}
