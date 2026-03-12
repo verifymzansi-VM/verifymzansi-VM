@@ -49,7 +49,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center">
           <div className="flex items-center gap-3">
-            <BrandLogo size="sm" showAccent={false} />
+            <BrandLogo size="sm" />
             <span className="rounded-full border border-border px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Admin
             </span>

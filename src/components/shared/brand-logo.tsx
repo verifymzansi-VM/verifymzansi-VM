@@ -10,121 +10,64 @@ type BrandLogoTone = "default" | "inverse";
 interface BrandLogoProps {
   className?: string;
   imageClassName?: string;
-  wordmarkClassName?: string;
-  accentClassName?: string;
   size?: BrandLogoSize;
   layout?: BrandLogoLayout;
   tone?: BrandLogoTone;
   priority?: boolean;
-  showAccent?: boolean;
-  showDescriptor?: boolean;
 }
 
-const sizeStyles: Record<
-  BrandLogoSize,
-  { icon: string; wordmark: string; accent: string; descriptor: string }
-> = {
+const sizeStyles: Record<BrandLogoSize, { container: string; sizes: string }> = {
   sm: {
-    icon: "h-5 w-5",
-    wordmark: "text-base tracking-[-0.045em]",
-    accent: "mt-1 h-0.5 w-7",
-    descriptor: "text-[0.55rem] tracking-[0.28em]",
+    container: "w-[112px] sm:w-[124px]",
+    sizes: "(max-width: 640px) 112px, 124px",
   },
   md: {
-    icon: "h-9 w-9 sm:h-12 sm:w-12",
-    wordmark: "text-[1.6rem] sm:text-[1.9rem] tracking-[-0.05em]",
-    accent: "mt-1.5 h-0.5 w-10",
-    descriptor: "text-[0.62rem] tracking-[0.34em]",
+    container: "w-[148px] sm:w-[184px]",
+    sizes: "(max-width: 640px) 148px, 184px",
   },
   lg: {
-    icon: "h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem]",
-    wordmark: "text-[2.4rem] sm:text-[3rem] tracking-[-0.055em]",
-    accent: "mt-2 h-1 w-12",
-    descriptor: "text-[0.68rem] tracking-[0.38em]",
+    container: "w-[220px] sm:w-[264px]",
+    sizes: "(max-width: 640px) 220px, 264px",
   },
   xl: {
-    icon: "h-24 w-24 sm:h-32 sm:w-32 lg:h-36 lg:w-36",
-    wordmark: "text-4xl sm:text-5xl lg:text-6xl tracking-[-0.06em]",
-    accent: "mt-3 h-1 w-14",
-    descriptor: "text-[0.75rem] tracking-[0.4em]",
+    container: "w-[280px] sm:w-[360px] lg:w-[420px]",
+    sizes: "(max-width: 640px) 280px, (max-width: 1024px) 360px, 420px",
   },
 };
 
 export function BrandLogo({
   className,
   imageClassName,
-  wordmarkClassName,
-  accentClassName,
   size = "md",
   layout = "horizontal",
   tone = "default",
   priority = false,
-  showAccent = true,
-  showDescriptor = false,
 }: BrandLogoProps) {
   const styles = sizeStyles[size];
-  const isInverse = tone === "inverse";
+  const logoSrc = tone === "inverse" ? "/images/logo-inverse.png" : "/images/logo-transparent.png";
 
   return (
     <div
       className={cn(
-        "inline-flex items-center",
-        layout === "stacked" ? "flex-col text-center" : "flex-row",
-        size === "sm" ? "gap-2" : layout === "stacked" ? "gap-3 sm:gap-4" : "gap-2.5 sm:gap-3",
+        "inline-flex",
+        styles.container,
+        layout === "stacked" && "justify-center",
         className
       )}
     >
       <Image
-        src="/icons/icon-192.png?v=9"
-        alt="VerifyMzansi shield"
-        width={176}
-        height={176}
+        src={logoSrc}
+        alt="VerifyMzansi logo"
+        width={516}
+        height={145}
+        sizes={styles.sizes}
         priority={priority}
         className={cn(
-          "shrink-0 object-contain drop-shadow-[0_10px_30px_rgba(0,0,0,0.12)]",
-          styles.icon,
+          "h-auto w-full object-contain",
+          tone === "inverse" ? "drop-shadow-[0_18px_48px_rgba(0,0,0,0.28)]" : undefined,
           imageClassName
         )}
       />
-
-      <div className={cn("flex flex-col", layout === "stacked" ? "items-center" : "items-start")}>
-        {showDescriptor ? (
-          <span
-            className={cn(
-              "mb-1 font-medium uppercase leading-none",
-              styles.descriptor,
-              isInverse ? "text-white/65" : "text-foreground/50"
-            )}
-          >
-            Trusted Marketplace
-          </span>
-        ) : null}
-
-        <span
-          className={cn(
-            "font-display font-semibold leading-none",
-            styles.wordmark,
-            wordmarkClassName
-          )}
-        >
-          <span className={isInverse ? "text-white" : "text-foreground"}>Verify</span>
-          <span className={isInverse ? "text-brand-green-300" : "text-brand-green-700"}>
-            Mzansi
-          </span>
-        </span>
-
-        {showAccent ? (
-          <span
-            aria-hidden="true"
-            className={cn(
-              "rounded-full bg-[linear-gradient(90deg,#ffb81c_0%,#ffb81c_18%,#00833e_76%,#006b32_100%)]",
-              styles.accent,
-              isInverse ? "opacity-95" : "opacity-90",
-              accentClassName
-            )}
-          />
-        ) : null}
-      </div>
     </div>
   );
 }

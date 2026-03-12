@@ -16,11 +16,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <Link href="/" className="flex flex-col items-center justify-center gap-6 w-full">
             <BrandLogo
               size="xl"
-              layout="stacked"
               priority
-              showDescriptor
               imageClassName="drop-shadow-[0_24px_48px_rgba(0,0,0,0.16)]"
-              accentClassName="w-14"
             />
           </Link>
           <p className="text-lg text-muted-foreground">
@@ -54,10 +51,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="flex flex-col items-center justify-center gap-4 w-full">
               <BrandLogo
                 size="lg"
-                layout="stacked"
                 priority
                 imageClassName="drop-shadow-[0_14px_28px_rgba(0,0,0,0.12)]"
-                accentClassName="w-12"
               />
             </Link>
           </div>

@@ -106,8 +106,6 @@ export function Header({
             size="md"
             priority
             imageClassName="transition-transform duration-200 group-hover:scale-105"
-            wordmarkClassName="text-[1.45rem] sm:text-[1.75rem]"
-            accentClassName="w-7 sm:w-9"
           />
         </Link>
 
