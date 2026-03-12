@@ -18,7 +18,7 @@ export const registerSchema = z
     displayName: z
       .string()
       .min(2, "Name must be at least 2 characters")
-      .max(60, "Name is too long")
+      .max(50, "Name is too long")
       .regex(/^[\p{L}\s'-]+$/u, "Name contains invalid characters"),
     email: emailSchema,
     phone: saPhoneSchema,
