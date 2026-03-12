@@ -126,6 +126,7 @@ site root with `?code=...` instead of the app callback handler.
 | -------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | `pnpm dev`                                                                             | Start the local Next.js dev server                   |
 | `pnpm build`                                                                           | Production Next.js build                             |
+| `pnpm brand:assets`                                                                    | Regenerate logo lockups, favicon, and app icons      |
 | `pnpm lint`                                                                            | ESLint                                               |
 | `pnpm typecheck`                                                                       | TypeScript typecheck                                 |
 | `pnpm test`                                                                            | Vitest suite                                         |

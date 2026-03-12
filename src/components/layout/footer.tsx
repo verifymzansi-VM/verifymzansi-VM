@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
+import { BrandLogo } from "../shared/brand-logo";
 import { Separator } from "@/components/ui/separator";
 
 export function Footer() {
@@ -12,10 +12,7 @@ export function Footer() {
           {/* Brand */}
           <div className="space-y-2">
             <Link href="/" className="flex items-center gap-1.5">
-              <ShieldCheck className="h-5 w-5 text-brand-green" />
-              <span className="font-display font-bold text-base">
-                Verify<span className="text-brand-green">Mzansi</span>
-              </span>
+              <BrandLogo size="sm" accentClassName="w-6" />
             </Link>
             <p className="text-xs text-muted-foreground max-w-xs">SA&apos;s trusted marketplace.</p>
           </div>

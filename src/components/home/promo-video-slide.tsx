@@ -12,6 +12,7 @@ import {
   MapPin,
   CreditCard,
 } from "lucide-react";
+import { BrandLogo } from "../shared/brand-logo";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 /* ── Animation presets (matching project conventions) ── */
@@ -36,17 +37,12 @@ function LogoEntrance({ noMotion }: { noMotion: boolean }) {
         animate={{ scale: 1, filter: "blur(0px)", opacity: 1 }}
         transition={noMotion ? { duration: 0 } : { ...SPRING, duration: 0.8 }}
       >
-        <Image
-          src="/icons/icon-192.png?v=7"
-          alt="VerifyMzansi logo"
-          width={80}
-          height={80}
-          className="w-16 h-16 sm:w-20 sm:h-20 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+        <BrandLogo
+          size="lg"
+          tone="inverse"
           priority
+          imageClassName="drop-shadow-[0_10px_24px_rgba(0,0,0,0.4)]"
         />
-        <span className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white drop-shadow-md">
-          Verify<span className="text-brand-green-400">Mzansi</span>
-        </span>
       </motion.div>
 
       <motion.p
@@ -247,11 +243,7 @@ function CallToAction({ noMotion }: { noMotion: boolean }) {
         animate={{ opacity: 1, y: 0 }}
         transition={noMotion ? { duration: 0 } : { duration: 0.6 }}
       >
-        Join{" "}
-        <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green-400 to-brand-gold-400">
-          VerifyMzansi
-        </span>{" "}
-        Today
+        Join <span className="text-white">VerifyMzansi</span> Today
       </motion.p>
 
       <motion.p

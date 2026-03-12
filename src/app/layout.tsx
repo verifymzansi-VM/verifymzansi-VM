@@ -34,9 +34,9 @@ export const metadata: Metadata = {
       "Buy & sell with people you can trust. South Africa's verification-first marketplace.",
     images: [
       {
-        url: "/images/logo.png",
-        width: 512,
-        height: 512,
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
         alt: "VerifyMzansi — SA's Trusted Marketplace",
       },
     ],
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     title: "VerifyMzansi — SA's Trusted Marketplace",
     description:
       "Buy & sell with people you can trust. South Africa's verification-first marketplace.",
-    images: ["/images/logo.png"],
+    images: ["/twitter-image"],
   },
   robots: {
     index: true,
@@ -54,13 +54,13 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon.ico?v=7", sizes: "32x32", type: "image/x-icon" },
-      { url: "/icons/icon-16.png?v=7", sizes: "16x16", type: "image/png" },
-      { url: "/icons/icon-192.png?v=7", sizes: "192x192", type: "image/png" },
+      { url: "/favicon.ico?v=9", sizes: "32x32", type: "image/x-icon" },
+      { url: "/icons/icon-16.png?v=9", sizes: "16x16", type: "image/png" },
+      { url: "/icons/icon-192.png?v=9", sizes: "192x192", type: "image/png" },
     ],
-    apple: "/icons/icon-192.png?v=7",
+    apple: "/icons/icon-192.png?v=9",
   },
-  manifest: "/manifest.json?v=7",
+  manifest: "/manifest.json?v=9",
 };
 
 export const viewport: Viewport = {
@@ -99,31 +99,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <ServiceWorkerRegistrar />
         </ThemeProvider>
         <noscript>
-          <div
-            style={{
-              padding: "2rem",
-              textAlign: "center",
-              fontFamily: "system-ui, sans-serif",
-              maxWidth: "600px",
-              margin: "0 auto",
-            }}
-          >
+          <div className="mx-auto max-w-[600px] p-8 text-center font-sans">
             <h1>JavaScript Required</h1>
             <p>
               VerifyMzansi requires JavaScript to function. Please enable JavaScript in your browser
               settings and reload the page.
             </p>
-            <p style={{ marginTop: "1rem", fontSize: "0.875rem", color: "#666" }}>
+            <p className="mt-4 text-sm text-muted-foreground">
               You can still reach us at{" "}
-              <a href="mailto:hello@verifymzansi.com" style={{ color: "#16a34a" }}>
+              <a href="mailto:hello@verifymzansi.com" className="text-brand-green underline">
                 hello@verifymzansi.com
               </a>{" "}
               or visit our{" "}
-              <a href="/privacy" style={{ color: "#16a34a" }}>
+              <a href="/privacy" className="text-brand-green underline">
                 Privacy Policy
               </a>{" "}
               and{" "}
-              <a href="/terms" style={{ color: "#16a34a" }}>
+              <a href="/terms" className="text-brand-green underline">
                 Terms of Service
               </a>
               .

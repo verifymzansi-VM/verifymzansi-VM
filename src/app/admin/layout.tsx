@@ -1,4 +1,5 @@
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
@@ -47,7 +48,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       {/* Admin specific minimalist top-nav instead of public Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center">
-          <span className="font-bold tracking-tight">VerifyMzansi Admin</span>
+          <div className="flex items-center gap-3">
+            <BrandLogo size="sm" showAccent={false} />
+            <span className="rounded-full border border-border px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Admin
+            </span>
+          </div>
         </div>
       </header>
 

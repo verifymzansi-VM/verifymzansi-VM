@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useState, useEffect, useCallback } from "react";
 import {
   Menu,
@@ -26,6 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { BrandLogo } from "../shared/brand-logo";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { NotificationBell } from "@/components/notification-bell";
 import { MarketplaceSwitcher } from "./marketplace-switcher";
@@ -102,17 +102,13 @@ export function Header({
           aria-label="VerifyMzansi — Home"
           className="flex items-center gap-2 sm:gap-3 flex-shrink-0 group"
         >
-          <Image
-            src="/icons/icon-192.png?v=7"
-            alt=""
-            width={56}
-            height={56}
-            className="w-10 h-10 sm:w-14 sm:h-14 object-contain drop-shadow transition-transform group-hover:scale-110"
+          <BrandLogo
+            size="md"
             priority
+            imageClassName="transition-transform duration-200 group-hover:scale-105"
+            wordmarkClassName="text-[1.45rem] sm:text-[1.75rem]"
+            accentClassName="w-7 sm:w-9"
           />
-          <span className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
-            Verify<span className="text-brand-green">Mzansi</span>
-          </span>
         </Link>
 
         {/* Marketplace Switcher — hidden on mobile, shown md+ */}

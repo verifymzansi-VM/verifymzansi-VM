@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     title: "VerifyMzansi — SA's Trusted Marketplace",
     description:
       "Buy, sell, and discover trusted businesses, deals, and events with verified accounts. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
-    images: [{ url: "/icons/icon-512.png", width: 512, height: 512, alt: "VerifyMzansi" }],
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "VerifyMzansi" }],
   },
 };
 
@@ -79,7 +79,7 @@ export default async function HomePage() {
         "@type": "Organization",
         name: "VerifyMzansi",
         url,
-        logo: `${url}/icons/icon-512.png`,
+        logo: `${url}/icons/icon-512.png?v=9`,
         sameAs: [],
         contactPoint: {
           "@type": "ContactPoint",
@@ -130,10 +130,7 @@ export default async function HomePage() {
 
                   <div className="space-y-3">
                     <h2 className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-white leading-[1.1]">
-                      Start here on{" "}
-                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green-400 to-brand-gold-400">
-                        VerifyMzansi
-                      </span>
+                      Start here on <span className="text-white">VerifyMzansi</span>
                     </h2>
 
                     <p className="text-warm-100 text-base sm:text-lg max-w-2xl">

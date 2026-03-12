@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import { BrandLogo } from "@/components/shared/brand-logo";
 
 export const metadata = {
   title: "Account",
@@ -14,16 +14,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="hidden lg:flex lg:w-1/2 bg-hero-mesh items-center justify-center p-12 relative overflow-hidden">
         <div className="relative z-10 max-w-md space-y-6 text-center">
           <Link href="/" className="flex flex-col items-center justify-center gap-6 w-full">
-            <Image
-              src="/icons/icon-192.png?v=7"
-              alt="VerifyMzansi Shield"
-              width={192}
-              height={192}
-              className="object-contain drop-shadow-xl"
+            <BrandLogo
+              size="xl"
+              layout="stacked"
+              priority
+              showDescriptor
+              imageClassName="drop-shadow-[0_24px_48px_rgba(0,0,0,0.16)]"
+              accentClassName="w-14"
             />
-            <span className="font-display text-5xl font-bold tracking-tight">
-              Verify<span className="text-brand-green">Mzansi</span>
-            </span>
           </Link>
           <p className="text-lg text-muted-foreground">
             South Africa&apos;s verification-first marketplace.
@@ -54,16 +52,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
             <Link href="/" className="flex flex-col items-center justify-center gap-4 w-full">
-              <Image
-                src="/icons/icon-192.png?v=7"
-                alt="VerifyMzansi Shield"
-                width={128}
-                height={128}
-                className="object-contain drop-shadow-lg"
+              <BrandLogo
+                size="lg"
+                layout="stacked"
+                priority
+                imageClassName="drop-shadow-[0_14px_28px_rgba(0,0,0,0.12)]"
+                accentClassName="w-12"
               />
-              <span className="font-display text-3xl font-bold tracking-tight mt-1">
-                Verify<span className="text-brand-green">Mzansi</span>
-              </span>
             </Link>
           </div>
           {children}
