@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
-import { MobilePostSticker } from "@/components/layout/mobile-post-sticker";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
@@ -96,7 +95,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           nonce={nonce}
         >
           <main id="main-content">{children}</main>
-          <MobilePostSticker />
           <Toaster />
           <ServiceWorkerRegistrar />
         </ThemeProvider>
