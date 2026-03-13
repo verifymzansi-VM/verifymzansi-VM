@@ -17,7 +17,7 @@ export default function PostCreatePage() {
         <div className="container-page py-6 space-y-4">
           <PageHeader
             title="Create a Post"
-            description="Compare the three posting categories, choose the right one, and start with the correct flow."
+            description="Pick a category to start posting."
             breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Create Post" }]}
           />
 
