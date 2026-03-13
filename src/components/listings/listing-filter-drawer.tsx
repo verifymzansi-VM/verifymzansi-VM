@@ -68,21 +68,22 @@ export function ListingFilterDrawer() {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      {/* ── FAB Trigger ──────────────────────────────── */}
-      <div className="fixed bottom-20 right-4 z-40 lg:hidden">
+      {/* ── Inline filter bar (mobile only) ─────────── */}
+      <div className="lg:hidden">
         <SheetTrigger asChild>
-          <Button
-            size="lg"
-            className="rounded-full shadow-lg h-14 w-14"
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
             aria-label="Open listing filters"
           >
-            <SlidersHorizontal className="h-5 w-5" />
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
+            <span className="flex-1 text-left">Filter &amp; search listings</span>
             {activeFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
                 {activeFilterCount}
               </span>
             )}
-          </Button>
+          </button>
         </SheetTrigger>
       </div>
 
