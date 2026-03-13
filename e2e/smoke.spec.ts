@@ -223,8 +223,9 @@ test.describe("Platform Smoke", () => {
       await page.waitForTimeout(1_000);
 
       if (check.ctaName) {
-        const heading = page.getByRole("heading", { name: check.heading }).first();
-        const cta = page.getByRole("link", { name: check.ctaName }).first();
+        // Target the PageHeader h1 (not the ShowroomHero h2) and its sibling CTA
+        const heading = page.getByRole("heading", { name: check.heading, level: 1 }).first();
+        const cta = page.getByRole("link", { name: check.ctaName }).last();
 
         await expect(cta).toBeVisible();
 

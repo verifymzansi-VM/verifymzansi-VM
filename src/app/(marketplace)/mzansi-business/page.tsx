@@ -87,17 +87,13 @@ export default async function MzansiBusinessPage() {
       </Suspense>
 
       {/* ── Dynamic Showroom Hero ──────────────────────────────────── */}
-      <div className="hidden sm:block">
-        <ShowroomHero
-          slides={slides}
-          fallbackTitle="Mzansi Business"
-          fallbackDescription="Discover verified South African businesses and services."
-        />
-      </div>
+      <ShowroomHero
+        slides={slides}
+        fallbackTitle="Mzansi Business"
+        fallbackDescription="Discover verified South African businesses and services."
+      />
 
-      <div className="hidden sm:block">
-        <TrustStrip variant="blue" />
-      </div>
+      <TrustStrip variant="blue" />
 
       {/* ── Main Content ─────────────────────────────────── */}
       <div className="container-page py-4 sm:py-6 space-y-4">

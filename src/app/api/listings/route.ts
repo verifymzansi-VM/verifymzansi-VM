@@ -207,7 +207,7 @@ export async function GET(request: NextRequest) {
         const batchResult = await queryWithSelectFallbacks({
           attempts: selectAttempts,
           fallbackFields: LISTING_SELECT_FALLBACK_FIELDS,
-          runQuery: async (selectClause) =>
+          runQuery: (selectClause) =>
             applyBaseMarketFilters(
               admin
                 .from("listings")
@@ -272,7 +272,7 @@ export async function GET(request: NextRequest) {
       const result = await queryWithSelectFallbacks({
         attempts: selectAttempts,
         fallbackFields: LISTING_SELECT_FALLBACK_FIELDS,
-        runQuery: async (selectClause) =>
+        runQuery: (selectClause) =>
           applyBaseMarketFilters(
             admin
               .from("listings")

@@ -17,7 +17,7 @@ export interface SelectFallbackAttempt<TField extends string> {
 interface QueryWithSelectFallbacksOptions<TData, TField extends string> {
   attempts: readonly SelectFallbackAttempt<TField>[];
   fallbackFields: readonly TField[];
-  runQuery: (selectClause: string) => Promise<QueryResult<TData>>;
+  runQuery: (selectClause: string) => PromiseLike<QueryResult<TData>>;
 }
 
 function isRetryableMissingColumnError<TField extends string>(
@@ -31,15 +31,22 @@ function isRetryableMissingColumnError<TField extends string>(
   const code = error.code ?? "";
   const message = (error.message ?? "").toLowerCase();
 
-  if (code !== "42703" && code !== "PGRST204" && code !== "PGRST200") {
+  // PostgREST / PostgreSQL error codes for missing or unrecognised columns
+  const retryableCodes = new Set([
+    "42703", // undefined_column (PostgreSQL)
+    "PGRST204", // column not found
+    "PGRST200", // could not resolve column
+    "PGRST116", // unexpected result shape
+    "PGRST202", // function / column ambiguity
+  ]);
+
+  if (!retryableCodes.has(code)) {
     return false;
   }
 
   return (
     retryableFields.some((field) => message.includes(field.toLowerCase())) ||
-    code === "42703" ||
-    code === "PGRST204" ||
-    code === "PGRST200"
+    retryableCodes.has(code)
   );
 }
 

@@ -25,7 +25,14 @@ import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallbac
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
-const BUSINESS_SELECT_FALLBACK_FIELDS = ["gallery_photos", "business_details"] as const;
+const BUSINESS_SELECT_FALLBACK_FIELDS = [
+  "gallery_photos",
+  "business_details",
+  "featured_until",
+  "published_at",
+  "video_thumbnail",
+  "slug",
+] as const;
 
 function normalizeBusinessSelectShape(
   businesses: Array<Record<string, unknown>>
@@ -351,9 +358,23 @@ export async function GET(request: NextRequest) {
         ),
         omittedFields: ["gallery_photos", "business_details"] as const,
       },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, business_type, business_name, description, category, logo_url, cover_photo, cover_video, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, created_at",
+          ownerColumn
+        ),
+        omittedFields: [
+          "gallery_photos",
+          "business_details",
+          "featured_until",
+          "published_at",
+          "video_thumbnail",
+          "slug",
+        ] as const,
+      },
     ] as const;
 
-    const buildQuery = async (selectClause: string) => {
+    const buildQuery = (selectClause: string) => {
       let query = admin
         .from("businesses")
         .select(selectClause, { count: "exact" })
@@ -384,11 +405,12 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      return query
-        .order("boost_until", { ascending: false, nullsFirst: false })
-        .order("featured_until", { ascending: false, nullsFirst: false })
-        .order("created_at", { ascending: false })
-        .range(offset, offset + limit - 1);
+      // Only ORDER BY featured_until when the column is in the SELECT clause
+      query = query.order("boost_until", { ascending: false, nullsFirst: false });
+      if (selectClause.includes("featured_until")) {
+        query = query.order("featured_until", { ascending: false, nullsFirst: false });
+      }
+      return query.order("created_at", { ascending: false }).range(offset, offset + limit - 1);
     };
 
     const result = await queryWithSelectFallbacks({
@@ -404,13 +426,29 @@ export async function GET(request: NextRequest) {
     const error = result.error;
 
     if (error) {
-      log.error("Failed to fetch businesses", { error: error.message });
+      log.error("Failed to fetch businesses", {
+        error: error.message,
+        code: (error as { code?: string }).code,
+      });
       return NextResponse.json({ error: "Failed to fetch businesses" }, { status: 500 });
     }
 
+    const filteredBusinesses = normalizeOwnerRecords(businesses).filter(
+      (b) =>
+        !isPlaceholderMarketplaceContent(
+          String((b as Record<string, unknown>).business_name ?? ""),
+          typeof (b as Record<string, unknown>).description === "string"
+            ? ((b as Record<string, unknown>).description as string)
+            : null
+        )
+    );
+
     return NextResponse.json({
-      businesses: normalizeOwnerRecords(businesses),
-      total: count ?? 0,
+      businesses: filteredBusinesses,
+      total: Math.max(
+        0,
+        (count ?? filteredBusinesses.length) - (businesses.length - filteredBusinesses.length)
+      ),
       page,
       limit,
     });
