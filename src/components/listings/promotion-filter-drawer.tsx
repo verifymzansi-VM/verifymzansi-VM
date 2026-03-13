@@ -62,7 +62,7 @@ export function PromotionFilterDrawer({
             aria-label="Open promotion filters"
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
-            <span className="flex-1 text-left">Filter &amp; search promotions</span>
+            <span className="flex-1 text-left">Filter &amp; search promotions &amp; events</span>
             {activeFilterCount > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
                 {activeFilterCount}
@@ -78,7 +78,7 @@ export function PromotionFilterDrawer({
         className="max-h-[85vh] overflow-y-auto rounded-t-2xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
       >
         <SheetHeader className="flex flex-row items-center justify-between pb-4">
-          <SheetTitle>Filter Promotions</SheetTitle>
+          <SheetTitle>Filter Promotions &amp; Events</SheetTitle>
           {activeFilterCount > 0 && (
             <Button
               variant="ghost"
