@@ -22,7 +22,22 @@ describe("listing-form helpers", () => {
 
   it("returns attribute-level validation errors for missing required fields", () => {
     expect(validateListingAttributes("electronics", {})).toMatchObject({
+      "attributes.device_type": expect.stringContaining("Invalid option"),
       "attributes.brand": expect.stringContaining("expected string"),
+    });
+  });
+
+  it("keeps supported electronics text attributes during coercion", () => {
+    expect(
+      coerceListingAttributes("electronics", {
+        device_type: "Gaming Console",
+        brand: "Sony",
+        model_name: "PlayStation 5",
+      })
+    ).toEqual({
+      device_type: "Gaming Console",
+      brand: "Sony",
+      model_name: "PlayStation 5",
     });
   });
 });

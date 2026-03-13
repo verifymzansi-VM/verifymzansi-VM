@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { priceSchema } from "./shared";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
+import { ELECTRONICS_DEVICE_TYPES } from "@/lib/constants/categories";
 
 // ── Shared listing fields ───────────────────────────────────
 const listingBase = z.object({
@@ -69,6 +70,7 @@ const autoPartsAttrs = z.object({
 });
 
 const electronicsAttrs = z.object({
+  device_type: z.enum(ELECTRONICS_DEVICE_TYPES),
   brand: z.string().min(1, "Brand is required"),
   model_name: z.string().optional(),
   storage_gb: z.number().int().min(1).optional(),

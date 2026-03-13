@@ -198,7 +198,12 @@ test.describe("Platform Smoke", () => {
     test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Mobile-only marketplace check");
 
     const { consoleErrors, pageErrors, failedApiResponses } = collectMarketplacePageErrors(page);
-    const pageChecks = [
+    const pageChecks: Array<{
+      path: string;
+      heading: RegExp;
+      ctaName?: RegExp;
+      filterButtonName?: string;
+    }> = [
       {
         path: "/mzansi-market",
         heading: /browse listings/i,
@@ -215,7 +220,7 @@ test.describe("Platform Smoke", () => {
         ctaName: /create a post/i,
         filterButtonName: "Open promotion filters",
       },
-    ] as const;
+    ];
 
     for (const check of pageChecks) {
       await page.goto(check.path);

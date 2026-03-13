@@ -6,26 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
-import { CATEGORIES, type AttributeField } from "@/lib/constants/categories";
-import { getModelsForMake } from "@/lib/constants/sa-vehicles";
+import { CATEGORIES } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { useMarketplaceStore } from "@/stores";
 import { cn } from "@/lib/utils";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
-
-/* ─── Helpers ──────────────────────────────────────────────── */
-
-function numberRangeOptions(field: AttributeField): string[] | null {
-  const bedroom = ["bedrooms", "bathrooms", "parking_spots"];
-  if (bedroom.includes(field.name)) {
-    return ["1", "2", "3", "4", "5+"];
-  }
-  return null;
-}
-
-function resolveOption(option: string | { value: string; label: string }) {
-  return typeof option === "string" ? { value: option, label: option } : option;
-}
+import { ListingAttributeFilters } from "./listing-attribute-filters";
 
 /* ─── Main Component ───────────────────────────────────────── */
 
@@ -44,13 +30,6 @@ export function ListingFilterSidebar() {
     setPrevStoreQuery(filters.query);
     setLocalQuery(filters.query || "");
   }
-
-  const selectedCategory = CATEGORIES.find((c) => c.value === filters.category);
-
-  const filterableAttributes =
-    selectedCategory?.attributeFields.filter(
-      (f) => f.type === "select" || f.type === "boolean" || f.type === "number" || f.type === "text"
-    ) ?? [];
 
   const hasActiveFilters =
     filters.category ||
@@ -139,29 +118,12 @@ export function ListingFilterSidebar() {
       </div>
 
       {/* ── Dynamic Category Attributes ────────────── */}
-      {selectedCategory && filterableAttributes.length > 0 && (
-        <div className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-3 space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-300">
-          <p className="text-xs font-semibold text-brand-green flex items-center gap-1.5">
-            <selectedCategory.icon className="h-3.5 w-3.5" />
-            {selectedCategory.label} Filters
-          </p>
-          {filterableAttributes.map((field) => (
-            <FilterAttributeField
-              key={field.name}
-              field={field}
-              value={filters.attributes[field.name]}
-              allAttributes={filters.attributes}
-              onChange={(val) => {
-                setAttribute(field.name, val);
-                // Clear dependent fields when parent changes
-                if (field.name === "make") {
-                  setAttribute("model", undefined);
-                }
-              }}
-            />
-          ))}
-        </div>
-      )}
+      <ListingAttributeFilters
+        category={filters.category}
+        attributes={filters.attributes}
+        density="sidebar"
+        onAttributeChange={setAttribute}
+      />
 
       {/* ── Price range ───────────────────────────── */}
       <div className="space-y-2">
@@ -237,125 +199,4 @@ export function ListingFilterSidebar() {
       )}
     </div>
   );
-}
-
-/* ─── Dynamic Attribute Filter Renderer ──────────────────────── */
-
-function FilterAttributeField({
-  field,
-  value,
-  allAttributes,
-  onChange,
-}: {
-  field: AttributeField;
-  value: string | boolean | undefined;
-  allAttributes: Record<string, string | boolean | undefined>;
-  onChange: (value: string | boolean | undefined) => void;
-}) {
-  const selectClass =
-    "w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
-
-  switch (field.type) {
-    case "select": {
-      // Resolve options dynamically for cascading selects
-      let options = field.options ?? [];
-      if (field.dependsOn === "make") {
-        const parentMake = allAttributes["make"] as string;
-        options = parentMake ? [...getModelsForMake(parentMake), "Other"] : [];
-      }
-
-      const parentValue = field.dependsOn ? allAttributes[field.dependsOn] : undefined;
-      const isDisabled = field.dependsOn && !parentValue;
-
-      return (
-        <div className="space-y-1">
-          <Label className="text-xs">{field.label}</Label>
-          <select
-            aria-label={field.label}
-            className={selectClass}
-            value={(value as string) || ""}
-            onChange={(e) => onChange(e.target.value || undefined)}
-            disabled={!!isDisabled}
-          >
-            <option value="">
-              {isDisabled ? `Select ${field.dependsOn} first` : `Any ${field.label.toLowerCase()}`}
-            </option>
-            {options.map((opt) => {
-              const resolved = resolveOption(opt);
-              return (
-                <option key={resolved.value} value={resolved.value}>
-                  {resolved.label}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-      );
-    }
-
-    case "number": {
-      const rangeOpts = numberRangeOptions(field);
-      if (rangeOpts) {
-        return (
-          <div className="space-y-1">
-            <Label className="text-xs">
-              {field.label}
-              {field.unit ? ` (${field.unit})` : ""}
-            </Label>
-            <select
-              aria-label={field.label}
-              className={selectClass}
-              value={(value as string) || ""}
-              onChange={(e) => onChange(e.target.value || undefined)}
-            >
-              <option value="">Any</option>
-              {rangeOpts.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
-        );
-      }
-
-      return (
-        <div className="space-y-1">
-          <Label className="text-xs">
-            {field.label}
-            {field.unit ? ` (${field.unit})` : ""}
-          </Label>
-          <Input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            placeholder={field.placeholder || `Any`}
-            className="text-xs h-8"
-            value={(value as string) || ""}
-            onChange={(e) => onChange(e.target.value || undefined)}
-          />
-        </div>
-      );
-    }
-
-    case "boolean":
-      return (
-        <div className="flex items-center gap-2">
-          <input
-            id={`filter-${field.name}`}
-            type="checkbox"
-            aria-label={field.label}
-            className="h-3.5 w-3.5 rounded border-input text-brand-green focus:ring-brand-green"
-            checked={(value as boolean) || false}
-            onChange={(e) => onChange(e.target.checked ? true : undefined)}
-          />
-          <Label htmlFor={`filter-${field.name}`} className="cursor-pointer text-xs font-normal">
-            {field.label}
-          </Label>
-        </div>
-      );
-
-    default:
-      return null;
-  }
 }

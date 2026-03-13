@@ -62,6 +62,7 @@ const FIELD_IDS: Record<string, string> = {
   "attributes.compatible_make": "listing-attribute-compatible_make",
   "attributes.compatible_model": "listing-attribute-compatible_model",
   "attributes.oem_or_aftermarket": "listing-attribute-oem_or_aftermarket",
+  "attributes.device_type": "listing-attribute-device_type",
   "attributes.brand": "listing-attribute-brand",
   "attributes.model_name": "listing-attribute-model_name",
   "attributes.storage_gb": "listing-attribute-storage_gb",

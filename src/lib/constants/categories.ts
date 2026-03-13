@@ -46,6 +46,21 @@ export interface AttributeField {
   dependsOn?: string;
 }
 
+export const ELECTRONICS_DEVICE_TYPES = [
+  "Smartphone",
+  "Tablet / iPad",
+  "Laptop",
+  "Desktop PC",
+  "Gaming Console",
+  "Video Games",
+  "Monitors & TVs",
+  "PC Components",
+  "Smartwatch / Wearable",
+  "Audio & Headphones",
+  "Cameras & Drones",
+  "Accessories",
+] as const;
+
 export const CATEGORIES: CategoryDefinition[] = [
   {
     value: "property",
@@ -245,20 +260,7 @@ export const CATEGORIES: CategoryDefinition[] = [
         label: "Device Type",
         type: "select",
         required: true,
-        options: [
-          "Smartphone",
-          "Tablet / iPad",
-          "Laptop",
-          "Desktop PC",
-          "Gaming Console",
-          "Video Games",
-          "Monitors & TVs",
-          "PC Components",
-          "Smartwatch / Wearable",
-          "Audio & Headphones",
-          "Cameras & Drones",
-          "Accessories",
-        ],
+        options: [...ELECTRONICS_DEVICE_TYPES],
       },
       {
         name: "brand",

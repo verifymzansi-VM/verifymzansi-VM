@@ -89,9 +89,18 @@ describe("listingSchema", () => {
     const result = listingSchema.safeParse({
       ...baseFields,
       category: "electronics",
-      attributes: { brand: "Samsung" },
+      attributes: { device_type: "Smartphone", brand: "Samsung" },
     });
     expect(result.success).toBe(true);
+  });
+
+  it("rejects electronics listing without device_type", () => {
+    const result = listingSchema.safeParse({
+      ...baseFields,
+      category: "electronics",
+      attributes: { brand: "Samsung" },
+    });
+    expect(result.success).toBe(false);
   });
 
   // ── Home & Lifestyle ───────────────────────────────────
@@ -123,7 +132,7 @@ describe("listingSchema", () => {
       ...baseFields,
       title: "Hi",
       category: "electronics",
-      attributes: { brand: "LG" },
+      attributes: { device_type: "Smartphone", brand: "LG" },
     });
     expect(result.success).toBe(false);
   });
@@ -133,7 +142,7 @@ describe("listingSchema", () => {
       ...baseFields,
       images: [],
       category: "electronics",
-      attributes: { brand: "LG" },
+      attributes: { device_type: "Smartphone", brand: "LG" },
     });
     expect(result.success).toBe(false);
   });
@@ -143,7 +152,7 @@ describe("listingSchema", () => {
       ...baseFields,
       images: Array(11).fill("https://example.com/img.jpg"),
       category: "electronics",
-      attributes: { brand: "LG" },
+      attributes: { device_type: "Smartphone", brand: "LG" },
     });
     expect(result.success).toBe(false);
   });
@@ -153,7 +162,7 @@ describe("listingSchema", () => {
       ...baseFields,
       images: ["https://evil.example.com/image.jpg"],
       category: "electronics",
-      attributes: { brand: "LG" },
+      attributes: { device_type: "Smartphone", brand: "LG" },
     });
     expect(result.success).toBe(false);
   });
@@ -163,7 +172,7 @@ describe("listingSchema", () => {
       ...baseFields,
       price_zar: -100,
       category: "electronics",
-      attributes: { brand: "LG" },
+      attributes: { device_type: "Smartphone", brand: "LG" },
     });
     expect(result.success).toBe(false);
   });
@@ -173,7 +182,7 @@ describe("listingSchema", () => {
       ...baseFields,
       description: "Too short",
       category: "electronics",
-      attributes: { brand: "LG" },
+      attributes: { device_type: "Smartphone", brand: "LG" },
     });
     expect(result.success).toBe(false);
   });
