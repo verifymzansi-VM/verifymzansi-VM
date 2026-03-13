@@ -376,10 +376,12 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
  * Delegates to routeRequest() for auth/routing, then wraps
  * the response with security headers (CSP nonce, HSTS, etc.).
  */
-export async function proxy(request: NextRequest): Promise<NextResponse> {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const routeResponse = await routeRequest(request);
   return withSecurityHeaders(request, routeResponse);
 }
+
+export const proxy = middleware;
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|api/health|api/webhooks).*)"],
