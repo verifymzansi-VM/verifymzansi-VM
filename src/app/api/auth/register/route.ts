@@ -16,6 +16,25 @@ import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/li
 
 const log = createLogger("Register");
 
+async function deleteOrphanedAuthUser(userId: string, admin: ReturnType<typeof createAdminClient>) {
+  try {
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) {
+      log.error("Failed to delete orphaned auth user after profile conflict", {
+        userId,
+        error: error.message,
+        code: error.code,
+        status: error.status,
+      });
+    }
+  } catch (cleanupError) {
+    log.error("Unexpected orphaned auth user cleanup failure", {
+      userId,
+      error: cleanupError instanceof Error ? cleanupError.message : "Unknown",
+    });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
@@ -49,6 +68,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (turnstileStatus.configured) {
+      if (parsedBody.data.turnstileToken === "turnstile-unavailable") {
+        return NextResponse.json(
+          { error: "Security verification is temporarily unavailable. Please retry." },
+          { status: 503 }
+        );
+      }
+
       const captcha = await verifyTurnstileToken({
         token: parsedBody.data.turnstileToken,
         remoteIp: ip,
@@ -146,6 +172,7 @@ export async function POST(request: NextRequest) {
 
         if (profileError) {
           if (profileError.code === "23505") {
+            await deleteOrphanedAuthUser(signUpData.user.id, admin);
             return NextResponse.json({ error: ACCOUNT_PHONE_IN_USE_ERROR }, { status: 409 });
           }
 
@@ -157,6 +184,7 @@ export async function POST(request: NextRequest) {
           "code" in profileError &&
           (profileError as unknown as { code: string }).code === "23505"
         ) {
+          await deleteOrphanedAuthUser(signUpData.user.id, admin);
           return NextResponse.json({ error: ACCOUNT_PHONE_IN_USE_ERROR }, { status: 409 });
         }
 

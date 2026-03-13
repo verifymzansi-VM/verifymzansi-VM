@@ -15,8 +15,14 @@ function generateNonce(): string {
 }
 
 /** Build a nonce-based Content-Security-Policy string. */
-function buildCsp(nonce: string): string {
-  return [
+function buildCsp(
+  nonce: string,
+  options?: { allowDevWebSocket?: boolean; enforceHttps?: boolean }
+): string {
+  const connectSrc = options?.allowDevWebSocket
+    ? "connect-src 'self' ws: wss: https://tnygdgormnofpgjknlhr.supabase.co https://*.sentry.io https://challenges.cloudflare.com"
+    : "connect-src 'self' https://tnygdgormnofpgjknlhr.supabase.co https://*.sentry.io https://challenges.cloudflare.com";
+  const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
@@ -26,12 +32,17 @@ function buildCsp(nonce: string): string {
     "img-src 'self' data: blob: https://tnygdgormnofpgjknlhr.supabase.co https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com",
     "media-src 'self' blob: https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com",
     "font-src 'self'",
-    "connect-src 'self' https://tnygdgormnofpgjknlhr.supabase.co https://*.sentry.io https://challenges.cloudflare.com",
+    connectSrc,
     "frame-src https://challenges.cloudflare.com",
     "form-action 'self'",
     "worker-src 'self'",
-    "upgrade-insecure-requests",
-  ].join("; ");
+  ];
+
+  if (options?.enforceHttps) {
+    directives.push("upgrade-insecure-requests");
+  }
+
+  return directives.join("; ");
 }
 
 /** Attach all standard security headers to a response. */
@@ -66,7 +77,12 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
   }
 
   const nonce = generateNonce();
-  const csp = buildCsp(nonce);
+  const isSecureRequest =
+    request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
+  const csp = buildCsp(nonce, {
+    allowDevWebSocket: process.env.NODE_ENV !== "production",
+    enforceHttps: isSecureRequest,
+  });
 
   // Inject x-nonce so Server Components can read it via `headers()`
   const requestHeaders = new Headers(request.headers);
@@ -80,6 +96,20 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
   // Preserve cookies set during auth (Supabase session refresh, etc.)
   for (const cookie of proxyResponse.cookies.getAll()) {
     response.cookies.set(cookie);
+  }
+
+  // Preserve any non-cookie headers the routing layer already attached.
+  for (const [headerName, headerValue] of proxyResponse.headers.entries()) {
+    const normalizedHeaderName = headerName.toLowerCase();
+    if (
+      normalizedHeaderName === "content-security-policy" ||
+      normalizedHeaderName === "x-nonce" ||
+      normalizedHeaderName === "set-cookie"
+    ) {
+      continue;
+    }
+
+    response.headers.set(headerName, headerValue);
   }
 
   applySecurityHeaders(response, csp);
@@ -378,12 +408,12 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
  * Delegates to routeRequest() for auth/routing, then wraps
  * the response with security headers (CSP nonce, HSTS, etc.).
  */
-export async function middleware(request: NextRequest): Promise<NextResponse> {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const routeResponse = await routeRequest(request);
   return withSecurityHeaders(request, routeResponse);
 }
 
-export const proxy = middleware;
+export const middleware = proxy;
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|api/health|api/webhooks).*)"],

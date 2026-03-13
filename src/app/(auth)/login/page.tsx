@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -16,6 +16,10 @@ import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
+
+function subscribeToHydrationState() {
+  return () => {};
+}
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -33,6 +37,11 @@ export default function LoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isInteractive = useSyncExternalStore(
+    subscribeToHydrationState,
+    () => true,
+    () => false
+  );
   const router = useRouter();
   const { toast } = useToast();
 
@@ -352,6 +361,7 @@ export default function LoginPage() {
             autoComplete="email"
             spellCheck={false}
             autoCapitalize="none"
+            disabled={!isInteractive}
             aria-invalid={!!errors.email}
             aria-describedby={errors.email ? "email-error" : undefined}
             {...register("email")}
@@ -378,6 +388,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               spellCheck={false}
               autoCapitalize="none"
+              disabled={!isInteractive}
               aria-invalid={!!errors.password}
               aria-describedby={errors.password ? "password-error" : undefined}
               {...register("password")}
@@ -386,6 +397,7 @@ export default function LoginPage() {
               type="button"
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => setShowPassword(!showPassword)}
+              disabled={!isInteractive}
               tabIndex={-1}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
@@ -433,7 +445,7 @@ export default function LoginPage() {
           type="submit"
           className="w-full"
           variant="trust-verified"
-          disabled={isSubmitting || captchaUnavailable}
+          disabled={!isInteractive || isSubmitting || captchaUnavailable}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Sign In

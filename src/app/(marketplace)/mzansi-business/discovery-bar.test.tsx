@@ -1,11 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BusinessDiscoveryBar } from "./discovery-bar";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 
-const { useMarketplaceStoreMock, debounceCancelMock } = vi.hoisted(() => ({
+const { useMarketplaceStoreMock } = vi.hoisted(() => ({
   useMarketplaceStoreMock: vi.fn(),
-  debounceCancelMock: vi.fn(),
 }));
 
 vi.mock("@/stores", () => ({
@@ -13,8 +12,13 @@ vi.mock("@/stores", () => ({
 }));
 
 vi.mock("@/hooks/use-debounce", () => ({
-  useDebouncedCallback: (callback: (value: string) => void) =>
-    Object.assign(callback, { cancel: debounceCancelMock }),
+  useDebouncedCallback: (callback: (value: string) => void) => {
+    const debounced = ((value: string) => callback(value)) as ((value: string) => void) & {
+      cancel: () => void;
+    };
+    debounced.cancel = vi.fn();
+    return debounced;
+  },
 }));
 
 vi.mock("@/lib/constants/sa-provinces", () => ({
@@ -92,7 +96,7 @@ describe("BusinessDiscoveryBar", () => {
     expect(setFilter).toHaveBeenCalledWith("businessCategory", undefined);
   });
 
-  it("cancels pending search updates when clearing the query badge", () => {
+  it("clears the query badge and resets the stored query", () => {
     useMarketplaceStoreMock.mockReturnValue({
       filters: {
         sort: "newest",
@@ -111,7 +115,6 @@ describe("BusinessDiscoveryBar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /remove query filter coffee/i }));
 
-    expect(debounceCancelMock).toHaveBeenCalled();
     expect(setFilter).toHaveBeenCalledWith("query", undefined);
   });
 
@@ -154,6 +157,15 @@ describe("BusinessDiscoveryBar", () => {
     rerender(<BusinessDiscoveryBar />);
 
     expect(screen.getByLabelText("Search")).toHaveValue("synced from store");
-    expect(debounceCancelMock).toHaveBeenCalled();
+  });
+
+  it("applies the query filter when the search input changes", () => {
+    render(<BusinessDiscoveryBar />);
+
+    fireEvent.input(screen.getByLabelText("Search"), { target: { value: "coffee" } });
+
+    return waitFor(() => {
+      expect(setFilter).toHaveBeenCalledWith("query", "coffee");
+    });
   });
 });

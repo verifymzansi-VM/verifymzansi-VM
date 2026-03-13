@@ -9,11 +9,6 @@ process.env.PLAYWRIGHT_TEST_MODE ||= "1";
 process.env.PLAYWRIGHT_PORT ||= String(PLAYWRIGHT_PORT);
 process.env.PLAYWRIGHT_HOST ||= PLAYWRIGHT_HOST;
 
-// WebKit-family automation currently renders blank public/auth pages on this
-// app outside the simpler page-load a11y coverage. Keep Safari projects in the
-// matrix, but scope them to the stable page-load accessibility suite.
-const SAFARI_STABLE_TESTS = ["**/a11y.spec.ts"];
-
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -39,7 +34,6 @@ export default defineConfig({
     },
     {
       name: "webkit",
-      testMatch: SAFARI_STABLE_TESTS,
       use: { ...devices["Desktop Safari"], navigationTimeout: process.env.CI ? 120_000 : 45_000 },
     },
     {
@@ -48,7 +42,6 @@ export default defineConfig({
     },
     {
       name: "mobile-safari",
-      testMatch: SAFARI_STABLE_TESTS,
       use: { ...devices["iPhone 14"] },
     },
   ],

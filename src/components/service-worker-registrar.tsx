@@ -12,6 +12,10 @@ const SERVICE_WORKER_VERSION = "20260312-logo-refresh";
  */
 export function ServiceWorkerRegistrar() {
   useEffect(() => {
+    if (process.env.PLAYWRIGHT_TEST_MODE === "1") {
+      return;
+    }
+
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       if (process.env.NODE_ENV === "production") {
         navigator.serviceWorker

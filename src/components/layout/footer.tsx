@@ -7,7 +7,7 @@ export function Footer() {
 
   return (
     <footer className="border-t bg-warm-50 dark:bg-warm-950">
-      <div className="container-page py-4 pb-[calc(env(safe-area-inset-bottom)+5.75rem)] md:pb-4">
+      <div className="container-page py-4 pb-[calc(env(safe-area-inset-bottom)+7.5rem)] md:pb-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {/* Brand */}
           <div className="space-y-2">

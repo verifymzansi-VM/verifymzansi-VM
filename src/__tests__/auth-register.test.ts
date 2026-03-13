@@ -8,11 +8,14 @@ const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
   mockVerifyTurnstile: vi.fn(),
 }));
 
-const { mockCreateAdminClient, mockProfileUpsert, mockCheckRateLimit } = vi.hoisted(() => ({
-  mockCreateAdminClient: vi.fn(),
-  mockProfileUpsert: vi.fn().mockResolvedValue({ error: null }),
-  mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
-}));
+const { mockCreateAdminClient, mockProfileUpsert, mockDeleteUser, mockCheckRateLimit } = vi.hoisted(
+  () => ({
+    mockCreateAdminClient: vi.fn(),
+    mockProfileUpsert: vi.fn().mockResolvedValue({ error: null }),
+    mockDeleteUser: vi.fn().mockResolvedValue({ error: null }),
+    mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+  })
+);
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
@@ -86,6 +89,11 @@ const validBody = {
 
 function createAdminMock(existingPhoneProfile: { id: string } | null = null) {
   return {
+    auth: {
+      admin: {
+        deleteUser: mockDeleteUser,
+      },
+    },
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -103,6 +111,7 @@ describe("POST /api/auth/register", () => {
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockCreateAdminClient.mockReturnValue(createAdminMock() as never);
+    mockDeleteUser.mockResolvedValue({ error: null });
   });
 
   afterEach(() => {
@@ -221,6 +230,24 @@ describe("POST /api/auth/register", () => {
     expect(body.error).toContain("Bot detected");
   });
 
+  it("returns 503 when the client reports Turnstile is temporarily unavailable", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key");
+
+    const res = await POST(
+      createRequest({
+        ...validBody,
+        turnstileToken: "turnstile-unavailable",
+      })
+    );
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      error: expect.stringMatching(/temporarily unavailable/i),
+    });
+    expect(mockVerifyTurnstile).not.toHaveBeenCalled();
+  });
+
   it("fails closed in production when the Turnstile site key is missing", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
@@ -270,6 +297,24 @@ describe("POST /api/auth/register", () => {
     const res = await POST(createRequest(validBody));
 
     expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "This phone number is already linked to another account.",
+    });
+  });
+
+  it("deletes the just-created auth user when the profile insert loses a phone uniqueness race", async () => {
+    const profileConflict = Object.assign(new Error("duplicate key"), { code: "23505" });
+    mockProfileUpsert.mockResolvedValueOnce({ error: profileConflict });
+    const mockSignUp = vi.fn().mockResolvedValue({
+      data: { user: { id: "u-race", identities: [{ id: "identity-1" }] } },
+      error: null,
+    });
+    mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(409);
+    expect(mockDeleteUser).toHaveBeenCalledWith("u-race");
     await expect(res.json()).resolves.toMatchObject({
       error: "This phone number is already linked to another account.",
     });

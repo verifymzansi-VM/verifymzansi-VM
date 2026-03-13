@@ -226,7 +226,8 @@ export function Header({
           className="md:hidden p-2"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          aria-controls="mobile-nav-menu"
+          aria-controls={mobileOpen ? "mobile-nav-menu" : undefined}
+          aria-expanded={mobileOpen}
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>

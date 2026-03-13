@@ -76,9 +76,14 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
 
   return (
-    <html lang="en-ZA" suppressHydrationWarning>
+    <html
+      lang="en-ZA"
+      suppressHydrationWarning
+      data-playwright={isPlaywrightTestMode ? "1" : undefined}
+    >
       <body className="min-h-screen antialiased">
         <Script
           src="/runtime/turbopack-name-polyfill.js"

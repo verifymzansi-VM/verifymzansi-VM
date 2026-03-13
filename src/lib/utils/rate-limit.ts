@@ -113,36 +113,37 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (apiKey) {
-      headers["Authorization"] = `Bearer ${apiKey}`;
-    }
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        phone: opts.key, // worker uses `phone` as the key field
-        action: opts.action,
-        deviceId: opts.deviceId,
-      }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timer);
-
-    if (res.status === 429) {
-      const data = (await res.json().catch(() => ({}))) as {
-        retryAfter?: number;
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
       };
-      logger.warn("Rate limited", { action: opts.action, key: opts.key });
-      return { limited: true, retryAfter: data.retryAfter ?? 60 };
-    }
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
 
-    return { limited: false };
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          phone: opts.key, // worker uses `phone` as the key field
+          action: opts.action,
+          deviceId: opts.deviceId,
+        }),
+        signal: controller.signal,
+      });
+
+      if (res.status === 429) {
+        const data = (await res.json().catch(() => ({}))) as {
+          retryAfter?: number;
+        };
+        logger.warn("Rate limited", { action: opts.action, key: opts.key });
+        return { limited: true, retryAfter: data.retryAfter ?? 60 };
+      }
+
+      return { limited: false };
+    } finally {
+      clearTimeout(timer);
+    }
   } catch (err) {
     // Fail degraded — use local in-memory rate limiter as fallback
     logger.error("Rate limiter worker unreachable, using local fallback", {
