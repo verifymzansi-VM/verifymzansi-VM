@@ -2,11 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildPayFastCheckoutUrl } from "@/lib/services/payfast";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { createHostedCheckout } from "@/lib/payments/checkout";
 import { z } from "zod";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
@@ -22,7 +22,7 @@ const checkoutSchema = z.object({
 /**
  * POST /api/billing/create-checkout
  *
- * Create a PayFast checkout session and return the redirect URL.
+ * Create an Ozow checkout session and return the redirect URL.
  * Requires an authenticated user with an account profile.
  */
 export async function POST(request: NextRequest) {
@@ -104,56 +104,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Create pending payment record ────────────────────────
-    const { data: payment, error: paymentError } = await admin
-      .from("payments")
-      .insert({
-        user_id: user.id,
+    const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
+
+    let paymentId: string;
+    let checkoutUrl: string;
+    try {
+      const checkout = await createHostedCheckout({
+        admin: admin as never,
+        userId: user.id,
         area: plan.area,
-        amount_cents: plan.price_cents,
-        status: "pending",
-        payfast_data: {
+        amountCents: plan.price_cents,
+        itemName: plan.name,
+        itemDescription: `${plan.name} - 30-day subscription`,
+        returnUrl: `${appUrl}/billing/success?payment=__PAYMENT_ID__`,
+        cancelUrl: `${appUrl}/billing/cancel?payment=__PAYMENT_ID__`,
+        providerData: {
           type: "subscription",
           plan_id: plan.id,
           plan_tier: plan.tier,
           area: plan.area,
         },
-      })
-      .select("id")
-      .single();
-
-    if (paymentError || !payment) {
-      log.error("Failed to create payment", { error: paymentError });
-      return NextResponse.json({ error: "Failed to create payment" }, { status: 500 });
+      });
+      paymentId = checkout.paymentId;
+      checkoutUrl = checkout.checkoutUrl;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create checkout session";
+      log.error("Failed to create hosted checkout", { error: message });
+      if (/configured|authenticate/i.test(message)) {
+        return NextResponse.json(
+          { error: "Billing is not yet configured. Please try again later." },
+          { status: 503 }
+        );
+      }
+      return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });
     }
-
-    // ── Build PayFast checkout URL ───────────────────────────
-    const merchantId = env("PAYFAST_MERCHANT_ID");
-    const merchantKey = env("PAYFAST_MERCHANT_KEY");
-    if (!merchantId || !merchantKey) {
-      log.error("PayFast credentials not configured");
-      return NextResponse.json(
-        { error: "Billing is not yet configured. Please try again later." },
-        { status: 503 }
-      );
-    }
-
-    const amountRands = plan.price_cents / 100;
-    const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
-    const notifyUrl = env("PAYFAST_NOTIFY_URL") || `${appUrl}/api/webhooks/payfast`;
-
-    const checkoutUrl = buildPayFastCheckoutUrl({
-      merchantId,
-      merchantKey,
-      returnUrl: `${appUrl}/billing/success?payment=${payment.id}`,
-      cancelUrl: `${appUrl}/billing/cancel`,
-      notifyUrl,
-      paymentId: payment.id,
-      amount: amountRands,
-      itemName: plan.name,
-      itemDescription: `${plan.name} — 30-day subscription`,
-      emailAddress: user.email || undefined,
-    });
 
     // ── Audit log ────────────────────────────────────────────
     await logAuditEvent({
@@ -161,11 +145,11 @@ export async function POST(request: NextRequest) {
       actorRole: "member",
       action: "checkout_initiated",
       targetType: "payment",
-      targetId: payment.id,
+      targetId: paymentId,
       metadata: {
         planId: plan.id,
         planName: plan.name,
-        amount: amountRands,
+        amount: plan.price_cents / 100,
         status: "checkout_initiated",
       },
     });
@@ -173,7 +157,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       checkoutUrl,
-      paymentId: payment.id,
+      paymentId,
     });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });

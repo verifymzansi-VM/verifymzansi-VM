@@ -41,7 +41,7 @@ vi.mock("@/components/layout/page-header", () => ({
 }));
 
 describe("CreatePostPage", () => {
-  it("renders exactly three category cards with the updated guide copy", () => {
+  it("renders exactly three category cards with the current category selection UI", () => {
     (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       isLoading: false,
       isVerified: true,
@@ -53,12 +53,10 @@ describe("CreatePostPage", () => {
     expect(screen.getAllByText("Mzansi Market").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mzansi Business").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Promotions & Events").length).toBeGreaterThan(0);
-    expect(screen.getByText("How to choose the right category")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Mzansi Market is for a single listing. Mzansi Business is for your business profile. Promotions & Events is for temporary offers, campaigns, and events."
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByText("Pick a category to start posting.")).toBeInTheDocument();
+    expect(screen.getByText("Sell, buy, or rent a single item.")).toBeInTheDocument();
+    expect(screen.getByText("Create your full business profile.")).toBeInTheDocument();
+    expect(screen.getByText("Promote something time-sensitive.")).toBeInTheDocument();
     expect(screen.getAllByRole("link")).toHaveLength(3);
   });
 

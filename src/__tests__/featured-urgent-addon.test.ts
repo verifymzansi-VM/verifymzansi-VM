@@ -7,6 +7,11 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoiste
   mockLogAuditEvent: vi.fn(),
 }));
 
+const mockCreateHostedCheckout = vi.fn().mockResolvedValue({
+  paymentId: "payment-1",
+  checkoutUrl: "https://pay.ozow.test/checkout",
+});
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
@@ -18,15 +23,13 @@ vi.mock("@/lib/config/env", () => ({
   env: vi.fn((key: string) => {
     const envMap: Record<string, string> = {
       NEXT_PUBLIC_APP_URL: "http://localhost:3000",
-      PAYFAST_MERCHANT_ID: "test-merchant-id",
-      PAYFAST_MERCHANT_KEY: "test-merchant-key",
-      PAYFAST_NOTIFY_URL: "http://localhost:3000/api/webhooks/payfast",
+      OZOW_ENV: "staging",
     };
     return envMap[key] ?? "";
   }),
 }));
-vi.mock("@/lib/services/payfast", () => ({
-  buildPayFastCheckoutUrl: vi.fn().mockReturnValue("https://payfast.co.za/checkout"),
+vi.mock("@/lib/payments/checkout", () => ({
+  createHostedCheckout: (...args: unknown[]) => mockCreateHostedCheckout(...args),
 }));
 vi.mock("@/lib/services/entitlements", () => ({
   canFeatured: vi.fn().mockReturnValue({ allowed: true }),
@@ -113,7 +116,13 @@ function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_u
 // ── Featured ──────────────────────────────────────────────────
 
 describe("POST /api/listings/[id]/featured", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCreateHostedCheckout.mockResolvedValue({
+      paymentId: "payment-1",
+      checkoutUrl: "https://pay.ozow.test/checkout",
+    });
+  });
 
   it("rejects invalid UUID", async () => {
     mockAuth({ id: USER_ID });
@@ -254,14 +263,12 @@ describe("POST /api/listings/[id]/featured", () => {
           },
         }),
       },
-      payments: {
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: "DB error" } }),
-      },
     });
+    mockCreateHostedCheckout.mockRejectedValueOnce(new Error("Checkout provider unavailable"));
     const req = createRequest(`http://localhost:3000/api/listings/${UUID}/featured`);
     const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
     expect(res.status).toBe(500);
-    expect((await res.json()).error).toBe("Failed to create payment");
+    expect((await res.json()).error).toBe("Failed to create featured checkout");
   });
 
   it("happy path returns checkout URL", async () => {
@@ -271,7 +278,7 @@ describe("POST /api/listings/[id]/featured", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(body.checkoutUrl).toBe("https://payfast.co.za/checkout");
+    expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
     expect(body.paymentId).toBe("payment-1");
   });
 });
@@ -279,7 +286,13 @@ describe("POST /api/listings/[id]/featured", () => {
 // ── Urgent ────────────────────────────────────────────────────
 
 describe("POST /api/listings/[id]/urgent", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCreateHostedCheckout.mockResolvedValue({
+      paymentId: "payment-1",
+      checkoutUrl: "https://pay.ozow.test/checkout",
+    });
+  });
 
   it("rejects invalid UUID", async () => {
     mockAuth({ id: USER_ID });
@@ -402,14 +415,12 @@ describe("POST /api/listings/[id]/urgent", () => {
           },
         }),
       },
-      payments: {
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: "DB error" } }),
-      },
     });
+    mockCreateHostedCheckout.mockRejectedValueOnce(new Error("Checkout provider unavailable"));
     const req = createRequest(`http://localhost:3000/api/listings/${UUID}/urgent`);
     const res = await UrgentPOST(req, { params: Promise.resolve({ id: UUID }) });
     expect(res.status).toBe(500);
-    expect((await res.json()).error).toBe("Failed to create payment");
+    expect((await res.json()).error).toBe("Failed to create urgent checkout");
   });
 
   it("happy path returns checkout URL", async () => {
@@ -419,7 +430,7 @@ describe("POST /api/listings/[id]/urgent", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(body.checkoutUrl).toBe("https://payfast.co.za/checkout");
+    expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
     expect(body.paymentId).toBe("payment-1");
   });
 });
@@ -427,7 +438,13 @@ describe("POST /api/listings/[id]/urgent", () => {
 // ── Boost (NEW — previously untested) ─────────────────────────
 
 describe("POST /api/listings/[id]/boost", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCreateHostedCheckout.mockResolvedValue({
+      paymentId: "payment-1",
+      checkoutUrl: "https://pay.ozow.test/checkout",
+    });
+  });
 
   it("rejects invalid UUID", async () => {
     mockAuth({ id: USER_ID });
@@ -550,14 +567,12 @@ describe("POST /api/listings/[id]/boost", () => {
           },
         }),
       },
-      payments: {
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: "DB error" } }),
-      },
     });
+    mockCreateHostedCheckout.mockRejectedValueOnce(new Error("Checkout provider unavailable"));
     const req = createRequest(`http://localhost:3000/api/listings/${UUID}/boost`);
     const res = await BoostPOST(req, { params: Promise.resolve({ id: UUID }) });
     expect(res.status).toBe(500);
-    expect((await res.json()).error).toBe("Failed to create payment");
+    expect((await res.json()).error).toBe("Failed to create boost checkout");
   });
 
   it("happy path returns checkout URL", async () => {
@@ -567,7 +582,7 @@ describe("POST /api/listings/[id]/boost", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(body.checkoutUrl).toBe("https://payfast.co.za/checkout");
+    expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
     expect(body.paymentId).toBe("payment-1");
   });
 });

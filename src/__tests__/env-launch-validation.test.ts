@@ -23,10 +23,11 @@ const validProductionEnv: Record<string, string> = {
   AFRICASTALKING_API_KEY: "africas-talking-api-key",
   AFRICASTALKING_USERNAME: "verifymzansi",
   AFRICASTALKING_SENDER_ID: "VERIFYMZ",
-  PAYFAST_MERCHANT_ID: "merchant-id",
-  PAYFAST_MERCHANT_KEY: "merchant-key",
-  PAYFAST_PASSPHRASE: "merchant-passphrase", // secret-scan: allow deterministic fixture
-  PAYFAST_SANDBOX: "false",
+  OZOW_ENV: "production",
+  OZOW_CLIENT_ID: "client-id",
+  OZOW_CLIENT_SECRET: "client-secret", // secret-scan: allow deterministic fixture
+  OZOW_SITE_CODE: "site-code",
+  OZOW_WEBHOOK_SECRET: "webhook-secret", // secret-scan: allow deterministic fixture
   RESEND_API_KEY: "re_live_123456789",
   R2_ACCOUNT_ID: "account-12345678",
   R2_ACCESS_KEY_ID: "access-key-12345678",

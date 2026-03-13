@@ -52,7 +52,7 @@ export default function TermsPage() {
     {
       title: "5. Payments & Billing",
       content: [
-        "Paid features are billed via PayFast in ZAR (incl. VAT). Subscriptions auto-renew unless cancelled. Refunds follow CPA guidelines.",
+        "Paid features are billed via secure hosted checkout in ZAR (incl. VAT). Subscriptions auto-renew unless cancelled. Refunds follow CPA guidelines.",
       ],
     },
     {

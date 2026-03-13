@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildPayFastCheckoutUrl } from "@/lib/services/payfast";
 import { canUrgent } from "@/lib/services/entitlements";
 import { logAuditEvent } from "@/lib/services/audit";
 import { ADDON_PRICES, URGENT_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
+import { createHostedCheckout } from "@/lib/payments/checkout";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
@@ -30,7 +30,7 @@ type ListingCheckoutRow = {
 /**
  * POST /api/listings/[id]/urgent
  *
- * Create a PayFast checkout session to mark a listing as urgent.
+ * Create an Ozow checkout session to mark a listing as urgent.
  * Requires authenticated user who owns the listing, on Pro plan.
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -103,55 +103,22 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: urgentCheck.reason }, { status: 403 });
     }
 
-    // ── Create pending payment record ────────────────────────
     const urgentDays = URGENT_DURATION_DAYS;
-    const amountRands = ADDON_PRICES.urgent / 100;
-
-    const { data: payment, error: paymentError } = await admin
-      .from("payments")
-      .insert({
-        user_id: user.id,
-        area: area,
-        amount_cents: ADDON_PRICES.urgent,
-        status: "pending",
-        payfast_data: {
-          type: "urgent",
-          listing_id: listingId,
-          urgent_days: urgentDays,
-        },
-      })
-      .select("id")
-      .single();
-
-    if (paymentError || !payment) {
-      log.error("Failed to create payment", { error: paymentError });
-      return NextResponse.json({ error: "Failed to create payment" }, { status: 500 });
-    }
-
-    // ── Build PayFast checkout URL ───────────────────────────
     const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
-    const notifyUrl = env("PAYFAST_NOTIFY_URL") || `${appUrl}/api/webhooks/payfast`;
-
-    const merchantId = env("PAYFAST_MERCHANT_ID");
-    const merchantKey = env("PAYFAST_MERCHANT_KEY");
-    if (!merchantId || !merchantKey) {
-      return NextResponse.json(
-        { error: "Billing is not yet configured. Please try again later." },
-        { status: 503 }
-      );
-    }
-
-    const checkoutUrl = buildPayFastCheckoutUrl({
-      merchantId,
-      merchantKey,
-      returnUrl: `${appUrl}/dashboard/listings?urgent=${listingId}`,
-      cancelUrl: `${appUrl}/dashboard/listings`,
-      notifyUrl,
-      paymentId: payment.id,
-      amount: amountRands,
+    const { paymentId, checkoutUrl } = await createHostedCheckout({
+      admin: admin as never,
+      userId: user.id,
+      area,
+      amountCents: ADDON_PRICES.urgent,
       itemName: `Urgent: ${listing.title}`.slice(0, 100),
       itemDescription: `${urgentDays}-day urgent listing`,
-      emailAddress: user.email || undefined,
+      returnUrl: `${appUrl}/billing/success?payment=__PAYMENT_ID__`,
+      cancelUrl: `${appUrl}/billing/cancel?payment=__PAYMENT_ID__`,
+      providerData: {
+        type: "urgent",
+        listing_id: listingId,
+        urgent_days: urgentDays,
+      },
     });
 
     // Audit is best-effort — never block checkout on audit failure
@@ -164,8 +131,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         targetId: listingId,
         area: area as "MZANSI_MARKET" | "MALL_SHOPS" | "BUSINESS_ADS" | "PROMOTIONS_EVENTS",
         metadata: {
-          paymentId: payment.id,
-          amount: amountRands,
+          paymentId,
+          amount: ADDON_PRICES.urgent / 100,
           urgentDays,
           status: "checkout_initiated",
         },
@@ -173,14 +140,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     } catch (auditErr) {
       log.error("Audit log failed (non-fatal)", {
         error: auditErr instanceof Error ? auditErr.message : "Unknown",
-        paymentId: payment.id,
+        paymentId,
       });
     }
 
     return NextResponse.json({
       success: true,
       checkoutUrl,
-      paymentId: payment.id,
+      paymentId,
     });
   } catch (err) {
     log.error("Unexpected error", {

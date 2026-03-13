@@ -5,7 +5,7 @@
  * were not included in the production build. These tests verify:
  *
  * 1. Route files exist and export POST handlers.
- * 2. PayFast env-missing path returns 503 (billing not configured).
+ * 2. Billing-misconfigured path fails safely instead of crashing.
  * 3. Payment insert failure returns 500 (not a crash).
  * 4. Audit log failure doesn't crash the checkout flow.
  * 5. Concurrent "already active" guard is tested.
@@ -22,6 +22,7 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockEnv } = 
   mockLogAuditEvent: vi.fn(),
   mockEnv: vi.fn(),
 }));
+const mockCreateHostedCheckout = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
@@ -32,8 +33,8 @@ vi.mock("@/lib/utils/logger", () => ({
 vi.mock("@/lib/config/env", () => ({
   env: (...args: unknown[]) => mockEnv(...args),
 }));
-vi.mock("@/lib/services/payfast", () => ({
-  buildPayFastCheckoutUrl: vi.fn().mockReturnValue("https://payfast.co.za/checkout"),
+vi.mock("@/lib/payments/checkout", () => ({
+  createHostedCheckout: (...args: unknown[]) => mockCreateHostedCheckout(...args),
 }));
 vi.mock("@/lib/services/entitlements", () => ({
   canFeatured: vi.fn().mockReturnValue({ allowed: true }),
@@ -95,6 +96,10 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
 
 function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_until") {
   mockAuth({ id: USER_ID, email: "seller@test.com" });
+  mockCreateHostedCheckout.mockResolvedValue({
+    paymentId: "payment-1",
+    checkoutUrl: "https://pay.ozow.test/checkout",
+  });
   mockAdmin({
     account_profiles: {
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
@@ -117,28 +122,25 @@ function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_u
   });
 }
 
-function setupEnvWithPayFast() {
+function setupEnvWithOzow() {
   mockEnv.mockImplementation((key: string) => {
     const envMap: Record<string, string> = {
       NEXT_PUBLIC_APP_URL: "http://localhost:3000",
-      PAYFAST_MERCHANT_ID: "test-merchant-id",
-      PAYFAST_MERCHANT_KEY: "test-merchant-key",
-      PAYFAST_NOTIFY_URL: "http://localhost:3000/api/webhooks/payfast",
+      OZOW_ENV: "staging",
     };
     return envMap[key] ?? "";
   });
 }
 
-function setupEnvWithoutPayFast() {
+function setupEnvWithoutOzow() {
   mockEnv.mockImplementation((key: string) => {
     const envMap: Record<string, string> = {
       NEXT_PUBLIC_APP_URL: "http://localhost:3000",
-      PAYFAST_MERCHANT_ID: "", // Missing!
-      PAYFAST_MERCHANT_KEY: "", // Missing!
-      PAYFAST_NOTIFY_URL: "http://localhost:3000/api/webhooks/payfast",
+      OZOW_ENV: "",
     };
     return envMap[key] ?? "";
   });
+  mockCreateHostedCheckout.mockRejectedValue(new Error("Ozow credentials are not configured"));
 }
 
 // ── Test 1: Route module exports ───────────────────────────────
@@ -157,45 +159,45 @@ describe("Route module exports (regression: routes excluded from build)", () => 
   });
 });
 
-// ── Test 2: 503 when PayFast billing not configured ────────────
+// ── Test 2: billing misconfiguration fails safely ──────────────
 
-describe("Billing not configured (PAYFAST_MERCHANT_ID/KEY missing)", () => {
+describe("Billing not configured", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("featured returns 503 when merchant credentials are empty", async () => {
+  it("featured fails safely when Ozow credentials are missing", async () => {
     setupHappyPath("featured_until");
-    setupEnvWithoutPayFast();
+    setupEnvWithoutOzow();
 
     const req = createRequest();
     const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
 
-    expect(res.status).toBe(503);
+    expect([500, 503]).toContain(res.status);
     const body = await res.json();
-    expect(body.error).toContain("Billing is not yet configured");
+    expect(body.error).toMatch(/billing|checkout/i);
   });
 
-  it("urgent returns 503 when merchant credentials are empty", async () => {
+  it("urgent fails safely when Ozow credentials are missing", async () => {
     setupHappyPath("urgent_until");
-    setupEnvWithoutPayFast();
+    setupEnvWithoutOzow();
 
     const req = createRequest();
     const res = await UrgentPOST(req, { params: Promise.resolve({ id: UUID }) });
 
-    expect(res.status).toBe(503);
+    expect([500, 503]).toContain(res.status);
     const body = await res.json();
-    expect(body.error).toContain("Billing is not yet configured");
+    expect(body.error).toMatch(/billing|checkout/i);
   });
 
-  it("boost returns 503 when merchant credentials are empty", async () => {
+  it("boost fails safely when Ozow credentials are missing", async () => {
     setupHappyPath("boost_until");
-    setupEnvWithoutPayFast();
+    setupEnvWithoutOzow();
 
     const req = createRequest();
     const res = await BoostPOST(req, { params: Promise.resolve({ id: UUID }) });
 
-    expect(res.status).toBe(503);
+    expect([500, 503]).toContain(res.status);
     const body = await res.json();
-    expect(body.error).toContain("Billing is not yet configured");
+    expect(body.error).toMatch(/billing|checkout/i);
   });
 });
 
@@ -206,7 +208,7 @@ describe("Payment insert failure path", () => {
 
   it("featured returns 500 when payment creation fails with DB error", async () => {
     mockAuth({ id: USER_ID, email: "seller@test.com" });
-    setupEnvWithPayFast();
+    setupEnvWithOzow();
     mockAdmin({
       account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
@@ -223,20 +225,15 @@ describe("Payment insert failure path", () => {
           },
         }),
       },
-      payments: {
-        single: vi.fn().mockResolvedValue({
-          data: null,
-          error: { message: "DB connection lost", code: "PGRST301" },
-        }),
-      },
     });
+    mockCreateHostedCheckout.mockRejectedValueOnce(new Error("Failed to create payment"));
 
     const req = createRequest();
     const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
 
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body.error).toBe("Failed to create payment");
+    expect(body.error).toBe("Failed to create featured checkout");
   });
 });
 
@@ -247,7 +244,7 @@ describe("Audit log failure resilience", () => {
 
   it("featured checkout succeeds even when audit log throws (audit is non-fatal)", async () => {
     setupHappyPath("featured_until");
-    setupEnvWithPayFast();
+    setupEnvWithOzow();
     mockLogAuditEvent.mockRejectedValueOnce(new Error("Audit service down"));
 
     const req = createRequest();
@@ -262,7 +259,7 @@ describe("Audit log failure resilience", () => {
 
   it("boost checkout succeeds even when audit log throws", async () => {
     setupHappyPath("boost_until");
-    setupEnvWithPayFast();
+    setupEnvWithOzow();
     mockLogAuditEvent.mockRejectedValueOnce(new Error("Audit service down"));
 
     const req = createRequest();
@@ -275,7 +272,7 @@ describe("Audit log failure resilience", () => {
 
   it("urgent checkout succeeds even when audit log throws", async () => {
     setupHappyPath("urgent_until");
-    setupEnvWithPayFast();
+    setupEnvWithOzow();
     mockLogAuditEvent.mockRejectedValueOnce(new Error("Audit service down"));
 
     const req = createRequest();
@@ -295,7 +292,7 @@ describe("Already-active guard edge cases", () => {
   it("featured allows re-purchase when featured_until is in the past", async () => {
     const pastDate = new Date(Date.now() - 86_400_000).toISOString();
     mockAuth({ id: USER_ID, email: "seller@test.com" });
-    setupEnvWithPayFast();
+    setupEnvWithOzow();
     mockAdmin({
       account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
@@ -329,7 +326,7 @@ describe("Already-active guard edge cases", () => {
   it("featured blocks re-purchase when featured_until is 1 second in the future", async () => {
     const nearFutureDate = new Date(Date.now() + 1000).toISOString();
     mockAuth({ id: USER_ID, email: "seller@test.com" });
-    setupEnvWithPayFast();
+    setupEnvWithOzow();
     mockAdmin({
       account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),

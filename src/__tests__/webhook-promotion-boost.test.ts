@@ -75,7 +75,12 @@ function setupWebhookMock(paymentData: Record<string, unknown>, amountCents = 15
             maybeSingle: vi.fn().mockResolvedValue({
               data: {
                 id: PAYMENT_ID,
+                area: "PROMOTIONS_EVENTS",
                 status: "pending",
+                provider: "payfast",
+                provider_payment_id: null,
+                provider_reference: PAYMENT_ID,
+                provider_data: null,
                 payfast_payment_id: null,
                 amount_cents: amountCents,
                 user_id: USER_ID,
@@ -86,17 +91,23 @@ function setupWebhookMock(paymentData: Record<string, unknown>, amountCents = 15
         }
         if (paymentsCallCount === 2) {
           // Second call: CAS claim (update status to "processing")
+          const claimResult = {
+            select: vi.fn().mockResolvedValue({
+              data: [{ id: PAYMENT_ID }],
+            }),
+          };
+          const thirdNeq = {
+            neq: vi.fn().mockReturnValue(claimResult),
+          };
+          const secondNeq = {
+            neq: vi.fn().mockReturnValue(thirdNeq),
+          };
+          const firstNeq = {
+            neq: vi.fn().mockReturnValue(secondNeq),
+          };
           return {
             update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                neq: vi.fn().mockReturnValue({
-                  neq: vi.fn().mockReturnValue({
-                    select: vi.fn().mockResolvedValue({
-                      data: [{ id: PAYMENT_ID }],
-                    }),
-                  }),
-                }),
-              }),
+              eq: vi.fn().mockReturnValue(firstNeq),
             }),
           };
         }

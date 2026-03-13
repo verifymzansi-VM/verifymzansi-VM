@@ -398,7 +398,7 @@ describe("POST /api/webhooks/payfast", () => {
       const res = await POST(req);
       expect(res.status).toBe(500);
       const body = await res.json();
-      expect(body.error).toMatch(/boost/i);
+      expect(body.error).toMatch(/fulfillment/i);
     });
   });
 

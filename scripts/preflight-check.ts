@@ -79,43 +79,50 @@ export function classifySupabaseSchemaPreflightError(
   };
 }
 
-export function classifyPayFastPreflightCheck({
+export function classifyOzowPreflightCheck({
   mode,
-  sandbox,
-  merchantId,
-  merchantKey,
-  passphrase,
+  ozowEnv,
+  clientId,
+  clientSecret,
+  siteCode,
+  webhookSecret,
 }: {
   mode: LaunchValidationMode;
-  sandbox?: string;
-  merchantId: string;
-  merchantKey: string;
-  passphrase: string;
+  ozowEnv?: string;
+  clientId: string;
+  clientSecret: string;
+  siteCode: string;
+  webhookSecret: string;
 }): Pick<CheckResult, "status" | "detail"> {
   if (mode !== "production") {
     return {
       status: "warn",
-      detail: `Non-production mode allows PAYFAST_SANDBOX=${sandbox ?? "unset"}`,
+      detail: `Non-production mode allows OZOW_ENV=${ozowEnv ?? "unset"}`,
     };
   }
 
-  if (sandbox === "true") {
+  if (ozowEnv !== "production") {
     return {
       status: "fail",
-      detail: "PAYFAST_SANDBOX must be false in production",
+      detail: "OZOW_ENV must be production in production mode",
     };
   }
 
-  if (merchantId.length < 5 || merchantKey.length < 5 || passphrase.length < 3) {
+  if (
+    clientId.length < 5 ||
+    clientSecret.length < 8 ||
+    siteCode.length < 3 ||
+    webhookSecret.length < 8
+  ) {
     return {
       status: "fail",
-      detail: "Merchant credentials look too short for production",
+      detail: "Ozow credentials look too short for production",
     };
   }
 
   return {
     status: "pass",
-    detail: `merchant=${merchantId} sandbox=false`,
+    detail: `env=production site=${siteCode}`,
   };
 }
 
@@ -279,23 +286,25 @@ async function checkR2Access(mode: LaunchValidationMode): Promise<void> {
   }
 }
 
-function checkPayFast(mode: LaunchValidationMode): void {
+function checkOzow(mode: LaunchValidationMode): void {
   try {
-    const sandbox = optionalEnv("PAYFAST_SANDBOX");
-    const merchantId = requireEnv("PAYFAST_MERCHANT_ID");
-    const merchantKey = requireEnv("PAYFAST_MERCHANT_KEY");
-    const passphrase = requireEnv("PAYFAST_PASSPHRASE");
-    const result = classifyPayFastPreflightCheck({
+    const ozowEnv = optionalEnv("OZOW_ENV");
+    const clientId = requireEnv("OZOW_CLIENT_ID");
+    const clientSecret = requireEnv("OZOW_CLIENT_SECRET");
+    const siteCode = requireEnv("OZOW_SITE_CODE");
+    const webhookSecret = requireEnv("OZOW_WEBHOOK_SECRET");
+    const result = classifyOzowPreflightCheck({
       mode,
-      sandbox,
-      merchantId,
-      merchantKey,
-      passphrase,
+      ozowEnv,
+      clientId,
+      clientSecret,
+      siteCode,
+      webhookSecret,
     });
 
-    addResult("PayFast", result.status, result.detail);
+    addResult("Ozow", result.status, result.detail);
   } catch (error) {
-    addResult("PayFast", "fail", (error as Error).message);
+    addResult("Ozow", "fail", (error as Error).message);
   }
 }
 
@@ -411,7 +420,7 @@ async function main(): Promise<void> {
   await checkSupabaseSchema(mode);
   await checkSupabasePlansSeeded(mode);
   await checkR2Access(mode);
-  checkPayFast(mode);
+  checkOzow(mode);
   checkAfricasTalking(mode);
   await checkResend(mode);
   await checkTurnstile(mode);

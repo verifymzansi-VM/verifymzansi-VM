@@ -98,7 +98,15 @@ export type EntitlementType = "subscription" | "trial" | "pay_per_post";
 
 export type EntitlementStatus = "active" | "expired" | "cancelled";
 
-export type PaymentStatus = "pending" | "complete" | "failed" | "refunded";
+export type PaymentStatus =
+  | "pending"
+  | "processing"
+  | "complete"
+  | "failed"
+  | "expired"
+  | "refunded";
+
+export type PaymentProvider = "payfast" | "ozow";
 
 export type LeadStatus = "new" | "read" | "contacted" | "closed";
 

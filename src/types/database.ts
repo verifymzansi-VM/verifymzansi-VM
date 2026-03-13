@@ -20,6 +20,7 @@ import type {
   EntitlementType,
   EntitlementStatus,
   PaymentStatus,
+  PaymentProvider,
   LeadStatus,
   ContactEventType,
   ReportCategory,
@@ -304,6 +305,10 @@ export interface Payment {
   area: MarketplaceArea;
   amount_cents: number;
   status: PaymentStatus;
+  provider: PaymentProvider;
+  provider_payment_id: string | null;
+  provider_reference: string | null;
+  provider_data: Record<string, unknown> | null;
   payfast_payment_id: string | null;
   payfast_data: Record<string, unknown> | null;
   created_at: string;

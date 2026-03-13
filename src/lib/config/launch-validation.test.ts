@@ -13,10 +13,11 @@ const BASE_ENV: EnvSource = {
   AFRICASTALKING_API_KEY: "africas-talking-key",
   AFRICASTALKING_USERNAME: "verifymzansi",
   AFRICASTALKING_SENDER_ID: "VERIFYMZANS",
-  PAYFAST_MERCHANT_ID: "10000100",
-  PAYFAST_MERCHANT_KEY: "merchant-key-value",
-  PAYFAST_PASSPHRASE: "merchant-passphrase", // secret-scan: allow deterministic fixture
-  PAYFAST_SANDBOX: "false",
+  OZOW_ENV: "production",
+  OZOW_CLIENT_ID: "client-id-value",
+  OZOW_CLIENT_SECRET: "client-secret-value", // secret-scan: allow deterministic fixture
+  OZOW_SITE_CODE: "site-code",
+  OZOW_WEBHOOK_SECRET: "webhook-secret-value", // secret-scan: allow deterministic fixture
   RESEND_API_KEY: "re_test_1234567890",
   R2_ACCOUNT_ID: "cloudflare-account-id",
   R2_ACCESS_KEY_ID: "cloudflare-access-key",
@@ -45,7 +46,7 @@ describe("launch validation", () => {
       {
         ...BASE_ENV,
         NEXT_PUBLIC_APP_URL: "http://127.0.0.1:3000",
-        PAYFAST_SANDBOX: "true",
+        OZOW_ENV: "staging",
         AFRICASTALKING_USERNAME: "sandbox",
       },
       { mode: "e2e" }

@@ -19,11 +19,7 @@ export interface LaunchValidationSummary {
 
 const HEX_PLACEHOLDER = "cafebabe".repeat(8);
 const TRUTHY_VALUES = new Set(["1", "true", "yes", "on"]);
-const DEV_ONLY_FLAGS = [
-  "ENABLE_DEV_PAYMENT_BYPASS",
-  "ENABLE_MOCK_PAYFAST",
-  "DEV_EXPOSE_OTP",
-] as const;
+const DEV_ONLY_FLAGS = ["ENABLE_DEV_PAYMENT_BYPASS", "ENABLE_MOCK_OZOW", "DEV_EXPOSE_OTP"] as const;
 
 const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
   development: [
@@ -70,9 +66,11 @@ const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
     "AFRICASTALKING_API_KEY",
     "AFRICASTALKING_USERNAME",
     "AFRICASTALKING_SENDER_ID",
-    "PAYFAST_MERCHANT_ID",
-    "PAYFAST_MERCHANT_KEY",
-    "PAYFAST_PASSPHRASE",
+    "OZOW_ENV",
+    "OZOW_CLIENT_ID",
+    "OZOW_CLIENT_SECRET",
+    "OZOW_SITE_CODE",
+    "OZOW_WEBHOOK_SECRET",
     "RESEND_API_KEY",
     "R2_ACCOUNT_ID",
     "R2_ACCESS_KEY_ID",
@@ -95,9 +93,8 @@ const PRODUCTION_SECRET_KEYS = [
   "HMAC_SECRET",
   "IP_HASH_SECRET",
   "AFRICASTALKING_API_KEY",
-  "PAYFAST_MERCHANT_ID",
-  "PAYFAST_MERCHANT_KEY",
-  "PAYFAST_PASSPHRASE",
+  "OZOW_CLIENT_SECRET",
+  "OZOW_WEBHOOK_SECRET",
   "RESEND_API_KEY",
   "TURNSTILE_SECRET_KEY",
 ] as const;
@@ -273,16 +270,55 @@ export function validateLaunchConfiguration(
     addCheck(checks, "Resend", "pass", "API key format looks valid");
   }
 
-  const payfastSandbox = env.PAYFAST_SANDBOX;
-  if (mode === "production" && isTruthy(payfastSandbox)) {
+  const ozowEnv = env.OZOW_ENV;
+  const ozowClientId = env.OZOW_CLIENT_ID;
+  const ozowClientSecret = env.OZOW_CLIENT_SECRET;
+  const ozowSiteCode = env.OZOW_SITE_CODE;
+  const ozowWebhookSecret = env.OZOW_WEBHOOK_SECRET;
+  const ozowApiBaseUrl = env.OZOW_API_BASE_URL;
+  if (mode === "production") {
+    if (
+      !hasValue(ozowEnv) ||
+      !hasValue(ozowClientId) ||
+      !hasValue(ozowClientSecret) ||
+      !hasValue(ozowSiteCode) ||
+      !hasValue(ozowWebhookSecret)
+    ) {
+      addCheck(
+        checks,
+        "Ozow",
+        "fail",
+        "OZOW_ENV, OZOW_CLIENT_ID, OZOW_CLIENT_SECRET, OZOW_SITE_CODE, and OZOW_WEBHOOK_SECRET are required in production"
+      );
+    } else if (ozowEnv !== "production") {
+      addCheck(checks, "Ozow", "fail", "OZOW_ENV must be production for production launch mode");
+    } else {
+      addCheck(
+        checks,
+        "Ozow",
+        "pass",
+        `env=${ozowEnv} site=${ozowSiteCode}${hasValue(ozowApiBaseUrl) ? " custom-base-url" : ""}`
+      );
+    }
+  } else if (
+    hasValue(ozowClientId) &&
+    hasValue(ozowClientSecret) &&
+    hasValue(ozowSiteCode) &&
+    hasValue(ozowWebhookSecret)
+  ) {
     addCheck(
       checks,
-      "PayFast",
-      "fail",
-      "PAYFAST_SANDBOX is enabled in production and would route payments to the sandbox gateway"
+      "Ozow",
+      "pass",
+      `env=${ozowEnv ?? "staging"} site=${ozowSiteCode}${hasValue(ozowApiBaseUrl) ? " custom-base-url" : ""}`
     );
   } else {
-    addCheck(checks, "PayFast", "pass", `sandbox=${isTruthy(payfastSandbox) ? "true" : "false"}`);
+    addCheck(
+      checks,
+      "Ozow",
+      "warn",
+      "Ozow credentials are optional locally but required before production launch"
+    );
   }
 
   const r2AccountId = env.R2_ACCOUNT_ID;

@@ -40,7 +40,7 @@ function CheckoutContent() {
           return;
         }
 
-        // Redirect to PayFast checkout
+        // Redirect to the hosted checkout
         if (data.checkoutUrl) {
           window.location.href = data.checkoutUrl;
         } else {
@@ -71,8 +71,8 @@ function CheckoutContent() {
           </>
         ) : (
           <>
-            <h1 className="font-display text-xl font-bold">Redirecting to PayFast...</h1>
-            <p className="text-sm text-muted-foreground">Redirecting to PayFast...</p>
+            <h1 className="font-display text-xl font-bold">Redirecting to secure checkout...</h1>
+            <p className="text-sm text-muted-foreground">Redirecting to Ozow secure checkout...</p>
             <Loader2 className="h-6 w-6 animate-spin mx-auto text-brand-green" />
           </>
         )}

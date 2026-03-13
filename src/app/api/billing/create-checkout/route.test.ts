@@ -17,16 +17,22 @@ vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: vi.fn(),
 }));
 
+vi.mock("@/lib/payments/checkout", () => ({
+  createHostedCheckout: vi.fn().mockResolvedValue({
+    paymentId: "pay-001",
+    checkoutUrl: "https://pay.ozow.com/checkout/pay-001",
+  }),
+}));
+
 vi.mock("@/lib/config/env", () => ({
   env: vi.fn((key: string) => {
     const envMap: Record<string, string> = {
       NEXT_PUBLIC_APP_URL: "https://verifymzansi.com",
-      PAYFAST_MERCHANT_ID: "test-merchant-id",
-      PAYFAST_MERCHANT_KEY: "test-merchant-key",
-      PAYFAST_NOTIFY_URL: "https://verifymzansi.com/api/webhooks/payfast",
-      PAYFAST_PASSPHRASE: "test-passphrase", // secret-scan: allow
-      NODE_ENV: "development",
-      PAYFAST_SANDBOX: "true",
+      OZOW_ENV: "staging",
+      OZOW_CLIENT_ID: "test-client-id",
+      OZOW_CLIENT_SECRET: "test-client-secret", // secret-scan: allow
+      OZOW_SITE_CODE: "test-site-code",
+      OZOW_WEBHOOK_SECRET: "test-webhook-secret", // secret-scan: allow
     };
     return envMap[key] ?? "";
   }),
@@ -184,7 +190,7 @@ describe("POST /api/billing/create-checkout", () => {
     expect(res.status).toBe(200);
     expect(data.success).toBe(true);
     expect(data.checkoutUrl).toBeDefined();
-    expect(data.checkoutUrl).toContain("merchant_id");
+    expect(data.checkoutUrl).toContain("ozow");
     expect(data.paymentId).toBe("pay-001");
   });
 });

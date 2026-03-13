@@ -28,8 +28,8 @@
   this Cloudflare stack.
 - **Post-deploy follow-up:** Public routing and auth-gated redirects still
   worked, but `/api/health` returned `status: "degraded"` after deploy because
-  launch validation now reports `PayFast` and `Dev-only flags` failures in
-  production. That needs environment cleanup in Cloudflare, not code changes in
+  launch validation reported payment-provider and dev-only flag failures in
+  production. That needed environment cleanup in Cloudflare, not code changes in
   this warning-cleanup pass.
 
 ## Cloudflare Middleware Compatibility Fix (2026-03-12)

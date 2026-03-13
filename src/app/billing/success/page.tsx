@@ -1,55 +1,125 @@
 import Link from "next/link";
-import { CheckCircle2, ArrowRight } from "lucide-react";
+import { CheckCircle2, ArrowRight, Clock3, AlertCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = {
-  title: "Payment Successful",
-  description: "Your VerifyMzansi plan upgrade was successful.",
+  title: "Payment Status",
+  description: "Review your VerifyMzansi payment status.",
 };
 
-export default function BillingSuccessPage() {
+type PaymentStatusView = "complete" | "pending" | "failed" | "expired" | "missing";
+
+async function resolvePaymentStatus(paymentId?: string): Promise<PaymentStatusView> {
+  if (!paymentId) {
+    return "missing";
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return "missing";
+  }
+
+  const admin = createAdminClient();
+  const { data: payment } = await admin
+    .from("payments")
+    .select("status")
+    .eq("id", paymentId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  switch (payment?.status) {
+    case "complete":
+      return "complete";
+    case "pending":
+    case "processing":
+      return "pending";
+    case "failed":
+      return "failed";
+    case "expired":
+      return "expired";
+    default:
+      return "missing";
+  }
+}
+
+function getCopy(status: PaymentStatusView) {
+  switch (status) {
+    case "complete":
+      return {
+        icon: <CheckCircle2 className="h-6 w-6 text-brand-green" />,
+        title: "Payment Confirmed",
+        description: "Your payment has been confirmed and your paid features are now active.",
+      };
+    case "pending":
+      return {
+        icon: <Clock3 className="h-6 w-6 text-brand-green" />,
+        title: "Payment Pending",
+        description:
+          "Your redirect completed, but we are still waiting for Ozow to confirm the payment.",
+      };
+    case "failed":
+      return {
+        icon: <XCircle className="h-6 w-6 text-destructive" />,
+        title: "Payment Failed",
+        description: "The payment did not complete. You can return to billing and try again.",
+      };
+    case "expired":
+      return {
+        icon: <AlertCircle className="h-6 w-6 text-destructive" />,
+        title: "Payment Expired",
+        description:
+          "This checkout session expired before confirmation arrived. Please start a new payment.",
+      };
+    default:
+      return {
+        icon: <AlertCircle className="h-6 w-6 text-muted-foreground" />,
+        title: "Payment Not Found",
+        description: "We could not find a payment matching this request.",
+      };
+  }
+}
+
+export default async function BillingSuccessPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ payment?: string }>;
+}) {
+  const { payment } = await searchParams;
+  const status = await resolvePaymentStatus(payment);
+  const copy = getCopy(status);
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
 
-      <main className="flex-1 flex items-center justify-center py-4">
-        <div className="container-page max-w-md text-center space-y-4">
-          <div className="mx-auto w-12 h-12 rounded-full bg-brand-green/10 flex items-center justify-center">
-            <CheckCircle2 className="h-6 w-6 text-brand-green" />
+      <main className="flex flex-1 items-center justify-center py-4">
+        <div className="container-page max-w-md space-y-4 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            {copy.icon}
           </div>
 
-          <h1 className="font-display text-xl font-bold">Payment Successful!</h1>
+          <h1 className="font-display text-xl font-bold">{copy.title}</h1>
 
           <Card>
-            <CardContent className="p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Your plan is now active with all premium features.
+            <CardContent className="space-y-3 p-4">
+              <p className="text-sm text-muted-foreground">{copy.description}</p>
+              <p className="text-xs text-muted-foreground">
+                Payment status is driven by your internal VerifyMzansi payment record, not only the
+                redirect URL.
               </p>
-
-              <div className="border-t pt-3 space-y-1.5">
-                <p className="text-xs text-muted-foreground">What&apos;s next?</p>
-                <ul className="text-xs space-y-1 text-left">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-brand-green flex-shrink-0 mt-0.5" />
-                    Your trust badge has been updated
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-brand-green flex-shrink-0 mt-0.5" />
-                    Premium features are now active on your listings
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-brand-green flex-shrink-0 mt-0.5" />A
-                    receipt has been sent to your email
-                  </li>
-                </ul>
-              </div>
             </CardContent>
           </Card>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button asChild className="gap-2">
               <Link href="/dashboard">
                 Go to Dashboard

@@ -18,7 +18,7 @@ export default function PrivacyPolicyPage() {
         "• Account information (name, email, phone number)",
         "• Verification documents (ID number, selfie, location)",
         "• Listing content (titles, descriptions, images, pricing)",
-        "• Communication records and payment information (via PayFast)",
+        "• Communication records and payment information (via Ozow and our payment providers)",
         "We also collect device/browser info, IP address, and usage data automatically.",
       ],
     },

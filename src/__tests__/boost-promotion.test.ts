@@ -8,7 +8,10 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoiste
   mockLogAuditEvent: vi.fn(),
 }));
 
-const mockBuildPayFastCheckoutUrl = vi.fn().mockReturnValue("https://payfast.co.za/checkout");
+const mockCreateHostedCheckout = vi.fn().mockResolvedValue({
+  paymentId: "payment-1",
+  checkoutUrl: "https://pay.ozow.test/checkout",
+});
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
@@ -20,15 +23,13 @@ vi.mock("@/lib/config/env", () => ({
   env: vi.fn((key: string) => {
     const vars: Record<string, string> = {
       NEXT_PUBLIC_APP_URL: "http://localhost:3000",
-      PAYFAST_MERCHANT_ID: "m1",
-      PAYFAST_MERCHANT_KEY: "k1",
-      PAYFAST_NOTIFY_URL: "http://localhost:3000/api/webhooks/payfast",
+      OZOW_ENV: "staging",
     };
     return vars[key] ?? "";
   }),
 }));
-vi.mock("@/lib/services/payfast", () => ({
-  buildPayFastCheckoutUrl: (...args: unknown[]) => mockBuildPayFastCheckoutUrl(...args),
+vi.mock("@/lib/payments/checkout", () => ({
+  createHostedCheckout: (...args: unknown[]) => mockCreateHostedCheckout(...args),
 }));
 vi.mock("@/lib/constants/pricing", () => ({
   ADDON_PRICES: { boost: 1500, featured: 2500, urgent: 1000 },
@@ -100,6 +101,10 @@ function setupHappyPath() {
 describe("POST /api/promotions/[id]/boost", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreateHostedCheckout.mockResolvedValue({
+      paymentId: "payment-1",
+      checkoutUrl: "https://pay.ozow.test/checkout",
+    });
     resetOwnerColumnCacheForTesting();
   });
 
@@ -315,18 +320,13 @@ describe("POST /api/promotions/[id]/boost", () => {
           },
         }),
       },
-      payments: {
-        single: vi.fn().mockResolvedValue({
-          data: null,
-          error: { message: "DB connection lost" },
-        }),
-      },
     });
+    mockCreateHostedCheckout.mockRejectedValueOnce(new Error("Checkout provider unavailable"));
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body.error).toMatch(/payment/i);
+    expect(body.error).toMatch(/boost checkout/i);
   });
 
   it("happy path: returns checkout URL and payment ID", async () => {
@@ -336,18 +336,18 @@ describe("POST /api/promotions/[id]/boost", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(body.checkoutUrl).toBe("https://payfast.co.za/checkout");
+    expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
     expect(body.paymentId).toBe("payment-1");
   });
 
-  it("passes amount in ZAR (cents ÷ 100) to PayFast", async () => {
+  it("passes amount cents to the hosted checkout helper", async () => {
     setupHappyPath();
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
     await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
 
-    expect(mockBuildPayFastCheckoutUrl).toHaveBeenCalledTimes(1);
-    const passedParams = mockBuildPayFastCheckoutUrl.mock.calls[0][0];
-    expect(passedParams.amount).toBe(15); // 1500 / 100
+    expect(mockCreateHostedCheckout).toHaveBeenCalledTimes(1);
+    const passedParams = mockCreateHostedCheckout.mock.calls[0][0];
+    expect(passedParams.amountCents).toBe(1500);
   });
 
   it("logs audit event on successful checkout", async () => {
