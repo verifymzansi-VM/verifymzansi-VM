@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
 
 /**
  * Cloudflare Turnstile CAPTCHA widget.
@@ -21,6 +22,8 @@ interface TurnstileWidgetProps {
   onError?: (error: string) => void;
   /** Called when the script/widget is successfully loaded */
   onLoad?: () => void;
+  /** Called when the widget cannot be rendered in the current environment */
+  onUnavailable?: (message: string) => void;
   /** Widget theme */
   theme?: "light" | "dark" | "auto";
   /** Widget size */
@@ -90,15 +93,18 @@ export function TurnstileWidget({
   onExpire,
   onError,
   onLoad,
+  onUnavailable,
   theme = "auto",
   size = "normal",
   className,
 }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
-
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-  const isDev = !siteKey || siteKey === "dummy_site_key";
+  const renderAttemptRef = useRef(0);
+  const { mode, siteKey } = getTurnstileClientState();
+  const isBypassMode = mode === "bypass";
+  const isConfigured = mode === "configured";
+  const isUnavailable = mode === "unavailable";
 
   const cleanupWidget = useCallback(() => {
     if (
@@ -115,6 +121,10 @@ export function TurnstileWidget({
       }
       widgetIdRef.current = null;
     }
+
+    if (containerRef.current) {
+      containerRef.current.innerHTML = "";
+    }
   }, []);
 
   const renderWidget = useCallback(async () => {
@@ -122,6 +132,9 @@ export function TurnstileWidget({
 
     // Clean up previous widget if re-rendering
     cleanupWidget();
+    const attemptId = renderAttemptRef.current + 1;
+    renderAttemptRef.current = attemptId;
+    const container = containerRef.current;
 
     try {
       await loadTurnstileScript();
@@ -139,7 +152,12 @@ export function TurnstileWidget({
       >
     ).turnstile;
 
-    if (!turnstile || !containerRef.current) {
+    if (
+      !turnstile ||
+      !containerRef.current ||
+      renderAttemptRef.current !== attemptId ||
+      containerRef.current !== container
+    ) {
       onError?.("Turnstile not available after script load");
       return;
     }
@@ -157,27 +175,29 @@ export function TurnstileWidget({
     });
   }, [siteKey, theme, size, onSuccess, onExpire, onError, onLoad, cleanupWidget]);
 
-  // No client-side dev bypass. Server-side bypass in src/lib/utils/turnstile.ts
-  // handles dev mode token validation. In dev, show a manual trigger button.
-
   useEffect(() => {
-    if (isDev) return;
+    if (!isConfigured) return;
 
     renderWidget();
 
     return () => {
       cleanupWidget();
     };
-  }, [isDev, renderWidget, cleanupWidget]);
+  }, [isConfigured, renderWidget, cleanupWidget]);
 
-  // Auto-bypass Turnstile in dev mode so login works without real keys
   useEffect(() => {
-    if (isDev) {
+    if (isBypassMode) {
       onSuccess("dev-turnstile-bypass");
     }
-  }, [isDev, onSuccess]);
+  }, [isBypassMode, onSuccess]);
 
-  if (isDev) {
+  useEffect(() => {
+    if (isUnavailable) {
+      onUnavailable?.(TURNSTILE_UNAVAILABLE_MESSAGE);
+    }
+  }, [isUnavailable, onUnavailable]);
+
+  if (isBypassMode || isUnavailable) {
     return null;
   }
 

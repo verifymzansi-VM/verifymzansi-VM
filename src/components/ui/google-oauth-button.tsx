@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
+import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -27,11 +28,12 @@ export function GoogleOAuthButton({ mode }: GoogleOAuthButtonProps) {
     setIsLoading(true);
     try {
       const supabase = createClient();
+      const { appUrl } = getPublicRuntimeConfig();
 
       const redirectTo =
         typeof window !== "undefined"
           ? `${window.location.origin}/auth/callback`
-          : `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback`;
+          : `${appUrl}/auth/callback`;
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",

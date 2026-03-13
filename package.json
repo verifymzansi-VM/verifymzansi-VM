@@ -37,6 +37,7 @@
     "test:perf": "tsx scripts/test-perf.ts",
     "test:mutation": "tsx scripts/test-mutation.ts",
     "test:e2e": "playwright test",
+    "test:public-verify": "tsx scripts/verify-public-pages.ts",
     "seed:dev": "tsx scripts/seed-development.ts",
     "seed:prod": "tsx scripts/seed-production.ts",
     "db:verify-schema": "tsx scripts/check-supabase-schema.ts",

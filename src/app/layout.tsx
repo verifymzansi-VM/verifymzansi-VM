@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import Script from "next/script";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { PublicRuntimeConfigBridge } from "@/components/providers/public-runtime-config";
 import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import "@/styles/globals.css";
@@ -74,19 +76,22 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const nonce = (await headers()).get("x-nonce") ?? undefined;
-  const turbopackNamePolyfill =
-    'if(typeof globalThis.__name!=="function"){globalThis.__name=function(fn,name){Object.defineProperty(fn,"name",{value:name,configurable:true});return fn;};}var __name=globalThis.__name;';
 
   return (
     <html lang="en-ZA" suppressHydrationWarning>
       <body className="min-h-screen antialiased">
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: turbopackNamePolyfill }} />
+        <Script
+          src="/runtime/turbopack-name-polyfill.js"
+          strategy="beforeInteractive"
+          nonce={nonce}
+        />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"
         >
           Skip to main content
         </a>
+        <PublicRuntimeConfigBridge />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

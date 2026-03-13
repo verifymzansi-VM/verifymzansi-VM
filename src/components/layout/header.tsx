@@ -234,7 +234,7 @@ export function Header({
 
       {/* Mobile Marketplace Tabs — always visible on mobile */}
       <div className="md:hidden w-full border-t bg-background/95">
-        <div className="container-page flex items-center justify-around py-1.5">
+        <div className="px-3 py-1.5">
           <MarketplaceSwitcher />
         </div>
       </div>

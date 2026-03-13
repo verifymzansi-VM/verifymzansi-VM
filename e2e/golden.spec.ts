@@ -23,7 +23,7 @@ test.describe("VerifyMzansi Golden Paths", () => {
     await expect(
       page
         .getByRole("heading")
-        .filter({ hasText: /Register|Create Account|Sign Up|Create your seller account/i })
+        .filter({ hasText: /Register|Create Account|Sign Up|Create your account/i })
     ).toBeVisible();
   });
 

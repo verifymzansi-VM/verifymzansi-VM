@@ -14,6 +14,7 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
+import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 
 export default function LoginPage() {
@@ -21,6 +22,9 @@ export default function LoginPage() {
   const [turnstileError, setTurnstileError] = useState(false);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [captchaUnavailable, setCaptchaUnavailable] = useState(
+    getTurnstileClientState().mode === "unavailable"
+  );
   const [justRegistered, setJustRegistered] = useState(false);
   const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
   const [emailConfirmed, setEmailConfirmed] = useState(false);
@@ -82,11 +86,8 @@ export default function LoginPage() {
   // Turnstile widget load timeout — show error if it doesn't load in 15s.
   // Skip in dev/test environments where the widget may be slow or unavailable,
   // and in dev mode (dummy keys) since the widget auto-bypasses.
-  const isTurnstileDev =
-    !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY === "dummy_site_key";
-
-  const skipTurnstileTimeout = isTurnstileDev || process.env.NODE_ENV !== "production";
+  const turnstileState = getTurnstileClientState();
+  const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;
 
   useEffect(() => {
     if (skipTurnstileTimeout || turnstileLoaded) return;
@@ -100,6 +101,7 @@ export default function LoginPage() {
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
+      setCaptchaUnavailable(false);
       setTurnstileError(false);
       setTurnstileLoaded(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -109,12 +111,14 @@ export default function LoginPage() {
   );
 
   const handleTurnstileLoad = useCallback(() => {
+    setCaptchaUnavailable(false);
     setTurnstileLoaded(true);
     setTurnstileError(false);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
   }, []);
 
   const handleTurnstileError = useCallback(() => {
+    setCaptchaUnavailable(false);
     setTurnstileError(true);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     // When Turnstile widget errors, set a bypass token so the server
@@ -123,6 +127,7 @@ export default function LoginPage() {
   }, [setValue]);
 
   const handleRetry = useCallback(() => {
+    setCaptchaUnavailable(false);
     setTurnstileError(false);
     setTurnstileLoaded(false);
     setValue("turnstileToken", "", { shouldValidate: false });
@@ -399,10 +404,17 @@ export default function LoginPage() {
           onSuccess={handleTurnstileSuccess}
           onError={handleTurnstileError}
           onLoad={handleTurnstileLoad}
+          onUnavailable={() => {
+            setCaptchaUnavailable(true);
+            setTurnstileLoaded(false);
+            setTurnstileError(false);
+            setValue("turnstileToken", "", { shouldValidate: false });
+          }}
         />
         {errors.turnstileToken && !turnstileError && (
           <p className="inline-form-error">{errors.turnstileToken.message}</p>
         )}
+        {captchaUnavailable && <p className="inline-form-error">{TURNSTILE_UNAVAILABLE_MESSAGE}</p>}
         {turnstileError && (
           <div className="flex items-center gap-2">
             <p className="inline-form-error">Security verification failed to load.</p>
@@ -417,7 +429,12 @@ export default function LoginPage() {
           </div>
         )}
 
-        <Button type="submit" className="w-full" variant="trust-verified" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          className="w-full"
+          variant="trust-verified"
+          disabled={isSubmitting || captchaUnavailable}
+        >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Sign In
         </Button>

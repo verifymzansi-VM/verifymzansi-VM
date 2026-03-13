@@ -29,7 +29,7 @@ const publicRoutes = [
   {
     name: "register",
     path: "/register",
-    readySelector: 'h1:has-text("Create your seller account")',
+    readySelector: 'h1:has-text("Create your account")',
   },
   { name: "pricing", path: "/pricing", readySelector: 'h1:has-text("Pricing")' },
   { name: "contact", path: "/contact", readySelector: 'h1:has-text("Contact Us")' },

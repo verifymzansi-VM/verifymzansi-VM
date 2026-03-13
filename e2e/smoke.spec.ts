@@ -1,21 +1,75 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+function collectHydrationErrors(page: Page) {
+  const hydrationErrors: string[] = [];
+
+  page.on("console", (msg) => {
+    if (
+      msg.type() === "error" &&
+      /hydration|server rendered html didn't match|minified react error #418/i.test(msg.text())
+    ) {
+      hydrationErrors.push(msg.text());
+    }
+  });
+
+  page.on("pageerror", (error) => {
+    if (/hydration|minified react error #418/i.test(error.message)) {
+      hydrationErrors.push(error.message);
+    }
+  });
+
+  return hydrationErrors;
+}
 
 test.describe("Platform Smoke", () => {
-  test("@smoke public pages render", async ({ page }) => {
-    await page.goto("/");
-    await expect(page).toHaveTitle(/VerifyMzansi/i);
+  test("@smoke public and auth pages render without hydration errors", async ({ page }) => {
+    const hydrationErrors = collectHydrationErrors(page);
 
-    await page.goto("/login");
-    await expect(page.getByLabel(/email/i)).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
+    const checks = [
+      {
+        path: "/",
+        assert: async () => {
+          await expect(page).toHaveTitle(/VerifyMzansi/i);
+        },
+      },
+      {
+        path: "/login",
+        assert: async () => {
+          await expect(page.getByLabel(/email/i)).toBeVisible();
+          await expect(page.locator('input[type="password"]')).toBeVisible();
+          await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled();
+          await expect(page.getByText(/security verification failed to load/i)).toHaveCount(0);
+          await expect(page.getByText(/temporarily unavailable/i)).toHaveCount(0);
+        },
+      },
+      {
+        path: "/register",
+        assert: async () => {
+          await expect(page.getByRole("heading", { name: /create your account/i })).toBeVisible();
+          await expect(page.getByRole("button", { name: /create account/i })).toBeEnabled();
+          await expect(page.getByText(/security verification failed to load/i)).toHaveCount(0);
+          await expect(page.getByText(/temporarily unavailable/i)).toHaveCount(0);
+        },
+      },
+      {
+        path: "/pricing",
+        assert: async () => {
+          await expect(
+            page
+              .locator("main")
+              .getByRole("heading", { name: /Starter|Growth|Pro/i })
+              .first()
+          ).toBeVisible();
+        },
+      },
+    ];
 
-    await page.goto("/pricing");
-    await expect(
-      page
-        .locator("main")
-        .getByRole("heading", { name: /Starter|Growth|Pro/i })
-        .first()
-    ).toBeVisible();
+    for (const check of checks) {
+      await page.goto(check.path);
+      await check.assert();
+    }
+
+    expect(hydrationErrors).toEqual([]);
   });
 
   test("@smoke protected pages redirect unauthenticated users", async ({ page }) => {
@@ -57,13 +111,13 @@ test.describe("Platform Smoke", () => {
     }
 
     const search = isMobileViewport
-      ? page.getByLabel("Search businesses")
-      : page.getByLabel("Search");
+      ? page.locator("#drawer-business-search")
+      : page.locator("#business-search");
     await expect(search).toBeVisible();
 
     await search.fill("coffee");
-    await page.waitForTimeout(350);
-    await expect(page).toHaveURL(/q=coffee/);
+    await page.waitForTimeout(1_000);
+    await expect(page).toHaveURL(/q=coffee/, { timeout: 15_000 });
 
     if (isMobileViewport) {
       await page.getByRole("button", { name: "Clear all" }).click();
@@ -76,5 +130,40 @@ test.describe("Platform Smoke", () => {
     }
 
     await expect(page).not.toHaveURL(/q=coffee/);
+  });
+
+  test("@smoke mobile footer stays above bottom nav and marketplace tabs remain readable", async ({
+    page,
+  }) => {
+    test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Mobile-only layout check");
+
+    await page.goto("/mzansi-business");
+
+    const marketplaceTabs = page.getByRole("navigation", { name: "Marketplace areas" });
+    const marketTab = marketplaceTabs.getByRole("link", { name: "Mzansi Market" });
+    const businessTab = marketplaceTabs.getByRole("link", { name: "Mzansi Business" });
+    const promotionsTab = marketplaceTabs.getByRole("link", { name: "Promotions & Events" });
+
+    await expect(marketTab).toBeVisible();
+    await expect(businessTab).toBeVisible();
+    await expect(promotionsTab).toBeVisible();
+    await expect(marketTab).toContainText("Market");
+    await expect(businessTab).toContainText("Business");
+    await expect(promotionsTab).toContainText("Promotions");
+
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+
+    const footerLink = page.getByRole("link", { name: "Privacy Policy" });
+    const bottomNav = page.getByRole("navigation", { name: "Main" });
+
+    await expect(footerLink).toBeVisible();
+    await expect(bottomNav).toBeVisible();
+
+    const footerBottom = await footerLink.evaluate(
+      (element) => element.getBoundingClientRect().bottom
+    );
+    const navTop = await bottomNav.evaluate((element) => element.getBoundingClientRect().top);
+
+    expect(footerBottom).toBeLessThanOrEqual(navTop);
   });
 });

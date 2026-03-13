@@ -1,5 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-stub";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -41,8 +42,7 @@ export function createClient(): SupabaseClient {
     return _client;
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const { supabaseUrl: url, supabaseAnonKey: anonKey } = getPublicRuntimeConfig();
   const validUrl = typeof url === "string" && isValidHttpUrl(url);
   const hasAnonKey = typeof anonKey === "string" && anonKey.length > 0;
 

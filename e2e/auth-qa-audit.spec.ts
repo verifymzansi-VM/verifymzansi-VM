@@ -91,7 +91,7 @@ test.describe.serial("Registration Flow", () => {
     registeredEmail = freshEmail();
 
     await page.goto("/register");
-    await expect(page.getByRole("heading", { name: /create your seller account/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /create your account/i })).toBeVisible();
 
     // Fill form
     await page.fill("#displayName", "QA Test User");

@@ -71,6 +71,7 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
   // Inject x-nonce so Server Components can read it via `headers()`
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
 
   const response = NextResponse.next({
     request: { headers: requestHeaders },
@@ -82,6 +83,7 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
   }
 
   applySecurityHeaders(response, csp);
+  response.headers.set("x-nonce", nonce);
 
   return response;
 }

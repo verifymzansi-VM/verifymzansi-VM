@@ -44,7 +44,7 @@ export function MobileNav() {
   return (
     <nav
       aria-label="Main"
-      className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t bg-background safe-area-inset-bottom"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/98 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden safe-area-inset-bottom"
     >
       <div className="flex items-center justify-around h-16 px-2">
         {TABS.map((tab) => {

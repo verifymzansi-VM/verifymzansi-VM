@@ -68,6 +68,14 @@ jobs:
         run: pnpm run licenses:check
       - name: Validate production launch env
         run: pnpm exec tsx scripts/validate-launch-env.ts --mode=production
+      - name: Validate required public build envs
+        run: |
+          for var in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_APP_URL NEXT_PUBLIC_TURNSTILE_SITE_KEY; do
+            if [ -z "${!var}" ]; then
+              echo "::error::${var} must be set for the production client bundle"
+              exit 1
+            fi
+          done
       - name: Run production preflight
         run: pnpm run preflight:prod
       - name: Build for Cloudflare
@@ -131,3 +139,12 @@ jobs:
               exit 1
             fi
           fi
+
+      - name: Install Chromium for post-deploy verification
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify public/auth pages in a real browser
+        env:
+          PUBLIC_VERIFY_BASE_URL: ${{ secrets.APP_URL }}
+          PUBLIC_VERIFY_REQUIRE_TURNSTILE: "1"
+        run: pnpm run test:public-verify
