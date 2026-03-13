@@ -14,7 +14,7 @@ vi.mock("@supabase/ssr", () => ({
   }),
 }));
 
-import { middleware, proxy, routeRequest } from "@/proxy";
+import { middleware, proxy, routeRequest } from "@/proxy-handler";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
