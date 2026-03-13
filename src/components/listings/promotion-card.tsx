@@ -246,12 +246,22 @@ export const PromotionCard = memo(function PromotionCard({
             </>
           )}
 
-          {categoryLabel && (
-            <p className="text-xs text-muted-foreground line-clamp-1">{categoryLabel}</p>
-          )}
-
-          {businessName && (
-            <p className="text-xs font-medium text-brand-blue line-clamp-1">by {businessName}</p>
+          {(categoryLabel || businessName) && (
+            <div className="flex flex-wrap gap-1.5">
+              {categoryLabel && (
+                <Badge variant="secondary" className="max-w-full text-[10px]">
+                  <span className="truncate">{categoryLabel}</span>
+                </Badge>
+              )}
+              {businessName && (
+                <Badge
+                  variant="outline"
+                  className="max-w-full border-brand-blue/30 text-[10px] text-brand-blue"
+                >
+                  <span className="truncate">by {businessName}</span>
+                </Badge>
+              )}
+            </div>
           )}
 
           {/* Event: end date */}

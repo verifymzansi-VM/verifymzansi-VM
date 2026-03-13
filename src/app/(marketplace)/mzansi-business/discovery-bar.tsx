@@ -48,8 +48,15 @@ export function BusinessDiscoveryBar() {
   ].filter(Boolean).length;
 
   return (
-    <section className="space-y-4 rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))]">
+    <section className="space-y-5 rounded-2xl border border-border/70 bg-background/95 p-4 shadow-sm">
+      <div className="space-y-1">
+        <p className="text-sm font-semibold tracking-tight">Find a business faster</p>
+        <p className="text-xs leading-5 text-muted-foreground">
+          Start with a search, then narrow by category, business type, and location.
+        </p>
+      </div>
+
+      <div className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="business-search">Search</Label>
           <div className="relative">
@@ -95,7 +102,7 @@ export function BusinessDiscoveryBar() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="business-type">Type</Label>
+          <Label htmlFor="business-type">Business type</Label>
           <select
             id="business-type"
             aria-label="Business type"
@@ -148,7 +155,7 @@ export function BusinessDiscoveryBar() {
             onChange={(event) => setFilter("city", event.target.value || undefined)}
             disabled={!filters.province}
           >
-            <option value="">All cities</option>
+            <option value="">{filters.province ? "All cities" : "Select province first"}</option>
             {filters.province &&
               getCitiesForProvince(filters.province).map((city) => (
                 <option key={city} value={city}>

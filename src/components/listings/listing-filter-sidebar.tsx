@@ -63,7 +63,7 @@ export function ListingFilterSidebar() {
     Object.values(filters.attributes).some((v) => v !== undefined && v !== "");
 
   return (
-    <div className="sticky top-24 space-y-4 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-thin pr-1">
+    <div className="space-y-4">
       {/* ── Search ────────────────────────────────────── */}
       <div className="relative" role="search">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

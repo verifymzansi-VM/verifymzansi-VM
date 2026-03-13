@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
-import { PageHeader } from "@/components/layout/page-header";
+import { MarketplaceSectionNav, PageHeader } from "@/components/layout";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
 import { ListingFilterDrawer } from "@/components/listings/listing-filter-drawer";
@@ -106,8 +106,11 @@ export default async function MzansiMarketPage() {
         {/* Two-column layout */}
         <div className="flex gap-6">
           {/* Desktop sidebar */}
-          <aside className="hidden lg:block w-64 shrink-0">
-            <ListingFilterSidebar />
+          <aside className="hidden w-72 shrink-0 lg:block">
+            <div className="sticky top-24 max-h-[calc(100vh-7rem)] space-y-4 overflow-y-auto pr-1 scrollbar-thin">
+              <MarketplaceSectionNav />
+              <ListingFilterSidebar />
+            </div>
           </aside>
 
           {/* Main content area */}
