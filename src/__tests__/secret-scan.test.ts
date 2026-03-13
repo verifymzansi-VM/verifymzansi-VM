@@ -26,7 +26,7 @@ describe("secret scan allowlisting", () => {
     expect(
       shouldIgnoreSecretFinding({
         filePath: "src/app/api/live/route.ts",
-        line: 'TURNSTILE_SECRET_KEY: "live-secret-value"',
+        line: 'TURNSTILE_SECRET_KEY: "test-secret-value"',
         ruleName: "Turnstile secret key",
       })
     ).toBe(false);
