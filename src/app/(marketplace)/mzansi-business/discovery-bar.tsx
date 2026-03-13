@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,28 +13,29 @@ import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provi
 
 export function BusinessDiscoveryBar() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
-  const [localQuery, setLocalQuery] = useState(filters.query || "");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const debouncedSetQuery = useDebouncedCallback(
     (value: string) => setFilter("query", value || undefined),
     300
   );
-  const [prevStoreQuery, setPrevStoreQuery] = useState(filters.query);
 
-  if (filters.query !== prevStoreQuery) {
-    debouncedSetQuery.cancel();
-    setPrevStoreQuery(filters.query);
-    setLocalQuery(filters.query || "");
-  }
+  useEffect(() => {
+    return () => debouncedSetQuery.cancel();
+  }, [debouncedSetQuery]);
 
   const clearQueryFilter = () => {
     debouncedSetQuery.cancel();
-    setLocalQuery("");
+    if (searchInputRef.current) {
+      searchInputRef.current.value = "";
+    }
     setFilter("query", undefined);
   };
 
   const clearAllFilters = () => {
     debouncedSetQuery.cancel();
-    setLocalQuery("");
+    if (searchInputRef.current) {
+      searchInputRef.current.value = "";
+    }
     resetFilters();
   };
 
@@ -54,13 +55,14 @@ export function BusinessDiscoveryBar() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              key={filters.query || "__empty-query__"}
+              ref={searchInputRef}
               id="business-search"
               type="search"
               placeholder="Search businesses, services, or brands"
               className="pl-9"
-              value={localQuery}
+              defaultValue={filters.query || ""}
               onChange={(event) => {
-                setLocalQuery(event.target.value);
                 debouncedSetQuery(event.target.value);
               }}
             />

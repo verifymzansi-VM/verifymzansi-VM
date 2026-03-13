@@ -54,7 +54,72 @@ function optionalEnv(name: string): string | undefined {
   return process.env[name] || undefined;
 }
 
-async function checkSupabaseSchema(): Promise<void> {
+const SUPABASE_CONNECTIVITY_ERROR_PATTERN =
+  /\b(fetch failed|network|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN)\b/i;
+
+export function classifySupabaseSchemaPreflightError(
+  mode: LaunchValidationMode,
+  error: unknown
+): Pick<CheckResult, "status" | "detail"> {
+  const message = error instanceof Error ? error.message : "Unknown schema verification failure";
+
+  if (mode !== "production" && SUPABASE_CONNECTIVITY_ERROR_PATTERN.test(message)) {
+    return {
+      status: "warn",
+      detail:
+        `Schema verification could not reach Supabase (${message}). ` +
+        "Local preflight will continue, but rerun with working network access and require " +
+        "'pnpm preflight:prod' before deploy.",
+    };
+  }
+
+  return {
+    status: "fail",
+    detail: message,
+  };
+}
+
+export function classifyPayFastPreflightCheck({
+  mode,
+  sandbox,
+  merchantId,
+  merchantKey,
+  passphrase,
+}: {
+  mode: LaunchValidationMode;
+  sandbox?: string;
+  merchantId: string;
+  merchantKey: string;
+  passphrase: string;
+}): Pick<CheckResult, "status" | "detail"> {
+  if (mode !== "production") {
+    return {
+      status: "warn",
+      detail: `Non-production mode allows PAYFAST_SANDBOX=${sandbox ?? "unset"}`,
+    };
+  }
+
+  if (sandbox === "true") {
+    return {
+      status: "fail",
+      detail: "PAYFAST_SANDBOX must be false in production",
+    };
+  }
+
+  if (merchantId.length < 5 || merchantKey.length < 5 || passphrase.length < 3) {
+    return {
+      status: "fail",
+      detail: "Merchant credentials look too short for production",
+    };
+  }
+
+  return {
+    status: "pass",
+    detail: `merchant=${merchantId} sandbox=false`,
+  };
+}
+
+async function checkSupabaseSchema(mode: LaunchValidationMode): Promise<void> {
   try {
     const result = await verifySupabaseSchema({
       url: requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
@@ -82,7 +147,8 @@ async function checkSupabaseSchema(): Promise<void> {
       .join("; ");
     addResult("Supabase schema", "fail", otherErrors || "Unknown schema verification failure");
   } catch (error) {
-    addResult("Supabase schema", "fail", (error as Error).message);
+    const classifiedError = classifySupabaseSchemaPreflightError(mode, error);
+    addResult("Supabase schema", classifiedError.status, classifiedError.detail);
   }
 }
 
@@ -216,29 +282,18 @@ async function checkR2Access(mode: LaunchValidationMode): Promise<void> {
 function checkPayFast(mode: LaunchValidationMode): void {
   try {
     const sandbox = optionalEnv("PAYFAST_SANDBOX");
-    if (mode !== "production") {
-      addResult(
-        "PayFast",
-        "warn",
-        `Non-production mode allows PAYFAST_SANDBOX=${sandbox ?? "unset"}`
-      );
-      return;
-    }
-
     const merchantId = requireEnv("PAYFAST_MERCHANT_ID");
     const merchantKey = requireEnv("PAYFAST_MERCHANT_KEY");
     const passphrase = requireEnv("PAYFAST_PASSPHRASE");
+    const result = classifyPayFastPreflightCheck({
+      mode,
+      sandbox,
+      merchantId,
+      merchantKey,
+      passphrase,
+    });
 
-    if (merchantId.length < 5 || merchantKey.length < 5 || passphrase.length < 3) {
-      addResult("PayFast", "fail", "Merchant credentials look too short for production");
-      return;
-    }
-
-    addResult(
-      "PayFast",
-      "pass",
-      `merchant=${merchantId} sandbox=${sandbox === "true" ? "true" : "false"}`
-    );
+    addResult("PayFast", result.status, result.detail);
   } catch (error) {
     addResult("PayFast", "fail", (error as Error).message);
   }
@@ -353,7 +408,7 @@ async function main(): Promise<void> {
   console.log("");
 
   appendLaunchChecks(mode);
-  await checkSupabaseSchema();
+  await checkSupabaseSchema(mode);
   await checkSupabasePlansSeeded(mode);
   await checkR2Access(mode);
   checkPayFast(mode);
@@ -388,7 +443,10 @@ async function main(): Promise<void> {
   console.log(`All ${results.length} checks passed for ${mode} mode.`);
 }
 
-main().catch((error) => {
-  console.error("Preflight script crashed:", error);
-  process.exit(1);
-});
+const currentScriptPath = process.argv[1]?.replace(/\\/g, "/") ?? "";
+if (currentScriptPath.endsWith("/scripts/preflight-check.ts")) {
+  main().catch((error) => {
+    console.error("Preflight script crashed:", error);
+    process.exit(1);
+  });
+}

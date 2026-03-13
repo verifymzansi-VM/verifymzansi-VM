@@ -129,8 +129,12 @@ site root with `?code=...` instead of the app callback handler.
 | `pnpm brand:assets`                                                                    | Regenerate logo lockups, favicon, and app icons      |
 | `pnpm lint`                                                                            | ESLint                                               |
 | `pnpm typecheck`                                                                       | TypeScript typecheck                                 |
-| `pnpm test`                                                                            | Vitest suite                                         |
-| `pnpm test:coverage`                                                                   | Vitest with coverage                                 |
+| `pnpm test`                                                                            | Blocking Vitest lane used for launch gating          |
+| `pnpm test:blocking`                                                                   | Explicit blocking Vitest lane                        |
+| `pnpm test:coverage`                                                                   | Alias for the core coverage lane                     |
+| `pnpm test:coverage:core`                                                              | Coverage lane focused on core server and domain code |
+| `pnpm test:deep`                                                                       | Core coverage plus Playwright                        |
+| `pnpm test:all`                                                                        | Full validation shortcut                             |
 | `pnpm test:e2e`                                                                        | Full Playwright suite                                |
 | `pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome` | Launch-path smoke coverage                           |
 | `pnpm preflight`                                                                       | Local launch checks with development-mode validation |
@@ -144,13 +148,12 @@ site root with `?code=...` instead of the app callback handler.
 
 ## Testing
 
-Run the full launch-relevant suite with:
+Run the blocking launch gate with:
 
 ```bash
 pnpm lint
 pnpm typecheck
 pnpm test
-pnpm test:coverage
 pnpm preflight
 pnpm secret-scan
 pnpm security:audit
@@ -159,7 +162,15 @@ pnpm build
 pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome
 ```
 
-Before a production release, also run:
+Run the deeper confidence lane when you want broader coverage before a release
+candidate, after a risky refactor, or before changing shared infra code:
+
+```bash
+pnpm test:coverage:core
+pnpm test:e2e
+```
+
+Before a production release, also run the production-only validation checks:
 
 ```bash
 pnpm validate:launch-env
@@ -179,9 +190,12 @@ The deploy workflow now:
 
 1. Validates the full production env contract with
    `scripts/validate-launch-env.ts`
-2. Builds the Cloudflare bundle on Ubuntu
-3. Deploys the Pages app plus supporting Workers
-4. Fails if `/api/health` comes back degraded after deploy
+2. Runs the blocking launch gate: `pnpm lint`, `pnpm typecheck`, `pnpm test`,
+   `pnpm preflight`, `pnpm secret-scan`, `pnpm security:audit`,
+   `pnpm licenses:check`, `pnpm build`, and Playwright smoke
+3. Builds the Cloudflare bundle on Ubuntu
+4. Deploys the Pages app plus supporting Workers
+5. Fails if `/api/health` comes back degraded after deploy
 
 ### Windows note
 

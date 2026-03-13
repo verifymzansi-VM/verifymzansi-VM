@@ -12,7 +12,8 @@ function createDeterministicEnv() {
     VERIFYMZANSI_VALIDATION_MODE: "e2e",
     NEXT_PUBLIC_SUPABASE_URL: "https://playwright.supabase.stub",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.playwright-anon-key",
-    SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.playwright-service-role",
+    SUPABASE_SERVICE_ROLE_KEY:
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.playwright-service-role", // secret-scan: allow deterministic fixture
     R2_ACCOUNT_ID: "playwright-r2-account",
     R2_ACCESS_KEY_ID: "playwright-r2-access-key",
     R2_SECRET_ACCESS_KEY: "playwright-r2-secret-key",
@@ -27,11 +28,11 @@ function createDeterministicEnv() {
     AFRICASTALKING_SENDER_ID: "VERIFYMZANS",
     PAYFAST_MERCHANT_ID: "10000100",
     PAYFAST_MERCHANT_KEY: "playwright-payfast-key",
-    PAYFAST_PASSPHRASE: "playwright-passphrase",
+    PAYFAST_PASSPHRASE: "playwright-passphrase", // secret-scan: allow deterministic fixture
     PAYFAST_SANDBOX: "true",
     RESEND_API_KEY: "re_playwright_1234567890",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key",
-    TURNSTILE_SECRET_KEY: "dummy_secret_key",
+    TURNSTILE_SECRET_KEY: "dummy_secret_key", // secret-scan: allow deterministic fixture
     NEXT_PUBLIC_APP_URL: `http://${PLAYWRIGHT_HOST}:${PLAYWRIGHT_PORT}`,
   };
 

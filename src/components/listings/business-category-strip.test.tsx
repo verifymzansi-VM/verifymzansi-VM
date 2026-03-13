@@ -32,10 +32,10 @@ describe("BusinessCategoryStrip", () => {
   it("renders every business category when seed counts include all categories", () => {
     render(<BusinessCategoryStrip categoryCounts={DEV_SEED_BUSINESS_CATEGORY_COUNTS} />);
 
+    const buttonTexts = screen.getAllByRole("button").map((button) => button.textContent ?? "");
+
     for (const category of BUSINESS_CATEGORIES) {
-      expect(
-        screen.getByRole("button", { name: new RegExp(category.label, "i") })
-      ).toBeInTheDocument();
+      expect(buttonTexts.some((text) => text.includes(category.label))).toBe(true);
     }
 
     expect(screen.getAllByText("(1)")).toHaveLength(BUSINESS_CATEGORIES.length);

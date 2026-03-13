@@ -14,6 +14,20 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { saIdSchema } from "@/lib/validations/shared";
 
 type RequestType = "access" | "correction" | "deletion" | "objection";
+type DsarFailurePayload = {
+  requestId?: string;
+  reference?: string;
+};
+
+function formatDsarSubmissionFailure(payload: DsarFailurePayload | null): string {
+  const identifiers = [
+    payload?.reference ? `Reference: ${payload.reference}` : null,
+    payload?.requestId ? `Case ID: ${payload.requestId}` : null,
+  ].filter(Boolean);
+
+  const suffix = identifiers.length > 0 ? ` ${identifiers.join(" | ")}` : "";
+  return `Please try again or email privacy@verifymzansi.com.${suffix}`;
+}
 
 export default function DsarPage() {
   const [name, setName] = useState("");
@@ -71,8 +85,8 @@ export default function DsarPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Submission failed");
+        const data = (await res.json().catch(() => null)) as DsarFailurePayload | null;
+        throw new Error(formatDsarSubmissionFailure(data));
       }
 
       const data = (await res.json()) as { reference?: string; requestId?: string };
@@ -83,7 +97,9 @@ export default function DsarPage() {
       toast({
         title: "Failed to submit request",
         description:
-          err instanceof Error ? err.message : "Please try again or email privacy@verifymzansi.com",
+          err instanceof Error
+            ? err.message
+            : "Please try again or email privacy@verifymzansi.com.",
         variant: "destructive",
       });
     } finally {

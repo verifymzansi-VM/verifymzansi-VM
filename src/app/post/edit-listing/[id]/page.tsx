@@ -24,6 +24,9 @@ import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("EditListingPage");
 
 export default function EditListingPage() {
   const params = useParams();
@@ -44,6 +47,7 @@ export default function EditListingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [loadFailed, setLoadFailed] = useState(false);
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [existingVideos, setExistingVideos] = useState<string[]>([]);
   const [existingVideoThumbnail, setExistingVideoThumbnail] = useState<string | null>(null);
@@ -68,49 +72,105 @@ export default function EditListingPage() {
   );
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
-      const supabase = createClient();
-      const { data } = await supabase.from("listings").select("*").eq("id", id).maybeSingle();
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("listings")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
 
-      if (!data) {
-        toast({ title: "Listing not found", variant: "destructive" });
-        router.push("/dashboard/listings");
-        return;
+        if (error) {
+          log.error("Failed to load listing", {
+            listingId: id,
+            code: error.code,
+            error: error.message,
+          });
+
+          if (!cancelled) {
+            setLoadFailed(true);
+            toast({
+              title: "Unable to load listing",
+              description: "Please reopen it from your dashboard.",
+              variant: "destructive",
+            });
+            router.push("/dashboard/listings");
+          }
+          return;
+        }
+
+        if (!data) {
+          if (!cancelled) {
+            setLoadFailed(true);
+            toast({ title: "Listing not found", variant: "destructive" });
+            router.push("/dashboard/listings");
+          }
+          return;
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        setTitle(data.title || "");
+        setDescription(data.description || "");
+        setPrice(data.price_cents ? (data.price_cents / 100).toString() : "");
+        setCategory((data.category as ListingCategory) || "");
+        setCondition(
+          ((data.condition as ListingCondition | null) ??
+            ((data.attributes as Record<string, unknown> | null)?.condition as
+              | ListingCondition
+              | undefined) ??
+            "") as ListingCondition | ""
+        );
+        setCategoryAttributes((data.attributes as Record<string, string | boolean>) || {});
+        setProvince(data.location_province || "");
+        setCity(data.location_city || "");
+        setTown(((data as Record<string, unknown>).location_suburb as string) || "");
+        setNegotiable(data.price_negotiable ?? false);
+        setContactMethods(
+          Array.isArray(data.contact_methods) && data.contact_methods.length > 0
+            ? (data.contact_methods as string[])
+            : ["call"]
+        );
+        setExistingVideoThumbnail(
+          ((data as Record<string, unknown>).video_thumbnail as string | null) ?? null
+        );
+        setExistingPhotos(
+          normalizeMediaUrls(Array.isArray(data.photos) ? (data.photos as string[]) : [])
+        );
+        setExistingVideos(
+          normalizeMediaUrls(Array.isArray(data.videos) ? (data.videos as string[]) : [])
+        );
+      } catch (error) {
+        log.error("Listing load threw unexpectedly", {
+          listingId: id,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+
+        if (!cancelled) {
+          setLoadFailed(true);
+          toast({
+            title: "Unable to load listing",
+            description: "Please reopen it from your dashboard.",
+            variant: "destructive",
+          });
+          router.push("/dashboard/listings");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
-
-      setTitle(data.title || "");
-      setDescription(data.description || "");
-      setPrice(data.price_cents ? (data.price_cents / 100).toString() : "");
-      setCategory((data.category as ListingCategory) || "");
-      setCondition(
-        ((data.condition as ListingCondition | null) ??
-          ((data.attributes as Record<string, unknown> | null)?.condition as
-            | ListingCondition
-            | undefined) ??
-          "") as ListingCondition | ""
-      );
-      setCategoryAttributes((data.attributes as Record<string, string | boolean>) || {});
-      setProvince(data.location_province || "");
-      setCity(data.location_city || "");
-      setTown(((data as Record<string, unknown>).location_suburb as string) || "");
-      setNegotiable(data.price_negotiable ?? false);
-      setContactMethods(
-        Array.isArray(data.contact_methods) && data.contact_methods.length > 0
-          ? (data.contact_methods as string[])
-          : ["call"]
-      );
-      setExistingVideoThumbnail(
-        ((data as Record<string, unknown>).video_thumbnail as string | null) ?? null
-      );
-      setExistingPhotos(
-        normalizeMediaUrls(Array.isArray(data.photos) ? (data.photos as string[]) : [])
-      );
-      setExistingVideos(
-        normalizeMediaUrls(Array.isArray(data.videos) ? (data.videos as string[]) : [])
-      );
-      setIsLoading(false);
     }
     load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [id, router, toast]);
 
   useEffect(
@@ -293,6 +353,26 @@ export default function EditListingPage() {
         <main className="flex-1 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </main>
+      </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header isAuthenticated />
+        <main className="flex flex-1 items-center justify-center px-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="space-y-3 p-6 text-center">
+              <h1 className="text-lg font-semibold">Unable to load listing</h1>
+              <p className="text-sm text-muted-foreground">
+                We could not load this listing safely. Please reopen it from your dashboard.
+              </p>
+              <Button onClick={() => router.push("/dashboard/listings")}>Back to listings</Button>
+            </CardContent>
+          </Card>
+        </main>
+        <Footer />
       </div>
     );
   }

@@ -1,9 +1,8 @@
 import { describe, it, expect } from "vitest";
+import * as v from "./index";
 
 describe("validations index barrel", () => {
-  it("re-exports all validation modules", async () => {
-    const v = await import("./index");
-
+  it("re-exports all validation modules", () => {
     // Shared schemas
     expect(v.saPhoneSchema).toBeDefined();
     expect(v.emailSchema).toBeDefined();

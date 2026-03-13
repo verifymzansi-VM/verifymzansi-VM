@@ -16,14 +16,14 @@ const VALID_PRODUCTION_ENV = {
   VERIFYMZANSI_RUNTIME_MODE: "production",
   NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key-value-1234567890",
-  SUPABASE_SERVICE_ROLE_KEY: "service-role-key-1234567890",
+  SUPABASE_SERVICE_ROLE_KEY: "service-role-key-1234567890", // secret-scan: allow deterministic fixture
   NEXT_PUBLIC_APP_URL: "https://verifymzansi.com",
   AFRICASTALKING_API_KEY: "africas-talking-key",
   AFRICASTALKING_USERNAME: "verifymzansi",
   AFRICASTALKING_SENDER_ID: "VERIFYMZANS",
   PAYFAST_MERCHANT_ID: "10000100",
   PAYFAST_MERCHANT_KEY: "merchant-key-value",
-  PAYFAST_PASSPHRASE: "merchant-passphrase",
+  PAYFAST_PASSPHRASE: "merchant-passphrase", // secret-scan: allow deterministic fixture
   PAYFAST_SANDBOX: "false",
   RESEND_API_KEY: "re_test_1234567890",
   R2_ACCOUNT_ID: "cloudflare-account-id",
@@ -34,7 +34,7 @@ const VALID_PRODUCTION_ENV = {
   HMAC_SECRET: "c".repeat(64),
   IP_HASH_SECRET: "p".repeat(32),
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAAA_test_site_key",
-  TURNSTILE_SECRET_KEY: "0x4AAAAAAA_test_secret_key",
+  TURNSTILE_SECRET_KEY: "0x4AAAAAAA_test_secret_key", // secret-scan: allow deterministic fixture
 };
 
 function stubLaunchEnv(values: Record<string, string>) {

@@ -4,6 +4,10 @@ import EditListingPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
+const { mockMaybeSingle } = vi.hoisted(() => ({
+  mockMaybeSingle: vi.fn(),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
   useParams: vi.fn(),
@@ -58,25 +62,7 @@ vi.mock("@/lib/supabase/client", () => ({
     from: () => ({
       select: () => ({
         eq: () => ({
-          maybeSingle: async () => ({
-            data: {
-              id: "listing-1",
-              title: "Used iPhone 15",
-              description: "Clean phone in excellent condition.",
-              price_cents: 150000,
-              category: "electronics",
-              condition: "used",
-              attributes: { brand: "Apple", storage_gb: 256 },
-              location_province: "Gauteng",
-              location_city: "Johannesburg",
-              location_suburb: "Sandton",
-              price_negotiable: true,
-              contact_methods: ["call", "whatsapp"],
-              photos: ["https://example.com/photo.jpg"],
-              videos: [],
-              video_thumbnail: null,
-            },
-          }),
+          maybeSingle: mockMaybeSingle,
         }),
       }),
     }),
@@ -89,6 +75,26 @@ describe("EditListingPage", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        id: "listing-1",
+        title: "Used iPhone 15",
+        description: "Clean phone in excellent condition.",
+        price_cents: 150000,
+        category: "electronics",
+        condition: "used",
+        attributes: { brand: "Apple", storage_gb: 256 },
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+        location_suburb: "Sandton",
+        price_negotiable: true,
+        contact_methods: ["call", "whatsapp"],
+        photos: ["https://example.com/photo.jpg"],
+        videos: [],
+        video_thumbnail: null,
+      },
+      error: null,
+    });
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       push: mockPush,
       back: vi.fn(),
@@ -132,5 +138,24 @@ describe("EditListingPage", () => {
     expect(payload.town).toBe("Sandton");
     expect(payload.contactMethods).toEqual(["call", "whatsapp"]);
     expect(payload.attributes).toMatchObject({ brand: "Apple", storage_gb: 256 });
+  });
+
+  it("shows a safe fallback when the listing fails to load", async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: null,
+      error: { message: "boom", code: "PGRST301" },
+    });
+
+    render(<EditListingPage />);
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Unable to load listing" })
+      );
+    });
+
+    expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
+    expect(screen.getByText("Unable to load listing")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Back to listings/i })).toBeInTheDocument();
   });
 });

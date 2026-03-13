@@ -66,4 +66,54 @@ describe("DSAR page", () => {
     expect(screen.getByText(/Reference: DSAR-ABCD1234/)).toBeInTheDocument();
     expect(screen.getByText(/Case ID: case-123/)).toBeInTheDocument();
   });
+
+  it("shows a safe error message when submission fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({
+          error: "database exploded",
+          requestId: "case-500",
+          reference: "DSAR-FAIL500",
+        }),
+      })
+    );
+
+    render(<DsarPage />);
+
+    fireEvent.change(screen.getByLabelText("Full Name *"), {
+      target: { value: "Nomsa Dlamini" },
+    });
+    fireEvent.change(screen.getByLabelText("Email Address *"), {
+      target: { value: "nomsa@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("SA ID Number *"), {
+      target: { value: "8001015009087" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Complete captcha" }));
+    fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalled();
+    });
+
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Failed to submit request",
+        description: expect.stringContaining("privacy@verifymzansi.com"),
+      })
+    );
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining("Reference: DSAR-FAIL500"),
+      })
+    );
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.not.stringContaining("database exploded"),
+      })
+    );
+  });
 });

@@ -14,7 +14,7 @@ vi.mock("@supabase/ssr", () => ({
   }),
 }));
 
-import { routeRequest } from "@/middleware";
+import { proxy, routeRequest } from "@/proxy";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -85,6 +85,34 @@ describe("middleware — missing Supabase env", () => {
     const res = await routeRequest(createMockRequest("/verification"));
     expect(res.status).toBe(307);
     expect(new URL(res.headers.get("location")!).pathname).toBe("/");
+  });
+});
+
+describe("proxy security headers", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.PLAYWRIGHT_SUPABASE_MODE;
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  });
+
+  it("adds the full security header set to successful responses", async () => {
+    const res = await proxy(createMockRequest("/"));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'self'");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("X-Frame-Options")).toBe("DENY");
+    expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
+  });
+
+  it("keeps basic security headers on redirects", async () => {
+    const res = await proxy(createMockRequest("/dashboard"));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("Content-Security-Policy")).toBeNull();
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("X-Frame-Options")).toBe("DENY");
   });
 });
 

@@ -1,25 +1,37 @@
 # VerifyMzansi Launch Checklist
 
-**Date:** 2026-03-12  
-**Status:** Release gate checklist, not a blanket readiness claim
+**Date:** 2026-03-13  
+**Status:** Release gate checklist with split blocking and deep validation lanes
 
 ## 1. Required Local Verification
 
-Run these from the repo root:
+Run the blocking lane from the repo root:
 
 ```bash
 pnpm lint
 pnpm typecheck
 pnpm test
-pnpm test:coverage
 pnpm preflight
-pnpm preflight:prod
-pnpm validate:launch-env
 pnpm secret-scan
 pnpm security:audit
 pnpm licenses:check
 pnpm build
 pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome
+```
+
+Run the deeper confidence lane before higher-risk releases, larger refactors, or
+shared infrastructure changes:
+
+```bash
+pnpm test:coverage:core
+pnpm test:e2e
+```
+
+Run the production-only checks before final production deploy approval:
+
+```bash
+pnpm validate:launch-env
+pnpm preflight:prod
 ```
 
 ## 2. Production Env Contract
@@ -69,8 +81,9 @@ Canonical path:
 
 1. Merge or push to `master`
 2. Let GitHub Actions run the blocking CI gate: `pnpm lint`, `pnpm typecheck`,
-   `pnpm test`, `pnpm test:coverage`, `pnpm preflight`, `pnpm build`, and
-   Playwright smoke on `chromium` plus `mobile-chrome`
+   `pnpm test`, `pnpm preflight`, `pnpm secret-scan`, `pnpm security:audit`,
+   `pnpm licenses:check`, `pnpm build`, and Playwright smoke on `chromium` plus
+   `mobile-chrome`
 3. Let the deploy workflow run `pnpm secret-scan`, `pnpm security:audit`,
    `pnpm licenses:check`, `pnpm validate:launch-env`, and `pnpm preflight:prod`
 4. Verify the workflow passes the post-deploy `/api/health` gate
@@ -90,6 +103,9 @@ ext4-backed workspace. Native Windows remains unsupported.
 
 ## 6. Release Decision
 
-Call the release launch-ready only when every command above passes on the
-release candidate branch and the production deploy workflow completes without
-degraded health output.
+Call the release launch-ready only when:
+
+- Every blocking-lane command passes on the release candidate branch
+- Production-only validation passes
+- Any required deep-lane checks for the change set pass
+- The production deploy workflow completes without degraded health output

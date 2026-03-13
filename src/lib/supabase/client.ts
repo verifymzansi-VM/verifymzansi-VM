@@ -31,7 +31,7 @@ function createPlaceholderClient() {
  * unnecessary re-renders or re-subscriptions.
  *
  * Session persistence, auto-refresh, and URL detection are disabled
- * because auth state is managed server-side via middleware cookies.
+ * because auth state is managed server-side via proxy cookies.
  */
 export function createClient(): SupabaseClient {
   if (_client) return _client;

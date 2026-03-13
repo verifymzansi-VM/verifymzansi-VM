@@ -114,4 +114,46 @@ describe("BusinessDiscoveryBar", () => {
     expect(debounceCancelMock).toHaveBeenCalled();
     expect(setFilter).toHaveBeenCalledWith("query", undefined);
   });
+
+  it("syncs the local search input when the store query changes externally", () => {
+    let filters: {
+      sort: "newest";
+      attributes: Record<string, string | boolean | undefined>;
+      query?: string;
+      businessCategory?: string;
+      businessType?: string;
+      province?: string;
+      city?: string;
+    } = {
+      sort: "newest",
+      attributes: {},
+      query: undefined,
+      businessCategory: undefined,
+      businessType: undefined,
+      province: undefined,
+      city: undefined,
+    };
+
+    const storeState = {
+      get filters() {
+        return filters;
+      },
+      set filters(nextFilters: typeof filters) {
+        filters = nextFilters;
+      },
+      setFilter,
+      resetFilters,
+    };
+
+    useMarketplaceStoreMock.mockImplementation(() => storeState);
+
+    const { rerender } = render(<BusinessDiscoveryBar />);
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "local draft" } });
+
+    storeState.filters = { ...storeState.filters, query: "synced from store" };
+    rerender(<BusinessDiscoveryBar />);
+
+    expect(screen.getByLabelText("Search")).toHaveValue("synced from store");
+    expect(debounceCancelMock).toHaveBeenCalled();
+  });
 });

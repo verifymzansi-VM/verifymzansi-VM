@@ -1,11 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { extname } from "node:path";
-
-type Rule = {
-  name: string;
-  pattern: RegExp;
-};
+import {
+  SECRET_SCAN_RULES,
+  shouldIgnoreSecretFinding,
+  type SecretScanRule,
+} from "../src/lib/security/secret-scan";
 
 const MAX_FILE_SIZE_BYTES = 1_000_000;
 const SKIP_EXTENSIONS = new Set([
@@ -24,53 +24,6 @@ const SKIP_EXTENSIONS = new Set([
   ".ttf",
   ".lock",
 ]);
-
-const RULES: Rule[] = [
-  {
-    name: "Private key block",
-    pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g,
-  },
-  {
-    name: "AWS access key",
-    pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g,
-  },
-  {
-    name: "Stripe live secret",
-    pattern: /\bsk_live_[A-Za-z0-9]{16,}\b/g,
-  },
-  {
-    name: "Slack token",
-    pattern: /\bxox[baprs]-[A-Za-z0-9-]{20,}\b/g,
-  },
-  {
-    name: "Supabase secret key",
-    pattern: /\bsb_secret_[A-Za-z0-9]{20,}\b/g,
-  },
-  {
-    name: "Hardcoded service role key assignment",
-    pattern: /\bSUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*["'][^"'\n]{20,}["']/g,
-  },
-  {
-    name: "PayFast passphrase",
-    pattern: /\bPAYFAST_PASSPHRASE\s*[:=]\s*["'][^"'\n]{4,}["']/g,
-  },
-  {
-    name: "Resend API key",
-    pattern: /\bre_[A-Za-z0-9]{20,}\b/g,
-  },
-  {
-    name: "Cloudflare API token",
-    pattern: /\bcf_[A-Za-z0-9_-]{30,}\b/g,
-  },
-  {
-    name: "Turnstile secret key",
-    pattern: /\bTURNSTILE_SECRET_KEY\s*[:=]\s*["'][^"'\n]{10,}["']/g,
-  },
-  {
-    name: "64-char hex string (potential encryption key)",
-    pattern: /\b[0-9a-fA-F]{64}\b/g,
-  },
-];
 
 const gitBin = process.platform === "win32" ? "git.exe" : "git";
 
@@ -97,10 +50,6 @@ function shouldSkipFile(path: string): boolean {
   }
 }
 
-function isAllowedLine(line: string): boolean {
-  return line.includes("secret-scan: allow");
-}
-
 const findings: string[] = [];
 
 for (const file of getTrackedFiles()) {
@@ -117,10 +66,16 @@ for (const file of getTrackedFiles()) {
 
   const lines = content.split(/\r?\n/);
 
-  RULES.forEach((rule) => {
+  SECRET_SCAN_RULES.forEach((rule: SecretScanRule) => {
     for (let i = 0; i < lines.length; i += 1) {
       const line = lines[i];
-      if (isAllowedLine(line)) {
+      if (
+        shouldIgnoreSecretFinding({
+          filePath: file,
+          line,
+          ruleName: rule.name,
+        })
+      ) {
         continue;
       }
       if (rule.pattern.test(line)) {
@@ -137,4 +92,4 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log("Secret scan passed.");
+process.stdout.write("Secret scan passed.\n");
