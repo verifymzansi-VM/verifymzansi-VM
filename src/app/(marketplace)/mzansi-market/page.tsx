@@ -5,6 +5,7 @@ import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroo
 import { PageHeader } from "@/components/layout";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
+import { ListingFilterDrawer } from "@/components/listings/listing-filter-drawer";
 import { ListingGridHeader } from "@/components/listings/listing-grid-header";
 import { MzansiMarketGrid } from "./grid";
 import { MarketplaceUrlFilterSync } from "./url-filter-sync";
@@ -102,6 +103,9 @@ export default async function MzansiMarketPage() {
             </Link>
           </Button>
         </PageHeader>
+
+        {/* Mobile filter drawer (FAB visible < lg only) */}
+        <ListingFilterDrawer />
 
         {/* Two-column layout */}
         <div className="flex gap-6">

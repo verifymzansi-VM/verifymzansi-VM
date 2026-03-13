@@ -8,6 +8,7 @@ import { ArrowRight, Eye, Megaphone } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { PromotionFilterPanel } from "@/components/listings/promotion-filter-panel";
+import { PromotionFilterDrawer } from "@/components/listings/promotion-filter-drawer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -284,6 +285,21 @@ export function PromotionsExplorer() {
           </Link>
         </Button>
       </PageHeader>
+
+      {/* Mobile filter drawer (FAB visible < lg only) */}
+      <PromotionFilterDrawer
+        filters={filters}
+        cities={cities}
+        businessMap={businessMap}
+        onQueryChange={debouncedUpdateQuery}
+        onTypeChange={handleTypeChange}
+        onCategoryChange={(value) => updateFilters({ category: value })}
+        onProvinceChange={handleProvinceChange}
+        onCityChange={(value) => updateFilters({ city: value })}
+        onEventStateChange={handleEventStateChange}
+        onClearQuery={clearQueryFilter}
+        onClearAll={clearAllFilters}
+      />
 
       <div className="lg:flex lg:gap-6">
         <aside className="hidden w-72 shrink-0 lg:block">

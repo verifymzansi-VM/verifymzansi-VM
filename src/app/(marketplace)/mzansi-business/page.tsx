@@ -8,6 +8,7 @@ import { MzansiBusinessFilterSync } from "./filter-sync";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { BusinessDiscoveryBar } from "./discovery-bar";
+import { BusinessFilterDrawer } from "@/components/listings/business-filter-drawer";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -109,6 +110,9 @@ export default async function MzansiBusinessPage() {
             </Link>
           </Button>
         </PageHeader>
+
+        {/* Mobile filter drawer (FAB visible < lg only) */}
+        <BusinessFilterDrawer />
 
         <div className="flex gap-6">
           <aside className="hidden w-72 shrink-0 lg:block">
