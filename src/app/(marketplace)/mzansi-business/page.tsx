@@ -8,7 +8,6 @@ import { MzansiBusinessFilterSync } from "./filter-sync";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { BusinessDiscoveryBar } from "./discovery-bar";
-import { BusinessFilterDrawer } from "@/components/listings/business-filter-drawer";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -101,6 +100,7 @@ export default async function MzansiBusinessPage() {
           title="Mzansi Business"
           description="Browse verified South African businesses, compare service providers, and discover trusted shops near you."
           breadcrumbs={[{ label: "Mzansi Business" }]}
+          className="hidden lg:block"
         >
           <Button asChild size="sm" className="gap-2">
             <Link href="/post/create-business">
@@ -124,9 +124,6 @@ export default async function MzansiBusinessPage() {
           </section>
         </div>
       </div>
-
-      {/* Mobile filter FAB + drawer */}
-      <BusinessFilterDrawer />
     </div>
   );
 }

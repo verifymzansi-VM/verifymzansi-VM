@@ -4,22 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Eye, Megaphone, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Eye, Megaphone } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { PromotionFilterPanel } from "@/components/listings/promotion-filter-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-  SheetClose,
-} from "@/components/ui/sheet";
 import { getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import {
   PROMOTION_TYPE_LABELS,
@@ -278,22 +269,13 @@ export function PromotionsExplorer() {
     ? promotions.filter((p) => p.id !== featuredPromotion.id)
     : promotions;
 
-  const activeFilterCount = [
-    filters.query,
-    filters.type,
-    filters.category,
-    filters.province,
-    filters.city,
-    filters.businessId,
-    filters.eventState,
-  ].filter(Boolean).length;
-
   return (
     <div className="container mx-auto px-4 py-6 space-y-5 max-w-7xl">
       <PageHeader
         title="Promotions & Events"
         description="Deals, promotions, launches, and events from verified South African businesses and members."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Promotions & Events" }]}
+        className="hidden lg:block"
       >
         <Button asChild size="sm" className="gap-1">
           <Link href="/post/create">
@@ -336,62 +318,6 @@ export function PromotionsExplorer() {
               />
             </div>
           )}
-
-          {/* ── Mobile Filter FAB + Sheet ── */}
-          <Sheet>
-            <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] right-4 z-40 lg:hidden">
-              <SheetTrigger asChild>
-                <Button
-                  size="lg"
-                  className="relative h-14 w-14 rounded-full bg-brand-red text-white shadow-lg shadow-brand-red/20 hover:bg-brand-red/90"
-                  aria-label="Open promotion filters"
-                >
-                  <SlidersHorizontal className="h-5 w-5" />
-                  {activeFilterCount > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-background text-[10px] font-bold">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </Button>
-              </SheetTrigger>
-            </div>
-            <SheetContent
-              side="bottom"
-              className="max-h-[85vh] overflow-y-auto rounded-t-2xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
-            >
-              <SheetHeader>
-                <SheetTitle>Filter Promotions</SheetTitle>
-                <SheetDescription>
-                  Search and refine promotions without hiding the cards behind extra page chrome.
-                </SheetDescription>
-              </SheetHeader>
-              <div className="mt-4 space-y-4">
-                <PromotionFilterPanel
-                  mode="mobile"
-                  filters={filters}
-                  cities={cities}
-                  businessMap={businessMap}
-                  onQueryChange={debouncedUpdateQuery}
-                  onTypeChange={handleTypeChange}
-                  onCategoryChange={(value) => updateFilters({ category: value })}
-                  onProvinceChange={handleProvinceChange}
-                  onCityChange={(value) => updateFilters({ city: value })}
-                  onEventStateChange={handleEventStateChange}
-                  onClearQuery={clearQueryFilter}
-                  onClearAll={clearAllFilters}
-                  className="border-none bg-transparent p-0 shadow-none"
-                />
-              </div>
-              <div className="sticky bottom-0 inset-x-0 flex gap-3 border-t bg-background/95 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur">
-                <Button variant="outline" className="flex-1" onClick={clearAllFilters}>
-                  Clear all
-                </Button>
-                <SheetClose asChild>
-                  <Button className="flex-1">View results</Button>
-                </SheetClose>
-              </div>
-            </SheetContent>
-          </Sheet>
 
           {/* ── Results Count + CTA ── */}
           <div className="flex items-center justify-between">

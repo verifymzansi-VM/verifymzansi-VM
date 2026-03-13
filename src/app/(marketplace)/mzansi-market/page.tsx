@@ -5,7 +5,6 @@ import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroo
 import { PageHeader } from "@/components/layout";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
-import { ListingFilterDrawer } from "@/components/listings/listing-filter-drawer";
 import { ListingGridHeader } from "@/components/listings/listing-grid-header";
 import { MzansiMarketGrid } from "./grid";
 import { MarketplaceUrlFilterSync } from "./url-filter-sync";
@@ -94,6 +93,7 @@ export default async function MzansiMarketPage() {
           title="Browse Listings"
           description="Verified classifieds from South African sellers, with filters for price, condition, and location."
           breadcrumbs={[{ label: "Mzansi Market" }]}
+          className="hidden lg:block"
         >
           <Button asChild size="sm" className="gap-1">
             <Link href="/post/create">
@@ -122,9 +122,6 @@ export default async function MzansiMarketPage() {
           </div>
         </div>
       </div>
-
-      {/* Mobile filter FAB + drawer */}
-      <ListingFilterDrawer />
     </div>
   );
 }
