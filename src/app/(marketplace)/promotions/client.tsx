@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Eye, Megaphone, SlidersHorizontal } from "lucide-react";
-import { MarketplaceSectionNav, PageHeader } from "@/components/layout";
+import { PageHeader } from "@/components/layout";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { PromotionFilterPanel } from "@/components/listings/promotion-filter-panel";
 import { Button } from "@/components/ui/button";
@@ -305,8 +305,7 @@ export function PromotionsExplorer() {
 
       <div className="lg:flex lg:gap-6">
         <aside className="hidden w-72 shrink-0 lg:block">
-          <div className="sticky top-24 space-y-4">
-            <MarketplaceSectionNav />
+          <div className="sticky top-24">
             <PromotionFilterPanel
               filters={filters}
               cities={cities}
@@ -367,12 +366,6 @@ export function PromotionsExplorer() {
                 </SheetDescription>
               </SheetHeader>
               <div className="mt-4 space-y-4">
-                <MarketplaceSectionNav
-                  variant="mobile"
-                  heading="Browse marketplace sections"
-                  description="Jump between market, business, promotions, and events from this mobile filter panel."
-                  className="border-none bg-transparent p-0 shadow-none"
-                />
                 <PromotionFilterPanel
                   mode="mobile"
                   filters={filters}

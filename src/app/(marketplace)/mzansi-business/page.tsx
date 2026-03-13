@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
 import { Suspense } from "react";
-import { MarketplaceSectionNav, PageHeader } from "@/components/layout";
+import { PageHeader } from "@/components/layout";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { MzansiBusinessGrid } from "./grid";
 import { MzansiBusinessFilterSync } from "./filter-sync";
@@ -116,8 +116,7 @@ export default async function MzansiBusinessPage() {
 
         <div className="flex gap-6">
           <aside className="hidden w-72 shrink-0 lg:block">
-            <div className="sticky top-24 space-y-4">
-              <MarketplaceSectionNav />
+            <div className="sticky top-24">
               <BusinessDiscoveryBar />
             </div>
           </aside>

@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Calendar } from "lucide-react";
-import { MarketplaceBrowseSheet, MarketplaceSectionNav, PageHeader } from "@/components/layout";
+import { PageHeader } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -179,118 +179,106 @@ export default async function EventsPage() {
         </Button>
       </PageHeader>
 
-      <div className="flex gap-6">
-        <aside className="hidden w-72 shrink-0 lg:block">
-          <div className="sticky top-24 space-y-4">
-            <MarketplaceSectionNav />
-          </div>
-        </aside>
+      {/* Upcoming Events — grouped by month */}
+      {upcoming.length > 0 ? (
+        <>
+          {monthGroups.map((group) => (
+            <section key={group.label} className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-purple-500" />
+                <h2 className="text-xl font-display font-semibold">{group.label}</h2>
+                <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                  {group.events.length}
+                </Badge>
+              </div>
 
-        <div className="min-w-0 flex-1 space-y-6">
-          {/* Upcoming Events — grouped by month */}
-          {upcoming.length > 0 ? (
-            <>
-              {monthGroups.map((group) => (
-                <section key={group.label} className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-purple-500" />
-                    <h2 className="text-xl font-display font-semibold">{group.label}</h2>
-                    <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-                      {group.events.length}
-                    </Badge>
-                  </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {group.events.map((event, index) => {
+                  const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
+                  const businessName = event.business_id
+                    ? businessMap.get(event.business_id as string)
+                    : undefined;
+                  const nowDate = new Date();
+                  const isBoosted = event.boost_until
+                    ? new Date(event.boost_until as string) > nowDate
+                    : false;
+                  const isFeatured = event.featured_until
+                    ? new Date(event.featured_until as string) > nowDate
+                    : false;
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {group.events.map((event, index) => {
-                      const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
-                      const businessName = event.business_id
-                        ? businessMap.get(event.business_id as string)
-                        : undefined;
-                      const nowDate = new Date();
-                      const isBoosted = event.boost_until
-                        ? new Date(event.boost_until as string) > nowDate
-                        : false;
-                      const isFeatured = event.featured_until
-                        ? new Date(event.featured_until as string) > nowDate
-                        : false;
+                  return (
+                    <div
+                      key={event.id}
+                      className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                    >
+                      <PromotionCard
+                        id={event.id}
+                        title={event.title as string}
+                        price={event.price_cents as number | null}
+                        negotiable={event.price_negotiable as boolean}
+                        imageUrl={
+                          (event.photos as string[] | null)?.[0] ||
+                          (event.videos as string[] | null)?.[0]
+                        }
+                        province={event.location_province as string}
+                        city={event.location_city as string}
+                        promotionType="event"
+                        createdAt={event.created_at}
+                        ownerTrustLevel={accountProfile?.trust}
+                        ownerName={accountProfile?.name}
+                        viewCount={event.view_count as number}
+                        boosted={isBoosted}
+                        featured={isFeatured}
+                        startDate={event.start_date as string | null}
+                        endDate={event.end_date as string | null}
+                        businessName={businessName}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </>
+      ) : (
+        <Card>
+          <CardContent className="space-y-3 p-6 text-center">
+            <Calendar className="mx-auto h-8 w-8 text-muted-foreground" />
+            <h3 className="font-display text-lg font-semibold">No upcoming events</h3>
+            <p className="mx-auto max-w-md text-sm text-muted-foreground">
+              Check back soon for events from verified businesses!
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
-                      return (
-                        <div
-                          key={event.id}
-                          className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
-                        >
-                          <PromotionCard
-                            id={event.id}
-                            title={event.title as string}
-                            price={event.price_cents as number | null}
-                            negotiable={event.price_negotiable as boolean}
-                            imageUrl={
-                              (event.photos as string[] | null)?.[0] ||
-                              (event.videos as string[] | null)?.[0]
-                            }
-                            province={event.location_province as string}
-                            city={event.location_city as string}
-                            promotionType="event"
-                            createdAt={event.created_at}
-                            ownerTrustLevel={accountProfile?.trust}
-                            ownerName={accountProfile?.name}
-                            viewCount={event.view_count as number}
-                            boosted={isBoosted}
-                            featured={isFeatured}
-                            startDate={event.start_date as string | null}
-                            endDate={event.end_date as string | null}
-                            businessName={businessName}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-            </>
-          ) : (
-            <Card>
-              <CardContent className="space-y-3 p-6 text-center">
-                <Calendar className="mx-auto h-8 w-8 text-muted-foreground" />
-                <h3 className="font-display text-lg font-semibold">No upcoming events</h3>
-                <p className="mx-auto max-w-md text-sm text-muted-foreground">
-                  Check back soon for events from verified businesses!
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Past Events — collapsed accordion */}
-          {past.length > 0 && (
-            <PastEventsAccordion
-              events={past.map((event) => {
-                const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
-                const videos = event.videos as string[] | null;
-                const photos = event.photos as string[] | null;
-                return {
-                  id: event.id,
-                  title: event.title ?? "Untitled event",
-                  price: event.price_cents ?? null,
-                  negotiable: event.price_negotiable as boolean,
-                  imageUrl: photos?.[0] || videos?.[0],
-                  posterUrl: videos?.[0]
-                    ? (event.video_thumbnail as string | null) || photos?.[0] || undefined
-                    : undefined,
-                  province: event.location_province ?? "",
-                  city: event.location_city ?? "",
-                  createdAt: event.created_at,
-                  ownerTrustLevel: accountProfile?.trust,
-                  ownerName: accountProfile?.name,
-                  startDate: event.start_date,
-                  endDate: event.end_date,
-                };
-              })}
-            />
-          )}
-        </div>
-      </div>
-
-      <MarketplaceBrowseSheet />
+      {/* Past Events — collapsed accordion */}
+      {past.length > 0 && (
+        <PastEventsAccordion
+          events={past.map((event) => {
+            const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
+            const videos = event.videos as string[] | null;
+            const photos = event.photos as string[] | null;
+            return {
+              id: event.id,
+              title: event.title ?? "Untitled event",
+              price: event.price_cents ?? null,
+              negotiable: event.price_negotiable as boolean,
+              imageUrl: photos?.[0] || videos?.[0],
+              posterUrl: videos?.[0]
+                ? (event.video_thumbnail as string | null) || photos?.[0] || undefined
+                : undefined,
+              province: event.location_province ?? "",
+              city: event.location_city ?? "",
+              createdAt: event.created_at,
+              ownerTrustLevel: accountProfile?.trust,
+              ownerName: accountProfile?.name,
+              startDate: event.start_date,
+              endDate: event.end_date,
+            };
+          })}
+        />
+      )}
     </div>
   );
 }

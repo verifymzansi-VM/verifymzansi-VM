@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MarketplaceSectionNav } from "@/components/layout/marketplace-section-nav";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { useMarketplaceStore } from "@/stores";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
@@ -85,13 +84,6 @@ export function BusinessFilterDrawer() {
         </SheetHeader>
 
         <div className="space-y-4">
-          <MarketplaceSectionNav
-            variant="mobile"
-            heading="Browse marketplace sections"
-            description="Switch between market, business, promotions, and events without losing your place in the mobile flow."
-            className="border-none bg-transparent p-0 shadow-none"
-          />
-
           {/* Search */}
           <div className="space-y-1.5">
             <Label htmlFor="drawer-business-search">Search</Label>

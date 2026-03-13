@@ -13,7 +13,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MarketplaceSectionNav } from "@/components/layout/marketplace-section-nav";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
@@ -109,13 +108,6 @@ export function ListingFilterDrawer() {
         </SheetHeader>
 
         <div className="space-y-5 pb-20">
-          <MarketplaceSectionNav
-            variant="mobile"
-            heading="Browse marketplace sections"
-            description="Move between market, business, promotions, and events before refining your search."
-            className="border-none bg-transparent p-0 shadow-none"
-          />
-
           {/* ── Search ────────────────────────────────── */}
           <div className="space-y-2">
             <Label className="text-sm font-semibold">Search</Label>
