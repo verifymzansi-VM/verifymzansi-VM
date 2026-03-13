@@ -6,6 +6,7 @@ import { UPLOAD_AREAS } from "@/types/enums";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("MediaUpload");
 
@@ -27,6 +28,11 @@ const MAX_FILES = 10;
  */
 export async function POST(request: NextRequest) {
   try {
+    const sameOriginFailure = enforceSameOriginMutation(request, log);
+    if (sameOriginFailure) {
+      return sameOriginFailure;
+    }
+
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
     const {

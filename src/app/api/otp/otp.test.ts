@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import * as smsService from "@/lib/services/sms";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 async function hashOtpForTest(otp: string): Promise<string> {
   const salt = new Uint8Array(16);
@@ -44,6 +45,11 @@ vi.mock("@/lib/services/sms", () => ({
   sendOtpSms: vi.fn(),
 }));
 
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+}));
+
 function createMockRequest(path: string, body: Record<string, unknown>) {
   return new NextRequest(`http://localhost${path}`, {
     method: "POST",
@@ -60,6 +66,7 @@ describe("OTP Routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
     mockUserClient.auth.getUser.mockResolvedValue({
       data: { user: { id: "user-1" } },
       error: null,
@@ -68,6 +75,15 @@ describe("OTP Routes", () => {
   });
 
   describe("POST /api/otp/send", () => {
+    it("returns the shared rate-limit response when the external limiter blocks the request", async () => {
+      vi.mocked(checkRateLimit).mockResolvedValue({ limited: true, retryAfter: 45 });
+
+      const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+
+      expect(res.status).toBe(429);
+      expect(res.headers.get("Retry-After")).toBe("45");
+    });
+
     it("blocks when challenge send limit is exceeded", async () => {
       const mockAdminClient = {
         from: vi.fn((table: string) => {

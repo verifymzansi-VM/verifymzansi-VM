@@ -1,12 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { dsarRequestSchema } from "@/lib/validations/verification";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { createLogger } from "@/lib/utils/logger";
+import { getClientIp } from "@/lib/utils/rate-limit";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("DSAR");
+const dsarSubmitSchema = dsarRequestSchema.extend({
+  turnstileToken: z.string().min(1, "CAPTCHA verification required"),
+});
 
 /**
  * POST /api/dsar/submit
@@ -16,19 +21,17 @@ const log = createLogger("DSAR");
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    const parsedBody = await parseAndValidateJsonRequest(request, dsarSubmitSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
+
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
-    // ── Validate input ───────────────────────────────────────
-    const parsed = dsarRequestSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
-    }
-
-    const { type, name, email, idNumber, details } = parsed.data;
+    const { type, name, email, idNumber, details, turnstileToken } = parsedBody.data;
 
     // Validate ID number format if provided (must be 13 digits for SA ID)
     if (idNumber && !/^\d{13}$/.test(idNumber)) {
@@ -40,13 +43,7 @@ export async function POST(request: NextRequest) {
 
     // ── Turnstile CAPTCHA verification ───────────────────
     if (process.env.TURNSTILE_SECRET_KEY) {
-      const turnstileToken = body.turnstileToken;
-      if (typeof turnstileToken !== "string") {
-        return NextResponse.json({ error: "CAPTCHA verification required" }, { status: 400 });
-      }
-
-      const forwardedFor = request.headers.get("x-forwarded-for");
-      const remoteIp = forwardedFor?.split(",")[0].trim() || undefined;
+      const remoteIp = getClientIp(request);
 
       const captchaResult = await verifyTurnstileToken({
         token: turnstileToken,
@@ -112,8 +109,8 @@ export async function POST(request: NextRequest) {
       reference,
       dueBy: dueBy.toISOString(),
     });
-  } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "unknown error" });
-    return NextResponse.json({ error: "Failed to submit DSAR request" }, { status: 500 });
+  } catch (error) {
+    logApiError(log, "Unexpected DSAR submit error", error);
+    return internalApiError("Failed to submit DSAR request");
   }
 }

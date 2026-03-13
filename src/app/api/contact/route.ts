@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readAccountVerificationStatus } from "@/lib/account/compat";
-import { parseJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { contactAccountHolderSchema } from "@/lib/validations/contact";
@@ -9,30 +8,29 @@ import { mapLegacyContactMethod } from "@/lib/utils/enum-compat";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("ContactRoute");
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-    const parsed = contactAccountHolderSchema.safeParse(body);
+    const parsedBody = await parseAndValidateJsonRequest(request, contactAccountHolderSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
 
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
     // ── CAPTCHA verification ─────────────────────────────────
     if (process.env.TURNSTILE_SECRET_KEY) {
-      const turnstileToken = body.turnstileToken;
-      if (typeof turnstileToken !== "string") {
-        return NextResponse.json({ error: "CAPTCHA verification required" }, { status: 400 });
-      }
-      const forwardedFor = request.headers.get("x-forwarded-for");
-      const remoteIp = forwardedFor?.split(",")[0].trim() || undefined;
-      const captchaResult = await verifyTurnstileToken({ token: turnstileToken, remoteIp });
+      const remoteIp = getClientIp(request);
+      const captchaResult = await verifyTurnstileToken({
+        token: parsedBody.data.turnstileToken,
+        remoteIp,
+      });
       if (!captchaResult.success) {
         return NextResponse.json({ error: "CAPTCHA verification failed" }, { status: 400 });
       }
@@ -59,14 +57,14 @@ export async function POST(request: NextRequest) {
     // Use admin client for lookups and inserts to bypass RLS on service-only tables
     const admin = createAdminClient();
 
-    const targetTable = parsed.data.targetType === "promotion" ? "promotions" : "listings";
-    const notFoundLabel = parsed.data.targetType === "promotion" ? "Promotion" : "Listing";
+    const targetTable = parsedBody.data.targetType === "promotion" ? "promotions" : "listings";
+    const notFoundLabel = parsedBody.data.targetType === "promotion" ? "Promotion" : "Listing";
 
     // Get the content owner (use admin client so unauthenticated users can still contact)
     const { data: targetRecord } = await admin
       .from(targetTable)
       .select("owner_id, title")
-      .eq("id", parsed.data.targetId)
+      .eq("id", parsedBody.data.targetId)
       .single();
 
     if (!targetRecord) {
@@ -83,12 +81,12 @@ export async function POST(request: NextRequest) {
     const ownerVerified = readAccountVerificationStatus(accountProfile) === "verified";
 
     // Map legacy contactMethod values to canonical contact_type
-    const contactType = mapLegacyContactMethod(parsed.data.contactMethod);
+    const contactType = mapLegacyContactMethod(parsedBody.data.contactMethod);
 
     // Create canonical contact_events record
     const { error: contactError } = await admin.from("contact_events").insert({
-      target_id: parsed.data.targetId,
-      target_type: parsed.data.targetType,
+      target_id: parsedBody.data.targetId,
+      target_type: parsedBody.data.targetType,
       owner_id: targetRecord.owner_id,
       member_verified: ownerVerified,
       contact_type: contactType,
@@ -100,12 +98,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Create leads row for buyer message content
-    if (parsed.data.message) {
+    if (parsedBody.data.message) {
       // Sanitize message: strip HTML tags to prevent stored XSS
-      const sanitizedMessage = parsed.data.message.replace(/<[^>]*>/g, "").trim();
+      const sanitizedMessage = parsedBody.data.message.replace(/<[^>]*>/g, "").trim();
       const { error: leadsError } = await admin.from("leads").insert({
-        target_id: parsed.data.targetId,
-        target_type: parsed.data.targetType,
+        target_id: parsedBody.data.targetId,
+        target_type: parsedBody.data.targetType,
         owner_id: targetRecord.owner_id,
         buyer_name: null,
         buyer_email: user?.email || null,
@@ -121,7 +119,7 @@ export async function POST(request: NextRequest) {
 
     // Notify the account holder about the new lead/contact
     try {
-      const itemTitle = targetRecord.title?.slice(0, 40) || `your ${parsed.data.targetType}`;
+      const itemTitle = targetRecord.title?.slice(0, 40) || `your ${parsedBody.data.targetType}`;
 
       await createNotification({
         userId: targetRecord.owner_id,
@@ -135,7 +133,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    logApiError(log, "Unexpected contact route error", error);
+    return internalApiError();
   }
 }

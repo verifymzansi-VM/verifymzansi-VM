@@ -31,6 +31,8 @@ async function rollbackPayment(
 /**
  * PayFast ITN (Instant Transaction Notification) webhook handler.
  * This endpoint is called by PayFast when a payment status changes.
+ * Same-origin mutation enforcement is intentionally not applied here because
+ * PayFast calls this endpoint server-to-server, not from the browser.
  */
 export async function POST(request: NextRequest) {
   try {

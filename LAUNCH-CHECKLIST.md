@@ -10,7 +10,7 @@ Run the blocking lane from the repo root:
 ```bash
 pnpm lint
 pnpm typecheck
-pnpm test
+pnpm test:blocking
 pnpm preflight
 pnpm secret-scan
 pnpm security:audit
@@ -63,6 +63,8 @@ deployed Cloudflare/Wrangler runtime secrets:
 
 Failing any of the above should block deploy.
 
+If `RATE_LIMITER_API_KEY` is set, `OTP_RATE_LIMITER_URL` must also be set.
+
 ## 3. Data and Billing Checks
 
 - Run `pnpm seed:prod` against the target Supabase project before release if
@@ -80,10 +82,10 @@ Failing any of the above should block deploy.
 Canonical path:
 
 1. Merge or push to `master`
-2. Let GitHub Actions run the blocking CI gate: `pnpm lint`, `pnpm typecheck`,
-   `pnpm test`, `pnpm preflight`, `pnpm secret-scan`, `pnpm security:audit`,
-   `pnpm licenses:check`, `pnpm build`, and Playwright smoke on `chromium` plus
-   `mobile-chrome`
+2. Let GitHub Actions run the blocking CI gate on Node `22.x`: `pnpm lint`,
+   `pnpm typecheck`, `pnpm test:blocking`, `pnpm preflight`, `pnpm secret-scan`,
+   `pnpm security:audit`, `pnpm licenses:check`, `pnpm build`, and Playwright
+   smoke on `chromium` plus `mobile-chrome`
 3. Let the deploy workflow run `pnpm secret-scan`, `pnpm security:audit`,
    `pnpm licenses:check`, `pnpm validate:launch-env`, and `pnpm preflight:prod`
 4. Verify the workflow passes the post-deploy `/api/health` gate
@@ -109,3 +111,14 @@ Call the release launch-ready only when:
 - Production-only validation passes
 - Any required deep-lane checks for the change set pass
 - The production deploy workflow completes without degraded health output
+
+## 7. Why Startup Fails
+
+The most common launch blockers are:
+
+- Node.js is outside the supported `20.x` to `25.x` range
+- `NEXT_PUBLIC_APP_URL` does not match the real environment origin
+- A production secret is missing or malformed
+- `RATE_LIMITER_API_KEY` is configured without `OTP_RATE_LIMITER_URL`
+
+Run `pnpm validate:launch-env` first when startup or deploy validation fails.

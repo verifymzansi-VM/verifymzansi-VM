@@ -22,11 +22,11 @@ if (major < MIN_MAJOR || major > MAX_MAJOR) {
       "",
       "   Fix:",
       `   1. Install a supported Node version: https://nodejs.org/`,
-      `   2. Or run: nvm install ${MAX_MAJOR} && nvm use ${MAX_MAJOR}`,
+      `   2. Or run: nvm install 22 && nvm use 22`,
       "",
     ].join("\n")
   );
   process.exit(1);
 }
 
-console.log(`✔ Node.js ${raw} (supported)`);
+process.stdout.write(`✔ Node.js ${raw} (supported)\n`);

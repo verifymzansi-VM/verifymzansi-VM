@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
+import type * as ApiModule from "@/lib/utils/api";
 
 const {
   mockCreateClient,
@@ -21,6 +22,33 @@ vi.mock("@/lib/utils/turnstile", () => ({
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
+vi.mock("@/lib/utils/api", async () => {
+  const actual = await vi.importActual<typeof ApiModule>("@/lib/utils/api");
+  return {
+    ...actual,
+    parseAndValidateJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }, schema) => {
+      try {
+        const body = await req.json();
+        const parsed = schema.safeParse(body);
+        if (!parsed.success) {
+          return {
+            success: false,
+            response: Response.json(
+              { error: parsed.error.issues[0]?.message ?? "Invalid request" },
+              { status: 400 }
+            ),
+          };
+        }
+        return { success: true, data: parsed.data };
+      } catch {
+        return {
+          success: false,
+          response: Response.json({ error: "Invalid JSON payload" }, { status: 400 }),
+        };
+      }
+    }),
+  };
+});
 
 import { POST } from "@/app/api/contact/route";
 

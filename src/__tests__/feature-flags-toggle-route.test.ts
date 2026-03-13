@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type * as ApiModule from "@/lib/utils/api";
 
 const { mockGetUser, mockToggle, mockUpdateConfig, mockAudit, mockIsAdmin, mockParseJson } =
   vi.hoisted(() => ({
@@ -29,9 +30,23 @@ vi.mock("@/lib/auth/roles", () => ({
   isAdmin: mockIsAdmin,
 }));
 
-vi.mock("@/lib/utils/api", () => ({
-  parseJsonRequest: mockParseJson,
-}));
+vi.mock("@/lib/utils/api", async () => {
+  const actual = await vi.importActual<typeof ApiModule>("@/lib/utils/api");
+  return {
+    ...actual,
+    parseJsonRequest: mockParseJson,
+    parseAndValidateJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }) => {
+      const body = await mockParseJson(req);
+      if (body === null) {
+        return {
+          success: false,
+          response: Response.json({ error: "Invalid JSON payload" }, { status: 400 }),
+        };
+      }
+      return { success: true, data: body };
+    }),
+  };
+});
 
 import { POST } from "@/app/api/admin/feature-flags/toggle/route";
 import type { NextRequest } from "next/server";
@@ -39,6 +54,7 @@ import type { NextRequest } from "next/server";
 function makeRequest(body: Record<string, unknown>) {
   return {
     json: () => Promise.resolve(body),
+    url: "http://localhost:3000/api/admin/feature-flags/toggle",
     headers: { get: () => null },
     nextUrl: new URL("http://localhost:3000/api/admin/feature-flags/toggle"),
   } as unknown as NextRequest;
@@ -54,6 +70,16 @@ describe("POST /api/admin/feature-flags/toggle", () => {
 
     const res = await POST(makeRequest({ key: "test", enabled: true }));
     expect(res.status).toBe(401);
+  });
+
+  it("should reject cross-site requests", async () => {
+    const req = {
+      ...makeRequest({ key: "test", enabled: true }),
+      headers: { get: (name: string) => (name === "origin" ? "https://evil.example" : null) },
+    } as unknown as NextRequest;
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
   });
 
   it("should return 403 for non-admin users", async () => {

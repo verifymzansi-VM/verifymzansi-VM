@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("AvatarUpload");
 
@@ -12,6 +13,11 @@ const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
 const BUCKET = "avatars";
 
 export async function POST(request: NextRequest) {
+  const sameOriginFailure = enforceSameOriginMutation(request, log);
+  if (sameOriginFailure) {
+    return sameOriginFailure;
+  }
+
   // Rate limit by IP
   const ip = getClientIp(request);
   const rateCheck = await checkRateLimit({ key: ip, action: "profile:avatar" });

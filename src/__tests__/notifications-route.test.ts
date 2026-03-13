@@ -18,12 +18,18 @@ import { DELETE, GET, PATCH } from "@/app/api/notifications/route";
 function createRequest(
   method: string,
   url = "http://localhost:3000/api/notifications",
-  body?: unknown
+  body?: unknown,
+  headers: Record<string, string> = {}
 ): NextRequest {
   return {
     method,
     url,
     json: async () => body,
+    headers: {
+      get(name: string) {
+        return headers[name.toLowerCase()] ?? null;
+      },
+    },
   } as unknown as NextRequest;
 }
 
@@ -67,6 +73,20 @@ describe("/api/notifications", () => {
 
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toEqual({ error: "Failed to update notifications" });
+  });
+
+  it("rejects cross-site mutation requests", async () => {
+    const res = await PATCH(
+      createRequest(
+        "PATCH",
+        "http://localhost:3000/api/notifications",
+        { all: true },
+        { origin: "https://evil.example" }
+      )
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({ error: "Cross-site requests are not allowed" });
   });
 
   it("validates notification ids for PATCH", async () => {

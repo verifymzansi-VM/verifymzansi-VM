@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("NotificationsRoute");
 
@@ -81,6 +82,11 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
+    const sameOriginFailure = enforceSameOriginMutation(request, log);
+    if (sameOriginFailure) {
+      return sameOriginFailure;
+    }
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -151,6 +157,11 @@ export async function PATCH(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    const sameOriginFailure = enforceSameOriginMutation(request, log);
+    if (sameOriginFailure) {
+      return sameOriginFailure;
+    }
+
     const supabase = await createClient();
     const {
       data: { user },

@@ -19,7 +19,8 @@ VerifyMzansi combines:
 
 ## Prerequisites
 
-- Node.js `>=20 <23`
+- Node.js `20.x` through `25.x` supported
+- Node.js `22.x` recommended locally and in CI
 - pnpm `>=10`
 - Supabase project
 - Cloudflare account for Pages/Workers/R2/Turnstile
@@ -117,6 +118,7 @@ site root with `?code=...` instead of the app callback handler.
 - `NEXT_PUBLIC_APP_URL` must be public HTTPS
 - `AFRICASTALKING_SENDER_ID`, `IP_HASH_SECRET`, PayFast production secrets,
   Turnstile, R2, Resend, and encryption keys must all be populated
+- If you set `RATE_LIMITER_API_KEY`, you must also set `OTP_RATE_LIMITER_URL`
 - Sensitive values belong in GitHub Actions secrets and Cloudflare Wrangler
   secrets, not in committed files
 
@@ -153,7 +155,7 @@ Run the blocking launch gate with:
 ```bash
 pnpm lint
 pnpm typecheck
-pnpm test
+pnpm test:blocking
 pnpm preflight
 pnpm secret-scan
 pnpm security:audit
@@ -180,7 +182,7 @@ pnpm preflight:prod
 ## Deployment
 
 Canonical release path: push to `master` and let GitHub Actions deploy from
-Ubuntu.
+Ubuntu using Node `22.x`.
 
 ```bash
 git push origin master
@@ -190,12 +192,26 @@ The deploy workflow now:
 
 1. Validates the full production env contract with
    `scripts/validate-launch-env.ts`
-2. Runs the blocking launch gate: `pnpm lint`, `pnpm typecheck`, `pnpm test`,
-   `pnpm preflight`, `pnpm secret-scan`, `pnpm security:audit`,
-   `pnpm licenses:check`, `pnpm build`, and Playwright smoke
+2. Runs the blocking launch gate: `pnpm lint`, `pnpm typecheck`,
+   `pnpm test:blocking`, `pnpm preflight`, `pnpm secret-scan`,
+   `pnpm security:audit`, `pnpm licenses:check`, `pnpm build`, and Playwright
+   smoke
 3. Builds the Cloudflare bundle on Ubuntu
 4. Deploys the Pages app plus supporting Workers
 5. Fails if `/api/health` comes back degraded after deploy
+
+## Startup Failures
+
+Startup and launch validation usually fail for one of these reasons:
+
+- `NEXT_PUBLIC_APP_URL` is not the real public origin for the current
+  environment
+- A production-only secret is missing or malformed
+- `RATE_LIMITER_API_KEY` is set without `OTP_RATE_LIMITER_URL`
+- Local or CI Node.js version is outside the supported `20.x` to `25.x` range
+
+When that happens, run `pnpm validate:launch-env` first. It fails fast with the
+specific variable or contract that needs fixing.
 
 ### Windows note
 

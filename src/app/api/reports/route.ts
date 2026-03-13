@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportSchema } from "@/lib/validations/contact";
@@ -8,30 +7,29 @@ import { mapLegacyReportValues } from "@/lib/utils/enum-compat";
 import crypto from "crypto";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("Reports");
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-    const parsed = reportSchema.safeParse(body);
+    const parsedBody = await parseAndValidateJsonRequest(request, reportSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
 
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
     // ── CAPTCHA verification ─────────────────────────────────
     if (process.env.TURNSTILE_SECRET_KEY) {
-      const turnstileToken = body.turnstileToken;
-      if (typeof turnstileToken !== "string") {
-        return NextResponse.json({ error: "CAPTCHA verification required" }, { status: 400 });
-      }
-      const forwardedFor = request.headers.get("x-forwarded-for");
-      const remoteIp = forwardedFor?.split(",")[0].trim() || undefined;
-      const captchaResult = await verifyTurnstileToken({ token: turnstileToken, remoteIp });
+      const remoteIp = getClientIp(request);
+      const captchaResult = await verifyTurnstileToken({
+        token: parsedBody.data.turnstileToken,
+        remoteIp,
+      });
       if (!captchaResult.success) {
         return NextResponse.json({ error: "CAPTCHA verification failed" }, { status: 400 });
       }
@@ -57,16 +55,15 @@ export async function POST(request: NextRequest) {
 
     // Map legacy request values to canonical DB enums
     const { category, targetType, area } = mapLegacyReportValues({
-      reason: parsed.data.reason,
-      targetType: parsed.data.targetType,
+      reason: parsedBody.data.reason,
+      targetType: parsedBody.data.targetType,
     });
 
     // Use admin client for service-only insert
     const admin = createAdminClient();
 
     // Compute IP hash for anonymous reports
-    const forwardedFor = request.headers.get("x-forwarded-for");
-    const sourceIp = forwardedFor?.split(",")[0].trim() || "unknown";
+    const sourceIp = getClientIp(request);
     const hmacKey = process.env.IP_HASH_SECRET;
     if (!hmacKey) {
       if (process.env.NODE_ENV === "production") {
@@ -84,13 +81,13 @@ export async function POST(request: NextRequest) {
       reporter_user_id: user?.id || null,
       reporter_ip_hash: ipHash,
       target_type: targetType,
-      target_id: parsed.data.targetId,
+      target_id: parsedBody.data.targetId,
       area,
       category,
       severity: "standard",
-      description: parsed.data.description,
-      screenshot_url: parsed.data.evidenceUrls?.[0] || null,
-      evidence_urls: parsed.data.evidenceUrls?.length ? parsed.data.evidenceUrls : null,
+      description: parsedBody.data.description,
+      screenshot_url: parsedBody.data.evidenceUrls?.[0] || null,
+      evidence_urls: parsedBody.data.evidenceUrls?.length ? parsedBody.data.evidenceUrls : null,
       status: "open",
     });
 
@@ -102,7 +99,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    logApiError(log, "Unexpected report route error", error);
+    return internalApiError();
   }
 }

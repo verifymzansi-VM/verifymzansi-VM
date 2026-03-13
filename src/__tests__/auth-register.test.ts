@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
+import type * as ApiModule from "@/lib/utils/api";
 import type * as TurnstileModule from "@/lib/utils/turnstile";
 
 const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
@@ -26,15 +27,40 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
-vi.mock("@/lib/utils/api", () => ({
-  parseJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }) => {
-    try {
-      return await req.json();
-    } catch {
-      return null;
-    }
-  }),
-}));
+vi.mock("@/lib/utils/api", async () => {
+  const actual = await vi.importActual<typeof ApiModule>("@/lib/utils/api");
+  return {
+    ...actual,
+    parseJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }) => {
+      try {
+        return await req.json();
+      } catch {
+        return null;
+      }
+    }),
+    parseAndValidateJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }, schema) => {
+      try {
+        const body = await req.json();
+        const parsed = schema.safeParse(body);
+        if (!parsed.success) {
+          return {
+            success: false,
+            response: Response.json(
+              { error: parsed.error.issues[0]?.message ?? "Invalid request" },
+              { status: 400 }
+            ),
+          };
+        }
+        return { success: true, data: parsed.data };
+      } catch {
+        return {
+          success: false,
+          response: Response.json({ error: "Invalid JSON payload" }, { status: 400 }),
+        };
+      }
+    }),
+  };
+});
 
 import { POST } from "@/app/api/auth/register/route";
 

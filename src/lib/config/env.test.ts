@@ -136,6 +136,21 @@ describe("env config", () => {
 
       expect(mod.validateEnv().NEXT_PUBLIC_APP_URL).toBe("http://127.0.0.1:3000");
     });
+
+    it("fails fast when RATE_LIMITER_API_KEY is set without OTP_RATE_LIMITER_URL", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("RATE_LIMITER_API_KEY", "test-rate-limit-key");
+      delete process.env.OTP_RATE_LIMITER_URL;
+      const mod = await import("./env");
+
+      expect(() => mod.validateEnv()).toThrow(
+        "RATE_LIMITER_API_KEY is set but OTP_RATE_LIMITER_URL is missing"
+      );
+    });
   });
 
   describe("env helper", () => {

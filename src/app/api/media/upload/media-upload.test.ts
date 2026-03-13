@@ -23,14 +23,29 @@ vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn() }),
 }));
 
-function createFormDataRequest(files: File[]) {
+function createFormDataRequest(files: File[], headers: Record<string, string> = {}) {
   const formData = new FormData();
   formData.append("area", "listing");
   files.forEach((file) => formData.append("files", file));
 
   return {
     formData: async () => formData,
-    headers: { get: vi.fn().mockReturnValue("127.0.0.1") },
+    url: "http://localhost:3000/api/media/upload",
+    nextUrl: new URL("http://localhost:3000/api/media/upload"),
+    headers: {
+      get: vi.fn((name: string) => {
+        const normalizedName = name.toLowerCase();
+        if (normalizedName in headers) {
+          return headers[normalizedName];
+        }
+
+        if (normalizedName === "x-forwarded-for" || normalizedName === "x-real-ip") {
+          return "127.0.0.1";
+        }
+
+        return null;
+      }),
+    },
   } as unknown as NextRequest;
 }
 
@@ -54,6 +69,16 @@ describe("Media Upload Routes", () => {
 
       expect(res.status).toBe(401);
       await expect(res.json()).resolves.toEqual({ error: "Unauthorized" });
+    });
+
+    it("rejects cross-site upload attempts", async () => {
+      const res = await uploadMedia(
+        createFormDataRequest([], {
+          origin: "https://evil.example",
+        })
+      );
+
+      expect(res.status).toBe(403);
     });
 
     it("rate limits upload bursts", async () => {
@@ -108,7 +133,13 @@ describe("Media Upload Routes", () => {
 
       const req = {
         formData: async () => formData,
-        headers: { get: vi.fn().mockReturnValue("127.0.0.1") },
+        url: "http://localhost:3000/api/media/upload",
+        nextUrl: new URL("http://localhost:3000/api/media/upload"),
+        headers: {
+          get: vi.fn((name: string) =>
+            name.toLowerCase() === "x-forwarded-for" ? "127.0.0.1" : null
+          ),
+        },
       } as unknown as NextRequest;
 
       const res = await uploadMedia(req);

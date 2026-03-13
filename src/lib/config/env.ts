@@ -80,6 +80,7 @@ const envSchema = z.object({
   // ── OTP Rate Limiter (optional) ───────────────────────────
   OTP_RATE_LIMITER_URL: z.string().url().optional().or(z.literal("")),
   OTP_RATE_LIMITER_TIMEOUT_MS: z.coerce.number().positive().optional(),
+  RATE_LIMITER_API_KEY: z.string().min(1).optional(),
 
   // ── PayFast (optional at startup — validated at request time in billing routes)
   PAYFAST_MERCHANT_ID: z.string().optional(),
@@ -150,6 +151,7 @@ function _createFallbackEnv(): Env {
     OTP_RATE_LIMITER_TIMEOUT_MS: process.env.OTP_RATE_LIMITER_TIMEOUT_MS
       ? Number(process.env.OTP_RATE_LIMITER_TIMEOUT_MS)
       : undefined,
+    RATE_LIMITER_API_KEY: process.env.RATE_LIMITER_API_KEY,
     PAYFAST_MERCHANT_ID: process.env.PAYFAST_MERCHANT_ID || "",
     PAYFAST_MERCHANT_KEY: process.env.PAYFAST_MERCHANT_KEY || "",
     PAYFAST_PASSPHRASE: process.env.PAYFAST_PASSPHRASE,
@@ -201,6 +203,21 @@ function toEnvSource(env: Env): Record<string, string | undefined> {
   );
 }
 
+function validateRateLimiterConfig(env: Env): void {
+  if (env.RATE_LIMITER_API_KEY && !env.OTP_RATE_LIMITER_URL) {
+    throw new Error(
+      [
+        "",
+        "VerifyMzansi — Environment Configuration Error",
+        "",
+        "RATE_LIMITER_API_KEY is set but OTP_RATE_LIMITER_URL is missing.",
+        "Configure both values together or remove RATE_LIMITER_API_KEY.",
+        "",
+      ].join("\n")
+    );
+  }
+}
+
 export function validateEnv(options: ValidateEnvOptions = {}): Env {
   if (_cachedEnv) return _cachedEnv;
   const validationMode = options.mode ?? resolveLaunchValidationMode(process.env);
@@ -240,6 +257,7 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
       const fullResult = envSchema.safeParse(process.env);
       _cachedEnv = fullResult.success ? fullResult.data : _createFallbackEnv();
     }
+    validateRateLimiterConfig(_cachedEnv);
     return _cachedEnv;
   }
 
@@ -279,6 +297,8 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
   if (!launchSummary.isValid) {
     throw new Error(formatLaunchValidationFailure(validationMode, launchSummary.errors));
   }
+
+  validateRateLimiterConfig(result.data);
 
   for (const warning of launchSummary.warnings) {
     console.warn(`[ENV] WARNING: ${warning.name}: ${warning.detail}`);

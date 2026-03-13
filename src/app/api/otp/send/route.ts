@@ -1,15 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { saPhoneSchema } from "@/lib/validations/shared";
 import { sendOtpSms } from "@/lib/services/sms";
 import { createLogger } from "@/lib/utils/logger";
 import { normalizeSaPhone } from "@/lib/utils/phone";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("OTP");
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
 const MAX_SENDS_PER_HOUR = 5;
+const otpSendSchema = z.object({ phone: saPhoneSchema });
 
 /** Convert a Uint8Array to hex string */
 function toHex(buf: Uint8Array): string {
@@ -53,64 +57,24 @@ async function hashOtp(otp: string): Promise<string> {
   return `${saltHex}:${hashHex}`;
 }
 
-async function checkExternalOtpRateLimit(
-  request: NextRequest,
-  phone: string
-): Promise<{ allowed: true } | { allowed: false; error: string }> {
-  const limiterUrl = process.env.OTP_RATE_LIMITER_URL?.trim();
-  if (!limiterUrl) {
-    return { allowed: true };
-  }
-
-  const timeoutMs = Number(process.env.OTP_RATE_LIMITER_TIMEOUT_MS || 2500);
-  const safeTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 2500;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), safeTimeout);
-
-  try {
-    const deviceId = request.headers.get("x-device-id") || undefined;
-    const response = await fetch(limiterUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, deviceId }),
-      signal: controller.signal,
-    });
-
-    if (response.status === 429) {
-      return { allowed: false, error: "Too many OTP requests. Please wait before trying again." };
-    }
-
-    if (!response.ok) {
-      log.warn("External OTP rate limiter returned non-OK status", { status: response.status });
-    }
-
-    return { allowed: true };
-  } catch (error) {
-    log.warn("External OTP rate limiter unavailable; falling back to DB limits", {
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-    return { allowed: true };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-    const parsed = saPhoneSchema.safeParse(body.phone);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? "Invalid request" },
-        { status: 400 }
-      );
+    const sameOriginFailure = enforceSameOriginMutation(request, log);
+    if (sameOriginFailure) {
+      return sameOriginFailure;
     }
 
-    const phone = normalizeSaPhone(parsed.data);
+    const parsedBody = await parseAndValidateJsonRequest(request, otpSendSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
+
+    if (!parsedBody.success) {
+      return parsedBody.response;
+    }
+
+    const phone = normalizeSaPhone(parsedBody.data.phone);
     const supabase = await createClient();
     const {
       data: { user },
@@ -123,10 +87,17 @@ export async function POST(request: NextRequest) {
     // otp_logs is service-only; use admin client to bypass RLS safely in this server route.
     const adminSupabase = createAdminClient();
 
-    // ── Optional external rate limiter (Cloudflare worker) ──
-    const externalLimit = await checkExternalOtpRateLimit(request, phone);
-    if (!externalLimit.allowed) {
-      return NextResponse.json({ error: externalLimit.error }, { status: 429 });
+    const deviceId = request.headers.get("x-device-id") || undefined;
+    const externalLimit = await checkRateLimit({
+      key: phone,
+      action: "otp:send",
+      deviceId,
+    });
+    if (externalLimit.limited) {
+      return NextResponse.json(
+        { error: "Too many OTP requests. Please wait before trying again." },
+        { status: 429, headers: { "Retry-After": String(externalLimit.retryAfter ?? 60) } }
+      );
     }
 
     // ── Pre-send Rate Limit Check ──
@@ -199,12 +170,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    log.error("Unexpected error in OTP generation", {
-      error: message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    logApiError(log, "Unexpected error in OTP generation", error);
+    return internalApiError();
   }
 }

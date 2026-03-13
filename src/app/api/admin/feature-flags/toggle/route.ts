@@ -14,8 +14,9 @@ import { toggleFeatureFlag, updateFeatureFlagConfig } from "@/lib/services/featu
 import { logAuditEvent } from "@/lib/services/audit";
 import { isAdmin } from "@/lib/auth/roles";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { parseJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("FeatureFlagsToggle");
 
@@ -36,6 +37,11 @@ const canarySchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const sameOriginFailure = enforceSameOriginMutation(request, log);
+    if (sameOriginFailure) {
+      return sameOriginFailure;
+    }
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -57,10 +63,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    const bodyResult = await parseAndValidateJsonRequest(request, z.unknown(), {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request body",
+      includeValidationDetails: false,
+    });
+
+    if (!bodyResult.success) {
+      return bodyResult.response;
     }
+
+    const body = bodyResult.data;
 
     // Try canary format first, then fall back to legacy
     const canaryParsed = canarySchema.safeParse(body);
@@ -119,8 +132,8 @@ export async function POST(request: NextRequest) {
     const legacyErrors = legacyParsed.error.issues.map((i) => i.message);
     const allErrors = [...new Set([...canaryErrors, ...legacyErrors])];
     return NextResponse.json({ error: allErrors[0] || "Invalid request body" }, { status: 400 });
-  } catch (err) {
-    log.error("Toggle error", { error: err instanceof Error ? err.message : "unknown error" });
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    logApiError(log, "Toggle error", error);
+    return internalApiError();
   }
 }

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { parseJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("ContentDelete");
 
@@ -29,6 +30,11 @@ const tableMap: Record<string, string> = {
  */
 export async function POST(request: Request) {
   try {
+    const sameOriginFailure = enforceSameOriginMutation(request, log);
+    if (sameOriginFailure) {
+      return sameOriginFailure;
+    }
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -46,17 +52,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    const parsedBody = await parseAndValidateJsonRequest(request, deleteSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
+
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
-    const parsed = deleteSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
-    }
-
-    const { itemId, area } = parsed.data;
+    const { itemId, area } = parsedBody.data;
     const table = tableMap[area];
     if (!table) {
       return NextResponse.json({ error: "Invalid area" }, { status: 400 });
@@ -105,10 +111,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (err) {
-    log.error("Content delete failed", {
-      error: err instanceof Error ? err.message : "Unknown error",
-    });
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    logApiError(log, "Content delete failed", error);
+    return internalApiError();
   }
 }
