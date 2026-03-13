@@ -21,6 +21,31 @@ function collectHydrationErrors(page: Page) {
   return hydrationErrors;
 }
 
+function collectMarketplacePageErrors(page: Page) {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  const failedApiResponses: string[] = [];
+
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  page.on("pageerror", (error) => {
+    pageErrors.push(error.message);
+  });
+
+  page.on("response", (response) => {
+    const { pathname } = new URL(response.url());
+    if (/^\/api\/(listings|businesses)\b/.test(pathname) && response.status() >= 500) {
+      failedApiResponses.push(`${response.status()} ${pathname}`);
+    }
+  });
+
+  return { consoleErrors, pageErrors, failedApiResponses };
+}
+
 test.describe("Platform Smoke", () => {
   test("@smoke public and auth pages render without hydration errors", async ({ page }) => {
     const hydrationErrors = collectHydrationErrors(page);
@@ -165,5 +190,68 @@ test.describe("Platform Smoke", () => {
     const navTop = await bottomNav.evaluate((element) => element.getBoundingClientRect().top);
 
     expect(footerBottom).toBeLessThanOrEqual(navTop);
+  });
+
+  test("@smoke marketplace mobile pages avoid bootstrap errors and overlapping chrome", async ({
+    page,
+  }) => {
+    test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Mobile-only marketplace check");
+
+    const { consoleErrors, pageErrors, failedApiResponses } = collectMarketplacePageErrors(page);
+    const pageChecks = [
+      {
+        path: "/mzansi-market",
+        heading: /browse listings/i,
+      },
+      {
+        path: "/mzansi-business",
+        heading: /mzansi business/i,
+        ctaName: /list your business/i,
+        filterButtonName: "Open business filters",
+      },
+      {
+        path: "/promotions",
+        heading: /promotions & events/i,
+        ctaName: /create a post/i,
+        filterButtonName: "Open promotion filters",
+      },
+    ] as const;
+
+    for (const check of pageChecks) {
+      await page.goto(check.path);
+      await expect(page.getByRole("heading", { name: check.heading }).first()).toBeVisible();
+      await page.waitForTimeout(1_000);
+
+      if (check.ctaName) {
+        const heading = page.getByRole("heading", { name: check.heading }).first();
+        const cta = page.getByRole("link", { name: check.ctaName }).first();
+
+        await expect(cta).toBeVisible();
+
+        const headingBox = await heading.boundingBox();
+        const ctaBox = await cta.boundingBox();
+
+        expect(ctaBox?.y ?? 0).toBeGreaterThan((headingBox?.y ?? 0) + (headingBox?.height ?? 0));
+      }
+
+      if (check.filterButtonName) {
+        const filterButton = page.getByRole("button", { name: check.filterButtonName });
+        const bottomNav = page.getByRole("navigation", { name: "Main" });
+
+        await expect(filterButton).toBeVisible();
+        await expect(bottomNav).toBeVisible();
+
+        const filterButtonBox = await filterButton.boundingBox();
+        const bottomNavBox = await bottomNav.boundingBox();
+
+        expect((filterButtonBox?.y ?? 0) + (filterButtonBox?.height ?? 0)).toBeLessThanOrEqual(
+          (bottomNavBox?.y ?? Number.POSITIVE_INFINITY) - 8
+        );
+      }
+    }
+
+    expect(consoleErrors.filter((message) => /__name is not defined/i.test(message))).toEqual([]);
+    expect(pageErrors.filter((message) => /__name is not defined/i.test(message))).toEqual([]);
+    expect(failedApiResponses).toEqual([]);
   });
 });

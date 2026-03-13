@@ -339,11 +339,11 @@ export function PromotionsExplorer() {
 
           {/* ── Mobile Filter FAB + Sheet ── */}
           <Sheet>
-            <div className="fixed bottom-20 right-4 z-40 lg:hidden">
+            <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] right-4 z-40 lg:hidden">
               <SheetTrigger asChild>
                 <Button
                   size="lg"
-                  className="rounded-full shadow-lg h-14 w-14 bg-red-500 hover:bg-red-600 relative"
+                  className="relative h-14 w-14 rounded-full bg-brand-red text-white shadow-lg shadow-brand-red/20 hover:bg-brand-red/90"
                   aria-label="Open promotion filters"
                 >
                   <SlidersHorizontal className="h-5 w-5" />

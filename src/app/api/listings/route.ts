@@ -22,9 +22,11 @@ import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
+import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
+const LISTING_SELECT_FALLBACK_FIELDS = ["featured_until", "condition", "video_thumbnail"] as const;
 
 type MarketQueryOps = {
   eq: (column: string, value: unknown) => MarketQueryOps;
@@ -130,6 +132,17 @@ function isPlaceholderListing(listing: { title: string | null; description?: str
   return isPlaceholderMarketplaceContent(listing.title, listing.description);
 }
 
+function normalizeListingSelectShape(
+  listings: Record<string, unknown>[]
+): Record<string, unknown>[] {
+  return listings.map((listing) => ({
+    ...listing,
+    featured_until: listing.featured_until ?? null,
+    condition: listing.condition ?? null,
+    video_thumbnail: listing.video_thumbnail ?? null,
+  }));
+}
+
 /**
  * GET /api/listings
  *
@@ -145,34 +158,71 @@ export async function GET(request: NextRequest) {
       Math.max(1, parseInt(request.nextUrl.searchParams.get("limit") || "24", 10))
     );
     const offset = (filters.page - 1) * limit;
-    const selectClause = withOwnerColumn(
-      "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured",
-      ownerColumn
-    );
+    const selectAttempts = [
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+          ownerColumn
+        ),
+        omittedFields: [] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured",
+          ownerColumn
+        ),
+        omittedFields: ["featured_until"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+          ownerColumn
+        ),
+        omittedFields: ["condition"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured_until, featured",
+          ownerColumn
+        ),
+        omittedFields: ["video_thumbnail"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured",
+          ownerColumn
+        ),
+        omittedFields: ["featured_until", "condition", "video_thumbnail"] as const,
+      },
+    ] as const;
     const hasAttributeFilters = Object.keys(filters.attributes).length > 0;
 
     let listings: Record<string, unknown>[] = [];
     let total = 0;
-
     if (hasAttributeFilters) {
       const batchSize = 500;
       let from = 0;
 
       while (true) {
-        const batchQuery = applyBaseMarketFilters(
-          admin
-            .from("listings")
-            .select(selectClause)
-            .eq("status", "live")
-            .eq("area", AREA)
-            .not("title", "ilike", "%seed%")
-            .not("title", "ilike", "%[seed]%")
-            .not("title", "ilike", "%demo%")
-            .not("title", "ilike", "%sample%"),
-          filters
-        ).range(from, from + batchSize - 1);
+        const batchResult = await queryWithSelectFallbacks({
+          attempts: selectAttempts,
+          fallbackFields: LISTING_SELECT_FALLBACK_FIELDS,
+          runQuery: async (selectClause) =>
+            applyBaseMarketFilters(
+              admin
+                .from("listings")
+                .select(selectClause)
+                .eq("status", "live")
+                .eq("area", AREA)
+                .not("title", "ilike", "%seed%")
+                .not("title", "ilike", "%[seed]%")
+                .not("title", "ilike", "%demo%")
+                .not("title", "ilike", "%sample%"),
+              filters
+            ).range(from, from + batchSize - 1),
+        });
 
-        const { data, error } = await batchQuery;
+        const { data, error } = batchResult;
         if (error) {
           if (error.code === "PGRST205") {
             log.warn("Listings schema cache unavailable", {
@@ -193,7 +243,9 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
         }
 
-        const batch = (data ?? []) as unknown as Record<string, unknown>[];
+        const batch = normalizeListingSelectShape(
+          (data ?? []) as unknown as Record<string, unknown>[]
+        );
         listings.push(...batch);
 
         if (batch.length < batchSize) {
@@ -217,21 +269,25 @@ export async function GET(request: NextRequest) {
       total = listings.length;
       listings = listings.slice(offset, offset + limit);
     } else {
-      const query = applyBaseMarketFilters(
-        admin
-          .from("listings")
-          .select(selectClause, { count: "exact" })
-          .eq("status", "live")
-          .eq("area", AREA)
-          .not("title", "ilike", "%seed%")
-          .not("title", "ilike", "%[seed]%")
-          .not("title", "ilike", "%demo%")
-          .not("title", "ilike", "%sample%"),
-        filters
-      ).range(offset, offset + limit - 1);
+      const result = await queryWithSelectFallbacks({
+        attempts: selectAttempts,
+        fallbackFields: LISTING_SELECT_FALLBACK_FIELDS,
+        runQuery: async (selectClause) =>
+          applyBaseMarketFilters(
+            admin
+              .from("listings")
+              .select(selectClause, { count: "exact" })
+              .eq("status", "live")
+              .eq("area", AREA)
+              .not("title", "ilike", "%seed%")
+              .not("title", "ilike", "%[seed]%")
+              .not("title", "ilike", "%demo%")
+              .not("title", "ilike", "%sample%"),
+            filters
+          ).range(offset, offset + limit - 1),
+      });
 
-      const { data, count, error } = await query;
-
+      const { data, count, error } = result;
       if (error) {
         if (error.code === "PGRST205") {
           log.warn("Listings schema cache unavailable", {
@@ -252,7 +308,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
       }
 
-      const filteredListings = ((data ?? []) as unknown as Record<string, unknown>[]).filter(
+      const filteredListings = normalizeListingSelectShape(
+        (data ?? []) as unknown as Record<string, unknown>[]
+      ).filter(
         (listing) =>
           !isPlaceholderListing({
             title: String(listing.title ?? ""),

@@ -476,4 +476,120 @@ describe("GET /api/businesses", () => {
       seller_id: USER_ID,
     });
   });
+
+  it.each([
+    {
+      missingField: "gallery_photos",
+      expectedNullField: "gallery_photos",
+      initialSelect:
+        "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
+      fallbackSelect:
+        "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
+    },
+    {
+      missingField: "business_details",
+      expectedNullField: "business_details",
+      initialSelect:
+        "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
+      fallbackSelect:
+        "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
+    },
+  ])(
+    "returns 200 and normalizes %s when the column is missing",
+    async ({ missingField, expectedNullField, initialSelect, fallbackSelect }) => {
+      mockCreateAdminClient.mockReturnValue({
+        from: vi.fn((table: string) => {
+          if (table === "businesses") {
+            return {
+              select: vi.fn((fields: string) => {
+                if (fields === "id, owner_id") {
+                  return {
+                    limit: vi.fn().mockResolvedValue({ error: null }),
+                  };
+                }
+
+                if (fields === initialSelect) {
+                  return {
+                    eq: vi.fn().mockReturnThis(),
+                    not: vi.fn().mockReturnThis(),
+                    order: vi.fn().mockReturnThis(),
+                    range: vi.fn().mockResolvedValue({
+                      data: null,
+                      count: null,
+                      error: {
+                        code: "42703",
+                        message: `column businesses.${missingField} does not exist`,
+                      },
+                    }),
+                  };
+                }
+
+                if (fields === fallbackSelect || !fields.includes(missingField)) {
+                  return {
+                    eq: vi.fn().mockReturnThis(),
+                    not: vi.fn().mockReturnThis(),
+                    order: vi.fn().mockReturnThis(),
+                    range: vi.fn().mockResolvedValue({
+                      data: null,
+                      count: null,
+                      error: {
+                        code: "42703",
+                        message: `column businesses.${missingField} does not exist`,
+                      },
+                    }),
+                  };
+                }
+
+                if (fields.includes(missingField)) {
+                  return {
+                    eq: vi.fn().mockReturnThis(),
+                    not: vi.fn().mockReturnThis(),
+                    order: vi.fn().mockReturnThis(),
+                    range: vi.fn().mockResolvedValue({
+                      data: [
+                        {
+                          id: "business-1",
+                          owner_id: USER_ID,
+                          business_name: "Nomsa Fashion",
+                          description: "A valid business profile description.",
+                          business_type: "standalone_shop",
+                          category: "fashion_accessories",
+                          location_province: "Gauteng",
+                          location_city: "Johannesburg",
+                        },
+                      ],
+                      count: 1,
+                      error: null,
+                    }),
+                  };
+                }
+
+                throw new Error(`Unexpected select clause: ${fields}`);
+              }),
+            };
+          }
+
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }),
+      });
+
+      const request = {
+        nextUrl: new URL("http://localhost:3000/api/businesses?page=1&limit=24"),
+      } as NextRequest;
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.businesses[0]).toMatchObject({
+        id: "business-1",
+        owner_id: USER_ID,
+        [expectedNullField]: null,
+      });
+    }
+  );
 });

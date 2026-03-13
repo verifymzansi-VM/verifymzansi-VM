@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
-import Script from "next/script";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { PublicRuntimeConfigBridge } from "@/components/providers/public-runtime-config";
 import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import "@/styles/globals.css";
+
+const TURBOPACK_NAME_POLYFILL =
+  'if(typeof globalThis.__name!=="function"){globalThis.__name=function(fn,name){Object.defineProperty(fn,"name",{value:name,configurable:true});return fn;};}var __name=globalThis.__name;';
 
 export const metadata: Metadata = {
   title: {
@@ -85,11 +87,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       data-playwright={isPlaywrightTestMode ? "1" : undefined}
     >
       <body className="min-h-screen antialiased">
-        <Script
-          src="/runtime/turbopack-name-polyfill.js"
-          strategy="beforeInteractive"
-          nonce={nonce}
-        />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: TURBOPACK_NAME_POLYFILL }} />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"

@@ -494,4 +494,157 @@ describe("GET /api/listings", () => {
       },
     ]);
   });
+
+  it.each([
+    {
+      missingField: "featured_until",
+      expectedNullField: "featured_until",
+      initialSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+      fallbackSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured",
+    },
+    {
+      missingField: "condition",
+      expectedNullField: "condition",
+      initialSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+      fallbackSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+    },
+    {
+      missingField: "video_thumbnail",
+      expectedNullField: "video_thumbnail",
+      initialSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+      fallbackSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured_until, featured",
+    },
+  ])(
+    "returns 200 and normalizes %s when the column is missing",
+    async ({ missingField, expectedNullField, initialSelect, fallbackSelect }) => {
+      mockCreateAdminClient.mockReturnValue({
+        from: vi.fn((table: string) => {
+          if (table === "listings") {
+            return {
+              select: vi.fn((fields: string) => {
+                if (fields === "id, owner_id") {
+                  return {
+                    limit: vi.fn().mockResolvedValue({ error: null }),
+                  };
+                }
+
+                if (fields === initialSelect) {
+                  return {
+                    eq: vi.fn().mockReturnThis(),
+                    not: vi.fn().mockReturnThis(),
+                    gte: vi.fn().mockReturnThis(),
+                    lte: vi.fn().mockReturnThis(),
+                    or: vi.fn().mockReturnThis(),
+                    order: vi.fn().mockReturnThis(),
+                    range: vi.fn().mockResolvedValue({
+                      data: null,
+                      count: null,
+                      error: {
+                        code: "42703",
+                        message: `column listings.${missingField} does not exist`,
+                      },
+                    }),
+                  };
+                }
+
+                if (fields === fallbackSelect || !fields.includes(missingField)) {
+                  return {
+                    eq: vi.fn().mockReturnThis(),
+                    not: vi.fn().mockReturnThis(),
+                    gte: vi.fn().mockReturnThis(),
+                    lte: vi.fn().mockReturnThis(),
+                    or: vi.fn().mockReturnThis(),
+                    order: vi.fn().mockReturnThis(),
+                    range: vi.fn().mockResolvedValue({
+                      data: null,
+                      count: null,
+                      error: {
+                        code: "42703",
+                        message: `column listings.${missingField} does not exist`,
+                      },
+                    }),
+                  };
+                }
+
+                if (fields.includes(missingField)) {
+                  return {
+                    eq: vi.fn().mockReturnThis(),
+                    not: vi.fn().mockReturnThis(),
+                    gte: vi.fn().mockReturnThis(),
+                    lte: vi.fn().mockReturnThis(),
+                    or: vi.fn().mockReturnThis(),
+                    order: vi.fn().mockReturnThis(),
+                    range: vi.fn().mockResolvedValue({
+                      data: [
+                        {
+                          id: "listing-live",
+                          owner_id: USER_ID,
+                          title: "Toyota Corolla",
+                          description: "Verified listing",
+                          price_cents: 1200000,
+                          price_negotiable: false,
+                          category: "vehicles",
+                          attributes: {},
+                          photos: [],
+                          videos: [],
+                          location_province: "Gauteng",
+                          location_city: "Johannesburg",
+                          created_at: "2026-03-13T10:00:00.000Z",
+                          boost_until: null,
+                          featured: false,
+                        },
+                      ],
+                      count: 1,
+                      error: null,
+                    }),
+                  };
+                }
+
+                throw new Error(`Unexpected select clause: ${fields}`);
+              }),
+            };
+          }
+
+          if (table === "account_profiles") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              in: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    user_id: USER_ID,
+                    display_name: "Nomsa",
+                    account_verification_status: "verified",
+                  },
+                ],
+              }),
+            };
+          }
+
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }),
+      });
+
+      const response = await GET(
+        createGetRequest("http://localhost:3000/api/listings?page=1&limit=24")
+      );
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.listings[0]).toMatchObject({
+        id: "listing-live",
+        owner_id: USER_ID,
+        [expectedNullField]: null,
+      });
+    }
+  );
 });

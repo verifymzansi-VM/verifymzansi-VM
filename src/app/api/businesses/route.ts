@@ -21,9 +21,21 @@ import {
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
+import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
+const BUSINESS_SELECT_FALLBACK_FIELDS = ["gallery_photos", "business_details"] as const;
+
+function normalizeBusinessSelectShape(
+  businesses: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> {
+  return businesses.map((business) => ({
+    ...business,
+    gallery_photos: business.gallery_photos ?? null,
+    business_details: business.business_details ?? null,
+  }));
+}
 
 /**
  * POST /api/businesses
@@ -310,16 +322,38 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
     const offset = (page - 1) * limit;
 
-    const primarySelect = withOwnerColumn(
-      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
-      ownerColumn
-    );
-    const fallbackSelect = withOwnerColumn(
-      "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
-      ownerColumn
-    );
+    const selectAttempts = [
+      {
+        select: withOwnerColumn(
+          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
+          ownerColumn
+        ),
+        omittedFields: [] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
+          ownerColumn
+        ),
+        omittedFields: ["gallery_photos"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
+          ownerColumn
+        ),
+        omittedFields: ["business_details"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
+          ownerColumn
+        ),
+        omittedFields: ["gallery_photos", "business_details"] as const,
+      },
+    ] as const;
 
-    const buildQuery = (selectClause: string) => {
+    const buildQuery = async (selectClause: string) => {
       let query = admin
         .from("businesses")
         .select(selectClause, { count: "exact" })
@@ -357,20 +391,17 @@ export async function GET(request: NextRequest) {
         .range(offset, offset + limit - 1);
     };
 
-    const primaryResult = await buildQuery(primarySelect);
-    let businesses = (primaryResult.data ?? []) as unknown[];
-    let count = primaryResult.count;
-    let error = primaryResult.error;
+    const result = await queryWithSelectFallbacks({
+      attempts: selectAttempts,
+      fallbackFields: BUSINESS_SELECT_FALLBACK_FIELDS,
+      runQuery: buildQuery,
+    });
 
-    if (error?.message?.includes("gallery_photos")) {
-      const fallbackResult = await buildQuery(fallbackSelect);
-      businesses = ((fallbackResult.data ?? []) as unknown[]).map((business) => ({
-        ...(business as Record<string, unknown>),
-        gallery_photos: null,
-      }));
-      count = fallbackResult.count;
-      error = fallbackResult.error;
-    }
+    const businesses = normalizeBusinessSelectShape(
+      (result.data ?? []) as unknown as Array<Record<string, unknown>>
+    );
+    const count = result.count;
+    const error = result.error;
 
     if (error) {
       log.error("Failed to fetch businesses", { error: error.message });
@@ -378,7 +409,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      businesses: normalizeOwnerRecords(businesses as Array<Record<string, unknown>>),
+      businesses: normalizeOwnerRecords(businesses),
       total: count ?? 0,
       page,
       limit,
