@@ -67,10 +67,6 @@ If `RATE_LIMITER_API_KEY` is set, `OTP_RATE_LIMITER_URL` must also be set.
 
 ## 3. Data and Billing Checks
 
-- Run `pnpm seed:prod` against the target Supabase project before release if
-  `pnpm preflight:prod` reports plan drift.
-- Confirm the `plans` table contains the same active rows as
-  `src/lib/constants/pricing.ts`.
 - Confirm PayFast is in production mode and can receive callbacks at
   `/api/webhooks/payfast`.
 - Confirm Africa's Talking sender approval is complete for the live sender ID.

@@ -140,9 +140,8 @@ site root with `?code=...` instead of the app callback handler.
 | `pnpm test:e2e`                                                                        | Full Playwright suite                                |
 | `pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome` | Launch-path smoke coverage                           |
 | `pnpm preflight`                                                                       | Local launch checks with development-mode validation |
-| `pnpm preflight:prod`                                                                  | Production launch checks, including plan seed parity |
+| `pnpm preflight:prod`                                                                  | Production launch checks                             |
 | `pnpm validate:launch-env`                                                             | Fail-fast production env validation                  |
-| `pnpm seed:prod`                                                                       | Sync plan rows and seed staff accounts               |
 | `pnpm security:audit`                                                                  | Dependency vulnerability gate                        |
 | `pnpm secret-scan`                                                                     | Secret leak scan                                     |
 | `pnpm licenses:check`                                                                  | License policy gate                                  |
@@ -248,7 +247,7 @@ src/
   lib/                 domain logic, config, services, Supabase helpers
   stores/              Zustand stores
   test/                shared test setup
-scripts/               seed, preflight, validation, security, and release tooling
+scripts/               preflight, validation, security, and release tooling
 supabase/              migrations and schema assets
 workers/               Cloudflare Workers
 e2e/                   Playwright suites
@@ -258,8 +257,6 @@ e2e/                   Playwright suites
 
 - `Mzansi Business` is the primary business experience.
 - Legacy public routes remain available for compatibility.
-- Runtime pricing in `src/lib/constants/pricing.ts` is treated as the source of
-  truth for seeded `plans`.
 - `/api/health` now reports config, Supabase, and audit status without exposing
   secrets.
 

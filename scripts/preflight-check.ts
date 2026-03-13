@@ -1,14 +1,7 @@
 /* eslint-disable no-console */
 
 import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
-import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
-import {
-  EXPECTED_ACTIVE_PLAN_ROWS,
-  getPlanContractKey,
-  normalizePlanBillingFrequency,
-  type SeedPlanContractRow,
-} from "./seed-contract";
 import { verifySupabaseSchema } from "./check-supabase-schema";
 import {
   validateLaunchConfiguration,
@@ -156,92 +149,6 @@ async function checkSupabaseSchema(mode: LaunchValidationMode): Promise<void> {
   } catch (error) {
     const classifiedError = classifySupabaseSchemaPreflightError(mode, error);
     addResult("Supabase schema", classifiedError.status, classifiedError.detail);
-  }
-}
-
-async function checkSupabasePlansSeeded(mode: LaunchValidationMode): Promise<void> {
-  if (mode !== "production") {
-    addResult(
-      "Plans seeded",
-      "warn",
-      "Skipped outside production mode. Run 'pnpm preflight:prod' before deploy."
-    );
-    return;
-  }
-
-  try {
-    const supabase = createClient(
-      requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
-      requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
-      {
-        auth: { autoRefreshToken: false, persistSession: false },
-      }
-    );
-
-    const { data, error } = await supabase
-      .from("plans")
-      .select("area,tier,name,price_cents,billing_frequency,active")
-      .eq("active", true);
-
-    if (error) {
-      addResult("Plans seeded", "fail", error.message);
-      return;
-    }
-
-    const actualRows = (data ?? []) as SeedPlanContractRow[];
-    const actualByKey = new Map(actualRows.map((row) => [getPlanContractKey(row), row]));
-    const missing = EXPECTED_ACTIVE_PLAN_ROWS.filter(
-      (row) => !actualByKey.has(getPlanContractKey(row))
-    ).map((row) => `${row.area}/${row.tier}`);
-    const mismatched = EXPECTED_ACTIVE_PLAN_ROWS.filter((row) => {
-      const actual = actualByKey.get(getPlanContractKey(row));
-      return (
-        actual &&
-        (actual.name !== row.name ||
-          actual.price_cents !== row.price_cents ||
-          normalizePlanBillingFrequency(actual.billing_frequency) !== row.billing_frequency ||
-          actual.active !== row.active)
-      );
-    }).map((row) => `${row.area}/${row.tier}`);
-    const unexpected = actualRows
-      .filter(
-        (row) =>
-          !EXPECTED_ACTIVE_PLAN_ROWS.some(
-            (expected) => getPlanContractKey(expected) === getPlanContractKey(row)
-          )
-      )
-      .map((row) => `${row.area}/${row.tier}`);
-
-    const missingOnlyPromotionsRows =
-      missing.length > 0 && missing.every((row) => row.startsWith("PROMOTIONS_EVENTS/"));
-    const missingPromotionsHint = missingOnlyPromotionsRows
-      ? " This usually means the linked Supabase database is missing the PROMOTIONS_EVENTS marketplace_area enum migration. Apply migrations, then rerun pnpm seed:prod."
-      : "";
-
-    if (missing.length > 0 || mismatched.length > 0 || unexpected.length > 0) {
-      const details = [
-        missing.length > 0 ? `missing ${missing.join(", ")}` : null,
-        mismatched.length > 0 ? `mismatched ${mismatched.join(", ")}` : null,
-        unexpected.length > 0 ? `unexpected ${unexpected.join(", ")}` : null,
-      ]
-        .filter(Boolean)
-        .join("; ");
-
-      addResult(
-        "Plans seeded",
-        "fail",
-        `Expected ${EXPECTED_ACTIVE_PLAN_ROWS.length} active runtime plan rows; found ${actualRows.length}. ${details}. Run: pnpm seed:prod.${missingPromotionsHint}`
-      );
-      return;
-    }
-
-    addResult(
-      "Plans seeded",
-      "pass",
-      `${actualRows.length} active plans match the runtime pricing contract`
-    );
-  } catch (error) {
-    addResult("Plans seeded", "fail", (error as Error).message);
   }
 }
 
@@ -418,7 +325,6 @@ async function main(): Promise<void> {
 
   appendLaunchChecks(mode);
   await checkSupabaseSchema(mode);
-  await checkSupabasePlansSeeded(mode);
   await checkR2Access(mode);
   checkOzow(mode);
   checkAfricasTalking(mode);

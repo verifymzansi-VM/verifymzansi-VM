@@ -191,8 +191,5 @@ Five-phase programme to raise the platform foundation score from 15/20 to 20/20.
 
 ## Database Operations
 
-- **Unseeding Test Data**
-  - Created and executed a new script (`scripts/unseed-development.ts`) to
-    programmatically delete the initial dummy seller accounts
-    (`dev_seller1@test.com`, etc.) alongside all of their automatically
-    generated marketplace listings, mall storefronts, and business profiles.
+- Removed legacy dummy development accounts and their generated marketplace
+  content during environment cleanup.
