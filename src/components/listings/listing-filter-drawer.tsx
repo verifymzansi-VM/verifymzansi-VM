@@ -11,6 +11,7 @@ import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provi
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { cloneMarketplaceFilters, useMarketplaceStore, type MarketplaceFilters } from "@/stores";
 import { cn } from "@/lib/utils";
+import { triggerHaptic } from "@/lib/utils/haptics";
 import { ListingAttributeFilters } from "./listing-attribute-filters";
 
 function countActiveFilters(
@@ -77,10 +78,12 @@ export function ListingFilterDrawer() {
   }
 
   function clearDraftFilters() {
+    triggerHaptic("light");
     setDraftFilters(cloneMarketplaceFilters());
   }
 
   function handleApply() {
+    triggerHaptic("success");
     replaceFilters(draftFilters);
     setOpen(false);
   }
@@ -90,6 +93,7 @@ export function ListingFilterDrawer() {
       open={open}
       onOpenChange={(nextOpen) => {
         if (nextOpen) {
+          triggerHaptic("medium");
           setDraftFilters(cloneMarketplaceFilters(filters));
         }
         setOpen(nextOpen);

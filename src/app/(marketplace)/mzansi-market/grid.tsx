@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { createLogger } from "@/lib/utils/logger";
+import { triggerHaptic } from "@/lib/utils/haptics";
 import { serializeMarketplaceFiltersToSearchParams } from "@/lib/utils/marketplace-query";
 
 const PAGE_SIZE = 24;
@@ -425,12 +426,14 @@ export function MzansiMarketGrid() {
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 pt-4">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-4">
           <Button
             variant="outline"
             size="sm"
+            className="w-full sm:w-auto"
             disabled={page <= 1}
             onClick={() => {
+              triggerHaptic("light");
               setPage(page - 1);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
@@ -438,7 +441,7 @@ export function MzansiMarketGrid() {
             Previous
           </Button>
 
-          <div className="flex items-center gap-1">
+          <div className="hidden sm:flex items-center gap-1">
             {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
               const pageNum =
                 totalPages <= 5
@@ -456,6 +459,7 @@ export function MzansiMarketGrid() {
                   size="sm"
                   className={`w-8 h-8 p-0 ${pageNum === page ? "pointer-events-none" : ""}`}
                   onClick={() => {
+                    triggerHaptic("light");
                     setPage(pageNum);
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
@@ -469,8 +473,10 @@ export function MzansiMarketGrid() {
           <Button
             variant="outline"
             size="sm"
+            className="w-full sm:w-auto"
             disabled={page >= totalPages}
             onClick={() => {
+              triggerHaptic("light");
               setPage(page + 1);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}

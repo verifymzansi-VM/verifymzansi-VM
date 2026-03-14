@@ -1,9 +1,9 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Clock, Eye, Tag, Calendar, Percent, Sparkles } from "lucide-react";
+import { MapPin, Clock, Eye, Tag, Calendar, Percent, Sparkles, Maximize2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrustBadge } from "@/components/trust/trust-badge";
@@ -12,6 +12,8 @@ import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { TrustLevel, PromotionType } from "@/types/enums";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { CountdownBadge } from "@/components/ui/countdown-badge";
+import { Lightbox } from "@/components/ui/lightbox";
+import { triggerHaptic } from "@/lib/utils/haptics";
 
 interface PromotionCardProps {
   id: string;
@@ -101,6 +103,7 @@ export const PromotionCard = memo(function PromotionCard({
   endDate,
   businessName,
 }: PromotionCardProps) {
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const imageIsVideo = isVideoUrl(imageUrl);
@@ -116,7 +119,25 @@ export const PromotionCard = memo(function PromotionCard({
         trustLevel={ownerTrustLevel}
       >
         {/* Image area */}
-        <div className="relative aspect-[4/3] bg-warm-100 dark:bg-warm-800 overflow-hidden shrink-0">
+        <div
+          className="relative aspect-[4/3] bg-warm-100 dark:bg-warm-800 overflow-hidden shrink-0 cursor-pointer group/preview"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            triggerHaptic("light");
+            setIsPreviewOpen(true);
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsPreviewOpen(true);
+            }
+          }}
+          aria-label="Quick preview media"
+        >
           {normalizedImageUrl ? (
             imageIsVideo ? (
               <VideoCardPlayer
@@ -142,7 +163,15 @@ export const PromotionCard = memo(function PromotionCard({
           )}
 
           {/* Gradient overlay on hover */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+          {/* Quick Preview Icon Hint */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-all duration-300 bg-black/20 pointer-events-none">
+            <div className="flex items-center gap-1.5 bg-black/60 text-white px-3 py-1.5 rounded-full backdrop-blur-md transform scale-90 group-hover/preview:scale-100 transition-transform">
+              <Maximize2 className="h-4 w-4" />
+              <span className="text-xs font-bold">Preview</span>
+            </div>
+          </div>
 
           {/* Deal ribbon */}
           {isDeal && (
@@ -303,6 +332,14 @@ export const PromotionCard = memo(function PromotionCard({
           )}
         </CardContent>
       </Card>
+
+      <Lightbox
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        imageUrl={imageUrl}
+        posterUrl={posterUrl}
+        title={title}
+      />
     </Link>
   );
 });

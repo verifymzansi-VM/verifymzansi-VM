@@ -1,8 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Store, MapPin, Wrench, Camera, Truck, Globe, Home as HomeIcon } from "lucide-react";
+import {
+  Store,
+  MapPin,
+  Wrench,
+  Camera,
+  Truck,
+  Globe,
+  Home as HomeIcon,
+  Maximize2,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +25,8 @@ import {
 } from "@/types/enums";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { Lightbox } from "@/components/ui/lightbox";
+import { triggerHaptic } from "@/lib/utils/haptics";
 
 interface BusinessCardProps {
   id: string;
@@ -53,6 +65,7 @@ export function BusinessCard({
   featuredUntil,
   serviceAreas: _serviceAreas,
 }: BusinessCardProps) {
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const categoryData = BUSINESS_CATEGORIES.find((c) => c.value === category);
   const isBoosted = boostUntil && new Date(boostUntil) > new Date();
   const isFeatured = featuredUntil && new Date(featuredUntil) > new Date();
@@ -80,7 +93,25 @@ export function BusinessCard({
         trustLevel={trustLevel}
       >
         {/* Banner Image / Video */}
-        <div className="relative h-32 sm:h-40 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 overflow-hidden shrink-0">
+        <div
+          className="relative h-32 sm:h-40 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 overflow-hidden shrink-0 cursor-pointer group/preview"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            triggerHaptic("light");
+            setIsPreviewOpen(true);
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsPreviewOpen(true);
+            }
+          }}
+          aria-label="Quick preview media"
+        >
           {normalizedCoverPhoto ? (
             isVideo ? (
               <VideoCardPlayer
@@ -106,6 +137,14 @@ export function BusinessCard({
               <Store className="w-12 h-12" />
             </div>
           )}
+
+          {/* Quick Preview Icon Hint */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-all duration-300 bg-black/20 pointer-events-none">
+            <div className="flex items-center gap-1.5 bg-black/60 text-white px-3 py-1.5 rounded-full backdrop-blur-md transform scale-90 group-hover/preview:scale-100 transition-transform">
+              <Maximize2 className="h-4 w-4" />
+              <span className="text-xs font-bold">Preview</span>
+            </div>
+          </div>
 
           {/* Trust Badge overlay */}
           {trustLevel > 0 && (
@@ -235,6 +274,14 @@ export function BusinessCard({
           </div>
         </CardContent>
       </Card>
+
+      <Lightbox
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        imageUrl={displayCover || undefined}
+        posterUrl={normalizedPosterUrl}
+        title={businessName}
+      />
     </Link>
   );
 }

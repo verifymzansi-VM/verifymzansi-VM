@@ -6,6 +6,7 @@ import { Home, Search, PlusCircle, MessageSquare, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotificationStore } from "@/stores/notification-store";
 import { useAuth } from "@/hooks/use-auth";
+import { triggerHaptic } from "@/lib/utils/haptics";
 
 interface TabDef {
   href: string;
@@ -58,6 +59,7 @@ export function MobileNav() {
             <Link
               key={tab.label}
               href={resolvedHref}
+              onClick={() => triggerHaptic("light")}
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-0.5 flex-1 py-1 transition-colors",

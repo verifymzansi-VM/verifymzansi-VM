@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Zap } from "lucide-react";
+import { MapPin, Zap, Maximize2 } from "lucide-react";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
+import { Lightbox } from "@/components/ui/lightbox";
+import { triggerHaptic } from "@/lib/utils/haptics";
 
 interface MarketPreviewCardProps {
   href: string;
@@ -34,6 +37,7 @@ export function MarketPreviewCard({
   provinceCode,
   boosted,
 }: MarketPreviewCardProps) {
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
 
@@ -44,7 +48,25 @@ export function MarketPreviewCard({
       style={{ touchAction: "manipulation" }}
     >
       {/* Thumbnail */}
-      <div className="relative aspect-[4/3] overflow-hidden bg-warm-100 dark:bg-warm-800">
+      <div
+        className="relative aspect-[4/3] overflow-hidden bg-warm-100 dark:bg-warm-800 cursor-pointer group/preview"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerHaptic("light");
+          setIsPreviewOpen(true);
+        }}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsPreviewOpen(true);
+          }
+        }}
+        aria-label="Quick preview media"
+      >
         {normalizedImageUrl ? (
           isVideo ? (
             <VideoCardPlayer
@@ -67,6 +89,14 @@ export function MarketPreviewCard({
             <div className="h-16 w-24 rounded bg-warm-200 dark:bg-warm-700" />
           </div>
         )}
+
+        {/* Quick Preview Icon Hint */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-all duration-300 bg-black/20 pointer-events-none z-20">
+          <div className="flex items-center gap-1.5 bg-black/60 text-white px-3 py-1.5 rounded-full backdrop-blur-md transform scale-90 group-hover/preview:scale-100 transition-transform">
+            <Maximize2 className="h-4 w-4" />
+            <span className="text-xs font-bold">Preview</span>
+          </div>
+        </div>
 
         {/* Bottom gradient for title */}
         <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
@@ -105,6 +135,14 @@ export function MarketPreviewCard({
           {city}, {provinceCode}
         </p>
       </div>
+
+      <Lightbox
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        imageUrl={imageUrl}
+        posterUrl={posterUrl}
+        title={title}
+      />
     </Link>
   );
 }

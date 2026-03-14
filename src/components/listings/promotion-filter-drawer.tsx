@@ -9,6 +9,7 @@ import {
   type PromotionFilterState,
 } from "@/components/listings/promotion-filter-panel";
 import type { BusinessCategory, PromotionEventState, PromotionType } from "@/types/enums";
+import { triggerHaptic } from "@/lib/utils/haptics";
 
 interface PromotionFilterDrawerProps {
   filters: PromotionFilterState;
@@ -52,7 +53,13 @@ export function PromotionFilterDrawer({
   const activeFilterCount = countActivePromotionFilters(filters);
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (next) triggerHaptic("medium");
+        setOpen(next);
+      }}
+    >
       {/* ── Inline filter bar (mobile only) ─────────── */}
       <div className="lg:hidden">
         <SheetTrigger asChild>
@@ -85,6 +92,7 @@ export function PromotionFilterDrawer({
               size="sm"
               className="text-destructive hover:text-destructive"
               onClick={() => {
+                triggerHaptic("light");
                 onClearAll();
                 setOpen(false);
               }}
@@ -113,7 +121,13 @@ export function PromotionFilterDrawer({
 
         {/* ── Apply button ─────────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 border-t bg-background p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          <Button className="w-full" onClick={() => setOpen(false)}>
+          <Button
+            className="w-full"
+            onClick={() => {
+              triggerHaptic("success");
+              setOpen(false);
+            }}
+          >
             Show results
           </Button>
         </div>

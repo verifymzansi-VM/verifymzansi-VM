@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore, useState } from "react";
 import { SlidersHorizontal, Search } from "lucide-react";
 import {
   Sheet,
@@ -9,7 +9,6 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetClose,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +17,7 @@ import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { useMarketplaceStore } from "@/stores";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { triggerHaptic } from "@/lib/utils/haptics";
 
 const selectClassName =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
@@ -28,6 +28,7 @@ function subscribeToHydrationState() {
 
 export function BusinessFilterDrawer() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
+  const [open, setOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isInteractive = useSyncExternalStore(
     subscribeToHydrationState,
@@ -52,6 +53,7 @@ export function BusinessFilterDrawer() {
   ].filter(Boolean).length;
 
   const clearAllFilters = () => {
+    triggerHaptic("light");
     debouncedSetQuery.cancel();
     if (searchInputRef.current) {
       searchInputRef.current.value = "";
@@ -60,7 +62,13 @@ export function BusinessFilterDrawer() {
   };
 
   return (
-    <Sheet>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (next) triggerHaptic("medium");
+        setOpen(next);
+      }}
+    >
       {/* ── Inline filter bar (mobile only) ─────────── */}
       <div className="lg:hidden">
         <SheetTrigger asChild>
@@ -222,14 +230,16 @@ export function BusinessFilterDrawer() {
             >
               Clear all
             </Button>
-            <SheetClose asChild>
-              <Button
-                className="flex-1 bg-brand-blue hover:bg-brand-blue/90"
-                disabled={!isInteractive}
-              >
-                View results
-              </Button>
-            </SheetClose>
+            <Button
+              className="flex-1 bg-brand-blue hover:bg-brand-blue/90"
+              disabled={!isInteractive}
+              onClick={() => {
+                triggerHaptic("success");
+                setOpen(false);
+              }}
+            >
+              View results
+            </Button>
           </div>
         </div>
       </SheetContent>

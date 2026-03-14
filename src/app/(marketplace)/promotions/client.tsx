@@ -24,6 +24,7 @@ import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { formatZAR } from "@/lib/utils/format";
+import { triggerHaptic } from "@/lib/utils/haptics";
 
 interface PromotionRow {
   id: string;
@@ -429,12 +430,14 @@ export function PromotionsExplorer() {
               </div>
 
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 pt-4">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-4">
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto"
                     disabled={page <= 1}
                     onClick={() => {
+                      triggerHaptic("light");
                       updateFilters({ page: String(page - 1) }, { preservePage: true });
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
@@ -442,7 +445,7 @@ export function PromotionsExplorer() {
                     Previous
                   </Button>
 
-                  <div className="flex items-center gap-1">
+                  <div className="hidden sm:flex items-center gap-1">
                     {Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {
                       const pageNumber =
                         totalPages <= 5
@@ -460,6 +463,7 @@ export function PromotionsExplorer() {
                           size="sm"
                           className={`h-8 w-8 p-0 ${pageNumber === page ? "pointer-events-none" : ""}`}
                           onClick={() => {
+                            triggerHaptic("light");
                             updateFilters({ page: String(pageNumber) }, { preservePage: true });
                             window.scrollTo({ top: 0, behavior: "smooth" });
                           }}
@@ -473,8 +477,10 @@ export function PromotionsExplorer() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto"
                     disabled={page >= totalPages}
                     onClick={() => {
+                      triggerHaptic("light");
                       updateFilters({ page: String(page + 1) }, { preservePage: true });
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}

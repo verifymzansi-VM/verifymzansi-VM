@@ -42,7 +42,8 @@ export function ListingGridHeader() {
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-1.5 text-xs font-medium text-foreground outline-none border-none hover:text-brand-green bg-transparent transition-colors">
               <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
-              {currentSortLabel}
+              <span className="hidden sm:inline">{currentSortLabel}</span>
+              <span className="sm:hidden">Sort</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[160px]">
               {sortOptions.map((option) => (
