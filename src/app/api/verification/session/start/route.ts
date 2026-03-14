@@ -49,23 +49,57 @@ export async function POST(_request: NextRequest) {
 
     let session = existingSession;
 
-    // If the existing session is expired, mark it and create a new one
+    // If the existing session is expired, reset it for reuse (UNIQUE(user_id) allows only one row)
     if (session) {
       const expiresAt = new Date(new Date(session.created_at).getTime() + 24 * 60 * 60 * 1000);
       if (expiresAt < new Date()) {
-        // Mark expired session
-        await adminClient
-          .from("verification_sessions")
-          .update({ finalized_at: new Date().toISOString() })
-          .eq("id", session.id)
-          .is("finalized_at", null);
+        // Check if phone was already verified in verification_steps
+        const { data: phoneStep } = await adminClient
+          .from("verification_steps")
+          .select("phone_verified_at")
+          .eq("user_id", user.id)
+          .eq("step_type", "phone")
+          .in("status", ["approved", "pending"])
+          .maybeSingle();
 
-        session = null; // Force creation of a new session below
+        // Reset the expired session in-place instead of finalize + insert
+        // (inserting would violate the UNIQUE(user_id) constraint)
+        const { data: resetSession, error: resetErr } = await adminClient
+          .from("verification_sessions")
+          .update({
+            finalized_at: null,
+            created_at: new Date().toISOString(),
+            phone_verified_at: phoneStep?.phone_verified_at ?? null,
+            id_artifact_id: null,
+            selfie_artifact_id: null,
+            location_submitted_at: null,
+          })
+          .eq("id", session.id)
+          .select()
+          .single();
+
+        if (resetErr || !resetSession) {
+          log.error("Failed to reset expired session", { error: resetErr?.message ?? "unknown" });
+          return NextResponse.json(
+            { error: "Failed to create verification session" },
+            { status: 500 }
+          );
+        }
+
+        session = resetSession;
+
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "kyc_session_started",
+          targetType: "verification_session",
+          targetId: session.id,
+        });
       }
     }
 
     if (!session) {
-      // Check if phone was already verified in a previous session or verification_steps
+      // Check if phone was already verified in verification_steps
       const { data: phoneStep } = await adminClient
         .from("verification_steps")
         .select("phone_verified_at")
@@ -74,14 +108,20 @@ export async function POST(_request: NextRequest) {
         .in("status", ["approved", "pending"])
         .maybeSingle();
 
+      // Use upsert to handle edge case where a finalized row already exists
       const { data: newSession, error: insertErr } = await adminClient
         .from("verification_sessions")
-        .insert({
-          user_id: user.id,
-          ...(phoneStep?.phone_verified_at
-            ? { phone_verified_at: phoneStep.phone_verified_at }
-            : {}),
-        })
+        .upsert(
+          {
+            user_id: user.id,
+            finalized_at: null,
+            phone_verified_at: phoneStep?.phone_verified_at ?? null,
+            id_artifact_id: null,
+            selfie_artifact_id: null,
+            location_submitted_at: null,
+          },
+          { onConflict: "user_id" }
+        )
         .select()
         .single();
 

@@ -149,7 +149,7 @@ describe("POST /api/verification/session/start", () => {
       if (table === "verification_sessions") {
         return {
           ...mockSessionSelectChain({ data: null, error: { code: "PGRST116" } }),
-          insert: vi.fn().mockReturnValue({
+          upsert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({ data: newSession, error: null }),
             }),
@@ -232,7 +232,7 @@ describe("POST /api/verification/session/start", () => {
       if (table === "verification_sessions") {
         return {
           ...mockSessionSelectChain({ data: null, error: { code: "PGRST116" } }),
-          insert: vi.fn().mockReturnValue({
+          upsert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({ data: null, error: { message: "DB error" } }),
             }),
@@ -293,6 +293,73 @@ describe("POST /api/verification/session/start", () => {
     expect(data.completedSteps).toEqual(["phone"]);
     expect(data.rejectedSteps).toContain("id_doc");
     expect(data.rejectedSteps).toContain("selfie");
+  });
+
+  it("resets expired session in-place and preserves phone_verified_at", async () => {
+    mockAuth({ id: "user-1" });
+
+    const expiredCreatedAt = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    const phoneVerifiedAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const expiredSession = {
+      id: "session-expired",
+      user_id: "user-1",
+      created_at: expiredCreatedAt,
+      phone_verified_at: null,
+      id_artifact_id: "old-artifact",
+      selfie_artifact_id: null,
+      location_submitted_at: null,
+      finalized_at: null,
+    };
+
+    const resetSession = {
+      id: "session-expired",
+      user_id: "user-1",
+      created_at: new Date().toISOString(),
+      phone_verified_at: phoneVerifiedAt,
+      id_artifact_id: null,
+      selfie_artifact_id: null,
+      location_submitted_at: null,
+      finalized_at: null,
+    };
+
+    const mockUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: resetSession, error: null }),
+        }),
+      }),
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_sessions") {
+        return {
+          ...mockSessionSelectChain({ data: expiredSession, error: null }),
+          update: mockUpdate,
+        };
+      }
+      if (table === "verification_steps") {
+        return mockStepsTable({
+          phoneStep: { phone_verified_at: phoneVerifiedAt },
+          allSteps: [{ step_type: "phone", status: "approved" }],
+        });
+      }
+      return {};
+    });
+
+    const response = await POST(createMockRequest());
+    expect(response.status).toBe(200);
+
+    const data = await response.json();
+    expect(data.sessionId).toBe("session-expired");
+    expect(data.phoneVerifiedAt).toBe(phoneVerifiedAt);
+    expect(data.completedSteps).toEqual(["phone"]);
+    expect(mockUpdate).toHaveBeenCalled();
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "kyc_session_started",
+        actorId: "user-1",
+      })
+    );
   });
 
   it("includes expiresAt as 24h after session creation", async () => {
