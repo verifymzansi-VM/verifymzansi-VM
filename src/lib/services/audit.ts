@@ -55,7 +55,8 @@ export type AuditAction =
   | "feature_flag_toggled"
   | "kyc_session_started"
   | "kyc_gps_submitted"
-  | "kyc_proof_uploaded";
+  | "kyc_proof_uploaded"
+  | "kyc_manual_location_submitted";
 
 interface AuditLogEntry {
   actorId: string;

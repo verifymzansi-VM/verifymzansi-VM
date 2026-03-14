@@ -15,7 +15,12 @@ import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/
 
 const log = createLogger("GpsVerification");
 import { parseJsonRequest } from "@/lib/utils/api";
-import { GPS_ACCURACY_WARN_METERS, GPS_ACCURACY_REJECT_METERS } from "@/lib/constants/verification";
+import {
+  GPS_ACCURACY_WARN_METERS,
+  GPS_ACCURACY_REJECT_METERS,
+  GPS_PROVINCE_MISMATCH_RISK,
+  GPS_CITY_MISMATCH_RISK,
+} from "@/lib/constants/verification";
 import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
@@ -26,6 +31,8 @@ const gpsLocationSchema = z.object({
   longitude: z.number().min(16).max(33),
   accuracy: z.number().positive(),
   timestamp: z.number().positive(),
+  declaredProvince: z.string().optional(),
+  declaredCity: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -67,7 +74,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { latitude, longitude, accuracy, timestamp: _timestamp } = parsed.data;
+    const {
+      latitude,
+      longitude,
+      accuracy,
+      timestamp: _timestamp,
+      declaredProvince,
+      declaredCity,
+    } = parsed.data;
+    const isConfirmationMode = !!declaredProvince;
 
     // Reject extremely poor accuracy
     if (accuracy > GPS_ACCURACY_REJECT_METERS) {
@@ -112,9 +127,9 @@ export async function POST(request: NextRequest) {
     const resolvedCity = geoResult.city;
     const confidence = computeLocationConfidence(
       resolvedProvince,
-      resolvedProvince,
+      isConfirmationMode ? declaredProvince! : resolvedProvince,
       resolvedCity,
-      resolvedCity ?? resolvedProvince,
+      isConfirmationMode ? (declaredCity ?? resolvedProvince) : (resolvedCity ?? resolvedProvince),
       accuracy
     );
 
@@ -124,6 +139,39 @@ export async function POST(request: NextRequest) {
       severity: string;
       value_json: Record<string, unknown>;
     }> = [];
+
+    // Mismatch detection in confirmation mode
+    const mismatch = { province: false, city: false };
+    if (isConfirmationMode) {
+      const provinceMatch = resolvedProvince.toLowerCase() === declaredProvince!.toLowerCase();
+      const cityMatch = resolvedCity
+        ? resolvedCity.toLowerCase() === (declaredCity ?? "").toLowerCase()
+        : false;
+
+      mismatch.province = !provinceMatch;
+      mismatch.city = !cityMatch;
+
+      if (!provinceMatch) {
+        signals.push({
+          signal_code: "gps_province_mismatch",
+          severity: "block",
+          value_json: {
+            declared_province: declaredProvince,
+            gps_province: resolvedProvince,
+          },
+        });
+      }
+      if (provinceMatch && !cityMatch) {
+        signals.push({
+          signal_code: "gps_city_mismatch",
+          severity: "warn",
+          value_json: {
+            declared_city: declaredCity,
+            gps_city: resolvedCity,
+          },
+        });
+      }
+    }
 
     if (geoResult.source !== "nominatim" || !resolvedCity) {
       signals.push({
@@ -152,9 +200,21 @@ export async function POST(request: NextRequest) {
 
     // Calculate risk score from signals
     let riskScore = 0;
-    for (const sig of signals) {
-      if (sig.severity === "block") riskScore += 40;
-      else if (sig.severity === "warn") riskScore += 15;
+    if (isConfirmationMode) {
+      if (mismatch.province) riskScore += GPS_PROVINCE_MISMATCH_RISK;
+      else if (mismatch.city) riskScore += GPS_CITY_MISMATCH_RISK;
+      // Add standard signal-based risk on top
+      for (const sig of signals) {
+        if (sig.signal_code.startsWith("gps_province") || sig.signal_code.startsWith("gps_city"))
+          continue;
+        if (sig.severity === "block") riskScore += 40;
+        else if (sig.severity === "warn") riskScore += 15;
+      }
+    } else {
+      for (const sig of signals) {
+        if (sig.severity === "block") riskScore += 40;
+        else if (sig.severity === "warn") riskScore += 15;
+      }
     }
     riskScore = Math.min(riskScore, 100);
 
@@ -162,24 +222,34 @@ export async function POST(request: NextRequest) {
       riskScore <= 25 ? "low" : riskScore <= 50 ? "medium" : riskScore <= 75 ? "high" : "critical";
 
     // Upsert verification step
+    const stepData = buildPendingVerificationStep({
+      user_id: user.id,
+      step_type: "location",
+      location_method: isConfirmationMode ? "manual_with_gps" : "gps",
+      gps_lat: latitude,
+      gps_lon: longitude,
+      location_province: isConfirmationMode ? declaredProvince! : resolvedProvince,
+      location_city: isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity,
+      risk_score: riskScore,
+      risk_level: riskLevel,
+      auto_status: riskScore > 50 ? "needs_manual_review" : "approved",
+      submitted_at: new Date().toISOString(),
+      ...(isConfirmationMode
+        ? {
+            metadata: {
+              declared_province: declaredProvince,
+              declared_city: declaredCity,
+              gps_province: resolvedProvince,
+              gps_city: resolvedCity,
+              mismatch,
+            },
+          }
+        : {}),
+    });
+
     const { data: step, error: stepError } = await adminClient
       .from("verification_steps")
-      .upsert(
-        buildPendingVerificationStep({
-          user_id: user.id,
-          step_type: "location",
-          location_method: "gps",
-          gps_lat: latitude,
-          gps_lon: longitude,
-          location_province: resolvedProvince,
-          location_city: resolvedCity,
-          risk_score: riskScore,
-          risk_level: riskLevel,
-          auto_status: riskScore > 50 ? "needs_manual_review" : "approved",
-          submitted_at: new Date().toISOString(),
-        }),
-        { onConflict: "user_id,step_type" }
-      )
+      .upsert(stepData, { onConflict: "user_id,step_type" })
       .select("id")
       .single();
 
@@ -209,12 +279,12 @@ export async function POST(request: NextRequest) {
       { onConflict: "user_id" }
     );
 
-    // Update account profile
+    // Update account profile — use declared values in confirmation mode
     await adminClient
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
-        location_province: resolvedProvince,
-        location_city: resolvedCity,
+        location_province: isConfirmationMode ? declaredProvince! : resolvedProvince,
+        location_city: isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity,
       })
       .eq("user_id", user.id);
 
@@ -254,6 +324,7 @@ export async function POST(request: NextRequest) {
       source: geoResult.source,
       riskScore,
       riskLevel,
+      ...(isConfirmationMode ? { mismatch } : {}),
     });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "unknown error" });

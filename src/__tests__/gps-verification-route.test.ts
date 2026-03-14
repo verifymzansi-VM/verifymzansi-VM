@@ -50,6 +50,8 @@ vi.mock("@/lib/utils/api", () => ({
 vi.mock("@/lib/constants/verification", () => ({
   GPS_ACCURACY_WARN_METERS: 100,
   GPS_ACCURACY_REJECT_METERS: 500,
+  GPS_PROVINCE_MISMATCH_RISK: 50,
+  GPS_CITY_MISMATCH_RISK: 25,
 }));
 
 vi.mock("@/lib/constants/sa-provinces", () => ({

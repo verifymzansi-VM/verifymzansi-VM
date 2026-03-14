@@ -58,6 +58,8 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 const LOCATION_METHOD_LABELS: Record<string, string> = {
   gps: "GPS coordinates",
   proof_of_address: "Proof of address document",
+  manual: "Manual selection (no GPS)",
+  manual_with_gps: "Manual selection + GPS confirmed",
 };
 
 const REASON_CODES = [

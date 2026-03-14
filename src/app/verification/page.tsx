@@ -40,6 +40,7 @@ import type {
   AccountVerificationStatus,
 } from "@/types/enums";
 import { GPS_REQUEST_TIMEOUT_MS, GPS_MAX_AGE_MS } from "@/lib/constants/verification";
+import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 
 type WizardStep = "phone" | "id_doc" | "selfie" | "location" | "complete";
 type UploadReceipt = { name: string; sizeBytes: number; uploadedAtIso: string };
@@ -75,7 +76,7 @@ const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
     "Enter your 13-digit SA ID number and add a clear photo or PDF of your ID document. Accepted: JPG, PNG, WebP, PDF up to 5 MB.",
   selfie: "Upload a clear selfie with your full face visible. Accepted: JPG, PNG, WebP up to 5 MB.",
   location:
-    "We'll request your GPS location to register your address. Please allow location access when prompted.",
+    "Select your province and city below. You can optionally confirm with GPS for faster approval.",
 };
 
 class SubmissionError extends Error {
@@ -308,6 +309,11 @@ export default function VerificationPage() {
   const [gpsProvince, setGpsProvince] = useState<string | null>(null);
   const [gpsFeatureAvailable, setGpsFeatureAvailable] = useState(true);
 
+  // Manual location state
+  const [manualSubmitted, setManualSubmitted] = useState(false);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [gpsMismatch, setGpsMismatch] = useState<{ province: boolean; city: boolean } | null>(null);
+
   // SA ID validation feedback
   const [idDob, setIdDob] = useState<string | null>(null);
   const [idGender, setIdGender] = useState<string | null>(null);
@@ -348,7 +354,7 @@ export default function VerificationPage() {
   const persistedLocationSubmitted = ["approved", "pending"].includes(
     serverStepMap.get("location")?.status ?? ""
   );
-  const isLocationReady = persistedLocationSubmitted || gpsStatus === "success";
+  const isLocationReady = persistedLocationSubmitted || manualSubmitted;
   const allStepsResolved = useMemo(
     () =>
       REVIEWABLE_STEP_ORDER.every((stepType) => {
@@ -529,24 +535,35 @@ export default function VerificationPage() {
         setGpsStatus("success");
 
         try {
+          const gpsBody: Record<string, unknown> = {
+            latitude,
+            longitude,
+            accuracy,
+            timestamp: position.timestamp,
+          };
+          // Pass declared values for GPS confirmation mode
+          if (manualSubmitted && province) {
+            gpsBody.declaredProvince = province;
+            if (city) gpsBody.declaredCity = city;
+          }
           const res = await fetch("/api/verification/location/gps", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              latitude,
-              longitude,
-              accuracy,
-              timestamp: position.timestamp,
-            }),
+            body: JSON.stringify(gpsBody),
           });
           if (res.ok) {
             const data = await res.json();
-            setProvince(data.resolvedProvince ?? "");
-            setCity(data.resolvedCity ?? "");
+            if (!manualSubmitted) {
+              setProvince(data.resolvedProvince ?? "");
+              setCity(data.resolvedCity ?? "");
+            }
             setGpsConfidence(data.confidence);
             setGpsProvince(data.resolvedProvince ?? null);
+            if (data.mismatch) {
+              setGpsMismatch(data.mismatch);
+            }
             markStepComplete("location");
-            toast({ title: "GPS location captured", variant: "success" });
+            toast({ title: "GPS confirmation captured", variant: "success" });
           } else if (res.status === 404) {
             setGpsFeatureAvailable(false);
             setGpsStatus("idle");
@@ -576,8 +593,7 @@ export default function VerificationPage() {
         setGpsStatus(err.code === err.PERMISSION_DENIED ? "denied" : "error");
         toast({
           title: err.code === err.PERMISSION_DENIED ? "GPS permission denied" : "GPS error",
-          description:
-            "GPS access is required for verification. Please enable location permissions and try again.",
+          description: "GPS confirmation is optional. You can proceed without it.",
           variant: "destructive",
         });
       },
@@ -587,15 +603,9 @@ export default function VerificationPage() {
         maximumAge: GPS_MAX_AGE_MS,
       }
     );
-  }, [gpsStatus, toast]);
+  }, [gpsStatus, toast, manualSubmitted, province, city]);
 
-  useEffect(() => {
-    if (step !== "location" || gpsStatus !== "idle" || !gpsFeatureAvailable) {
-      return;
-    }
-
-    void handleRequestGps();
-  }, [gpsFeatureAvailable, gpsStatus, handleRequestGps, step]);
+  // GPS is no longer auto-triggered — it's optional confirmation after manual selection
 
   const idPreviewUrl = useMemo(
     () => (idFile && idFile.type.startsWith("image/") ? URL.createObjectURL(idFile) : null),
@@ -827,14 +837,49 @@ export default function VerificationPage() {
   }
 
   async function submitLocation() {
-    if (persistedLocationSubmitted || gpsStatus === "success") {
+    if (persistedLocationSubmitted || manualSubmitted) {
       if (!completedSteps.includes("location")) {
         markStepComplete("location");
       }
       return;
     }
 
-    throw new Error("Please allow GPS access to capture your location.");
+    throw new Error("Please select your province and city.");
+  }
+
+  async function handleManualLocationSubmit() {
+    if (!province || !city) {
+      toast({ title: "Please select both province and city", variant: "destructive" });
+      return;
+    }
+    setManualSubmitting(true);
+    try {
+      const res = await fetch("/api/verification/location/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ province, city }),
+      });
+      if (res.ok) {
+        setManualSubmitted(true);
+        markStepComplete("location");
+        toast({ title: "Location saved", variant: "success" });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({
+          title: "Failed to save location",
+          description: data.error || "Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Location submission failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setManualSubmitting(false);
+    }
   }
 
   async function handleFinalize() {
@@ -1295,104 +1340,180 @@ export default function VerificationPage() {
                       </div>
                     )}
 
-                    <div className="space-y-2 rounded-md border border-warm-200/70 p-4 dark:border-warm-700/70">
-                      <p className="text-sm font-medium">GPS Location</p>
-                      <p className="text-xs text-muted-foreground">
-                        GPS starts automatically when you reach this step. Your live location will
-                        be used as your registered address.
-                      </p>
-                    </div>
-
+                    {/* Manual Province + City Selection */}
                     <div className="space-y-3 rounded-md border border-warm-200/70 p-4 dark:border-warm-700/70">
                       <h4 className="flex items-center gap-2 text-sm font-medium">
-                        <Navigation className="h-4 w-4 text-brand-blue" />
-                        GPS Location Verification
+                        <MapPin className="h-4 w-4 text-brand-red" />
+                        Select Your Location
                       </h4>
-                      <p className="text-xs text-muted-foreground">
-                        We use your device GPS to resolve your current location automatically.
-                      </p>
 
-                      {gpsFeatureAvailable && gpsStatus === "idle" && (
-                        <Button
-                          onClick={handleRequestGps}
-                          variant="outline"
-                          className="gap-2"
-                          size="sm"
+                      <div className="space-y-2">
+                        <Label htmlFor="province-select" className="text-xs">
+                          Province
+                        </Label>
+                        <select
+                          id="province-select"
+                          title="Province"
+                          aria-label="Province"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={province}
+                          disabled={manualSubmitted}
+                          onChange={(e) => {
+                            setProvince(e.target.value);
+                            setCity("");
+                          }}
                         >
-                          <Navigation className="h-4 w-4" />
-                          Retry GPS Capture
+                          <option value="">Select province…</option>
+                          {getProvinceNames().map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="city-select" className="text-xs">
+                          City / Town
+                        </Label>
+                        <select
+                          id="city-select"
+                          title="City"
+                          aria-label="City"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={city}
+                          disabled={!province || manualSubmitted}
+                          onChange={(e) => setCity(e.target.value)}
+                        >
+                          <option value="">Select city…</option>
+                          {province &&
+                            getCitiesForProvince(province).map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      {!manualSubmitted && (
+                        <Button
+                          onClick={handleManualLocationSubmit}
+                          disabled={!province || !city || manualSubmitting}
+                          variant="default"
+                          size="sm"
+                          className="gap-2"
+                        >
+                          {manualSubmitting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4" />
+                          )}
+                          Submit Location
                         </Button>
                       )}
 
-                      {gpsStatus === "requesting" && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Requesting GPS access and resolving your location…
-                        </div>
-                      )}
-
-                      {gpsStatus === "success" && gpsCoords && (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-sm text-brand-green">
-                            <CheckCircle2 className="h-4 w-4" />
-                            GPS captured (accuracy: {Math.round(gpsCoords.accuracy)}m)
-                          </div>
-                          {province && (
-                            <div className="rounded-md border border-brand-green/30 bg-brand-green-50 px-3 py-2 text-xs text-brand-green-900">
-                              Detected area: {city ? `${city}, ${province}` : province}
-                            </div>
-                          )}
-                          {gpsConfidence && (
-                            <div
-                              className={`rounded-md border px-3 py-2 text-xs ${
-                                gpsConfidence === "high"
-                                  ? "border-brand-green/30 bg-brand-green-50 text-brand-green-900"
-                                  : gpsConfidence === "medium"
-                                    ? "border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-950 text-yellow-900 dark:text-yellow-100"
-                                    : "border-destructive/30 bg-destructive/5 text-destructive"
-                              }`}
-                            >
-                              Location confidence:{" "}
-                              <span className="font-medium capitalize">{gpsConfidence}</span>
-                              {gpsProvince && <span className="ml-1">({gpsProvince})</span>}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {(gpsStatus === "denied" || gpsStatus === "error") && (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-sm text-destructive">
-                            <AlertTriangle className="h-4 w-4" />
-                            {gpsStatus === "denied"
-                              ? "GPS permission was denied. Please enable location access in your browser settings."
-                              : "Could not verify your location. Please try again."}
-                          </div>
-                          <Button
-                            onClick={() => {
-                              setGpsStatus("idle");
-                              setGpsCoords(null);
-                              setGpsConfidence(null);
-                              setProvince("");
-                              setCity("");
-                            }}
-                            variant="outline"
-                            size="sm"
-                            className="gap-2"
-                          >
-                            <Navigation className="h-4 w-4" />
-                            Retry GPS
-                          </Button>
-                        </div>
-                      )}
-
-                      {!gpsFeatureAvailable && (
-                        <div className="flex items-center gap-2 text-sm text-destructive">
-                          <AlertTriangle className="h-4 w-4" />
-                          GPS verification is temporarily unavailable. Please try again later.
+                      {manualSubmitted && (
+                        <div className="flex items-center gap-2 text-sm text-brand-green">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Location saved: {city}, {province}
                         </div>
                       )}
                     </div>
+
+                    {/* Optional GPS Confirmation */}
+                    {manualSubmitted && gpsStatus !== "success" && (
+                      <div className="space-y-3 rounded-md border border-dashed border-brand-blue/40 p-4 bg-brand-blue/5">
+                        <h4 className="flex items-center gap-2 text-sm font-medium">
+                          <Navigation className="h-4 w-4 text-brand-blue" />
+                          Confirm with GPS (Optional)
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          GPS confirmation speeds up approval. Your selected location will still be
+                          used as your address.
+                        </p>
+
+                        {gpsFeatureAvailable && gpsStatus === "idle" && (
+                          <Button
+                            onClick={handleRequestGps}
+                            variant="outline"
+                            className="gap-2"
+                            size="sm"
+                          >
+                            <Navigation className="h-4 w-4" />
+                            Confirm with GPS
+                          </Button>
+                        )}
+
+                        {gpsStatus === "requesting" && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Requesting GPS access…
+                          </div>
+                        )}
+
+                        {(gpsStatus === "denied" || gpsStatus === "error") && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              {gpsStatus === "denied"
+                                ? "GPS permission denied — you can still proceed without it."
+                                : "GPS unavailable — you can still proceed without it."}
+                            </div>
+                            <Button
+                              onClick={() => {
+                                setGpsStatus("idle");
+                                setGpsCoords(null);
+                                setGpsConfidence(null);
+                              }}
+                              variant="ghost"
+                              size="sm"
+                              className="gap-2 text-xs"
+                            >
+                              <Navigation className="h-3.5 w-3.5" />
+                              Try Again
+                            </Button>
+                          </div>
+                        )}
+
+                        {!gpsFeatureAvailable && (
+                          <p className="text-xs text-muted-foreground">
+                            GPS is not available on this device. You can proceed without it.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* GPS Confirmation Result */}
+                    {manualSubmitted && gpsStatus === "success" && gpsCoords && (
+                      <div className="space-y-2 rounded-md border border-brand-green/30 bg-brand-green-50/30 p-4 dark:bg-brand-green-950/20">
+                        <div className="flex items-center gap-2 text-sm text-brand-green">
+                          <Navigation className="h-4 w-4" />
+                          GPS confirmed (accuracy: {Math.round(gpsCoords.accuracy)}m)
+                        </div>
+                        {gpsMismatch?.province && (
+                          <div className="rounded-md border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
+                            GPS detected a different province ({gpsProvince}). Your selected
+                            location will be reviewed by an admin.
+                          </div>
+                        )}
+                        {gpsMismatch && !gpsMismatch.province && gpsMismatch.city && (
+                          <div className="rounded-md border border-yellow-300/50 bg-yellow-50 px-3 py-2 text-xs text-yellow-700 dark:bg-yellow-950/20 dark:text-yellow-400">
+                            GPS detected a different city. Your selected city will be used.
+                          </div>
+                        )}
+                        {gpsMismatch && !gpsMismatch.province && !gpsMismatch.city && (
+                          <div className="text-xs text-brand-green">
+                            GPS matches your selected location.
+                          </div>
+                        )}
+                        {gpsConfidence && (
+                          <div className="text-xs text-muted-foreground">
+                            Confidence:{" "}
+                            <span className="font-medium capitalize">{gpsConfidence}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="flex gap-2">
                       <Button
@@ -1471,15 +1592,21 @@ export default function VerificationPage() {
 
                     <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
                       <p className="font-medium">Location</p>
-                      {gpsStatus === "success" && province ? (
-                        <div className="mt-1 space-y-1 text-brand-green">
-                          <div className="flex items-center gap-1">
-                            <Navigation className="h-4 w-4" />
-                            <span>GPS verified{gpsConfidence ? ` (${gpsConfidence})` : ""}</span>
-                          </div>
+                      {(manualSubmitted || persistedLocationSubmitted) && province ? (
+                        <div className="mt-1 space-y-1">
                           <p className="text-muted-foreground">
                             {city ? `${city}, ${province}` : province}
                           </p>
+                          <div className="flex items-center gap-1 text-xs">
+                            {gpsStatus === "success" ? (
+                              <span className="text-brand-green flex items-center gap-1">
+                                <Navigation className="h-3 w-3" />
+                                GPS confirmed{gpsConfidence ? ` (${gpsConfidence})` : ""}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">Manual selection</span>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         <div className="mt-1 flex items-center gap-1 text-muted-foreground">
