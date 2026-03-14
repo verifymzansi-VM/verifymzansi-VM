@@ -11,12 +11,11 @@ import { reverseGeocode, computeLocationConfidence } from "@/lib/services/geocod
 import { logAuditEvent } from "@/lib/services/audit";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { createLogger } from "@/lib/utils/logger";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("GpsVerification");
 import { parseJsonRequest } from "@/lib/utils/api";
 import { GPS_ACCURACY_WARN_METERS, GPS_ACCURACY_REJECT_METERS } from "@/lib/constants/verification";
-import { getProvinceNames } from "@/lib/constants/sa-provinces";
 import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
@@ -27,8 +26,6 @@ const gpsLocationSchema = z.object({
   longitude: z.number().min(16).max(33),
   accuracy: z.number().positive(),
   timestamp: z.number().positive(),
-  province: z.string().min(1),
-  city: z.string().min(1),
 });
 
 export async function POST(request: NextRequest) {
@@ -70,16 +67,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { latitude, longitude, accuracy, timestamp: _timestamp, province, city } = parsed.data;
-
-    // Validate province is a valid SA province
-    const validProvinces = getProvinceNames();
-    if (!validProvinces.includes(province)) {
-      return NextResponse.json(
-        { error: `Invalid province. Must be one of: ${validProvinces.join(", ")}` },
-        { status: 400 }
-      );
-    }
+    const { latitude, longitude, accuracy, timestamp: _timestamp } = parsed.data;
 
     // Reject extremely poor accuracy
     if (accuracy > GPS_ACCURACY_REJECT_METERS) {
@@ -98,7 +86,7 @@ export async function POST(request: NextRequest) {
 
     // Check account profile exists
     const { data: profile } = await adminClient
-      .from("account_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id")
       .eq("user_id", user.id)
       .single();
@@ -109,11 +97,24 @@ export async function POST(request: NextRequest) {
 
     // Reverse geocode
     const geoResult = await reverseGeocode(latitude, longitude);
+    if (!geoResult.province) {
+      return NextResponse.json(
+        {
+          error:
+            "We could not resolve your province from GPS. Please upload proof of residence instead.",
+          code: "gps_unresolved",
+        },
+        { status: 422 }
+      );
+    }
+
+    const resolvedProvince = geoResult.province;
+    const resolvedCity = geoResult.city;
     const confidence = computeLocationConfidence(
-      geoResult.province,
-      province,
-      geoResult.city,
-      city,
+      resolvedProvince,
+      resolvedProvince,
+      resolvedCity,
+      resolvedCity ?? resolvedProvince,
       accuracy
     );
 
@@ -124,14 +125,14 @@ export async function POST(request: NextRequest) {
       value_json: Record<string, unknown>;
     }> = [];
 
-    // Province mismatch
-    if (geoResult.province && geoResult.province.toLowerCase() !== province.toLowerCase()) {
+    if (geoResult.source !== "nominatim" || !resolvedCity) {
       signals.push({
-        signal_code: "gps_province_mismatch",
+        signal_code: "gps_low_resolution",
         severity: "warn",
         value_json: {
-          gps_province: geoResult.province,
-          declared_province: province,
+          gps_province: resolvedProvince,
+          gps_city: resolvedCity,
+          source: geoResult.source,
           confidence,
         },
       });
@@ -170,8 +171,8 @@ export async function POST(request: NextRequest) {
           location_method: "gps",
           gps_lat: latitude,
           gps_lon: longitude,
-          location_province: province,
-          location_city: city,
+          location_province: resolvedProvince,
+          location_city: resolvedCity,
           risk_score: riskScore,
           risk_level: riskLevel,
           auto_status: riskScore > 50 ? "needs_manual_review" : "approved",
@@ -210,16 +211,16 @@ export async function POST(request: NextRequest) {
 
     // Update account profile
     await adminClient
-      .from("account_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
-        location_province: province,
-        location_city: city,
+        location_province: resolvedProvince,
+        location_city: resolvedCity,
       })
       .eq("user_id", user.id);
 
     // Set pending_review if currently incomplete
     await adminClient
-      .from("account_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
         account_verification_status: "pending_review",
       })
@@ -235,8 +236,9 @@ export async function POST(request: NextRequest) {
       targetId: step.id,
       metadata: {
         confidence,
-        gps_province: geoResult.province,
-        declared_province: province,
+        gps_province: resolvedProvince,
+        gps_city: resolvedCity,
+        source: geoResult.source,
         accuracy_meters: accuracy,
         risk_score: riskScore,
         risk_level: riskLevel,
@@ -247,9 +249,9 @@ export async function POST(request: NextRequest) {
       success: true,
       stepId: step.id,
       confidence,
-      gpsProvince: geoResult.province,
-      gpsCity: geoResult.city,
-      gpsDeclaredMatch: geoResult.province?.toLowerCase() === province.toLowerCase(),
+      resolvedProvince,
+      resolvedCity,
+      source: geoResult.source,
       riskScore,
       riskLevel,
     });

@@ -9,15 +9,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { deleteFromR2, uploadKycDocument } from "@/lib/services/storage";
 import { processKycArtifact } from "@/lib/services/kyc-engine";
 import { logAuditEvent } from "@/lib/services/audit";
-import { validateUploadedFile } from "@/lib/validations/verification";
+import { proofOfAddressLineSchema, validateUploadedFile } from "@/lib/validations/verification";
 import { createLogger } from "@/lib/utils/logger";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("ProofUpload");
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
-import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { MAX_FILE_SIZE_BYTES } from "@/lib/constants/verification";
-import { getProvinceNames } from "@/lib/constants/sa-provinces";
 import { isStrictLocalDevelopmentRequest } from "@/lib/utils/local-dev";
 import {
   buildPendingVerificationStep,
@@ -46,37 +44,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Feature flag check
-    const gpsEnabled = await isFeatureEnabled("kyc_gps_location");
-    if (!gpsEnabled) {
-      return NextResponse.json(
-        { error: "GPS location verification is not yet enabled" },
-        { status: 404 }
-      );
-    }
-
     // Parse multipart form data
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
-    const province = formData.get("province") as string | null;
-    const city = formData.get("city") as string | null;
+    const addressLineRaw = formData.get("addressLine");
 
     if (!file) {
       return NextResponse.json({ error: "File is required" }, { status: 400 });
     }
 
-    if (!province || !city) {
-      return NextResponse.json({ error: "Province and city are required" }, { status: 400 });
-    }
-
-    // Validate province
-    const validProvinces = getProvinceNames();
-    if (!validProvinces.includes(province)) {
+    const addressLineResult = proofOfAddressLineSchema.safeParse(addressLineRaw);
+    if (!addressLineResult.success) {
       return NextResponse.json(
-        { error: `Invalid province. Must be one of: ${validProvinces.join(", ")}` },
+        {
+          error: addressLineResult.error.issues[0]?.message ?? "Address line is required",
+          code: "address_line_required",
+        },
         { status: 400 }
       );
     }
+    const addressLine = addressLineResult.data;
 
     // Validate file (images + PDF allowed for proof of address)
     const fileValidation = validateUploadedFile(file, { allowPdf: true });
@@ -106,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     // Check account profile exists
     const { data: profile } = await adminClient
-      .from("account_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id")
       .eq("user_id", user.id)
       .single();
@@ -119,14 +106,17 @@ export async function POST(request: NextRequest) {
     let uploadResult: { url: string; key: string };
     let uploadedToR2 = false;
     try {
-      uploadResult = await uploadKycDocument(file, user.id, "proof_of_address");
+      uploadResult = await uploadKycDocument(file, profile.id, "proof_of_address");
       uploadedToR2 = true;
     } catch (uploadErr) {
       if (!allowDevFallback) {
         log.error("R2 upload failed", {
           error: uploadErr instanceof Error ? uploadErr.message : "unknown error",
         });
-        return NextResponse.json({ error: "Failed to upload proof document" }, { status: 500 });
+        return NextResponse.json(
+          { error: "Failed to upload proof document", code: "storage_failed" },
+          { status: 500 }
+        );
       }
 
       const devKey = `dev://kyc/proof_of_address/${user.id}/${Date.now()}.bin`;
@@ -220,8 +210,9 @@ export async function POST(request: NextRequest) {
           user_id: user.id,
           step_type: "location",
           location_method: "proof_of_address",
-          location_province: province,
-          location_city: city,
+          location_province: null,
+          location_city: null,
+          location_address_line: addressLine,
           risk_score: riskScore,
           risk_level: riskLevel,
           auto_status: "needs_manual_review",
@@ -247,15 +238,15 @@ export async function POST(request: NextRequest) {
 
     // Update account profile
     await adminClient
-      .from("account_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
-        location_province: province,
-        location_city: city,
+        location_province: null,
+        location_city: null,
       })
       .eq("user_id", user.id);
 
     await adminClient
-      .from("account_profiles")
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
         account_verification_status: "pending_review",
       })
@@ -271,8 +262,7 @@ export async function POST(request: NextRequest) {
       targetId: step.id,
       metadata: {
         artifact_id: artifact.id,
-        province,
-        city,
+        address_line: addressLine,
         file_size: file.size,
         content_type: file.type,
         risk_score: riskScore,
@@ -284,6 +274,7 @@ export async function POST(request: NextRequest) {
       success: true,
       artifactId: artifact.id,
       stepId: step.id,
+      addressLine,
       riskScore,
       riskLevel,
     });

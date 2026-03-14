@@ -85,7 +85,9 @@ describe("POST /api/verification/location/gps", () => {
   it("should return 401 when not authenticated", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
 
-    const res = await POST(makeRequest({ lat: -26, lon: 28, accuracy: 50, province: "Gauteng" }));
+    const res = await POST(
+      makeRequest({ latitude: -26, longitude: 28, accuracy: 50, timestamp: Date.now() })
+    );
     expect(res.status).toBe(401);
   });
 
@@ -96,7 +98,9 @@ describe("POST /api/verification/location/gps", () => {
     });
     mockIsFeatureEnabled.mockResolvedValue(false);
 
-    const res = await POST(makeRequest({ lat: -26, lon: 28, accuracy: 50, province: "Gauteng" }));
+    const res = await POST(
+      makeRequest({ latitude: -26, longitude: 28, accuracy: 50, timestamp: Date.now() })
+    );
     expect(res.status).toBe(404);
   });
 
@@ -107,14 +111,14 @@ describe("POST /api/verification/location/gps", () => {
     });
     mockIsFeatureEnabled.mockResolvedValue(true);
     mockParseJson.mockResolvedValue({
-      lat: 51.5, // London, not SA
-      lon: -0.1,
+      latitude: 51.5,
+      longitude: -0.1,
       accuracy: 50,
-      province: "Gauteng",
+      timestamp: Date.now(),
     });
 
     const res = await POST(
-      makeRequest({ lat: 51.5, lon: -0.1, accuracy: 50, province: "Gauteng" })
+      makeRequest({ latitude: 51.5, longitude: -0.1, accuracy: 50, timestamp: Date.now() })
     );
     // Should reject — either 400 or 422
     expect(res.status).toBeGreaterThanOrEqual(400);
@@ -131,12 +135,10 @@ describe("POST /api/verification/location/gps", () => {
       longitude: 28.0,
       accuracy: 600, // > 500
       timestamp: Date.now(),
-      province: "Gauteng",
-      city: "Johannesburg",
     });
 
     const res = await POST(
-      makeRequest({ latitude: -26.2, longitude: 28.0, accuracy: 600, province: "Gauteng" })
+      makeRequest({ latitude: -26.2, longitude: 28.0, accuracy: 600, timestamp: Date.now() })
     );
     expect(res.status).toBe(422);
   });

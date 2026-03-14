@@ -45,6 +45,12 @@ export const verificationLocationSubmitSchema = z.object({
   gpsAccuracyMeters: z.number().positive().optional(),
 });
 
+export const proofOfAddressLineSchema = z
+  .string()
+  .trim()
+  .min(5, "Enter the residential address shown on your proof of residence")
+  .max(240, "Address line cannot exceed 240 characters");
+
 // ── V2M Buyer verification ──────────────────────────────────
 
 /** Zod schema for buyer-initiated verification of an account profile. */
@@ -132,6 +138,8 @@ export type VerificationSelfieInput = z.infer<typeof verificationSelfieSchema>;
 export type VerificationLocationInput = z.infer<typeof verificationLocationSchema>;
 /** Inferred input type for {@link verificationLocationSubmitSchema}. */
 export type VerificationLocationSubmitInput = z.infer<typeof verificationLocationSubmitSchema>;
+/** Inferred input type for {@link proofOfAddressLineSchema}. */
+export type ProofOfAddressLineInput = z.infer<typeof proofOfAddressLineSchema>;
 /** Inferred input type for {@link buyerVerifySchema}. */
 export type BuyerVerifyInput = z.infer<typeof buyerVerifySchema>;
 /** Inferred input type for {@link fileUploadSchema}. */

@@ -460,6 +460,7 @@ export interface DashboardKycItem {
   location_method: string | null;
   location_province: string | null;
   location_city: string | null;
+  location_address_line: string | null;
   submitted_at: string | null;
   created_at: string;
   risk_level: string | null;
@@ -482,7 +483,7 @@ export async function getDashboardKycQueue(limit = 50): Promise<DashboardKycItem
   const { data: steps } = await supabase
     .from("verification_steps")
     .select(
-      "id, user_id, step_type, status, full_name, dob, document_type, location_method, location_province, location_city, submitted_at, created_at, risk_level, risk_score, auto_status"
+      "id, user_id, step_type, status, full_name, dob, document_type, location_method, location_province, location_city, location_address_line, submitted_at, created_at, risk_level, risk_score, auto_status"
     )
     .eq("status", "pending")
     .order("created_at", { ascending: true })

@@ -251,7 +251,10 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({ error: "Failed to record upload" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to record upload", code: "artifact_record_failed" },
+        { status: 500 }
+      );
     }
 
     const { error: supersedeError } = await admin
@@ -305,7 +308,10 @@ export async function POST(request: NextRequest) {
       const encKey = process.env.ID_ENCRYPTION_KEY; // 32-byte hex key
       if (!encKey) {
         log.error("ID_ENCRYPTION_KEY not set");
-        return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+        return NextResponse.json(
+          { error: "Server configuration error", code: "config_missing" },
+          { status: 500 }
+        );
       }
       const iv = crypto.randomBytes(12);
       const cipher = crypto.createCipheriv("aes-256-gcm", Buffer.from(encKey, "hex"), iv);

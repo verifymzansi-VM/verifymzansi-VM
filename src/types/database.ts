@@ -79,6 +79,7 @@ export interface VerificationStep {
   gps_lon: number | null;
   location_province: string | null;
   location_city: string | null;
+  location_address_line: string | null;
   location_town: string | null;
   phone_verified_at: string | null;
   reviewed_by: string | null;

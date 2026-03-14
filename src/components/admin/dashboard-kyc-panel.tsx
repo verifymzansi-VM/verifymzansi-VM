@@ -361,6 +361,12 @@ export function DashboardKycPanel({
                               </span>
                             </span>
                           )}
+                          {item.location_address_line && (
+                            <span className="col-span-2">
+                              <span className="text-muted-foreground">Address: </span>
+                              <span className="font-medium">{item.location_address_line}</span>
+                            </span>
+                          )}
                           {(item.location_province || item.location_city) && (
                             <span>
                               <span className="text-muted-foreground">Area: </span>

@@ -11,6 +11,12 @@ interface EvidenceStep {
   risk_level: string | null;
   risk_score: number | null;
   auto_status: string | null;
+  location_method: string | null;
+  location_province: string | null;
+  location_city: string | null;
+  location_address_line: string | null;
+  gps_lat: number | null;
+  gps_lon: number | null;
   reason_code: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -89,6 +95,19 @@ export function EvidenceMetadataPanel({
             {step.risk_level && <Row label="Risk Level" value={step.risk_level} />}
             {step.risk_score !== null && <Row label="Risk Score" value={String(step.risk_score)} />}
             {step.auto_status && <Row label="Auto Status" value={step.auto_status} />}
+            {step.location_method && <Row label="Location Method" value={step.location_method} />}
+            {(step.location_city || step.location_province) && (
+              <Row
+                label="Resolved Area"
+                value={[step.location_city, step.location_province].filter(Boolean).join(", ")}
+              />
+            )}
+            {step.location_address_line && (
+              <Row label="Proof Address" value={step.location_address_line} />
+            )}
+            {step.gps_lat !== null && step.gps_lon !== null && (
+              <Row label="GPS Coords" value={`${step.gps_lat}, ${step.gps_lon}`} />
+            )}
             {step.reason_code && <Row label="Reason Code" value={step.reason_code} />}
             {step.reviewed_by && <Row label="Reviewed By" value={step.reviewed_by} mono />}
             {step.reviewed_at && (

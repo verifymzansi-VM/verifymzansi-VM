@@ -27,7 +27,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { getCitiesForProvince, getProvinceNames } from "@/lib/constants/sa-provinces";
 import {
   validateSaIdChecksum,
   extractDobFromSaId,
@@ -77,8 +76,44 @@ const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
     "Enter your 13-digit SA ID number and add a clear photo or PDF of your ID document. Accepted: JPG, PNG, WebP, PDF up to 5 MB.",
   selfie: "Upload a clear selfie with your full face visible. Accepted: JPG, PNG, WebP up to 5 MB.",
   location:
-    "Choose your province and city, then verify location by GPS or upload proof of address if GPS is unavailable.",
+    "We request your GPS location automatically on this step. If GPS is unavailable, upload proof of residence and type the residential address shown on the document.",
 };
+
+class SubmissionError extends Error {
+  code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "SubmissionError";
+    this.code = code;
+  }
+}
+
+function mapUploadFailureMessage(label: string, error: unknown, code?: string): string {
+  const normalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+
+  switch (code) {
+    case "storage_unavailable":
+    case "storage_failed":
+      return `${normalizedLabel} upload is temporarily unavailable. Please try again in a moment.`;
+    case "config_missing":
+      return `${normalizedLabel} upload is unavailable because secure verification storage is not configured.`;
+    case "encryption_failed":
+      return `${normalizedLabel} could not be encrypted securely. Please contact support.`;
+    case "artifact_record_failed":
+      return `${normalizedLabel} upload reached the server but could not be recorded. Please retry.`;
+    default: {
+      const message = error instanceof Error ? error.message : String(error ?? "").trim();
+      if (!message) {
+        return `Failed to upload ${label}.`;
+      }
+      if (/failed to upload document/i.test(message)) {
+        return `Failed to upload ${label}. Please try again.`;
+      }
+      return message;
+    }
+  }
+}
 
 function formatReasonCode(reasonCode: string | null | undefined): string | null {
   if (!reasonCode) return null;
@@ -254,11 +289,12 @@ export default function VerificationPage() {
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
+  const [proofAddressLine, setProofAddressLine] = useState("");
 
   // Session-driven state
   const [_sessionId, setSessionId] = useState<string | null>(null);
   const [_sessionLoading, setSessionLoading] = useState(true);
-  const [useV2Flow, setUseV2Flow] = useState(false);
+  const [_useV2Flow, setUseV2Flow] = useState(false);
   const [serverSteps, setServerSteps] = useState<StepStatusEntry[]>([]);
   const [accountVerificationStatus, setAccountVerificationStatus] =
     useState<AccountVerificationStatus | null>(null);
@@ -294,8 +330,6 @@ export default function VerificationPage() {
 
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const provinces = getProvinceNames();
-  const cities = province ? getCitiesForProvince(province) : [];
   const formattedPhone = useMemo(() => formatPhone(phone), [phone]);
   const completionHref = useMemo(
     () => sanitizeReturnUrl(searchParams.get("returnUrl")),
@@ -308,14 +342,25 @@ export default function VerificationPage() {
   const isOtpValid = otp.length === 6;
   const isIdReady = /^\d{13}$/.test(idNumber) && !idFileError && idChecksumValid !== false;
   const isSelfieReady = !selfieFileError;
-  const isLocationReady = useV2Flow
-    ? Boolean(province && city) &&
-      (locationMode === "gps" || locationMode === "proof" || !gpsFeatureAvailable)
-    : Boolean(province && city);
   const serverStepMap = useMemo(
     () => new Map(serverSteps.map((entry) => [entry.step_type, entry] as const)),
     [serverSteps]
   );
+  const persistedIdUploaded = ["approved", "pending"].includes(
+    serverStepMap.get("id_doc")?.status ?? ""
+  );
+  const persistedSelfieUploaded = ["approved", "pending"].includes(
+    serverStepMap.get("selfie")?.status ?? ""
+  );
+  const persistedLocationSubmitted = ["approved", "pending"].includes(
+    serverStepMap.get("location")?.status ?? ""
+  );
+  const isProofAddressReady = proofAddressLine.trim().length >= 5;
+  const isLocationReady =
+    persistedLocationSubmitted ||
+    (locationMode === "gps"
+      ? Boolean(province)
+      : locationMode === "proof" && proofUploaded && isProofAddressReady);
   const allStepsResolved = useMemo(
     () =>
       REVIEWABLE_STEP_ORDER.every((stepType) => {
@@ -352,7 +397,7 @@ export default function VerificationPage() {
       );
 
       const approvedSteps = nextSteps
-        .filter((entry) => entry.status === "approved")
+        .filter((entry) => entry.status === "approved" || entry.status === "pending")
         .map((entry) => entry.step_type);
       setCompletedSteps(approvedSteps);
       setPhoneVerified(
@@ -477,13 +522,19 @@ export default function VerificationPage() {
 
   // GPS capture handler
   const handleRequestGps = useCallback(async () => {
+    if (gpsStatus === "requesting") return;
+
     if (!navigator.geolocation) {
+      setGpsFeatureAvailable(false);
       setGpsStatus("error");
       toast({ title: "GPS not supported in this browser", variant: "destructive" });
       return;
     }
 
+    setLocationMode(null);
     setGpsStatus("requesting");
+    setProofUploaded(false);
+    clearStepCompletion("location");
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -491,60 +542,63 @@ export default function VerificationPage() {
         setGpsCoords({ lat: latitude, lon: longitude, accuracy });
         setGpsStatus("success");
 
-        // Submit GPS to server
-        if (province && city) {
-          try {
-            const res = await fetch("/api/verification/location/gps", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                latitude,
-                longitude,
-                accuracy,
-                timestamp: position.timestamp,
-                province,
-                city,
-              }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              setGpsConfidence(data.confidence);
-              setGpsProvince(data.gpsProvince);
-              setLocationMode("gps");
-              markStepComplete("location");
-              toast({ title: "GPS location captured", variant: "success" });
-            } else if (res.status === 404) {
-              // GPS feature not enabled — fall back to legacy location
-              setGpsFeatureAvailable(false);
-              setGpsStatus("idle");
-            } else {
-              const data = await res.json().catch(() => ({}));
-              if (res.status === 422) {
-                // Accuracy too poor
-                setGpsStatus("error");
-                toast({
-                  title: "GPS accuracy too low",
-                  description: "Please upload proof of address instead.",
-                  variant: "destructive",
-                });
-              } else {
-                throw new Error(data.error || "Failed to verify GPS");
-              }
-            }
-          } catch (err) {
+        try {
+          const res = await fetch("/api/verification/location/gps", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              latitude,
+              longitude,
+              accuracy,
+              timestamp: position.timestamp,
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setProvince(data.resolvedProvince ?? "");
+            setCity(data.resolvedCity ?? "");
+            setGpsConfidence(data.confidence);
+            setGpsProvince(data.resolvedProvince ?? null);
+            setLocationMode("gps");
+            markStepComplete("location");
+            toast({ title: "GPS location captured", variant: "success" });
+          } else if (res.status === 404) {
+            setGpsFeatureAvailable(false);
+            setGpsStatus("idle");
+            setLocationMode("proof");
             toast({
-              title: "GPS verification failed",
-              description: err instanceof Error ? err.message : "Please try proof of address.",
+              title: "GPS verification unavailable",
+              description: "Upload proof of residence and enter your address instead.",
               variant: "destructive",
             });
+          } else {
+            const data = await res.json().catch(() => ({}));
+            if (res.status === 422) {
+              setGpsStatus("error");
+              toast({
+                title: "GPS could not verify this location",
+                description:
+                  data.error || "Please upload proof of residence and enter your address instead.",
+                variant: "destructive",
+              });
+            } else {
+              throw new Error(data.error || "Failed to verify GPS");
+            }
           }
+        } catch (err) {
+          toast({
+            title: "GPS verification failed",
+            description: err instanceof Error ? err.message : "Please try proof of residence.",
+            variant: "destructive",
+          });
         }
       },
       (err) => {
         setGpsStatus(err.code === err.PERMISSION_DENIED ? "denied" : "error");
+        setLocationMode("proof");
         toast({
           title: err.code === err.PERMISSION_DENIED ? "GPS permission denied" : "GPS error",
-          description: "You can upload proof of address instead.",
+          description: "Upload proof of residence and enter your address instead.",
           variant: "destructive",
         });
       },
@@ -554,34 +608,39 @@ export default function VerificationPage() {
         maximumAge: GPS_MAX_AGE_MS,
       }
     );
-  }, [province, city, toast]);
+  }, [gpsStatus, toast]);
 
   // Proof of address upload handler
   const handleProofUpload = useCallback(async () => {
-    if (!proofFile || !province || !city) return;
+    if (!proofFile || !isProofAddressReady) return;
 
     setIsLoading(true);
     try {
       const formData = new FormData();
       formData.append("file", proofFile);
-      formData.append("province", province);
-      formData.append("city", city);
+      formData.append("addressLine", proofAddressLine.trim());
 
       const res = await fetch("/api/verification/location/proof", {
         method: "POST",
         body: formData,
       });
-      if (res.status === 404) {
-        // Proof feature not enabled — fall back to legacy location
-        setGpsFeatureAvailable(false);
-        return;
-      }
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Failed to upload proof");
+      if (!res.ok) {
+        throw new SubmissionError(
+          mapUploadFailureMessage(
+            "proof of residence",
+            data.error || "Failed to upload proof",
+            data.code
+          ),
+          data.code
+        );
+      }
+      setProvince("");
+      setCity("");
       setProofUploaded(true);
       setLocationMode("proof");
       markStepComplete("location");
-      toast({ title: "Proof of address uploaded", variant: "success" });
+      toast({ title: "Proof of residence uploaded", variant: "success" });
     } catch (err) {
       toast({
         title: "Upload failed",
@@ -591,7 +650,20 @@ export default function VerificationPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [proofFile, province, city, toast]);
+  }, [isProofAddressReady, proofAddressLine, proofFile, toast]);
+
+  useEffect(() => {
+    if (
+      step !== "location" ||
+      gpsStatus !== "idle" ||
+      locationMode === "proof" ||
+      !gpsFeatureAvailable
+    ) {
+      return;
+    }
+
+    void handleRequestGps();
+  }, [gpsFeatureAvailable, gpsStatus, handleRequestGps, locationMode, step]);
 
   const idPreviewUrl = useMemo(
     () => (idFile && idFile.type.startsWith("image/") ? URL.createObjectURL(idFile) : null),
@@ -754,7 +826,16 @@ export default function VerificationPage() {
         body: buildFormData(),
       });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload.error || `Failed to upload ${label}`);
+      if (!res.ok) {
+        throw new SubmissionError(
+          mapUploadFailureMessage(
+            label,
+            payload.error || `Failed to upload ${label}`,
+            payload.code
+          ),
+          payload.code
+        );
+      }
       return payload;
     };
 
@@ -768,7 +849,7 @@ export default function VerificationPage() {
   }
 
   async function uploadIdIfNeeded() {
-    if (uploadReceipts.id_doc) return;
+    if (uploadReceipts.id_doc || persistedIdUploaded) return;
     if (!idFile) throw new Error("Please add your ID document.");
 
     await uploadWithRetry(() => {
@@ -792,7 +873,7 @@ export default function VerificationPage() {
   }
 
   async function uploadSelfieIfNeeded() {
-    if (uploadReceipts.selfie) return;
+    if (uploadReceipts.selfie || persistedSelfieUploaded) return;
     if (!selfieFile) throw new Error("Please add your selfie.");
 
     await uploadWithRetry(() => {
@@ -814,22 +895,14 @@ export default function VerificationPage() {
   }
 
   async function submitLocation() {
-    // If v2 flow with GPS or proof, location was already submitted via those handlers
-    if (useV2Flow && (locationMode === "gps" || locationMode === "proof")) {
+    if (persistedLocationSubmitted || locationMode === "gps" || locationMode === "proof") {
       if (!completedSteps.includes("location")) {
         markStepComplete("location");
       }
       return;
     }
-    // Legacy flow (or v2 with GPS feature unavailable): submit province/city directly
-    const res = await fetch("/api/verification/location", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ province, city }),
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(payload.error || "Failed to save location");
-    markStepComplete("location");
+
+    throw new Error("Capture your GPS location or upload proof of residence first.");
   }
 
   async function handleFinalize() {
@@ -849,7 +922,11 @@ export default function VerificationPage() {
       return;
     }
     if (!isLocationReady) {
-      toast({ title: "Select province and city", variant: "destructive" });
+      toast({
+        title: "Complete your location verification",
+        description: "Allow GPS or upload proof of residence and enter the address shown on it.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -1286,73 +1363,25 @@ export default function VerificationPage() {
                       </div>
                     )}
 
-                    {/* Province & City selectors */}
-                    <div className="space-y-2">
-                      <Label htmlFor="province">Province</Label>
-                      <select
-                        id="province"
-                        title="Select province"
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        value={province}
-                        onChange={(e) => {
-                          setProvince(e.target.value);
-                          setCity("");
-                          setLocationMode(null);
-                          setGpsStatus("idle");
-                          setGpsCoords(null);
-                          setGpsConfidence(null);
-                          setProofUploaded(false);
-                          clearStepCompletion("location");
-                        }}
-                      >
-                        <option value="">Select province</option>
-                        {provinces.map((value) => (
-                          <option key={value} value={value}>
-                            {value}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="space-y-2 rounded-md border border-warm-200/70 p-4 dark:border-warm-700/70">
+                      <p className="text-sm font-medium">Location verification method</p>
+                      <p className="text-xs text-muted-foreground">
+                        GPS starts automatically when you reach this step. If GPS is unavailable,
+                        switch to proof of residence and type the address shown on the document.
+                      </p>
                     </div>
 
-                    {province && (
-                      <div className="space-y-2">
-                        <Label htmlFor="city">City</Label>
-                        <select
-                          id="city"
-                          title="Select city"
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          value={city}
-                          onChange={(e) => {
-                            setCity(e.target.value);
-                            setLocationMode(null);
-                            setGpsStatus("idle");
-                            setProofUploaded(false);
-                            clearStepCompletion("location");
-                          }}
-                        >
-                          <option value="">Select city</option>
-                          {cities.map((value) => (
-                            <option key={value} value={value}>
-                              {value}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+                    <div className="space-y-3 rounded-md border border-warm-200/70 p-4 dark:border-warm-700/70">
+                      <h4 className="flex items-center gap-2 text-sm font-medium">
+                        <Navigation className="h-4 w-4 text-brand-blue" />
+                        GPS Location Verification
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        We use your device GPS to resolve your current location automatically.
+                      </p>
 
-                    {/* GPS location capture (v2 flow) */}
-                    {useV2Flow && gpsFeatureAvailable && province && city && (
-                      <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-4">
-                        <h4 className="flex items-center gap-2 text-sm font-medium">
-                          <Navigation className="h-4 w-4 text-brand-blue" />
-                          GPS Location Verification
-                        </h4>
-                        <p className="text-xs text-muted-foreground">
-                          Allow GPS to verify your province. If it fails or permission is denied,
-                          you can upload proof of address instead.
-                        </p>
-
-                        {gpsStatus === "idle" && (
+                      {gpsFeatureAvailable && gpsStatus === "idle" && (
+                        <div className="flex gap-2">
                           <Button
                             onClick={handleRequestGps}
                             variant="outline"
@@ -1360,110 +1389,149 @@ export default function VerificationPage() {
                             size="sm"
                           >
                             <Navigation className="h-4 w-4" />
-                            Capture GPS Location
+                            Retry GPS Capture
                           </Button>
-                        )}
-
-                        {gpsStatus === "requesting" && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Requesting GPS access…
-                          </div>
-                        )}
-
-                        {gpsStatus === "success" && gpsCoords && (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-brand-green">
-                              <CheckCircle2 className="h-4 w-4" />
-                              GPS captured (accuracy: {Math.round(gpsCoords.accuracy)}m)
-                            </div>
-                            {gpsConfidence && (
-                              <div
-                                className={`rounded-md border px-3 py-2 text-xs ${
-                                  gpsConfidence === "high"
-                                    ? "border-brand-green/30 bg-brand-green-50 text-brand-green-900"
-                                    : gpsConfidence === "medium"
-                                      ? "border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-950 text-yellow-900 dark:text-yellow-100"
-                                      : "border-destructive/30 bg-destructive/5 text-destructive"
-                                }`}
-                              >
-                                Location confidence:{" "}
-                                <span className="font-medium capitalize">{gpsConfidence}</span>
-                                {gpsProvince && gpsProvince !== province && (
-                                  <span className="ml-1">(GPS detected: {gpsProvince})</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {(gpsStatus === "denied" || gpsStatus === "error") && (
-                          <div className="flex items-center gap-2 text-sm text-destructive">
-                            <AlertTriangle className="h-4 w-4" />
-                            {gpsStatus === "denied"
-                              ? "GPS permission was denied."
-                              : "Could not get GPS position."}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Proof of address fallback (v2 flow) */}
-                    {useV2Flow &&
-                      gpsFeatureAvailable &&
-                      province &&
-                      city &&
-                      (gpsStatus === "denied" ||
-                        gpsStatus === "error" ||
-                        locationMode === "proof") && (
-                        <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-4">
-                          <h4 className="flex items-center gap-2 text-sm font-medium">
-                            <Upload className="h-4 w-4 text-brand-gold" />
-                            Proof of Address (Alternative)
-                          </h4>
-                          <p className="text-xs text-muted-foreground">
-                            Upload a utility bill, bank statement, or government letter with your
-                            address. Accepted: JPG, PNG, WebP, PDF up to 5 MB.
-                          </p>
-                          <Input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,.pdf,application/pdf"
-                            onChange={(e) => {
-                              setProofFile(e.target.files?.[0] ?? null);
-                              setProofUploaded(false);
-                              setLocationMode(null);
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setLocationMode("proof");
+                              setGpsCoords(null);
+                              setGpsConfidence(null);
+                              setProvince("");
+                              setCity("");
                               clearStepCompletion("location");
                             }}
-                          />
-                          {proofFile && !proofUploaded && (
-                            <div className="space-y-2">
-                              <p className="text-xs text-muted-foreground">
-                                {proofFile.name} ({formatFileSize(proofFile.size)})
-                              </p>
-                              <Button
-                                onClick={handleProofUpload}
-                                variant="outline"
-                                size="sm"
-                                disabled={isLoading}
-                                className="gap-2"
-                              >
-                                {isLoading ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Upload className="h-4 w-4" />
-                                )}
-                                Upload Proof
-                              </Button>
+                          >
+                            Use proof instead
+                          </Button>
+                        </div>
+                      )}
+
+                      {gpsStatus === "requesting" && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Requesting GPS access and resolving your location…
+                        </div>
+                      )}
+
+                      {gpsStatus === "success" && gpsCoords && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm text-brand-green">
+                            <CheckCircle2 className="h-4 w-4" />
+                            GPS captured (accuracy: {Math.round(gpsCoords.accuracy)}m)
+                          </div>
+                          {province && (
+                            <div className="rounded-md border border-brand-green/30 bg-brand-green-50 px-3 py-2 text-xs text-brand-green-900">
+                              Detected area: {city ? `${city}, ${province}` : province}
                             </div>
                           )}
-                          {proofUploaded && (
-                            <div className="flex items-center gap-2 text-sm text-brand-green">
-                              <CheckCircle2 className="h-4 w-4" />
-                              Proof of address uploaded and ready for admin review
+                          {gpsConfidence && (
+                            <div
+                              className={`rounded-md border px-3 py-2 text-xs ${
+                                gpsConfidence === "high"
+                                  ? "border-brand-green/30 bg-brand-green-50 text-brand-green-900"
+                                  : gpsConfidence === "medium"
+                                    ? "border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-950 text-yellow-900 dark:text-yellow-100"
+                                    : "border-destructive/30 bg-destructive/5 text-destructive"
+                              }`}
+                            >
+                              Location confidence:{" "}
+                              <span className="font-medium capitalize">{gpsConfidence}</span>
+                              {gpsProvince && <span className="ml-1">({gpsProvince})</span>}
                             </div>
                           )}
                         </div>
                       )}
+
+                      {(gpsStatus === "denied" || gpsStatus === "error") && (
+                        <div className="flex items-center gap-2 text-sm text-destructive">
+                          <AlertTriangle className="h-4 w-4" />
+                          {gpsStatus === "denied"
+                            ? "GPS permission was denied."
+                            : "Could not verify your location from GPS."}
+                        </div>
+                      )}
+
+                      {!gpsFeatureAvailable && (
+                        <div className="flex items-center gap-2 text-sm text-destructive">
+                          <AlertTriangle className="h-4 w-4" />
+                          GPS verification is unavailable right now. Upload proof of residence
+                          instead.
+                        </div>
+                      )}
+                    </div>
+
+                    {(gpsStatus === "denied" ||
+                      gpsStatus === "error" ||
+                      locationMode === "proof" ||
+                      !gpsFeatureAvailable) && (
+                      <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-4">
+                        <h4 className="flex items-center gap-2 text-sm font-medium">
+                          <Upload className="h-4 w-4 text-brand-gold" />
+                          Proof of Residence (Fallback)
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          Upload a utility bill, bank statement, or government letter, then type the
+                          residential address shown on the document. Accepted: JPG, PNG, WebP, PDF
+                          up to 5 MB.
+                        </p>
+                        <div className="space-y-2">
+                          <Label htmlFor="proofAddressLine">Residential address</Label>
+                          <Input
+                            id="proofAddressLine"
+                            value={proofAddressLine}
+                            placeholder="Type the address exactly as it appears on the proof"
+                            onChange={(e) => {
+                              setProofAddressLine(e.target.value);
+                              if (proofUploaded) {
+                                setProofUploaded(false);
+                                clearStepCompletion("location");
+                              }
+                            }}
+                          />
+                        </div>
+                        <Input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,.pdf,application/pdf"
+                          onChange={(e) => {
+                            setProofFile(e.target.files?.[0] ?? null);
+                            setProofUploaded(false);
+                            setLocationMode("proof");
+                            clearStepCompletion("location");
+                          }}
+                        />
+                        {proofFile && !proofUploaded && (
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">
+                              {proofFile.name} ({formatFileSize(proofFile.size)})
+                            </p>
+                            <Button
+                              onClick={handleProofUpload}
+                              variant="outline"
+                              size="sm"
+                              disabled={isLoading || !isProofAddressReady}
+                              className="gap-2"
+                            >
+                              {isLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4" />
+                              )}
+                              Upload Proof
+                            </Button>
+                          </div>
+                        )}
+                        {proofUploaded && (
+                          <div className="flex items-center gap-2 text-sm text-brand-green">
+                            <CheckCircle2 className="h-4 w-4" />
+                            Proof of residence uploaded with your typed address and ready for admin
+                            review
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="flex gap-2">
                       <Button
@@ -1543,14 +1611,26 @@ export default function VerificationPage() {
                     <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
                       <p className="font-medium">Location</p>
                       {locationMode === "gps" ? (
-                        <div className="mt-1 flex items-center gap-1 text-brand-green">
-                          <Navigation className="h-4 w-4" />
-                          <span>GPS verified{gpsConfidence ? ` (${gpsConfidence})` : ""}</span>
+                        <div className="mt-1 space-y-1 text-brand-green">
+                          <div className="flex items-center gap-1">
+                            <Navigation className="h-4 w-4" />
+                            <span>GPS verified{gpsConfidence ? ` (${gpsConfidence})` : ""}</span>
+                          </div>
+                          {province && (
+                            <p className="text-muted-foreground">
+                              {city ? `${city}, ${province}` : province}
+                            </p>
+                          )}
                         </div>
                       ) : locationMode === "proof" ? (
-                        <div className="mt-1 flex items-center gap-1 text-brand-gold">
-                          <Upload className="h-4 w-4" />
-                          <span>Proof uploaded — pending review</span>
+                        <div className="mt-1 space-y-1 text-brand-gold">
+                          <div className="flex items-center gap-1">
+                            <Upload className="h-4 w-4" />
+                            <span>Proof uploaded — pending review</span>
+                          </div>
+                          {proofAddressLine && (
+                            <p className="text-muted-foreground">{proofAddressLine}</p>
+                          )}
                         </div>
                       ) : province && city ? (
                         <p className="mt-1 text-muted-foreground">

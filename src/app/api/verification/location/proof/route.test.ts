@@ -12,7 +12,6 @@ const {
   mockDeleteFromR2,
   mockLogAuditEvent,
   mockProcessKycArtifact,
-  mockIsFeatureEnabled,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -21,7 +20,6 @@ const {
   mockDeleteFromR2: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockProcessKycArtifact: vi.fn(),
-  mockIsFeatureEnabled: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -45,10 +43,6 @@ vi.mock("@/lib/services/kyc-engine", () => ({
   processKycArtifact: mockProcessKycArtifact,
 }));
 
-vi.mock("@/lib/services/feature-flags", () => ({
-  isFeatureEnabled: mockIsFeatureEnabled,
-}));
-
 vi.mock("@/lib/utils/file-validation", () => ({
   validateBufferIntegrity: vi
     .fn()
@@ -59,11 +53,10 @@ import { POST } from "./route";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function createProofRequest(file: File, province: string, city: string) {
+function createProofRequest(file: File, addressLine: string) {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("province", province);
-  formData.append("city", city);
+  formData.append("addressLine", addressLine);
   return {
     formData: async () => formData,
     nextUrl: new URL("http://localhost/api/verification/location/proof"),
@@ -161,7 +154,6 @@ function setupDefaultMocks() {
   });
 
   mockLogAuditEvent.mockResolvedValue(undefined);
-  mockIsFeatureEnabled.mockResolvedValue(true);
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -176,23 +168,21 @@ describe("POST /api/verification/location/proof", () => {
   it("returns 401 when user is not authenticated", async () => {
     mockAuth(null);
     const file = new File(["test"], "proof.jpg", { type: "image/jpeg" });
-    const response = await POST(createProofRequest(file, "Gauteng", "Johannesburg"));
+    const response = await POST(createProofRequest(file, "12 Test Street, Testville"));
     expect(response.status).toBe(401);
   });
 
-  it("returns 404 when kyc_gps_location feature flag is disabled", async () => {
+  it("returns 400 when address line is blank", async () => {
     mockAuth({ id: "user-1" });
-    mockIsFeatureEnabled.mockResolvedValue(false);
     const file = new File(["test"], "proof.jpg", { type: "image/jpeg" });
-    const response = await POST(createProofRequest(file, "Gauteng", "Johannesburg"));
-    expect(response.status).toBe(404);
+    const response = await POST(createProofRequest(file, ""));
+    expect(response.status).toBe(400);
   });
 
   it("returns 400 when file is missing", async () => {
     mockAuth({ id: "user-1" });
     const formData = new FormData();
-    formData.append("province", "Gauteng");
-    formData.append("city", "Johannesburg");
+    formData.append("addressLine", "12 Test Street, Testville");
     const req = {
       formData: async () => formData,
       nextUrl: new URL("http://localhost/api/verification/location/proof"),
@@ -202,31 +192,23 @@ describe("POST /api/verification/location/proof", () => {
     expect(response.status).toBe(400);
   });
 
-  it("returns 400 when province is missing", async () => {
+  it("returns 400 when address line is omitted", async () => {
     mockAuth({ id: "user-1" });
     const formData = new FormData();
     formData.append("file", new File(["test"], "proof.jpg", { type: "image/jpeg" }));
-    formData.append("city", "Johannesburg");
     const req = {
       formData: async () => formData,
       nextUrl: new URL("http://localhost/api/verification/location/proof"),
       headers: { get: vi.fn().mockReturnValue(null) },
     } as unknown as NextRequest;
     const response = await POST(req);
-    expect(response.status).toBe(400);
-  });
-
-  it("returns 400 for invalid province", async () => {
-    mockAuth({ id: "user-1" });
-    const file = new File(["test"], "proof.jpg", { type: "image/jpeg" });
-    const response = await POST(createProofRequest(file, "Invalid Province", "Johannesburg"));
     expect(response.status).toBe(400);
   });
 
   it("always sets auto_status to needs_manual_review", async () => {
     mockAuth({ id: "user-1" });
     const file = new File(["test"], "proof.jpg", { type: "image/jpeg" });
-    const response = await POST(createProofRequest(file, "Gauteng", "Johannesburg"));
+    const response = await POST(createProofRequest(file, "12 Test Street, Testville"));
     expect(response.status).toBe(200);
 
     const data = await response.json();
@@ -251,14 +233,14 @@ describe("POST /api/verification/location/proof", () => {
     });
 
     const file = new File(["test"], "proof.jpg", { type: "image/jpeg" });
-    const response = await POST(createProofRequest(file, "Gauteng", "Johannesburg"));
+    const response = await POST(createProofRequest(file, "12 Test Street, Testville"));
     expect(response.status).toBe(404);
   });
 
   it("logs audit event on successful upload", async () => {
     mockAuth({ id: "user-1" });
     const file = new File(["test"], "proof.jpg", { type: "image/jpeg" });
-    await POST(createProofRequest(file, "Gauteng", "Johannesburg"));
+    await POST(createProofRequest(file, "12 Test Street, Testville"));
 
     expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -323,7 +305,7 @@ describe("POST /api/verification/location/proof", () => {
     });
 
     const file = new File(["test"], "proof.jpg", { type: "image/jpeg" });
-    const response = await POST(createProofRequest(file, "Gauteng", "Johannesburg"));
+    const response = await POST(createProofRequest(file, "12 Test Street, Testville"));
 
     expect(response.status).toBe(200);
     expect(stepUpsert).toHaveBeenCalledWith(

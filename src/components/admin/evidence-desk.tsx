@@ -33,6 +33,12 @@ interface EvidenceStep {
   risk_level: string | null;
   risk_score: number | null;
   auto_status: string | null;
+  location_method: string | null;
+  location_province: string | null;
+  location_city: string | null;
+  location_address_line: string | null;
+  gps_lat: number | null;
+  gps_lon: number | null;
   reason_code: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
