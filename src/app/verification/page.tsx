@@ -439,7 +439,11 @@ export default function VerificationPage() {
             if (data.completedSteps?.length > 0) {
               setCompletedSteps(data.completedSteps);
             }
-            if (data.phoneVerifiedAt) {
+            if (
+              data.phoneVerifiedAt ||
+              data.completedSteps?.includes("phone") ||
+              data.pendingSteps?.includes("phone")
+            ) {
               setPhoneVerified(true);
             }
           }
@@ -462,6 +466,8 @@ export default function VerificationPage() {
         if (!cancelled) {
           const phoneDone =
             Boolean(sessionData?.phoneVerifiedAt) ||
+            sessionData?.completedSteps?.includes("phone") ||
+            sessionData?.pendingSteps?.includes("phone") ||
             Boolean(
               statusSnapshot?.steps.some(
                 (entry) =>

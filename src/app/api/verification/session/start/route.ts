@@ -65,10 +65,22 @@ export async function POST(_request: NextRequest) {
     }
 
     if (!session) {
+      // Check if phone was already verified in a previous session or verification_steps
+      const { data: phoneStep } = await adminClient
+        .from("verification_steps")
+        .select("phone_verified_at")
+        .eq("user_id", user.id)
+        .eq("step_type", "phone")
+        .in("status", ["approved", "pending"])
+        .maybeSingle();
+
       const { data: newSession, error: insertErr } = await adminClient
         .from("verification_sessions")
         .insert({
           user_id: user.id,
+          ...(phoneStep?.phone_verified_at
+            ? { phone_verified_at: phoneStep.phone_verified_at }
+            : {}),
         })
         .select()
         .single();

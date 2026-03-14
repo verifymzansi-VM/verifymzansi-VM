@@ -60,6 +60,40 @@ function mockSessionSelectChain(resolvedValue: { data: unknown; error: unknown }
   };
 }
 
+/**
+ * Mock verification_steps table supporting both:
+ * - Phone step lookup: .select("phone_verified_at").eq().eq().in().maybeSingle()
+ * - All steps query: .select("step_type, status").eq() (returns { data, error } directly)
+ */
+function mockStepsTable({
+  phoneStep = null,
+  allSteps = [],
+}: {
+  phoneStep?: unknown;
+  allSteps?: unknown[];
+}) {
+  return {
+    select: vi.fn().mockImplementation((cols: string) => {
+      if (cols.includes("phone_verified_at")) {
+        // Phone step lookup chain
+        return {
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              in: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: phoneStep, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      // All steps query
+      return {
+        eq: vi.fn().mockResolvedValue({ data: allSteps, error: null }),
+      };
+    }),
+  };
+}
+
 function mockAuth(user: { id: string } | null) {
   mockCreateClient.mockResolvedValue({
     auth: {
@@ -123,11 +157,7 @@ describe("POST /api/verification/session/start", () => {
         };
       }
       if (table === "verification_steps") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }),
-        };
+        return mockStepsTable({ phoneStep: null, allSteps: [] });
       }
       return {};
     });
@@ -208,6 +238,9 @@ describe("POST /api/verification/session/start", () => {
             }),
           }),
         };
+      }
+      if (table === "verification_steps") {
+        return mockStepsTable({ phoneStep: null, allSteps: [] });
       }
       return {};
     });
