@@ -395,7 +395,11 @@ export default function VerificationPage() {
         .map((entry) => entry.step_type);
       setCompletedSteps(approvedSteps);
       setPhoneVerified(
-        nextSteps.some((entry) => entry.step_type === "phone" && entry.status === "approved")
+        nextSteps.some(
+          (entry) =>
+            entry.step_type === "phone" &&
+            (entry.status === "approved" || entry.status === "pending")
+        )
       );
 
       return {
@@ -460,7 +464,9 @@ export default function VerificationPage() {
             Boolean(sessionData?.phoneVerifiedAt) ||
             Boolean(
               statusSnapshot?.steps.some(
-                (entry) => entry.step_type === "phone" && entry.status === "approved"
+                (entry) =>
+                  entry.step_type === "phone" &&
+                  (entry.status === "approved" || entry.status === "pending")
               )
             );
           const allSubmitted =
