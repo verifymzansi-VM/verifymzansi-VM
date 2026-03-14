@@ -27,10 +27,10 @@ function renderPanel(filters: PromotionFilterState = {}) {
 }
 
 describe("PromotionFilterPanel", () => {
-  it("shows promotion type as a vertical filter and calls back when it changes", () => {
+  it("shows post type as a vertical filter and calls back when it changes", () => {
     const handlers = renderPanel();
 
-    fireEvent.change(screen.getByLabelText("Promotion type"), { target: { value: "event" } });
+    fireEvent.change(screen.getByLabelText("Post type"), { target: { value: "event" } });
 
     expect(handlers.onTypeChange).toHaveBeenCalledWith("event");
     expect(screen.getByRole("option", { name: "Event" })).toBeInTheDocument();

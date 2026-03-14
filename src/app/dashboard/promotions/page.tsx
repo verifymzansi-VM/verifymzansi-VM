@@ -32,8 +32,9 @@ interface DashboardPromotion {
 }
 
 export const metadata = {
-  title: "My Promotions",
-  description: "Manage your promotions, ads, and event listings on VerifyMzansi.",
+  title: "My Promotions & Events",
+  description:
+    "Manage your Promotions & Events posts, campaign visibility, and event listings on VerifyMzansi.",
 };
 
 export default async function MyPromotionsPage() {
@@ -123,21 +124,21 @@ export default async function MyPromotionsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="My Promotions"
-        description="Track boosts, features, and promotions."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Promotions" }]}
+        title="My Promotions & Events"
+        description="Track campaign visibility, featured placements, and active Promotions & Events posts."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Promotions & Events" }]}
       >
         <div className="flex gap-2">
           <Button asChild size="sm" variant="outline" className="gap-1">
             <Link href="/promotions">
               <Megaphone className="h-4 w-4" />
-              View Public Promotions
+              View Public Promotions & Events
             </Link>
           </Button>
           <Button asChild size="sm" className="gap-1">
             <Link href="/post/create-promotion">
               <Plus className="h-4 w-4" />
-              New Promotion
+              Post in Promotions & Events
             </Link>
           </Button>
         </div>
@@ -147,16 +148,18 @@ export default async function MyPromotionsPage() {
         <Card>
           <CardContent className="p-6 text-center space-y-3">
             <Megaphone className="h-8 w-8 text-muted-foreground mx-auto" />
-            <h2 className="font-display text-lg font-semibold">No active promotions</h2>
+            <h2 className="font-display text-lg font-semibold">
+              No active Promotions & Events posts
+            </h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Boost your listings or create promotions to reach more buyers.
+              Start a verified campaign for a special, launch, or event to reach more buyers.
             </p>
             <div className="flex justify-center gap-2">
               <Button asChild variant="outline" size="sm">
                 <Link href="/dashboard/listings">Manage Listings</Link>
               </Button>
               <Button asChild size="sm">
-                <Link href="/post/create-promotion">Create Promotion</Link>
+                <Link href="/post/create-promotion">Post in Promotions & Events</Link>
               </Button>
             </div>
           </CardContent>
@@ -245,12 +248,12 @@ export default async function MyPromotionsPage() {
             </section>
           )}
 
-          {/* ── My Promotions ─────────────────────────────── */}
+          {/* ── My Promotions & Events ────────────────────── */}
           {myPromotions.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-lg font-display font-semibold flex items-center gap-2">
                 <Tag className="h-5 w-5 text-brand-green" />
-                My Promotions ({myPromotions.length})
+                My Promotions & Events ({myPromotions.length})
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {myPromotions.map((p) => {
@@ -306,7 +309,7 @@ export default async function MyPromotionsPage() {
                             size="sm"
                             variant="ghost"
                             className="h-8 w-8 p-0"
-                            aria-label="Edit promotion"
+                            aria-label="Edit Promotions & Events post"
                           >
                             <Link href={`/post/edit-promotion/${p.id}`}>
                               <Pencil className="h-3.5 w-3.5" />

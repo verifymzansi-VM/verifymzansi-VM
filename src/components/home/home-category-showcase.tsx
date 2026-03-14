@@ -87,7 +87,8 @@ export async function HomeCategoryShowcase() {
     },
     {
       title: "Promotions & Events",
-      description: "Discover current offers, deals, and events happening near you.",
+      description:
+        "Advertise specials, launches, and events or discover verified campaigns near you.",
       href: "/promotions",
       icon: Megaphone,
       accentColor: "text-red-500",

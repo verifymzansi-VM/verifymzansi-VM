@@ -80,7 +80,7 @@ const AREA_ITEM_LABELS: Record<MarketplaceArea, string> = {
   MALL_SHOPS: "storefronts",
   BUSINESS_ADS: "profiles",
   MZANSI_BUSINESS: "businesses",
-  PROMOTIONS_EVENTS: "promotions",
+  PROMOTIONS_EVENTS: "Promotions & Events posts",
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ function planFeatureList(plan: PlanDefinition): { text: string; enabled: boolean
         : plan.area === "MZANSI_BUSINESS"
           ? "businesses"
           : plan.area === "PROMOTIONS_EVENTS"
-            ? "promotions"
+            ? "Promotions & Events posts"
             : "listings";
 
   rows.push({ text: `${maxItems === -1 ? "Unlimited" : maxItems} ${itemLabel}`, enabled: true });

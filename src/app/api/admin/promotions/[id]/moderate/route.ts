@@ -58,7 +58,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .maybeSingle();
 
     if (!promotion) {
-      return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
+      return NextResponse.json({ error: "Promotions & Events post not found" }, { status: 404 });
     }
 
     // Map decision to status
@@ -84,8 +84,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .eq("id", promotionId);
 
     if (updateError) {
-      log.error("Failed to moderate promotion", { error: updateError.message });
-      return NextResponse.json({ error: "Failed to moderate promotion" }, { status: 500 });
+      log.error("Failed to moderate Promotions & Events post", { error: updateError.message });
+      return NextResponse.json(
+        { error: "Failed to moderate Promotions & Events post" },
+        { status: 500 }
+      );
     }
 
     // Audit
@@ -105,6 +108,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ success: true, status: newStatus });
   } catch (err) {
     logApiError(log, "Unexpected error moderating promotion", err);
-    return internalApiError("Failed to moderate promotion");
+    return internalApiError("Failed to moderate Promotions & Events post");
   }
 }

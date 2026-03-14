@@ -140,7 +140,7 @@ describe("POST /api/promotions/[id]/boost", () => {
     expect(body.error).toBe("Account profile not found");
   });
 
-  it("returns 404 when promotion not found", async () => {
+  it("returns 404 when Promotions & Events post not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
       account_profiles: {
@@ -154,7 +154,7 @@ describe("POST /api/promotions/[id]/boost", () => {
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.error).toBe("Promotion not found");
+    expect(body.error).toBe("Promotions & Events post not found");
   });
 
   it("returns 403 when user does not own the promotion", async () => {

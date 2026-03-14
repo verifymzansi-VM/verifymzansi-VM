@@ -111,11 +111,13 @@ describe("HomePromotionsShowcase", () => {
     render(ui as React.ReactElement);
     expect(screen.getByRole("heading", { name: /Promotions & Events/i })).toBeInTheDocument();
     expect(
-      screen.getByText("No promotions yet. Be the first to post a promotion or event.")
+      screen.getByText(
+        "No Promotions & Events posts yet. Be the first to advertise a special, launch, or upcoming event."
+      )
     ).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Create a Post/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Post in Promotions & Events/i })).toHaveAttribute(
       "href",
-      "/post/create"
+      "/post/create-promotion"
     );
   });
 

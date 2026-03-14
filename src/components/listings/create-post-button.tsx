@@ -20,7 +20,7 @@ type PostTypeOption = { value: string; label: string };
 
 const STOREFRONT_POST_TYPES: PostTypeOption[] = [
   { value: "update", label: "Update" },
-  { value: "promotion", label: "Promotion" },
+  { value: "promotion", label: "Campaign" },
   { value: "event", label: "Event" },
 ];
 

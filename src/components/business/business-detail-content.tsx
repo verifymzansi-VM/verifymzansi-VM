@@ -756,7 +756,7 @@ export function BusinessDetailContent({
           {showPromotions &&
             (promotions.length > 0 ? (
               <div className="space-y-4">
-                <h3 className="px-1 font-display text-xl font-bold">Promotions & Offers</h3>
+                <h3 className="px-1 font-display text-xl font-bold">Promotions & Events</h3>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {promotions.map((promo) => (
                     <PromotionCard
@@ -788,9 +788,9 @@ export function BusinessDetailContent({
             ) : (
               <div className="rounded-xl border border-dashed bg-muted/30 p-6 text-center">
                 <Store className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
-                <h4 className="mb-1 text-lg font-medium">Promotions & Offers</h4>
+                <h4 className="mb-1 text-lg font-medium">Promotions & Events</h4>
                 <p className="mx-auto max-w-sm text-muted-foreground">
-                  This business has not posted any promotions or offers yet.
+                  This business has not posted any Promotions &amp; Events campaigns yet.
                 </p>
               </div>
             ))}

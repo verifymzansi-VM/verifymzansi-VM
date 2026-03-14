@@ -1,8 +1,9 @@
 import { requireVerifiedPostAccess } from "@/app/post/_lib/require-verified-post-access";
 
 export const metadata = {
-  title: "Create Promotion",
-  description: "Create a promotion or event ad on VerifyMzansi to boost your reach.",
+  title: "Post in Promotions & Events",
+  description:
+    "Create a verified Promotions & Events campaign on VerifyMzansi for launches, specials, and time-sensitive offers.",
 };
 
 export default async function Layout({ children }: { children: React.ReactNode }) {

@@ -84,7 +84,7 @@ export default function EditPromotionPage() {
       try {
         const res = await fetch(`/api/promotions/${promotionId}`);
         if (!res.ok) {
-          setError("Promotion not found");
+          setError("Promotions & Events post not found");
           return;
         }
         const data = await res.json();
@@ -107,7 +107,7 @@ export default function EditPromotionPage() {
         setVideoThumbnail(p.video_thumbnail || "");
         setBusinessId(p.business_id || "");
       } catch {
-        setError("Failed to load promotion");
+        setError("Failed to load Promotions & Events post");
       } finally {
         setIsLoading(false);
       }
@@ -230,7 +230,7 @@ export default function EditPromotionPage() {
       const allImages = [...existingImages, ...newImageUrls];
       const allVideos = [...existingVideos, ...newVideoUrls];
 
-      setSubmitProgress("Saving promotion...");
+      setSubmitProgress("Saving Promotions & Events post...");
 
       const body = {
         title,
@@ -260,7 +260,7 @@ export default function EditPromotionPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Failed to update promotion");
+        setError(data.error || "Failed to update Promotions & Events post");
         return;
       }
 
@@ -299,10 +299,10 @@ export default function EditPromotionPage() {
       <main className="flex-1">
         <div className="container-page py-4 space-y-4 max-w-3xl">
           <PageHeader
-            title="Edit Promotion"
+            title="Edit Promotions & Events Post"
             breadcrumbs={[
               { label: "Dashboard", href: "/dashboard" },
-              { label: "Promotions", href: "/dashboard/promotions" },
+              { label: "Promotions & Events", href: "/dashboard/promotions" },
               { label: "Edit" },
             ]}
           />
@@ -316,10 +316,10 @@ export default function EditPromotionPage() {
           <Card>
             <CardContent className="p-5 space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="promotion_type">Promotion Type</Label>
+                <Label htmlFor="promotion_type">Post Type</Label>
                 <select
                   id="promotion_type"
-                  aria-label="Promotion Type"
+                  aria-label="Post Type"
                   className={selectClass}
                   value={promotionType}
                   onChange={(e) => setPromotionType(e.target.value as PromotionType)}
@@ -573,8 +573,9 @@ export default function EditPromotionPage() {
                     id: promotionId,
                     owner_id: "preview-seller",
                     business_id: businessId || null,
-                    title: title || "Your promotion title",
-                    description: description || "Your promotion description will appear here.",
+                    title: title || "Your Promotions & Events title",
+                    description:
+                      description || "Your Promotions & Events description will appear here.",
                     promotion_type: promotionType,
                     category: category || null,
                     category_key: categoryKey || null,

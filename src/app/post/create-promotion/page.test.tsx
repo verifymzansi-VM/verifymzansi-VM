@@ -105,6 +105,9 @@ describe("CreatePromotionPage", () => {
     render(<CreatePromotionPage />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
 
+    expect(
+      screen.getByRole("heading", { name: "Post in Promotions & Events" })
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Promotions & Events").length).toBeGreaterThan(0);
   });
 
@@ -112,11 +115,11 @@ describe("CreatePromotionPage", () => {
     render(<CreatePromotionPage />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
 
-    fireEvent.change(screen.getByLabelText("Promotion Type"), { target: { value: "event" } });
+    fireEvent.change(screen.getByLabelText("Post Type"), { target: { value: "event" } });
 
     expect(
       screen.getByText(
-        "Add the event details, tell people where it happens, and submit it for review."
+        "Add the event details, tell people where it happens, and submit the campaign for review."
       )
     ).toBeInTheDocument();
   });
@@ -151,7 +154,7 @@ describe("CreatePromotionPage", () => {
     render(<CreatePromotionPage />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
 
-    fireEvent.change(screen.getByLabelText("Promotion Type"), { target: { value: "event" } });
+    fireEvent.change(screen.getByLabelText("Post Type"), { target: { value: "event" } });
     completeStepOne();
 
     fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });

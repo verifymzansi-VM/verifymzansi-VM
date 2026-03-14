@@ -12,6 +12,7 @@ import {
   Loader2,
   Sun,
   Moon,
+  Megaphone,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -134,6 +135,12 @@ export function Header({
               {(trustLevelProp || auth.trustLevel) > 0 && (
                 <TrustBadge level={trustLevelProp || auth.trustLevel} size="sm" />
               )}
+              <Button asChild variant="outline" size="sm" className="gap-1">
+                <Link href="/post/create-promotion">
+                  <Megaphone className="h-4 w-4" />
+                  Promotions & Events
+                </Link>
+              </Button>
               <Button asChild variant="trust-verified" size="sm">
                 <Link href="/post/create">+ Post</Link>
               </Button>
@@ -228,7 +235,7 @@ export function Header({
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
           aria-controls="mobile-nav-menu"
-          aria-expanded={mobileOpen ? "true" : "false"}
+          aria-expanded={mobileOpen}
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
@@ -298,6 +305,11 @@ export function Header({
                       + Post
                     </Link>
                   </Button>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/post/create-promotion" onClick={() => setMobileOpen(false)}>
+                      Advertise in Promotions & Events
+                    </Link>
+                  </Button>
                   <button
                     className="flex items-center gap-2 py-2 text-sm font-medium text-destructive disabled:opacity-50"
                     disabled={signingOut}
@@ -319,6 +331,11 @@ export function Header({
                   <Button asChild variant="outline" className="w-full">
                     <Link href="/login" onClick={() => setMobileOpen(false)}>
                       Sign In
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/promotions" onClick={() => setMobileOpen(false)}>
+                      Browse Promotions & Events
                     </Link>
                   </Button>
                   <Button asChild variant="trust-verified" className="w-full">

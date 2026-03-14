@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Eye, Megaphone } from "lucide-react";
+import { ArrowRight, CalendarDays, Eye, Megaphone, ShieldCheck, Store, Zap } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { PromotionFilterPanel } from "@/components/listings/promotion-filter-panel";
@@ -70,6 +70,33 @@ interface PromotionsResponse {
   limit?: number;
   error?: string;
 }
+
+const PROMOTION_USE_CASES = [
+  {
+    title: "Retail specials",
+    description:
+      "Move stock quickly with weekend deals, clearance campaigns, and limited-time offers.",
+    icon: Store,
+  },
+  {
+    title: "Launches and openings",
+    description:
+      "Announce a new service, store opening, menu drop, or product launch with urgency.",
+    icon: Zap,
+  },
+  {
+    title: "Events that need attendance",
+    description:
+      "Promote date-based events, activations, and public gatherings from verified businesses.",
+    icon: CalendarDays,
+  },
+] as const;
+
+const PROMOTION_ADVANTAGES = [
+  "Verified businesses and members build more trust than anonymous social posts.",
+  "Location and category filters help nearby clients find offers that matter to them.",
+  "Time-sensitive campaigns belong here without changing your main business profile.",
+] as const;
 
 export function normalizeValue(value: string | null): string | undefined {
   const trimmed = value?.trim();
@@ -196,7 +223,7 @@ export function PromotionsExplorer() {
         if (!active) return;
 
         if (!res.ok) {
-          setError(payload.error || "Failed to load promotions.");
+          setError(payload.error || "Failed to load Promotions & Events.");
           setResponse({
             promotions: [],
             accountProfiles: [],
@@ -215,7 +242,9 @@ export function PromotionsExplorer() {
       } catch (loadError) {
         if (!active) return;
 
-        setError(loadError instanceof Error ? loadError.message : "Failed to load promotions.");
+        setError(
+          loadError instanceof Error ? loadError.message : "Failed to load Promotions & Events."
+        );
         setResponse({
           promotions: [],
           accountProfiles: [],
@@ -275,17 +304,95 @@ export function PromotionsExplorer() {
     <div className="container mx-auto px-4 py-6 space-y-5 max-w-7xl">
       <PageHeader
         title="Promotions & Events"
-        description="Deals, promotions, launches, and events from verified South African businesses and members."
+        description="Advertise time-sensitive offers, launches, specials, and events from verified South African businesses."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Promotions & Events" }]}
         className="hidden lg:block"
       >
         <Button asChild size="sm" className="gap-1">
-          <Link href="/post/create">
-            Create a Post
+          <Link href="/post/create-promotion">
+            Post in Promotions & Events
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
       </PageHeader>
+
+      <Card className="overflow-hidden border-red-200/70 bg-gradient-to-br from-red-50 via-white to-amber-50 dark:border-red-900/60 dark:from-red-950/30 dark:via-background dark:to-amber-950/20">
+        <CardContent className="space-y-6 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="bg-red-700 text-white hover:bg-red-700">
+                  For verified business campaigns
+                </Badge>
+                <Badge variant="outline">Deals, launches, events, specials</Badge>
+              </div>
+              <div className="space-y-2">
+                <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl lg:hidden">
+                  Promotions & Events
+                </h1>
+                <p className="text-base text-foreground/90 sm:text-lg">
+                  Use this space when you need urgency: launch a product, fill seats for an event,
+                  push a short-run special, or get local attention for a new offer.
+                </p>
+                <p className="text-sm text-muted-foreground sm:text-base">
+                  Best for restaurants, salons, shops, service businesses, event organisers, and
+                  growing brands that need a verified place to promote something now.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row lg:min-w-56 lg:flex-col lg:items-stretch">
+              <Button asChild className="gap-1 bg-red-700 hover:bg-red-800">
+                <Link href="/post/create-promotion">
+                  Post in Promotions & Events
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="gap-1">
+                <Link href="/promotions/events">
+                  Browse Events
+                  <CalendarDays className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            {PROMOTION_USE_CASES.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <div
+                  key={item.title}
+                  className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm"
+                >
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h2 className="font-medium text-foreground">{item.title}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="rounded-2xl border border-dashed border-red-300/80 bg-background/70 p-4 dark:border-red-900/80">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-full bg-emerald-100 p-2 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="font-medium text-foreground">Why businesses post here</h2>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  {PROMOTION_ADVANTAGES.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Mobile filter drawer (FAB visible < lg only) */}
       <PromotionFilterDrawer
@@ -343,8 +450,8 @@ export function PromotionsExplorer() {
               {total === 1 ? "" : "s"} found
             </p>
             <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex gap-1">
-              <Link href="/post/create">
-                Create a Post
+              <Link href="/post/create-promotion">
+                Post in Promotions & Events
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
@@ -361,7 +468,9 @@ export function PromotionsExplorer() {
             <Card>
               <CardContent className="space-y-3 p-6 text-center">
                 <Megaphone className="mx-auto h-8 w-8 text-muted-foreground" />
-                <h3 className="font-display text-lg font-semibold">Unable to load promotions</h3>
+                <h3 className="font-display text-lg font-semibold">
+                  Unable to load Promotions &amp; Events
+                </h3>
                 <p className="text-sm text-muted-foreground">{error}</p>
               </CardContent>
             </Card>
@@ -370,14 +479,23 @@ export function PromotionsExplorer() {
               <CardContent className="space-y-3 p-6 text-center">
                 <Megaphone className="mx-auto h-8 w-8 text-muted-foreground" />
                 <h3 className="font-display text-lg font-semibold">
-                  No promotions match your filters
+                  No Promotions &amp; Events posts match your filters
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Try broadening the search, changing the category, or clearing a location filter.
+                  Try broadening the search, or post your own campaign for a local special, launch,
+                  or event.
                 </p>
-                <Button variant="outline" size="sm" onClick={clearAllFilters}>
-                  Clear all filters
-                </Button>
+                <div className="flex flex-col items-center justify-center gap-2 sm:flex-row">
+                  <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                    Clear all filters
+                  </Button>
+                  <Button asChild size="sm" className="gap-1 bg-red-700 hover:bg-red-800">
+                    <Link href="/post/create-promotion">
+                      Post in Promotions & Events
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ) : (

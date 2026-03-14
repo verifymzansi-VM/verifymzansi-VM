@@ -172,7 +172,7 @@ export async function POST(request: Request) {
             : table === "storefronts"
               ? "Storefront"
               : table === "promotions"
-                ? "Promotion"
+                ? "Promotions & Events post"
                 : table === "business_profiles"
                   ? "Business profile"
                   : "Business";

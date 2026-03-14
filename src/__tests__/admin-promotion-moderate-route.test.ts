@@ -104,7 +104,9 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
     const response = await POST(createRequest({ decision: "approve" }), createParams());
 
     expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toEqual({ error: "Promotion not found" });
+    await expect(response.json()).resolves.toEqual({
+      error: "Promotions & Events post not found",
+    });
   });
 
   it("approves unpublished promotions and stamps published_at", async () => {
@@ -189,9 +191,9 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({
-      error: "Failed to moderate promotion",
+      error: "Failed to moderate Promotions & Events post",
     });
-    expect(mockLoggerError).toHaveBeenCalledWith("Failed to moderate promotion", {
+    expect(mockLoggerError).toHaveBeenCalledWith("Failed to moderate Promotions & Events post", {
       error: "raw db failure",
     });
   });

@@ -143,10 +143,10 @@ export function AttentionBanner({
       id: "expiring-promos",
       variant: "warning",
       icon: TrendingUp,
-      title: `${expiringPromoCount} promotion${expiringPromoCount > 1 ? "s" : ""} expiring soon`,
-      description: "Renew your promotions to keep your listings visible to buyers.",
+      title: `${expiringPromoCount} Promotions & Events post${expiringPromoCount > 1 ? "s" : ""} expiring soon`,
+      description: "Renew your Promotions & Events posts to keep your campaigns visible to buyers.",
       href: "/dashboard/promotions",
-      ctaLabel: "Manage Promos",
+      ctaLabel: "Manage Promotions & Events",
     });
   }
 

@@ -39,6 +39,12 @@ export function Footer() {
               >
                 Promotions & Events
               </Link>
+              <Link
+                href="/post/create-promotion"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Advertise in Promotions & Events
+              </Link>
             </nav>
           </div>
 

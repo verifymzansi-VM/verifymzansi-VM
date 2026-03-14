@@ -71,15 +71,21 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const promotion = rawPromotion as PromotionCheckoutRow | null;
 
     if (!promotion) {
-      return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
+      return NextResponse.json({ error: "Promotions & Events post not found" }, { status: 404 });
     }
 
     if (readOwnerId(promotion) !== user.id) {
-      return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
+      return NextResponse.json(
+        { error: "You don't own this Promotions & Events post" },
+        { status: 403 }
+      );
     }
 
     if (promotion.status !== "live") {
-      return NextResponse.json({ error: "Only live promotions can be featured" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Only live Promotions & Events posts can be featured" },
+        { status: 400 }
+      );
     }
 
     // Check if already featured

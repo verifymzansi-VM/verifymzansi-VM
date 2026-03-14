@@ -100,7 +100,7 @@ describe("HomePage", () => {
     ).toHaveAttribute("href", "/mzansi-business");
     expect(
       screen.getByRole("link", {
-        name: /Promotions & Events Discover current offers and events or create a time-sensitive promotion\./i,
+        name: /Promotions & Events Advertise specials, launches, and events or discover verified campaigns near you\./i,
       })
     ).toHaveAttribute("href", "/promotions");
   });
@@ -117,7 +117,10 @@ describe("HomePage", () => {
       "href",
       "/pricing"
     );
-    expect(screen.queryByRole("link", { name: /Advertise a promotion/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Explore Promotions & Events/i })).toHaveAttribute(
+      "href",
+      "/promotions"
+    );
     expect(screen.getByText("Create an account")).toBeInTheDocument();
     expect(screen.getByText("Complete verification")).toBeInTheDocument();
     expect(screen.getByText("Browse or post in the area that fits your goal")).toBeInTheDocument();
