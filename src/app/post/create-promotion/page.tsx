@@ -72,6 +72,7 @@ function CreatePromotionContent() {
   const { toast } = useToast();
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [promotionType, setPromotionType] = useState<PromotionType>("general");
@@ -98,9 +99,9 @@ function CreatePromotionContent() {
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
 
-  // Stable blob URL for the cover photo preview — revoked on change
-  const coverPhotoUrl = useMemo(
-    () => (photoFiles.length > 0 ? URL.createObjectURL(photoFiles[0]) : null),
+  // Stable blob URLs for photo previews — revoked on change
+  const photoPreviewUrls = useMemo(
+    () => photoFiles.map((file) => URL.createObjectURL(file)),
     [photoFiles]
   );
   const previewVideoUrls = useMemo(
@@ -113,9 +114,9 @@ function CreatePromotionContent() {
   );
   useEffect(
     () => () => {
-      if (coverPhotoUrl) URL.revokeObjectURL(coverPhotoUrl);
+      photoPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
     },
-    [coverPhotoUrl]
+    [photoPreviewUrls]
   );
   useEffect(
     () => () => {
@@ -230,41 +231,72 @@ function CreatePromotionContent() {
 
     clearErrors();
     setIsSubmitting(true);
+    setSubmitProgress("Uploading media...");
 
     try {
-      let imageUrls: string[] = [];
-      if (photoFiles.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "promotion");
-        photoFiles.forEach((file) => uploadData.append("files", file));
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload photos");
-        const uploadJson = await uploadRes.json();
-        imageUrls = uploadJson.urls || [];
-      }
+      // Upload photos, videos, and video thumbnail in parallel
+      const [imageUrls, videoUrls, uploadedVideoThumbnailUrl] = await Promise.all([
+        // Photos via server proxy (small files)
+        photoFiles.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "promotion");
+              photoFiles.forEach((file) => uploadData.append("files", file));
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) throw new Error("Failed to upload photos");
+              const uploadJson = await uploadRes.json();
+              return (uploadJson.urls || []) as string[];
+            })()
+          : Promise.resolve([] as string[]),
 
-      let videoUrls: string[] = [];
-      if (videoFiles.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "promotion");
-        videoFiles.forEach((file) => uploadData.append("files", file));
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload video");
-        const uploadJson = await uploadRes.json();
-        videoUrls = uploadJson.urls || [];
-      }
+        // Videos via presigned URL (direct to R2, avoids proxying large files)
+        videoFiles.length > 0
+          ? Promise.all(
+              videoFiles.map(async (file) => {
+                const urlRes = await fetch("/api/media/upload-url", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    filename: file.name,
+                    contentType: file.type,
+                    size: file.size,
+                    area: "promotion",
+                  }),
+                });
+                if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+                const { uploadUrl, publicUrl } = await urlRes.json();
+                const putRes = await fetch(uploadUrl, {
+                  method: "PUT",
+                  headers: { "Content-Type": file.type },
+                  body: file,
+                });
+                if (!putRes.ok) throw new Error("Failed to upload video");
+                return publicUrl as string;
+              })
+            )
+          : Promise.resolve([] as string[]),
 
-      let videoThumbnailUrl: string | undefined;
-      if (videoThumbnailFile.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "promotion");
-        uploadData.append("files", videoThumbnailFile[0]);
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (uploadRes.ok) {
-          const uploadJson = await uploadRes.json();
-          videoThumbnailUrl = uploadJson.urls?.[0];
-        }
-      }
+        // Video thumbnail via server proxy
+        videoThumbnailFile.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "promotion");
+              uploadData.append("files", videoThumbnailFile[0]);
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) return undefined;
+              const uploadJson = await uploadRes.json();
+              return uploadJson.urls?.[0] as string | undefined;
+            })()
+          : Promise.resolve(undefined as string | undefined),
+      ]);
+
+      setSubmitProgress("Saving promotion...");
 
       const body = {
         title: title.trim(),
@@ -279,7 +311,7 @@ function CreatePromotionContent() {
         contact_methods: contactMethods,
         images: imageUrls,
         videos: videoUrls,
-        video_thumbnail: videoThumbnailUrl,
+        video_thumbnail: uploadedVideoThumbnailUrl,
         start_date: startDate ? new Date(startDate).toISOString() : undefined,
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
         business_id: businessId || undefined,
@@ -306,6 +338,7 @@ function CreatePromotionContent() {
       setFormError(error instanceof Error ? error.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -356,7 +389,7 @@ function CreatePromotionContent() {
                     }}
                     submitDisabled={isSubmitting}
                     isSubmitting={isSubmitting}
-                    submittingLabel="Submitting..."
+                    submittingLabel={submitProgress || "Submitting..."}
                   />
                 }
               >
@@ -720,7 +753,7 @@ function CreatePromotionContent() {
                           promotion_type: promotionType,
                           category: category || null,
                           category_key: categoryKey || null,
-                          photos: coverPhotoUrl ? [coverPhotoUrl] : [],
+                          photos: photoPreviewUrls,
                           videos: previewVideoUrls,
                           video_thumbnail: videoThumbnailUrl,
                           price_cents: priceZar

@@ -358,7 +358,7 @@ describe("POST /api/verification/location/proof", () => {
     mockDeleteFromR2.mockResolvedValue(undefined);
 
     const file = new File(["test"], "proof.jpg", { type: "image/jpeg" });
-    const response = await POST(createProofRequest(file, "Gauteng", "Johannesburg"));
+    const response = await POST(createProofRequest(file, "Gauteng, Johannesburg"));
 
     expect(response.status).toBe(500);
     expect(mockDeleteFromR2).toHaveBeenCalled();

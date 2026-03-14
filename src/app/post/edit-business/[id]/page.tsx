@@ -72,6 +72,7 @@ export default function EditBusinessPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -329,8 +330,40 @@ export default function EditBusinessPage() {
     }
   }
 
+  async function uploadVideoPresigned(file: File, area: string): Promise<string | null> {
+    try {
+      const urlRes = await fetch("/api/media/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+          size: file.size,
+          area,
+        }),
+      });
+      if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+      const { uploadUrl, publicUrl } = await urlRes.json();
+      const putRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!putRes.ok) throw new Error("Failed to upload video");
+      return publicUrl;
+    } catch {
+      toast({
+        title: "Video upload was skipped",
+        description: "You can add the video later.",
+        variant: "destructive",
+      });
+      return null;
+    }
+  }
+
   async function handleSubmit() {
     setIsSubmitting(true);
+    setSubmitProgress("Uploading media...");
     setError(null);
 
     try {
@@ -360,53 +393,62 @@ export default function EditBusinessPage() {
         setFieldErrors(validationErrors);
         setError(Object.values(validationErrors)[0]);
         setIsSubmitting(false);
+        setSubmitProgress(null);
         return;
       }
       setFieldErrors({});
 
-      // Upload new media if provided
+      // Upload all new media in parallel
+      const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrl, thumbUrls] =
+        await Promise.all([
+          uploadMedia(newLogoFile, "business_logo"),
+          uploadMedia(newCoverFile, "business_cover"),
+          removeGallery ? Promise.resolve([]) : uploadMedia(newGalleryFiles, "business_gallery"),
+          removeMallPhotos
+            ? Promise.resolve([])
+            : uploadMedia(newMallPhotoFiles, "business_gallery"),
+          removeVideo
+            ? Promise.resolve(null)
+            : newPromoVideoFile.length > 0
+              ? uploadVideoPresigned(newPromoVideoFile[0], "business_cover")
+              : Promise.resolve(null),
+          uploadMedia(newVideoThumbnailFile, "business_cover"),
+        ]);
+
       let finalLogoUrl = existingLogo;
-      if (newLogoFile.length > 0) {
-        const urls = await uploadMedia(newLogoFile, "business_logo");
-        if (urls[0]) finalLogoUrl = urls[0];
-      }
+      if (logoUrls[0]) finalLogoUrl = logoUrls[0];
 
       let finalCoverPhoto = existingCoverPhoto;
+      if (coverUrls[0]) finalCoverPhoto = coverUrls[0];
+
       let finalCoverVideo = existingCoverVideo;
       let finalVideoThumbnail = existingVideoThumbnail;
-      let finalGalleryPhotos = existingGalleryPhotos;
-      let finalMallPhotos = existingMallPhotos;
-
-      if (newCoverFile.length > 0) {
-        const urls = await uploadMedia(newCoverFile, "business_cover");
-        if (urls[0]) finalCoverPhoto = urls[0];
-      }
-
       if (removeVideo) {
         finalCoverVideo = "";
         finalVideoThumbnail = "";
-      } else if (newPromoVideoFile.length > 0) {
-        const urls = await uploadMedia(newPromoVideoFile, "business_cover");
-        if (urls[0]) finalCoverVideo = urls[0];
+      } else if (videoUrl) {
+        finalCoverVideo = videoUrl;
       }
 
-      if (newVideoThumbnailFile.length > 0 && finalCoverVideo) {
-        const thumbUrls = await uploadMedia(newVideoThumbnailFile, "business_cover");
-        if (thumbUrls[0]) finalVideoThumbnail = thumbUrls[0];
+      if (thumbUrls[0] && finalCoverVideo) {
+        finalVideoThumbnail = thumbUrls[0];
       }
 
+      let finalGalleryPhotos = existingGalleryPhotos;
       if (removeGallery) {
         finalGalleryPhotos = [];
-      } else if (newGalleryFiles.length > 0) {
-        const urls = await uploadMedia(newGalleryFiles, "business_gallery");
-        if (urls.length > 0) finalGalleryPhotos = urls;
+      } else if (galleryUrls.length > 0) {
+        finalGalleryPhotos = galleryUrls;
       }
+
+      let finalMallPhotos = existingMallPhotos;
       if (removeMallPhotos) {
         finalMallPhotos = [];
-      } else if (newMallPhotoFiles.length > 0) {
-        const urls = await uploadMedia(newMallPhotoFiles, "business_gallery");
-        if (urls.length > 0) finalMallPhotos = urls;
+      } else if (mallPhotoUrls.length > 0) {
+        finalMallPhotos = mallPhotoUrls;
       }
+
+      setSubmitProgress("Saving business...");
 
       // Build social links
       const socialLinks: Record<string, string> = {};
@@ -486,6 +528,7 @@ export default function EditBusinessPage() {
       setError("Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -1234,7 +1277,7 @@ export default function EditBusinessPage() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Saving...
+                      {submitProgress || "Saving..."}
                     </>
                   ) : (
                     <>

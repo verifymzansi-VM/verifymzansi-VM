@@ -36,6 +36,7 @@ export default function EditPromotionPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Form state
@@ -154,6 +155,7 @@ export default function EditPromotionPage() {
 
   async function handleSubmit() {
     setIsSubmitting(true);
+    setSubmitProgress("Uploading media...");
     setError(null);
 
     try {
@@ -175,35 +177,60 @@ export default function EditPromotionPage() {
       if (Object.keys(validationErrors).length > 0) {
         setError(Object.values(validationErrors)[0]);
         setIsSubmitting(false);
+        setSubmitProgress(null);
         return;
       }
 
-      // Upload new photos if any
-      let newImageUrls: string[] = [];
-      if (newPhotoFiles.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "promotion");
-        for (const f of newPhotoFiles) uploadData.append("files", f);
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload photos");
-        const uploadJson = await uploadRes.json();
-        if (uploadJson.urls) newImageUrls = uploadJson.urls;
-      }
+      // Upload new photos and videos in parallel
+      const [newImageUrls, newVideoUrls] = await Promise.all([
+        // Photos via server proxy
+        newPhotoFiles.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "promotion");
+              for (const f of newPhotoFiles) uploadData.append("files", f);
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) throw new Error("Failed to upload photos");
+              const uploadJson = await uploadRes.json();
+              return (uploadJson.urls || []) as string[];
+            })()
+          : Promise.resolve([] as string[]),
 
-      // Upload new videos if any
-      let newVideoUrls: string[] = [];
-      if (newVideoFiles.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "promotion");
-        for (const f of newVideoFiles) uploadData.append("files", f);
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload video");
-        const uploadJson = await uploadRes.json();
-        if (uploadJson.urls) newVideoUrls = uploadJson.urls;
-      }
+        // Videos via presigned URL (direct to R2)
+        newVideoFiles.length > 0
+          ? Promise.all(
+              newVideoFiles.map(async (file) => {
+                const urlRes = await fetch("/api/media/upload-url", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    filename: file.name,
+                    contentType: file.type,
+                    size: file.size,
+                    area: "promotion",
+                  }),
+                });
+                if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+                const { uploadUrl, publicUrl } = await urlRes.json();
+                const putRes = await fetch(uploadUrl, {
+                  method: "PUT",
+                  headers: { "Content-Type": file.type },
+                  body: file,
+                });
+                if (!putRes.ok) throw new Error("Failed to upload video");
+                return publicUrl as string;
+              })
+            )
+          : Promise.resolve([] as string[]),
+      ]);
 
       const allImages = [...existingImages, ...newImageUrls];
       const allVideos = [...existingVideos, ...newVideoUrls];
+
+      setSubmitProgress("Saving promotion...");
 
       const body = {
         title,
@@ -242,6 +269,7 @@ export default function EditPromotionPage() {
       setError("Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -607,7 +635,7 @@ export default function EditPromotionPage() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Saving...
+                      {submitProgress || "Saving..."}
                     </>
                   ) : (
                     <>

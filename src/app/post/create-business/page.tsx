@@ -178,6 +178,7 @@ function CreateBusinessContent() {
   const [promoVideoFile, setPromoVideoFile] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -408,6 +409,37 @@ function CreateBusinessContent() {
     }
   }
 
+  async function uploadVideoPresigned(file: File, area: string): Promise<string | null> {
+    try {
+      const urlRes = await fetch("/api/media/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+          size: file.size,
+          area,
+        }),
+      });
+      if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+      const { uploadUrl, publicUrl } = await urlRes.json();
+      const putRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!putRes.ok) throw new Error("Failed to upload video");
+      return publicUrl;
+    } catch {
+      toast({
+        title: "Video upload was skipped",
+        description: "You can add the video later after your business is created.",
+        variant: "destructive",
+      });
+      return null;
+    }
+  }
+
   function goNext() {
     const errors = validateStep(step);
     if (Object.keys(errors).length > 0) {
@@ -438,21 +470,27 @@ function CreateBusinessContent() {
     }
     clearErrors();
     setIsSubmitting(true);
+    setSubmitProgress("Uploading media...");
     try {
-      const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrls] = await Promise.all([
+      const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrl] = await Promise.all([
         uploadMedia(logoFile, "business_logo"),
         uploadMedia(coverFile, "business_cover"),
         uploadMedia(galleryFiles, "business_gallery"),
         uploadMedia(mallPhotoFiles, "business_gallery"),
-        uploadMedia(promoVideoFile, "business_cover"),
+        promoVideoFile.length > 0
+          ? uploadVideoPresigned(promoVideoFile[0], "business_cover")
+          : Promise.resolve(null),
       ]);
       const finalCoverPhoto = coverUrls[0] || null;
-      const finalCoverVideo = videoUrls[0] || null;
+      const finalCoverVideo = videoUrl;
       let finalVideoThumbnail: string | null = null;
       if (finalCoverVideo && videoThumbnailFile.length > 0) {
         const thumbUrls = await uploadMedia(videoThumbnailFile, "business_cover");
         finalVideoThumbnail = thumbUrls[0] || null;
       }
+
+      setSubmitProgress("Saving business...");
+
       const socialLinks: Record<string, string> = {};
       if (socialFacebook) socialLinks.facebook = socialFacebook;
       if (socialInstagram) socialLinks.instagram = socialInstagram;
@@ -521,6 +559,7 @@ function CreateBusinessContent() {
       setFormError(error instanceof Error ? error.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -622,7 +661,7 @@ function CreateBusinessContent() {
                     onNext={goNext}
                     submitDisabled={isSubmitting}
                     isSubmitting={isSubmitting}
-                    submittingLabel="Submitting..."
+                    submittingLabel={submitProgress || "Submitting..."}
                   />
                 }
               >

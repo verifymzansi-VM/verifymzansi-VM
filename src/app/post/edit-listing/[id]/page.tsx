@@ -54,6 +54,7 @@ export default function EditListingPage() {
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -323,14 +324,42 @@ export default function EditListingPage() {
 
     clearErrors();
     setIsSubmitting(true);
+    setSubmitProgress("Uploading media...");
     try {
       const numPrice = parseFloat(price);
       const normalizedAttributes = category
         ? coerceListingAttributes(category, categoryAttributes)
         : {};
-      const newPhotoUrls = await uploadMedia(newPhotoFiles, "listing");
-      const newVideoUrls = await uploadMedia(newVideoFile, "listing_video");
-      const newCoverUrls = await uploadMedia(newVideoCoverFile, "listing");
+
+      // Upload photos, video, and video cover in parallel
+      const [newPhotoUrls, newVideoUrl, newCoverUrls] = await Promise.all([
+        uploadMedia(newPhotoFiles, "listing"),
+        newVideoFile.length > 0
+          ? (async () => {
+              const file = newVideoFile[0];
+              const urlRes = await fetch("/api/media/upload-url", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  filename: file.name,
+                  contentType: file.type,
+                  size: file.size,
+                  area: "listing_video",
+                }),
+              });
+              if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+              const { uploadUrl, publicUrl } = await urlRes.json();
+              const putRes = await fetch(uploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": file.type },
+                body: file,
+              });
+              if (!putRes.ok) throw new Error("Failed to upload video");
+              return publicUrl as string;
+            })()
+          : Promise.resolve(null as string | null),
+        uploadMedia(newVideoCoverFile, "listing"),
+      ]);
 
       // Resolve video thumbnail: new upload > existing > null
       let videoThumbnail: string | null = existingVideoThumbnail;
@@ -339,7 +368,9 @@ export default function EditListingPage() {
       }
 
       const allPhotos = [...existingPhotos, ...newPhotoUrls];
-      const allVideos = [...existingVideos, ...newVideoUrls];
+      const allVideos = [...existingVideos, ...(newVideoUrl ? [newVideoUrl] : [])];
+
+      setSubmitProgress("Saving listing...");
 
       // Submit via server-side API route for full validation & ownership check
       const res = await fetch(`/api/listings/${id}`, {
@@ -377,6 +408,7 @@ export default function EditListingPage() {
       setFormError(error instanceof Error ? error.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -821,7 +853,7 @@ export default function EditListingPage() {
                     </Button>
                     <Button type="submit" className="flex-1" disabled={isSubmitting}>
                       {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Save Changes
+                      {isSubmitting ? submitProgress || "Saving..." : "Save Changes"}
                     </Button>
                   </div>
                 </form>

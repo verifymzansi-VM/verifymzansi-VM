@@ -102,7 +102,7 @@ export default function CreateListingPage() {
   const [videoFile, setVideoFile] = useState<File[]>([]);
   const [videoCoverFile, setVideoCoverFile] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -112,6 +112,10 @@ export default function CreateListingPage() {
   const cities = province ? getCitiesForProvince(province) : [];
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
   const videoAllowed = usePlanVideoAllowed("MZANSI_MARKET");
+  const photoPreviewUrls = useMemo(
+    () => photoFiles.map((file) => URL.createObjectURL(file)),
+    [photoFiles]
+  );
   const videoPreviewUrl = useMemo(
     () => (videoFile.length > 0 ? URL.createObjectURL(videoFile[0]) : null),
     [videoFile]
@@ -121,15 +125,12 @@ export default function CreateListingPage() {
     [videoCoverFile]
   );
 
-  useEffect(() => {
-    if (photoFiles.length > 0) {
-      const url = URL.createObjectURL(photoFiles[0]);
-      setPreviewUrl(url);
-      return () => URL.revokeObjectURL(url);
-    }
-
-    setPreviewUrl(null);
-  }, [photoFiles]);
+  useEffect(
+    () => () => {
+      photoPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [photoPreviewUrls]
+  );
 
   useEffect(
     () => () => {
@@ -272,46 +273,75 @@ export default function CreateListingPage() {
 
     clearErrors();
     setIsSubmitting(true);
+    setSubmitProgress("Uploading media...");
 
     try {
       const normalizedAttributes = category
         ? coerceListingAttributes(category, categoryAttributes)
         : {};
-      let photoUrls: string[] = [];
-      if (photoFiles.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "listing");
-        photoFiles.forEach((file) => uploadData.append("files", file));
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload photos");
-        const uploadJson = await uploadRes.json();
-        photoUrls = uploadJson.urls || [];
-      }
 
-      let videoUrls: string[] = [];
-      if (videoFile.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "listing_video");
-        uploadData.append("files", videoFile[0]);
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload video");
-        const uploadJson = await uploadRes.json();
-        if (uploadJson.urls?.length) {
-          videoUrls = [uploadJson.urls[0]];
-        }
-      }
+      // Upload photos, video, and video cover in parallel
+      const [photoUrls, videoUrl, videoThumbnailUrl] = await Promise.all([
+        // Photos via server proxy (small files)
+        photoFiles.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "listing");
+              photoFiles.forEach((file) => uploadData.append("files", file));
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) throw new Error("Failed to upload photos");
+              const uploadJson = await uploadRes.json();
+              return (uploadJson.urls || []) as string[];
+            })()
+          : Promise.resolve([] as string[]),
 
-      let videoThumbnailUrl: string | null = null;
-      if (videoCoverFile.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "listing");
-        uploadData.append("files", videoCoverFile[0]);
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (uploadRes.ok) {
-          const uploadJson = await uploadRes.json();
-          videoThumbnailUrl = uploadJson.urls?.[0] || null;
-        }
-      }
+        // Video via presigned URL (direct to R2, avoids proxying large files)
+        videoFile.length > 0
+          ? (async () => {
+              const file = videoFile[0];
+              const urlRes = await fetch("/api/media/upload-url", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  filename: file.name,
+                  contentType: file.type,
+                  size: file.size,
+                  area: "listing_video",
+                }),
+              });
+              if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+              const { uploadUrl, publicUrl } = await urlRes.json();
+              const putRes = await fetch(uploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": file.type },
+                body: file,
+              });
+              if (!putRes.ok) throw new Error("Failed to upload video");
+              return publicUrl as string;
+            })()
+          : Promise.resolve(null as string | null),
+
+        // Video cover image via server proxy
+        videoCoverFile.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "listing");
+              uploadData.append("files", videoCoverFile[0]);
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) return null;
+              const uploadJson = await uploadRes.json();
+              return (uploadJson.urls?.[0] || null) as string | null;
+            })()
+          : Promise.resolve(null as string | null),
+      ]);
+
+      setSubmitProgress("Saving listing...");
 
       const res = await fetch("/api/listings", {
         method: "POST",
@@ -328,7 +358,7 @@ export default function CreateListingPage() {
           city,
           town,
           images: photoUrls,
-          videos: videoUrls,
+          videos: videoUrl ? [videoUrl] : [],
           videoThumbnail: videoThumbnailUrl,
           contactMethods,
         }),
@@ -349,6 +379,7 @@ export default function CreateListingPage() {
       setFormError(error instanceof Error ? error.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -377,7 +408,7 @@ export default function CreateListingPage() {
             category: category || null,
             condition: condition || null,
             attributes: normalizedAttributes,
-            photos: previewUrl ? [previewUrl] : [],
+            photos: photoPreviewUrls,
             videos: videoPreviewUrl ? [videoPreviewUrl] : [],
             video_thumbnail: videoCoverPreviewUrl,
             location_province: province || null,
@@ -429,7 +460,7 @@ export default function CreateListingPage() {
                     onNext={goNext}
                     submitDisabled={isSubmitting}
                     isSubmitting={isSubmitting}
-                    submittingLabel="Submitting..."
+                    submittingLabel={submitProgress || "Submitting..."}
                   />
                 }
               >
