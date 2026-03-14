@@ -4,7 +4,6 @@ import path from "node:path";
 import {
   EmailProviderResponseSchema,
   KycWebhookPayloadSchema,
-  PayFastItnPayloadSchema,
   SmsProviderResponseSchema,
 } from "@/test/contracts/webhooks";
 
@@ -16,20 +15,6 @@ function readFixture<T>(segments: string[]): T {
 }
 
 describe("Webhook and Provider Contract Fixtures", () => {
-  it("accepts PayFast COMPLETE payload fixture", () => {
-    const payload = readFixture<Record<string, unknown>>(["payfast", "itn.complete.json"]);
-
-    const parsed = PayFastItnPayloadSchema.safeParse(payload);
-    expect(parsed.success).toBe(true);
-  });
-
-  it("accepts PayFast FAILED payload fixture", () => {
-    const payload = readFixture<Record<string, unknown>>(["payfast", "itn.failed.json"]);
-
-    const parsed = PayFastItnPayloadSchema.safeParse(payload);
-    expect(parsed.success).toBe(true);
-  });
-
   it("accepts KYC approved payload fixture", () => {
     const payload = readFixture<Record<string, unknown>>(["kyc", "provider-approved.json"]);
 
@@ -70,14 +55,6 @@ describe("Webhook and Provider Contract Fixtures", () => {
 
     const parsed = EmailProviderResponseSchema.safeParse(payload);
     expect(parsed.success).toBe(true);
-  });
-
-  it("rejects PayFast payload without signature", () => {
-    const payload = readFixture<Record<string, unknown>>(["payfast", "itn.complete.json"]);
-    delete payload.signature;
-
-    const parsed = PayFastItnPayloadSchema.safeParse(payload);
-    expect(parsed.success).toBe(false);
   });
 
   it("rejects KYC payload with invalid status", () => {

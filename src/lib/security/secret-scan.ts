@@ -16,7 +16,6 @@ const FIXTURE_FILE_PATTERNS = [
 
 const FIXTURE_RULES = new Set([
   "Hardcoded service role key assignment",
-  "PayFast passphrase",
   "Turnstile secret key",
   "Resend API key",
 ]);
@@ -47,10 +46,6 @@ export const SECRET_SCAN_RULES: SecretScanRule[] = [
   {
     name: "Hardcoded service role key assignment",
     pattern: /\bSUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*["'][^"'\n]{20,}["']/g,
-  },
-  {
-    name: "PayFast passphrase",
-    pattern: /\bPAYFAST_PASSPHRASE\s*[:=]\s*["'][^"'\n]{4,}["']/g,
   },
   {
     name: "Resend API key",

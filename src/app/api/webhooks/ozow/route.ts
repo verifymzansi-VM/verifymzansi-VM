@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     const { data: payment } = await supabase
       .from("payments")
       .select(
-        "id, area, status, provider, provider_payment_id, provider_reference, provider_data, payfast_payment_id, amount_cents, user_id, payfast_data"
+        "id, area, status, provider, provider_payment_id, provider_reference, provider_data, amount_cents, user_id"
       )
       .eq("id", payload.merchantReference)
       .maybeSingle();
@@ -98,8 +98,6 @@ export async function POST(request: NextRequest) {
               provider_payment_id: payment.provider_payment_id,
               provider_reference: payment.provider_reference,
               provider_data: (payment.provider_data as Record<string, unknown> | null) || null,
-              payfast_payment_id: payment.payfast_payment_id,
-              payfast_data: (payment.payfast_data as Record<string, unknown> | null) || null,
             },
             payload.rawPayload
           ),
@@ -140,8 +138,6 @@ export async function POST(request: NextRequest) {
         provider_payment_id: payload.providerPaymentId || payment.provider_payment_id,
         provider_reference: payment.provider_reference || payment.id,
         provider_data: (payment.provider_data as Record<string, unknown> | null) || null,
-        payfast_payment_id: payment.payfast_payment_id,
-        payfast_data: (payment.payfast_data as Record<string, unknown> | null) || null,
       });
     } catch (error) {
       log.error("Ozow fulfillment failed", {
@@ -169,8 +165,6 @@ export async function POST(request: NextRequest) {
             provider_payment_id: payload.providerPaymentId || payment.provider_payment_id,
             provider_reference: payment.provider_reference || payment.id,
             provider_data: (payment.provider_data as Record<string, unknown> | null) || null,
-            payfast_payment_id: payment.payfast_payment_id,
-            payfast_data: (payment.payfast_data as Record<string, unknown> | null) || null,
           },
           payload.rawPayload
         ),

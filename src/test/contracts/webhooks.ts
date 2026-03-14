@@ -1,27 +1,5 @@
 import { z } from "zod";
 
-export const PayFastPaymentStatusSchema = z.enum(["COMPLETE", "FAILED", "PENDING", "CANCELLED"]);
-
-export const PayFastItnPayloadSchema = z
-  .object({
-    m_payment_id: z.string().min(1),
-    payment_status: PayFastPaymentStatusSchema,
-    amount_gross: z.string().regex(/^\d+(\.\d{2})$/, "amount_gross must be 0.00 format"),
-    signature: z.string().regex(/^[a-f0-9]{32}$/i, "signature must be md5 hex"),
-    pf_payment_id: z.string().min(1).optional(),
-    item_name: z.string().min(1).optional(),
-    item_description: z.string().optional(),
-    amount_fee: z
-      .string()
-      .regex(/^-?\d+(\.\d{2})$/)
-      .optional(),
-    amount_net: z
-      .string()
-      .regex(/^-?\d+(\.\d{2})$/)
-      .optional(),
-  })
-  .passthrough();
-
 export const KycWebhookStatusSchema = z.enum(["approved", "rejected", "needs_manual_review"]);
 
 export const KycWebhookPayloadSchema = z
@@ -81,7 +59,6 @@ export const EmailProviderResponseSchema = z
     }
   });
 
-export type PayFastItnPayload = z.infer<typeof PayFastItnPayloadSchema>;
 export type KycWebhookPayload = z.infer<typeof KycWebhookPayloadSchema>;
 export type SmsProviderResponse = z.infer<typeof SmsProviderResponseSchema>;
 export type EmailProviderResponse = z.infer<typeof EmailProviderResponseSchema>;

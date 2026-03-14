@@ -113,13 +113,13 @@ test.describe("Platform Smoke", () => {
   });
 
   test("@smoke webhook endpoints handle malformed payloads without 5xx", async ({ request }) => {
-    const payfast = await request.post("/api/webhooks/payfast", {
-      form: {
-        m_payment_id: "smoke-1",
-        payment_status: "COMPLETE",
+    const ozow = await request.post("/api/webhooks/ozow", {
+      data: {
+        merchantReference: "smoke-1",
+        eventType: "transaction.complete",
       },
     });
-    expect(payfast.status()).toBeLessThan(500);
+    expect(ozow.status()).toBeLessThan(500);
 
     const kyc = await request.post("/api/webhooks/kyc/provider", {
       data: {},

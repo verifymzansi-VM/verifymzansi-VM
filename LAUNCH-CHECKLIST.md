@@ -46,10 +46,6 @@ deployed Cloudflare/Wrangler runtime secrets:
 - `AFRICASTALKING_API_KEY`
 - `AFRICASTALKING_USERNAME` using the real production account, not `sandbox`
 - `AFRICASTALKING_SENDER_ID`
-- `PAYFAST_MERCHANT_ID`
-- `PAYFAST_MERCHANT_KEY`
-- `PAYFAST_PASSPHRASE`
-- `PAYFAST_SANDBOX=false`
 - `RESEND_API_KEY`
 - `R2_ACCOUNT_ID`
 - `R2_ACCESS_KEY_ID`
@@ -60,6 +56,11 @@ deployed Cloudflare/Wrangler runtime secrets:
 - `IP_HASH_SECRET`
 - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
 - `TURNSTILE_SECRET_KEY`
+- `OZOW_ENV=production`
+- `OZOW_CLIENT_ID`
+- `OZOW_CLIENT_SECRET`
+- `OZOW_SITE_CODE`
+- `OZOW_WEBHOOK_SECRET`
 
 Failing any of the above should block deploy.
 
@@ -67,8 +68,8 @@ If `RATE_LIMITER_API_KEY` is set, `OTP_RATE_LIMITER_URL` must also be set.
 
 ## 3. Data and Billing Checks
 
-- Confirm PayFast is in production mode and can receive callbacks at
-  `/api/webhooks/payfast`.
+- Confirm Ozow is in production mode and can receive callbacks at
+  `/api/webhooks/ozow`.
 - Confirm Africa's Talking sender approval is complete for the live sender ID.
 - Confirm Resend domain verification is complete for the production sender
   domain.

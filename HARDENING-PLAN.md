@@ -41,19 +41,19 @@ All findings have been addressed — **102/107 items implemented, 5 deferred**
 
 ## Phase 1 — CRITICAL Security Fixes (4 items, do first) ✅ COMPLETE
 
-### 1. ✅ Gate PayFast dev bypass behind explicit env var, not `NODE_ENV`
+### 1. ✅ Gate Ozow dev bypass behind explicit env var, not `NODE_ENV`
 
 - **File:**
-  [src/app/api/webhooks/payfast/route.ts#L36](src/app/api/webhooks/payfast/route.ts#L36)
+  [src/app/api/webhooks/ozow/route.ts#L36](src/app/api/webhooks/ozow/route.ts#L36)
 - **Problem:** `NODE_ENV === "development"` check allows `dev_bypass_signature`
   to bypass payment verification. Any staging/preview deployment with
   `NODE_ENV=development` is vulnerable to forged payment completions.
 - **File:**
-  [src/app/api/mock-payfast/route.ts#L16](src/app/api/mock-payfast/route.ts#L16)
+  [src/app/api/mock-ozow/route.ts#L16](src/app/api/mock-ozow/route.ts#L16)
 - **Problem:** Entire mock payment endpoint active on all non-production
   deployments.
 - **Fix:** Replace `NODE_ENV` checks with `ENABLE_DEV_PAYMENT_BYPASS === "true"`
-  and `ENABLE_MOCK_PAYFAST === "true"` env vars. Add to `.env.example` with
+  and `ENABLE_MOCK_OZOW === "true"` env vars. Add to `.env.example` with
   `# ⚠️ NEVER set in production` comments.
 
 ### 2. ✅ Harden Supabase auth config
@@ -167,15 +167,14 @@ All findings have been addressed — **102/107 items implemented, 5 deferred**
   `log.warn("KYC_PROVIDER=stub: All verifications route to manual review")` at
   startup. Add `KYC_PROVIDER` env var (default: `"stub"`) for explicit intent.
 
-### 13. ✅ Harden PayFast sandbox guard
+### 13. ✅ Harden Ozow sandbox guard
 
-- **File:**
-  [src/lib/services/payfast.ts#L91-L93](src/lib/services/payfast.ts#L91-L93)
-- **Problem:** Mock signature accepted in dev+sandbox mode. If `PAYFAST_SANDBOX`
-  is accidentally `"true"` in production, signature verification is bypassed.
-- **Fix:** Add runtime check in `verifyPayFastSignature()` that throws if
-  `PAYFAST_SANDBOX === "true"` AND `NODE_ENV === "production"`. Document MD5 as
-  accepted PayFast-mandated business risk.
+- **File:** [src/lib/services/ozow.ts#L91-L93](src/lib/services/ozow.ts#L91-L93)
+- **Problem:** Mock signature accepted in dev+sandbox mode. If `OZOW_SANDBOX` is
+  accidentally `"true"` in production, signature verification is bypassed.
+- **Fix:** Add runtime check in `verifyOzowSignature()` that throws if
+  `OZOW_SANDBOX === "true"` AND `NODE_ENV === "production"`. Document MD5 as
+  accepted Ozow-mandated business risk.
 
 ### 14. ✅ Fix `DEV_EXPOSE_OTP` risk
 
@@ -412,9 +411,9 @@ All findings have been addressed — **102/107 items implemented, 5 deferred**
 ### 42. ✅ Expand secret-scan rules
 
 - **File:** [scripts/secret-scan.ts#L32-L49](scripts/secret-scan.ts#L32-L49)
-- **Fix:** Add patterns for PayFast passphrase, Resend API keys (`re_`),
-  Cloudflare API tokens (`cf_`), Turnstile secrets, 64-char hex strings outside
-  `.env` files.
+- **Fix:** Add patterns for Ozow passphrase, Resend API keys (`re_`), Cloudflare
+  API tokens (`cf_`), Turnstile secrets, 64-char hex strings outside `.env`
+  files.
 
 ### 43. ✅ Add Tailwind safelist for dynamic classes
 
@@ -428,11 +427,11 @@ All findings have been addressed — **102/107 items implemented, 5 deferred**
 - **Fix:** Replace `hostname: "*.supabase.co"` with specific
   `tnygdgormnofpgjknlhr.supabase.co`.
 
-### 45. ✅ Document `.env.example` PayFast sandbox risk
+### 45. ✅ Document `.env.example` Ozow sandbox risk
 
 - **File:** `.env.example`
 - **Fix:** Add prominent `# ⚠️ SET TO false IN PRODUCTION` comment next to
-  `PAYFAST_SANDBOX=true`.
+  `OZOW_SANDBOX=true`.
 
 ### 46. ✅ Fix `use-auth.ts` null-safety
 
@@ -457,7 +456,7 @@ All findings have been addressed — **102/107 items implemented, 5 deferred**
 ### 49. ✅ Harden `.env.example` dev-only vars
 
 - **Fix:** Add `# ⚠️ NEVER SET IN PRODUCTION` comments to: `DEV_EXPOSE_OTP`,
-  `ENABLE_DEV_PAYMENT_BYPASS`, `ENABLE_MOCK_PAYFAST`.
+  `ENABLE_DEV_PAYMENT_BYPASS`, `ENABLE_MOCK_OZOW`.
 
 ### 50. ✅ Add DSAR page loading state
 
@@ -588,14 +587,14 @@ All findings have been addressed — **102/107 items implemented, 5 deferred**
 ### 105. ✅ Update README Quick Start
 
 - Show Turnstile env vars as required (not commented out)
-- Add note about `ENABLE_MOCK_PAYFAST` and `DEV_EXPOSE_OTP` being dev-only
+- Add note about `ENABLE_MOCK_OZOW` and `DEV_EXPOSE_OTP` being dev-only
 - Add `pnpm preflight` as a required step before first deploy
 
 ### 106. ✅ Add RUNBOOK section
 
 Document:
 
-- How to rotate secrets (PayFast, Supabase, R2, encryption keys, HMAC)
+- How to rotate secrets (Ozow, Supabase, R2, encryption keys, HMAC)
 - How to enable/disable feature flags
 - How to process DSAR requests within 30-day POPIA deadline
 - How to check audit logs for compliance
@@ -627,8 +626,8 @@ Document:
 ### Manual (deploy to staging)
 
 - [ ] Turnstile challenges appear on register/login/contact/report pages
-- [ ] `/api/mock-payfast` returns 404 on staging (no `ENABLE_MOCK_PAYFAST`)
-- [ ] PayFast webhook rejects `dev_bypass_signature` on staging
+- [ ] `/api/mock-ozow` returns 404 on staging (no `ENABLE_MOCK_OZOW`)
+- [ ] Ozow webhook rejects `dev_bypass_signature` on staging
 - [ ] Banned user sees `/banned` page and cannot access `/dashboard`
 - [ ] Password reset flow works end-to-end
 - [ ] Supabase dashboard: email confirmations enabled, password length ≥8
@@ -639,9 +638,9 @@ Document:
 
 ### Production Deploy
 
-- [ ] `PAYFAST_SANDBOX=false` confirmed
+- [ ] `OZOW_SANDBOX=false` confirmed
 - [ ] `ENABLE_DEV_PAYMENT_BYPASS` not set
-- [ ] `ENABLE_MOCK_PAYFAST` not set
+- [ ] `ENABLE_MOCK_OZOW` not set
 - [ ] `DEV_EXPOSE_OTP` not set
 - [ ] All secrets rotated from test values
 - [ ] Supabase network restrictions enabled (not `0.0.0.0/0`)
@@ -656,7 +655,7 @@ Document:
 | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **KYC stub provider at launch**                    | Intentional manual-only review. Documented with `KYC_PROVIDER=stub` env var and startup warning.                                                                                                    |
 | **`src/middleware.ts` is the active request gate** | Next.js 16 `proxy.ts` currently runs on the Node.js runtime, which breaks OpenNext Cloudflare builds. Edge `middleware.ts` is used instead despite the deprecation warning.                         |
-| **MD5 in PayFast signatures**                      | PayFast-mandated. Documented as accepted business risk.                                                                                                                                             |
+| **MD5 in Ozow signatures**                         | Ozow-mandated. Documented as accepted business risk.                                                                                                                                                |
 | **`style-src 'unsafe-inline'`**                    | Required by Tailwind CSS + shadcn component styles. Nonce-based styles deferred post-launch.                                                                                                        |
 | **No MFA at launch**                               | Supabase MFA disabled. Acceptable for initial launch; plan to add for admin accounts in first sprint.                                                                                               |
 | **Items 66-69, 73 deferred**                       | Major component extraction/DRY refactors (VideoCard, HeroCarousel, CategoryStrip, GridHeader, plan entitlements hook). Too high regression risk pre-launch. Scheduled for first post-launch sprint. |

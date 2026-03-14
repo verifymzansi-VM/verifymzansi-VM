@@ -184,7 +184,6 @@ export interface Entitlement {
   tier: PlanTier;
   type: EntitlementType;
   status: EntitlementStatus;
-  payfast_subscription_id: string | null;
   started_at: string;
   expires_at: string | null;
   cancelled_at: string | null;
@@ -310,8 +309,6 @@ export interface Payment {
   provider_payment_id: string | null;
   provider_reference: string | null;
   provider_data: Record<string, unknown> | null;
-  payfast_payment_id: string | null;
-  payfast_data: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }

@@ -106,7 +106,7 @@ export type PaymentStatus =
   | "expired"
   | "refunded";
 
-export type PaymentProvider = "payfast" | "ozow";
+export type PaymentProvider = "ozow";
 
 export type LeadStatus = "new" | "read" | "contacted" | "closed";
 

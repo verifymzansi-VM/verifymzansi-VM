@@ -98,7 +98,6 @@ describe("env config", () => {
         vi.stubEnv(key, value);
       }
       vi.stubEnv("NODE_ENV", "production");
-      vi.stubEnv("PAYFAST_PASSPHRASE", "prod-passphrase");
       vi.stubEnv("OZOW_ENV", "production");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
       delete process.env.AFRICASTALKING_SENDER_ID;

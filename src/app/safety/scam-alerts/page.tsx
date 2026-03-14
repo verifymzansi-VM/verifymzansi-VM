@@ -27,7 +27,7 @@ const SCAM_TYPES = [
     tips: [
       "Pay only on delivery after inspecting the item",
       "Never transfer money to strangers via EFT or e-wallet",
-      "Use PayFast or secure payment methods",
+      "Use Ozow or secure payment methods",
     ],
   },
   {

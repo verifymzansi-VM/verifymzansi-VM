@@ -7,11 +7,6 @@ describe("services index barrel", () => {
   it("re-exports all service modules", { timeout: 15_000 }, async () => {
     const services = await import("./index");
 
-    // PayFast
-    expect(typeof services.buildPayFastCheckoutUrl).toBe("function");
-    expect(typeof services.verifyPayFastSignature).toBe("function");
-    expect(typeof services.isPayFastIp).toBe("function");
-
     // Entitlements
     expect(typeof services.getPlan).toBe("function");
     expect(typeof services.getEntitlements).toBe("function");

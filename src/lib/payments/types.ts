@@ -10,8 +10,6 @@ export interface PaymentRecordShape {
   provider_payment_id?: string | null;
   provider_reference?: string | null;
   provider_data?: Record<string, unknown> | null;
-  payfast_payment_id?: string | null;
-  payfast_data?: Record<string, unknown> | null;
 }
 
 export type PaymentMetadata = Record<string, unknown> & { type?: string };
@@ -34,8 +32,7 @@ export function getPaymentMetadata(payment: PaymentRecordShape): PaymentMetadata
     }
   }
 
-  const payfastData = asRecord(payment.payfast_data);
-  return payfastData as PaymentMetadata | null;
+  return null;
 }
 
 export function appendProviderWebhook(
@@ -50,18 +47,6 @@ export function appendProviderWebhook(
     return {
       ...providerData,
       webhooks: [...existing, webhookPayload],
-      last_webhook_at: new Date().toISOString(),
-    };
-  }
-
-  const payfastData = asRecord(payment.payfast_data);
-  if (payfastData) {
-    return {
-      ...payfastData,
-      webhooks: [
-        ...(Array.isArray(payfastData.webhooks) ? payfastData.webhooks : []),
-        webhookPayload,
-      ],
       last_webhook_at: new Date().toISOString(),
     };
   }

@@ -2,7 +2,7 @@
  * Regression tests for addon checkout button redirect behavior.
  *
  * Root cause of incident: all three addon buttons used Next.js
- * `router.push(checkoutUrl)` to redirect to external PayFast URLs.
+ * `router.push(checkoutUrl)` to redirect to external checkout URLs.
  * `router.push()` cannot navigate to external URLs — it treats them
  * as client-side routes, causing a 404.
  *
@@ -33,8 +33,7 @@ import { UrgentButton } from "@/components/listings/urgent-button";
 // ── Helpers ────────────────────────────────────────────────────
 
 const LISTING_ID = "00000000-0000-0000-0000-000000000001";
-const EXTERNAL_CHECKOUT_URL =
-  "https://sandbox.payfast.co.za/eng/process?merchant_id=123&amount=25.00";
+const EXTERNAL_CHECKOUT_URL = "https://pay.ozow.com/checkout?id=test-123&amount=25.00";
 
 let originalLocationHref: string;
 

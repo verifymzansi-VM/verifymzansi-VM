@@ -76,8 +76,7 @@ jobs:
             "api/listings/\\[id\\]/urgent" \
             "api/listings/\\[id\\]/boost" \
             "api/businesses/\\[id\\]/boost" \
-            "api/billing/create-checkout" \
-            "api/webhooks/payfast"; do
+            "api/billing/create-checkout"; do
             if ! find .next/server/app -path "*${route}*" -print -quit 2>/dev/null | grep -q .; then
               echo "::error::MISSING ROUTE: ${route} not found in production build"
               MISSING=$((MISSING + 1))

@@ -14,7 +14,7 @@ VerifyMzansi combines:
 - `Mzansi Business` for verified businesses, shops, and services
 - `Promotions & Events` for deals, campaigns, and business posts
 - KYC, moderation, audit logging, and POPIA-sensitive data handling
-- PayFast billing, Africa's Talking OTP, Resend email, Turnstile CAPTCHA, and
+- Ozow billing, Africa's Talking OTP, Resend email, Turnstile CAPTCHA, and
   Cloudflare R2 file storage
 
 ## Prerequisites
@@ -24,7 +24,7 @@ VerifyMzansi combines:
 - pnpm `>=10`
 - Supabase project
 - Cloudflare account for Pages/Workers/R2/Turnstile
-- PayFast, Africa's Talking, and Resend credentials for launch validation
+- Ozow, Africa's Talking, and Resend credentials for launch validation
 
 ## Local Development
 
@@ -116,8 +116,8 @@ site root with `?code=...` instead of the app callback handler.
 - Required check: `pnpm validate:launch-env`
 - Full release check: `pnpm preflight:prod`
 - `NEXT_PUBLIC_APP_URL` must be public HTTPS
-- `AFRICASTALKING_SENDER_ID`, `IP_HASH_SECRET`, PayFast production secrets,
-  Turnstile, R2, Resend, and encryption keys must all be populated
+- `AFRICASTALKING_SENDER_ID`, `IP_HASH_SECRET`, Ozow credentials, Turnstile, R2,
+  Resend, and encryption keys must all be populated
 - If you set `RATE_LIMITER_API_KEY`, you must also set `OTP_RATE_LIMITER_URL`
 - Sensitive values belong in GitHub Actions secrets and Cloudflare Wrangler
   secrets, not in committed files

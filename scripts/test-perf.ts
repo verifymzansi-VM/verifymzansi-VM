@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { loadEnvConfig } from "@next/env";
 
 loadEnvConfig(process.cwd());
@@ -42,12 +43,12 @@ const scenarios: PerfScenario[] = [
     expectedStatuses: [200],
   },
   {
-    name: "PayFast webhook resilience",
-    path: "/api/webhooks/payfast",
+    name: "Ozow webhook resilience",
+    path: "/api/webhooks/ozow",
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: "m_payment_id=perf-test&payment_status=COMPLETE&amount_gross=100.00",
-    expectedStatuses: [400, 403, 404],
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ merchantReference: "perf-test", eventType: "transaction.complete" }),
+    expectedStatuses: [400, 401, 403, 404],
   },
 ];
 

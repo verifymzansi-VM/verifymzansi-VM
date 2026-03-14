@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { loadEnvConfig } from "@next/env";
 
 loadEnvConfig(process.cwd());
@@ -51,12 +52,12 @@ const checks: SmokeCheck[] = [
     expectStatuses: [400, 401, 403, 422],
   },
   {
-    name: "PayFast webhook path reachable",
-    path: "/api/webhooks/payfast",
+    name: "Ozow webhook path reachable",
+    path: "/api/webhooks/ozow",
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: "m_payment_id=test&payment_status=COMPLETE",
-    expectStatuses: [400, 403, 404],
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ merchantReference: "test", eventType: "transaction.complete" }),
+    expectStatuses: [400, 401, 403, 404],
   },
   {
     name: "KYC webhook path reachable",

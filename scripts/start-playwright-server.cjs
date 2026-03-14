@@ -30,10 +30,6 @@ function createDeterministicEnv() {
     AFRICASTALKING_API_KEY: "playwright-africas-talking-key",
     AFRICASTALKING_USERNAME: "sandbox",
     AFRICASTALKING_SENDER_ID: "VERIFYMZANS",
-    PAYFAST_MERCHANT_ID: "10000100",
-    PAYFAST_MERCHANT_KEY: "playwright-payfast-key",
-    PAYFAST_PASSPHRASE: "playwright-passphrase", // secret-scan: allow deterministic fixture
-    PAYFAST_SANDBOX: "true",
     RESEND_API_KEY: "re_playwright_1234567890",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key",
     TURNSTILE_SECRET_KEY: "dummy_secret_key", // secret-scan: allow deterministic fixture

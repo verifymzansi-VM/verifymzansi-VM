@@ -82,13 +82,6 @@ const envSchema = z.object({
   OTP_RATE_LIMITER_TIMEOUT_MS: z.coerce.number().positive().optional(),
   RATE_LIMITER_API_KEY: z.string().min(1).optional(),
 
-  // ── PayFast (optional at startup — validated at request time in billing routes)
-  PAYFAST_MERCHANT_ID: z.string().optional(),
-  PAYFAST_MERCHANT_KEY: z.string().optional(),
-  PAYFAST_PASSPHRASE: z.string().optional(),
-  PAYFAST_SANDBOX: z.enum(["true", "false", "1", "0"]).optional(),
-  PAYFAST_NOTIFY_URL: z.string().url().optional(),
-
   // ── Ozow (validated for production launch paths)
   OZOW_ENV: z.enum(["staging", "production"]).optional(),
   OZOW_CLIENT_ID: z.string().optional(),
@@ -160,11 +153,6 @@ function _createFallbackEnv(): Env {
       ? Number(process.env.OTP_RATE_LIMITER_TIMEOUT_MS)
       : undefined,
     RATE_LIMITER_API_KEY: process.env.RATE_LIMITER_API_KEY,
-    PAYFAST_MERCHANT_ID: process.env.PAYFAST_MERCHANT_ID || "",
-    PAYFAST_MERCHANT_KEY: process.env.PAYFAST_MERCHANT_KEY || "",
-    PAYFAST_PASSPHRASE: process.env.PAYFAST_PASSPHRASE,
-    PAYFAST_SANDBOX: process.env.PAYFAST_SANDBOX,
-    PAYFAST_NOTIFY_URL: process.env.PAYFAST_NOTIFY_URL,
     OZOW_ENV: process.env.OZOW_ENV as "staging" | "production" | undefined,
     OZOW_CLIENT_ID: process.env.OZOW_CLIENT_ID,
     OZOW_CLIENT_SECRET: process.env.OZOW_CLIENT_SECRET,

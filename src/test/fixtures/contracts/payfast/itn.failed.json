@@ -1,8 +1,0 @@
-{
-  "m_payment_id": "pay_54321",
-  "pf_payment_id": "pf_09876",
-  "payment_status": "FAILED",
-  "amount_gross": "450.00",
-  "item_name": "Business Ads Pro Subscription",
-  "signature": "abcdef0123456789abcdef0123456789"
-}

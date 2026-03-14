@@ -32,11 +32,11 @@ The platform differentiates from competitors through **identity verification
 | User registration + KYC       | `/register` → `/verification`                    | Working                         |
 | Browse marketplace            | `/mzansi-market`, `/mall-shops`, `/business-ads` | Working                         |
 | Create listing/shop/business  | `/post/create` → create forms                    | Working                         |
-| Boost/Featured/Urgent add-ons | Listing cards → PayFast checkout                 | Working                         |
+| Boost/Featured/Urgent add-ons | Listing cards → Ozow checkout                    | Working                         |
 | Storefront/Business posts     | API routes for promotions/events/offers          | Working                         |
 | **Advertising hub**           | `/promotions`                                    | **Incomplete — see Finding #1** |
 | Admin moderation              | `/admin/*`                                       | Working                         |
-| Billing/subscriptions         | `/billing/*` + PayFast webhooks                  | Working                         |
+| Billing/subscriptions         | `/billing/*` + Ozow webhooks                     | Working                         |
 | POPIA compliance (DSAR)       | `/dsar` + admin DSAR queue                       | Working                         |
 
 ### Current Readiness: **NOT LAUNCH-READY**
@@ -217,7 +217,7 @@ VerifyMzansi
 
 **Current architecture already supports this:**
 
-- Boost/Featured/Urgent add-ons exist with full PayFast payment integration
+- Boost/Featured/Urgent add-ons exist with full Ozow payment integration
 - Storefront posts (promotions, events, specials) exist
 - Business posts (offers, hiring, case studies) exist
 - `/promotions` page exists as a public feed
@@ -342,7 +342,7 @@ The existing test suite is comprehensive and covers:
 
 - Authentication flows
 - Add-on/boost payment flows
-- PayFast webhook processing
+- Ozow webhook processing
 - KYC verification pipeline
 - Entitlements and plan gating
 - File validation and security
@@ -392,8 +392,8 @@ pnpm test:contract # Contract tests
 
 - [ ] Update homepage CTA copy to mention advertising (Finding #6)
 - [ ] Add "Advertise" button to header for non-authenticated users
-- [ ] Verify PayFast webhook endpoint is publicly accessible
-- [ ] Test full payment flow in PayFast sandbox
+- [ ] Verify Ozow webhook endpoint is publicly accessible
+- [ ] Test full payment flow in Ozow sandbox
 - [ ] Verify R2 bucket CORS configuration
 - [ ] Check Cloudflare Turnstile (CAPTCHA) is configured
 - [ ] Test KYC flow end-to-end with Africa's Talking SMS
@@ -401,7 +401,7 @@ pnpm test:contract # Contract tests
 
 ### Post-Launch (Track)
 
-- [ ] Monitor PayFast webhook delivery rate
+- [ ] Monitor Ozow webhook delivery rate
 - [ ] Monitor KYC completion rate
 - [ ] Track advertising/promotion usage metrics
 - [ ] Set up alerts for audit log failure threshold
@@ -451,7 +451,7 @@ pnpm deploy
 
 ### Security-Sensitive Files (never commit)
 
-- `.env.local` — Contains Supabase service role key, PayFast passphrase
+- `.env.local` — Contains Supabase service role key, Ozow passphrase
 - `.env.production` — Production secrets
 - Any `*.pem` files
 - `cloudflare-env-vars.txt`
