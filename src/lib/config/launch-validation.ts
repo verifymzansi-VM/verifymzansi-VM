@@ -66,11 +66,6 @@ const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
     "AFRICASTALKING_API_KEY",
     "AFRICASTALKING_USERNAME",
     "AFRICASTALKING_SENDER_ID",
-    "OZOW_ENV",
-    "OZOW_CLIENT_ID",
-    "OZOW_CLIENT_SECRET",
-    "OZOW_SITE_CODE",
-    "OZOW_WEBHOOK_SECRET",
     "RESEND_API_KEY",
     "R2_ACCOUNT_ID",
     "R2_ACCESS_KEY_ID",
@@ -185,6 +180,26 @@ export function validateLaunchConfiguration(
     );
   } else {
     addCheck(checks, "Launch env", "fail", `Missing: ${missingRequired.join(", ")}`);
+  }
+
+  // Ozow payment vars are optional — warn when missing in production
+  if (mode === "production") {
+    const ozowKeys = [
+      "OZOW_ENV",
+      "OZOW_CLIENT_ID",
+      "OZOW_CLIENT_SECRET",
+      "OZOW_SITE_CODE",
+      "OZOW_WEBHOOK_SECRET",
+    ];
+    const missingOzow = ozowKeys.filter((key) => !hasValue(env[key]));
+    if (missingOzow.length > 0) {
+      addCheck(
+        checks,
+        "Ozow payments",
+        "warn",
+        `Not configured: ${missingOzow.join(", ")}. Payment features will be unavailable.`
+      );
+    }
   }
 
   const appUrl = env.NEXT_PUBLIC_APP_URL;
