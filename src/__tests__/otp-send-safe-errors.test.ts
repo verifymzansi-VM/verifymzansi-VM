@@ -75,6 +75,9 @@ describe("POST /api/otp/send safe error envelopes", () => {
     const res = await POST(createOtpRequest({ phone: "0712345678" }));
 
     expect(res.status).toBe(500);
-    await expect(res.json()).resolves.toEqual({ error: "Failed to generate OTP" });
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Failed to generate OTP",
+      code: "otp_generation_failed",
+    });
   });
 });

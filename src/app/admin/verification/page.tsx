@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { VerificationAlertBanner } from "@/components/admin/verification-alert-banner";
+import { OtpDeliveryCard } from "@/components/admin/otp-delivery-card";
 import { KycQueueClient } from "./kyc-queue-client";
-import { getPendingVerifications } from "@/lib/utils/admin-queries";
+import { getPendingVerifications, getRecentOtpAttempts } from "@/lib/utils/admin-queries";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 
@@ -23,6 +24,7 @@ export default async function AdminVerificationPage() {
   }
 
   const pendingSteps = await getPendingVerifications(100);
+  const recentOtpAttempts = await getRecentOtpAttempts(8);
   const evidenceDeskEnabled = await isFeatureEnabled("kyc_evidence_desk");
 
   return (
@@ -38,6 +40,8 @@ export default async function AdminVerificationPage() {
       </PageHeader>
 
       <VerificationAlertBanner pendingCount={pendingSteps.length} />
+
+      <OtpDeliveryCard attempts={recentOtpAttempts} />
 
       <KycQueueClient initialSteps={pendingSteps} evidenceDeskEnabled={evidenceDeskEnabled} />
     </div>

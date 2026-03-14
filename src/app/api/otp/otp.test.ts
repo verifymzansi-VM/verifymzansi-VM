@@ -79,9 +79,15 @@ describe("OTP Routes", () => {
       vi.mocked(checkRateLimit).mockResolvedValue({ limited: true, retryAfter: 45 });
 
       const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+      const data = await res.json();
 
       expect(res.status).toBe(429);
       expect(res.headers.get("Retry-After")).toBe("45");
+      expect(data).toMatchObject({
+        error: "Too many OTP requests. Please wait before trying again.",
+        code: "rate_limited",
+        retryAfter: 45,
+      });
     });
 
     it("blocks when challenge send limit is exceeded", async () => {
@@ -103,10 +109,14 @@ describe("OTP Routes", () => {
       const data = await res.json();
 
       expect(res.status).toBe(429);
+      expect(res.headers.get("Retry-After")).toBe("3600");
       expect(data.error).toBe("Maximum SMS limit reached. Please try again in 1 hour.");
+      expect(data.code).toBe("hourly_limit_reached");
+      expect(data.retryAfter).toBe(3600);
     });
 
     it("creates challenge and sends OTP when allowed", async () => {
+      const otpLogInsert = vi.fn().mockResolvedValue({ error: null });
       const mockAdminClient = {
         from: vi.fn((table: string) => {
           if (table === "otp_challenges") {
@@ -119,7 +129,7 @@ describe("OTP Routes", () => {
           }
           if (table === "otp_logs") {
             return {
-              insert: vi.fn().mockResolvedValue({ error: null }),
+              insert: otpLogInsert,
             };
           }
           return {};
@@ -136,6 +146,63 @@ describe("OTP Routes", () => {
       expect(res.status).toBe(200);
       expect(data).toEqual({ success: true });
       expect(smsService.sendOtpSms).toHaveBeenCalledWith("+27821234567", expect.any(String));
+      expect(otpLogInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phone: "+27821234567",
+          delivery_status: "sent",
+          provider_name: "africastalking",
+          provider_message_id: "sms-1",
+          provider_error: null,
+        })
+      );
+    });
+
+    it("returns a structured provider error when the SMS provider rejects the send", async () => {
+      const otpLogInsert = vi.fn().mockResolvedValue({ error: null });
+      const mockAdminClient = {
+        from: vi.fn((table: string) => {
+          if (table === "otp_challenges") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockResolvedValue({ count: 0 }),
+              insert: vi.fn().mockResolvedValue({ error: null }),
+            };
+          }
+          if (table === "otp_logs") {
+            return {
+              insert: otpLogInsert,
+            };
+          }
+          return {};
+        }),
+      };
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+      vi.mocked(smsService.sendOtpSms).mockResolvedValue({
+        success: false,
+        error: "HTTP 401: Generator rejected",
+      } as never);
+
+      const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+      const data = await res.json();
+
+      expect(res.status).toBe(502);
+      expect(res.headers.get("Retry-After")).toBe("60");
+      expect(data).toMatchObject({
+        error: "Failed to send OTP. Please try again.",
+        code: "sms_delivery_failed",
+        detail: "The SMS provider could not accept the message.",
+        retryAfter: 60,
+      });
+      expect(otpLogInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phone: "+27821234567",
+          delivery_status: "failed",
+          provider_name: "africastalking",
+          provider_message_id: undefined,
+          provider_error: "HTTP 401: Generator rejected",
+        })
+      );
     });
   });
 

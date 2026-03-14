@@ -34,6 +34,7 @@ import {
   extractGenderFromSaId,
 } from "@/lib/utils/sa-id-validation";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
+import { formatPhone } from "@/lib/utils/format";
 import type {
   VerificationStepType,
   LocationConfidence,
@@ -61,6 +62,14 @@ const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"];
+const OTP_RESEND_COOLDOWN_SECONDS = 30;
+
+type OtpSendResponse = {
+  error?: string;
+  code?: string;
+  detail?: string;
+  retryAfter?: number;
+};
 
 const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
   phone: "Use your real South African mobile number. We will send a one-time password by SMS.",
@@ -194,12 +203,51 @@ function getCompletionCtaLabel(completionHref: string): string {
   return "Continue";
 }
 
+function formatCountdown(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes === 0) {
+    return `${seconds}s`;
+  }
+
+  if (seconds === 0) {
+    return `${minutes}m`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
+function buildOtpSupportMessage(
+  payload: OtpSendResponse,
+  retryAfterSeconds: number,
+  formattedPhone: string
+): string {
+  if (payload.code === "hourly_limit_reached" || payload.code === "rate_limited") {
+    return retryAfterSeconds > 0
+      ? `Too many OTP requests were made for this number. Wait ${formatCountdown(retryAfterSeconds)} before resending.`
+      : "Too many OTP requests were made for this number. Please wait before resending.";
+  }
+
+  if (payload.code === "sms_delivery_failed") {
+    return `We could not hand your code to the SMS provider. Confirm ${formattedPhone} is correct, wait a minute, then resend.`;
+  }
+
+  if (payload.code === "unauthorized") {
+    return "Your session expired before the OTP request completed. Sign in again, then retry.";
+  }
+
+  return `SMS delivery can take up to 60 seconds. If nothing arrives, confirm ${formattedPhone} and resend once the timer ends.`;
+}
+
 export default function VerificationPage() {
   const [step, setStep] = useState<WizardStep>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
+  const [otpRetryAfterSeconds, setOtpRetryAfterSeconds] = useState(0);
+  const [otpSupportMessage, setOtpSupportMessage] = useState<string | null>(null);
 
   const [idNumber, setIdNumber] = useState("");
   const [idFile, setIdFile] = useState<File | null>(null);
@@ -248,6 +296,7 @@ export default function VerificationPage() {
   const searchParams = useSearchParams();
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
+  const formattedPhone = useMemo(() => formatPhone(phone), [phone]);
   const completionHref = useMemo(
     () => sanitizeReturnUrl(searchParams.get("returnUrl")),
     [searchParams]
@@ -567,12 +616,30 @@ export default function VerificationPage() {
     };
   }, [selfiePreviewUrl]);
 
+  useEffect(() => {
+    if (otpRetryAfterSeconds <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setOtpRetryAfterSeconds((current) => (current <= 1 ? 0 : current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [otpRetryAfterSeconds]);
+
   function markStepComplete(stepType: VerificationStepType) {
     setCompletedSteps((prev) => (prev.includes(stepType) ? prev : [...prev, stepType]));
   }
 
   function clearStepCompletion(stepType: VerificationStepType) {
     setCompletedSteps((prev) => prev.filter((entry) => entry !== stepType));
+  }
+
+  function handlePhoneChange(value: string) {
+    setPhone(value);
+    setOtp("");
+    setOtpSent(false);
+    setOtpRetryAfterSeconds(0);
+    setOtpSupportMessage(null);
   }
 
   async function handleSendOtp() {
@@ -589,16 +656,26 @@ export default function VerificationPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone }),
       });
-      const payload = await res.json().catch(() => ({}));
+      const payload = (await res.json().catch(() => ({}))) as OtpSendResponse;
+      const retryAfterSeconds = Number(res.headers.get("Retry-After") ?? payload.retryAfter ?? 0);
+
       if (!res.ok) {
-        const detail = payload.detail ? ` (${payload.detail})` : "";
-        throw new Error((payload.error || "Failed to send OTP") + detail);
+        if (retryAfterSeconds > 0) {
+          setOtpRetryAfterSeconds(retryAfterSeconds);
+        }
+
+        const supportMessage = buildOtpSupportMessage(payload, retryAfterSeconds, formattedPhone);
+        setOtpSupportMessage(supportMessage);
+        throw new Error(payload.error || supportMessage);
       }
 
       setOtpSent(true);
+      setOtp("");
+      setOtpRetryAfterSeconds(OTP_RESEND_COOLDOWN_SECONDS);
+      setOtpSupportMessage(buildOtpSupportMessage({}, OTP_RESEND_COOLDOWN_SECONDS, formattedPhone));
       toast({
-        title: "OTP sent",
-        description: "Check your SMS inbox for the 6-digit code.",
+        title: otpSent ? "OTP resent" : "OTP sent",
+        description: `Check ${formattedPhone} for the 6-digit code. Delivery can take up to 60 seconds.`,
         variant: "success",
       });
     } catch (err) {
@@ -629,6 +706,8 @@ export default function VerificationPage() {
       if (!res.ok) throw new Error(payload.error || "Invalid OTP");
 
       setPhoneVerified(true);
+      setOtpSupportMessage(null);
+      setOtpRetryAfterSeconds(0);
       markStepComplete("phone");
       await syncVerificationStatus();
       setStep("id_doc");
@@ -915,32 +994,50 @@ export default function VerificationPage() {
                       id="phone"
                       placeholder="071 234 5678"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => handlePhoneChange(e.target.value)}
                       disabled={phoneVerified}
                     />
                   </div>
 
                   {!phoneVerified && (
-                    <Button
-                      onClick={handleSendOtp}
-                      disabled={isLoading || !isPhoneValid}
-                      variant="trust-verified"
-                      className="gap-2"
-                    >
-                      {isLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ArrowRight className="h-4 w-4" />
+                    <div className="space-y-2">
+                      <Button
+                        onClick={handleSendOtp}
+                        disabled={isLoading || !isPhoneValid || otpRetryAfterSeconds > 0}
+                        variant="trust-verified"
+                        className="gap-2"
+                      >
+                        {isLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ArrowRight className="h-4 w-4" />
+                        )}
+                        {otpSent ? "Resend OTP" : "Send OTP"}
+                      </Button>
+                      {otpRetryAfterSeconds > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          You can resend a new code in {formatCountdown(otpRetryAfterSeconds)}.
+                        </p>
                       )}
-                      Send OTP
-                    </Button>
+                      {otpSupportMessage && !otpSent && (
+                        <div className="rounded-md border border-warm-200/70 bg-warm-50/80 p-3 text-xs text-muted-foreground dark:border-warm-700/70 dark:bg-warm-950/20">
+                          {otpSupportMessage}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {otpSent && !phoneVerified && (
                     <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
                       <p className="text-xs text-muted-foreground">
-                        Enter the 6-digit code sent to your phone. Codes expire after 5 minutes.
+                        Enter the 6-digit code sent to {formattedPhone}. Codes expire after 5
+                        minutes.
                       </p>
+                      {otpSupportMessage && (
+                        <div className="rounded-md border border-warm-200/70 bg-warm-50/80 p-3 text-xs text-muted-foreground dark:border-warm-700/70 dark:bg-warm-950/20">
+                          {otpSupportMessage}
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <Label htmlFor="otp">6-digit OTP</Label>
                         <Input

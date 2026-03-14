@@ -51,11 +51,14 @@ type StepStatus = {
   submitted_at?: string | null;
 };
 
-function jsonResponse(body: unknown, status = 200) {
+function jsonResponse(body: unknown, status = 200, headers?: Record<string, string>) {
   return {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
+    headers: {
+      get: (name: string) => headers?.[name] ?? headers?.[name.toLowerCase()] ?? null,
+    },
   };
 }
 
@@ -80,6 +83,7 @@ describe("VerificationPage", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
     sessionResponse = jsonResponse(
       {
         sessionId: "session-1",
@@ -211,6 +215,51 @@ describe("VerificationPage", () => {
     expect(screen.getByText(/Codes expire after 5 minutes/i)).toBeInTheDocument();
     expect(screen.queryByText(/Dev OTP:/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Test OTP:/i)).not.toBeInTheDocument();
+  });
+
+  it("shows resend cooldown guidance after a successful OTP send", async () => {
+    sessionResponse = jsonResponse({ error: "New verification flow is not yet enabled" }, 404);
+    statusResponse = jsonResponse({ error: "Account profile not found" }, 404);
+
+    render(<VerificationPage />);
+
+    fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
+      target: { value: "0712345678" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Send OTP/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Resend OTP/i })).toBeDisabled();
+    });
+    expect(screen.getByText(/You can resend a new code in 30s/i)).toBeInTheDocument();
+    expect(screen.getByText(/SMS delivery can take up to 60 seconds/i)).toBeInTheDocument();
+  });
+
+  it("shows retry guidance when OTP send is rate limited", async () => {
+    sessionResponse = jsonResponse({ error: "New verification flow is not yet enabled" }, 404);
+    statusResponse = jsonResponse({ error: "Account profile not found" }, 404);
+    otpSendResponse = jsonResponse(
+      {
+        error: "Too many OTP requests. Please wait before trying again.",
+        code: "rate_limited",
+        retryAfter: 45,
+      },
+      429,
+      { "Retry-After": "45" }
+    );
+
+    render(<VerificationPage />);
+
+    fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
+      target: { value: "0712345678" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Send OTP/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Wait 45s before resending/i)).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /Send OTP/i })).toBeDisabled();
+    expect(screen.queryByLabelText(/6-digit OTP/i)).not.toBeInTheDocument();
   });
 
   it("falls back to /dashboard when no returnUrl is provided", async () => {

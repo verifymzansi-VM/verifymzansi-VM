@@ -53,6 +53,19 @@ export interface AuditLogEntry {
   created_at: string;
 }
 
+export interface RecentOtpAttempt {
+  id: string;
+  phone: string;
+  delivery_status: "pending" | "sent" | "failed";
+  provider_name: string | null;
+  provider_message_id: string | null;
+  provider_error: string | null;
+  verified: boolean;
+  verified_at: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
 async function getPendingModerationCountInternal() {
   const supabase = createAdminClient();
 
@@ -77,6 +90,24 @@ async function getPendingModerationCountInternal() {
 
 export async function getPendingModerationCount(): Promise<number> {
   return getPendingModerationCountInternal();
+}
+
+export async function getRecentOtpAttempts(limit = 12): Promise<RecentOtpAttempt[]> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("otp_logs")
+    .select(
+      "id, phone, delivery_status, provider_name, provider_message_id, provider_error, verified, verified_at, created_at, expires_at"
+    )
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data as RecentOtpAttempt[];
 }
 
 // ── Queries ──────────────────────────────────────────────────
