@@ -114,8 +114,15 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (stepError || !step) {
-      log.error("Failed to upsert step", { error: stepError?.message ?? "unknown" });
-      return NextResponse.json({ error: "Failed to save location verification" }, { status: 500 });
+      log.error("Failed to upsert step", {
+        error: stepError?.message ?? "unknown",
+        code: stepError?.code,
+        details: stepError?.details,
+      });
+      return NextResponse.json(
+        { error: "Failed to save location verification", detail: stepError?.message },
+        { status: 500 }
+      );
     }
 
     // Write risk signal for manual-only submission

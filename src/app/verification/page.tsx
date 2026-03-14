@@ -879,7 +879,7 @@ export default function VerificationPage() {
         const data = await res.json().catch(() => ({}));
         toast({
           title: "Failed to save location",
-          description: data.error || "Please try again.",
+          description: data.detail || data.error || "Please try again.",
           variant: "destructive",
         });
       }
