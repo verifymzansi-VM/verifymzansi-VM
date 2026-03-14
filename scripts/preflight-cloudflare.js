@@ -67,14 +67,12 @@ if (isWSL()) {
   console.log(`✓ Running on ${platform} — Cloudflare build should work.`);
 }
 
-// Next.js 16 requires proxy.ts only — middleware.ts must not coexist.
-// The Cloudflare Pages build-output cache can restore an old middleware.ts
-// from a previous build even after it has been deleted from git. Remove it
-// here so the check always passes regardless of cache state.
+// Cloudflare's build cache can restore a stale src/proxy.ts from older
+// builds. Remove it so Next sees only the active Edge middleware entrypoint.
 const fs = require("fs");
 const path = require("path");
-const staleMiddleware = path.join(__dirname, "..", "src", "middleware.ts");
-if (fs.existsSync(staleMiddleware)) {
-  fs.rmSync(staleMiddleware);
-  console.log("✓ Removed stale src/middleware.ts (restored from build cache).");
+const staleProxy = path.join(__dirname, "..", "src", "proxy.ts");
+if (fs.existsSync(staleProxy)) {
+  fs.rmSync(staleProxy);
+  console.log("✓ Removed stale src/proxy.ts (restored from build cache).");
 }

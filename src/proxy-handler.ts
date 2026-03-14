@@ -5,7 +5,7 @@ import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import {
   getPlaywrightStubUserFromToken,
   PLAYWRIGHT_SESSION_COOKIE,
-} from "@/lib/supabase/playwright-stub";
+} from "@/lib/supabase/playwright-session";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 
