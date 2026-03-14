@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { PublicRuntimeConfigBridge } from "@/components/providers/public-runtime-config";
 import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import "@/styles/globals.css";
 
 const TURBOPACK_NAME_POLYFILL =
@@ -105,6 +106,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           <main id="main-content">{children}</main>
           <Toaster />
+          <PwaInstallPrompt />
           <ServiceWorkerRegistrar />
         </ThemeProvider>
         <noscript>
