@@ -72,7 +72,7 @@ describe("middleware — missing Supabase env", () => {
     expect(location.pathname).toBe("/auth/callback");
     expect(location.searchParams.get("code")).toBe("legacy-code");
     expect(location.searchParams.get("type")).toBe("signup");
-    expect(location.searchParams.get("next")).toBe("/?confirmed=true");
+    expect(location.searchParams.get("next")).toBe("/login?confirmed=true");
   });
 
   it("blocks /billing when Supabase not configured", async () => {

@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient();
-    const callbackUrl = buildAuthCallbackUrl(request, "/?confirmed=true");
+    const callbackUrl = buildAuthCallbackUrl(request, "/login?confirmed=true");
     const { data: signUpData, error } = await supabase.auth.signUp({
       email: parsedBody.data.email,
       password: parsedBody.data.password,

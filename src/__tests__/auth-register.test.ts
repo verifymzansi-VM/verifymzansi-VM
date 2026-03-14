@@ -154,7 +154,7 @@ describe("POST /api/auth/register", () => {
       email: "user@example.com",
       password: "StrongP@ss1",
       options: {
-        emailRedirectTo: "https://verifymzansi.com/auth/callback?next=%2F%3Fconfirmed%3Dtrue",
+        emailRedirectTo: "https://verifymzansi.com/auth/callback?next=%2Flogin%3Fconfirmed%3Dtrue",
         data: {
           display_name: "Test User",
           phone: "+27821234567",

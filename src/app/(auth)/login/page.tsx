@@ -69,6 +69,8 @@ export default function LoginPage() {
     }
     if (params.get("confirmed") === "true") {
       setEmailConfirmed(true);
+      // Clean URL to prevent re-flash on refresh/back navigation
+      window.history.replaceState({}, "", window.location.pathname);
     }
     // Pre-fill email from query param (e.g. after registration redirect)
     const emailParam = params.get("email");

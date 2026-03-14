@@ -14,7 +14,8 @@ const log = createLogger("AuthCallback");
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = sanitizeReturnUrl(searchParams.get("next"));
+  const rawNext = searchParams.get("next");
+  const next = sanitizeReturnUrl(rawNext);
   const type = searchParams.get("type"); // Supabase passes type=signup for email confirmation
 
   if (code) {
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
       // For email signup confirmations, honor the requested success route.
       // Legacy links without `next` still fall back to the login success state.
       if (type === "signup") {
-        const confirmedPath = next === "/dashboard" ? "/login?confirmed=true" : next;
+        const confirmedPath = rawNext ? next : "/login?confirmed=true";
         return NextResponse.redirect(`${origin}${confirmedPath}`);
       }
 
