@@ -99,6 +99,26 @@ describe("sms service", () => {
       expect(result.error).toBe("No recipient data in response");
     });
 
+    it("returns failure when Africa's Talking rejects the sender ID", async () => {
+      globalThis.fetch = mockFetchResponse(
+        {
+          SMSMessageData: {
+            Message: "InvalidSenderId",
+            Recipients: [],
+          },
+        },
+        201
+      );
+
+      const result = await sendSms({
+        to: "+27821234567",
+        message: "Sender test",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("InvalidSenderId");
+    });
+
     it("catches thrown errors", async () => {
       globalThis.fetch = vi.fn().mockRejectedValue(new Error("API Down"));
 

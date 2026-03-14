@@ -135,13 +135,28 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       rawResponse: rawBody.slice(0, 500),
     });
 
+    const providerMessage = result.SMSMessageData?.Message?.trim();
+
     // Check if message was sent successfully
     if (result.SMSMessageData?.Recipients) {
       const atRecipients = result.SMSMessageData.Recipients;
 
       if (atRecipients.length === 0) {
-        // AT returned 200 + empty recipients — message was accepted but
-        // no delivery info yet.  Treat as success (AT dashboard shows "Sent").
+        const normalizedProviderMessage = providerMessage?.toLowerCase() ?? "";
+        if (
+          normalizedProviderMessage.includes("invalidsenderid") ||
+          normalizedProviderMessage.includes("invalid sender")
+        ) {
+          log.warn("AT rejected sender ID", {
+            providerMessage,
+          });
+          return {
+            success: false,
+            error: providerMessage || "SMS provider rejected the configured sender ID",
+          };
+        }
+
+        // AT can accept the message before per-recipient details are available.
         log.warn("AT returned 200 OK with empty Recipients array", {
           rawBody: rawBody.slice(0, 500),
         });
