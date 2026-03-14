@@ -172,10 +172,7 @@ function PlanGrid({ plans }: PlanGridProps) {
                   <FeatureItem included text={`${plan.features.maxBusinesses} businesses`} />
                 )}
                 {plan.features.maxPromotions !== undefined && (
-                  <FeatureItem
-                    included
-                    text={`${plan.features.maxPromotions} Promotions & Events posts`}
-                  />
+                  <FeatureItem included text={`${plan.features.maxPromotions} promotions`} />
                 )}
                 <FeatureItem
                   included
@@ -185,7 +182,7 @@ function PlanGrid({ plans }: PlanGridProps) {
                       : plan.area === "MZANSI_BUSINESS"
                         ? "business"
                         : plan.area === "PROMOTIONS_EVENTS"
-                          ? "Promotions & Events post"
+                          ? "promotion"
                           : plan.area === "MALL_SHOPS"
                             ? "storefront"
                             : "profile"
@@ -199,7 +196,7 @@ function PlanGrid({ plans }: PlanGridProps) {
                       : plan.area === "MZANSI_BUSINESS"
                         ? "businesses"
                         : plan.area === "PROMOTIONS_EVENTS"
-                          ? "Promotions & Events posts"
+                          ? "promotions"
                           : plan.area === "MALL_SHOPS"
                             ? "storefronts"
                             : "profiles"

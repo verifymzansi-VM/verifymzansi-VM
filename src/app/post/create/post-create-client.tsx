@@ -25,7 +25,6 @@ const POST_OPTIONS = [
     badgeColor: "bg-brand-green text-white",
     iconColor: "text-brand-green",
     iconBg: "bg-brand-green/10",
-    actionLabel: "Start Listing",
   },
   {
     title: "Mzansi Business",
@@ -41,15 +40,14 @@ const POST_OPTIONS = [
     badgeColor: "bg-brand-blue text-white",
     iconColor: "text-brand-blue",
     iconBg: "bg-brand-blue/10",
-    actionLabel: "Build Profile",
   },
   {
     title: "Promotions & Events",
-    tagline: "Run a time-sensitive campaign for your business.",
+    tagline: "Promote something time-sensitive.",
     bullets: [
-      "Deals, specials, launches, and date-based offers",
-      "Event marketing, activations, and attendance campaigns",
-      "Opening promotions, product drops, and short-run visibility",
+      "Deals, specials & launches",
+      "Event marketing & campaigns",
+      "Opening promotions & product drops",
     ],
     icon: Megaphone,
     href: "/post/create-promotion",
@@ -57,7 +55,6 @@ const POST_OPTIONS = [
     badgeColor: "bg-amber-600 text-white",
     iconColor: "text-amber-600",
     iconBg: "bg-amber-600/10",
-    actionLabel: "Start Campaign",
   },
 ] as const;
 
@@ -134,7 +131,7 @@ export function PostCreateClient() {
                   </ul>
 
                   <div className="mt-auto flex items-center gap-1 text-sm font-medium text-brand-green">
-                    {isLoading ? "Checking access" : option.actionLabel}
+                    {isLoading ? "Checking access" : "Get Started"}
                     <ArrowRight className="h-4 w-4" />
                   </div>
                 </CardContent>

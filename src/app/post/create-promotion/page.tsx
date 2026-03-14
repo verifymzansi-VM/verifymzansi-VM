@@ -296,7 +296,7 @@ function CreatePromotionContent() {
           : Promise.resolve(undefined as string | undefined),
       ]);
 
-      setSubmitProgress("Saving Promotions & Events post...");
+      setSubmitProgress("Saving promotion...");
 
       const body = {
         title: title.trim(),
@@ -325,17 +325,14 @@ function CreatePromotionContent() {
       const payload = await res.json().catch(() => null);
 
       if (!res.ok) {
-        const normalized = normalizeCreatePostError(
-          payload,
-          "Failed to create Promotions & Events post."
-        );
+        const normalized = normalizeCreatePostError(payload, "Failed to create promotion.");
         setFieldErrors(normalized.fieldErrors);
         setFormError(normalized.formError);
         focusFirstError(normalized.fieldErrors);
         return;
       }
 
-      toast({ title: "Campaign submitted for review.", variant: "success" });
+      toast({ title: "Promotion submitted for review.", variant: "success" });
       router.push("/dashboard/promotions?created=true");
     } catch (error: unknown) {
       setFormError(error instanceof Error ? error.message : "Something went wrong.");
@@ -354,19 +351,19 @@ function CreatePromotionContent() {
           <PlanGate area="PROMOTIONS_EVENTS">
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
-                title="Post in Promotions & Events"
-                description="Launch a verified campaign with the offer, timing, and location details people need to act quickly."
+                title="Create a Promotions & Events Post"
+                description="Promote your offer or event with the key details people need to act quickly."
                 breadcrumbs={[
                   { label: "Dashboard", href: "/dashboard" },
-                  { label: "Choose Campaign Type", href: "/post/create" },
+                  { label: "Create Post", href: "/post/create" },
                   { label: "Promotions & Events" },
                 ]}
                 badgeLabel="Promotions & Events"
                 badgeClassName="bg-amber-600 text-white"
                 guideDescription={
                   isEvent
-                    ? "Add the event details, tell people where it happens, and submit the campaign for review."
-                    : "Add the offer details, show where it applies, and submit the campaign for review."
+                    ? "Add the event details, tell people where it happens, and submit it for review."
+                    : "Add the offer details, show where it applies, and submit it for review."
                 }
                 steps={STEPS}
                 currentStep={step}
@@ -399,10 +396,10 @@ function CreatePromotionContent() {
                 {step === 0 && (
                   <div className="space-y-5">
                     <div className="space-y-2">
-                      <Label htmlFor="promotion_type">Post Type</Label>
+                      <Label htmlFor="promotion_type">Promotion Type</Label>
                       <select
                         id="promotion_type"
-                        aria-label="Post Type"
+                        aria-label="Promotion Type"
                         className={SELECT_CLASS}
                         value={promotionType}
                         onChange={(event) => setPromotionType(event.target.value as PromotionType)}
@@ -750,9 +747,9 @@ function CreatePromotionContent() {
                           id: "preview-promotion",
                           owner_id: "preview-seller",
                           business_id: businessId || null,
-                          title: title || "Your Promotions & Events title",
+                          title: title || "Your promotion title",
                           description:
-                            description || "Your Promotions & Events description will appear here.",
+                            description || "Your promotion description will appear here.",
                           promotion_type: promotionType,
                           category: category || null,
                           category_key: categoryKey || null,

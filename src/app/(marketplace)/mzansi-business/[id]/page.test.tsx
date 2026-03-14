@@ -45,7 +45,7 @@ vi.mock("@/components/listings/business-promo-video", () => ({
   BusinessPromoVideo: () => <div>Video</div>,
 }));
 vi.mock("@/components/listings/promotion-card", () => ({
-  PromotionCard: () => <div>Promotions &amp; Events card</div>,
+  PromotionCard: () => <div>Promotion</div>,
 }));
 vi.mock("@/components/shared/share-button", () => ({
   ShareButton: () => <button>Share</button>,
@@ -363,7 +363,7 @@ describe("BusinessDetailPage", () => {
 
     render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-5" }) }));
 
-    expect(screen.getByText("Promotions & Events")).toBeInTheDocument();
-    expect(screen.getByText("Promotions & Events card")).toBeInTheDocument();
+    expect(screen.getByText("Promotions & Offers")).toBeInTheDocument();
+    expect(screen.getByText("Promotion")).toBeInTheDocument();
   });
 });

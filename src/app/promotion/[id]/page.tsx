@@ -21,11 +21,11 @@ export async function generateMetadata({ params }: PromotionDetailPageProps): Pr
     .single();
 
   if (!promotion) {
-    return { title: "Promotions & Events Post Not Found" };
+    return { title: "Promotion Not Found" };
   }
 
   return {
-    title: `${promotion.title} | Promotions & Events`,
+    title: `${promotion.title} | Promotions`,
     description: promotion.description?.slice(0, 160),
   };
 }
@@ -103,7 +103,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
             title={promotion.title}
             breadcrumbs={[
               { label: "Home", href: "/" },
-              { label: "Promotions & Events", href: "/promotions" },
+              { label: "Promotions", href: "/promotions" },
               { label: promotion.title },
             ]}
           />

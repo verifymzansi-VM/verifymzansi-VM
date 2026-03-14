@@ -53,17 +53,10 @@ describe("CreatePostPage", () => {
     expect(screen.getAllByText("Mzansi Market").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mzansi Business").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Promotions & Events").length).toBeGreaterThan(0);
-    expect(screen.getByText("Choose What to Post")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Pick the area that fits your goal: a listing, a business profile, or a Promotions & Events campaign."
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByText("Pick a category to start posting.")).toBeInTheDocument();
     expect(screen.getByText("Sell, buy, or rent a single item.")).toBeInTheDocument();
     expect(screen.getByText("Create your full business profile.")).toBeInTheDocument();
-    expect(
-      screen.getByText("Run a time-sensitive campaign for your business.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("Promote something time-sensitive.")).toBeInTheDocument();
     expect(screen.getAllByRole("link")).toHaveLength(3);
   });
 

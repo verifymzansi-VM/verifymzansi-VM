@@ -59,7 +59,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       .maybeSingle();
 
     if (error || !promotion) {
-      return NextResponse.json({ error: "Promotions & Events post not found" }, { status: 404 });
+      return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
     }
 
     const normalizedPromotion = normalizeOwnerRecord(promotion as PromotionOwnerRow);
@@ -73,7 +73,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       } = await supabase.auth.getUser();
 
       if (!user || user.id !== readOwnerId(normalizedPromotion)) {
-        return NextResponse.json({ error: "Promotions & Events post not found" }, { status: 404 });
+        return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
       }
     }
 
@@ -88,10 +88,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ promotion: normalizedPromotion });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
-    return NextResponse.json(
-      { error: "Failed to fetch Promotions & Events post" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch promotion" }, { status: 500 });
   }
 }
 
@@ -129,14 +126,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const existing = rawExisting as PromotionOwnerRow | null;
 
     if (!existing) {
-      return NextResponse.json({ error: "Promotions & Events post not found" }, { status: 404 });
+      return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
     }
 
     if (readOwnerId(existing) !== user.id) {
-      return NextResponse.json(
-        { error: "You don't own this Promotions & Events post" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, promotionSchema, {
@@ -231,11 +225,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { error: updateError } = await updateQuery;
 
     if (updateError) {
-      log.error("Failed to update Promotions & Events post", { error: updateError.message });
-      return NextResponse.json(
-        { error: "Failed to update Promotions & Events post" },
-        { status: 500 }
-      );
+      log.error("Failed to update promotion", { error: updateError.message });
+      return NextResponse.json({ error: "Failed to update promotion" }, { status: 500 });
     }
 
     if (removedMediaUrls.length > 0) {
@@ -265,10 +256,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ success: true });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
-    return NextResponse.json(
-      { error: "Failed to update Promotions & Events post" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to update promotion" }, { status: 500 });
   }
 }
 
@@ -308,19 +296,16 @@ export async function DELETE(
     const existing = rawExisting as PromotionOwnerRow | null;
 
     if (!existing) {
-      return NextResponse.json({ error: "Promotions & Events post not found" }, { status: 404 });
+      return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
     }
 
     if (readOwnerId(existing) !== user.id) {
-      return NextResponse.json(
-        { error: "You don't own this Promotions & Events post" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
     if (!["draft", "rejected"].includes(existing.status)) {
       return NextResponse.json(
-        { error: "Only draft or rejected Promotions & Events posts can be deleted" },
+        { error: "Only draft or rejected promotions can be deleted" },
         { status: 400 }
       );
     }
@@ -334,11 +319,8 @@ export async function DELETE(
     const { error: deleteError } = await deleteQuery;
 
     if (deleteError) {
-      log.error("Failed to delete Promotions & Events post", { error: deleteError.message });
-      return NextResponse.json(
-        { error: "Failed to delete Promotions & Events post" },
-        { status: 500 }
-      );
+      log.error("Failed to delete promotion", { error: deleteError.message });
+      return NextResponse.json({ error: "Failed to delete promotion" }, { status: 500 });
     }
 
     const deletedMediaUrls = collectMediaUrls(
@@ -373,9 +355,6 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
-    return NextResponse.json(
-      { error: "Failed to delete Promotions & Events post" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to delete promotion" }, { status: 500 });
   }
 }

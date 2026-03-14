@@ -38,7 +38,7 @@ const ENTITY_CONFIG = {
     badgeColor: "bg-orange-700 text-orange-50 border-orange-600 backdrop-blur-md",
     badge: "Promotions & Events",
     href: "/promotion/",
-    cta: "View Promotions & Events",
+    cta: "View Promotion",
   },
   listing: {
     Icon: ShieldCheck,
@@ -451,8 +451,7 @@ export function HeroBanner({
           type: "promotion" as const,
           id: promotion.id,
           title: promotion.title,
-          description:
-            promotion.description || "Latest special, launch, or event from a verified advertiser.",
+          description: promotion.description || "Latest promotion from a verified advertiser.",
           location: promotion.location_city || "South Africa",
           mediaUrl: normalizeMediaUrl(
             usesVideo

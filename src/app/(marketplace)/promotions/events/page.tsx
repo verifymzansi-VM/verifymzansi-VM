@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ArrowRight, Calendar, ShieldCheck, Store, Zap } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Events",
   description:
-    "Discover and advertise upcoming events, activations, launches, and gatherings from verified businesses across South Africa.",
+    "Discover upcoming events, gatherings, and happenings from verified businesses and members across South Africa.",
 };
 
 export const revalidate = 60;
@@ -167,7 +167,7 @@ export default async function EventsPage() {
     <div className="container mx-auto px-4 py-6 space-y-6 max-w-7xl">
       <PageHeader
         title="Events"
-        description="Discover verified events and promote launches, activations, and date-based campaigns."
+        description="Upcoming events from verified businesses."
         breadcrumbs={[
           { label: "Home", href: "/" },
           { label: "Promotions & Events", href: "/promotions" },
@@ -175,54 +175,9 @@ export default async function EventsPage() {
         ]}
       >
         <Button asChild size="sm" className="gap-1">
-          <Link href="/post/create-promotion">
-            Advertise an Event
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          <Link href="/post/create">Create a Post</Link>
         </Button>
       </PageHeader>
-
-      <Card className="border-purple-200/70 bg-gradient-to-br from-purple-50 via-white to-indigo-50 dark:border-purple-900/60 dark:from-purple-950/30 dark:via-background dark:to-indigo-950/20">
-        <CardContent className="space-y-4 p-5 sm:p-6">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-purple-700 text-white hover:bg-purple-700">
-                For live campaigns and gatherings
-              </Badge>
-              <Badge variant="outline">Verified event discovery</Badge>
-            </div>
-            <p className="max-w-3xl text-sm text-muted-foreground sm:text-base">
-              Use Events when the date matters: community activations, launches, grand openings,
-              workshops, ticketed experiences, and in-person Promotions &amp; Events campaigns that
-              need attention before the day arrives.
-            </p>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
-              <Store className="h-5 w-5 text-purple-700" />
-              <h2 className="mt-3 font-medium">Local attendance</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Reach nearby customers looking for things to do and places to visit.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
-              <Zap className="h-5 w-5 text-purple-700" />
-              <h2 className="mt-3 font-medium">Launch urgency</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Promote opening nights, product drops, and limited-date experiences.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
-              <ShieldCheck className="h-5 w-5 text-purple-700" />
-              <h2 className="mt-3 font-medium">Verified trust</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Show attendees that the organiser is verified and the post belongs on-platform.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Upcoming Events — grouped by month */}
       {upcoming.length > 0 ? (
@@ -291,14 +246,8 @@ export default async function EventsPage() {
             <Calendar className="mx-auto h-8 w-8 text-muted-foreground" />
             <h3 className="font-display text-lg font-semibold">No upcoming events</h3>
             <p className="mx-auto max-w-md text-sm text-muted-foreground">
-              Check back soon for verified events, or advertise your own upcoming event or launch.
+              Check back soon for events from verified businesses!
             </p>
-            <Button asChild size="sm" className="gap-1">
-              <Link href="/post/create-promotion">
-                Advertise an Event
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
           </CardContent>
         </Card>
       )}

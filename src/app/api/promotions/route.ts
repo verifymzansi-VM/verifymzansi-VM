@@ -296,11 +296,8 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError || !promotion) {
-      log.error("Failed to create Promotions & Events post", { error: insertError?.message });
-      return NextResponse.json(
-        { error: "Failed to create Promotions & Events post" },
-        { status: 500 }
-      );
+      log.error("Failed to create promotion", { error: insertError?.message });
+      return NextResponse.json({ error: "Failed to create promotion" }, { status: 500 });
     }
 
     // ── Mark free post as used if no paid entitlement ────────
@@ -342,10 +339,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, promotion: { id: promotion.id } }, { status: 201 });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
-    return NextResponse.json(
-      { error: "Failed to create Promotions & Events post" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create promotion" }, { status: 500 });
   }
 }
 
@@ -455,8 +449,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (error) {
-      log.error("Failed to fetch Promotions & Events", { error: error.message });
-      return NextResponse.json({ error: "Failed to fetch Promotions & Events" }, { status: 500 });
+      log.error("Failed to fetch promotions", { error: error.message });
+      return NextResponse.json({ error: "Failed to fetch promotions" }, { status: 500 });
     }
 
     const normalizedPromotions = normalizeOwnerRecords(promotions ?? []).map((promotion) => {
@@ -513,6 +507,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
-    return NextResponse.json({ error: "Failed to fetch Promotions & Events" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch promotions" }, { status: 500 });
   }
 }

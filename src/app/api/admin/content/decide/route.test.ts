@@ -126,7 +126,7 @@ describe("POST /api/admin/content/decide", () => {
     expect(mockCreateNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "owner-1",
-        title: "Promotions & Events post approved!",
+        title: "Promotion approved!",
         href: "/dashboard/promotions",
       })
     );

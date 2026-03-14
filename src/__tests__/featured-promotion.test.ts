@@ -126,7 +126,7 @@ describe("POST /api/promotions/[id]/featured", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 404 when Promotions & Events post not found", async () => {
+  it("returns 404 when promotion not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
       account_profiles: {

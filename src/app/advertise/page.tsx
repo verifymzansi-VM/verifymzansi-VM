@@ -2,9 +2,9 @@ import { permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Advertise on VerifyMzansi",
+  title: "Promotions & Events",
   description:
-    "Advertise in Promotions & Events on VerifyMzansi for launches, deals, specials, and time-sensitive campaigns.",
+    "Discover promotions, launches, deals, and events from verified businesses and members across South Africa.",
   alternates: {
     canonical: "https://verifymzansi.com/promotions",
   },

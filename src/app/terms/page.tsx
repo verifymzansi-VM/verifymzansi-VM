@@ -58,7 +58,7 @@ export default function TermsPage() {
     {
       title: "6. Limitation of Liability",
       content: [
-        "VerifyMzansi connects buyers, account holders, businesses, and advertisers — we are not a party to transactions. We do not guarantee quality, safety, or legality of listed items or Promotions & Events posts. Liability is limited to the maximum extent permitted by SA law.",
+        "VerifyMzansi connects buyers, account holders, businesses, and advertisers — we are not a party to transactions. We do not guarantee quality, safety, or legality of listed items or promotions. Liability is limited to the maximum extent permitted by SA law.",
       ],
     },
   ];

@@ -149,7 +149,7 @@ const AREA_CONFIG = {
   },
   PROMOTIONS_EVENTS: {
     title: "Promotions & Events",
-    description: "Specials, launches, events & campaigns",
+    description: "Ads, deals, events & promotions",
     icon: Megaphone,
     href: "/admin/promotions-events",
     accentBg: "bg-amber-50/50 dark:bg-amber-950/20",

@@ -1,6 +1,5 @@
 "use client";
 
-import { useId } from "react";
 import { Building2, Calendar, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,7 +67,6 @@ export function PromotionFilterPanel({
   className,
   mode = "desktop",
 }: PromotionFilterPanelProps) {
-  const instanceId = useId().replace(/:/g, "");
   const hasActiveFilters = Boolean(
     filters.query ||
     filters.type ||
@@ -78,12 +76,6 @@ export function PromotionFilterPanel({
     filters.businessId ||
     filters.eventState
   );
-  const searchId = `${mode}-promotion-search-${instanceId}`;
-  const typeId = `${mode}-promotion-type-${instanceId}`;
-  const categoryId = `${mode}-promotion-category-${instanceId}`;
-  const provinceId = `${mode}-promotion-province-${instanceId}`;
-  const cityId = `${mode}-promotion-city-${instanceId}`;
-  const eventStateId = `${mode}-promotion-event-state-${instanceId}`;
 
   return (
     <section
@@ -95,20 +87,22 @@ export function PromotionFilterPanel({
       <div className="space-y-1">
         <p className="text-sm font-semibold tracking-tight">Refine what you see</p>
         <p className="text-xs leading-5 text-muted-foreground">
-          Search first, then filter by post type, category, and location.
+          Search first, then filter by promotion type, category, and location.
         </p>
       </div>
 
       <div className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor={searchId}>Search</Label>
+          <Label htmlFor={mode === "mobile" ? "promotion-search-mobile" : "promotion-search"}>
+            Search
+          </Label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               key={`${mode}-${filters.query ?? ""}`}
-              id={searchId}
+              id={mode === "mobile" ? "promotion-search-mobile" : "promotion-search"}
               type="search"
-              placeholder="Search Promotions & Events, deals, or launches"
+              placeholder="Search promotions, deals, or events"
               className="pl-9"
               defaultValue={filters.query ?? ""}
               onChange={(event) => onQueryChange(event.target.value)}
@@ -117,10 +111,12 @@ export function PromotionFilterPanel({
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor={typeId}>Post type</Label>
+          <Label htmlFor={mode === "mobile" ? "promotion-type-mobile" : "promotion-type"}>
+            Promotion type
+          </Label>
           <select
-            id={typeId}
-            aria-label="Post type"
+            id={mode === "mobile" ? "promotion-type-mobile" : "promotion-type"}
+            aria-label="Promotion type"
             className={selectClassName}
             value={filters.type || ""}
             onChange={(event) =>
@@ -137,9 +133,11 @@ export function PromotionFilterPanel({
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor={categoryId}>Category</Label>
+          <Label htmlFor={mode === "mobile" ? "promotion-category-mobile" : "promotion-category"}>
+            Category
+          </Label>
           <select
-            id={categoryId}
+            id={mode === "mobile" ? "promotion-category-mobile" : "promotion-category"}
             aria-label="Promotion category"
             className={selectClassName}
             value={filters.category || ""}
@@ -158,9 +156,11 @@ export function PromotionFilterPanel({
 
         <div className={cn("gap-3", mode === "mobile" ? "grid grid-cols-2" : "space-y-4")}>
           <div className="space-y-1.5">
-            <Label htmlFor={provinceId}>Province</Label>
+            <Label htmlFor={mode === "mobile" ? "promotion-province-mobile" : "promotion-province"}>
+              Province
+            </Label>
             <select
-              id={provinceId}
+              id={mode === "mobile" ? "promotion-province-mobile" : "promotion-province"}
               aria-label="Province"
               className={selectClassName}
               value={filters.province || ""}
@@ -176,9 +176,11 @@ export function PromotionFilterPanel({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor={cityId}>City</Label>
+            <Label htmlFor={mode === "mobile" ? "promotion-city-mobile" : "promotion-city"}>
+              City
+            </Label>
             <select
-              id={cityId}
+              id={mode === "mobile" ? "promotion-city-mobile" : "promotion-city"}
               aria-label="City"
               className={selectClassName}
               value={filters.city || ""}
@@ -197,9 +199,13 @@ export function PromotionFilterPanel({
 
         {filters.type === "event" && (
           <div className="space-y-1.5">
-            <Label htmlFor={eventStateId}>Event state</Label>
+            <Label
+              htmlFor={mode === "mobile" ? "promotion-event-state-mobile" : "promotion-event-state"}
+            >
+              Event state
+            </Label>
             <select
-              id={eventStateId}
+              id={mode === "mobile" ? "promotion-event-state-mobile" : "promotion-event-state"}
               aria-label="Event state"
               className={selectClassName}
               value={filters.eventState || ""}
@@ -242,7 +248,7 @@ export function PromotionFilterPanel({
               <button
                 type="button"
                 className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Remove post type filter"
+                aria-label="Remove promotion type filter"
                 onClick={() => onTypeChange(undefined)}
               >
                 <X className="h-3 w-3" />
@@ -256,7 +262,7 @@ export function PromotionFilterPanel({
               <button
                 type="button"
                 className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Remove Promotions & Events category filter"
+                aria-label="Remove promotion category filter"
                 onClick={() => onCategoryChange(undefined)}
               >
                 <X className="h-3 w-3" />
@@ -271,7 +277,7 @@ export function PromotionFilterPanel({
               <button
                 type="button"
                 className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Remove Promotions & Events location filter"
+                aria-label="Remove promotion location filter"
                 onClick={() => {
                   onProvinceChange(undefined);
                   onCityChange(undefined);

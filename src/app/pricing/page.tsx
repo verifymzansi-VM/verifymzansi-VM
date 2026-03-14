@@ -1,4 +1,4 @@
-import { Check, Sparkles, ArrowRight, Megaphone, ShieldCheck, Zap } from "lucide-react";
+import { Check, Sparkles, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +17,7 @@ import {
 export const metadata = {
   title: "Pricing",
   description:
-    "Choose the plan that fits your selling and advertising needs on VerifyMzansi. Free and premium options for Mzansi Market, Mzansi Business, and Promotions & Events.",
+    "Choose the plan that fits your selling needs on VerifyMzansi. Free and premium options for Mzansi Market, Mzansi Business, and Promotions & Events.",
 };
 
 function featureList(plan: PlanDefinition): string[] {
@@ -142,58 +142,9 @@ export default function PricingPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Pricing"
-            description={`1 free post per area with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video. All plans include verification, trust badges, and support for time-sensitive Promotions & Events campaigns.`}
+            description={`1 free post per area with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video. All plans include verification and trust badges.`}
             breadcrumbs={[{ label: "Pricing" }]}
           />
-
-          <Card className="max-w-5xl mx-auto border-red-200/70 bg-gradient-to-br from-red-50 via-white to-amber-50 dark:border-red-900/60 dark:from-red-950/30 dark:via-background dark:to-amber-950/20">
-            <CardContent className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)] lg:items-center">
-              <div className="space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full bg-red-700 px-3 py-1 text-xs font-medium text-white">
-                  <Megaphone className="h-3.5 w-3.5" />
-                  Promotions & Events plans
-                </div>
-                <div className="space-y-2">
-                  <h2 className="font-display text-xl font-semibold">
-                    Built for campaigns that need urgency
-                  </h2>
-                  <p className="text-sm text-muted-foreground sm:text-base">
-                    Use Promotions & Events when you need to advertise a short-run offer, opening
-                    special, launch, or event without changing your core business profile.
-                  </p>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-border/70 bg-background/80 p-3">
-                    <Zap className="h-4 w-4 text-red-600" />
-                    <p className="mt-2 text-sm font-medium">Short-run campaigns</p>
-                  </div>
-                  <div className="rounded-2xl border border-border/70 bg-background/80 p-3">
-                    <ShieldCheck className="h-4 w-4 text-red-600" />
-                    <p className="mt-2 text-sm font-medium">Verified trust</p>
-                  </div>
-                  <div className="rounded-2xl border border-border/70 bg-background/80 p-3">
-                    <Megaphone className="h-4 w-4 text-red-600" />
-                    <p className="mt-2 text-sm font-medium">Boosted visibility</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2 lg:justify-self-end lg:min-w-56">
-                <Button asChild className="gap-2 bg-red-700 hover:bg-red-800 text-white">
-                  <Link href="/post/create-promotion">
-                    Post in Promotions & Events
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="gap-2">
-                  <Link href="/promotions">
-                    Browse Promotions & Events
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
 
           <Tabs defaultValue="market" className="max-w-5xl mx-auto">
             <div className="flex justify-center mb-3">
