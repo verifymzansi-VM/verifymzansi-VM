@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 type BrandLogoSize = "sm" | "md" | "lg" | "xl";
 type BrandLogoLayout = "horizontal" | "stacked";
 type BrandLogoTone = "default" | "inverse";
+type BrandLogoVariant = "solid" | "transparent";
 
 const BRAND_LOGO_ASSET_VERSION = "20260312-logo-refresh";
 
@@ -15,6 +16,7 @@ interface BrandLogoProps {
   size?: BrandLogoSize;
   layout?: BrandLogoLayout;
   tone?: BrandLogoTone;
+  variant?: BrandLogoVariant;
   priority?: boolean;
 }
 
@@ -43,13 +45,16 @@ export function BrandLogo({
   size = "md",
   layout = "horizontal",
   tone = "default",
+  variant = "solid",
   priority = false,
 }: BrandLogoProps) {
   const styles = sizeStyles[size];
   const logoSrc =
     tone === "inverse"
       ? `/images/logo-inverse.png?v=${BRAND_LOGO_ASSET_VERSION}`
-      : `/images/logo.png?v=${BRAND_LOGO_ASSET_VERSION}`;
+      : variant === "transparent"
+        ? `/images/logo-transparent.png?v=${BRAND_LOGO_ASSET_VERSION}`
+        : `/images/logo.png?v=${BRAND_LOGO_ASSET_VERSION}`;
 
   return (
     <div
