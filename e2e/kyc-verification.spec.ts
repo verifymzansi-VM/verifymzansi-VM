@@ -84,9 +84,9 @@ test.describe("KYC Verification Flows", () => {
       expect(res.status()).toBe(401);
     });
 
-    test("proof-of-address endpoint returns 401 without auth", async ({ request }) => {
+    test("GPS location endpoint returns 401 without auth (POST)", async ({ request }) => {
       const res = await withTransientNetworkRetry(() =>
-        request.post("/api/verification/location/proof")
+        request.post("/api/verification/location/gps")
       );
       expect(res.status()).toBe(401);
     });

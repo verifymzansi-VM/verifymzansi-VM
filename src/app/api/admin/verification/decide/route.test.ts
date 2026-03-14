@@ -516,5 +516,60 @@ describe("POST /api/admin/verification/decide", () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.decision).toBe("needs_resubmission");
+    // needs_resubmission should set account status to pending_review, not rejected
+    expect(profileUpdate).toHaveBeenCalledWith({
+      account_verification_status: "pending_review",
+    });
+  });
+
+  it("sets account status to pending_review (not rejected) for needs_resubmission", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+    const profileUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+        }),
+      }),
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
+            }),
+          }),
+          update: updateMock,
+        };
+      }
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          update: profileUpdate,
+        };
+      }
+      return {};
+    });
+
+    const response = await POST(
+      createMockRequest({
+        stepId: STEP_UUID,
+        decision: "needs_resubmission",
+        reasonCode: "blurry_image",
+        reasonNote: "Please retake with better lighting",
+      })
+    );
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.decision).toBe("needs_resubmission");
+    expect(profileUpdate).toHaveBeenCalledWith({
+      account_verification_status: "pending_review",
+    });
   });
 });

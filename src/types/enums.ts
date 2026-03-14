@@ -17,7 +17,7 @@ export type AccountVerificationStatus = "incomplete" | "pending_review" | "verif
 
 export type DocumentType = "sa_id_card" | "sa_id_book" | "sa_passport" | "sa_drivers_license";
 
-export type LocationMethod = "gps" | "proof_of_address";
+export type LocationMethod = "gps" | "proof_of_address" | "manual" | "manual_with_gps";
 
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 

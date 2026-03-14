@@ -36,6 +36,7 @@ export interface PendingVerification {
   risk_level: string | null;
   risk_score: number | null;
   auto_status: string | null;
+  reviewed_at: string | null;
   account_display_name?: string | null;
   account_verification_status?: string | null;
   /** @deprecated Use account_display_name */
@@ -357,7 +358,9 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
 
   const { data: steps } = await supabase
     .from("verification_steps")
-    .select("id, user_id, step_type, status, created_at, risk_level, risk_score, auto_status")
+    .select(
+      "id, user_id, step_type, status, created_at, risk_level, risk_score, auto_status, reviewed_at"
+    )
     .eq("status", "pending")
     .order("created_at", { ascending: true })
     .limit(limit);

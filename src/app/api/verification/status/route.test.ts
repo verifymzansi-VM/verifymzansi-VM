@@ -95,7 +95,7 @@ describe("GET /api/verification/status", () => {
     });
   });
 
-  it("falls back to the legacy seller verification status when needed", async () => {
+  it("falls back to incomplete when account has no verification status", async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -129,8 +129,8 @@ describe("GET /api/verification/status", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.accountVerificationStatus).toBe("pending_review");
-    expect(body.overallStatus).toBe("pending_review");
+    expect(body.accountVerificationStatus).toBe("incomplete");
+    expect(body.overallStatus).toBe("incomplete");
   });
 
   it("returns 404 when the account profile does not exist", async () => {

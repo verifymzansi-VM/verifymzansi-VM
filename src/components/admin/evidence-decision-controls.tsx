@@ -118,10 +118,18 @@ export function EvidenceDecisionControls({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Resubmission warning */}
+        {step.status === "needs_resubmission" && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
+            This step was previously flagged for resubmission. Verify the user has corrected the
+            issue before approving.
+          </div>
+        )}
+
         {/* Risk warning */}
         {isHighRisk && (
           <div className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-            ⚠️ This step has <strong>{step.risk_level}</strong> risk
+            This step has <strong>{step.risk_level}</strong> risk
             {step.risk_score !== null && <> (score: {step.risk_score})</>}. Approval requires an
             override reason.
           </div>

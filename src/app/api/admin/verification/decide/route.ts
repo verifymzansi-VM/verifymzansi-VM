@@ -173,11 +173,20 @@ export async function POST(request: Request) {
           .eq("user_id", step.user_id)
           .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
       }
-    } else {
+    } else if (decision === "rejected") {
       await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_verification_status: "rejected",
+        })
+        .eq("user_id", step.user_id)
+        .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
+    } else {
+      // needs_resubmission — keep as pending_review so the user isn't shown "rejected"
+      await admin
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .update({
+          account_verification_status: "pending_review",
         })
         .eq("user_id", step.user_id)
         .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
