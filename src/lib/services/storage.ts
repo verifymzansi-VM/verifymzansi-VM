@@ -7,6 +7,8 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { encryptFile, decryptFile } from "@/lib/utils/encryption";
 import crypto from "crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 /**
  * R2-compatible object storage helpers for listing images
@@ -85,6 +87,22 @@ function getR2Client(): S3Client {
  * This properly signs requests using AWS Sigv4.
  */
 export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
+  if (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") {
+    const arrayBuffer = await params.file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const publicRoot = path.join(process.cwd(), "public", "e2e-media");
+    const destination = path.join(publicRoot, params.key);
+
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.writeFile(destination, buffer);
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "") ?? "";
+    const normalizedKey = params.key.replace(/\\/g, "/");
+    const url = appUrl ? `${appUrl}/e2e-media/${normalizedKey}` : `/e2e-media/${normalizedKey}`;
+
+    return { url, key: normalizedKey };
+  }
+
   const client = getR2Client();
   const arrayBuffer = await params.file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);

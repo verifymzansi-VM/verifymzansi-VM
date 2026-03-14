@@ -1,7 +1,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
-import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-stub";
+import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("SupabaseClient");

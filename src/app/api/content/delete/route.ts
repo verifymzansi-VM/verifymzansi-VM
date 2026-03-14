@@ -7,22 +7,40 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import {
+  applyOwnerFilter,
+  getOwnerColumn,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
 
 const log = createLogger("ContentDelete");
 
 const deleteSchema = z.object({
   itemId: z.string().uuid("itemId must be a valid UUID"),
-  area: z.enum(["MZANSI_MARKET", "BUSINESS_ADS", "MALL_SHOPS", "PROMOTIONS_EVENTS"], {
-    message: "area must be MZANSI_MARKET, BUSINESS_ADS, MALL_SHOPS, or PROMOTIONS_EVENTS",
-  }),
+  area: z.enum(
+    ["MZANSI_MARKET", "MZANSI_BUSINESS", "BUSINESS_ADS", "MALL_SHOPS", "PROMOTIONS_EVENTS"],
+    {
+      message:
+        "area must be MZANSI_MARKET, MZANSI_BUSINESS, BUSINESS_ADS, MALL_SHOPS, or PROMOTIONS_EVENTS",
+    }
+  ),
 });
 
-const tableMap: Record<string, string> = {
-  MZANSI_MARKET: "listings",
-  BUSINESS_ADS: "businesses",
-  MALL_SHOPS: "storefronts",
-  PROMOTIONS_EVENTS: "promotions",
-};
+const tableMap = {
+  MZANSI_MARKET: { table: "listings", ownerCompatible: true },
+  MZANSI_BUSINESS: { table: "businesses", ownerCompatible: true },
+  BUSINESS_ADS: { table: "businesses", ownerCompatible: true },
+  MALL_SHOPS: { table: "storefronts", ownerCompatible: false },
+  PROMOTIONS_EVENTS: { table: "promotions", ownerCompatible: true },
+} as const;
+
+type TableConfig = (typeof tableMap)[keyof typeof tableMap];
+type CompatibleTable = "listings" | "businesses" | "promotions";
+
+function isOwnerCompatibleTable(table: TableConfig["table"]): table is CompatibleTable {
+  return table === "listings" || table === "businesses" || table === "promotions";
+}
 
 /**
  * POST /api/content/delete
@@ -63,37 +81,81 @@ export async function POST(request: Request) {
     }
 
     const { itemId, area } = parsedBody.data;
-    const table = tableMap[area];
-    if (!table) {
+    const config = tableMap[area];
+    if (!config) {
       return NextResponse.json({ error: "Invalid area" }, { status: 400 });
     }
 
     const admin = createAdminClient();
 
-    // Verify the item exists and belongs to this user
-    const { data: item, error: fetchError } = await admin
-      .from(table)
-      .select("id, status, owner_id")
-      .eq("id", itemId)
-      .single();
+    let item: {
+      id: string;
+      status: string;
+      owner_id?: string | null;
+      seller_id?: string | null;
+    } | null = null;
+    let deleteErrorMessage: string | null = null;
 
-    if (fetchError || !item) {
-      return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+    if (config.ownerCompatible && isOwnerCompatibleTable(config.table)) {
+      const ownerColumn = await getOwnerColumn(admin, config.table);
+      const { data: fetchedItem, error: fetchError } = await admin
+        .from(config.table)
+        .select(withOwnerColumn("id, status, owner_id", ownerColumn))
+        .eq("id", itemId)
+        .maybeSingle();
+
+      if (fetchError || !fetchedItem) {
+        return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+      }
+
+      const compatibleItem = fetchedItem as unknown as {
+        id: string;
+        status: string;
+        owner_id?: string | null;
+        seller_id?: string | null;
+      };
+      item = compatibleItem;
+
+      if (readOwnerId(compatibleItem) !== user.id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
+      const deleteQuery = applyOwnerFilter(
+        admin.from(config.table).delete().eq("id", itemId),
+        ownerColumn,
+        user.id
+      );
+      const deleteResult = await deleteQuery;
+      deleteErrorMessage =
+        (deleteResult.error as unknown as { message?: string | null } | null)?.message ?? null;
+    } else {
+      const { data: fetchedItem, error: fetchError } = await admin
+        .from(config.table)
+        .select("id, status, owner_id")
+        .eq("id", itemId)
+        .single();
+
+      if (fetchError || !fetchedItem) {
+        return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+      }
+
+      item = fetchedItem;
+
+      if (item.owner_id !== user.id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
+      const deleteResult = await admin.from(config.table).delete().eq("id", itemId);
+      deleteErrorMessage =
+        (deleteResult.error as unknown as { message?: string | null } | null)?.message ?? null;
     }
 
-    if (item.owner_id !== user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    // Delete the item
-    const { error: deleteError } = await admin.from(table).delete().eq("id", itemId);
-
-    if (deleteError) {
-      log.error("Failed to delete content", { error: deleteError.message, itemId, area });
+    if (deleteErrorMessage) {
+      log.error("Failed to delete content", { error: deleteErrorMessage, itemId, area });
       return NextResponse.json({ error: "Failed to delete content" }, { status: 500 });
     }
 
-    const targetType = table.replace(/s$/, "") as string;
+    const targetType = config.table.replace(/s$/, "") as string;
     const actionMap: Record<string, string> = {
       listing: "listing_deleted",
       business_profile: "business_profile_deleted",
@@ -107,7 +169,7 @@ export async function POST(request: Request) {
       >[0]["action"],
       targetType,
       targetId: itemId,
-      metadata: { action: "account_delete", area, previousStatus: item.status },
+      metadata: { action: "account_delete", area, previousStatus: item?.status ?? null },
     });
 
     return NextResponse.json({ success: true });

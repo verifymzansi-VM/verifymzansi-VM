@@ -6,22 +6,40 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import {
+  applyOwnerFilter,
+  getOwnerColumn,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
 
 const log = createLogger("ContentResubmit");
 
 const resubmitSchema = z.object({
   itemId: z.string().uuid("itemId must be a valid UUID"),
-  area: z.enum(["MZANSI_MARKET", "BUSINESS_ADS", "MALL_SHOPS", "PROMOTIONS_EVENTS"], {
-    message: "area must be MZANSI_MARKET, BUSINESS_ADS, MALL_SHOPS, or PROMOTIONS_EVENTS",
-  }),
+  area: z.enum(
+    ["MZANSI_MARKET", "MZANSI_BUSINESS", "BUSINESS_ADS", "MALL_SHOPS", "PROMOTIONS_EVENTS"],
+    {
+      message:
+        "area must be MZANSI_MARKET, MZANSI_BUSINESS, BUSINESS_ADS, MALL_SHOPS, or PROMOTIONS_EVENTS",
+    }
+  ),
 });
 
-const tableMap: Record<string, string> = {
-  MZANSI_MARKET: "listings",
-  BUSINESS_ADS: "businesses",
-  MALL_SHOPS: "storefronts",
-  PROMOTIONS_EVENTS: "promotions",
-};
+const tableMap = {
+  MZANSI_MARKET: { table: "listings", ownerCompatible: true },
+  MZANSI_BUSINESS: { table: "businesses", ownerCompatible: true },
+  BUSINESS_ADS: { table: "businesses", ownerCompatible: true },
+  MALL_SHOPS: { table: "storefronts", ownerCompatible: false },
+  PROMOTIONS_EVENTS: { table: "promotions", ownerCompatible: true },
+} as const;
+
+type TableConfig = (typeof tableMap)[keyof typeof tableMap];
+type CompatibleTable = "listings" | "businesses" | "promotions";
+
+function isOwnerCompatibleTable(table: TableConfig["table"]): table is CompatibleTable {
+  return table === "listings" || table === "businesses" || table === "promotions";
+}
 
 /**
  * POST /api/content/resubmit
@@ -57,47 +75,104 @@ export async function POST(request: Request) {
     }
 
     const { itemId, area } = parsed.data;
-    const table = tableMap[area];
-    if (!table) {
+    const config = tableMap[area];
+    if (!config) {
       return NextResponse.json({ error: "Invalid area" }, { status: 400 });
     }
 
     const admin = createAdminClient();
 
-    // Verify the item exists, belongs to this user, and is currently rejected
-    const { data: item, error: fetchError } = await admin
-      .from(table)
-      .select("id, status, owner_id")
-      .eq("id", itemId)
-      .single();
+    let item: {
+      id: string;
+      status: string;
+      owner_id?: string | null;
+      seller_id?: string | null;
+    } | null = null;
+    let updateErrorMessage: string | null = null;
 
-    if (fetchError || !item) {
-      return NextResponse.json({ error: "Content item not found" }, { status: 404 });
-    }
+    if (config.ownerCompatible && isOwnerCompatibleTable(config.table)) {
+      const ownerColumn = await getOwnerColumn(admin, config.table);
+      const { data: fetchedItem, error: fetchError } = await admin
+        .from(config.table)
+        .select(withOwnerColumn("id, status, owner_id", ownerColumn))
+        .eq("id", itemId)
+        .maybeSingle();
 
-    if (item.owner_id !== user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+      if (fetchError || !fetchedItem) {
+        return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+      }
 
-    if (item.status !== "rejected") {
-      return NextResponse.json(
-        { error: "Only rejected content can be resubmitted" },
-        { status: 400 }
+      item = fetchedItem as typeof item;
+
+      const compatibleItem = fetchedItem as unknown as {
+        id: string;
+        status: string;
+        owner_id?: string | null;
+        seller_id?: string | null;
+      };
+      item = compatibleItem;
+
+      if (readOwnerId(compatibleItem) !== user.id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
+      if (compatibleItem.status !== "rejected") {
+        return NextResponse.json(
+          { error: "Only rejected content can be resubmitted" },
+          { status: 400 }
+        );
+      }
+
+      const updateQuery = applyOwnerFilter(
+        admin
+          .from(config.table)
+          .update({ status: "pending_moderation", status_reason: null })
+          .eq("id", itemId),
+        ownerColumn,
+        user.id
       );
+
+      const updateResult = await updateQuery;
+      updateErrorMessage =
+        (updateResult.error as unknown as { message?: string | null } | null)?.message ?? null;
+    } else {
+      const { data: fetchedItem, error: fetchError } = await admin
+        .from(config.table)
+        .select("id, status, owner_id")
+        .eq("id", itemId)
+        .single();
+
+      if (fetchError || !fetchedItem) {
+        return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+      }
+
+      item = fetchedItem;
+
+      if (!item || item.owner_id !== user.id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
+      if (item.status !== "rejected") {
+        return NextResponse.json(
+          { error: "Only rejected content can be resubmitted" },
+          { status: 400 }
+        );
+      }
+
+      const updateResult = await admin
+        .from(config.table)
+        .update({ status: "pending_moderation", status_reason: null })
+        .eq("id", itemId);
+      updateErrorMessage =
+        (updateResult.error as unknown as { message?: string | null } | null)?.message ?? null;
     }
 
-    // Update status to pending_moderation and clear the rejection reason
-    const { error: updateError } = await admin
-      .from(table)
-      .update({ status: "pending_moderation", status_reason: null })
-      .eq("id", itemId);
-
-    if (updateError) {
-      log.error("Failed to resubmit content", { error: updateError.message, itemId, area });
+    if (updateErrorMessage) {
+      log.error("Failed to resubmit content", { error: updateErrorMessage, itemId, area });
       return NextResponse.json({ error: "Failed to resubmit content" }, { status: 500 });
     }
 
-    const targetType = table.replace(/s$/, "") as string;
+    const targetType = config.table.replace(/s$/, "") as string;
     const actionMap: Record<string, string> = {
       listing: "listing_updated",
       business_profile: "business_profile_updated",

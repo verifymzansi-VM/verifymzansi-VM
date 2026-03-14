@@ -8,8 +8,12 @@ function createDeterministicEnv() {
     PORT: String(PLAYWRIGHT_PORT),
     PLAYWRIGHT_TEST_MODE: "1",
     PLAYWRIGHT_SUPABASE_MODE: "stub",
+    PLAYWRIGHT_E2E_AUTO_APPROVE: "1",
+    PLAYWRIGHT_E2E_AUTH: "1",
     VERIFYMZANSI_RUNTIME_MODE: "e2e",
     VERIFYMZANSI_VALIDATION_MODE: "e2e",
+    NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE: "1",
+    NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE: "stub",
     NEXT_PUBLIC_SUPABASE_URL: "https://playwright.supabase.stub",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.playwright-anon-key",
     SUPABASE_SERVICE_ROLE_KEY:
@@ -34,6 +38,7 @@ function createDeterministicEnv() {
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key",
     TURNSTILE_SECRET_KEY: "dummy_secret_key", // secret-scan: allow deterministic fixture
     NEXT_PUBLIC_APP_URL: `http://${PLAYWRIGHT_HOST}:${PLAYWRIGHT_PORT}`,
+    NEXT_PUBLIC_MEDIA_URL: `http://${PLAYWRIGHT_HOST}:${PLAYWRIGHT_PORT}/e2e-media`,
   };
 
   return {

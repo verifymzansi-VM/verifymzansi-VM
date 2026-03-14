@@ -29,6 +29,12 @@ vi.mock("@/components/layout/page-header", () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
 
+vi.mock("@/components/billing/plan-gate", () => ({
+  usePlanMaxPhotos: () => 5,
+  usePlanMaxVideos: () => 1,
+  usePlanVideoAllowed: () => true,
+}));
+
 vi.mock("@/components/listings/listing-detail-content", () => ({
   ListingDetailContent: ({
     listing,
@@ -83,7 +89,7 @@ describe("EditListingPage", () => {
         price_cents: 150000,
         category: "electronics",
         condition: "used",
-        attributes: { brand: "Apple", storage_gb: 256 },
+        attributes: { device_type: "Smartphone", brand: "Apple", storage_gb: 256 },
         location_province: "Gauteng",
         location_city: "Johannesburg",
         location_suburb: "Sandton",

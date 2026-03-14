@@ -1,0 +1,69 @@
+
+C:\Users\SENZO\Documents\verifymzansi\src\components\billing\plan-gate.tsx
+  749:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\SENZO\Documents\verifymzansi\src\components\billing\plan-gate.tsx:749:7
+  747 |   useEffect(() => {
+  748 |     if (isPlaywrightTestMode()) {
+> 749 |       setMaxPhotos(FREE_POST_CONFIG.maxPhotos);
+      |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  750 |       return;
+  751 |     }
+  752 |           react-hooks/set-state-in-effect
+  800:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\SENZO\Documents\verifymzansi\src\components\billing\plan-gate.tsx:800:7
+  798 |   useEffect(() => {
+  799 |     if (isPlaywrightTestMode()) {
+> 800 |       setVideoAllowed(FREE_POST_CONFIG.videoAllowed);
+      |       ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  801 |       return;
+  802 |     }
+  803 |  react-hooks/set-state-in-effect
+  862:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\SENZO\Documents\verifymzansi\src\components\billing\plan-gate.tsx:862:7
+  860 |   useEffect(() => {
+  861 |     if (isPlaywrightTestMode()) {
+> 862 |       setMaxVideos(FREE_POST_CONFIG.maxVideos);
+      |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  863 |       return;
+  864 |     }
+  865 |           react-hooks/set-state-in-effect
+  918:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\SENZO\Documents\verifymzansi\src\components\billing\plan-gate.tsx:918:7
+  916 |   useEffect(() => {
+  917 |     if (isPlaywrightTestMode()) {
+> 918 |       setCoverVideoAllowed(false);
+      |       ^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  919 |       return;
+  920 |     }
+  921 |                react-hooks/set-state-in-effect
+
+Ô£û 4 problems (4 errors, 0 warnings)
+

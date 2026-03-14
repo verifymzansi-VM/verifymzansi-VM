@@ -7,12 +7,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
-import { PLANS, type PlanDefinition } from "@/lib/constants/pricing";
+import {
+  FREE_POST_CONFIG,
+  isActiveMarketplaceArea,
+  PLANS,
+  type PlanDefinition,
+} from "@/lib/constants/pricing";
 
 export const metadata = {
   title: "Pricing",
   description:
-    "Choose the plan that fits your selling needs on VerifyMzansi. Free and premium options for Mzansi Market, Mall Shops, and Business Ads.",
+    "Choose the plan that fits your selling needs on VerifyMzansi. Free and premium options for Mzansi Market, Mzansi Business, and Promotions & Events.",
 };
 
 function featureList(plan: PlanDefinition): string[] {
@@ -97,9 +102,10 @@ function PlanGrid({ plans }: { plans: PlanDefinition[] }) {
 }
 
 export default function PricingPage() {
-  const marketPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_MARKET");
-  const businessPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
-  const promotionPlans = PLANS.filter((p: PlanDefinition) => p.area === "PROMOTIONS_EVENTS");
+  const activePlans = PLANS.filter((plan: PlanDefinition) => isActiveMarketplaceArea(plan.area));
+  const marketPlans = activePlans.filter((p: PlanDefinition) => p.area === "MZANSI_MARKET");
+  const businessPlans = activePlans.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
+  const promotionPlans = activePlans.filter((p: PlanDefinition) => p.area === "PROMOTIONS_EVENTS");
 
   const allPlans = [...marketPlans, ...businessPlans, ...promotionPlans];
   const jsonLd = {
@@ -136,7 +142,7 @@ export default function PricingPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Pricing"
-            description={`1 free post per area. All plans include verification and trust badges.`}
+            description={`1 free post per area with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video. All plans include verification and trust badges.`}
             breadcrumbs={[{ label: "Pricing" }]}
           />
 

@@ -1,5 +1,15 @@
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
+export const ACTIVE_MARKETPLACE_AREAS = [
+  "MZANSI_MARKET",
+  "MZANSI_BUSINESS",
+  "PROMOTIONS_EVENTS",
+] as const satisfies readonly MarketplaceArea[];
+
+export function isActiveMarketplaceArea(area: MarketplaceArea): boolean {
+  return (ACTIVE_MARKETPLACE_AREAS as readonly MarketplaceArea[]).includes(area);
+}
+
 /* ── Plan Definitions ────────────────────────────────────── */
 export interface PlanDefinition {
   area: MarketplaceArea;

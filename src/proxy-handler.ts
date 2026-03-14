@@ -2,7 +2,11 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
-import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-stub";
+import {
+  getPlaywrightStubUserFromToken,
+  PLAYWRIGHT_SESSION_COOKIE,
+} from "@/lib/supabase/playwright-stub";
+import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger("Proxy");
@@ -171,12 +175,37 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   }
 
   if (isPlaywrightSupabaseStubMode()) {
+    const stubUser =
+      process.env.PLAYWRIGHT_E2E_AUTH === "1"
+        ? getPlaywrightStubUserFromToken(
+            request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value ?? null
+          )
+        : null;
     const isProtected = protectedPrefixesAll.some((prefix) => pathname.startsWith(prefix));
     const isAuthRoute = authRoutes.some(
       (route) => pathname === route || pathname.startsWith(route + "/")
     );
 
+    if (stubUser && isAuthRoute) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
     if (!isProtected || isAuthRoute) {
+      return NextResponse.next();
+    }
+
+    if (stubUser) {
+      if (
+        pathname === "/admin" ||
+        pathname.startsWith("/admin/") ||
+        pathname.startsWith("/api/admin/")
+      ) {
+        if (isApiRoute) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
+
       return NextResponse.next();
     }
 

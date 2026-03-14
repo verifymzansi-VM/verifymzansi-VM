@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
+import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { toast } from "@/hooks/use-toast";
 import { createLogger } from "@/lib/utils/logger";
 import { isPostingLimitBypassEnabled } from "../../lib/utils/posting-limit-bypass";
@@ -223,6 +224,23 @@ export function PlanGate({ area, children }: PlanGateProps) {
   const [subscribing, setSubscribing] = useState<string | null>(null);
 
   useEffect(() => {
+    if (isPlaywrightTestMode()) {
+      setPlanInfo({
+        tier: "free",
+        isTrial: true,
+        trialDaysLeft: FREE_POST_CONFIG.durationDays,
+        freePostAvailable: true,
+        postingLimitBypassEnabled: true,
+        currentCount: 0,
+        maxAllowed: -1,
+        maxPhotos: FREE_POST_CONFIG.maxPhotos,
+        maxVideos: FREE_POST_CONFIG.maxVideos,
+        videoAllowed: FREE_POST_CONFIG.videoAllowed,
+      });
+      setLoading(false);
+      return;
+    }
+
     async function checkEntitlements() {
       try {
         const supabase = createClient();
@@ -724,9 +742,13 @@ function PlanPickerWithTrial({
    Hook: usePlanMaxPhotos
    ───────────────────────────────────────────────────────────── */
 export function usePlanMaxPhotos(area: MarketplaceArea): number {
-  const [maxPhotos, setMaxPhotos] = useState<number>(FREE_POST_CONFIG.maxPhotos); // default free tier (5)
+  const [maxPhotos, setMaxPhotos] = useState<number>(() =>
+    isPlaywrightTestMode() ? FREE_POST_CONFIG.maxPhotos : FREE_POST_CONFIG.maxPhotos
+  ); // default free tier (5)
 
   useEffect(() => {
+    if (isPlaywrightTestMode()) return;
+
     async function fetchMaxPhotos() {
       try {
         const supabase = createClient();
@@ -770,9 +792,13 @@ export function usePlanMaxPhotos(area: MarketplaceArea): number {
    Hook: usePlanVideoAllowed
    ───────────────────────────────────────────────────────────── */
 export function usePlanVideoAllowed(area: MarketplaceArea): boolean {
-  const [videoAllowed, setVideoAllowed] = useState(false); // default free tier
+  const [videoAllowed, setVideoAllowed] = useState(() =>
+    isPlaywrightTestMode() ? FREE_POST_CONFIG.videoAllowed : false
+  ); // default free tier
 
   useEffect(() => {
+    if (isPlaywrightTestMode()) return;
+
     async function fetchVideoAllowed() {
       try {
         const supabase = createClient();
@@ -827,9 +853,13 @@ export function usePlanVideoAllowed(area: MarketplaceArea): boolean {
    Hook: usePlanMaxVideos
    ───────────────────────────────────────────────────────────── */
 export function usePlanMaxVideos(area: MarketplaceArea): number {
-  const [maxVideos, setMaxVideos] = useState<number>(FREE_POST_CONFIG.maxVideos);
+  const [maxVideos, setMaxVideos] = useState<number>(() =>
+    isPlaywrightTestMode() ? FREE_POST_CONFIG.maxVideos : FREE_POST_CONFIG.maxVideos
+  );
 
   useEffect(() => {
+    if (isPlaywrightTestMode()) return;
+
     async function fetchMaxVideos() {
       try {
         const supabase = createClient();
@@ -878,9 +908,13 @@ export function usePlanMaxVideos(area: MarketplaceArea): number {
 }
 
 export function usePlanCoverVideoAllowed(area: MarketplaceArea): boolean {
-  const [coverVideoAllowed, setCoverVideoAllowed] = useState(false);
+  const [coverVideoAllowed, setCoverVideoAllowed] = useState(() =>
+    isPlaywrightTestMode() ? false : false
+  );
 
   useEffect(() => {
+    if (isPlaywrightTestMode()) return;
+
     async function fetchCoverVideoAllowed() {
       try {
         const supabase = createClient();

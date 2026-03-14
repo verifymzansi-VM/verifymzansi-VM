@@ -507,13 +507,6 @@ export async function POST(request: NextRequest) {
             videoAllowed: FREE_POST_CONFIG.videoAllowed,
           };
 
-    const rawVideos = Array.isArray((body as Record<string, unknown>).videos)
-      ? ((body as Record<string, unknown>).videos as unknown[])
-      : [];
-    if (rawVideos.some((video) => typeof video !== "string")) {
-      return NextResponse.json({ error: "Videos must be an array of URLs" }, { status: 422 });
-    }
-
     if (data.images.length > ent.maxPhotos) {
       return NextResponse.json(
         {
@@ -523,14 +516,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (rawVideos.length > 0 && !ent.videoAllowed) {
+    if (data.videos.length > 0 && !ent.videoAllowed) {
       return NextResponse.json(
         { error: "Video upload is not available on your current plan." },
         { status: 422 }
       );
     }
 
-    if (rawVideos.length > ent.maxVideos) {
+    if (data.videos.length > ent.maxVideos) {
       return NextResponse.json(
         { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
         { status: 422 }
@@ -551,13 +544,13 @@ export async function POST(request: NextRequest) {
         condition: data.condition || null,
         location_province: data.province || null,
         location_city: data.city || null,
-        location_suburb: (body as Record<string, unknown>).town || null,
+        location_suburb: data.town || null,
         status: "pending_moderation",
         area: AREA,
         photos: data.images,
-        videos: rawVideos,
-        video_thumbnail: (body as Record<string, unknown>).videoThumbnail || null,
-        contact_methods: (body as Record<string, unknown>).contactMethods || ["call"],
+        videos: data.videos,
+        video_thumbnail: data.videoThumbnail || null,
+        contact_methods: data.contactMethods,
       },
       ownerColumn,
       user.id

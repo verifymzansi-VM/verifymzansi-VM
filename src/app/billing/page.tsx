@@ -4,7 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PLANS, FREE_POST_CONFIG, type PlanDefinition } from "@/lib/constants/pricing";
+import {
+  FREE_POST_CONFIG,
+  isActiveMarketplaceArea,
+  PLANS,
+  type PlanDefinition,
+} from "@/lib/constants/pricing";
 import { SubscribeButton } from "@/components/billing/subscribe-button";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -16,10 +21,10 @@ export const metadata = {
 };
 
 export default function BillingPage() {
-  // Group plans by area
-  const marketPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_MARKET");
-  const businessPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
-  const promotionPlans = PLANS.filter((p: PlanDefinition) => p.area === "PROMOTIONS_EVENTS");
+  const activePlans = PLANS.filter((plan: PlanDefinition) => isActiveMarketplaceArea(plan.area));
+  const marketPlans = activePlans.filter((p: PlanDefinition) => p.area === "MZANSI_MARKET");
+  const businessPlans = activePlans.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
+  const promotionPlans = activePlans.filter((p: PlanDefinition) => p.area === "PROMOTIONS_EVENTS");
 
   return (
     <div className="flex min-h-screen flex-col">

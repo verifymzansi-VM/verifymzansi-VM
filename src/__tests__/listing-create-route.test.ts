@@ -35,7 +35,7 @@ const VALID_BODY = {
   province: "Gauteng",
   city: "Johannesburg",
   category: "electronics",
-  attributes: { brand: "Apple" },
+  attributes: { device_type: "Smartphone", brand: "Apple" },
   images: [VALID_IMAGE],
 };
 

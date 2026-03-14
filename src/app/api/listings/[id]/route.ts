@@ -155,17 +155,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             videoAllowed: FREE_POST_CONFIG.videoAllowed,
           };
 
-    const rawVideos = Array.isArray((body as Record<string, unknown>).videos)
-      ? ((body as Record<string, unknown>).videos as unknown[])
-      : [];
-    if (rawVideos.some((video) => typeof video !== "string")) {
-      return NextResponse.json({ error: "Videos must be an array of URLs" }, { status: 422 });
-    }
-    const videoUrls = rawVideos as string[];
-    const nextVideoThumbnail =
-      typeof (body as Record<string, unknown>).videoThumbnail === "string"
-        ? ((body as Record<string, unknown>).videoThumbnail as string)
-        : null;
+    const videoUrls = data.videos;
+    const nextVideoThumbnail = data.videoThumbnail || null;
 
     if (data.images.length > ent.maxPhotos) {
       return NextResponse.json(
@@ -176,14 +167,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    if (rawVideos.length > 0 && !ent.videoAllowed) {
+    if (videoUrls.length > 0 && !ent.videoAllowed) {
       return NextResponse.json(
         { error: "Video upload is not available on your current plan." },
         { status: 422 }
       );
     }
 
-    if (rawVideos.length > ent.maxVideos) {
+    if (videoUrls.length > ent.maxVideos) {
       return NextResponse.json(
         { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
         { status: 422 }
@@ -203,11 +194,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       condition: data.condition || null,
       location_province: data.province || null,
       location_city: data.city || null,
-      location_suburb: (body as Record<string, unknown>).town || null,
+      location_suburb: data.town || null,
       photos: data.images,
       videos: videoUrls,
       video_thumbnail: nextVideoThumbnail,
-      contact_methods: (body as Record<string, unknown>).contactMethods || ["call"],
+      contact_methods: data.contactMethods,
       // Re-submit for moderation on edit
       status: listing.status === "live" ? "pending_moderation" : listing.status,
     };

@@ -274,12 +274,19 @@ describe("middleware — authenticated routing", () => {
 
 describe("middleware — Playwright stub mode", () => {
   const originalStubMode = process.env.PLAYWRIGHT_SUPABASE_MODE;
+  const originalPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE;
+  const originalPublicPlaywrightTestMode = process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE;
   const origUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const origKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetUser.mockImplementation(() => {
+      throw new Error("Supabase auth should not be called in stub mode");
+    });
     process.env.PLAYWRIGHT_SUPABASE_MODE = "stub";
+    delete process.env.PLAYWRIGHT_TEST_MODE;
+    delete process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://playwright.supabase.stub";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "playwright-anon-key";
   });
@@ -287,6 +294,15 @@ describe("middleware — Playwright stub mode", () => {
   afterEach(() => {
     if (originalStubMode) process.env.PLAYWRIGHT_SUPABASE_MODE = originalStubMode;
     else delete process.env.PLAYWRIGHT_SUPABASE_MODE;
+
+    if (originalPlaywrightTestMode) process.env.PLAYWRIGHT_TEST_MODE = originalPlaywrightTestMode;
+    else delete process.env.PLAYWRIGHT_TEST_MODE;
+
+    if (originalPublicPlaywrightTestMode) {
+      process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE = originalPublicPlaywrightTestMode;
+    } else {
+      delete process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE;
+    }
 
     if (origUrl) process.env.NEXT_PUBLIC_SUPABASE_URL = origUrl;
     else delete process.env.NEXT_PUBLIC_SUPABASE_URL;

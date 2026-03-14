@@ -1,0 +1,13 @@
+
+C:\Users\SENZO\Documents\verifymzansi\e2e\posting.chromium.spec.ts
+  10:28  warning  `import()` type annotations are forbidden  @typescript-eslint/consistent-type-imports
+  18:44  warning  `import()` type annotations are forbidden  @typescript-eslint/consistent-type-imports
+  48:45  warning  `import()` type annotations are forbidden  @typescript-eslint/consistent-type-imports
+  75:46  warning  `import()` type annotations are forbidden  @typescript-eslint/consistent-type-imports
+
+C:\Users\SENZO\Documents\verifymzansi\e2e\posting.mobile.spec.ts
+  10:28  warning  `import()` type annotations are forbidden  @typescript-eslint/consistent-type-imports
+
+Ô£û 5 problems (0 errors, 5 warnings)
+
+ESLint found too many warnings (maximum: 0).

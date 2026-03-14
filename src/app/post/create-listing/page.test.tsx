@@ -66,6 +66,7 @@ vi.mock("@/components/listings/category-picker", () => ({
         type="button"
         onClick={() => {
           onChange("electronics");
+          onAttributeChange("device_type", "Smartphone");
           onAttributeChange("brand", "Apple");
         }}
       >

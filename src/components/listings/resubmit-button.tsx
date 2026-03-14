@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCcw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { MarketplaceArea } from "@/types/enums";
 
 interface ResubmitButtonProps {
   itemId: string;
-  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS" | "PROMOTIONS_EVENTS";
+  area: MarketplaceArea;
   /** Optional label override (default: "Resubmit for Review") */
   label?: string;
 }
