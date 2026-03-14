@@ -24,8 +24,8 @@ const sizeStyles: Record<BrandLogoSize, { container: string; sizes: string }> = 
     sizes: "(max-width: 640px) 112px, 124px",
   },
   md: {
-    container: "w-[148px] sm:w-[184px]",
-    sizes: "(max-width: 640px) 148px, 184px",
+    container: "w-[168px] sm:w-[208px]",
+    sizes: "(max-width: 640px) 168px, 208px",
   },
   lg: {
     container: "w-[220px] sm:w-[264px]",
@@ -49,7 +49,7 @@ export function BrandLogo({
   const logoSrc =
     tone === "inverse"
       ? `/images/logo-inverse.png?v=${BRAND_LOGO_ASSET_VERSION}`
-      : `/images/logo-transparent.png?v=${BRAND_LOGO_ASSET_VERSION}`;
+      : `/images/logo.png?v=${BRAND_LOGO_ASSET_VERSION}`;
 
   return (
     <div

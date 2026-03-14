@@ -79,7 +79,7 @@ export default async function HomePage() {
         "@type": "Organization",
         name: "VerifyMzansi",
         url,
-        logo: `${url}/icons/icon-512.png?v=9`,
+        logo: `${url}/icons/icon-1024.png?v=10`,
         sameAs: [],
         contactPoint: {
           "@type": "ContactPoint",
@@ -198,7 +198,7 @@ export default async function HomePage() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 self-start">
+                <div className="grid w-full max-w-xl gap-3 self-start justify-self-center">
                   {onboardingDestinations.map(
                     ({ title, description, href, icon: Icon, accentClass, iconBgClass }) => (
                       <Link

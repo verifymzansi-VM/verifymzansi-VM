@@ -5,15 +5,26 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "VerifyMzansi",
     short_name: "VerifyMzansi",
     description:
-      "South Africa's verification-first marketplace for classifieds, shops, and business services.",
+      "South Africa's verification-first marketplace. Buy & sell with people you can trust.",
     start_url: "/",
     display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#16a34a",
+    background_color: "#faf8f5",
+    theme_color: "#007749",
     icons: [
       {
-        src: "/icon.png",
-        sizes: "any",
+        src: "/icons/icon-192.png?v=10",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icons/icon-512.png?v=10",
+        sizes: "512x512",
+        type: "image/png",
+      },
+      {
+        src: "/icons/icon-1024.png?v=10",
+        sizes: "1024x1024",
         type: "image/png",
       },
     ],

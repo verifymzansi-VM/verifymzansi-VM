@@ -55,7 +55,7 @@ export function MarketplaceSwitcher() {
 
   return (
     <nav
-      className="flex w-full items-center gap-1 overflow-x-auto pb-1 scrollbar-hide md:w-auto md:justify-start md:overflow-visible md:pb-0"
+      className="mx-auto flex w-full items-center justify-center gap-1 overflow-x-auto pb-1 scrollbar-hide md:w-fit md:max-w-full md:overflow-visible md:pb-0"
       aria-label="Marketplace areas"
     >
       {AREA_TABS.map((tab) => {
@@ -69,7 +69,7 @@ export function MarketplaceSwitcher() {
             aria-label={tab.label}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "inline-flex min-w-[6.5rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium leading-none transition-colors md:min-w-0 md:flex-none md:px-3 md:py-2 md:text-sm",
+              "inline-flex min-w-[6.5rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium leading-none transition-colors md:min-w-0 md:flex-none md:px-4 md:py-2 md:text-sm",
               isActive
                 ? tab.activeClass
                 : cn(

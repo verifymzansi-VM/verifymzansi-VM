@@ -96,26 +96,26 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background md:bg-background/95 md:backdrop-blur md:supports-[backdrop-filter]:bg-background/60">
-      <div className="container-page flex h-16 items-center justify-between">
+      <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
         <Link
           href="/"
           aria-label="VerifyMzansi — Home"
-          className="flex items-center gap-2 sm:gap-3 flex-shrink-0 group"
+          className="group flex items-center gap-2 sm:gap-3 md:justify-self-start"
         >
           <BrandLogo
             size="md"
             priority
-            imageClassName="transition-transform duration-200 group-hover:scale-105"
+            imageClassName="drop-shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-transform duration-200 group-hover:scale-105"
           />
         </Link>
 
         {/* Marketplace Switcher — hidden on mobile, shown md+ */}
-        <div className="hidden md:flex items-center">
+        <div className="hidden md:flex md:justify-self-center">
           <MarketplaceSwitcher />
         </div>
 
         {/* Desktop Right — Auth */}
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden items-center gap-2 md:flex md:justify-self-end">
           {/* Theme toggle */}
           <Button
             variant="ghost"
@@ -223,11 +223,11 @@ export function Header({
 
         {/* Mobile Hamburger */}
         <button
-          className="md:hidden p-2"
+          className="justify-self-end p-2 md:hidden"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          aria-controls={mobileOpen ? "mobile-nav-menu" : undefined}
-          aria-expanded={mobileOpen}
+          aria-controls="mobile-nav-menu"
+          aria-expanded={mobileOpen ? "true" : "false"}
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
