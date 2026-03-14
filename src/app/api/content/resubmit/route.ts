@@ -102,8 +102,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
       }
 
-      item = fetchedItem as typeof item;
-
       const compatibleItem = fetchedItem as unknown as {
         id: string;
         status: string;
