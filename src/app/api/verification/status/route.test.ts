@@ -133,7 +133,7 @@ describe("GET /api/verification/status", () => {
     expect(body.overallStatus).toBe("incomplete");
   });
 
-  it("returns 404 when the account profile does not exist", async () => {
+  it("returns steps with incomplete status when the account profile does not exist", async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
         return {
@@ -145,13 +145,25 @@ describe("GET /api/verification/status", () => {
         };
       }
 
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [{ step_type: "phone", status: "approved" }],
+            }),
+          }),
+        };
+      }
+
       return {};
     });
 
     const response = await GET({} as unknown as NextRequest);
     const body = await response.json();
 
-    expect(response.status).toBe(404);
-    expect(body.error).toBe("Account profile not found");
+    expect(response.status).toBe(200);
+    expect(body.accountVerificationStatus).toBe("incomplete");
+    expect(body.steps).toHaveLength(1);
+    expect(body.steps[0].step_type).toBe("phone");
   });
 });
