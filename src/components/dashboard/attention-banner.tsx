@@ -5,6 +5,7 @@ import Link from "next/link";
 import { X, ShieldAlert, AlertTriangle, MessageSquare, Clock, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { AccountVerificationStatus } from "@/types/enums";
 
 interface BannerItem {
   id: string;
@@ -17,7 +18,8 @@ interface BannerItem {
 }
 
 interface AttentionBannerProps {
-  trustLevel: number;
+  verificationStatus: AccountVerificationStatus;
+  stepsRemaining: number;
   unreadLeadCount: number;
   rejectedListingCount: number;
   pendingModerationCount: number;
@@ -62,7 +64,8 @@ const variantStyles = {
 };
 
 export function AttentionBanner({
-  trustLevel,
+  verificationStatus,
+  stepsRemaining,
   unreadLeadCount,
   rejectedListingCount,
   pendingModerationCount,
@@ -89,8 +92,18 @@ export function AttentionBanner({
     });
   }
 
-  if (trustLevel <= 1 && trustLevel >= 0) {
-    const stepsRemaining = 4 - trustLevel;
+  if (verificationStatus === "rejected") {
+    banners.push({
+      id: "verification-rejected",
+      variant: "warning",
+      icon: ShieldAlert,
+      title: "Verification needs attention",
+      description:
+        "One or more verification checks need to be resubmitted before your account can be approved.",
+      href: "/verification",
+      ctaLabel: "Fix Verification",
+    });
+  } else if (verificationStatus === "incomplete" && stepsRemaining > 0) {
     banners.push({
       id: "incomplete-verification",
       variant: "warning",
@@ -100,7 +113,7 @@ export function AttentionBanner({
       href: "/verification",
       ctaLabel: "Verify Now",
     });
-  } else if (trustLevel === 2) {
+  } else if (verificationStatus === "pending_review") {
     banners.push({
       id: "verification-under-review",
       variant: "info",

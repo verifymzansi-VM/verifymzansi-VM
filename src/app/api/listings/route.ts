@@ -64,7 +64,10 @@ function applyBaseMarketFilters<T>(
     builder = builder.eq("condition", filters.condition) as T & MarketQueryOps;
   }
   if (filters.query) {
-    const safeSearch = filters.query.replace(/[,.()\\/]/g, "");
+    const safeSearch = filters.query
+      .replace(/[,.()\\/]/g, "")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_");
     if (safeSearch) {
       builder = builder.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`) as T &
         MarketQueryOps;

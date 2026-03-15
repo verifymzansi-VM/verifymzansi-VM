@@ -85,11 +85,26 @@ describe("Retention & Legal Hold", () => {
     it("sets purge_after on artifacts when all steps approved", async () => {
       mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 
-      const artifactUpdateMock = vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          is: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      });
+      const artifactUpdateMock = vi
+        .fn()
+        .mockReturnValueOnce({
+          // First call: artifact sync (.update({status}).eq().eq().in().order().limit())
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              in: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                }),
+              }),
+            }),
+          }),
+        })
+        .mockReturnValueOnce({
+          // Second call: purge scheduling (.update({purge_after}).eq().is())
+          eq: vi.fn().mockReturnValue({
+            is: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        });
 
       const stepUpdateMock = vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
@@ -143,8 +158,9 @@ describe("Retention & Legal Hold", () => {
       await postDecide(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
 
       // Verify purge_after was set on artifacts
-      expect(artifactUpdateMock).toHaveBeenCalled();
-      const updateArg = artifactUpdateMock.mock.calls[0][0];
+      // First call is artifact sync ({status}), second call is purge scheduling ({purge_after})
+      expect(artifactUpdateMock).toHaveBeenCalledTimes(2);
+      const updateArg = artifactUpdateMock.mock.calls[1][0];
       expect(updateArg).toHaveProperty("purge_after");
 
       // purge_after should be approximately 30 days in the future
@@ -157,6 +173,36 @@ describe("Retention & Legal Hold", () => {
 
     it("logs purge_scheduled audit event", async () => {
       mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+
+      // Hoist kyc_artifacts mock so it tracks calls across multiple from() invocations
+      let artifactCallCount = 0;
+      const artifactHandler = () => {
+        artifactCallCount++;
+        if (artifactCallCount === 1) {
+          // First from("kyc_artifacts"): artifact sync (.update({status}).eq().eq().in().order().limit())
+          return {
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  in: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockResolvedValue({ error: null }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        // Second from("kyc_artifacts"): purge scheduling (.update({purge_after}).eq().is())
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      };
 
       mockFrom.mockImplementation((table: string) => {
         if (table === "verification_steps") {
@@ -198,13 +244,7 @@ describe("Retention & Legal Hold", () => {
           };
         }
         if (table === "kyc_artifacts") {
-          return {
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockResolvedValue({ error: null }),
-              }),
-            }),
-          };
+          return artifactHandler();
         }
         return {};
       });

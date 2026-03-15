@@ -95,8 +95,8 @@ const PRODUCTION_SECRET_KEYS = [
   "HMAC_SECRET",
   "IP_HASH_SECRET",
   "AFRICASTALKING_API_KEY",
-  "OZOW_CLIENT_SECRET",
-  "OZOW_WEBHOOK_SECRET",
+  // Ozow secrets omitted — PayFast is the active payment provider.
+  // Re-add when Ozow integration is activated.
   "RESEND_API_KEY",
   "TURNSTILE_SECRET_KEY",
 ] as const;
@@ -306,14 +306,20 @@ export function validateLaunchConfiguration(
       !hasValue(ozowSiteCode) ||
       !hasValue(ozowWebhookSecret)
     ) {
+      // Ozow is optional — PayFast may be the active payment provider
       addCheck(
         checks,
         "Ozow",
-        "fail",
-        "OZOW_ENV, OZOW_CLIENT_ID, OZOW_CLIENT_SECRET, OZOW_SITE_CODE, and OZOW_WEBHOOK_SECRET are required in production"
+        "warn",
+        "Ozow payment credentials not configured. Ozow payment features will be unavailable."
       );
     } else if (ozowEnv !== "production") {
-      addCheck(checks, "Ozow", "fail", "OZOW_ENV must be production for production launch mode");
+      addCheck(
+        checks,
+        "Ozow",
+        "warn",
+        "OZOW_ENV is not set to production — Ozow payments will use staging"
+      );
     } else {
       addCheck(
         checks,

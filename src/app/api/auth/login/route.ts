@@ -10,7 +10,8 @@ const log = createLogger("Login");
 
 export async function POST(request: NextRequest) {
   try {
-    const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
+    const isPlaywrightTestMode =
+      process.env.NODE_ENV !== "production" && process.env.PLAYWRIGHT_TEST_MODE === "1";
     const turnstileStatus = getTurnstileConfigStatus();
     if (
       process.env.NODE_ENV === "production" &&

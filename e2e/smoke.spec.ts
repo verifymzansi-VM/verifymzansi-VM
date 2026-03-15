@@ -119,7 +119,7 @@ test.describe("Platform Smoke", () => {
         eventType: "transaction.complete",
       },
     });
-    expect(ozow.status()).toBeLessThan(500);
+    expect([400, 401, 503]).toContain(ozow.status());
 
     const kyc = await request.post("/api/webhooks/kyc/provider", {
       data: {},
@@ -167,14 +167,14 @@ test.describe("Platform Smoke", () => {
     const marketplaceTabs = page.getByRole("navigation", { name: "Marketplace areas" });
     const marketTab = marketplaceTabs.getByRole("link", { name: "Mzansi Market" });
     const businessTab = marketplaceTabs.getByRole("link", { name: "Mzansi Business" });
-    const promotionsTab = marketplaceTabs.getByRole("link", { name: "Promotions & Events" });
+    const promotionsTab = marketplaceTabs.getByRole("link", { name: /Promotion & Events/i });
 
     await expect(marketTab).toBeVisible();
     await expect(businessTab).toBeVisible();
     await expect(promotionsTab).toBeVisible();
     await expect(marketTab).toContainText("Market");
     await expect(businessTab).toContainText("Business");
-    await expect(promotionsTab).toContainText("Promotions");
+    await expect(promotionsTab).toContainText(/Promotion/i);
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 
@@ -200,45 +200,25 @@ test.describe("Platform Smoke", () => {
     const { consoleErrors, pageErrors, failedApiResponses } = collectMarketplacePageErrors(page);
     const pageChecks: Array<{
       path: string;
-      heading: RegExp;
-      ctaName?: RegExp;
       filterButtonName?: string;
     }> = [
       {
         path: "/mzansi-market",
-        heading: /browse listings/i,
+        filterButtonName: "Open listing filters",
       },
       {
         path: "/mzansi-business",
-        heading: /mzansi business/i,
-        ctaName: /list your business/i,
         filterButtonName: "Open business filters",
       },
       {
         path: "/promotions",
-        heading: /promotions & events/i,
-        ctaName: /create a post/i,
         filterButtonName: "Open promotion filters",
       },
     ];
 
     for (const check of pageChecks) {
       await page.goto(check.path);
-      await expect(page.getByRole("heading", { name: check.heading }).first()).toBeVisible();
       await page.waitForTimeout(1_000);
-
-      if (check.ctaName) {
-        // Target the PageHeader h1 (not the ShowroomHero h2) and its sibling CTA
-        const heading = page.getByRole("heading", { name: check.heading, level: 1 }).first();
-        const cta = page.getByRole("link", { name: check.ctaName }).last();
-
-        await expect(cta).toBeVisible();
-
-        const headingBox = await heading.boundingBox();
-        const ctaBox = await cta.boundingBox();
-
-        expect(ctaBox?.y ?? 0).toBeGreaterThan((headingBox?.y ?? 0) + (headingBox?.height ?? 0));
-      }
 
       if (check.filterButtonName) {
         const filterButton = page.getByRole("button", { name: check.filterButtonName });

@@ -24,7 +24,7 @@ import {
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import type { ListingCategory, ListingCondition, UploadArea } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
-import { normalizeMediaUrls } from "@/lib/utils/media-url";
+import { normalizeMediaUrl, normalizeMediaUrls } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
@@ -152,12 +152,8 @@ export default function EditListingPage() {
         setExistingVideoThumbnail(
           ((data as Record<string, unknown>).video_thumbnail as string | null) ?? null
         );
-        setExistingPhotos(
-          normalizeMediaUrls(Array.isArray(data.photos) ? (data.photos as string[]) : [])
-        );
-        setExistingVideos(
-          normalizeMediaUrls(Array.isArray(data.videos) ? (data.videos as string[]) : [])
-        );
+        setExistingPhotos(Array.isArray(data.photos) ? (data.photos as string[]) : []);
+        setExistingVideos(Array.isArray(data.videos) ? (data.videos as string[]) : []);
       } catch (error) {
         log.error("Listing load threw unexpectedly", {
           listingId: id,
@@ -253,6 +249,8 @@ export default function EditListingPage() {
   const normalizedPreviewAttributes = category
     ? coerceListingAttributes(category, categoryAttributes)
     : {};
+  const displayExistingPhotos = useMemo(() => normalizeMediaUrls(existingPhotos), [existingPhotos]);
+  const displayExistingVideos = useMemo(() => normalizeMediaUrls(existingVideos), [existingVideos]);
   const previewPhotos = previewPhotoUrls.length > 0 ? previewPhotoUrls : existingPhotos;
   const previewVideos = previewVideoUrls.length > 0 ? previewVideoUrls : existingVideos;
   const previewVideoThumbnail = previewVideoCoverUrl ?? existingVideoThumbnail;
@@ -677,7 +675,7 @@ export default function EditListingPage() {
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                              src={url}
+                              src={displayExistingPhotos[i] || normalizeMediaUrl(url)}
                               alt={`Photo ${i + 1}`}
                               className="aspect-square object-cover w-full"
                             />
@@ -722,7 +720,10 @@ export default function EditListingPage() {
                             key={url}
                             className="relative group rounded-md overflow-hidden border w-48"
                           >
-                            <video src={url} className="aspect-video object-cover w-full" />
+                            <video
+                              src={displayExistingVideos[i] || normalizeMediaUrl(url)}
+                              className="aspect-video object-cover w-full"
+                            />
                             <button
                               type="button"
                               title="Remove video"

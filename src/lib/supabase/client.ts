@@ -1,5 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
 import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
@@ -26,6 +26,187 @@ function createPlaceholderClient() {
   }) as SupabaseClient;
 }
 
+const PLAYWRIGHT_SESSION_PREFIX = "persona:";
+
+function decodePlaywrightPersonaFromCookie(token: string | null): string | null {
+  const normalizedToken = token ? decodeURIComponent(token) : null;
+
+  if (!normalizedToken?.startsWith(PLAYWRIGHT_SESSION_PREFIX)) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(normalizedToken.slice(PLAYWRIGHT_SESSION_PREFIX.length));
+  } catch {
+    return null;
+  }
+}
+
+function getBrowserCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+
+  const prefix = `${name}=`;
+  const cookie = document.cookie.split("; ").find((entry) => entry.startsWith(prefix));
+  return cookie ? cookie.slice(prefix.length) : null;
+}
+
+function setBrowserCookie(name: string, value: string) {
+  if (typeof document === "undefined") return;
+  document.cookie = `${name}=${value}; path=/; SameSite=Lax`;
+}
+
+function removeBrowserCookie(name: string) {
+  if (typeof document === "undefined") return;
+  document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
+}
+
+function createBrowserPlaywrightStubClient(): SupabaseClient {
+  const listeners = new Set<(event: AuthChangeEvent, session: Session | null) => void>();
+
+  function readUser() {
+    const persona = decodePlaywrightPersonaFromCookie(getBrowserCookie("vmz_pw_session"));
+
+    if (!persona) {
+      return null;
+    }
+
+    return {
+      id: `pw-${persona}`,
+      email: `${persona}@playwright.verifymzansi.test`,
+      aud: "authenticated",
+      created_at: new Date(0).toISOString(),
+      is_anonymous: false,
+      app_metadata: { role: persona.includes("admin") ? "admin" : "member" },
+      user_metadata: { display_name: `Playwright ${persona}` },
+      identities: [{ id: `pw-identity-${persona}` }],
+    };
+  }
+
+  function readSession(): Session | null {
+    const token = getBrowserCookie("vmz_pw_session");
+    const user = readUser();
+    if (!token || !user) return null;
+
+    return {
+      access_token: token,
+      refresh_token: token,
+      token_type: "bearer",
+      expires_in: 3600,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user,
+    } as unknown as Session;
+  }
+
+  function emit(event: AuthChangeEvent, session: Session | null) {
+    for (const listener of listeners) {
+      listener(event, session);
+    }
+  }
+
+  async function readFixtureRow(table: string, id: unknown) {
+    if (typeof id !== "string") {
+      return { data: null, error: null };
+    }
+
+    const response = await fetch(`/api/e2e/${table}/${id}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return { data: null, error: null };
+    }
+
+    const payload = (await response.json()) as { data?: unknown; error?: unknown };
+    return { data: payload.data ?? null, error: payload.error ?? null };
+  }
+
+  function createQuery(table: string) {
+    const state: { filterColumn?: string; filterValue?: unknown } = {};
+
+    const builder = {
+      select: () => builder,
+      eq: (column: string, value: unknown) => {
+        state.filterColumn = column;
+        state.filterValue = value;
+        return builder;
+      },
+      single: async () => {
+        const user = readUser();
+
+        if (table === "account_profiles" && user && state.filterColumn === "user_id") {
+          return {
+            data: {
+              id: `pw-profile-${user.id}`,
+              user_id: user.id,
+              display_name: user.user_metadata.display_name,
+              account_verification_status: "verified",
+              account_status: "active",
+              strikes: 0,
+              legal_hold: false,
+            },
+            error: null,
+          };
+        }
+
+        if (table === "listings" && state.filterColumn === "id") {
+          return readFixtureRow("listings", state.filterValue);
+        }
+
+        return { data: null, error: null };
+      },
+      order: () => builder,
+      in: () => builder,
+      maybeSingle: async () => {
+        if (table === "listings" && state.filterColumn === "id") {
+          return readFixtureRow("listings", state.filterValue);
+        }
+
+        return { data: null, error: null };
+      },
+      then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+        Promise.resolve(resolve({ data: [], error: null })),
+    };
+
+    return builder;
+  }
+
+  return {
+    auth: {
+      getUser: async () => ({ data: { user: readUser() }, error: null }),
+      getSession: async () => ({ data: { session: readSession() }, error: null }),
+      signOut: async () => {
+        removeBrowserCookie("vmz_pw_session");
+        emit("SIGNED_OUT", null);
+        return { error: null };
+      },
+      onAuthStateChange: (callback: (event: AuthChangeEvent, session: Session | null) => void) => {
+        listeners.add(callback);
+        return {
+          data: {
+            subscription: {
+              unsubscribe() {
+                listeners.delete(callback);
+              },
+            },
+          },
+        };
+      },
+      signInWithPassword: async (credentials: { email: string; password: string }) => {
+        const persona = credentials.email.split("@")[0] || "member";
+        const token = `${PLAYWRIGHT_SESSION_PREFIX}${encodeURIComponent(persona)}`;
+        setBrowserCookie("vmz_pw_session", token);
+        const session = readSession();
+        emit("SIGNED_IN", session);
+        return { data: { user: readUser(), session }, error: null };
+      },
+    },
+    from: (table: string) => createQuery(table),
+    channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
+    removeChannel: () => {},
+  } as unknown as SupabaseClient;
+}
+
 /**
  * Create (or return the cached) Supabase client for use in Client Components.
  * The client is a singleton — safe to call repeatedly without causing
@@ -38,7 +219,7 @@ export function createClient(): SupabaseClient {
   if (_client) return _client;
 
   if (isPlaywrightSupabaseStubMode()) {
-    _client = createPlaceholderClient();
+    _client = createBrowserPlaywrightStubClient();
     return _client;
   }
 

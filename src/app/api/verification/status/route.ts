@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
+import { summarizeVerification } from "@/lib/account/verification-summary";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(_request: NextRequest) {
@@ -29,9 +30,10 @@ export async function GET(_request: NextRequest) {
         .eq("user_id", user.id),
     ]);
 
-    const verificationStatus = profileResult.data
-      ? (readAccountVerificationStatus(profileResult.data) ?? "incomplete")
-      : "incomplete";
+    const verificationStatus = summarizeVerification(
+      profileResult.data?.account_verification_status,
+      stepsResult.data
+    ).accountVerificationStatus;
 
     return NextResponse.json({
       accountVerificationStatus: verificationStatus,

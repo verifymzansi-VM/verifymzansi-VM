@@ -144,6 +144,13 @@ function setupDefaultAdminMocks() {
     }
     if (table === "verification_steps") {
       return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+          }),
+        }),
         upsert: vi.fn().mockResolvedValue({ error: null }),
       };
     }
@@ -361,7 +368,16 @@ describe("POST /api/verification/upload", () => {
         };
       }
       if (table === "verification_steps") {
-        return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
+          }),
+          upsert: vi.fn().mockResolvedValue({ error: null }),
+        };
       }
       if (table === "verification_sessions") {
         return {
@@ -419,6 +435,17 @@ describe("POST /api/verification/upload", () => {
               single: vi.fn().mockResolvedValue({
                 data: null,
                 error: { message: "Insert failed" },
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
               }),
             }),
           }),
@@ -501,6 +528,13 @@ describe("POST /api/verification/upload", () => {
       }
       if (table === "verification_steps") {
         return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
+          }),
           upsert: vi.fn().mockResolvedValue({ error: null }),
         };
       }
@@ -609,6 +643,13 @@ describe("POST /api/verification/upload", () => {
       }
       if (table === "verification_steps") {
         return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
+          }),
           upsert: stepUpsert,
         };
       }

@@ -56,7 +56,12 @@ export async function POST(request: NextRequest) {
     );
 
     if (process.env.NODE_ENV === "production" && !hasStorageSecrets) {
-      log.error("R2 storage secrets are missing in production");
+      log.error("R2 storage secrets are missing in production", {
+        hasAccountId: Boolean(process.env.R2_ACCOUNT_ID),
+        hasAccessKey: Boolean(process.env.R2_ACCESS_KEY_ID),
+        hasSecretKey: Boolean(process.env.R2_SECRET_ACCESS_KEY),
+        nodeEnv: process.env.NODE_ENV,
+      });
       return NextResponse.json(
         { error: "Document upload temporarily unavailable", code: "storage_unavailable" },
         { status: 503 }
@@ -177,6 +182,24 @@ export async function POST(request: NextRequest) {
     };
     const stepType = stepTypeMap[docType];
     const artifactKind = artifactKindMap[docType];
+
+    // ── Guard: prevent re-uploading over already-approved steps ──
+    const { data: existingStep } = await admin
+      .from("verification_steps")
+      .select("status")
+      .eq("user_id", user.id)
+      .eq("step_type", stepType)
+      .maybeSingle();
+
+    if (existingStep?.status === "approved") {
+      return NextResponse.json(
+        {
+          error: "This verification step has already been approved.",
+          code: "step_already_approved",
+        },
+        { status: 409 }
+      );
+    }
 
     // ── Read file bytes once for SHA-256 and upload ───────────
     const fileBuffer = Buffer.from(await file.arrayBuffer());

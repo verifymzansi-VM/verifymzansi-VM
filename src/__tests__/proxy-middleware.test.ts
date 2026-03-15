@@ -18,10 +18,15 @@ import { middleware, proxy, routeRequest } from "@/proxy-handler";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function createMockRequest(path: string, options?: { hostname?: string }): NextRequest {
+function createMockRequest(
+  path: string,
+  options?: { hostname?: string; cookieHeader?: string }
+): NextRequest {
   const hostname = options?.hostname ?? "localhost";
   const url = `http://${hostname}:3000${path}`;
-  return new NextRequest(url);
+  return new NextRequest(url, {
+    headers: options?.cookieHeader ? { cookie: options.cookieHeader } : undefined,
+  });
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -345,6 +350,21 @@ describe("middleware — Playwright stub mode", () => {
 
   it("keeps auth pages reachable", async () => {
     const res = await routeRequest(createMockRequest("/login"));
+
+    expect(res.status).toBe(200);
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+
+  it("allows protected pages when a valid playwright stub session cookie is present", async () => {
+    process.env.PLAYWRIGHT_TEST_MODE = "1";
+    process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE = "1";
+    process.env.PLAYWRIGHT_E2E_AUTH = "1";
+
+    const res = await routeRequest(
+      createMockRequest("/dashboard", {
+        cookieHeader: "vmz_pw_session=persona%3Aproxy-authenticated",
+      })
+    );
 
     expect(res.status).toBe(200);
     expect(mockGetUser).not.toHaveBeenCalled();

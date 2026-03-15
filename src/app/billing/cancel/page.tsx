@@ -70,8 +70,9 @@ function getCopy(status: PaymentStatusView) {
     case "failed":
       return {
         icon: <XCircle className="h-6 w-6 text-destructive" />,
-        title: "Payment Cancelled",
-        description: "This payment was cancelled or failed before completion.",
+        title: "Payment Not Completed",
+        description:
+          "Your payment was not completed. This could be because you cancelled, or because there was a processing issue. No charge was made.",
       };
     case "expired":
       return {

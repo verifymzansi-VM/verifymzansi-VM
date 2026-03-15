@@ -26,6 +26,38 @@ import {
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
 
+/**
+ * Canonical province name mapping for South African provinces.
+ * Handles common abbreviations and alternate spellings from geocoding APIs.
+ */
+const SA_PROVINCE_ALIASES: Record<string, string> = {
+  "eastern cape": "Eastern Cape",
+  ec: "Eastern Cape",
+  "free state": "Free State",
+  fs: "Free State",
+  gauteng: "Gauteng",
+  gp: "Gauteng",
+  gt: "Gauteng",
+  "kwazulu-natal": "KwaZulu-Natal",
+  "kwazulu natal": "KwaZulu-Natal",
+  kzn: "KwaZulu-Natal",
+  limpopo: "Limpopo",
+  lp: "Limpopo",
+  mpumalanga: "Mpumalanga",
+  mp: "Mpumalanga",
+  "north west": "North West",
+  nw: "North West",
+  "northern cape": "Northern Cape",
+  nc: "Northern Cape",
+  "western cape": "Western Cape",
+  wc: "Western Cape",
+};
+
+function normalizeProvinceName(province: string): string {
+  const lower = province.trim().toLowerCase();
+  return SA_PROVINCE_ALIASES[lower] ?? province.trim();
+}
+
 const gpsLocationSchema = z.object({
   latitude: z.number().min(-35).max(-22),
   longitude: z.number().min(16).max(33),
@@ -143,7 +175,8 @@ export async function POST(request: NextRequest) {
     // Mismatch detection in confirmation mode
     const mismatch = { province: false, city: false };
     if (isConfirmationMode) {
-      const provinceMatch = resolvedProvince.toLowerCase() === declaredProvince!.toLowerCase();
+      const provinceMatch =
+        normalizeProvinceName(resolvedProvince) === normalizeProvinceName(declaredProvince!);
       const cityMatch = resolvedCity
         ? resolvedCity.toLowerCase() === (declaredCity ?? "").toLowerCase()
         : false;

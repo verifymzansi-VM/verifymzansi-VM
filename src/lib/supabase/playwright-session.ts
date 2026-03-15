@@ -1,5 +1,8 @@
 import "server-only";
 
+export const PLAYWRIGHT_SESSION_COOKIE = "vmz_pw_session";
+const PLAYWRIGHT_SESSION_PREFIX = "persona:";
+
 type StubUser = {
   id: string;
   email: string;
@@ -11,36 +14,51 @@ type StubUser = {
   identities: Array<{ id: string }>;
 };
 
-type PlaywrightFixtureStore = {
-  sessions: Map<string, string>;
-  users: Map<string, StubUser>;
-};
+function decodeSessionPersona(token: string | null | undefined): string | null {
+  const normalizedToken = token ? decodeURIComponent(token) : null;
 
-const GLOBAL_KEY = "__verifymzansiPlaywrightFixtureStore";
+  if (!normalizedToken?.startsWith(PLAYWRIGHT_SESSION_PREFIX)) {
+    return null;
+  }
 
-export const PLAYWRIGHT_SESSION_COOKIE = "vmz_pw_session";
-
-function cloneValue<T>(value: T): T {
-  return structuredClone(value);
+  try {
+    return decodeURIComponent(normalizedToken.slice(PLAYWRIGHT_SESSION_PREFIX.length));
+  } catch {
+    return null;
+  }
 }
 
-function getPlaywrightFixtureStore(): PlaywrightFixtureStore | null {
-  const container = globalThis as unknown as Record<string, PlaywrightFixtureStore | undefined>;
-  return container[GLOBAL_KEY] ?? null;
+function deterministicId(seed: string): string {
+  let hash = 2166136261;
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  const hex = (hash >>> 0).toString(16).padStart(8, "0");
+  return `${hex}-${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(0, 4)}-${hex}${hex}`.slice(
+    0,
+    36
+  );
+}
+
+function buildStubUser(persona: string): StubUser {
+  const normalizedPersona = persona.trim() || "verified-member";
+
+  return {
+    id: deterministicId(`user:${normalizedPersona}`),
+    email: `${normalizedPersona}@playwright.verifymzansi.test`,
+    password: `Playwright-${normalizedPersona}-Password1!`,
+    persona: normalizedPersona,
+    is_anonymous: false,
+    app_metadata: { role: normalizedPersona.includes("admin") ? "admin" : "member" },
+    user_metadata: { display_name: `Playwright ${normalizedPersona}` },
+    identities: [{ id: deterministicId(`identity:${normalizedPersona}`) }],
+  };
 }
 
 export function getPlaywrightStubUserFromToken(token: string | null | undefined) {
-  if (!token) return null;
-
-  const store = getPlaywrightFixtureStore();
-  if (!store) {
-    return null;
-  }
-
-  const userId = store.sessions.get(token);
-  if (!userId) {
-    return null;
-  }
-
-  return cloneValue(store.users.get(userId) ?? null);
+  const persona = decodeSessionPersona(token);
+  return persona ? buildStubUser(persona) : null;
 }

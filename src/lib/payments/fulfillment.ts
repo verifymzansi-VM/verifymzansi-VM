@@ -6,6 +6,7 @@ import {
 } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { getPaymentMetadata, type PaymentRecordShape } from "./types";
+import { getOwnerColumn, type OwnerColumn } from "@/lib/account/compat";
 
 const log = createLogger("PaymentFulfillment");
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
@@ -58,6 +59,21 @@ export async function fulfillPayment(
     return;
   }
 
+  // Resolve owner columns dynamically via compat layer instead of hardcoding "owner_id"
+  const client = supabase as unknown as { from: (table: string) => unknown };
+  let listingsOwnerCol: OwnerColumn = "owner_id";
+  let businessesOwnerCol: OwnerColumn = "owner_id";
+  let promotionsOwnerCol: OwnerColumn = "owner_id";
+  try {
+    [listingsOwnerCol, businessesOwnerCol, promotionsOwnerCol] = await Promise.all([
+      getOwnerColumn(client as never, "listings"),
+      getOwnerColumn(client as never, "businesses"),
+      getOwnerColumn(client as never, "promotions"),
+    ]);
+  } catch {
+    log.warn("Owner column detection failed, falling back to owner_id");
+  }
+
   const planId = typeof meta.plan_id === "string" ? meta.plan_id : null;
   if (planId) {
     const { data: plan } = await supabase
@@ -96,7 +112,7 @@ export async function fulfillPayment(
       .from("listings")
       .update({ boost_until: boostUntil })
       .eq("id", meta.listing_id)
-      .eq("owner_id", payment.user_id);
+      .eq(listingsOwnerCol, payment.user_id);
     if (error) {
       throw new Error(`Boost update failed: ${error.message}`);
     }
@@ -127,7 +143,7 @@ export async function fulfillPayment(
       .from("businesses")
       .update({ boost_until: boostUntil })
       .eq("id", targetId)
-      .eq("owner_id", payment.user_id);
+      .eq(businessesOwnerCol, payment.user_id);
     if (error) {
       throw new Error(`Business boost update failed: ${error.message}`);
     }
@@ -151,7 +167,7 @@ export async function fulfillPayment(
       .from("storefronts")
       .update({ boost_until: boostUntil })
       .eq("id", meta.storefront_id)
-      .eq("owner_id", payment.user_id);
+      .eq(listingsOwnerCol, payment.user_id);
     if (error) {
       throw new Error(`Storefront boost update failed: ${error.message}`);
     }
@@ -175,7 +191,7 @@ export async function fulfillPayment(
       .from("listings")
       .update({ featured_until: featuredUntil })
       .eq("id", meta.listing_id)
-      .eq("owner_id", payment.user_id);
+      .eq(listingsOwnerCol, payment.user_id);
     if (error) {
       throw new Error(`Featured update failed: ${error.message}`);
     }
@@ -199,7 +215,7 @@ export async function fulfillPayment(
       .from("listings")
       .update({ urgent_until: urgentUntil })
       .eq("id", meta.listing_id)
-      .eq("owner_id", payment.user_id);
+      .eq(listingsOwnerCol, payment.user_id);
     if (error) {
       throw new Error(`Urgent update failed: ${error.message}`);
     }
@@ -223,7 +239,7 @@ export async function fulfillPayment(
       .from("promotions")
       .update({ boost_until: boostUntil })
       .eq("id", meta.promotion_id)
-      .eq("owner_id", payment.user_id);
+      .eq(promotionsOwnerCol, payment.user_id);
     if (error) {
       throw new Error(`Promotion boost update failed: ${error.message}`);
     }
@@ -247,7 +263,7 @@ export async function fulfillPayment(
       .from("promotions")
       .update({ featured_until: featuredUntil })
       .eq("id", meta.promotion_id)
-      .eq("owner_id", payment.user_id);
+      .eq(promotionsOwnerCol, payment.user_id);
     if (error) {
       throw new Error(`Promotion featured update failed: ${error.message}`);
     }

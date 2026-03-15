@@ -1043,7 +1043,7 @@ export default function VerificationPage() {
             <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
               <CardContent className="space-y-3 p-4 sm:p-5">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">Wizard 2.0 progress</p>
+                  <p className="text-sm font-medium">Verification progress</p>
                   {step !== "complete" && (
                     <Badge variant="secondary">Step {currentStepNumber} of 4</Badge>
                   )}

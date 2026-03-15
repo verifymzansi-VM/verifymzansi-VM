@@ -393,7 +393,10 @@ export async function GET(request: NextRequest) {
         query = query.eq("location_city", city);
       }
       if (search) {
-        const safeSearch = search.replace(/[,.()\\/]/g, "");
+        const safeSearch = search
+          .replace(/[,.()\\/]/g, "")
+          .replace(/%/g, "\\%")
+          .replace(/_/g, "\\_");
         if (safeSearch) {
           query = query.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
         }

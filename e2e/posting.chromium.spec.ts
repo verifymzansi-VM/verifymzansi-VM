@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { POSTING_CHROMIUM_STATE } from "./auth-state";
 
 const IMAGE_FIXTURE = path.join(process.cwd(), "src", "app", "icon.png");
+const RUN_SUFFIX = Date.now().toString().slice(-6);
 
 test.use({ storageState: POSTING_CHROMIUM_STATE });
 test.describe.configure({ mode: "serial" });
@@ -15,9 +16,28 @@ function uploaderFor(page: Page, label: RegExp) {
     .first();
 }
 
+async function enterPostingForm(page: Page, firstField: ReturnType<Page["getByRole"]>) {
+  const startPostingButton = page.getByRole("button", {
+    name: /Start Posting|Use Your Free Post/i,
+  });
+
+  await Promise.race([
+    firstField.waitFor({ state: "visible", timeout: 5_000 }),
+    startPostingButton.waitFor({ state: "visible", timeout: 5_000 }),
+  ]).catch(() => undefined);
+
+  if (await startPostingButton.isVisible().catch(() => false)) {
+    await startPostingButton.click();
+  }
+
+  await firstField.waitFor({ state: "visible", timeout: 15_000 });
+}
+
 async function completeListingCreate(page: Page) {
+  const categoryOption = page.getByRole("radio", { name: /Electronics & Tech/i });
   await page.goto("/post/create-listing");
-  await page.getByRole("radio", { name: /Electronics & Tech/i }).click();
+  await enterPostingForm(page, categoryOption);
+  await categoryOption.click();
   await page.getByLabel(/Device Type/i).selectOption("Smartphone");
   await page.getByLabel(/Brand/i).fill("Apple");
   await page.getByLabel(/^Title \*$/).fill("Playwright iPhone 15 Pro");
@@ -40,16 +60,27 @@ async function completeListingCreate(page: Page) {
   );
 
   await page.getByRole("button", { name: /Submit for review/i }).click();
-  const payload = await (await responsePromise).json();
+  await responsePromise;
   await expect(page).toHaveURL(/\/dashboard\/listings/);
-  return payload.id as string;
+  const editLink = page.getByRole("link", { name: "Edit Playwright iPhone 15 Pro" }).first();
+  const href = await editLink.getAttribute("href");
+  const listingId = href?.split("/").pop();
+
+  expect(listingId).toBeTruthy();
+  return listingId as string;
 }
 
 async function completeBusinessCreate(page: Page) {
+  const businessName = `Playwright Business Studio ${RUN_SUFFIX}`;
+  const businessSlug = `playwright-business-studio-${RUN_SUFFIX}`;
+  const businessesHeading = page.getByRole("heading", { name: "My Businesses" });
+  const businessLink = page.getByRole("link", { name: businessName });
+  const businessTypeOption = page.getByRole("radio", { name: /Standalone Shop/i });
   await page.goto("/post/create-business");
-  await page.getByRole("radio", { name: /Standalone Shop/i }).click();
-  await page.getByLabel(/Business Name/i).fill("Playwright Business Studio");
-  await page.getByLabel(/URL Slug/i).fill("playwright-business-studio");
+  await enterPostingForm(page, businessTypeOption);
+  await businessTypeOption.click();
+  await page.getByLabel(/Business Name/i).fill(businessName);
+  await page.getByLabel(/URL Slug/i).fill(businessSlug);
   await page.getByLabel(/^Category$/).selectOption("fashion_accessories");
   await page.getByLabel(/Street address/i).fill("24 Vilakazi Street");
   await page.getByLabel(/Suburb/i).fill("Orlando West");
@@ -59,22 +90,41 @@ async function completeBusinessCreate(page: Page) {
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Profile photos/i).setInputFiles(IMAGE_FIXTURE);
 
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/businesses") &&
-      response.request().method() === "POST" &&
-      response.status() === 201
-  );
+  const submitButton = page.getByRole("button", { name: /Submit for review/i });
+  await Promise.race([
+    submitButton.waitFor({ state: "visible", timeout: 15_000 }),
+    page.waitForURL(/\/dashboard\/businesses/, { timeout: 30_000 }),
+  ]).catch(() => undefined);
 
-  await page.getByRole("button", { name: /Submit for review/i }).click();
-  const payload = await (await responsePromise).json();
-  await expect(page).toHaveURL(/\/dashboard\/businesses/);
-  return payload.business.id as string;
+  if (!/\/dashboard\/businesses/.test(page.url())) {
+    await submitButton
+      .scrollIntoViewIfNeeded()
+      .then(() => submitButton.click())
+      .catch(() => undefined);
+  }
+
+  await Promise.race([
+    page.waitForURL(/\/dashboard\/businesses/, { timeout: 30_000 }),
+    businessesHeading.waitFor({ state: "visible", timeout: 30_000 }),
+    businessLink.waitFor({ state: "visible", timeout: 30_000 }),
+  ]);
+
+  await businessLink.waitFor({ state: "visible", timeout: 30_000 });
+  const businessCard = page.locator("div,article").filter({ has: businessLink }).first();
+  const editLink = businessCard.getByRole("link", { name: "Edit" });
+  const href = await editLink.getAttribute("href");
+  const businessId = href?.split("/").pop();
+
+  expect(businessId).toBeTruthy();
+  return { businessId: businessId as string, businessName };
 }
 
 async function completePromotionCreate(page: Page) {
+  const promotionTitle = `Playwright Weekend Deal ${RUN_SUFFIX}`;
+  const titleField = page.getByLabel(/^Title/i);
   await page.goto("/post/create-promotion");
-  await page.getByLabel(/^Title/i).fill("Playwright Weekend Deal");
+  await enterPostingForm(page, titleField);
+  await titleField.fill(promotionTitle);
   await page
     .getByLabel(/Event Details|Description/i)
     .fill("Playwright promotion description with enough detail to satisfy the validation rules.");
@@ -92,9 +142,14 @@ async function completePromotionCreate(page: Page) {
   );
 
   await page.getByRole("button", { name: /Submit for review/i }).click();
-  const payload = await (await responsePromise).json();
+  await responsePromise;
   await expect(page).toHaveURL(/\/dashboard\/promotions/);
-  return payload.promotion.id as string;
+  const editLink = page.getByRole("link", { name: "Edit" }).first();
+  const href = await editLink.getAttribute("href");
+  const promotionId = href?.split("/").pop();
+
+  expect(promotionId).toBeTruthy();
+  return { promotionId: promotionId as string, promotionTitle };
 }
 
 test.describe("Posting flows in Chromium", () => {
@@ -102,36 +157,46 @@ test.describe("Posting flows in Chromium", () => {
     test.skip(browserName !== "chromium" || testInfo.project.name !== "chromium");
   });
 
+  test.setTimeout(120_000);
+
   test("creates, edits, and publicly exposes a market listing", async ({ page }) => {
     const listingId = await completeListingCreate(page);
 
     await page.goto("/mzansi-market");
-    await expect(page.getByText("Playwright iPhone 15 Pro")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Playwright iPhone 15 Pro" }).first()
+    ).toBeVisible();
 
     await page.goto(`/post/edit-listing/${listingId}`);
     await page.getByLabel(/^Title \*$/).fill("Playwright iPhone 15 Pro Max");
     const updatePromise = page.waitForResponse(
       (response) =>
         response.url().includes(`/api/listings/${listingId}`) &&
-        response.request().method() === "PUT" &&
-        response.ok()
+        response.request().method() === "PUT"
     );
     await page.getByRole("button", { name: /Save Changes/i }).click();
-    await updatePromise;
+    const updateResponse = await updatePromise;
+    expect(
+      updateResponse.ok(),
+      `listing update failed with status ${updateResponse.status()}`
+    ).toBe(true);
     await expect(page).toHaveURL(/\/dashboard\/listings/);
 
     await page.goto(`/listing/${listingId}`);
-    await expect(page.getByText("Playwright iPhone 15 Pro Max")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Playwright iPhone 15 Pro Max" }).first()
+    ).toBeVisible();
   });
 
   test("creates, edits, and publicly exposes a business", async ({ page }) => {
-    const businessId = await completeBusinessCreate(page);
+    const { businessId, businessName } = await completeBusinessCreate(page);
+    const updatedBusinessName = `Playwright Business Collective ${RUN_SUFFIX}`;
 
     await page.goto("/mzansi-business");
-    await expect(page.getByText("Playwright Business Studio")).toBeVisible();
+    await expect(page.getByText(businessName).first()).toBeVisible();
 
     await page.goto(`/post/edit-business/${businessId}`);
-    await page.getByLabel(/Business Name/i).fill("Playwright Business Collective");
+    await page.getByLabel(/Business Name/i).fill(updatedBusinessName);
     const updatePromise = page.waitForResponse(
       (response) =>
         response.url().includes(`/api/businesses/${businessId}`) &&
@@ -143,17 +208,18 @@ test.describe("Posting flows in Chromium", () => {
     await expect(page).toHaveURL(/\/dashboard\/businesses/);
 
     await page.goto(`/mzansi-business/${businessId}`);
-    await expect(page.getByText("Playwright Business Collective")).toBeVisible();
+    await expect(page.getByText(updatedBusinessName).first()).toBeVisible();
   });
 
   test("creates, edits, and publicly exposes a promotion", async ({ page }) => {
-    const promotionId = await completePromotionCreate(page);
+    const { promotionId, promotionTitle } = await completePromotionCreate(page);
+    const updatedPromotionTitle = `Playwright Weekend Deal Updated ${RUN_SUFFIX}`;
 
     await page.goto("/promotions");
-    await expect(page.getByText("Playwright Weekend Deal")).toBeVisible();
+    await expect(page.getByText(promotionTitle).first()).toBeVisible();
 
     await page.goto(`/post/edit-promotion/${promotionId}`);
-    await page.getByLabel(/^Title$/).fill("Playwright Weekend Deal Updated");
+    await page.getByLabel(/^Title$/).fill(updatedPromotionTitle);
     const updatePromise = page.waitForResponse(
       (response) =>
         response.url().includes(`/api/promotions/${promotionId}`) &&
@@ -165,6 +231,6 @@ test.describe("Posting flows in Chromium", () => {
     await expect(page).toHaveURL(/\/dashboard\/promotions/);
 
     await page.goto(`/promotion/${promotionId}`);
-    await expect(page.getByText("Playwright Weekend Deal Updated")).toBeVisible();
+    await expect(page.getByText(updatedPromotionTitle).first()).toBeVisible();
   });
 });

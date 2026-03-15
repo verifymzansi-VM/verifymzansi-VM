@@ -22,6 +22,7 @@ type PlaywrightFixtureStore = {
 };
 
 const GLOBAL_KEY = "__verifymzansiPlaywrightFixtureStore";
+const PLAYWRIGHT_SESSION_PREFIX = "persona:";
 
 const DEFAULT_TABLES = [
   "account_profiles",
@@ -46,6 +47,24 @@ function stableUuid(input: string): string {
     16,
     20
   )}-${hash.slice(20, 32)}`;
+}
+
+function encodeSessionPersona(persona: string): string {
+  return `${PLAYWRIGHT_SESSION_PREFIX}${encodeURIComponent(persona)}`;
+}
+
+function decodeSessionPersona(token: string | null | undefined): string | null {
+  const normalizedToken = token ? decodeURIComponent(token) : null;
+
+  if (!normalizedToken?.startsWith(PLAYWRIGHT_SESSION_PREFIX)) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(normalizedToken.slice(PLAYWRIGHT_SESSION_PREFIX.length));
+  } catch {
+    return null;
+  }
 }
 
 function nowIso() {
@@ -206,13 +225,18 @@ export function ensurePlaywrightVerifiedMember(persona: string): StubUser {
 export function createPlaywrightSession(persona: string): { token: string; user: StubUser } {
   const store = getPlaywrightFixtureStore();
   const user = ensurePlaywrightVerifiedMember(persona);
-  const token = stableUuid(`session:${persona}`);
+  const token = encodeSessionPersona(persona);
   store.sessions.set(token, user.id);
   return { token, user };
 }
 
 export function resolvePlaywrightSession(token: string | null | undefined): StubUser | null {
   if (!token) return null;
+
+  const persona = decodeSessionPersona(token);
+  if (persona) {
+    return cloneValue(ensurePlaywrightVerifiedMember(persona));
+  }
 
   const store = getPlaywrightFixtureStore();
   const userId = store.sessions.get(token);

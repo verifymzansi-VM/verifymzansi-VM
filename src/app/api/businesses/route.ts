@@ -399,7 +399,10 @@ export async function GET(request: NextRequest) {
       }
       if (search) {
         // Escape PostgREST special characters to prevent filter injection
-        const safeSearch = search.replace(/[,.()\\/]/g, "");
+        const safeSearch = search
+          .replace(/[,.()\\/]/g, "")
+          .replace(/%/g, "\\%")
+          .replace(/_/g, "\\_");
         if (safeSearch) {
           query = query.or(`business_name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
         }

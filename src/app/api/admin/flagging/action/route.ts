@@ -6,7 +6,7 @@ import { adminFlaggingActionSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
@@ -69,13 +69,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
+    // Resolve owner columns via compat layer
+    const [listingsOwnerCol, businessesOwnerCol, promotionsOwnerCol] = await Promise.all([
+      getOwnerColumn(admin as never, "listings").catch(() => "owner_id" as const),
+      getOwnerColumn(admin as never, "businesses").catch(() => "owner_id" as const),
+      getOwnerColumn(admin as never, "promotions").catch(() => "owner_id" as const),
+    ]);
+
     // Get the account holder for this target
     let ownerId: string | null = null;
 
     if (report.target_type === "listing") {
       const { data: listing, error: listingErr } = await admin
         .from("listings")
-        .select("owner_id")
+        .select(listingsOwnerCol)
         .eq("id", report.target_id)
         .single();
       if (listingErr) {
@@ -84,7 +91,7 @@ export async function POST(request: Request) {
           error: listingErr.message,
         });
       }
-      ownerId = listing?.owner_id || null;
+      ownerId = ((listing as Record<string, unknown> | null)?.[listingsOwnerCol] as string) || null;
     } else if (report.target_type === "account_profile") {
       ownerId = report.target_id;
     } else if (
@@ -94,7 +101,7 @@ export async function POST(request: Request) {
     ) {
       const { data: biz, error: bizErr } = await admin
         .from("businesses")
-        .select("owner_id")
+        .select(businessesOwnerCol)
         .eq("id", report.target_id)
         .single();
       if (bizErr) {
@@ -103,11 +110,11 @@ export async function POST(request: Request) {
           error: bizErr.message,
         });
       }
-      ownerId = biz?.owner_id || null;
+      ownerId = ((biz as Record<string, unknown> | null)?.[businessesOwnerCol] as string) || null;
     } else if (report.target_type === "promotion") {
       const { data: promotion, error: promotionErr } = await admin
         .from("promotions")
-        .select("owner_id")
+        .select(promotionsOwnerCol)
         .eq("id", report.target_id)
         .single();
       if (promotionErr) {
@@ -116,7 +123,8 @@ export async function POST(request: Request) {
           error: promotionErr.message,
         });
       }
-      ownerId = promotion?.owner_id || null;
+      ownerId =
+        ((promotion as Record<string, unknown> | null)?.[promotionsOwnerCol] as string) || null;
     }
 
     // Actions that target an account holder require a valid owner reference
@@ -166,17 +174,17 @@ export async function POST(request: Request) {
       await admin
         .from("listings")
         .update({ status: "hidden" })
-        .eq("owner_id", ownerId)
+        .eq(listingsOwnerCol, ownerId)
         .eq("status", "live");
       await admin
         .from("businesses")
         .update({ status: "hidden" })
-        .eq("owner_id", ownerId)
+        .eq(businessesOwnerCol, ownerId)
         .eq("status", "live");
       await admin
         .from("promotions")
         .update({ status: "hidden" })
-        .eq("owner_id", ownerId)
+        .eq(promotionsOwnerCol, ownerId)
         .eq("status", "live");
     } else if (action === "ban" && ownerId) {
       await admin
@@ -189,9 +197,9 @@ export async function POST(request: Request) {
         .eq("user_id", ownerId);
 
       // Hide all content
-      await admin.from("listings").update({ status: "hidden" }).eq("owner_id", ownerId);
-      await admin.from("businesses").update({ status: "hidden" }).eq("owner_id", ownerId);
-      await admin.from("promotions").update({ status: "hidden" }).eq("owner_id", ownerId);
+      await admin.from("listings").update({ status: "hidden" }).eq(listingsOwnerCol, ownerId);
+      await admin.from("businesses").update({ status: "hidden" }).eq(businessesOwnerCol, ownerId);
+      await admin.from("promotions").update({ status: "hidden" }).eq(promotionsOwnerCol, ownerId);
     }
 
     // Record moderation action

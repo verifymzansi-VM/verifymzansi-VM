@@ -58,7 +58,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const { data: business, error } = await admin
       .from("businesses")
-      .select("*")
+      .select(
+        "id, owner_id, seller_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, services_offered, service_areas, business_details, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, status, area, created_at, updated_at"
+      )
       .eq("id", id)
       .maybeSingle();
 

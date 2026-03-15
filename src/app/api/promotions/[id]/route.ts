@@ -54,7 +54,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const { data: promotion, error } = await admin
       .from("promotions")
-      .select("*")
+      .select(
+        "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
+      )
       .eq("id", id)
       .maybeSingle();
 

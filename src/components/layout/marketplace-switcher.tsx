@@ -40,8 +40,8 @@ const AREA_TABS: AreaTab[] = [
   },
   {
     area: "PROMOTIONS",
-    label: "Promotion & Events",
-    mobileLabel: "Promotion & Events",
+    label: "Promotions & Events",
+    mobileLabel: "Promotions & Events",
     slug: "/promotions",
     icon: Megaphone,
     iconColor: "text-red-500",

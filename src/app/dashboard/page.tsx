@@ -19,12 +19,8 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { VerificationProgress } from "@/components/trust/verification-progress";
-import {
-  ACCOUNT_PROFILE_TABLE,
-  applyOwnerFilter,
-  getOwnerColumn,
-  readAccountVerificationStatus,
-} from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_TABLE, applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
+import { summarizeVerification } from "@/lib/account/verification-summary";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { AttentionBanner } from "@/components/dashboard/attention-banner";
 import { NeedsAttention } from "@/components/dashboard/needs-attention";
@@ -214,8 +210,13 @@ export default async function DashboardPage() {
   const conversionRate =
     (totalViews || 0) > 0 ? ((totalLeadCount / (totalViews || 1)) * 100).toFixed(1) : "0.0";
 
+  const verificationSummary = summarizeVerification(
+    profile?.account_verification_status,
+    verificationSteps
+  );
+
   const trustLevel = computeTrustLevel(
-    readAccountVerificationStatus(profile) ?? "incomplete",
+    verificationSummary.accountVerificationStatus,
     undefined,
     profile?.account_status,
     { strikes: profile?.strikes ?? 0, legalHold: profile?.legal_hold ?? false }
@@ -289,7 +290,7 @@ export default async function DashboardPage() {
     pendingModerationCount > 0 ||
     expiringListingCount > 0 ||
     expiringPromoCount > 0 ||
-    trustLevel <= 2;
+    verificationSummary.accountVerificationStatus !== "verified";
 
   return (
     <div className="space-y-6">
@@ -305,7 +306,8 @@ export default async function DashboardPage() {
 
       {/* Attention Banners — dismissible alerts for urgent items */}
       <AttentionBanner
-        trustLevel={trustLevel}
+        verificationStatus={verificationSummary.accountVerificationStatus}
+        stepsRemaining={verificationSummary.stepsRemaining}
         unreadLeadCount={unreadLeadCount}
         rejectedListingCount={rejectedListingCount}
         pendingModerationCount={pendingModerationCount}
@@ -320,7 +322,8 @@ export default async function DashboardPage() {
           pendingModerationCount={pendingModerationCount}
           expiringListingCount={expiringListingCount}
           expiringPromoCount={expiringPromoCount}
-          trustLevel={trustLevel}
+          verificationStatus={verificationSummary.accountVerificationStatus}
+          stepsRemaining={verificationSummary.stepsRemaining}
         />
       )}
 

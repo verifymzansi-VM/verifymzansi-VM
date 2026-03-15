@@ -6,6 +6,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { adminContentDecideSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { getRoleFromUser, isModeratorOrAdmin, asAdminRole } from "@/lib/auth/roles";
+import { getOwnerColumn, readOwnerId } from "@/lib/account/compat";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
 
@@ -146,8 +147,18 @@ export async function POST(request: Request) {
 
     // Notify the account holder about the moderation decision
     try {
-      // Get the account holder's user ID and content title
-      const ownerField = table === "listings" ? "owner_id" : "owner_id";
+      // Resolve owner column via compat layer for tables that support it
+      const compatTable =
+        table === "listings"
+          ? "listings"
+          : table === "businesses"
+            ? "businesses"
+            : table === "promotions"
+              ? "promotions"
+              : null;
+      const ownerField = compatTable
+        ? await getOwnerColumn(admin as never, compatTable).catch(() => "owner_id")
+        : "owner_id";
       const titleField =
         table === "listings"
           ? "title"
@@ -163,8 +174,8 @@ export async function POST(request: Request) {
         .single();
 
       if (contentItem) {
-        const record = contentItem as Record<string, unknown>;
-        const accountHolderId = record[ownerField] as string;
+        const record = contentItem as unknown as Record<string, unknown>;
+        const accountHolderId = (record[ownerField] ?? readOwnerId(record)) as string;
         const contentTitle = (record[titleField] as string)?.slice(0, 40) || "your content";
         const contentLabel =
           table === "listings"

@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
 import {
   createPlaywrightSession,
   createPlaywrightTableRow,
@@ -529,10 +529,32 @@ function resolveStubUser(
   return resolvePlaywrightSession(token);
 }
 
+function createStubSession(token: string | null, user: StubAuthUser): Session | null {
+  if (!token || !user) {
+    return null;
+  }
+
+  return {
+    access_token: token,
+    refresh_token: token,
+    token_type: "bearer",
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    user,
+  } as unknown as Session;
+}
+
 export function createPlaywrightStubSupabaseClient(
   options: StubClientOptions = {}
 ): SupabaseClient {
   const cookieStore = options.cookies;
+  const authStateListeners = new Set<(event: AuthChangeEvent, session: Session | null) => void>();
+
+  function emitAuthState(event: AuthChangeEvent, session: Session | null) {
+    for (const listener of authStateListeners) {
+      listener(event, session);
+    }
+  }
 
   return {
     auth: {
@@ -544,7 +566,7 @@ export function createPlaywrightStubSupabaseClient(
         const token = cookieStore?.get(PLAYWRIGHT_SESSION_COOKIE) ?? options.sessionToken ?? null;
         return {
           data: {
-            session: user && token ? { access_token: token, user } : null,
+            session: createStubSession(token, user),
           },
           error: null,
         };
@@ -562,8 +584,10 @@ export function createPlaywrightStubSupabaseClient(
 
         const { token } = createPlaywrightSession(persona);
         cookieStore?.set(PLAYWRIGHT_SESSION_COOKIE, token);
+        const session = createStubSession(token, user);
+        emitAuthState("SIGNED_IN", session);
         return {
-          data: { user, session: { access_token: token, user } },
+          data: { user, session },
           error: null,
         };
       },
@@ -589,7 +613,21 @@ export function createPlaywrightStubSupabaseClient(
       },
       async signOut() {
         cookieStore?.remove(PLAYWRIGHT_SESSION_COOKIE);
+        emitAuthState("SIGNED_OUT", null);
         return { error: null };
+      },
+      onAuthStateChange(callback: (event: AuthChangeEvent, session: Session | null) => void) {
+        authStateListeners.add(callback);
+
+        return {
+          data: {
+            subscription: {
+              unsubscribe() {
+                authStateListeners.delete(callback);
+              },
+            },
+          },
+        };
       },
       admin: {
         async deleteUser(userId: string) {

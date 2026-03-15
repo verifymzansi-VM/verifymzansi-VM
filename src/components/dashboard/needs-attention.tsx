@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import type { AccountVerificationStatus } from "@/types/enums";
 
 interface NeedsAttentionItem {
   count: number;
@@ -25,7 +26,8 @@ interface NeedsAttentionProps {
   pendingModerationCount: number;
   expiringListingCount: number;
   expiringPromoCount: number;
-  trustLevel: number;
+  verificationStatus: AccountVerificationStatus;
+  stepsRemaining: number;
 }
 
 const variantColors = {
@@ -52,7 +54,8 @@ export function NeedsAttention({
   pendingModerationCount,
   expiringListingCount,
   expiringPromoCount,
-  trustLevel,
+  verificationStatus,
+  stepsRemaining,
 }: NeedsAttentionProps) {
   const items: NeedsAttentionItem[] = [];
 
@@ -111,16 +114,25 @@ export function NeedsAttention({
     });
   }
 
-  if (trustLevel <= 1) {
+  if (verificationStatus === "rejected") {
     items.push({
-      count: 4 - trustLevel,
+      count: 1,
+      label: "Resubmit",
+      description: "Verification needs fixes",
+      href: "/verification",
+      icon: ShieldAlert,
+      variant: "warning",
+    });
+  } else if (verificationStatus === "incomplete" && stepsRemaining > 0) {
+    items.push({
+      count: stepsRemaining,
       label: "Steps Left",
       description: "Complete verification",
       href: "/verification",
       icon: ShieldAlert,
       variant: "warning",
     });
-  } else if (trustLevel === 2) {
+  } else if (verificationStatus === "pending_review") {
     items.push({
       count: 1,
       label: "Under Review",

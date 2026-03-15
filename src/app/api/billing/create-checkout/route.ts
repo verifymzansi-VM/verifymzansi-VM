@@ -22,7 +22,7 @@ const checkoutSchema = z.object({
 /**
  * POST /api/billing/create-checkout
  *
- * Create an Ozow checkout session and return the redirect URL.
+ * Create a payment checkout session and return the redirect URL.
  * Requires an authenticated user with an account profile.
  */
 export async function POST(request: NextRequest) {
@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
       .eq("area", plan.area)
       .eq("type", "subscription")
       .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
       .maybeSingle();
 
     if (activeEntitlement) {

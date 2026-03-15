@@ -166,4 +166,47 @@ describe("GET /api/verification/status", () => {
     expect(body.steps).toHaveLength(1);
     expect(body.steps[0].step_type).toBe("phone");
   });
+
+  it("returns verified when all verification steps are approved but the profile is stale", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "profile-1",
+                  account_verification_status: "incomplete",
+                },
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                { step_type: "phone", status: "approved" },
+                { step_type: "id_doc", status: "approved" },
+                { step_type: "selfie", status: "approved" },
+                { step_type: "location", status: "approved" },
+              ],
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    const response = await GET({} as unknown as NextRequest);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.accountVerificationStatus).toBe("verified");
+    expect(body.overallStatus).toBe("verified");
+  });
 });

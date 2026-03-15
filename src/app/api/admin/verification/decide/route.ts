@@ -115,6 +115,30 @@ export async function POST(request: Request) {
       );
     }
 
+    // Sync the latest artifact status to match the step decision
+    const artifactStatus =
+      decision === "approved"
+        ? "approved"
+        : decision === "needs_resubmission"
+          ? "needs_resubmission"
+          : "rejected";
+    const { error: artifactSyncError } = await admin
+      .from("kyc_artifacts")
+      .update({ status: artifactStatus })
+      .eq("user_id", step.user_id)
+      .eq("step_type", step.step_type)
+      .in("status", ["pending", "needs_resubmission"])
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (artifactSyncError) {
+      log.warn("Failed to sync artifact status (non-fatal)", {
+        error: artifactSyncError.message,
+        stepId,
+        decision,
+      });
+    }
+
     // If approved, check if all 4 steps are now approved → update the account to verified
     if (decision === "approved") {
       const { data: allSteps } = await admin

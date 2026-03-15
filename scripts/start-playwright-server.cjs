@@ -35,6 +35,8 @@ function createDeterministicEnv() {
     TURNSTILE_SECRET_KEY: "dummy_secret_key", // secret-scan: allow deterministic fixture
     NEXT_PUBLIC_APP_URL: `http://${PLAYWRIGHT_HOST}:${PLAYWRIGHT_PORT}`,
     NEXT_PUBLIC_MEDIA_URL: `http://${PLAYWRIGHT_HOST}:${PLAYWRIGHT_PORT}/e2e-media`,
+    TEST_PHONE_NUMBERS: "",
+    DEV_EXPOSE_OTP: "",
   };
 
   return {

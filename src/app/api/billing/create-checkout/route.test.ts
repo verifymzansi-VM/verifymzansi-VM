@@ -168,6 +168,7 @@ describe("POST /api/billing/create-checkout", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null }), // No active entitlement
         };
       }

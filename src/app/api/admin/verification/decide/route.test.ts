@@ -52,6 +52,38 @@ function mockAuth(user: { id: string; app_metadata?: Record<string, unknown> } |
   });
 }
 
+/** Build a chainable mock for the artifact-sync update:
+ *  .update().eq().eq().in().order().limit()
+ */
+function artifactSyncChain(resolvedValue = { error: null }) {
+  return {
+    update: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue(resolvedValue),
+            }),
+          }),
+        }),
+      }),
+    }),
+  };
+}
+
+/** Build a chainable mock for the purge update:
+ *  .update().eq().is()
+ */
+function artifactPurgeChain(resolvedValue = { error: null }) {
+  return {
+    update: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        is: vi.fn().mockResolvedValue(resolvedValue),
+      }),
+    }),
+  };
+}
+
 const STEP_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
 const MEMBER_UUID = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
 const ADMIN_UUID = "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33";
@@ -193,13 +225,7 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        return {
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockResolvedValue({ error: null }),
-            }),
-          }),
-        };
+        return artifactSyncChain();
       }
       return {};
     });
@@ -228,6 +254,7 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactSyncCalled = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -264,13 +291,12 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        return {
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockResolvedValue({ error: null }),
-            }),
-          }),
-        };
+        // First call: artifact sync; second call: purge scheduling
+        if (!artifactSyncCalled) {
+          artifactSyncCalled = true;
+          return artifactSyncChain();
+        }
+        return artifactPurgeChain();
       }
       return {};
     });
@@ -317,6 +343,9 @@ describe("POST /api/admin/verification/decide", () => {
         return {
           update: profileUpdate,
         };
+      }
+      if (table === "kyc_artifacts") {
+        return artifactSyncChain();
       }
       return {};
     });
@@ -380,6 +409,9 @@ describe("POST /api/admin/verification/decide", () => {
           update: profileUpdate,
         };
       }
+      if (table === "kyc_artifacts") {
+        return artifactSyncChain();
+      }
       return {};
     });
 
@@ -404,6 +436,7 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let purgeArtifactSyncCalled = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -438,14 +471,12 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        // Purge update FAILS
-        return {
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockResolvedValue({ error: { message: "DB error" } }),
-            }),
-          }),
-        };
+        // First call: artifact sync (succeeds); second call: purge update (FAILS)
+        if (!purgeArtifactSyncCalled) {
+          purgeArtifactSyncCalled = true;
+          return artifactSyncChain();
+        }
+        return artifactPurgeChain({ error: { message: "DB error" } });
       }
       return {};
     });
@@ -503,6 +534,9 @@ describe("POST /api/admin/verification/decide", () => {
           update: profileUpdate,
         };
       }
+      if (table === "kyc_artifacts") {
+        return artifactSyncChain();
+      }
       return {};
     });
 
@@ -554,6 +588,9 @@ describe("POST /api/admin/verification/decide", () => {
         return {
           update: profileUpdate,
         };
+      }
+      if (table === "kyc_artifacts") {
+        return artifactSyncChain();
       }
       return {};
     });

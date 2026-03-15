@@ -64,7 +64,7 @@ function getCopy(status: PaymentStatusView) {
         icon: <Clock3 className="h-6 w-6 text-brand-green" />,
         title: "Payment Pending",
         description:
-          "Your redirect completed, but we are still waiting for Ozow to confirm the payment.",
+          "Your redirect completed, but we are still waiting for the payment provider to confirm your payment.",
       };
     case "failed":
       return {
