@@ -29,6 +29,7 @@ custom_domain = true
 #     Real secrets go via `wrangler secret put` (see bottom of file).
 # ────────────────────────────────────────────────────────────────────────────
 [vars]
+NODE_ENV = "production"
 ENVIRONMENT = "production"
 NEXT_PUBLIC_APP_URL = "https://verifymzansi.com"
 NEXT_PUBLIC_MEDIA_URL = "https://media.verifymzansi.com"
@@ -38,9 +39,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOi
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
 # Cloudflare Image Resizing toggle — set to "true" once enabled on the zone
 NEXT_PUBLIC_CF_IMAGE_RESIZING = "false"
-ENABLE_TEST_POSTING_BYPASS = "true"
-NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS = "true"
-TEST_PHONE_NUMBERS = "+27600000001,+27600000002"
+# ⚠️ TEST_PHONE_NUMBERS and ENABLE_TEST_POSTING_BYPASS removed — these
+# weaken security and must NEVER be set in production. Use them only in
+# local .env for development/testing.
 
 # ────────────────────────────────────────────────────────────────────────────
 # Durable Objects (required by @opennextjs/cloudflare for ISR/caching)

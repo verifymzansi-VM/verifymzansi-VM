@@ -414,14 +414,52 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const stack = err instanceof Error ? err.stack : undefined;
-    log.error("Unexpected error in verification upload", { error: message, stack });
+
+    // Categorize the error for structured logging and client error codes
+    const isR2Error =
+      message.includes("R2") ||
+      message.includes("S3") ||
+      message.includes("PutObject") ||
+      message.includes("AccessDenied") ||
+      message.includes("InvalidAccessKeyId") ||
+      message.includes("SignatureDoesNotMatch");
+    const isEncryptionError =
+      message.includes("encryption") || message.includes("KYC_ENCRYPTION_KEY");
+    const isConfigError =
+      message.includes("not configured") ||
+      message.includes("HMAC_SECRET") ||
+      message.includes("ID_ENCRYPTION_KEY");
+
+    const errorCategory = isR2Error
+      ? "r2_storage"
+      : isEncryptionError
+        ? "encryption"
+        : isConfigError
+          ? "config"
+          : "unknown";
+
+    log.error("Unexpected error in verification upload", {
+      error: message,
+      stack,
+      category: errorCategory,
+    });
+
+    // Return a category-specific code so the client can show a targeted message
+    const errorCode = isR2Error
+      ? "storage_failed"
+      : isEncryptionError
+        ? "encryption_failed"
+        : isConfigError
+          ? "config_missing"
+          : "unexpected_error";
+
     return NextResponse.json(
       {
         error:
           process.env.NODE_ENV === "development"
             ? message
             : "Failed to upload document. Please try again.",
-        code: "unexpected_error",
+        code: errorCode,
       },
       { status: 500 }
     );
