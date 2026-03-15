@@ -33,55 +33,56 @@ export function useAuth() {
     return normalizeUserRole(role) ?? role;
   }
 
-  const fetchUser = useCallback(async () => {
-    // Guard: skip if we already fetched during this component lifecycle.
-    // The Zustand store is shared, so other useAuth() consumers see the
-    // same data without triggering duplicate Supabase round-trips.
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
+  const fetchUser = useCallback(
+    async (options?: { force?: boolean }) => {
+      // Guard: skip if we already fetched during this component lifecycle.
+      // The Zustand store is shared, so other useAuth() consumers see the
+      // same data without triggering duplicate Supabase round-trips.
+      if (fetchedRef.current && !options?.force) return;
+      fetchedRef.current = true;
 
-    setLoading(true);
-    try {
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
+      setLoading(true);
+      try {
+        const {
+          data: { user: authUser },
+        } = await supabase.auth.getUser();
 
-      if (!authUser) {
+        if (!authUser) {
+          reset();
+          return;
+        }
+
+        setUser({
+          id: authUser.id,
+          email: authUser.email || "",
+          displayName:
+            ((authUser.user_metadata?.display_name ?? "") as string) ||
+            authUser.email?.split("@")[0] ||
+            "User",
+          role: readSessionRole(authUser.app_metadata?.role),
+        });
+
+        // Fetch account profile
+        const { data: accountProfile } = await supabase
+          .from(ACCOUNT_PROFILE_WRITE_TABLE)
+          .select("*")
+          .eq("user_id", authUser.id)
+          .single();
+
+        if (accountProfile) {
+          setProfile(accountProfile);
+        }
+      } catch (err) {
+        log.error("Failed to fetch user", {
+          error: err instanceof Error ? err.message : String(err),
+        });
         reset();
-        return;
+      } finally {
+        setLoading(false);
       }
-
-      setUser({
-        id: authUser.id,
-        email: authUser.email || "",
-        displayName:
-          ((authUser.user_metadata?.display_name ?? "") as string) ||
-          authUser.email?.split("@")[0] ||
-          "User",
-        role: readSessionRole(authUser.app_metadata?.role),
-      });
-
-      // Fetch account profile
-      const { data: accountProfile } = await supabase
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .select("*")
-        .eq("user_id", authUser.id)
-        .single();
-
-      if (accountProfile) {
-        setProfile(accountProfile);
-      }
-    } catch (err) {
-      log.error("Failed to fetch user", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      reset();
-    } finally {
-      setLoading(false);
-    }
-    // supabase is a stable singleton — safe to omit from deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setUser, setProfile, setLoading, reset]);
+    },
+    [reset, setLoading, setProfile, setUser, supabase]
+  );
 
   useEffect(() => {
     fetchUser();
@@ -91,15 +92,7 @@ export function useAuth() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email || "",
-          displayName:
-            (session.user.user_metadata?.display_name as string) ||
-            session.user.email?.split("@")[0] ||
-            "User",
-          role: readSessionRole(session.user.app_metadata?.role),
-        });
+        void fetchUser({ force: true });
       } else {
         // If user was previously authenticated and session was lost, reset store.
         // Don't redirect here — let signOut() or middleware handle navigation
@@ -113,7 +106,7 @@ export function useAuth() {
     };
     // `user` is intentionally excluded — including it would cause re-subscription
     // on every state change. The SIGNED_OUT redirect reads `user` from closure.
-  }, [fetchUser, supabase, setUser, reset]);
+  }, [fetchUser, supabase, reset]);
 
   const signOut = useCallback(async () => {
     try {
@@ -141,6 +134,6 @@ export function useAuth() {
     isModerator,
     isVerified,
     signOut,
-    refresh: fetchUser,
+    refresh: () => fetchUser({ force: true }),
   };
 }

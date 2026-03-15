@@ -271,6 +271,9 @@ describe("OTP Routes", () => {
       const profileUpdateEq = vi.fn().mockResolvedValue({ error: null });
       const verificationStepUpsert = vi.fn().mockResolvedValue({ error: null });
       const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
+      const otpLogVerifyIs = vi.fn().mockResolvedValue({ error: null });
+      const otpLogVerifyHashEq = vi.fn().mockReturnValue({ is: otpLogVerifyIs });
+      const otpLogVerifyPhoneEq = vi.fn().mockReturnValue({ eq: otpLogVerifyHashEq });
       const storedHash = await hashOtpForTest("123456");
 
       const mockAdminClient = {
@@ -326,6 +329,14 @@ describe("OTP Routes", () => {
             };
           }
 
+          if (table === "otp_logs") {
+            return {
+              update: vi.fn().mockReturnValue({
+                eq: otpLogVerifyPhoneEq,
+              }),
+            };
+          }
+
           return {};
         }),
       };
@@ -355,6 +366,9 @@ describe("OTP Routes", () => {
         }),
         { onConflict: "user_id" }
       );
+      expect(otpLogVerifyPhoneEq).toHaveBeenCalledWith("phone", "+27821234567");
+      expect(otpLogVerifyHashEq).toHaveBeenCalledWith("otp_hash", storedHash);
+      expect(otpLogVerifyIs).toHaveBeenCalledWith("verified_at", null);
     });
 
     it("returns 409 when the verified phone already belongs to another account", async () => {

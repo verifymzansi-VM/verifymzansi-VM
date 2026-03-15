@@ -89,7 +89,8 @@ async function finalizePhoneVerification(
   adminSupabase: ReturnType<typeof createAdminClient>,
   user: { id: string; email?: string | null; user_metadata?: unknown },
   accountPhoneFields: ReturnType<typeof buildAccountPhoneFields>,
-  nowIso: string
+  nowIso: string,
+  otpLogLookup: { phone: string; otpHash: string }
 ): Promise<{ success: true } | { success: false; error: string; status: number }> {
   let { data: profile } = await adminSupabase
     .from("account_profiles")
@@ -178,6 +179,20 @@ async function finalizePhoneVerification(
   if (sessionError) {
     log.error("Failed to update verification session phone state", {
       error: sessionError.message,
+    });
+  }
+
+  const { error: otpLogError } = await adminSupabase
+    .from("otp_logs")
+    .update({ verified: true, verified_at: nowIso })
+    .eq("phone", otpLogLookup.phone)
+    .eq("otp_hash", otpLogLookup.otpHash)
+    .is("verified_at", null);
+
+  if (otpLogError) {
+    log.warn("Failed to sync OTP audit log verification state", {
+      error: otpLogError.message,
+      userId: user.id,
     });
   }
 
@@ -285,7 +300,8 @@ export async function POST(request: NextRequest) {
       adminSupabase,
       user,
       accountPhoneFields,
-      nowIso
+      nowIso,
+      { phone, otpHash: challenge.otp_hash }
     );
     if (!verificationResult.success) {
       return NextResponse.json(

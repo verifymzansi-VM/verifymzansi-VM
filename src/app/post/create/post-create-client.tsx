@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowRight, Building2, Megaphone, ShieldAlert, ShoppingBag } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -71,8 +72,20 @@ function getVerificationNote(status: AccountVerificationStatus | null | undefine
 }
 
 export function PostCreateClient() {
-  const { isLoading, isVerified, profile } = useAuth();
+  const { isLoading, isVerified, profile, refresh } = useAuth();
+  const refreshedRef = useRef(false);
   const verificationStatus = readAccountVerificationStatus(profile);
+
+  useEffect(() => {
+    if (refreshedRef.current) {
+      return;
+    }
+
+    refreshedRef.current = true;
+    if (typeof refresh === "function") {
+      void refresh();
+    }
+  }, [refresh]);
 
   return (
     <div className="space-y-4">

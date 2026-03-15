@@ -157,6 +157,11 @@ describe("POST /api/promotions", () => {
           },
         }),
       },
+      verification_steps: {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: [] }),
+        }),
+      },
     });
     const req = createRequest("http://localhost:3000/api/promotions", {
       method: "POST",
@@ -168,6 +173,49 @@ describe("POST /api/promotions", () => {
       error: "Verification required",
       code: "verification_required",
     });
+  });
+
+  it("allows promotion creation when the profile is stale but all verification steps are approved", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "sp-1",
+            account_verification_status: "incomplete",
+          },
+        }),
+      },
+      verification_steps: {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [
+              { step_type: "phone", status: "approved" },
+              { step_type: "id_doc", status: "approved" },
+              { step_type: "selfie", status: "approved" },
+              { step_type: "location", status: "approved" },
+            ],
+          }),
+        }),
+      },
+      promotions: {
+        single: vi.fn().mockResolvedValue({ data: { id: VALID_UUID }, error: null }),
+      },
+      entitlements: {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "basic" } }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(201);
   });
 
   it("creates promotion successfully (201)", async () => {

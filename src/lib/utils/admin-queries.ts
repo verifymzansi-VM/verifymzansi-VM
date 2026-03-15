@@ -108,7 +108,54 @@ export async function getRecentOtpAttempts(limit = 12): Promise<RecentOtpAttempt
     return [];
   }
 
-  return data as RecentOtpAttempt[];
+  const attempts = data as RecentOtpAttempt[];
+  const phones = Array.from(new Set(attempts.map((attempt) => attempt.phone).filter(Boolean)));
+
+  if (phones.length === 0) {
+    return attempts;
+  }
+
+  const { data: profiles } = await supabase
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
+    .select("user_id, phone")
+    .in("phone", phones);
+
+  const phoneToUserId = new Map<string, string>();
+  for (const profile of profiles ?? []) {
+    if (typeof profile.phone === "string" && profile.phone && typeof profile.user_id === "string") {
+      phoneToUserId.set(profile.phone, profile.user_id);
+    }
+  }
+
+  const userIds = Array.from(new Set(Array.from(phoneToUserId.values())));
+  const verifiedAtByUserId = new Map<string, string>();
+
+  if (userIds.length > 0) {
+    const { data: phoneSteps } = await supabase
+      .from("verification_steps")
+      .select("user_id, phone_verified_at, status")
+      .eq("step_type", "phone")
+      .eq("status", "approved")
+      .in("user_id", userIds);
+
+    for (const step of phoneSteps ?? []) {
+      if (typeof step.user_id === "string" && typeof step.phone_verified_at === "string") {
+        verifiedAtByUserId.set(step.user_id, step.phone_verified_at);
+      }
+    }
+  }
+
+  return attempts.map((attempt) => {
+    const fallbackVerifiedAt =
+      verifiedAtByUserId.get(phoneToUserId.get(attempt.phone) ?? "") ?? null;
+    const verifiedAt = attempt.verified_at ?? fallbackVerifiedAt;
+
+    return {
+      ...attempt,
+      verified: attempt.verified || Boolean(verifiedAt),
+      verified_at: verifiedAt,
+    };
+  });
 }
 
 // ── Queries ──────────────────────────────────────────────────

@@ -275,6 +275,13 @@ describe("POST /api/businesses", () => {
             }),
           };
         }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: [] }),
+            }),
+          };
+        }
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
@@ -290,6 +297,74 @@ describe("POST /api/businesses", () => {
       error: "Verification required",
       code: "verification_required",
     });
+  });
+
+  it("allows business creation when the profile is stale but all verification steps are approved", async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({
+        single: vi.fn().mockResolvedValue({ data: { id: "business-1" }, error: null }),
+      }),
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "incomplete",
+              },
+            }),
+          };
+        }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({
+                data: [
+                  { step_type: "phone", status: "approved" },
+                  { step_type: "id_doc", status: "approved" },
+                  { step_type: "selfie", status: "approved" },
+                  { step_type: "location", status: "approved" },
+                ],
+              }),
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "growth" } }),
+          };
+        }
+        if (table === "businesses") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            insert: insertSpy,
+            single: vi.fn().mockResolvedValue({ data: { id: "business-1" }, error: null }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(201);
+    expect(insertSpy).toHaveBeenCalled();
   });
 
   it("writes seller_id when businesses still use the legacy owner column", async () => {

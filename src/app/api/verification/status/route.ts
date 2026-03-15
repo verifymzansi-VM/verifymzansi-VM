@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
-import { summarizeVerification } from "@/lib/account/verification-summary";
+import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(_request: NextRequest) {
@@ -15,30 +14,14 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Fetch profile and verification steps in parallel
-    const [profileResult, stepsResult] = await Promise.all([
-      supabase
-        .from(ACCOUNT_PROFILE_TABLE)
-        .select("id, account_verification_status")
-        .eq("user_id", user.id)
-        .maybeSingle(),
-      supabase
-        .from("verification_steps")
-        .select(
-          "step_type, status, reviewed_at, reason_code, reason_note, risk_level, submitted_at"
-        )
-        .eq("user_id", user.id),
-    ]);
-
-    const verificationStatus = summarizeVerification(
-      profileResult.data?.account_verification_status,
-      stepsResult.data
-    ).accountVerificationStatus;
+    const verification = await resolveAccountVerification(supabase, user.id, {
+      includeStepsWhenVerified: true,
+    });
 
     return NextResponse.json({
-      accountVerificationStatus: verificationStatus,
-      overallStatus: verificationStatus,
-      steps: stepsResult.data || [],
+      accountVerificationStatus: verification.accountVerificationStatus,
+      overallStatus: verification.accountVerificationStatus,
+      steps: verification.steps,
     });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

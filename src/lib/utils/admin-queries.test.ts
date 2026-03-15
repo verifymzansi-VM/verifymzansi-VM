@@ -30,6 +30,7 @@ import {
   getExtendedPlatformStats,
   getPendingVerifications,
   getPendingModerationCount,
+  getRecentOtpAttempts,
   getRecentActivity,
   getAreaReports,
   getPendingContent,
@@ -177,6 +178,57 @@ describe("admin-queries", () => {
       expect(result[0].account_display_name).toBe("Thabo");
       expect(result[0].account_verification_status).toBe("pending_review");
       expect(result[0].account_display_name).toBe("Thabo");
+    });
+  });
+
+  describe("getRecentOtpAttempts", () => {
+    it("falls back to the approved phone verification timestamp for already-verified phones", async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "otp_logs") {
+          return createChainableMock({
+            data: [
+              {
+                id: "otp-1",
+                phone: "+27821234567",
+                delivery_status: "sent",
+                provider_name: "africastalking",
+                provider_message_id: "sms-1",
+                provider_error: null,
+                verified: false,
+                verified_at: null,
+                created_at: "2026-03-14T10:12:00.000Z",
+                expires_at: "2026-03-14T10:17:00.000Z",
+              },
+            ],
+          });
+        }
+
+        if (table === "account_profiles") {
+          return createChainableMock({
+            data: [{ user_id: "user-1", phone: "+27821234567" }],
+          });
+        }
+
+        if (table === "verification_steps") {
+          return createChainableMock({
+            data: [
+              {
+                user_id: "user-1",
+                phone_verified_at: "2026-03-14T10:12:30.000Z",
+                status: "approved",
+              },
+            ],
+          });
+        }
+
+        return createChainableMock({ data: [] });
+      });
+
+      const result = await getRecentOtpAttempts(8);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].verified).toBe(true);
+      expect(result[0].verified_at).toBe("2026-03-14T10:12:30.000Z");
     });
   });
 

@@ -11,13 +11,12 @@ import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
-  ACCOUNT_PROFILE_WRITE_TABLE,
   getOwnerColumn,
   normalizeOwnerRecords,
-  readAccountVerificationStatus,
   withOwnerColumn,
   withOwnerField,
 } from "@/lib/account/compat";
+import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
@@ -77,17 +76,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check account profile exists
-    const { data: profile } = await admin
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("id, account_verification_status")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const verification = await resolveAccountVerification(admin, user.id);
+    const profile = verification.profile;
 
     if (!profile) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedMember(readAccountVerificationStatus(profile))) {
+    if (!isVerifiedMember(verification.accountVerificationStatus)) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 

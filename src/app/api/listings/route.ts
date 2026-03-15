@@ -18,6 +18,7 @@ import {
   withOwnerColumn,
   withOwnerField,
 } from "@/lib/account/compat";
+import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
@@ -399,17 +400,14 @@ export async function POST(request: NextRequest) {
     const ownerColumn = await getOwnerColumn(admin, "listings");
 
     // ── Get account profile ──────────────────────────────────
-    const { data: profile } = await admin
-      .from("account_profiles")
-      .select("id, account_verification_status")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const verification = await resolveAccountVerification(admin, user.id);
+    const profile = verification.profile;
 
     if (!profile) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedMember(readAccountVerificationStatus(profile))) {
+    if (!isVerifiedMember(verification.accountVerificationStatus)) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
