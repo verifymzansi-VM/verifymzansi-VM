@@ -94,7 +94,7 @@ export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
     warningCount: configSummary.warnings.length,
     failedChecks: configSummary.errors.map((check) => check.name),
     warningChecks: configSummary.warnings.map((check) => check.name),
-    failedDetails: configSummary.errors.map((check) => `${check.name}: ${check.message}`),
+    failedDetails: configSummary.errors.map((check) => `${check.name}: ${check.detail}`),
   };
 
   const degraded =
