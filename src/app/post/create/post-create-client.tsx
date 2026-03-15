@@ -1,18 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Building2, Megaphone, ShieldAlert, ShoppingBag } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buildPostCategoryHref } from "@/app/post/_lib/post-access";
-import { useAuth } from "@/hooks/use-auth";
-import { readAccountVerificationStatus } from "@/lib/account/compat";
-import { createLogger } from "@/lib/utils/logger";
 import type { AccountVerificationStatus } from "@/types/enums";
-
-const log = createLogger("PostCreateClient");
 
 const POST_OPTIONS = [
   {
@@ -74,89 +68,21 @@ function getVerificationNote(status: AccountVerificationStatus | null | undefine
   }
 }
 
-export function PostCreateClient() {
-  const { isLoading, isAuthenticated, profile, refresh } = useAuth();
-  const refreshedRef = useRef(false);
-  const profileStatus = readAccountVerificationStatus(profile);
-  const [resolvedStatus, setResolvedStatus] = useState<
-    AccountVerificationStatus | null | undefined
-  >(() => profileStatus);
-  const [isCheckingStatus, setIsCheckingStatus] = useState(() =>
-    Boolean(isAuthenticated && profileStatus !== "verified")
-  );
+interface PostCreateClientProps {
+  initialVerificationStatus: AccountVerificationStatus | null;
+  isAuthenticated: boolean;
+}
 
-  useEffect(() => {
-    const nextProfileStatus = readAccountVerificationStatus(profile);
-    setResolvedStatus(nextProfileStatus);
-    setIsCheckingStatus(Boolean(isAuthenticated && nextProfileStatus !== "verified"));
-  }, [isAuthenticated, profile]);
-
-  useEffect(() => {
-    if (refreshedRef.current) {
-      return;
-    }
-
-    refreshedRef.current = true;
-    if (typeof refresh === "function") {
-      void refresh();
-    }
-  }, [refresh]);
-
-  useEffect(() => {
-    if (isLoading || !isAuthenticated) {
-      return;
-    }
-
-    const controller = new AbortController();
-
-    async function syncResolvedStatus() {
-      setIsCheckingStatus(true);
-
-      try {
-        const response = await fetch("/api/verification/status", {
-          signal: controller.signal,
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          return;
-        }
-
-        const payload = (await response.json()) as {
-          accountVerificationStatus?: AccountVerificationStatus | null;
-          overallStatus?: AccountVerificationStatus | null;
-        };
-
-        setResolvedStatus(payload.accountVerificationStatus ?? payload.overallStatus ?? null);
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        log.warn("Failed to load reconciled verification status", {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsCheckingStatus(false);
-        }
-      }
-    }
-
-    void syncResolvedStatus();
-
-    return () => {
-      controller.abort();
-    };
-  }, [isAuthenticated, isLoading]);
-
-  const verificationStatus = resolvedStatus;
+export function PostCreateClient({
+  initialVerificationStatus,
+  isAuthenticated,
+}: PostCreateClientProps) {
+  const verificationStatus = initialVerificationStatus;
   const canPost = verificationStatus === "verified";
-  const showLoadingState = isLoading || (isAuthenticated && isCheckingStatus);
 
   return (
     <div className="space-y-4">
-      {!showLoadingState && !canPost && (
+      {isAuthenticated && !canPost && (
         <Alert className="border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <div>
@@ -169,22 +95,10 @@ export function PostCreateClient() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {POST_OPTIONS.map((option) => {
           const Icon = option.icon;
-          const href = showLoadingState
-            ? "/post/create"
-            : buildPostCategoryHref(option.href, verificationStatus);
+          const href = buildPostCategoryHref(option.href, verificationStatus);
 
           return (
-            <Link
-              key={option.href}
-              href={href}
-              aria-disabled={showLoadingState}
-              onClick={(event) => {
-                if (showLoadingState) {
-                  event.preventDefault();
-                }
-              }}
-              className={showLoadingState ? "pointer-events-auto" : undefined}
-            >
+            <Link key={option.href} href={href}>
               <Card className="h-full cursor-pointer transition-all hover:border-brand-green/40 hover:shadow-lg">
                 <CardContent className="flex h-full flex-col gap-4 p-5">
                   <div className="flex items-center justify-between gap-3">
@@ -211,7 +125,7 @@ export function PostCreateClient() {
                   </ul>
 
                   <div className="mt-auto flex items-center gap-1 text-sm font-medium text-brand-green">
-                    {showLoadingState ? "Checking access" : "Get Started"}
+                    Get Started
                     <ArrowRight className="h-4 w-4" />
                   </div>
                 </CardContent>

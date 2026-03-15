@@ -28,15 +28,19 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { summarizeVerification } from "@/lib/account/verification-summary";
 import { profileUpdateSchema } from "@/lib/validations/profile";
 import { ACCOUNT_PHONE_IN_USE_ERROR } from "@/lib/utils/phone";
-import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
+import type { AccountVerificationStatus } from "@/types/enums";
 
 type TabValue = "profile" | "security" | "account";
 
 export default function ProfilePage() {
   const [email, setEmail] = useState("");
-  const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState<AccountVerificationStatus | null>(
+    null
+  );
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [province, setProvince] = useState("");
@@ -103,13 +107,25 @@ export default function ProfilePage() {
 
       setEmail(user.email ?? "");
 
-      const { data: profile } = await supabase
-        .from(ACCOUNT_PROFILE_TABLE)
-        .select(
-          "display_name, bio, location_province, location_city, phone, account_verification_status, avatar_url"
-        )
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const [{ data: profile }, { data: verificationSteps }] = await Promise.all([
+        supabase
+          .from(ACCOUNT_PROFILE_TABLE)
+          .select(
+            "display_name, bio, location_province, location_city, phone, account_verification_status, avatar_url"
+          )
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("verification_steps")
+          .select("step_type, status")
+          .eq("user_id", user.id)
+          .in("status", ["approved", "pending", "rejected", "needs_resubmission"]),
+      ]);
+
+      const verificationSummary = summarizeVerification(
+        profile?.account_verification_status,
+        verificationSteps
+      );
 
       if (profile) {
         setDisplayName(profile.display_name || "");
@@ -117,9 +133,9 @@ export default function ProfilePage() {
         setProvince(profile.location_province || "");
         setCity(profile.location_city || "");
         setPhone(profile.phone || "");
-        setVerificationStatus(readAccountVerificationStatus(profile));
         setAvatarUrl(profile.avatar_url || null);
       }
+      setVerificationStatus(verificationSummary.accountVerificationStatus);
       setIsLoading(false);
     }
 

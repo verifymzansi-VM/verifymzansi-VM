@@ -1,7 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CreatePostPage from "./page";
-import { useAuth } from "@/hooks/use-auth";
+
+const { mockCreateClient, mockResolveAccountVerification } = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockResolveAccountVerification: vi.fn(),
+}));
 
 vi.mock("next/link", () => ({
   default: ({
@@ -19,8 +23,12 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("@/hooks/use-auth", () => ({
-  useAuth: vi.fn(),
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: mockCreateClient,
+}));
+
+vi.mock("@/lib/account/resolved-verification", () => ({
+  resolveAccountVerification: mockResolveAccountVerification,
 }));
 
 vi.mock("@/components/layout/header", () => ({
@@ -42,26 +50,22 @@ vi.mock("@/components/layout/page-header", () => ({
 
 describe("CreatePostPage", () => {
   beforeEach(() => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ accountVerificationStatus: "verified" }),
-    }) as unknown as typeof fetch;
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+    });
+    mockResolveAccountVerification.mockResolvedValue({
+      accountVerificationStatus: "verified",
+    });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("renders exactly three category cards with the current category selection UI", () => {
-    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      isLoading: false,
-      isVerified: true,
-      isAuthenticated: true,
-      profile: { account_verification_status: "verified" },
-      refresh: vi.fn(),
-    });
-
-    render(<CreatePostPage />);
+  it("renders exactly three category cards with the current category selection UI", async () => {
+    render(await CreatePostPage());
 
     expect(screen.getAllByText("Mzansi Market").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mzansi Business").length).toBeGreaterThan(0);
@@ -74,15 +78,7 @@ describe("CreatePostPage", () => {
   });
 
   it("sends verified users directly to the create forms", async () => {
-    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      isLoading: false,
-      isVerified: true,
-      isAuthenticated: true,
-      profile: { account_verification_status: "verified" },
-      refresh: vi.fn(),
-    });
-
-    render(<CreatePostPage />);
+    render(await CreatePostPage());
 
     await waitFor(() => {
       expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
@@ -101,20 +97,11 @@ describe("CreatePostPage", () => {
   });
 
   it("sends unverified users to verification with a returnUrl", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ accountVerificationStatus: "incomplete" }),
-    }) as unknown as typeof fetch;
-
-    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      isLoading: false,
-      isVerified: false,
-      isAuthenticated: true,
-      profile: { account_verification_status: "incomplete" },
-      refresh: vi.fn(),
+    mockResolveAccountVerification.mockResolvedValue({
+      accountVerificationStatus: "incomplete",
     });
 
-    render(<CreatePostPage />);
+    render(await CreatePostPage());
 
     await waitFor(() => {
       expect(screen.getByText("Verification required before posting")).toBeInTheDocument();
@@ -130,21 +117,12 @@ describe("CreatePostPage", () => {
     });
   });
 
-  it("promotes stale verified profiles once the reconciled verification status loads", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ accountVerificationStatus: "verified" }),
-    }) as unknown as typeof fetch;
-
-    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      isLoading: false,
-      isVerified: false,
-      isAuthenticated: true,
-      profile: { account_verification_status: "incomplete" },
-      refresh: vi.fn(),
+  it("trusts the server-resolved verification status on first render", async () => {
+    mockResolveAccountVerification.mockResolvedValue({
+      accountVerificationStatus: "verified",
     });
 
-    render(<CreatePostPage />);
+    render(await CreatePostPage());
 
     await waitFor(() => {
       expect(screen.queryByText("Verification required before posting")).not.toBeInTheDocument();
@@ -155,23 +133,28 @@ describe("CreatePostPage", () => {
     });
   });
 
-  it("does not flash the verification banner while stale authenticated profiles are being reconciled", () => {
-    global.fetch = vi.fn(() => new Promise(() => undefined)) as unknown as typeof fetch;
+  it("does not render a checking-access placeholder while awaiting client hydration", async () => {
+    render(await CreatePostPage());
 
-    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      isLoading: false,
-      isVerified: false,
-      isAuthenticated: true,
-      profile: { account_verification_status: "incomplete" },
-      refresh: vi.fn(),
-    });
-
-    render(<CreatePostPage />);
-
-    expect(screen.queryByText("Verification required before posting")).not.toBeInTheDocument();
+    expect(screen.queryByText("Checking access")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
       "href",
-      "/post/create"
+      "/post/create-listing"
+    );
+  });
+
+  it("keeps unauthenticated users on verification-linked entry points without a member-only banner", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
+    });
+
+    render(await CreatePostPage());
+
+    expect(screen.queryByText("Verification required before posting")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Mzansi Market/i }).getAttribute("href")).toContain(
+      "/verification?returnUrl=%2Fpost%2Fcreate-listing"
     );
   });
 });
