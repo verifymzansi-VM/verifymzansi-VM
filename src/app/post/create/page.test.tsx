@@ -154,4 +154,24 @@ describe("CreatePostPage", () => {
       );
     });
   });
+
+  it("does not flash the verification banner while stale authenticated profiles are being reconciled", () => {
+    global.fetch = vi.fn(() => new Promise(() => undefined)) as unknown as typeof fetch;
+
+    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      isLoading: false,
+      isVerified: false,
+      isAuthenticated: true,
+      profile: { account_verification_status: "incomplete" },
+      refresh: vi.fn(),
+    });
+
+    render(<CreatePostPage />);
+
+    expect(screen.queryByText("Verification required before posting")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
+      "href",
+      "/post/create"
+    );
+  });
 });

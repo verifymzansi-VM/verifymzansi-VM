@@ -77,14 +77,19 @@ function getVerificationNote(status: AccountVerificationStatus | null | undefine
 export function PostCreateClient() {
   const { isLoading, isAuthenticated, profile, refresh } = useAuth();
   const refreshedRef = useRef(false);
+  const profileStatus = readAccountVerificationStatus(profile);
   const [resolvedStatus, setResolvedStatus] = useState<
     AccountVerificationStatus | null | undefined
-  >(() => readAccountVerificationStatus(profile));
-  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  >(() => profileStatus);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(() =>
+    Boolean(isAuthenticated && profileStatus !== "verified")
+  );
 
   useEffect(() => {
-    setResolvedStatus(readAccountVerificationStatus(profile));
-  }, [profile]);
+    const nextProfileStatus = readAccountVerificationStatus(profile);
+    setResolvedStatus(nextProfileStatus);
+    setIsCheckingStatus(Boolean(isAuthenticated && nextProfileStatus !== "verified"));
+  }, [isAuthenticated, profile]);
 
   useEffect(() => {
     if (refreshedRef.current) {
