@@ -28,6 +28,14 @@ describe("public runtime config", () => {
   });
 
   it("falls back to DOM data when the client bundle env is missing", () => {
+    // Clear any env vars that CI may inject (e.g. NEXT_PUBLIC_SUPABASE_*)
+    // so the merge logic genuinely falls through to DOM values.
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "");
+
     document.body.innerHTML = `
       <div
         id="${PUBLIC_RUNTIME_CONFIG_ELEMENT_ID}"
