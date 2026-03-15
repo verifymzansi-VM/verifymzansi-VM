@@ -4,9 +4,9 @@ compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 workers_dev = false
 preview_urls = false
 
-# Main entry point is set by @opennextjs/cloudflare build
-# Do not change unless you modify the build output
-main = ".open-next/worker.js"
+# Main entry point wraps the generated OpenNext worker so custom Durable
+# Objects can be exported alongside the adapter output.
+main = "workers/open-next-entry.mjs"
 
 [assets]
 directory = ".open-next/assets"
