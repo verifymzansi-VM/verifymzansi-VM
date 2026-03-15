@@ -248,14 +248,7 @@ export function KycInlinePreview({
         </div>
       )}
 
-      {/* Print protection */}
-      <style>{`
-        @media print {
-          .evidence-protected, [data-evidence-thumb] {
-            display: none !important;
-          }
-        }
-      `}</style>
+      {/* Print protection — moved to globals.css for CSP nonce compliance */}
     </div>
   );
 }

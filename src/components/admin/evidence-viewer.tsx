@@ -220,14 +220,7 @@ export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
               </div>
             )}
 
-            {/* Print-media CSS hiding */}
-            <style>{`
-              @media print {
-                .evidence-protected {
-                  display: none !important;
-                }
-              }
-            `}</style>
+            {/* Print-media CSS hiding — moved to globals.css for CSP nonce compliance */}
 
             {/* Purge warning */}
             {artifact.purge_after && (

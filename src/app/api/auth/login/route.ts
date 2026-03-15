@@ -5,6 +5,7 @@ import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turn
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { checkAccountLockout, recordFailedLogin, clearLockout } from "@/lib/utils/account-lockout";
 
 const log = createLogger("Login");
 
@@ -46,6 +47,19 @@ export async function POST(request: NextRequest) {
       return parsedBody.response;
     }
 
+    // Account lockout: block login after 5 failed attempts within 1 hour
+    const lockout = checkAccountLockout(parsedBody.data.email);
+    if (lockout.locked) {
+      log.warn("Account locked due to too many failed attempts", {
+        email: parsedBody.data.email,
+        ip,
+      });
+      return NextResponse.json(
+        { error: "Account temporarily locked due to too many failed attempts. Try again later." },
+        { status: 429, headers: { "Retry-After": String(lockout.retryAfter ?? 3600) } }
+      );
+    }
+
     if (turnstileStatus.configured) {
       if (parsedBody.data.turnstileToken === "turnstile-unavailable") {
         log.warn("Turnstile widget failed to load on client — applying strict rate limit", {
@@ -82,6 +96,10 @@ export async function POST(request: NextRequest) {
       password: parsedBody.data.password,
     });
 
+    if (!error) {
+      clearLockout(parsedBody.data.email);
+    }
+
     if (error) {
       if (error.message?.toLowerCase().includes("email not confirmed")) {
         return NextResponse.json(
@@ -92,6 +110,7 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
+      recordFailedLogin(parsedBody.data.email);
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 

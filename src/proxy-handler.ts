@@ -32,7 +32,7 @@ function buildCsp(
     "frame-ancestors 'none'",
     "object-src 'none'",
     `script-src 'self' 'nonce-${nonce}' https://challenges.cloudflare.com`,
-    "style-src 'self' 'unsafe-inline'",
+    `style-src 'self' 'nonce-${nonce}'`,
     "img-src 'self' data: blob: https://tnygdgormnofpgjknlhr.supabase.co https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com",
     "media-src 'self' blob: https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com",
     "font-src 'self'",

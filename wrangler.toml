@@ -55,11 +55,16 @@ bindings = [
   { name = "NEXT_CACHE_DO_QUEUE", class_name = "DOQueueHandler" },
   { name = "NEXT_TAG_CACHE_DO_SHARDED", class_name = "DOShardedTagCache" },
   { name = "NEXT_CACHE_PURGE_DO", class_name = "BucketCachePurge" },
+  { name = "RATE_LIMITER_DO", class_name = "RateLimiterDO" },
 ]
 
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["DOQueueHandler", "DOShardedTagCache", "BucketCachePurge"]
+
+[[migrations]]
+tag = "v2"
+new_classes = ["RateLimiterDO"]
 
 # ────────────────────────────────────────────────────────────────────────────
 # KV Namespace for OTP Rate Limiting

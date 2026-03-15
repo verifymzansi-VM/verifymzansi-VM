@@ -7,6 +7,8 @@ import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { stripExifFromJpeg } from "@/lib/utils/exif-strip";
+import { scanForMalware } from "@/lib/utils/malware-scan";
 
 const log = createLogger("MediaUpload");
 
@@ -148,13 +150,33 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // Scan for embedded malware / polyglot attacks
+      const fileBuffer = new Uint8Array(await file.arrayBuffer());
+      const scanResult = scanForMalware(fileBuffer, file.type);
+      if (!scanResult.safe) {
+        log.warn("Malware scan rejected upload", {
+          filename: file.name,
+          threat: scanResult.threat,
+          userId: user.id,
+        });
+        errors.push(`"${file.name}": file rejected by security scan`);
+        continue;
+      }
+
       const key = generateStorageKey(`media/${area}`, user.id, file.name);
 
       try {
+        // Strip EXIF metadata from JPEG images to prevent GPS/PII leaks (POPIA)
+        let uploadFile: File | Blob = file;
+        if (file.type === "image/jpeg") {
+          const stripped = stripExifFromJpeg(fileBuffer);
+          uploadFile = new Blob([stripped], { type: file.type });
+        }
+
         const result = await uploadToR2({
           bucket,
           key,
-          file,
+          file: uploadFile,
           contentType: file.type,
         });
         uploadedUrls.push(result.url);

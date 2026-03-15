@@ -531,13 +531,7 @@ export function KycPreviewLightbox({
         <p className="text-[10px] text-muted-foreground">
           Decrypted server-side, displayed in-memory only. Do not screenshot or download.
         </p>
-        <style>{`
-          @media print {
-            .evidence-protected {
-              display: none !important;
-            }
-          }
-        `}</style>
+        {/* Print protection — moved to globals.css for CSP nonce compliance */}
       </DialogContent>
     </Dialog>
   );

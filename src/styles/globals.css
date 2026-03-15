@@ -395,4 +395,10 @@
     max-width: 100% !important;
     page-break-inside: avoid;
   }
+
+  /* Hide sensitive KYC evidence when printing (POPIA compliance) */
+  .evidence-protected,
+  [data-evidence-thumb] {
+    display: none !important;
+  }
 }
