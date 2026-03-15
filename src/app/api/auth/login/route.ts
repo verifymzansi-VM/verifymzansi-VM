@@ -19,21 +19,9 @@ export async function POST(request: NextRequest) {
     ) {
       log.error("Turnstile not configured in production", {
         reason: !turnstileStatus.configured ? turnstileStatus.reason : "N/A",
-        hasSecretKey: Boolean(process.env.TURNSTILE_SECRET_KEY),
-        secretKeyLength: process.env.TURNSTILE_SECRET_KEY?.length ?? 0,
-        hasSiteKey: Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY),
-        nodeEnv: process.env.NODE_ENV,
       });
       return NextResponse.json(
-        {
-          error: "Authentication temporarily unavailable",
-          debug: {
-            reason: !turnstileStatus.configured ? turnstileStatus.reason : undefined,
-            hasSecret: Boolean(process.env.TURNSTILE_SECRET_KEY),
-            secretLen: process.env.TURNSTILE_SECRET_KEY?.length ?? 0,
-            hasSiteKey: Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY),
-          },
-        },
+        { error: "Authentication temporarily unavailable" },
         { status: 503 }
       );
     }
