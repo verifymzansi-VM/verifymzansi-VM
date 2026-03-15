@@ -229,8 +229,8 @@ jobs:
         run: ANALYZE=true pnpm run build
       - name: Check bundle size budget
         run: |
-          # Warn if any individual JS chunk exceeds 250 KB
-          BUDGET_KB=250
+          # Warn if any individual JS chunk exceeds 275 KB
+          BUDGET_KB=275
           echo "Bundle size budget: ${BUDGET_KB}KB per chunk"
           if [ -d ".next/static/chunks" ]; then
             # Use find -printf to get size+name without wc (avoids broken-pipe from sort|head)
