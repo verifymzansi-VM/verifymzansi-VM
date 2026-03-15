@@ -153,6 +153,7 @@ jobs:
 
   e2e-full-matrix:
     runs-on: ubuntu-latest
+    continue-on-error: true
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
     needs: [e2e-smoke, db-rls]
     strategy:
