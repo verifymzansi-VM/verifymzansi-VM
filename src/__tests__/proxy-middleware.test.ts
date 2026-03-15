@@ -274,6 +274,7 @@ describe("middleware — authenticated routing", () => {
 
 describe("middleware — Playwright stub mode", () => {
   const originalStubMode = process.env.PLAYWRIGHT_SUPABASE_MODE;
+  const originalPublicStubMode = process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE;
   const originalPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE;
   const originalPublicPlaywrightTestMode = process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE;
   const origUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -285,6 +286,9 @@ describe("middleware — Playwright stub mode", () => {
       throw new Error("Supabase auth should not be called in stub mode");
     });
     process.env.PLAYWRIGHT_SUPABASE_MODE = "stub";
+    // jsdom defines `window`, so isPlaywrightSupabaseStubMode() checks
+    // the NEXT_PUBLIC_ variant — set it too so the stub branch activates.
+    process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE = "stub";
     delete process.env.PLAYWRIGHT_TEST_MODE;
     delete process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://playwright.supabase.stub";
@@ -294,6 +298,10 @@ describe("middleware — Playwright stub mode", () => {
   afterEach(() => {
     if (originalStubMode) process.env.PLAYWRIGHT_SUPABASE_MODE = originalStubMode;
     else delete process.env.PLAYWRIGHT_SUPABASE_MODE;
+
+    if (originalPublicStubMode)
+      process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE = originalPublicStubMode;
+    else delete process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE;
 
     if (originalPlaywrightTestMode) process.env.PLAYWRIGHT_TEST_MODE = originalPlaywrightTestMode;
     else delete process.env.PLAYWRIGHT_TEST_MODE;

@@ -92,7 +92,11 @@ describe("encryption", () => {
 
   describe("error cases", () => {
     beforeEach(() => {
+      // Clear cached env so the next env() call re-validates.
       _resetEnvCacheForTesting();
+      // Disable CI flag so validateEnv() uses the strict path instead of
+      // the lenient CI path that supplies valid fallback defaults.
+      vi.stubEnv("CI", "");
     });
 
     it("throws when KYC_ENCRYPTION_KEY is not set", async () => {
