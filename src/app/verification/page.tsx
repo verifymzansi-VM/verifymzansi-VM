@@ -972,8 +972,32 @@ export default function VerificationPage() {
   }
 
   const progressSteps = useMemo(() => {
-    const entries = REVIEWABLE_STEP_ORDER.flatMap((stepType) => {
+    // Find the first step that is incomplete, rejected, or needs resubmission
+    // Steps after this one should not appear "approved" even if the server says so,
+    // because the earlier step blocks the flow.
+    let firstIncompleteIdx = REVIEWABLE_STEP_ORDER.length;
+    for (let i = 0; i < REVIEWABLE_STEP_ORDER.length; i++) {
+      const s = serverStepMap.get(REVIEWABLE_STEP_ORDER[i]);
+      if (!s || s.status === "rejected" || s.status === "needs_resubmission") {
+        firstIncompleteIdx = i;
+        break;
+      }
+    }
+
+    const entries = REVIEWABLE_STEP_ORDER.flatMap((stepType, idx) => {
       const persisted = serverStepMap.get(stepType);
+
+      // If this step is after an incomplete earlier step, cap its display
+      if (idx > firstIncompleteIdx) {
+        if (!persisted) return [];
+        // Show persisted status but don't let it appear as "approved"
+        // when an earlier step still blocks the flow
+        if (persisted.status === "approved" || persisted.status === "pending") {
+          return [{ type: stepType, status: "pending" as const }];
+        }
+        return [{ type: stepType, status: persisted.status }];
+      }
+
       if (persisted) {
         return [{ type: stepType, status: persisted.status }];
       }
@@ -1032,33 +1056,44 @@ export default function VerificationPage() {
               </CardContent>
             </Card>
 
-            {(accountVerificationStatus || reviewAttentionStep) && (
+            {reviewAttentionStep && (
               <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
                 <CardContent className="space-y-2 p-4 text-sm">
-                  {reviewAttentionStep ? (
-                    <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive">
-                      <p className="font-medium">
-                        Action needed on {reviewAttentionStep.replace("_", " ")}.
-                      </p>
-                      <p className="mt-1 text-xs">
-                        Review the notes on that step, replace the document if needed, and submit
-                        again.
-                      </p>
-                    </div>
-                  ) : accountVerificationStatus === "verified" ? (
-                    <div className="rounded-md border border-brand-green/30 bg-brand-green-50 p-3 text-brand-green-900">
-                      Your verification is approved. You can still review the submitted details
-                      below.
-                    </div>
-                  ) : accountVerificationStatus === "pending_review" && allStepsResolved ? (
+                  <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive">
+                    <p className="font-medium">
+                      Action needed on {reviewAttentionStep.replace("_", " ")}.
+                    </p>
+                    <p className="mt-1 text-xs">
+                      Review the notes on that step, replace the document if needed, and submit
+                      again.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {!reviewAttentionStep && accountVerificationStatus === "verified" && (
+              <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
+                <CardContent className="space-y-2 p-4 text-sm">
+                  <div className="rounded-md border border-brand-green/30 bg-brand-green-50 p-3 text-brand-green-900">
+                    Your verification is approved. You can still review the submitted details below.
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {!reviewAttentionStep &&
+              accountVerificationStatus === "pending_review" &&
+              allStepsResolved && (
+                <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
+                  <CardContent className="space-y-2 p-4 text-sm">
                     <div className="rounded-md border border-brand-gold/30 bg-brand-gold-50 p-3 text-brand-gold-900">
                       Your verification is in admin review. We will notify you if anything needs to
                       be resubmitted.
                     </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            )}
+                  </CardContent>
+                </Card>
+              )}
 
             {step === "phone" && (
               <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
