@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import { summarizeVerification } from "@/lib/account/verification-summary";
 import { isModeratorOrAdmin } from "@/lib/auth/roles";
 import {
   getPlaywrightStubUserFromToken,
@@ -418,11 +419,44 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         }
       }
 
-      if (readAccountVerificationStatus(profile) !== "verified") {
+      let canPost = readAccountVerificationStatus(profile) === "verified";
+
+      if (!canPost) {
+        const { data: verificationSteps, error: verificationStepsError } = await supabase
+          .from("verification_steps")
+          .select("step_type, status")
+          .eq("user_id", user.id);
+
+        if (verificationStepsError) {
+          logger.error("Verification step lookup failed in posting gate", {
+            path: pathname,
+            userId: user.id,
+            error: verificationStepsError.message,
+            code: verificationStepsError.code,
+          });
+
+          if (isApiRoute) {
+            return NextResponse.json(
+              { error: "Posting eligibility service unavailable" },
+              { status: 503 }
+            );
+          }
+
+          return NextResponse.redirect(new URL("/dashboard", request.url));
+        }
+
+        canPost =
+          summarizeVerification(profile?.account_verification_status, verificationSteps)
+            .accountVerificationStatus === "verified";
+      }
+
+      if (!canPost) {
         if (isApiRoute) {
           return NextResponse.json({ error: "Verification required" }, { status: 403 });
         }
-        return NextResponse.redirect(new URL("/verification", request.url));
+        const verificationUrl = new URL("/verification", request.url);
+        verificationUrl.searchParams.set("returnUrl", pathname);
+        return NextResponse.redirect(verificationUrl);
       }
     }
   }

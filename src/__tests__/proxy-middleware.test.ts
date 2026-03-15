@@ -275,6 +275,113 @@ describe("middleware — authenticated routing", () => {
     expect(res.status).toBe(200);
     expect(mockFrom).not.toHaveBeenCalled();
   });
+
+  it("allows verified posting routes when the legacy profile status is stale but all steps are approved", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          is_anonymous: false,
+          app_metadata: { role: "seller" },
+        },
+      },
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              phone: "+27600000000",
+              account_verification_status: "incomplete",
+              account_status: "active",
+              suspended_until: null,
+            },
+            error: null,
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({
+            data: [
+              { step_type: "phone", status: "approved" },
+              { step_type: "id_doc", status: "approved" },
+              { step_type: "selfie", status: "approved" },
+              { step_type: "location", status: "approved" },
+            ],
+            error: null,
+          }),
+        };
+      }
+
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+    });
+
+    const res = await routeRequest(createMockRequest("/post/create-business"));
+    expect(res.status).toBe(200);
+  });
+
+  it("preserves the returnUrl when an unverified user is redirected from an edit posting route", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          is_anonymous: false,
+          app_metadata: { role: "seller" },
+        },
+      },
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              phone: "+27600000000",
+              account_verification_status: "incomplete",
+              account_status: "active",
+              suspended_until: null,
+            },
+            error: null,
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({
+            data: [{ step_type: "phone", status: "approved" }],
+            error: null,
+          }),
+        };
+      }
+
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+    });
+
+    const res = await routeRequest(createMockRequest("/post/edit-business/123"));
+    expect(res.status).toBe(307);
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/verification");
+    expect(location.searchParams.get("returnUrl")).toBe("/post/edit-business/123");
+  });
 });
 
 describe("middleware — Playwright stub mode", () => {

@@ -2,9 +2,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CreatePostPage from "./page";
 
-const { mockCreateClient, mockResolveAccountVerification } = vi.hoisted(() => ({
+const { mockCreateClient, mockResolveAccountVerification, mockFetch } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockResolveAccountVerification: vi.fn(),
+  mockFetch: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -50,6 +51,12 @@ vi.mock("@/components/layout/page-header", () => ({
 
 describe("CreatePostPage", () => {
   beforeEach(() => {
+    vi.stubGlobal("fetch", mockFetch);
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: vi.fn().mockResolvedValue({ error: "Unauthorized" }),
+    });
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
@@ -61,6 +68,7 @@ describe("CreatePostPage", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -156,5 +164,38 @@ describe("CreatePostPage", () => {
     expect(screen.getByRole("link", { name: /Mzansi Market/i }).getAttribute("href")).toContain(
       "/verification?returnUrl=%2Fpost%2Fcreate-listing"
     );
+  });
+
+  it("upgrades stale server gating when the live verification API reports the user is verified", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
+    });
+    mockResolveAccountVerification.mockResolvedValue({
+      accountVerificationStatus: null,
+    });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ accountVerificationStatus: "verified" }),
+    });
+
+    render(await CreatePostPage());
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
+        "href",
+        "/post/create-listing"
+      );
+      expect(screen.getByRole("link", { name: /Mzansi Business/i })).toHaveAttribute(
+        "href",
+        "/post/create-business"
+      );
+      expect(screen.getByRole("link", { name: /Promotions & Events/i })).toHaveAttribute(
+        "href",
+        "/post/create-promotion"
+      );
+    });
   });
 });

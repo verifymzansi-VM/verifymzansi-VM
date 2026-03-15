@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { ArrowRight, Building2, Megaphone, ShieldAlert, ShoppingBag } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buildPostCategoryHref } from "@/app/post/_lib/post-access";
+import { normalizeAccountVerificationStatus } from "@/lib/account/compat";
 import type { AccountVerificationStatus } from "@/types/enums";
 
 const POST_OPTIONS = [
@@ -77,12 +79,66 @@ export function PostCreateClient({
   initialVerificationStatus,
   isAuthenticated,
 }: PostCreateClientProps) {
-  const verificationStatus = initialVerificationStatus;
+  const [resolvedVerificationStatus, setResolvedVerificationStatus] =
+    useState<AccountVerificationStatus | null>(null);
+  const [hasConfirmedAuth, setHasConfirmedAuth] = useState(isAuthenticated);
+  const verificationStatus = resolvedVerificationStatus ?? initialVerificationStatus;
   const canPost = verificationStatus === "verified";
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (initialVerificationStatus === "verified") {
+      return;
+    }
+
+    async function refreshVerificationStatus() {
+      try {
+        const res = await fetch("/api/verification/status", {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            setHasConfirmedAuth(false);
+          }
+          return;
+        }
+
+        const payload = (await res.json()) as {
+          accountVerificationStatus?: string | null;
+          overallStatus?: string | null;
+        };
+
+        const nextStatus = normalizeAccountVerificationStatus(
+          payload.accountVerificationStatus ?? payload.overallStatus ?? null
+        );
+
+        setHasConfirmedAuth(true);
+        setResolvedVerificationStatus(nextStatus);
+      } catch {
+        if (!isCancelled) {
+          setHasConfirmedAuth(isAuthenticated);
+        }
+      }
+    }
+
+    void refreshVerificationStatus();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [initialVerificationStatus, isAuthenticated]);
 
   return (
     <div className="space-y-4">
-      {isAuthenticated && !canPost && (
+      {hasConfirmedAuth && !canPost && (
         <Alert className="border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <div>
