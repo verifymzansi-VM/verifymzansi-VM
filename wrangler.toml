@@ -54,7 +54,7 @@ NEXT_PUBLIC_CF_IMAGE_RESIZING = "false"
 bindings = [
   { name = "NEXT_CACHE_DO_QUEUE", class_name = "DOQueueHandler" },
   { name = "NEXT_TAG_CACHE_DO_SHARDED", class_name = "DOShardedTagCache" },
-  { name = "NEXT_CACHE_PURGE_DO", class_name = "BucketCachePurge" },
+  { name = "NEXT_CACHE_DO_PURGE", class_name = "BucketCachePurge" },
   { name = "RATE_LIMITER_DO", class_name = "RateLimiterDO" },
 ]
 
