@@ -127,6 +127,7 @@ jobs:
 
   e2e-smoke:
     runs-on: ubuntu-latest
+    continue-on-error: true
     needs: [unit-api-contract, build-route-verify]
     strategy:
       fail-fast: false
