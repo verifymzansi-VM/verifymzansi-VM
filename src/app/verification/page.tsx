@@ -321,6 +321,8 @@ export default function VerificationPage() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [isUploadingId, setIsUploadingId] = useState(false);
+  const [isUploadingSelfie, setIsUploadingSelfie] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<VerificationStepType[]>([]);
   const [uploadReceipts, setUploadReceipts] = useState<{
     id_doc?: UploadReceipt;
@@ -749,7 +751,7 @@ export default function VerificationPage() {
     }
   }
 
-  function goToSelfieStep() {
+  async function goToSelfieStep() {
     if (!/^\d{13}$/.test(idNumber)) {
       toast({ title: "Enter a valid 13-digit SA ID number", variant: "destructive" });
       return;
@@ -758,15 +760,41 @@ export default function VerificationPage() {
       toast({ title: idFileError, variant: "destructive" });
       return;
     }
-    setStep("selfie");
+    setIsUploadingId(true);
+    try {
+      await uploadIdIfNeeded();
+      await syncVerificationStatus();
+      setStep("selfie");
+    } catch (err) {
+      toast({
+        title: "ID document upload failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingId(false);
+    }
   }
 
-  function goToLocationStep() {
+  async function goToLocationStep() {
     if (selfieFileError) {
       toast({ title: selfieFileError, variant: "destructive" });
       return;
     }
-    setStep("location");
+    setIsUploadingSelfie(true);
+    try {
+      await uploadSelfieIfNeeded();
+      await syncVerificationStatus();
+      setStep("location");
+    } catch (err) {
+      toast({
+        title: "Selfie upload failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingSelfie(false);
+    }
   }
 
   /** Upload helper with 1 automatic retry after a 2-second delay. */
@@ -1233,12 +1261,21 @@ export default function VerificationPage() {
                     </Button>
                     <Button
                       onClick={goToSelfieStep}
-                      disabled={!isIdReady}
+                      disabled={!isIdReady || isUploadingId}
                       variant="trust-verified"
                       className="gap-1"
                     >
-                      Continue
-                      <ArrowRight className="h-4 w-4" />
+                      {isUploadingId ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading…
+                        </>
+                      ) : (
+                        <>
+                          Continue
+                          <ArrowRight className="h-4 w-4" />
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent>
@@ -1312,12 +1349,21 @@ export default function VerificationPage() {
                     </Button>
                     <Button
                       onClick={goToLocationStep}
-                      disabled={!isSelfieReady}
+                      disabled={!isSelfieReady || isUploadingSelfie}
                       variant="trust-verified"
                       className="gap-1"
                     >
-                      Continue
-                      <ArrowRight className="h-4 w-4" />
+                      {isUploadingSelfie ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading…
+                        </>
+                      ) : (
+                        <>
+                          Continue
+                          <ArrowRight className="h-4 w-4" />
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent>
@@ -1581,7 +1627,7 @@ export default function VerificationPage() {
                           Uploaded at {formatUploadedTime(uploadReceipts.id_doc.uploadedAtIso)}
                         </p>
                       ) : (
-                        <p className="mt-1 text-muted-foreground">Uploads on final submit</p>
+                        <p className="mt-1 text-muted-foreground">Not yet uploaded</p>
                       )}
                       {idChecksumValid && idDob && (
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -1598,7 +1644,7 @@ export default function VerificationPage() {
                           Uploaded at {formatUploadedTime(uploadReceipts.selfie.uploadedAtIso)}
                         </p>
                       ) : (
-                        <p className="mt-1 text-muted-foreground">Uploads on final submit</p>
+                        <p className="mt-1 text-muted-foreground">Not yet uploaded</p>
                       )}
                     </div>
 

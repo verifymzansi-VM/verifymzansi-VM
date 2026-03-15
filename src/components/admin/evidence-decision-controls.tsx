@@ -59,6 +59,13 @@ export function EvidenceDecisionControls({
       toast({ title: "Please select a reason code", variant: "destructive" });
       return;
     }
+    if (decision !== "approved" && !reasonNote.trim()) {
+      toast({
+        title: "Please provide a written explanation for this decision",
+        variant: "destructive",
+      });
+      return;
+    }
     if (needsOverride && !overrideReasonCode) {
       toast({
         title: "Override reason required",
@@ -211,7 +218,11 @@ export function EvidenceDecisionControls({
         {/* Note templates */}
         {decision && (
           <div className="space-y-1.5">
-            <Label className="text-xs">Note (optional — click template to fill)</Label>
+            <Label className="text-xs">
+              {decision === "approved"
+                ? "Note (optional — click template to fill)"
+                : "Written Explanation (required — click template or type)"}
+            </Label>
             <div className="flex flex-wrap gap-1">
               {DECISION_NOTE_TEMPLATES.map((template, i) => (
                 <button
@@ -228,8 +239,12 @@ export function EvidenceDecisionControls({
               value={reasonNote}
               onChange={(e) => setReasonNote(e.target.value)}
               rows={2}
-              placeholder="Additional notes for this decision…"
-              className="text-xs"
+              placeholder={
+                decision === "approved"
+                  ? "Additional notes for this decision…"
+                  : "Explain the issue to the user…"
+              }
+              className={`text-xs ${decision !== "approved" && !reasonNote.trim() ? "border-destructive" : ""}`}
             />
           </div>
         )}

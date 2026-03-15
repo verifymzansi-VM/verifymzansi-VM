@@ -41,7 +41,15 @@ export const adminVerificationDecideSchema = z
   .refine((data) => data.decision === "approved" || data.reasonCode, {
     message: "Reason code is required for rejection or resubmission",
     path: ["reasonCode"],
-  });
+  })
+  .refine(
+    (data) =>
+      data.decision === "approved" || (data.reasonNote && data.reasonNote.trim().length > 0),
+    {
+      message: "A written explanation is required when rejecting or requesting resubmission",
+      path: ["reasonNote"],
+    }
+  );
 
 export const adminFlaggingActionSchema = z
   .object({
