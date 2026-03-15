@@ -1,6 +1,0 @@
-{
-  "status": 400,
-  "body": {
-    "error": "Registration failed. Please try again or use a different email."
-  }
-}

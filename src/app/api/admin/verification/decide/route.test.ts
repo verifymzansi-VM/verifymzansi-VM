@@ -511,6 +511,7 @@ describe("POST /api/admin/verification/decide", () => {
         stepId: STEP_UUID,
         decision: "resubmit",
         reasonCode: "blurry_image",
+        reasonNote: "Image is too blurry to verify identity",
       })
     );
     expect(response.status).toBe(200);

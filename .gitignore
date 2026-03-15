@@ -60,6 +60,10 @@ docs/
 !LAUNCH-HARDENING-PLAN.md
 !.github/**/*.md
 
+# ── QA evidence & temporary files ─────────────────────────────
+/evidence/
+/tmp/
+
 # ── Logs & artifacts ─────────────────────────────────────────
 *.log
 lint.json
@@ -85,6 +89,9 @@ e2e/visual-regression.spec.ts-snapshots/*
 !e2e/visual-regression.spec.ts-snapshots/homepage-dark-chromium-win32.png
 !e2e/visual-regression.spec.ts-snapshots/login-dark-chromium-win32.png
 !e2e/visual-regression.spec.ts-snapshots/pricing-dark-chromium-win32.png
+
+# ── Cloudflare Wrangler state ─────────────────────────────────
+.wrangler/
 
 # ── Claude IDE / planning ────────────────────────────────────
 .claude/
