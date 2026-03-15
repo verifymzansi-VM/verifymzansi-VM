@@ -17,9 +17,16 @@ function isSafeUrl(url: string): boolean {
 }
 
 export async function GET(request: Request) {
-  if (process.env.NODE_ENV === "production" || process.env.ENABLE_MOCK_OZOW !== "true") {
+  if (process.env.NODE_ENV === "production") {
+    log.error("Mock Ozow endpoint hit in production — blocked");
     return new NextResponse("Not found", { status: 404 });
   }
+
+  if (process.env.ENABLE_MOCK_OZOW !== "true") {
+    return new NextResponse("Not found", { status: 404 });
+  }
+
+  log.warn("Mock Ozow payment flow activated — this must not happen in production");
 
   const url = new URL(request.url);
   const paymentId = url.searchParams.get("paymentId");

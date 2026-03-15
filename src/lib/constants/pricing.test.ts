@@ -5,8 +5,12 @@ import {
   PAY_PER_POST,
   TRIAL_CONFIG,
   FREE_POST_CONFIG,
+  ACTIVE_MARKETPLACE_AREAS,
+  LEGACY_MARKETPLACE_AREAS,
   getPlansForArea,
   getPlan,
+  getCanonicalArea,
+  isLegacyArea,
   type PlanDefinition,
 } from "./pricing";
 
@@ -118,5 +122,53 @@ describe("getPlan", () => {
   it("returns undefined for non-existent combo", () => {
     // @ts-expect-error testing invalid
     expect(getPlan("MZANSI_MARKET", "enterprise")).toBeUndefined();
+  });
+});
+
+describe("legacy marketplace area helpers", () => {
+  it("identifies MALL_SHOPS as legacy", () => {
+    expect(isLegacyArea("MALL_SHOPS")).toBe(true);
+  });
+
+  it("identifies BUSINESS_ADS as legacy", () => {
+    expect(isLegacyArea("BUSINESS_ADS")).toBe(true);
+  });
+
+  it("identifies MZANSI_MARKET as not legacy", () => {
+    expect(isLegacyArea("MZANSI_MARKET")).toBe(false);
+  });
+
+  it("identifies MZANSI_BUSINESS as not legacy", () => {
+    expect(isLegacyArea("MZANSI_BUSINESS")).toBe(false);
+  });
+
+  it("identifies PROMOTIONS_EVENTS as not legacy", () => {
+    expect(isLegacyArea("PROMOTIONS_EVENTS")).toBe(false);
+  });
+
+  it("maps MALL_SHOPS to MZANSI_BUSINESS", () => {
+    expect(getCanonicalArea("MALL_SHOPS")).toBe("MZANSI_BUSINESS");
+  });
+
+  it("maps BUSINESS_ADS to MZANSI_BUSINESS", () => {
+    expect(getCanonicalArea("BUSINESS_ADS")).toBe("MZANSI_BUSINESS");
+  });
+
+  it("returns active areas unchanged", () => {
+    expect(getCanonicalArea("MZANSI_MARKET")).toBe("MZANSI_MARKET");
+    expect(getCanonicalArea("MZANSI_BUSINESS")).toBe("MZANSI_BUSINESS");
+    expect(getCanonicalArea("PROMOTIONS_EVENTS")).toBe("PROMOTIONS_EVENTS");
+  });
+
+  it("ACTIVE_MARKETPLACE_AREAS does not include legacy areas", () => {
+    for (const legacy of LEGACY_MARKETPLACE_AREAS) {
+      expect(ACTIVE_MARKETPLACE_AREAS as readonly string[]).not.toContain(legacy);
+    }
+  });
+
+  it("LEGACY_MARKETPLACE_AREAS contains only MALL_SHOPS and BUSINESS_ADS", () => {
+    expect(LEGACY_MARKETPLACE_AREAS).toHaveLength(2);
+    expect(LEGACY_MARKETPLACE_AREAS).toContain("MALL_SHOPS");
+    expect(LEGACY_MARKETPLACE_AREAS).toContain("BUSINESS_ADS");
   });
 });

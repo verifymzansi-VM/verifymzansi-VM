@@ -21,6 +21,13 @@ const HEX_PLACEHOLDER = "cafebabe".repeat(8);
 const TRUTHY_VALUES = new Set(["1", "true", "yes", "on"]);
 const DEV_ONLY_FLAGS = ["ENABLE_DEV_PAYMENT_BYPASS", "ENABLE_MOCK_OZOW", "DEV_EXPOSE_OTP"] as const;
 
+/**
+ * Environment variables that must NOT be set in production.
+ * Unlike DEV_ONLY_FLAGS (which are boolean toggles), these carry
+ * values that directly weaken security when present.
+ */
+const DANGEROUS_IN_PRODUCTION = ["BYPASS_OTP_CODE", "TEST_PHONE_NUMBERS", "SMS_MOCK"] as const;
+
 const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
   development: [
     "NEXT_PUBLIC_SUPABASE_URL",
@@ -417,6 +424,25 @@ export function validateLaunchConfiguration(
     addCheck(checks, "Dev-only flags", "warn", `Enabled: ${activeDevOnlyFlags.join(", ")}`);
   } else {
     addCheck(checks, "Dev-only flags", "pass", "No dev-only bypass flags enabled");
+  }
+
+  const dangerousVars = DANGEROUS_IN_PRODUCTION.filter((key) => hasValue(env[key]));
+  if (mode === "production" && dangerousVars.length > 0) {
+    addCheck(
+      checks,
+      "Dangerous env vars",
+      "fail",
+      `Remove before launch — these weaken security: ${dangerousVars.join(", ")}`
+    );
+  } else if (dangerousVars.length > 0) {
+    addCheck(
+      checks,
+      "Dangerous env vars",
+      "warn",
+      `Set in ${mode} (OK for dev, must remove for production): ${dangerousVars.join(", ")}`
+    );
+  } else {
+    addCheck(checks, "Dangerous env vars", "pass", "No dangerous override variables detected");
   }
 
   if (mode === "production") {
