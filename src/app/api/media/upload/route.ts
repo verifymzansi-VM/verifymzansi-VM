@@ -18,6 +18,12 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
 const MAX_FILES = 10;
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 /**
  * POST /api/media/upload
  *
@@ -170,7 +176,7 @@ export async function POST(request: NextRequest) {
         let uploadFile: File | Blob = file;
         if (file.type === "image/jpeg") {
           const stripped = stripExifFromJpeg(fileBuffer);
-          uploadFile = new Blob([stripped], { type: file.type });
+          uploadFile = new Blob([toArrayBuffer(stripped)], { type: file.type });
         }
 
         const result = await uploadToR2({
