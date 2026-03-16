@@ -297,7 +297,18 @@ export default function CreateListingPage() {
               });
               if (!uploadRes.ok) throw new Error("Failed to upload photos");
               const uploadJson = await uploadRes.json();
-              return (uploadJson.urls || []) as string[];
+              const urls = (uploadJson.urls || []) as string[];
+              const fileErrors = (uploadJson.errors || []) as string[];
+              if (urls.length === 0 && fileErrors.length > 0) {
+                throw new Error("Failed to upload photos");
+              }
+              if (fileErrors.length > 0) {
+                toast({
+                  title: `${urls.length} of ${photoFiles.length} photos uploaded. Some files were rejected.`,
+                  variant: "destructive",
+                });
+              }
+              return urls;
             })()
           : Promise.resolve([] as string[]),
 
