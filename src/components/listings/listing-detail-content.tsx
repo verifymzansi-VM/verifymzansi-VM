@@ -75,6 +75,7 @@ export function ListingDetailContent({
   showSimilarListings = true,
   similarItems = [],
   similarSellers = new Map<string, SimilarSellerRow>(),
+  photoCount,
 }: {
   listing: ListingDetailRecord;
   seller: ListingSellerRecord | null;
@@ -82,6 +83,8 @@ export function ListingDetailContent({
   showSimilarListings?: boolean;
   similarItems?: SimilarListingRow[];
   similarSellers?: Map<string, SimilarSellerRow>;
+  /** When set, passed to the carousel so blob preview URLs can be identified as video by position. */
+  photoCount?: number;
 }) {
   const trustLevel = seller ? computeTrustLevel(seller.account_verification_status ?? null) : null;
   const createdAt = new Date(listing.created_at).toLocaleDateString("en-ZA", {
@@ -101,6 +104,7 @@ export function ListingDetailContent({
             title={listing.title}
             listingId={listing.id}
             videoThumbnail={listing.video_thumbnail}
+            photoCount={photoCount}
           />
 
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">

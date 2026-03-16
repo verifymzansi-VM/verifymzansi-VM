@@ -14,6 +14,8 @@ interface ListingDetailClientProps {
   title: string;
   listingId: string;
   videoThumbnail?: string | null;
+  /** When set, items at index >= photoCount are treated as videos (needed for blob URLs with no extension). */
+  photoCount?: number;
 }
 
 function isVideoUrl(url: string): boolean {
@@ -48,6 +50,7 @@ export function ListingDetailClient({
   title,
   listingId,
   videoThumbnail,
+  photoCount,
 }: ListingDetailClientProps) {
   const allMedia = [...normalizeMediaUrls(photos), ...normalizeMediaUrls(videos)].filter(Boolean);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -59,8 +62,15 @@ export function ListingDetailClient({
     normalizeMediaUrls(photos.filter(Boolean))[0] ||
     undefined;
 
+  // When photoCount is provided, determine video by position; otherwise fall back to extension check
+  const resolvedPhotoCount = photoCount ?? normalizeMediaUrls(photos).filter(Boolean).length;
+  function isMediaVideo(index: number, url: string): boolean {
+    if (photoCount != null) return index >= resolvedPhotoCount;
+    return isVideoUrl(url);
+  }
+
   const activeUrl = allMedia[activeIndex] || "";
-  const isVideo = isVideoUrl(activeUrl);
+  const isVideo = isMediaVideo(activeIndex, activeUrl);
 
   function goTo(index: number) {
     if (index >= 0 && index < allMedia.length) {
@@ -150,7 +160,7 @@ export function ListingDetailClient({
       {allMedia.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {allMedia.map((url, i) => {
-            const isVid = isVideoUrl(url);
+            const isVid = isMediaVideo(i, url);
             return (
               <button
                 key={i}

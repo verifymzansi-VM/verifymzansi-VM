@@ -428,6 +428,7 @@ export default function CreateListingPage() {
           }}
           showContactActions={false}
           showSimilarListings={false}
+          photoCount={photoPreviewUrls.length}
         />
       </div>
     );

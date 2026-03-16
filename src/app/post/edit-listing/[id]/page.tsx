@@ -843,6 +843,7 @@ export default function EditListingPage() {
                       similarSellers={new Map()}
                       showContactActions={false}
                       showSimilarListings={false}
+                      photoCount={previewPhotos.length}
                     />
                   </div>
 
