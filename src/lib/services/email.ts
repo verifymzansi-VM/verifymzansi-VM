@@ -289,6 +289,59 @@ export async function sendPaymentReceiptEmail(
 }
 
 /**
+ * Send a notification to an existing user when someone tries to register
+ * with their email. This avoids email enumeration while giving the real
+ * owner an actionable path (sign in or reset password).
+ */
+export async function sendAlreadyRegisteredEmail(email: string): Promise<SendEmailResult> {
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const subject = "VerifyMzansi — Sign-in attempt with your email";
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #3b82f6; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
+          .button { display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .button-secondary { display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">Account Already Exists</h1>
+          </div>
+          <div class="content">
+            <p>Hi,</p>
+            <p>Someone (hopefully you) tried to create a new VerifyMzansi account with this email address, but you already have an account.</p>
+            <p>If this was you, you can sign in or reset your password:</p>
+            <p style="text-align: center;">
+              <a href="${appUrl}/login" class="button">Sign In</a>
+              &nbsp;&nbsp;
+              <a href="${appUrl}/forgot-password" class="button-secondary">Reset Password</a>
+            </p>
+            <p>If you didn't attempt to register, you can safely ignore this email. Your account is secure.</p>
+            <p>Best regards,<br>The VerifyMzansi Team</p>
+          </div>
+          <div class="footer">
+            <p>Questions? Email us at support@verifymzansi.com</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `Hi,\n\nSomeone tried to create a new VerifyMzansi account with this email address, but you already have an account.\n\nSign in: ${appUrl}/login\nReset password: ${appUrl}/forgot-password\n\nIf you didn't attempt to register, you can safely ignore this email.\n\nBest regards,\nThe VerifyMzansi Team`;
+
+  return sendEmail({ to: email, subject, html, text });
+}
+
+/**
  * Send contact form submission notification to the listing owner
  */
 export async function sendContactFormNotification(

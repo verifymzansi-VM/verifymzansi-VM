@@ -235,7 +235,7 @@ describe("middleware — authenticated routing", () => {
     expect(res.status).toBe(200);
   });
 
-  it("allows /post/create through without legacy seller verification lookup", async () => {
+  it("allows /post/create through for verified users", async () => {
     mockGetUser.mockResolvedValue({
       data: {
         user: {
@@ -246,12 +246,21 @@ describe("middleware — authenticated routing", () => {
       },
     });
 
-    // The phone-missing gate calls from("account_profiles") to check for a phone.
-    // Return a profile that already has a phone set so the gate lets the request through.
+    // The phone-missing gate and posting gate both call from("account_profiles").
+    // Return a verified profile with phone so both gates pass.
     mockFrom.mockReturnValue({
       select: () => ({
         eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: { phone: "+27600000000" }, error: null }),
+          maybeSingle: () =>
+            Promise.resolve({
+              data: {
+                phone: "+27600000000",
+                account_verification_status: "verified",
+                account_status: "active",
+                suspended_until: null,
+              },
+              error: null,
+            }),
         }),
       }),
     });
@@ -260,7 +269,7 @@ describe("middleware — authenticated routing", () => {
     expect(res.status).toBe(200);
   });
 
-  it("allows legacy /api/post/create paths through middleware without legacy seller gating", async () => {
+  it("allows /api/post/create for verified users through posting gate", async () => {
     mockGetUser.mockResolvedValue({
       data: {
         user: {
@@ -271,9 +280,25 @@ describe("middleware — authenticated routing", () => {
       },
     });
 
+    mockFrom.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () =>
+            Promise.resolve({
+              data: {
+                phone: "+27600000000",
+                account_verification_status: "verified",
+                account_status: "active",
+                suspended_until: null,
+              },
+              error: null,
+            }),
+        }),
+      }),
+    });
+
     const res = await routeRequest(createMockRequest("/api/post/create"));
     expect(res.status).toBe(200);
-    expect(mockFrom).not.toHaveBeenCalled();
   });
 
   it("allows verified posting routes when the legacy profile status is stale but all steps are approved", async () => {

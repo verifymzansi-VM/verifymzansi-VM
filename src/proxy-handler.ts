@@ -371,7 +371,12 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   }
 
   // -- Posting gate: require a verified account for posting -----------------
-  if (pathname.startsWith("/post/edit") || pathname.startsWith("/api/post/edit")) {
+  const isPostingRoute =
+    pathname.startsWith("/post/create") ||
+    pathname.startsWith("/post/edit") ||
+    pathname.startsWith("/api/post/create") ||
+    pathname.startsWith("/api/post/edit");
+  if (isPostingRoute) {
     if (user) {
       const { data: profile, error: profileError } = await supabase
         .from(ACCOUNT_PROFILE_WRITE_TABLE)

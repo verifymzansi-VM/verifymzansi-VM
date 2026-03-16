@@ -265,9 +265,11 @@ describe("OTP Routes", () => {
     });
 
     it("persists phone verification to profile, step, and session on success", async () => {
-      const challengeUpdateEq = vi.fn().mockReturnValue({
-        is: vi.fn().mockResolvedValue({ error: null }),
-      });
+      const challengeUpdateIs = vi.fn().mockResolvedValue({ error: null });
+      const challengeUpdateEq: ReturnType<typeof vi.fn> = vi.fn().mockImplementation(() => ({
+        eq: challengeUpdateEq,
+        is: challengeUpdateIs,
+      }));
       const profileUpdateEq = vi.fn().mockResolvedValue({ error: null });
       const verificationStepUpsert = vi.fn().mockResolvedValue({ error: null });
       const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -394,10 +396,11 @@ describe("OTP Routes", () => {
                 },
                 error: null,
               }),
-              update: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  is: vi.fn().mockResolvedValue({ error: null }),
-                }),
+              update: vi.fn().mockImplementation(() => {
+                const chain: Record<string, unknown> = {};
+                chain.eq = vi.fn().mockReturnValue(chain);
+                chain.is = vi.fn().mockResolvedValue({ error: null });
+                return chain;
               }),
             };
           }

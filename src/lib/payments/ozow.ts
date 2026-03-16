@@ -33,12 +33,12 @@ function toSafeString(value: unknown): string | null {
 }
 
 function createTimingSafeMatch(expected: string, received: string): boolean {
-  const expectedBuffer = Buffer.from(expected);
-  const receivedBuffer = Buffer.from(received);
-  if (expectedBuffer.length !== receivedBuffer.length) {
-    return false;
-  }
-  return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
+  // HMAC both values with a fixed key to produce equal-length outputs,
+  // avoiding a timing side-channel on length differences.
+  const key = expected; // use expected as HMAC key
+  const a = crypto.createHmac("sha256", key).update(expected).digest();
+  const b = crypto.createHmac("sha256", key).update(received).digest();
+  return crypto.timingSafeEqual(a, b);
 }
 
 async function getOzowAccessToken(forceRefresh = false): Promise<string> {

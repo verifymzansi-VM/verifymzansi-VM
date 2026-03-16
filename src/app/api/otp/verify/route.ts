@@ -289,11 +289,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Mark this challenge as verified atomically.
+    // Mark ALL pending challenges for this user+phone as verified so older
+    // OTPs cannot be replayed after a newer one succeeds.
     await adminSupabase
       .from("otp_challenges")
       .update({ verified_at: nowIso })
-      .eq("id", challenge.id)
+      .eq("user_id", user.id)
+      .eq("phone", phone)
       .is("verified_at", null);
 
     const verificationResult = await finalizePhoneVerification(

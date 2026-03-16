@@ -13,6 +13,7 @@ import {
 } from "@/lib/utils/phone";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { sendAlreadyRegisteredEmail } from "@/lib/services/email";
 
 const log = createLogger("Register");
 
@@ -155,6 +156,14 @@ export async function POST(request: NextRequest) {
       signUpData?.user && (!signUpData.user.identities || signUpData.user.identities.length === 0);
 
     if (isExistingAccount) {
+      // Non-blocking: notify the existing account owner so they have
+      // an actionable path (sign in or reset password) without leaking
+      // account existence to the requester.
+      sendAlreadyRegisteredEmail(parsedBody.data.email).catch((err) => {
+        log.warn("Failed to send already-registered email", {
+          error: err instanceof Error ? err.message : "Unknown",
+        });
+      });
       return NextResponse.json({ success: true });
     }
 

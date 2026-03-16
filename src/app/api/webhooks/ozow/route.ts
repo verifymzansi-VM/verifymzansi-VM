@@ -65,13 +65,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Currency mismatch" }, { status: 400 });
     }
 
-    if (payload.amount && payload.amount !== toAmountString(payment.amount_cents)) {
-      log.error("Ozow amount mismatch", {
-        paymentId: payment.id,
-        expected: toAmountString(payment.amount_cents),
-        received: payload.amount,
-      });
-      return NextResponse.json({ error: "Amount mismatch" }, { status: 400 });
+    if (payload.amount) {
+      const receivedCents = Math.round(parseFloat(payload.amount) * 100);
+      if (!Number.isFinite(receivedCents) || receivedCents !== payment.amount_cents) {
+        log.error("Ozow amount mismatch", {
+          paymentId: payment.id,
+          expected: toAmountString(payment.amount_cents),
+          received: payload.amount,
+        });
+        return NextResponse.json({ error: "Amount mismatch" }, { status: 400 });
+      }
     }
 
     const eventType = payload.eventType?.toLowerCase() || "";

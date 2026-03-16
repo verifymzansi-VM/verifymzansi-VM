@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, RefreshCw, MailCheck, Send } from "lucide-react";
+import { Loader2, Eye, EyeOff, RefreshCw, MailCheck, Mail, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -312,7 +312,7 @@ export default function LoginPage() {
 
       {emailNotConfirmed && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
-          <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <Mail className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <div className="space-y-2">
             <p className="text-sm font-medium text-foreground">Email not confirmed</p>
             <p className="text-sm text-muted-foreground">
@@ -431,7 +431,7 @@ export default function LoginPage() {
         {captchaUnavailable && <p className="inline-form-error">{TURNSTILE_UNAVAILABLE_MESSAGE}</p>}
         {turnstileError && (
           <div className="flex items-center gap-2">
-            <p className="inline-form-error">Security verification failed to load.</p>
+            <p className="inline-form-error">Security check failed to load.</p>
             <button
               type="button"
               onClick={handleRetry}

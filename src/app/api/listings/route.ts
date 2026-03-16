@@ -322,7 +322,7 @@ export async function GET(request: NextRequest) {
           })
       );
 
-      listings = normalizeOwnerRecords(filteredListings);
+      listings = filteredListings;
       total = Math.max(
         0,
         (count ?? filteredListings.length) - ((data?.length ?? 0) - filteredListings.length)
@@ -468,6 +468,7 @@ export async function POST(request: NextRequest) {
             error: "Free post already used",
             reason:
               "You have already used your free post for Mzansi Market. Subscribe to a plan to post more.",
+            upgradeUrl: "/billing",
           },
           { status: 403 }
         );

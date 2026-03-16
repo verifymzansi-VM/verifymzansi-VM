@@ -55,7 +55,7 @@ export default function RegisterPage() {
   useEffect(() => {
     if (skipTurnstileTimeout || turnstileLoaded) return;
     timeoutRef.current = setTimeout(() => {
-      setTurnstileError("Security verification failed to load.");
+      setTurnstileError("Security check failed to load.");
       setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
     }, 15000);
     return () => {
@@ -83,13 +83,13 @@ export default function RegisterPage() {
 
   const handleTurnstileError = useCallback(() => {
     setCaptchaUnavailable(false);
-    setTurnstileError("CAPTCHA verification failed. Please try again.");
+    setTurnstileError("Security check failed. Please try again.");
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
   }, [setValue]);
 
   const handleTurnstileExpire = useCallback(() => {
-    setTurnstileError("CAPTCHA expired. Please verify again.");
+    setTurnstileError("Security check expired. Please verify again.");
     setValue("turnstileToken", "", { shouldValidate: true });
   }, [setValue]);
 
