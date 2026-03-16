@@ -17,7 +17,7 @@ function createBaseProductionEnv(): EnvSource {
     NODE_ENV: "production",
     NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test-key-long-enough",
-    SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.service-role-key",
+    SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.service-role-key", // secret-scan: allow
     NEXT_PUBLIC_APP_URL: "https://verifymzansi.com",
     AFRICASTALKING_API_KEY: "real-api-key-value",
     AFRICASTALKING_USERNAME: "verifymzansi",
@@ -31,7 +31,7 @@ function createBaseProductionEnv(): EnvSource {
     HMAC_SECRET: hex64,
     IP_HASH_SECRET: "a".repeat(32),
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAACmVXwJ4jmJSu6fX",
-    TURNSTILE_SECRET_KEY: "0x4AAAAAACmVXwJ4jmJSu6fY",
+    TURNSTILE_SECRET_KEY: "0x4AAAAAACmVXwJ4jmJSu6fY", // secret-scan: allow
     OZOW_ENV: "production",
     OZOW_CLIENT_ID: "ozow-client-id",
     OZOW_CLIENT_SECRET: "ozow-client-secret",
