@@ -15,7 +15,7 @@ export async function requireVerifiedPostAccess(returnUrl: string) {
 
   const verification = await resolveAccountVerification(supabase, user.id);
 
-  if (!verification.profile || !isVerifiedMember(verification.accountVerificationStatus)) {
+  if (!isVerifiedMember(verification.accountVerificationStatus)) {
     redirect(buildVerificationRedirectUrl(returnUrl));
   }
 }
