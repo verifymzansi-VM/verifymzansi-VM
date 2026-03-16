@@ -373,8 +373,11 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   }
 
   // -- Posting gate: require a verified account for posting -----------------
+  // /post/create is the category-selection page — it handles unverified users
+  // in-client (shows a verification alert + redirects category links to
+  // /verification). Only the actual creation/edit sub-routes need gating.
   const isPostingRoute =
-    pathname.startsWith("/post/create") ||
+    (pathname.startsWith("/post/create") && pathname !== "/post/create") ||
     pathname.startsWith("/post/edit") ||
     pathname.startsWith("/api/post/create") ||
     pathname.startsWith("/api/post/edit");
@@ -393,15 +396,6 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
           error: profileError.message,
           code: profileError.code,
         });
-
-        if (isApiRoute) {
-          return NextResponse.json(
-            { error: "Posting eligibility service unavailable" },
-            { status: 503 }
-          );
-        }
-
-        return NextResponse.redirect(new URL("/dashboard", request.url));
       }
 
       if (profile?.account_status === "banned") {
@@ -441,19 +435,10 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
             error: verificationStepsError.message,
             code: verificationStepsError.code,
           });
-
-          if (isApiRoute) {
-            return NextResponse.json(
-              { error: "Posting eligibility service unavailable" },
-              { status: 503 }
-            );
-          }
-
-          return NextResponse.redirect(new URL("/dashboard", request.url));
         }
 
         canPost =
-          summarizeVerification(profile?.account_verification_status, verificationSteps)
+          summarizeVerification(profile?.account_verification_status, verificationSteps ?? [])
             .accountVerificationStatus === "verified";
       }
 
