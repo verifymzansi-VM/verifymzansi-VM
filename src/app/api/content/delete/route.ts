@@ -129,9 +129,22 @@ export async function POST(request: Request) {
       deleteErrorMessage =
         (deleteResult.error as unknown as { message?: string | null } | null)?.message ?? null;
     } else {
+      // Storefronts (MALL_SHOPS) — probe owner column since the table
+      // may use owner_id or seller_id depending on migration state.
+      let storefrontOwnerCol: "owner_id" | "seller_id" = "owner_id";
+      try {
+        const probe = await admin.from(config.table).select("id, owner_id").limit(1);
+        if ((probe.error as unknown as { code?: string } | null)?.code === "42703") {
+          storefrontOwnerCol = "seller_id";
+        }
+      } catch {
+        // Fall back to owner_id
+      }
+
+      const selectCols = `id, status, ${storefrontOwnerCol}`;
       const { data: fetchedItem, error: fetchError } = await admin
         .from(config.table)
-        .select("id, status, owner_id")
+        .select(selectCols)
         .eq("id", itemId)
         .single();
 
@@ -139,13 +152,22 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
       }
 
-      item = fetchedItem;
+      const typedItem = fetchedItem as Record<string, unknown>;
+      item = {
+        id: typedItem.id as string,
+        status: typedItem.status as string,
+        owner_id: (typedItem.owner_id ?? typedItem.seller_id ?? null) as string | null,
+      };
 
       if (item.owner_id !== user.id) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
 
-      const deleteResult = await admin.from(config.table).delete().eq("id", itemId);
+      const deleteResult = await admin
+        .from(config.table)
+        .delete()
+        .eq("id", itemId)
+        .eq(storefrontOwnerCol, user.id);
       deleteErrorMessage =
         (deleteResult.error as unknown as { message?: string | null } | null)?.message ?? null;
     }

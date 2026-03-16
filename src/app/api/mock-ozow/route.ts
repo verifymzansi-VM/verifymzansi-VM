@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createLogger } from "@/lib/utils/logger";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const log = createLogger("MockOzow");
 
@@ -34,6 +35,29 @@ export async function GET(request: Request) {
   const returnUrl = url.searchParams.get("returnUrl");
 
   if (paymentId) {
+    // Guard: verify the payment exists and was created in the mock flow
+    // to prevent completing real payments via the mock endpoint
+    try {
+      const supabase = createAdminClient();
+      const { data: payment } = await supabase
+        .from("payments")
+        .select("id, provider")
+        .eq("id", paymentId)
+        .eq("provider", "mock-ozow")
+        .maybeSingle();
+
+      if (!payment) {
+        log.warn("Mock Ozow attempted on non-mock payment", { paymentId });
+        return new NextResponse("Payment not found or not a mock payment", { status: 404 });
+      }
+    } catch (error) {
+      log.error("Mock Ozow payment verification failed", {
+        paymentId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      return new NextResponse("Internal error", { status: 500 });
+    }
+
     const payload = {
       eventType: "transaction.complete",
       data: {

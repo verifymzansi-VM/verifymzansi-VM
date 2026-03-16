@@ -198,10 +198,15 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: ACCOUNT_PHONE_IN_USE_ERROR }, { status: 409 });
         }
 
-        log.warn("Failed to create account profile on registration", {
+        log.error("Failed to create account profile on registration — cleaning up auth user", {
           userId: signUpData.user.id,
           error: profileError instanceof Error ? profileError.message : "Unknown",
         });
+        await deleteOrphanedAuthUser(signUpData.user.id, admin);
+        return NextResponse.json(
+          { error: "Registration failed. Please try again." },
+          { status: 500 }
+        );
       }
     }
 

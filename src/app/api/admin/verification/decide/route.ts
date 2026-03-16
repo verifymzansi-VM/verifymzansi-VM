@@ -257,13 +257,15 @@ export async function POST(request: Request) {
               : step.step_type === "phone"
                 ? "Phone"
                 : step.step_type;
+      // Lowercase label for inline use — preserves "ID" casing
+      const stepLabelInline = step.step_type === "id_doc" ? "ID document" : stepLabelInline;
 
       if (decision === "approved") {
         await createNotification({
           userId: step.user_id,
           type: "success",
           title: `${stepLabel} verification approved`,
-          message: `Your ${stepLabel.toLowerCase()} verification step has been approved.`,
+          message: `Your ${stepLabelInline} verification step has been approved.`,
           href: "/verification",
         });
       } else if (decision === "needs_resubmission") {
@@ -272,8 +274,8 @@ export async function POST(request: Request) {
           type: "warning",
           title: `${stepLabel} needs resubmission`,
           message: reasonNote
-            ? `Please resubmit your ${stepLabel.toLowerCase()}: ${reasonNote.slice(0, 80)}`
-            : `Please resubmit your ${stepLabel.toLowerCase()} verification.`,
+            ? `Please resubmit your ${stepLabelInline}: ${reasonNote.slice(0, 80)}`
+            : `Please resubmit your ${stepLabelInline} verification.`,
           href: "/verification",
         });
       } else {
@@ -283,7 +285,7 @@ export async function POST(request: Request) {
           title: `${stepLabel} verification rejected`,
           message: reasonNote
             ? reasonNote.slice(0, 100)
-            : `Your ${stepLabel.toLowerCase()} verification was not accepted.`,
+            : `Your ${stepLabelInline} verification was not accepted.`,
           href: "/verification",
         });
       }

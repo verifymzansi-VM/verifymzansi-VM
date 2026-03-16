@@ -7,6 +7,7 @@ import { PLAYWRIGHT_SESSION_COOKIE } from "@/lib/supabase/playwright-stub";
 import { isPlaywrightSupabaseStubMode, isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 function ensureEnabled() {
+  if (process.env.NODE_ENV === "production") return false;
   return isPlaywrightTestMode() && isPlaywrightSupabaseStubMode();
 }
 

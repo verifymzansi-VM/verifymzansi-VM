@@ -74,6 +74,28 @@ export async function fulfillPayment(
     log.warn("Owner column detection failed, falling back to owner_id");
   }
 
+  // Storefronts are not in OWNER_COMPAT_TABLES — probe separately
+  let storefrontsOwnerCol: OwnerColumn = "owner_id";
+  try {
+    const probe = await (
+      supabase as unknown as {
+        from: (t: string) => {
+          select: (s: string) => {
+            limit: (n: number) => Promise<{ error?: { code?: string } | null }>;
+          };
+        };
+      }
+    )
+      .from("storefronts")
+      .select("id, owner_id")
+      .limit(1);
+    if (probe.error?.code === "42703") {
+      storefrontsOwnerCol = "seller_id";
+    }
+  } catch {
+    log.warn("Storefront owner column detection failed, falling back to owner_id");
+  }
+
   const planId = typeof meta.plan_id === "string" ? meta.plan_id : null;
   if (planId) {
     const { data: plan } = await supabase
@@ -167,7 +189,7 @@ export async function fulfillPayment(
       .from("storefronts")
       .update({ boost_until: boostUntil })
       .eq("id", meta.storefront_id)
-      .eq(listingsOwnerCol, payment.user_id);
+      .eq(storefrontsOwnerCol, payment.user_id);
     if (error) {
       throw new Error(`Storefront boost update failed: ${error.message}`);
     }
@@ -246,7 +268,7 @@ export async function fulfillPayment(
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",
-      action: "listing_boosted",
+      action: "promotion_boosted",
       targetType: "promotion",
       targetId: meta.promotion_id,
       metadata: { paymentId: payment.id, boostDays, boostUntil },
@@ -270,7 +292,7 @@ export async function fulfillPayment(
     await logAuditEvent({
       actorId: payment.user_id || SYSTEM_ACTOR_ID,
       actorRole: "member",
-      action: "listing_featured",
+      action: "promotion_featured",
       targetType: "promotion",
       targetId: meta.promotion_id,
       metadata: { paymentId: payment.id, featureDays, featuredUntil },

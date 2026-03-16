@@ -125,6 +125,7 @@ export async function POST(request: NextRequest) {
             error: "Free post already used",
             reason:
               "You have already used your free post for Mzansi Business. Subscribe to a plan to post more.",
+            upgradeUrl: "/billing",
           },
           { status: 403 }
         );

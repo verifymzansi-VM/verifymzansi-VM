@@ -151,6 +151,11 @@ function normalizeListingSelectShape(
  * GET /api/listings
  *
  * Public listing discovery endpoint for Mzansi Market with filtering and pagination.
+ *
+ * NOTE: Uses admin client (bypasses RLS) intentionally for public marketplace reads.
+ * Security relies on explicit application-level filters (.eq("status", "live"),
+ * .neq("status", "rejected"), etc.) rather than RLS policies. This allows efficient
+ * queries with seller profile joins that would be restricted by user-scoped RLS.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -558,6 +563,21 @@ export async function POST(request: NextRequest) {
       user.id
     );
 
+    // ── Claim free post slot BEFORE inserting listing (prevents race condition) ──
+    if (!hasPaidPlan && !postingLimitBypassEnabled) {
+      const { error: freePostError } = await admin
+        .from("free_posts_used")
+        .upsert({ user_id: user.id, area: AREA }, { onConflict: "user_id,area" });
+
+      if (freePostError) {
+        log.error("Failed to claim free post slot", {
+          error: freePostError.message,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
+      }
+    }
+
     // ── Insert listing ───────────────────────────────────────
     const { data: newListing, error: insertError } = await admin
       .from("listings")
@@ -570,25 +590,14 @@ export async function POST(request: NextRequest) {
         error: insertError.message,
         userId: user.id,
       });
+      // Release free post slot if listing insert failed
+      if (!hasPaidPlan && !postingLimitBypassEnabled) {
+        await admin.from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+      }
       return NextResponse.json(
         { error: "Failed to create listing", details: insertError.message },
         { status: 500 }
       );
-    }
-
-    // ── Mark free post as used if no paid entitlement ────────
-    if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: freePostError } = await admin
-        .from("free_posts_used")
-        .upsert({ user_id: user.id, area: AREA }, { onConflict: "user_id,area" });
-
-      if (freePostError) {
-        log.error("Failed to mark free post as used", {
-          error: freePostError.message,
-          userId: user.id,
-        });
-        // Don't fail the request — the listing was already created
-      }
     }
 
     // ── Audit log ────────────────────────────────────────────

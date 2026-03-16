@@ -19,11 +19,18 @@ export async function POST(request: NextRequest) {
     const webhookSecret = process.env.OZOW_WEBHOOK_SECRET;
     const isProduction = process.env.NODE_ENV === "production";
 
-    if (isProduction && !webhookSecret) {
-      return NextResponse.json({ error: "Ozow webhook temporarily unavailable" }, { status: 503 });
+    if (!webhookSecret) {
+      if (isProduction) {
+        return NextResponse.json(
+          { error: "Ozow webhook temporarily unavailable" },
+          { status: 503 }
+        );
+      }
+      log.warn("OZOW_WEBHOOK_SECRET is not set — rejecting unsigned webhook in non-production");
+      return NextResponse.json({ error: "Webhook secret not configured" }, { status: 503 });
     }
 
-    if (webhookSecret && !verifyOzowWebhookSignature(rawBody, signature)) {
+    if (!verifyOzowWebhookSignature(rawBody, signature)) {
       log.warn("Invalid Ozow webhook signature");
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
     }
@@ -151,7 +158,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Payment fulfillment failed" }, { status: 500 });
     }
 
-    await supabase
+    const { error: completeError } = await supabase
       .from("payments")
       .update({
         status: "complete",
@@ -174,6 +181,15 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", payment.id)
       .eq("provider", "ozow");
+
+    if (completeError) {
+      log.error("Failed to mark payment as complete after successful fulfillment", {
+        paymentId: payment.id,
+        error: completeError.message,
+      });
+      // Fulfillment already succeeded — return success so Ozow doesn't retry,
+      // but log critically so a reconciliation process can fix the status.
+    }
 
     return NextResponse.json({
       success: true,

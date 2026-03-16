@@ -421,13 +421,32 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
               .from(ACCOUNT_PROFILE_WRITE_TABLE)
               .update({ account_status: "active", suspended_until: null })
               .eq("user_id", user.id);
+
+            // Restore content hidden during suspension (non-blocking, best-effort).
+            // Uses the user-scoped client — depends on RLS allowing owner updates.
+            // If RLS blocks this, content restoration falls back to admin/moderator unban.
+            Promise.all([
+              supabase.from("listings").update({ status: "live" }).eq("status", "hidden"),
+              supabase.from("businesses").update({ status: "live" }).eq("status", "hidden"),
+              supabase.from("promotions").update({ status: "live" }).eq("status", "hidden"),
+            ]).catch((err) => {
+              logger.warn("Auto-unsuspend content restoration failed (non-blocking)", {
+                userId: user.id,
+                error: err instanceof Error ? err.message : "Unknown",
+              });
+            });
           } catch {
             // Auto-unsuspend failed — still allow the request so the user
             // isn't permanently locked out; the next request will retry.
           }
         } else {
           if (isApiRoute) return NextResponse.json({ error: "Suspended" }, { status: 403 });
-          return NextResponse.redirect(new URL("/dashboard", request.url));
+          const suspendedUrl = new URL("/dashboard", request.url);
+          suspendedUrl.searchParams.set("suspended", "true");
+          if (profile.suspended_until) {
+            suspendedUrl.searchParams.set("until", profile.suspended_until);
+          }
+          return NextResponse.redirect(suspendedUrl);
         }
       }
 
