@@ -6,9 +6,6 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { encryptFile, decryptFile } from "@/lib/utils/encryption";
-import crypto from "crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
 
 /**
  * R2-compatible object storage helpers for listing images
@@ -88,6 +85,8 @@ function getR2Client(): S3Client {
  */
 export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
   if (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
     const arrayBuffer = await params.file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const publicRoot = path.join(process.cwd(), "public", "e2e-media");
@@ -140,7 +139,7 @@ export function generateStorageKey(prefix: string, ownerId: string, filename: st
   }
   const ext = (filename.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "");
   const timestamp = Date.now();
-  const random = crypto.randomUUID().slice(0, 8);
+  const random = globalThis.crypto.randomUUID().slice(0, 8);
   return `${safePrefix}/${safeOwnerId}/${timestamp}-${random}.${ext}`;
 }
 
