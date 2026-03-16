@@ -152,7 +152,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
       }
 
-      const typedItem = fetchedItem as Record<string, unknown>;
+      const typedItem = fetchedItem as unknown as Record<string, unknown>;
       item = {
         id: typedItem.id as string,
         status: typedItem.status as string,

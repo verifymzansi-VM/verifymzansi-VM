@@ -74,7 +74,9 @@ function artifactSyncChain(resolvedValue = { error: null }) {
 /** Build a chainable mock for the purge update:
  *  .update().eq().is()
  */
-function artifactPurgeChain(resolvedValue = { error: null }) {
+function artifactPurgeChain(
+  resolvedValue: { error: null | { message: string } } = { error: null }
+) {
   return {
     update: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
