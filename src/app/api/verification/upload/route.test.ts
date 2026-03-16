@@ -51,6 +51,22 @@ vi.mock("@/lib/utils/logger", () => ({
   }),
 }));
 
+vi.mock("@/lib/utils/file-validation", () => ({
+  validateBufferIntegrity: vi.fn(() => ({
+    valid: true,
+    detectedMime: "image/jpeg",
+    mismatch: false,
+  })),
+}));
+
+vi.mock("@/lib/utils/malware-scan", () => ({
+  scanForMalware: vi.fn(() => ({ safe: true })),
+}));
+
+vi.mock("@/lib/utils/exif-strip", () => ({
+  stripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
+}));
+
 import { POST } from "./route";
 
 // ── Helpers ──────────────────────────────────────────────────

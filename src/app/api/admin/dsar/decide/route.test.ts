@@ -36,6 +36,10 @@ vi.mock("@/lib/utils/logger", () => ({
   }),
 }));
 
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: () => null,
+}));
+
 import { POST } from "./route";
 
 function createMockRequest(body: Record<string, unknown>) {

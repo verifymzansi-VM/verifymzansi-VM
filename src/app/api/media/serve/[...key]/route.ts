@@ -61,7 +61,9 @@ const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg"]);
 function deriveFilename(key: string): string {
   const lastSegment = key.split("/").pop() ?? key;
   // Strip leading timestamp/UUID prefix (e.g. "17200000-" or "a1b2c3d4-")
-  return lastSegment.replace(/^[\da-f]+-/i, "") || lastSegment;
+  const name = lastSegment.replace(/^[\da-f]+-/i, "") || lastSegment;
+  // Sanitize for Content-Disposition header: remove quotes, newlines, and control chars
+  return name.replace(/["\r\n\x00-\x1f]/g, "_");
 }
 
 /**

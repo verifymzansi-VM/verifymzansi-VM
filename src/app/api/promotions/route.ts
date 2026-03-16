@@ -370,6 +370,7 @@ export async function GET(request: NextRequest) {
         .from("promotions")
         .select(selectClause, { count: "exact" })
         .eq("status", "live")
+        .or(`end_date.is.null,end_date.gte.${nowIso}`)
         .not("title", "ilike", "%seed%")
         .not("title", "ilike", "%[seed]%")
         .not("title", "ilike", "%demo%")

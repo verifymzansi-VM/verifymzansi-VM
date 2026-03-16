@@ -1,17 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canFeatured } from "@/lib/services/entitlements";
 import { logAuditEvent } from "@/lib/services/audit";
 import { ADDON_PRICES, FEATURED_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { createHostedCheckout } from "@/lib/payments/checkout";
+import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
   getOwnerColumn,
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
+import type { MarketplaceArea } from "@/types/enums";
 
 const log = createLogger("PromotionFeaturedCheckout");
 type PromotionCheckoutRow = {
@@ -85,6 +88,15 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     // Check if already featured
     if (promotion.featured_until && new Date(promotion.featured_until) > new Date()) {
       return NextResponse.json({ error: "This promotion is already featured" }, { status: 400 });
+    }
+
+    // Check entitlement — requires Growth or Pro plan
+    const area = "PROMOTIONS_EVENTS" as MarketplaceArea;
+    const tier = await getActivePlanTierForArea(user.id, area);
+    const featuredCheck = canFeatured(tier, area);
+
+    if (!featuredCheck.allowed) {
+      return NextResponse.json({ error: featuredCheck.reason }, { status: 403 });
     }
 
     const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";

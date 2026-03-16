@@ -7,6 +7,9 @@ import { fileUploadSchema, validateUploadedFile } from "@/lib/validations/verifi
 import { processKycArtifact } from "@/lib/services/kyc-engine";
 import { createLogger } from "@/lib/utils/logger";
 import { isStrictLocalDevelopmentRequest } from "@/lib/utils/local-dev";
+import { stripExifFromJpeg } from "@/lib/utils/exif-strip";
+import { scanForMalware } from "@/lib/utils/malware-scan";
+import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
@@ -202,7 +205,43 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Read file bytes once for SHA-256 and upload ───────────
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    let fileBuffer = Buffer.from(await file.arrayBuffer());
+
+    // ── Server-side magic-byte MIME validation ────────────────
+    const integrity = validateBufferIntegrity(fileBuffer, file.type);
+    if (!integrity.valid) {
+      log.warn("File MIME mismatch detected", {
+        declared: file.type,
+        detected: integrity.detectedMime,
+        userId: user.id,
+      });
+      return NextResponse.json(
+        { error: "File type does not match its content. Please upload a valid image or document." },
+        { status: 400 }
+      );
+    }
+
+    // ── Malware scan ──────────────────────────────────────────
+    const scanResult = scanForMalware(fileBuffer, file.type);
+    if (!scanResult.safe) {
+      log.warn("Malware detected in KYC upload", {
+        threat: scanResult.threat,
+        userId: user.id,
+        fileName: file.name,
+      });
+      return NextResponse.json(
+        {
+          error:
+            "This file was rejected because it contains suspicious content. Please upload a clean photo.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ── Strip EXIF metadata from JPEG files (POPIA data minimization) ──
+    if (file.type === "image/jpeg" || integrity.detectedMime === "image/jpeg") {
+      fileBuffer = Buffer.from(stripExifFromJpeg(fileBuffer));
+    }
 
     // ── Upload encrypted file to R2 (or local dev fallback) ──
     let uploadResult: { url: string; key: string };

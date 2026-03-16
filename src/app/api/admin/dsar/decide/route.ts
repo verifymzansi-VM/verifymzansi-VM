@@ -7,6 +7,7 @@ import { adminDsarDecideSchema } from "@/lib/validations/admin";
 import { isAdmin } from "@/lib/auth/roles";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("DSARDecide");
 
@@ -17,6 +18,9 @@ const log = createLogger("DSARDecide");
  */
 export async function POST(req: Request) {
   try {
+    const originBlock = enforceSameOriginMutation(req, log);
+    if (originBlock) return originBlock;
+
     const supabase = await createClient();
     const {
       data: { user },

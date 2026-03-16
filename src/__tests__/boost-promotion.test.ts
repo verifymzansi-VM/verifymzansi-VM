@@ -31,6 +31,12 @@ vi.mock("@/lib/config/env", () => ({
 vi.mock("@/lib/payments/checkout", () => ({
   createHostedCheckout: (...args: unknown[]) => mockCreateHostedCheckout(...args),
 }));
+vi.mock("@/lib/services/entitlements", () => ({
+  canBoost: vi.fn(() => ({ allowed: true })),
+}));
+vi.mock("@/lib/services/plan-tier", () => ({
+  getActivePlanTierForArea: vi.fn().mockResolvedValue("growth"),
+}));
 vi.mock("@/lib/constants/pricing", () => ({
   ADDON_PRICES: { boost: 1500, featured: 2500, urgent: 1000 },
   BOOST_DURATION_DAYS: 7,

@@ -103,7 +103,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       })
       .then(() => {});
 
-    return NextResponse.json({ business: normalizedBusiness, promotions: promotions ?? [] });
+    // Strip owner identifiers from public response (POPIA data minimization)
+    const { owner_id: _oid, seller_id: _sid, ...publicBusiness } = normalizedBusiness;
+    return NextResponse.json({ business: publicBusiness, promotions: promotions ?? [] });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
     return NextResponse.json({ error: "Failed to fetch business" }, { status: 500 });
@@ -251,8 +253,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           operating_hours: data.operating_hours,
           payment_methods_accepted: data.payment_methods_accepted,
           delivery_options: data.delivery_options,
-          // Re-trigger moderation on edit so changed content is reviewed
-          status: "pending_moderation",
+          // Re-trigger moderation only for live businesses so changed content is reviewed.
+          // Draft and rejected businesses keep their current status.
+          ...(existing.status === "live" ? { status: "pending_moderation" as const } : {}),
         })
         .eq("id", id),
       ownerColumn,

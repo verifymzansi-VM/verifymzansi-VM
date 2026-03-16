@@ -434,7 +434,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Link href="/dashboard/businesses">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
             <CardContent className="flex items-center gap-3 py-4">

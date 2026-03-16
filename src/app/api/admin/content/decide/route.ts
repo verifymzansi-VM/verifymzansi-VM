@@ -9,6 +9,7 @@ import { getRoleFromUser, isModeratorOrAdmin, asAdminRole } from "@/lib/auth/rol
 import { getOwnerColumn, readOwnerId } from "@/lib/account/compat";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("AdminContentDecide");
 
@@ -18,6 +19,8 @@ const log = createLogger("AdminContentDecide");
  */
 export async function POST(request: Request) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
     const supabase = await createClient();
     const {
       data: { user },

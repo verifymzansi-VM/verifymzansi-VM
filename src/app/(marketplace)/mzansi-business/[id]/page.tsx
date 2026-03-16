@@ -23,6 +23,7 @@ export async function generateMetadata({ params }: BusinessDetailPageProps): Pro
     .from("businesses")
     .select("business_name, description")
     .eq("id", id)
+    .eq("status", "live")
     .single();
 
   if (!business) {
@@ -89,13 +90,13 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
     },
   };
 
+  // Escape </script> sequences to prevent XSS via JSON-LD injection
+  const safeJsonLd = JSON.stringify(jsonLd).replace(/<\//g, "<\\/");
+
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
       <Header />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd }} />
 
       <main className="flex-1">
         <div className="container-page space-y-5 py-4">

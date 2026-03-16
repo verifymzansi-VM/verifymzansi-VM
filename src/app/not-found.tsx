@@ -3,10 +3,11 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { MobileNav } from "@/components/layout/mobile-nav";
 
 export default function NotFound() {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col pb-16 md:pb-0">
       <Header />
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4 text-center">
         <Search className="h-8 w-8 text-muted-foreground" />
@@ -26,6 +27,7 @@ export default function NotFound() {
         </div>
       </main>
       <Footer />
+      <MobileNav />
     </div>
   );
 }
