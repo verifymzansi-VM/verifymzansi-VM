@@ -73,8 +73,14 @@ export async function GET(request: Request) {
 
         // New OAuth users go to complete-profile to add their phone number;
         // returning users go to their requested destination.
-        const oauthDest = isNewOAuthUser ? "/dashboard/complete-profile" : next || "/dashboard";
-        return NextResponse.redirect(`${origin}${oauthDest}`);
+        if (isNewOAuthUser) {
+          const completeProfileUrl = new URL("/dashboard/complete-profile", origin);
+          if (next && next !== "/dashboard") {
+            completeProfileUrl.searchParams.set("returnUrl", next);
+          }
+          return NextResponse.redirect(completeProfileUrl);
+        }
+        return NextResponse.redirect(`${origin}${next || "/dashboard"}`);
       }
 
       return NextResponse.redirect(`${origin}${next}`);

@@ -318,7 +318,9 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         .maybeSingle();
 
       if (phoneProfile && !phoneProfile.phone) {
-        return NextResponse.redirect(new URL("/dashboard/complete-profile", request.url));
+        const completeProfileUrl = new URL("/dashboard/complete-profile", request.url);
+        completeProfileUrl.searchParams.set("returnUrl", pathname);
+        return NextResponse.redirect(completeProfileUrl);
       }
     } catch {
       // Non-blocking: if we can't check, let the user through.

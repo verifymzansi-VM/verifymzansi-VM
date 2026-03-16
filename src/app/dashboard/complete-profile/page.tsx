@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { saPhoneSchema } from "@/lib/validations/shared";
 import { ACCOUNT_PHONE_IN_USE_ERROR } from "@/lib/utils/phone";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
+import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 
 export default function CompleteProfilePage() {
   const [phone, setPhone] = useState("");
@@ -96,7 +97,10 @@ export default function CompleteProfilePage() {
       }
 
       toast({ title: "Phone number saved!", variant: "success" });
-      router.push("/dashboard/profile");
+      const returnUrl = sanitizeReturnUrl(
+        new URLSearchParams(window.location.search).get("returnUrl")
+      );
+      router.push(returnUrl);
     } catch {
       toast({ title: "Something went wrong", variant: "destructive" });
     } finally {
