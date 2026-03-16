@@ -331,13 +331,14 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   const isProtectedRoute = protectedPrefixes
     .filter((prefix) => prefix !== "/admin" && prefix !== "/api/admin")
     .some((p) => pathname.startsWith(p));
+  const protectedReturnUrl = `${pathname}${request.nextUrl.search}`;
 
   if (!user && isProtectedRoute) {
     if (isApiRoute) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("returnUrl", pathname);
+    loginUrl.searchParams.set("returnUrl", protectedReturnUrl);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -347,7 +348,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("returnUrl", pathname);
+    loginUrl.searchParams.set("returnUrl", protectedReturnUrl);
     return NextResponse.redirect(loginUrl);
   }
 

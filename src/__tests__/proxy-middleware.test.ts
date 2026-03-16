@@ -138,6 +138,21 @@ describe("middleware — authenticated routing", () => {
     expect(location.searchParams.get("returnUrl")).toBe("/dashboard");
   });
 
+  it("preserves nested verification returnUrl when redirecting unauthenticated users to login", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const res = await routeRequest(
+      createMockRequest("/verification?returnUrl=%2Fpost%2Fcreate-listing")
+    );
+
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("returnUrl")).toBe(
+      "/verification?returnUrl=%2Fpost%2Fcreate-listing"
+    );
+  });
+
   it("returns 401 for unauthenticated API requests to protected routes", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
@@ -233,6 +248,29 @@ describe("middleware — authenticated routing", () => {
 
     const res = await routeRequest(createMockRequest("/login"));
     expect(res.status).toBe(200);
+  });
+
+  it("preserves nested verification returnUrl for anonymous sessions", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "anon-1",
+          is_anonymous: true,
+          app_metadata: {},
+        },
+      },
+    });
+
+    const res = await routeRequest(
+      createMockRequest("/verification?returnUrl=%2Fpost%2Fcreate-business")
+    );
+
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("returnUrl")).toBe(
+      "/verification?returnUrl=%2Fpost%2Fcreate-business"
+    );
   });
 
   it("allows /post/create through for verified users", async () => {
