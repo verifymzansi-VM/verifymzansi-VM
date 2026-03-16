@@ -258,7 +258,7 @@ export async function POST(request: Request) {
                 ? "Phone"
                 : step.step_type;
       // Lowercase label for inline use — preserves "ID" casing
-      const stepLabelInline = step.step_type === "id_doc" ? "ID document" : stepLabelInline;
+      const stepLabelInline = step.step_type === "id_doc" ? "ID document" : stepLabel.toLowerCase();
 
       if (decision === "approved") {
         await createNotification({
