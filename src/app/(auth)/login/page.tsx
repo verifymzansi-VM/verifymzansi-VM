@@ -249,8 +249,10 @@ export default function LoginPage() {
 
       toast({ title: "Welcome back!", variant: "success" });
       router.refresh();
-      const returnUrl = new URLSearchParams(window.location.search).get("returnUrl") || "/";
-      router.push(sanitizeReturnUrl(returnUrl));
+      const returnUrl = sanitizeReturnUrl(
+        new URLSearchParams(window.location.search).get("returnUrl")
+      );
+      router.push(returnUrl);
     } catch {
       toast({
         title: "Something went wrong",

@@ -50,7 +50,10 @@ export function MobileNav() {
       <div className="flex items-center justify-around h-16 px-2">
         {TABS.map((tab) => {
           const href = tab.label === "Browse" ? browseHref : tab.href;
-          const resolvedHref = tab.requiresAuth && !isAuthenticated ? "/login" : href;
+          const resolvedHref =
+            tab.requiresAuth && !isAuthenticated
+              ? `/login?returnUrl=${encodeURIComponent(href)}`
+              : href;
           const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
           const Icon = tab.icon;
           const showRedDot = tab.dotSource === "leads" && unreadCount > 0;

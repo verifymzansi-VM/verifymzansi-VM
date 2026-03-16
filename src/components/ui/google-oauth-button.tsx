@@ -30,10 +30,19 @@ export function GoogleOAuthButton({ mode }: GoogleOAuthButtonProps) {
       const supabase = createClient();
       const { appUrl } = getPublicRuntimeConfig();
 
-      const redirectTo =
+      // Preserve returnUrl from the current page so users land back where they
+      // intended after OAuth (e.g. /post/create instead of /dashboard).
+      const currentReturnUrl =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("returnUrl")
+          : null;
+      const callbackBase =
         typeof window !== "undefined"
           ? `${window.location.origin}/auth/callback`
           : `${appUrl}/auth/callback`;
+      const redirectTo = currentReturnUrl
+        ? `${callbackBase}?next=${encodeURIComponent(currentReturnUrl)}`
+        : callbackBase;
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
