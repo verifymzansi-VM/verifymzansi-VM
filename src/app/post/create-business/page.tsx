@@ -42,7 +42,10 @@ import {
   PostFormScaffold,
   type PostFormStep,
 } from "@/components/post/post-form-scaffold";
-import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
+import {
+  normalizeCreatePostError,
+  normalizeCreatePostRuntimeError,
+} from "@/app/post/_lib/create-post-errors";
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
 import {
   coerceBusinessDetails,
@@ -399,10 +402,10 @@ function CreateBusinessContent() {
       if (!uploadRes.ok) throw new Error("Upload failed");
       const uploadJson = await uploadRes.json();
       return uploadJson.urls || [];
-    } catch {
+    } catch (error: unknown) {
       toast({
         title: "Some media was skipped",
-        description: "You can add the failed files later after your business is created.",
+        description: `${normalizeCreatePostRuntimeError(error, "One or more files could not be uploaded.")} You can add the failed files later after your business is created.`,
         variant: "destructive",
       });
       return [];
@@ -430,10 +433,10 @@ function CreateBusinessContent() {
       });
       if (!putRes.ok) throw new Error("Failed to upload video");
       return publicUrl;
-    } catch {
+    } catch (error: unknown) {
       toast({
         title: "Video upload was skipped",
-        description: "You can add the video later after your business is created.",
+        description: `${normalizeCreatePostRuntimeError(error, "Video upload could not be completed.")} You can add the video later after your business is created.`,
         variant: "destructive",
       });
       return null;
@@ -556,7 +559,7 @@ function CreateBusinessContent() {
       toast({ title: "Business submitted for review.", variant: "success" });
       router.push("/dashboard/businesses");
     } catch (error: unknown) {
-      setFormError(error instanceof Error ? error.message : "Something went wrong.");
+      setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);
@@ -678,46 +681,50 @@ function CreateBusinessContent() {
                           const Icon = option.icon;
                           const isSelected = businessType === option.value;
                           return (
-                            <button
+                            <label
                               key={option.value}
-                              type="button"
-                              role="radio"
-                              aria-checked={isSelected}
-                              onClick={() => {
-                                setBusinessType(option.value);
-                                setBusinessDetails(getDefaultBusinessDetails(option.value));
-                                if (option.value !== "mall_store") {
-                                  setStoreNumber("");
-                                  setMallPhotoFiles([]);
-                                }
-                                if (option.value !== "mobile_service") {
-                                  setServiceAreasInput("");
-                                }
-                                if (
-                                  ![
-                                    "mall_store",
-                                    "standalone_shop",
-                                    "home_business",
-                                    "market_stall",
-                                  ].includes(option.value)
-                                ) {
-                                  setMapDirections("");
-                                }
-                                clearErrors(
-                                  "business_type",
-                                  "store_number",
-                                  "service_areas",
-                                  "map_directions"
-                                );
-                                clearErrorPrefix("business_details.");
-                              }}
                               className={cn(
-                                "rounded-xl border-2 p-4 text-left transition-all",
+                                "cursor-pointer rounded-xl border-2 p-4 text-left transition-all",
                                 isSelected
                                   ? "border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20"
                                   : "border-border hover:border-brand-blue/30"
                               )}
                             >
+                              <input
+                                type="radio"
+                                name="business-type"
+                                value={option.value}
+                                checked={isSelected}
+                                onChange={() => {
+                                  setBusinessType(option.value);
+                                  setBusinessDetails(getDefaultBusinessDetails(option.value));
+                                  if (option.value !== "mall_store") {
+                                    setStoreNumber("");
+                                    setMallPhotoFiles([]);
+                                  }
+                                  if (option.value !== "mobile_service") {
+                                    setServiceAreasInput("");
+                                  }
+                                  if (
+                                    ![
+                                      "mall_store",
+                                      "standalone_shop",
+                                      "home_business",
+                                      "market_stall",
+                                    ].includes(option.value)
+                                  ) {
+                                    setMapDirections("");
+                                  }
+                                  clearErrors(
+                                    "business_type",
+                                    "store_number",
+                                    "service_areas",
+                                    "map_directions"
+                                  );
+                                  clearErrorPrefix("business_details.");
+                                }}
+                                className="sr-only"
+                              />
                               <Icon
                                 className={cn(
                                   "mb-2 h-6 w-6",
@@ -728,7 +735,7 @@ function CreateBusinessContent() {
                               <p className="mt-1 text-xs text-muted-foreground">
                                 {option.description}
                               </p>
-                            </button>
+                            </label>
                           );
                         })}
                       </div>

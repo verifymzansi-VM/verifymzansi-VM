@@ -24,9 +24,19 @@ function buildCsp(
   nonce: string,
   options?: { allowDevWebSocket?: boolean; enforceHttps?: boolean }
 ): string {
-  const connectSrc = options?.allowDevWebSocket
-    ? "connect-src 'self' ws: wss: https://tnygdgormnofpgjknlhr.supabase.co https://*.sentry.io https://challenges.cloudflare.com"
-    : "connect-src 'self' https://tnygdgormnofpgjknlhr.supabase.co https://*.sentry.io https://challenges.cloudflare.com";
+  const connectSrcValues = [
+    "'self'",
+    "https://tnygdgormnofpgjknlhr.supabase.co",
+    "https://*.sentry.io",
+    "https://challenges.cloudflare.com",
+    "https://*.r2.cloudflarestorage.com",
+  ];
+
+  if (options?.allowDevWebSocket) {
+    connectSrcValues.splice(1, 0, "ws:", "wss:");
+  }
+
+  const connectSrc = `connect-src ${connectSrcValues.join(" ")}`;
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",

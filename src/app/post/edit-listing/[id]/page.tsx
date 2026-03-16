@@ -27,7 +27,10 @@ import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { normalizeMediaUrl, normalizeMediaUrls } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
-import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
+import {
+  normalizeCreatePostError,
+  normalizeCreatePostRuntimeError,
+} from "@/app/post/_lib/create-post-errors";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { createLogger } from "@/lib/utils/logger";
@@ -402,8 +405,8 @@ export default function EditListingPage() {
 
       toast({ title: "Listing updated!", variant: "success" });
       router.push("/dashboard/listings");
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Something went wrong.");
+    } catch (error: unknown) {
+      setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);

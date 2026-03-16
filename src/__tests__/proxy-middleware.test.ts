@@ -103,9 +103,12 @@ describe("proxy security headers", () => {
 
   it("adds the full security header set to successful responses", async () => {
     const res = await middleware(createMockRequest("/"));
+    const csp = res.headers.get("Content-Security-Policy");
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'self'");
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("connect-src 'self'");
+    expect(csp).toContain("https://*.r2.cloudflarestorage.com");
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
     expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");

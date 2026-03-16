@@ -36,6 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { usePlanCoverVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
+import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
 import {
   coerceBusinessDetails,
@@ -319,11 +320,10 @@ export default function EditBusinessPage() {
       if (!uploadRes.ok) throw new Error("Upload failed");
       const uploadJson = await uploadRes.json();
       return uploadJson.urls || [];
-    } catch {
+    } catch (error: unknown) {
       toast({
         title: "Some media failed to upload",
-        description:
-          "Your changes will be saved without the failed files. You can re-upload them later.",
+        description: `${normalizeCreatePostRuntimeError(error, "One or more files could not be uploaded.")} Your changes will be saved without the failed files. You can re-upload them later.`,
         variant: "destructive",
       });
       return [];
@@ -351,10 +351,10 @@ export default function EditBusinessPage() {
       });
       if (!putRes.ok) throw new Error("Failed to upload video");
       return publicUrl;
-    } catch {
+    } catch (error: unknown) {
       toast({
         title: "Video upload was skipped",
-        description: "You can add the video later.",
+        description: `${normalizeCreatePostRuntimeError(error, "Video upload could not be completed.")} You can add the video later.`,
         variant: "destructive",
       });
       return null;
@@ -524,8 +524,8 @@ export default function EditBusinessPage() {
 
       toast({ title: "Business updated!", variant: "success" });
       router.push("/dashboard/businesses?updated=true");
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (error: unknown) {
+      setError(normalizeCreatePostRuntimeError(error, "Something went wrong. Please try again."));
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);

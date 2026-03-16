@@ -23,7 +23,10 @@ import {
   PostFormScaffold,
   type PostFormStep,
 } from "@/components/post/post-form-scaffold";
-import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
+import {
+  normalizeCreatePostError,
+  normalizeCreatePostRuntimeError,
+} from "@/app/post/_lib/create-post-errors";
 import { useToast } from "@/hooks/use-toast";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
@@ -335,7 +338,7 @@ function CreatePromotionContent() {
       toast({ title: "Promotion submitted for review.", variant: "success" });
       router.push("/dashboard/promotions?created=true");
     } catch (error: unknown) {
-      setFormError(error instanceof Error ? error.message : "Something went wrong.");
+      setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);

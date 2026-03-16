@@ -21,6 +21,7 @@ import {
   usePlanMaxVideos,
   usePlanVideoAllowed,
 } from "@/components/billing/plan-gate";
+import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
@@ -265,8 +266,8 @@ export default function EditPromotionPage() {
       }
 
       router.push("/dashboard/promotions?updated=true");
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (error: unknown) {
+      setError(normalizeCreatePostRuntimeError(error, "Something went wrong. Please try again."));
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);

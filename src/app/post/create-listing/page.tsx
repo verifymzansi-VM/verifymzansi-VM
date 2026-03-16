@@ -21,7 +21,10 @@ import {
   PostFormScaffold,
   type PostFormStep,
 } from "@/components/post/post-form-scaffold";
-import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
+import {
+  normalizeCreatePostError,
+  normalizeCreatePostRuntimeError,
+} from "@/app/post/_lib/create-post-errors";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
@@ -376,7 +379,7 @@ export default function CreateListingPage() {
       toast({ title: "Listing submitted for review.", variant: "success" });
       router.push("/dashboard/listings");
     } catch (error: unknown) {
-      setFormError(error instanceof Error ? error.message : "Something went wrong.");
+      setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);
@@ -601,19 +604,22 @@ export default function CreateListingPage() {
                           />
                         </div>
 
-                        <button
-                          type="button"
-                          aria-pressed={negotiable}
-                          onClick={() => setNegotiable((current) => !current)}
+                        <label
                           className={cn(
-                            "rounded-md border px-3 py-2 text-sm font-medium transition-all",
+                            "flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm font-medium transition-all",
                             negotiable
                               ? "border-brand-green bg-brand-green/10 text-brand-green"
                               : "border-input text-muted-foreground hover:border-brand-green/40"
                           )}
                         >
+                          <input
+                            type="checkbox"
+                            checked={negotiable}
+                            onChange={(event) => setNegotiable(event.target.checked)}
+                            className="sr-only"
+                          />
                           Negotiable
-                        </button>
+                        </label>
                       </div>
                       {fieldErrors.price_zar && (
                         <p className="inline-form-error">{fieldErrors.price_zar}</p>
@@ -703,32 +709,31 @@ export default function CreateListingPage() {
                       <p className="text-xs text-muted-foreground">
                         Choose how buyers should reach you.
                       </p>
-                      <div
-                        role="group"
-                        aria-label="Contact methods"
-                        className="grid grid-cols-3 gap-2"
-                      >
+                      <div className="grid grid-cols-3 gap-2">
                         {CONTACT_OPTIONS.map((option) => {
                           const Icon = option.icon;
                           const isSelected = contactMethods.includes(option.id);
 
                           return (
-                            <button
+                            <label
                               key={option.id}
-                              type="button"
-                              aria-pressed={isSelected}
-                              onClick={() => toggleContact(option.id)}
                               className={cn(
-                                "flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all",
+                                "flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all",
                                 isSelected
                                   ? "border-brand-green bg-brand-green/10 text-brand-green"
                                   : "border-input text-muted-foreground hover:border-brand-green/40 hover:bg-muted/50",
                                 fieldErrors.contactMethods && !isSelected && "border-destructive/40"
                               )}
                             >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleContact(option.id)}
+                                className="sr-only"
+                              />
                               <Icon className="h-5 w-5" />
                               {option.label}
-                            </button>
+                            </label>
                           );
                         })}
                       </div>
