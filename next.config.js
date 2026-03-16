@@ -49,10 +49,9 @@ const nextConfig = {
     ],
     formats: ["image/avif", "image/webp"],
   },
-  serverExternalPackages: ["@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner", "resend"],
   experimental: {
     serverActions: {
-      bodySizeLimit: "2mb",
+      bodySizeLimit: "50mb",
     },
     optimizePackageImports: [
       "lucide-react",
