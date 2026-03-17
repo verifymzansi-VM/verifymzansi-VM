@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
       await fulfillPayment(supabase as never, {
         id: payment.id,
         user_id: payment.user_id,
-        area: payment.area,
+        area: payment.area as never,
         amount_cents: payment.amount_cents,
         status: "processing",
         provider: "ozow",
