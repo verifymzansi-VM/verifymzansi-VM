@@ -120,4 +120,57 @@ describe("ListingsPage", () => {
 
     expect(screen.getByText(/Active \(0\)/)).toBeDefined();
   });
+
+  it("renders rejected listings when optional listing columns are missing", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "u-123" } } });
+
+    mockSupabase.from.mockImplementation((table) => {
+      const createQuery = (
+        resolver: (selectClause: string) => { data: unknown[]; error?: unknown }
+      ) => ({
+        select: vi.fn().mockImplementation((selectClause: string) => ({
+          order: vi.fn().mockResolvedValue(resolver(selectClause)),
+        })),
+      });
+
+      if (table === "listings") {
+        return createQuery((selectClause) => {
+          if (selectClause.includes("urgent_until")) {
+            return {
+              data: [],
+              error: {
+                code: "42703",
+                message: "column listings.urgent_until does not exist",
+              },
+            };
+          }
+
+          return {
+            data: [
+              {
+                id: "reject-1",
+                title: "Rejected Car",
+                status: "rejected",
+                price_cents: 10000,
+                created_at: "2023-01-01T00:00:00.000Z",
+                area: "MZANSI_MARKET",
+                photos: [],
+                status_reason: "Missing proof of ownership",
+              },
+            ],
+            error: null,
+          };
+        });
+      }
+
+      if (table === "businesses" || table === "promotions") {
+        return createQuery(() => ({ data: [], error: null }));
+      }
+    });
+
+    const ui = await ListingsPage();
+    render(ui);
+
+    expect(screen.getByRole("tab", { name: /Rejected \(1\)/ })).toBeDefined();
+  });
 });

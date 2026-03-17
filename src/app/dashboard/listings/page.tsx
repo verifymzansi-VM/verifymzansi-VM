@@ -23,7 +23,10 @@ import {
 } from "@/lib/services/entitlements";
 import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
+import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
 import { AREA_LABELS, type MarketplaceArea, type PlanTier } from "@/types/enums";
+
+const LISTING_DASHBOARD_FALLBACK_FIELDS = ["featured_until", "urgent_until"] as const;
 
 export const metadata = {
   title: "My Listings",
@@ -114,17 +117,35 @@ export default async function ListingsPage() {
     getOwnerColumn(supabase, "promotions"),
   ]);
 
+  const listingSelectAttempts = [
+    {
+      select:
+        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, urgent_until, status_reason",
+      omittedFields: [] as const,
+    },
+    {
+      select:
+        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, status_reason",
+      omittedFields: ["urgent_until"] as const,
+    },
+    {
+      select:
+        "id, title, status, price_cents, category, created_at, area, photos, boost_until, status_reason",
+      omittedFields: ["featured_until", "urgent_until"] as const,
+    },
+  ] as const;
+
   const [listingResponse, businessResponse, promotionResponse] = await Promise.all([
-    applyOwnerFilter(
-      supabase
-        .from("listings")
-        .select(
-          "id, title, status, price_cents, category, created_at, area, view_count, photos, boost_until, featured_until, urgent_until, status_reason"
-        )
-        .order("created_at", { ascending: false }),
-      listingOwnerColumn,
-      user.id
-    ),
+    queryWithSelectFallbacks({
+      attempts: listingSelectAttempts,
+      fallbackFields: LISTING_DASHBOARD_FALLBACK_FIELDS,
+      runQuery: (selectClause) =>
+        applyOwnerFilter(
+          supabase.from("listings").select(selectClause).order("created_at", { ascending: false }),
+          listingOwnerColumn,
+          user.id
+        ),
+    }),
     applyOwnerFilter(
       supabase
         .from("businesses")
@@ -148,7 +169,12 @@ export default async function ListingsPage() {
   ]);
 
   const items = sortByNewest([
-    ...toDashboardItems(listingResponse.data),
+    ...toDashboardItems(listingResponse.data).map((listing) => ({
+      ...listing,
+      featured_until: listing.featured_until ?? null,
+      urgent_until: listing.urgent_until ?? null,
+      view_count: listing.view_count ?? null,
+    })),
     ...(Array.isArray(businessResponse.data)
       ? (businessResponse.data as BusinessDashboardRow[])
       : []
