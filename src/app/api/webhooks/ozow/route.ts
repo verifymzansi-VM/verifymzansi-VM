@@ -10,6 +10,7 @@ import {
   markPaymentFailed,
   persistFulfillmentCompletion,
   claimPaymentProcessing,
+  type PaymentStoreClient,
 } from "@/lib/payments/store";
 
 const log = createLogger("OzowWebhook");
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing merchantReference" }, { status: 400 });
     }
 
-    const supabase = createAdminClient();
+    const supabase = createAdminClient() as unknown as PaymentStoreClient;
     const payment = await getPaymentById(supabase, payload.merchantReference);
 
     if (!payment) {
