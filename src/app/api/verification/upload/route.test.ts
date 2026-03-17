@@ -12,6 +12,8 @@ const {
   mockDeleteFromR2,
   mockLogAuditEvent,
   mockProcessKycArtifact,
+  mockCheckRateLimit,
+  mockGetClientIp,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -20,6 +22,8 @@ const {
   mockDeleteFromR2: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockProcessKycArtifact: vi.fn(),
+  mockCheckRateLimit: vi.fn(),
+  mockGetClientIp: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -67,6 +71,11 @@ vi.mock("@/lib/utils/exif-strip", () => ({
   stripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
 }));
 
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
+  getClientIp: (...args: unknown[]) => mockGetClientIp(...args),
+}));
+
 import { POST } from "./route";
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -79,11 +88,10 @@ function createFormDataRequest(fields: Record<string, string | Blob>) {
   // NextRequest.formData() can hang in jsdom, so we mock it directly
   const req = {
     formData: async () => formData,
+    url: "http://localhost/api/verification/upload",
     nextUrl: new URL("http://localhost/api/verification/upload"),
     headers: {
-      get: vi.fn((name: string) =>
-        name.toLowerCase() === "origin" ? "http://localhost:3000" : null
-      ),
+      get: vi.fn((name: string) => (name.toLowerCase() === "origin" ? "http://localhost" : null)),
     },
   } as unknown as NextRequest;
   return req;
@@ -209,6 +217,8 @@ describe("POST /api/verification/upload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
+    mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientIp.mockReturnValue("127.0.0.1");
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv(
       "ID_ENCRYPTION_KEY",
@@ -248,6 +258,20 @@ describe("POST /api/verification/upload", () => {
 
     const response = await POST(req);
     expect(response.status).toBe(400);
+  });
+
+  it("returns 503 when shared upload protection is unavailable", async () => {
+    mockAuth({ id: "user-1" });
+    mockCheckRateLimit.mockResolvedValue({ limited: true, degraded: true, retryAfter: 45 });
+
+    const req = createFormDataRequest({
+      file: createTestFile(),
+      docType: "id_document",
+    });
+
+    const response = await POST(req);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("45");
   });
 
   it("returns success for valid id_document upload", async () => {

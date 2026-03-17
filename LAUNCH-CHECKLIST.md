@@ -61,18 +61,28 @@ deployed Cloudflare/Wrangler runtime secrets:
 - `OZOW_CLIENT_SECRET`
 - `OZOW_SITE_CODE`
 - `OZOW_WEBHOOK_SECRET`
+- `KYC_WEBHOOK_SECRET`
 
 Failing any of the above should block deploy.
 
 If `RATE_LIMITER_API_KEY` is set, `OTP_RATE_LIMITER_URL` must also be set.
 
+`ENABLE_DEV_KYC_WEBHOOK_BYPASS` is local-development-only and must never be set
+outside explicit localhost development. Production startup validation now treats
+it the same as other dev bypass flags.
+
 ## 3. Data and Billing Checks
 
 - Confirm Ozow is in production mode and can receive callbacks at
   `/api/webhooks/ozow`.
+- Confirm the KYC provider webhook secret is configured before enabling live
+  provider callbacks at `/api/webhooks/kyc/provider`.
 - Confirm Africa's Talking sender approval is complete for the live sender ID.
 - Confirm Resend domain verification is complete for the production sender
   domain.
+- Confirm the shared rate-limiter worker is healthy. Verification upload,
+  session start, GPS location, manual location, OTP, and billing checkout now
+  fail closed with `503` when shared abuse protection is unavailable.
 
 ## 4. Deployment Path
 

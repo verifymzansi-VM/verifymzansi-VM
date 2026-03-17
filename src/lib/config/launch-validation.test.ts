@@ -81,4 +81,17 @@ describe("launch validation", () => {
     expect(summary.isValid).toBe(false);
     expect(summary.errors.some((error) => error.name === "Dev-only flags")).toBe(true);
   });
+
+  it("fails production mode when the local KYC webhook bypass is enabled", () => {
+    const summary = validateLaunchConfiguration(
+      {
+        ...BASE_ENV,
+        ENABLE_DEV_KYC_WEBHOOK_BYPASS: "true",
+      },
+      { mode: "production" }
+    );
+
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors.some((error) => error.name === "Dev-only flags")).toBe(true);
+  });
 });

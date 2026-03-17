@@ -19,7 +19,12 @@ export interface LaunchValidationSummary {
 
 const HEX_PLACEHOLDER = "cafebabe".repeat(8);
 const TRUTHY_VALUES = new Set(["1", "true", "yes", "on"]);
-const DEV_ONLY_FLAGS = ["ENABLE_DEV_PAYMENT_BYPASS", "ENABLE_MOCK_OZOW", "DEV_EXPOSE_OTP"] as const;
+const DEV_ONLY_FLAGS = [
+  "ENABLE_DEV_PAYMENT_BYPASS",
+  "ENABLE_MOCK_OZOW",
+  "DEV_EXPOSE_OTP",
+  "ENABLE_DEV_KYC_WEBHOOK_BYPASS",
+] as const;
 
 /**
  * Environment variables that must NOT be set in production.

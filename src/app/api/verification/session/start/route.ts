@@ -10,12 +10,19 @@ import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { logAuditEvent } from "@/lib/services/audit";
 import { REQUIRED_VERIFICATION_STEPS } from "@/lib/constants/verification";
 import { createLogger } from "@/lib/utils/logger";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("SessionStart");
 
 export async function POST(_request: NextRequest) {
   try {
+    const request = _request;
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) {
+      return originBlock;
+    }
+
     // Auth check
     const supabase = await createClient();
     const {
@@ -27,11 +34,24 @@ export async function POST(_request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rl = checkLocalRateLimit(user.id, "verification:session-start");
-    if (rl.limited) {
+    const rateCheck = await checkRateLimit({
+      key: getClientIp(request),
+      action: "verification:session-start",
+      degradedMode: "block",
+    });
+    if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          {
+            error: "Verification session protection is temporarily unavailable. Please try again.",
+          },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+        { error: "Too many verification session attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
       );
     }
 

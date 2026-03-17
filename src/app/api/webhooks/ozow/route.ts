@@ -1,133 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
-import { appendProviderWebhook } from "@/lib/payments/types";
 import { fulfillPayment, rollbackPaymentProcessing } from "@/lib/payments/fulfillment";
 import { normalizeOzowWebhook, verifyOzowWebhookSignature } from "@/lib/payments/ozow";
+import {
+  finalizeCompletedPayment,
+  getPaymentById,
+  hasFulfillmentCompletion,
+  markPaymentFailed,
+  persistFulfillmentCompletion,
+  claimPaymentProcessing,
+} from "@/lib/payments/store";
 
 const log = createLogger("OzowWebhook");
 
 function toAmountString(amountCents: number): string {
   return (amountCents / 100).toFixed(2);
-}
-
-type PaymentRow = {
-  id: string;
-  area: string;
-  status: string;
-  provider: string;
-  provider_payment_id: string | null;
-  provider_reference: string | null;
-  provider_data: Record<string, unknown> | null;
-  amount_cents: number;
-  user_id: string;
-};
-
-function asProviderData(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function hasFulfillmentCompletion(payment: PaymentRow): boolean {
-  return typeof asProviderData(payment.provider_data)?.fulfillment_completed_at === "string";
-}
-
-function buildProviderDataWithMarkers(
-  payment: PaymentRow,
-  webhookPayload: Record<string, unknown>,
-  extra: Record<string, unknown>
-): Record<string, unknown> {
-  return {
-    ...(appendProviderWebhook(payment, webhookPayload) ?? {}),
-    ...extra,
-  };
-}
-
-async function getPaymentById(
-  supabase: ReturnType<typeof createAdminClient>,
-  paymentId: string
-): Promise<PaymentRow | null> {
-  const { data } = await supabase
-    .from("payments")
-    .select(
-      "id, area, status, provider, provider_payment_id, provider_reference, provider_data, amount_cents, user_id"
-    )
-    .eq("id", paymentId)
-    .maybeSingle();
-
-  return (data as PaymentRow | null) ?? null;
-}
-
-async function persistFulfillmentCompletion(
-  supabase: ReturnType<typeof createAdminClient>,
-  payment: PaymentRow,
-  payload: ReturnType<typeof normalizeOzowWebhook>
-): Promise<boolean> {
-  const markerTimestamp = new Date().toISOString();
-  const { error } = await supabase
-    .from("payments")
-    .update({
-      provider_payment_id: payload?.providerPaymentId || payment.provider_payment_id,
-      provider_reference: payment.provider_reference || payment.id,
-      provider_data: buildProviderDataWithMarkers(payment, payload?.rawPayload ?? {}, {
-        processing_started_at:
-          asProviderData(payment.provider_data)?.processing_started_at ?? markerTimestamp,
-        fulfillment_completed_at: markerTimestamp,
-        fulfillment_state: "completed",
-      }),
-    })
-    .eq("id", payment.id)
-    .eq("provider", "ozow")
-    .eq("status", "processing");
-
-  if (error) {
-    log.error("Failed to persist payment fulfillment marker", {
-      paymentId: payment.id,
-      error: error.message,
-    });
-    return false;
-  }
-
-  return true;
-}
-
-async function finalizeCompletedPayment(
-  supabase: ReturnType<typeof createAdminClient>,
-  payment: PaymentRow,
-  payload: ReturnType<typeof normalizeOzowWebhook>
-): Promise<boolean> {
-  const providerData = asProviderData(payment.provider_data);
-  const fulfillmentCompletedAt =
-    typeof providerData?.fulfillment_completed_at === "string"
-      ? providerData.fulfillment_completed_at
-      : new Date().toISOString();
-
-  const { error } = await supabase
-    .from("payments")
-    .update({
-      status: "complete",
-      provider_payment_id: payload?.providerPaymentId || payment.provider_payment_id,
-      provider_reference: payment.provider_reference || payment.id,
-      provider_data: buildProviderDataWithMarkers(payment, payload?.rawPayload ?? {}, {
-        processing_started_at: providerData?.processing_started_at ?? fulfillmentCompletedAt,
-        fulfillment_completed_at: fulfillmentCompletedAt,
-        fulfillment_state: "completed",
-        completed_at: new Date().toISOString(),
-      }),
-    })
-    .eq("id", payment.id)
-    .eq("provider", "ozow");
-
-  if (error) {
-    log.error("Failed to mark payment as complete after successful fulfillment", {
-      paymentId: payment.id,
-      error: error.message,
-    });
-    return false;
-  }
-
-  return true;
 }
 
 export async function POST(request: NextRequest) {
@@ -205,27 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (eventType.includes("cancel") || eventType.includes("fail")) {
-      await supabase
-        .from("payments")
-        .update({
-          status: "failed",
-          provider_data: appendProviderWebhook(
-            {
-              id: payment.id,
-              user_id: payment.user_id,
-              area: payment.area,
-              amount_cents: payment.amount_cents,
-              status: payment.status,
-              provider: "ozow",
-              provider_payment_id: payment.provider_payment_id,
-              provider_reference: payment.provider_reference,
-              provider_data: (payment.provider_data as Record<string, unknown> | null) || null,
-            },
-            payload.rawPayload
-          ),
-        })
-        .eq("id", payment.id)
-        .eq("provider", "ozow");
+      await markPaymentFailed(supabase, payment, payload.rawPayload);
       return NextResponse.json({ success: true });
     }
 
@@ -233,27 +101,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, ignored: true });
     }
 
-    const { data: claimedRows } = await supabase
-      .from("payments")
-      .update({
-        status: "processing",
-        provider_payment_id: payload.providerPaymentId || payment.provider_payment_id,
-        provider_reference: payment.provider_reference || payment.id,
-        provider_data: {
-          ...(asProviderData(payment.provider_data) ?? {}),
-          processing_started_at:
-            asProviderData(payment.provider_data)?.processing_started_at ||
-            new Date().toISOString(),
-          last_event_type: payload.eventType || "transaction.complete",
-        },
-      })
-      .eq("id", payment.id)
-      .eq("provider", "ozow")
-      .neq("status", "complete")
-      .neq("status", "processing")
-      .select("id");
+    const claimed = await claimPaymentProcessing(supabase, payment, payload);
 
-    if (!claimedRows?.length) {
+    if (!claimed) {
       const currentPayment = await getPaymentById(supabase, payment.id);
 
       if (

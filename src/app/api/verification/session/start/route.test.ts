@@ -9,12 +9,16 @@ const {
   mockFrom,
   mockIsFeatureEnabled,
   mockLogAuditEvent,
+  mockCheckRateLimit,
+  mockGetClientIp,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockFrom: vi.fn(),
   mockIsFeatureEnabled: vi.fn(),
   mockLogAuditEvent: vi.fn(),
+  mockCheckRateLimit: vi.fn(),
+  mockGetClientIp: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -33,13 +37,19 @@ vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: mockLogAuditEvent,
 }));
 
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
+  getClientIp: (...args: unknown[]) => mockGetClientIp(...args),
+}));
+
 import { POST } from "./route";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function createMockRequest() {
+function createMockRequest(origin?: string) {
   return new NextRequest("http://localhost/api/verification/session/start", {
     method: "POST",
+    headers: origin ? { origin } : undefined,
   });
 }
 
@@ -111,6 +121,22 @@ describe("POST /api/verification/session/start", () => {
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
     mockIsFeatureEnabled.mockResolvedValue(true);
     mockLogAuditEvent.mockResolvedValue(undefined);
+    mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientIp.mockReturnValue("127.0.0.1");
+  });
+
+  it("rejects cross-site session-start requests", async () => {
+    const response = await POST(createMockRequest("https://evil.example"));
+    expect(response.status).toBe(403);
+  });
+
+  it("returns 503 when shared session protection is unavailable", async () => {
+    mockAuth({ id: "user-1" });
+    mockCheckRateLimit.mockResolvedValue({ limited: true, degraded: true, retryAfter: 30 });
+
+    const response = await POST(createMockRequest("http://localhost"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("30");
   });
 
   it("returns 401 when user is not authenticated", async () => {

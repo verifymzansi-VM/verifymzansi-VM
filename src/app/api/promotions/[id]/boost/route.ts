@@ -15,7 +15,8 @@ import {
   withOwnerColumn,
 } from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("PromotionBoostCheckout");
 type PromotionCheckoutRow = {
@@ -35,6 +36,10 @@ type PromotionCheckoutRow = {
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const request = _request;
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     const { id: promotionId } = await params;
 
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,11 +57,22 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rl = checkLocalRateLimit(user.id, "promotion:boost");
-    if (rl.limited) {
+    const rateCheck = await checkRateLimit({
+      key: getClientIp(request),
+      action: "promotion:boost",
+      degradedMode: "block",
+    });
+    if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          { error: "Promotion checkout protection is temporarily unavailable. Please try again." },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+        { error: "Too many promotion boost attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
       );
     }
 

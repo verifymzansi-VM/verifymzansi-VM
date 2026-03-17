@@ -23,6 +23,10 @@ import { POST } from "./route";
 function createMockRequest(body: Record<string, unknown>) {
   return {
     json: async () => body,
+    nextUrl: new URL("http://localhost/api/webhooks/kyc/provider"),
+    headers: {
+      get: vi.fn(() => null),
+    },
   } as unknown as NextRequest;
 }
 
@@ -48,6 +52,11 @@ describe("POST /api/webhooks/kyc/provider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLogAuditEvent.mockResolvedValue(undefined);
+    vi.unstubAllEnvs();
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ENABLE_DEV_KYC_WEBHOOK_BYPASS", "1");
+    delete process.env.KYC_WEBHOOK_SECRET;
+    delete process.env.PLAYWRIGHT_TEST_MODE;
   });
 
   it("returns 400 when provider_ref is missing", async () => {
@@ -363,36 +372,29 @@ describe("POST /api/webhooks/kyc/provider", () => {
   it("returns 503 in production without secret and without test mode", async () => {
     const origEnv = process.env.NODE_ENV;
     const origPw = process.env.PLAYWRIGHT_TEST_MODE;
+    const origBypass = process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS;
     try {
       // @ts-expect-error -- overriding readonly for test
       process.env.NODE_ENV = "production";
       delete process.env.KYC_WEBHOOK_SECRET;
       delete process.env.PLAYWRIGHT_TEST_MODE;
+      delete process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS;
       const res = await POST(createMockRequest({ provider_ref: "ref-1", status: "approved" }));
       expect(res.status).toBe(503);
     } finally {
       // @ts-expect-error -- restoring readonly
       process.env.NODE_ENV = origEnv;
       process.env.PLAYWRIGHT_TEST_MODE = origPw;
+      if (origBypass) process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS = origBypass;
+      else delete process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS;
     }
   });
 
-  it("bypasses 503 in production when PLAYWRIGHT_TEST_MODE=1", async () => {
-    const origEnv = process.env.NODE_ENV;
-    const origPw = process.env.PLAYWRIGHT_TEST_MODE;
-    try {
-      // @ts-expect-error -- overriding readonly for test
-      process.env.NODE_ENV = "production";
-      delete process.env.KYC_WEBHOOK_SECRET;
-      process.env.PLAYWRIGHT_TEST_MODE = "1";
-      const res = await POST(createMockRequest({}));
-      // Should hit payload validation (400) instead of 503
-      expect(res.status).toBe(400);
-    } finally {
-      // @ts-expect-error -- restoring readonly
-      process.env.NODE_ENV = origEnv;
-      process.env.PLAYWRIGHT_TEST_MODE = origPw;
-    }
+  it("allows unsigned webhook payloads only in explicit local development mode", async () => {
+    const res = await POST(createMockRequest({}));
+
+    // Should hit payload validation (400) instead of 503
+    expect(res.status).toBe(400);
   });
 
   it("sets auto_status to needs_manual_review for ambiguous result", async () => {

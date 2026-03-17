@@ -16,7 +16,8 @@ import {
 } from "@/lib/services/verification-state";
 import crypto from "crypto";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("VerificationUpload");
 
@@ -72,6 +73,12 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) {
+      return originBlock;
+    }
+
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
     const {
@@ -82,11 +89,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rl = checkLocalRateLimit(user.id, "verification:upload");
-    if (rl.limited) {
+    const rateCheck = await checkRateLimit({
+      key: getClientIp(request),
+      action: "verification:upload",
+      degradedMode: "block",
+    });
+    if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          { error: "Verification upload protection is temporarily unavailable. Please try again." },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+        { error: "Too many verification upload attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
       );
     }
 

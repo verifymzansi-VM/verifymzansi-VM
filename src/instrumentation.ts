@@ -13,6 +13,7 @@ function assertNoDevBypassesInProduction(): string[] {
     TEST_PHONE_NUMBERS: "Allows test phone numbers to skip real OTP",
     ENABLE_MOCK_OZOW: "Routes payments through mock endpoint",
     ENABLE_DEV_PAYMENT_BYPASS: "Bypasses payment verification",
+    ENABLE_DEV_KYC_WEBHOOK_BYPASS: "Allows unsigned KYC webhooks in local development",
     DEV_EXPOSE_OTP: "Exposes OTP codes in API responses",
     SMS_MOCK: "Prevents real SMS delivery",
   };

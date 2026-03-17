@@ -12,7 +12,8 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("GpsVerification");
 import { parseJsonRequest } from "@/lib/utils/api";
@@ -70,6 +71,11 @@ const gpsLocationSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) {
+      return originBlock;
+    }
+
     // Auth check
     const supabase = await createClient();
     const {
@@ -81,11 +87,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rl = checkLocalRateLimit(user.id, "verification:gps");
-    if (rl.limited) {
+    const rateCheck = await checkRateLimit({
+      key: getClientIp(request),
+      action: "verification:gps",
+      degradedMode: "block",
+    });
+    if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          { error: "GPS verification protection is temporarily unavailable. Please try again." },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+        { error: "Too many GPS verification attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
       );
     }
 

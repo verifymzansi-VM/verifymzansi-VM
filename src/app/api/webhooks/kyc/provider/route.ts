@@ -8,6 +8,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import crypto from "crypto";
 import { createLogger } from "@/lib/utils/logger";
+import {
+  findProviderResultByRef,
+  getArtifactStepType,
+  getVerificationStepForUserAndType,
+  updateProviderResult,
+  updateVerificationStepRiskDecision,
+} from "@/lib/services/kyc-webhook-store";
 
 const log = createLogger("KycWebhook");
 
@@ -28,10 +35,26 @@ interface ProviderWebhookPayload {
   raw_response?: Record<string, unknown>;
 }
 
+const TRUTHY_VALUES = new Set(["1", "true", "yes", "on"]);
+
+function isTruthy(value?: string): boolean {
+  return typeof value === "string" && TRUTHY_VALUES.has(value.trim().toLowerCase());
+}
+
+function isExplicitLocalUnsignedWebhookBypass(request: NextRequest): boolean {
+  return (
+    process.env.NODE_ENV === "development" &&
+    isTruthy(process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS) &&
+    ["localhost", "127.0.0.1"].includes(request.nextUrl.hostname)
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const isProduction = process.env.NODE_ENV === "production";
     const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
+    const allowUnsignedWebhook =
+      isExplicitLocalUnsignedWebhookBypass(request) ||
+      (process.env.NODE_ENV !== "production" && isPlaywrightTestMode);
 
     // ── Webhook signature validation ──────────────────────────
     // When KYC_WEBHOOK_SECRET is set, validate HMAC-SHA256 signature
@@ -39,7 +62,7 @@ export async function POST(request: NextRequest) {
     const webhookSecret = process.env.KYC_WEBHOOK_SECRET;
     let body: Record<string, unknown>;
 
-    if (isProduction && !webhookSecret && !isPlaywrightTestMode) {
+    if (!webhookSecret && !allowUnsignedWebhook) {
       return NextResponse.json({ error: "KYC webhook temporarily unavailable" }, { status: 503 });
     }
 
@@ -79,7 +102,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
       }
     } else {
-      // No secret configured — accept all (development / stub provider)
+      // Explicitly allowed local/test-only bypass when a webhook secret is not configured.
       try {
         body = await request.json();
       } catch {
@@ -105,15 +128,12 @@ export async function POST(request: NextRequest) {
     }
 
     const adminClient = createAdminClient();
+    const providerResult = await findProviderResultByRef(
+      adminClient as never,
+      payload.provider_ref
+    );
 
-    // Find the provider result by provider_ref
-    const { data: providerResult, error: findErr } = await adminClient
-      .from("kyc_provider_results")
-      .select("id, artifact_id, user_id, provider_status")
-      .eq("provider_ref", payload.provider_ref)
-      .single();
-
-    if (findErr || !providerResult) {
+    if (!providerResult) {
       log.warn("No provider result found for ref", { providerRef: payload.provider_ref });
       // Return 200 anyway to prevent webhook retries for unknown refs
       return NextResponse.json({
@@ -159,23 +179,21 @@ export async function POST(request: NextRequest) {
       updateData.raw_response = payload.raw_response;
     }
 
-    await adminClient.from("kyc_provider_results").update(updateData).eq("id", providerResult.id);
+    await updateProviderResult(adminClient as never, providerResult.id, updateData);
 
     // Recalculate risk on the linked verification step
-    const { data: artifact } = await adminClient
-      .from("kyc_artifacts")
-      .select("step_type")
-      .eq("id", providerResult.artifact_id)
-      .single();
+    const artifactStepType = await getArtifactStepType(
+      adminClient as never,
+      providerResult.artifact_id
+    );
 
-    if (artifact) {
+    if (artifactStepType) {
       // Get all risk signals for this user+step
-      const { data: step } = await adminClient
-        .from("verification_steps")
-        .select("id, status, risk_score")
-        .eq("user_id", providerResult.user_id)
-        .eq("step_type", artifact.step_type)
-        .single();
+      const step = await getVerificationStepForUserAndType(
+        adminClient as never,
+        providerResult.user_id,
+        artifactStepType
+      );
 
       if (step) {
         if (step.status !== "pending") {
@@ -209,14 +227,11 @@ export async function POST(request: NextRequest) {
                   ? "high"
                   : "critical";
 
-          await adminClient
-            .from("verification_steps")
-            .update({
-              auto_status: autoStatus,
-              risk_score: newRiskScore,
-              risk_level: newRiskLevel,
-            })
-            .eq("id", step.id);
+          await updateVerificationStepRiskDecision(adminClient as never, step.id, {
+            auto_status: autoStatus,
+            risk_score: newRiskScore,
+            risk_level: newRiskLevel,
+          });
         }
       }
     }

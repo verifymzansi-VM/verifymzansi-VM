@@ -73,6 +73,16 @@ describe("launch-validation: dev-only flags in production", () => {
     expect(devFlagCheck?.detail).toContain("DEV_EXPOSE_OTP");
   });
 
+  it("fails when ENABLE_DEV_KYC_WEBHOOK_BYPASS is set in production", () => {
+    const env = { ...createBaseProductionEnv(), ENABLE_DEV_KYC_WEBHOOK_BYPASS: "true" };
+    const result = validateLaunchConfiguration(env, { mode: "production" });
+
+    expect(result.isValid).toBe(false);
+    const devFlagCheck = result.checks.find((c) => c.name === "Dev-only flags");
+    expect(devFlagCheck?.status).toBe("fail");
+    expect(devFlagCheck?.detail).toContain("ENABLE_DEV_KYC_WEBHOOK_BYPASS");
+  });
+
   it("warns but passes when dev flags are set in development", () => {
     const env = { ...createBaseProductionEnv(), ENABLE_MOCK_OZOW: "true" };
     const result = validateLaunchConfiguration(env, { mode: "development" });
@@ -189,6 +199,7 @@ describe("instrumentation: dev bypass startup guard", () => {
     delete process.env.TEST_PHONE_NUMBERS;
     delete process.env.ENABLE_MOCK_OZOW;
     delete process.env.ENABLE_DEV_PAYMENT_BYPASS;
+    delete process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS;
     delete process.env.DEV_EXPOSE_OTP;
     delete process.env.SMS_MOCK;
   });
@@ -218,6 +229,15 @@ describe("instrumentation: dev bypass startup guard", () => {
     _resetInstrumentationForTesting();
 
     await expect(register()).rejects.toThrow("ENABLE_MOCK_OZOW");
+  });
+
+  it("blocks startup in production when ENABLE_DEV_KYC_WEBHOOK_BYPASS is set", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS = "true";
+    const { register, _resetInstrumentationForTesting } = await import("../instrumentation");
+    _resetInstrumentationForTesting();
+
+    await expect(register()).rejects.toThrow("ENABLE_DEV_KYC_WEBHOOK_BYPASS");
   });
 
   it("does not block startup in development even with dev bypasses", async () => {
