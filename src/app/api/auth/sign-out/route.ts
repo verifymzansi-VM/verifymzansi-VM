@@ -2,10 +2,19 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { createLogger } from "@/lib/utils/logger";
 import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
+import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 
 const log = createLogger("SignOut");
 
 export async function POST(request: Request) {
+  const rl = checkLocalRateLimit(getClientIp(request), "auth:sign-out");
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+    );
+  }
+
   try {
     const supabase = await createClient();
     await supabase.auth.signOut();

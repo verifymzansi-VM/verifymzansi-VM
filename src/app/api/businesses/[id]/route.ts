@@ -21,6 +21,7 @@ import {
 } from "@/lib/services/media-cleanup";
 import type { PlanTier } from "@/types/enums";
 import type { BusinessDetails } from "@/types/business-details";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 
 const log = createLogger("BusinessDetail");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -132,6 +133,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rl = checkLocalRateLimit(user.id, "business:update");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
     }
 
     const admin = createAdminClient();
@@ -324,6 +333,14 @@ export async function DELETE(
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rl = checkLocalRateLimit(user.id, "business:delete");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
     }
 
     const admin = createAdminClient();

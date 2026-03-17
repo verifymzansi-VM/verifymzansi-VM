@@ -5,7 +5,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { dsarRequestSchema } from "@/lib/validations/verification";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { createLogger } from "@/lib/utils/logger";
-import { getClientIp } from "@/lib/utils/rate-limit";
+import { getClientIp, checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("DSAR");
@@ -21,6 +21,15 @@ const dsarSubmitSchema = dsarRequestSchema.extend({
  */
 export async function POST(request: NextRequest) {
   try {
+    const clientIp = getClientIp(request);
+    const rl = checkLocalRateLimit(clientIp, "dsar:submit");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     const parsedBody = await parseAndValidateJsonRequest(request, dsarSubmitSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",

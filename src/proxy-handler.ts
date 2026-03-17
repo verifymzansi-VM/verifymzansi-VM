@@ -422,19 +422,13 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
               .update({ account_status: "active", suspended_until: null })
               .eq("user_id", user.id);
 
-            // Restore content hidden during suspension (non-blocking, best-effort).
-            // Uses the user-scoped client — depends on RLS allowing owner updates.
-            // If RLS blocks this, content restoration falls back to admin/moderator unban.
-            Promise.all([
-              supabase.from("listings").update({ status: "live" }).eq("status", "hidden"),
-              supabase.from("businesses").update({ status: "live" }).eq("status", "hidden"),
-              supabase.from("promotions").update({ status: "live" }).eq("status", "hidden"),
-            ]).catch((err) => {
-              logger.warn("Auto-unsuspend content restoration failed (non-blocking)", {
-                userId: user.id,
-                error: err instanceof Error ? err.message : "Unknown",
-              });
-            });
+            // Content restoration is NOT done here. The previous approach
+            // restored ALL hidden content, which incorrectly un-hid items
+            // hidden by admin moderation for other reasons (e.g. reported
+            // content hidden before/independently of the suspension).
+            // Content is restored via the admin enforcement unban flow
+            // (enforceAction with action="unban"), which scopes restoration
+            // to items hidden after the suspension timestamp.
           } catch {
             // Auto-unsuspend failed — still allow the request so the user
             // isn't permanently locked out; the next request will retry.

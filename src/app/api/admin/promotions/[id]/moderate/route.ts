@@ -6,6 +6,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 
 const log = createLogger("PromotionModeration");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,6 +38,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (!user || !isModeratorOrAdmin(user)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const rl = checkLocalRateLimit(user.id, "admin:promotions:moderate");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, moderateSchema, {

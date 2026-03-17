@@ -15,6 +15,7 @@ import {
   withOwnerColumn,
 } from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 
 const log = createLogger("FeaturedCheckout");
 type ListingCheckoutRow = {
@@ -50,6 +51,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rl = checkLocalRateLimit(user.id, "listing:featured");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
     }
 
     const admin = createAdminClient();

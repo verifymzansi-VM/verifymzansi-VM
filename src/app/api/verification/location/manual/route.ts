@@ -10,6 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { MANUAL_ONLY_BASELINE_RISK } from "@/lib/constants/verification";
 import {
@@ -36,6 +37,14 @@ export async function POST(request: NextRequest) {
 
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rl = checkLocalRateLimit(user.id, "verification:manual-location");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
     }
 
     // Parse and validate body

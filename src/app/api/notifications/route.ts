@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 
 const log = createLogger("NotificationsRoute");
 
@@ -94,6 +95,14 @@ export async function PATCH(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rl = checkLocalRateLimit(user.id, "notifications:update");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, notificationMutationSchema, {

@@ -4,6 +4,11 @@
  * Tracks failed login attempts per email and locks the account after
  * MAX_FAILED_ATTEMPTS within LOCKOUT_WINDOW_MS. Uses in-memory storage
  * with LRU eviction to bound memory usage.
+ *
+ * LIMITATION: On serverless runtimes (e.g. Cloudflare Workers) each isolate
+ * has its own Map, so lockout state is not shared across instances and resets
+ * when the isolate is recycled. For stronger protection, persist lockout state
+ * in Cloudflare KV or a Durable Object.
  */
 
 const MAX_FAILED_ATTEMPTS = 5;

@@ -10,6 +10,7 @@ import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { logAuditEvent } from "@/lib/services/audit";
 import { REQUIRED_VERIFICATION_STEPS } from "@/lib/constants/verification";
 import { createLogger } from "@/lib/utils/logger";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 
 const log = createLogger("SessionStart");
 
@@ -24,6 +25,14 @@ export async function POST(_request: NextRequest) {
 
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rl = checkLocalRateLimit(user.id, "verification:session-start");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
     }
 
     // Feature flag check

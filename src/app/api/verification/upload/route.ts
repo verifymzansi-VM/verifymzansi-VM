@@ -16,6 +16,7 @@ import {
 } from "@/lib/services/verification-state";
 import crypto from "crypto";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 
 const log = createLogger("VerificationUpload");
 
@@ -79,6 +80,14 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rl = checkLocalRateLimit(user.id, "verification:upload");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
     }
 
     // ── Parse multipart form ─────────────────────────────────
