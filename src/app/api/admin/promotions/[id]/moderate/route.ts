@@ -7,6 +7,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("PromotionModeration");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -24,6 +25,10 @@ const moderateSchema = z.object({
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // ── CSRF protection ───────────────────────────────────────
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     const { id: promotionId } = await params;
 
     if (!UUID_RE.test(promotionId)) {

@@ -54,7 +54,11 @@ export async function GET(request: NextRequest) {
     const adminClient = createAdminClient();
 
     // Fetch step(s)
-    let stepsQuery = adminClient.from("verification_steps").select("*");
+    let stepsQuery = adminClient
+      .from("verification_steps")
+      .select(
+        "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at"
+      );
 
     if (stepId) {
       stepsQuery = stepsQuery.eq("id", stepId);
@@ -85,7 +89,9 @@ export async function GET(request: NextRequest) {
     if (artifactIds.length > 0) {
       const { data } = await adminClient
         .from("kyc_provider_results")
-        .select("*")
+        .select(
+          "id, artifact_id, provider_status, face_match_score, liveness_score, doc_auth_score, provider_ref, created_at"
+        )
         .in("artifact_id", artifactIds);
       providerResults = data || [];
     }
@@ -93,7 +99,7 @@ export async function GET(request: NextRequest) {
     // Fetch risk signals
     const { data: riskSignals } = await adminClient
       .from("kyc_risk_signals")
-      .select("*")
+      .select("id, user_id, artifact_id, signal_type, signal_key, score, detail, created_at")
       .eq("user_id", targetUserId)
       .order("created_at", { ascending: false });
 

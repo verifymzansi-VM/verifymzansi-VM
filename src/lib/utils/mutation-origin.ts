@@ -34,10 +34,10 @@ function safeOrigin(raw: string | null | undefined): string | null {
 export function evaluateSameOriginMutation(request: RequestLike): SameOriginDecision {
   const origin = request.headers.get("origin");
   const secFetchSite = request.headers.get("sec-fetch-site");
-  const canonicalOrigin = safeOrigin(resolveAppOrigin({ url: request.url }));
-  const requestOrigin = safeOrigin(request.url);
 
   if (origin) {
+    const canonicalOrigin = safeOrigin(resolveAppOrigin({ url: request.url }));
+    const requestOrigin = safeOrigin(request.url);
     const normalizedOrigin = safeOrigin(origin);
 
     if (!normalizedOrigin) {

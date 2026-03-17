@@ -333,7 +333,14 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         return NextResponse.redirect(completeProfileUrl);
       }
     } catch {
-      // Non-blocking: if we can't check, let the user through.
+      // Fail closed: if we can't verify phone, block access to protected routes.
+      logger.error("Phone gate DB check failed — blocking access", {
+        path: pathname,
+        userId: user.id,
+      });
+      const completeProfileUrl = new URL("/dashboard/complete-profile", request.url);
+      completeProfileUrl.searchParams.set("returnUrl", pathname);
+      return NextResponse.redirect(completeProfileUrl);
     }
   }
 
@@ -380,6 +387,46 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
       return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+  }
+
+  // -- Ban/suspension enforcement: block banned/suspended users from all protected routes --
+  if (user && isProtectedRoute) {
+    const { data: statusProfile, error: statusError } = await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
+      .select("account_status, suspended_until")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!statusError && statusProfile) {
+      if (statusProfile.account_status === "banned") {
+        if (isApiRoute) return NextResponse.json({ error: "Banned" }, { status: 403 });
+        return NextResponse.redirect(new URL("/banned", request.url));
+      }
+
+      if (statusProfile.account_status === "suspended") {
+        if (
+          statusProfile.suspended_until &&
+          new Date(statusProfile.suspended_until) <= new Date()
+        ) {
+          try {
+            await supabase
+              .from(ACCOUNT_PROFILE_WRITE_TABLE)
+              .update({ account_status: "active", suspended_until: null })
+              .eq("user_id", user.id);
+          } catch {
+            // Auto-unsuspend failed — still allow the request
+          }
+        } else {
+          if (isApiRoute) return NextResponse.json({ error: "Suspended" }, { status: 403 });
+          const suspendedUrl = new URL("/dashboard", request.url);
+          suspendedUrl.searchParams.set("suspended", "true");
+          if (statusProfile.suspended_until) {
+            suspendedUrl.searchParams.set("until", statusProfile.suspended_until);
+          }
+          return NextResponse.redirect(suspendedUrl);
+        }
+      }
     }
   }
 

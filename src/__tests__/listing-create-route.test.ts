@@ -335,10 +335,12 @@ describe("POST /api/listings", () => {
         }
         if (table === "free_posts_used") {
           return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            upsert: vi.fn().mockResolvedValue({ error: null }),
+            insert: vi.fn().mockResolvedValue({ error: null }),
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            }),
           };
         }
         if (table === "listings") {

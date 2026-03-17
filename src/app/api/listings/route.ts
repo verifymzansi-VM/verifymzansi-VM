@@ -8,6 +8,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { parseJsonRequest } from "@/lib/utils/api";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { isPostingLimitBypassEnabled } from "../../../lib/utils/posting-limit-bypass";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
@@ -378,6 +379,10 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // ── CSRF protection ───────────────────────────────────────
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
     const {
@@ -465,23 +470,32 @@ export async function POST(request: NextRequest) {
 
     // Check free post availability for unpaid users
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { data: freePostRow } = await admin
+      // Atomic claim: INSERT (not upsert) to prevent TOCTOU race.
+      // If a concurrent request already claimed, the unique constraint
+      // on (user_id, area) causes a conflict error → return 403.
+      const { error: claimError } = await admin
         .from("free_posts_used")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("area", AREA)
-        .maybeSingle();
+        .insert({ user_id: user.id, area: AREA });
 
-      if (freePostRow) {
-        return NextResponse.json(
-          {
-            error: "Free post already used",
-            reason:
-              "You have already used your free post for Mzansi Market. Subscribe to a plan to post more.",
-            upgradeUrl: "/billing",
-          },
-          { status: 403 }
-        );
+      if (claimError) {
+        // 23505 = unique_violation → free post already used
+        if (claimError.code === "23505") {
+          return NextResponse.json(
+            {
+              error: "Free post already used",
+              reason:
+                "You have already used your free post for Mzansi Market. Subscribe to a plan to post more.",
+              upgradeUrl: "/billing",
+            },
+            { status: 403 }
+          );
+        }
+        log.error("Failed to claim free post slot", {
+          error: claimError.message,
+          code: claimError.code,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
       }
     }
 
@@ -568,21 +582,6 @@ export async function POST(request: NextRequest) {
       user.id
     );
 
-    // ── Claim free post slot BEFORE inserting listing (prevents race condition) ──
-    if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: freePostError } = await admin
-        .from("free_posts_used")
-        .upsert({ user_id: user.id, area: AREA }, { onConflict: "user_id,area" });
-
-      if (freePostError) {
-        log.error("Failed to claim free post slot", {
-          error: freePostError.message,
-          userId: user.id,
-        });
-        return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
-      }
-    }
-
     // ── Insert listing ───────────────────────────────────────
     const { data: newListing, error: insertError } = await admin
       .from("listings")
@@ -603,6 +602,33 @@ export async function POST(request: NextRequest) {
         { error: "Failed to create listing", details: insertError.message },
         { status: 500 }
       );
+    }
+
+    // ── Post-insert limit check (closes TOCTOU window for paid plans) ──
+    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
+      const postCountQuery = applyOwnerFilter(
+        admin
+          .from("listings")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "rejected"),
+        ownerColumn,
+        user.id
+      );
+      const { count: postInsertCount } = await postCountQuery;
+      const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
+      if (!postCheck.allowed) {
+        // Over limit due to concurrent insert — roll back
+        await admin.from("listings").delete().eq("id", newListing.id);
+        log.warn("Rolled back listing due to concurrent limit breach", {
+          listingId: newListing.id,
+          userId: user.id,
+          count: postInsertCount,
+        });
+        return NextResponse.json(
+          { error: "Listing limit reached", reason: postCheck.reason },
+          { status: 403 }
+        );
+      }
     }
 
     // ── Audit log ────────────────────────────────────────────

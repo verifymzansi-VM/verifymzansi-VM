@@ -5,6 +5,7 @@ import { listingSchema } from "@/lib/validations/listing";
 import { logAuditEvent } from "@/lib/services/audit";
 import { getEntitlements } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { parseJsonRequest } from "@/lib/utils/api";
@@ -43,6 +44,10 @@ type ListingUpdateRow = {
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // ── CSRF protection ───────────────────────────────────────
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     const { id: listingId } = await params;
 
     // ── Validate UUID format ─────────────────────────────────

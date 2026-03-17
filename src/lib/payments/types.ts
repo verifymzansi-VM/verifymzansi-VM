@@ -10,6 +10,7 @@ export interface PaymentRecordShape {
   provider_payment_id?: string | null;
   provider_reference?: string | null;
   provider_data?: Record<string, unknown> | null;
+  created_at?: string | null;
 }
 
 export type PaymentMetadata = Record<string, unknown> & { type?: string };

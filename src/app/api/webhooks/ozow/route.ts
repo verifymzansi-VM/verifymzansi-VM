@@ -6,7 +6,6 @@ import { fulfillPayment, rollbackPaymentProcessing } from "@/lib/payments/fulfil
 import { normalizeOzowWebhook, verifyOzowWebhookSignature } from "@/lib/payments/ozow";
 
 const log = createLogger("OzowWebhook");
-const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
 
 function toAmountString(amountCents: number): string {
   return (amountCents / 100).toFixed(2);
@@ -191,10 +190,7 @@ export async function POST(request: NextRequest) {
       // but log critically so a reconciliation process can fix the status.
     }
 
-    return NextResponse.json({
-      success: true,
-      actorId: payment.user_id || SYSTEM_ACTOR_ID,
-    });
+    return NextResponse.json({ success: true });
   } catch (error) {
     log.error("Ozow webhook processing failed", {
       error: error instanceof Error ? error.message : "Unknown error",

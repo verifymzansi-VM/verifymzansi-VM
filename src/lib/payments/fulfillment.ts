@@ -96,6 +96,9 @@ export async function fulfillPayment(
     log.warn("Storefront owner column detection failed, falling back to owner_id");
   }
 
+  // Anchor all duration calculations to payment creation time for idempotent re-runs
+  const baseTime = payment.created_at ? new Date(payment.created_at).getTime() : Date.now();
+
   const planId = typeof meta.plan_id === "string" ? meta.plan_id : null;
   if (planId) {
     const { data: plan } = await supabase
@@ -112,8 +115,8 @@ export async function fulfillPayment(
           tier: plan.tier,
           type: "subscription",
           status: "active",
-          started_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          started_at: new Date(baseTime).toISOString(),
+          expires_at: new Date(baseTime + 30 * 24 * 60 * 60 * 1000).toISOString(),
         },
         { onConflict: "user_id,area,type" }
       );
@@ -129,7 +132,7 @@ export async function fulfillPayment(
       typeof meta.boost_days === "number" && meta.boost_days > 0
         ? meta.boost_days
         : BOOST_DURATION_DAYS;
-    const boostUntil = new Date(Date.now() + boostDays * 24 * 60 * 60 * 1000).toISOString();
+    const boostUntil = new Date(baseTime + boostDays * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase
       .from("listings")
       .update({ boost_until: boostUntil })
@@ -160,7 +163,7 @@ export async function fulfillPayment(
       typeof meta.boost_days === "number" && meta.boost_days > 0
         ? meta.boost_days
         : BOOST_DURATION_DAYS;
-    const boostUntil = new Date(Date.now() + boostDays * 24 * 60 * 60 * 1000).toISOString();
+    const boostUntil = new Date(baseTime + boostDays * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase
       .from("businesses")
       .update({ boost_until: boostUntil })
@@ -184,7 +187,7 @@ export async function fulfillPayment(
       typeof meta.boost_days === "number" && meta.boost_days > 0
         ? meta.boost_days
         : BOOST_DURATION_DAYS;
-    const boostUntil = new Date(Date.now() + boostDays * 24 * 60 * 60 * 1000).toISOString();
+    const boostUntil = new Date(baseTime + boostDays * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase
       .from("storefronts")
       .update({ boost_until: boostUntil })
@@ -208,7 +211,7 @@ export async function fulfillPayment(
       typeof meta.feature_days === "number" && meta.feature_days > 0
         ? meta.feature_days
         : FEATURED_DURATION_DAYS;
-    const featuredUntil = new Date(Date.now() + featureDays * 24 * 60 * 60 * 1000).toISOString();
+    const featuredUntil = new Date(baseTime + featureDays * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase
       .from("listings")
       .update({ featured_until: featuredUntil })
@@ -232,7 +235,7 @@ export async function fulfillPayment(
       typeof meta.urgent_days === "number" && meta.urgent_days > 0
         ? meta.urgent_days
         : URGENT_DURATION_DAYS;
-    const urgentUntil = new Date(Date.now() + urgentDays * 24 * 60 * 60 * 1000).toISOString();
+    const urgentUntil = new Date(baseTime + urgentDays * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase
       .from("listings")
       .update({ urgent_until: urgentUntil })
@@ -256,7 +259,7 @@ export async function fulfillPayment(
       typeof meta.boost_days === "number" && meta.boost_days > 0
         ? meta.boost_days
         : BOOST_DURATION_DAYS;
-    const boostUntil = new Date(Date.now() + boostDays * 24 * 60 * 60 * 1000).toISOString();
+    const boostUntil = new Date(baseTime + boostDays * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase
       .from("promotions")
       .update({ boost_until: boostUntil })
@@ -280,7 +283,7 @@ export async function fulfillPayment(
       typeof meta.feature_days === "number" && meta.feature_days > 0
         ? meta.feature_days
         : FEATURED_DURATION_DAYS;
-    const featuredUntil = new Date(Date.now() + featureDays * 24 * 60 * 60 * 1000).toISOString();
+    const featuredUntil = new Date(baseTime + featureDays * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase
       .from("promotions")
       .update({ featured_until: featuredUntil })
