@@ -87,7 +87,7 @@ describe("payment cleanup worker", () => {
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-17T09:00:00.000Z"));
-    vi.stubGlobal("fetch", fetchMock as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     try {
       await worker.scheduled?.({ cron: "*/10 * * * *", scheduledTime: Date.now() }, env, ctx);

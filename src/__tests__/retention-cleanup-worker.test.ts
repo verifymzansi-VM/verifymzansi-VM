@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../../workers/retention-cleanup";
 
-interface TestR2Bucket {
-  delete: ReturnType<typeof vi.fn>;
-}
-
 const ctx = {
   waitUntil: vi.fn(),
   passThroughOnException: vi.fn(),
@@ -20,12 +16,12 @@ describe("retention cleanup worker", () => {
     const publicDelete = vi.fn().mockResolvedValue(undefined);
 
     const env = {
-      R2_PRIVATE: { delete: privateDelete } as TestR2Bucket,
-      R2_PUBLIC: { delete: publicDelete } as TestR2Bucket,
+      R2_PRIVATE: { delete: privateDelete },
+      R2_PUBLIC: { delete: publicDelete },
       SUPABASE_URL: "https://test.supabase.co",
       SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
       WORKER_API_KEY: "worker-key",
-    };
+    } as unknown as Parameters<NonNullable<typeof worker.scheduled>>[1];
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
@@ -88,7 +84,7 @@ describe("retention cleanup worker", () => {
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
-    vi.stubGlobal("fetch", fetchMock as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     await worker.scheduled?.({ cron: "0 3 * * *", scheduledTime: Date.now() }, env, ctx);
 
