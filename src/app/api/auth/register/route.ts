@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     const rateCheck = await checkRateLimit({
       key: ip,
       action: "auth:register",
-      degradedMode: "block",
+      degradedMode: "local",
     });
     if (rateCheck.limited) {
       if (rateCheck.degraded) {

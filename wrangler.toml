@@ -39,6 +39,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOi
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
 # Cloudflare Image Resizing toggle — set to "true" once enabled on the zone
 NEXT_PUBLIC_CF_IMAGE_RESIZING = "false"
+# OTP Rate Limiter Worker URL
+OTP_RATE_LIMITER_URL = "https://verifymzansi-rate-limiter.verifymzansi.workers.dev"
+OTP_RATE_LIMITER_TIMEOUT_MS = "2500"
 # ⚠️ TEST_PHONE_NUMBERS and ENABLE_TEST_POSTING_BYPASS removed — these
 # weaken security and must NEVER be set in production. Use them only in
 # local .env for development/testing.
