@@ -22,7 +22,7 @@ type KycWebhookStoreClient = {
         column: string,
         value: string
       ) => {
-        eq?: (
+        eq: (
           column: string,
           value: string
         ) => {

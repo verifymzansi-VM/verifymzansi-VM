@@ -1,5 +1,5 @@
 import { appendProviderWebhook } from "@/lib/payments/types";
-import type { MarketplaceArea } from "@/types/enums";
+import type { MarketplaceArea, PaymentProvider, PaymentStatus } from "@/types/enums";
 
 export type PaymentStoreClient = {
   from: (table: string) => {
@@ -19,7 +19,7 @@ export type PaymentStoreClient = {
         eq: (
           column: string,
           value: string
-        ) => {
+        ) => Promise<{ error?: { message?: string } | null }> & {
           eq: (column: string, value: string) => Promise<{ error?: { message?: string } | null }>;
           neq: (
             column: string,
@@ -52,8 +52,8 @@ export type PaymentStoreClient = {
 export type PaymentRow = {
   id: string;
   area: MarketplaceArea;
-  status: string;
-  provider: string;
+  status: PaymentStatus;
+  provider: PaymentProvider;
   provider_payment_id: string | null;
   provider_reference: string | null;
   provider_data: Record<string, unknown> | null;
