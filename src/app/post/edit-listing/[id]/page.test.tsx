@@ -65,6 +65,9 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
 
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
+    auth: {
+      getUser: () => Promise.resolve({ data: { user: { id: "user-1" } } }),
+    },
     from: () => ({
       select: () => ({
         eq: () => ({
@@ -84,6 +87,7 @@ describe("EditListingPage", () => {
     mockMaybeSingle.mockResolvedValue({
       data: {
         id: "listing-1",
+        seller_id: "user-1",
         title: "Used iPhone 15",
         description: "Clean phone in excellent condition.",
         price_cents: 150000,

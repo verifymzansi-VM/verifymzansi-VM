@@ -81,12 +81,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     // Increment view count atomically (best-effort, non-blocking).
-    // Uses raw SQL to avoid read-modify-write race condition.
-    admin
-      .from("promotions")
-      .update({ view_count: (normalizedPromotion.view_count ?? 0) + 1 } as Record<string, unknown>)
-      .eq("id", id)
-      .then(() => {});
+    admin.rpc("increment_promotion_view_count", { promotion_id: id }).then(() => {});
 
     return NextResponse.json({ promotion: normalizedPromotion });
   } catch (err) {

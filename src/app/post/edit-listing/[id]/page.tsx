@@ -93,6 +93,15 @@ export default function EditListingPage() {
     async function load() {
       try {
         const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          router.push("/login");
+          return;
+        }
+
         const { data, error } = await supabase
           .from("listings")
           .select("*")
@@ -122,6 +131,18 @@ export default function EditListingPage() {
           if (!cancelled) {
             setLoadFailed(true);
             toast({ title: "Listing not found", variant: "destructive" });
+            router.push("/dashboard/listings");
+          }
+          return;
+        }
+
+        // Defense-in-depth: verify current user is the listing owner
+        const ownerId =
+          (data as Record<string, unknown>).seller_id ?? (data as Record<string, unknown>).owner_id;
+        if (ownerId !== user.id) {
+          if (!cancelled) {
+            setLoadFailed(true);
+            toast({ title: "You are not the owner of this listing", variant: "destructive" });
             router.push("/dashboard/listings");
           }
           return;
