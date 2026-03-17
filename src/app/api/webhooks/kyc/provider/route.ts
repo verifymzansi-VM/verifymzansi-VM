@@ -143,10 +143,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Idempotency: skip if this provider result was already finalized ──
-    if (
-      providerResult.provider_status === payload.status &&
-      providerResult.provider_status !== "pending"
-    ) {
+    const currentStatus: string = providerResult.provider_status;
+    if (currentStatus === payload.status && currentStatus !== "pending") {
       return NextResponse.json({
         acknowledged: true,
         duplicate: true,
