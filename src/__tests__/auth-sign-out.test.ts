@@ -12,7 +12,15 @@ function createRequest(url = "http://localhost:3000/api/auth/sign-out") {
   return {
     method: "POST",
     url,
-    headers: { get: vi.fn().mockReturnValue(null) },
+    headers: new Headers(),
+  } as unknown as Request;
+}
+
+function createCrossSiteRequest(url = "https://verifymzansi.com/api/auth/sign-out") {
+  return {
+    method: "POST",
+    url,
+    headers: new Headers({ origin: "https://evil.example" }),
   } as unknown as Request;
 }
 
@@ -51,5 +59,11 @@ describe("POST /api/auth/sign-out", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toBe("https://verifymzansi.com/");
+  });
+
+  it("rejects cross-site sign-out requests", async () => {
+    const res = await POST(createCrossSiteRequest());
+
+    expect(res.status).toBe(403);
   });
 });

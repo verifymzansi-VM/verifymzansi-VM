@@ -21,6 +21,7 @@ import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -51,6 +52,9 @@ function normalizeBusinessSelectShape(
  */
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -112,23 +116,29 @@ export async function POST(request: NextRequest) {
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { data: freePostRow } = await admin
+      const { error: claimError } = await admin
         .from("free_posts_used")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("area", AREA)
-        .maybeSingle();
+        .insert({ user_id: user.id, area: AREA });
 
-      if (freePostRow) {
-        return NextResponse.json(
-          {
-            error: "Free post already used",
-            reason:
-              "You have already used your free post for Mzansi Business. Subscribe to a plan to post more.",
-            upgradeUrl: "/billing",
-          },
-          { status: 403 }
-        );
+      if (claimError) {
+        if (claimError.code === "23505") {
+          return NextResponse.json(
+            {
+              error: "Free post already used",
+              reason:
+                "You have already used your free post for Mzansi Business. Subscribe to a plan to post more.",
+              upgradeUrl: "/billing",
+            },
+            { status: 403 }
+          );
+        }
+
+        log.error("Failed to claim free post slot", {
+          error: claimError.message,
+          code: claimError.code,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
       }
     }
 
@@ -211,19 +221,32 @@ export async function POST(request: NextRequest) {
 
     if (insertError || !business) {
       log.error("Failed to create business", { error: insertError?.message });
+      if (!hasPaidPlan && !postingLimitBypassEnabled) {
+        await admin.from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+      }
       return NextResponse.json({ error: "Failed to create business" }, { status: 500 });
     }
 
-    if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: freePostError } = await admin
-        .from("free_posts_used")
-        .upsert({ user_id: user.id, area: AREA }, { onConflict: "user_id,area" });
+    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
+      const postCountQuery = admin
+        .from("businesses")
+        .select("id", { count: "exact", head: true })
+        .neq("status", "rejected");
 
-      if (freePostError) {
-        log.error("Failed to mark free post as used", {
-          error: freePostError.message,
+      const { count: postInsertCount } = await postCountQuery.eq(ownerColumn, user.id);
+      const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
+
+      if (!postCheck.allowed) {
+        await admin.from("businesses").delete().eq("id", business.id);
+        log.warn("Rolled back business due to concurrent limit breach", {
+          businessId: business.id,
           userId: user.id,
+          count: postInsertCount,
         });
+        return NextResponse.json(
+          { error: "Business limit reached", reason: postCheck.reason },
+          { status: 403 }
+        );
       }
     }
 

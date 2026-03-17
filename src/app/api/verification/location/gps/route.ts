@@ -274,7 +274,7 @@ export async function POST(request: NextRequest) {
       location_city: isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity,
       risk_score: riskScore,
       risk_level: riskLevel,
-      auto_status: riskScore > 50 ? "needs_manual_review" : "approved",
+      auto_status: riskScore <= 25 ? "approved" : "needs_manual_review",
       submitted_at: new Date().toISOString(),
       ...(isConfirmationMode
         ? {

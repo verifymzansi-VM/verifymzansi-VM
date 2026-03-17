@@ -171,10 +171,19 @@ export default function LoginPage() {
     if (resendCooldown > 0) return;
 
     const email = getValues("email") || registeredEmail;
+    const turnstileToken = getValues("turnstileToken");
     if (!email) {
       toast({
         title: "Enter your email",
         description: "Please enter your email address in the field above, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!turnstileToken) {
+      toast({
+        title: "Complete the security check",
+        description: "Please complete the CAPTCHA before resending the confirmation email.",
         variant: "destructive",
       });
       return;
@@ -184,7 +193,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/resend-confirmation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, turnstileToken }),
       });
       const data = await res.json().catch(() => ({}));
 

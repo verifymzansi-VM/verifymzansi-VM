@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
           location_city: city,
           risk_score: riskScore,
           risk_level: riskLevel,
-          auto_status: "approved",
+          auto_status: "needs_manual_review",
           submitted_at: new Date().toISOString(),
         }),
         { onConflict: "user_id,step_type" }

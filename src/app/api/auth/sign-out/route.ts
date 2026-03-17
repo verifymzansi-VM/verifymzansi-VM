@@ -3,10 +3,14 @@ import { NextResponse } from "next/server";
 import { createLogger } from "@/lib/utils/logger";
 import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("SignOut");
 
 export async function POST(request: Request) {
+  const originBlock = enforceSameOriginMutation(request, log);
+  if (originBlock) return originBlock;
+
   const rl = checkLocalRateLimit(getClientIp(request), "auth:sign-out");
   if (rl.limited) {
     return NextResponse.json(

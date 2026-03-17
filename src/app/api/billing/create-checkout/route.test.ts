@@ -57,6 +57,18 @@ function createMockRequest(body: Record<string, unknown>) {
   return {
     text: async () => json,
     json: async () => body,
+    url: "https://verifymzansi.com/api/billing/create-checkout",
+    headers: new Headers(),
+  } as unknown as NextRequest;
+}
+
+function createCrossSiteRequest(body: Record<string, unknown>) {
+  const json = JSON.stringify(body);
+  return {
+    text: async () => json,
+    json: async () => body,
+    url: "https://verifymzansi.com/api/billing/create-checkout",
+    headers: new Headers({ origin: "https://evil.example" }),
   } as unknown as NextRequest;
 }
 
@@ -82,6 +94,14 @@ describe("POST /api/billing/create-checkout", () => {
     const res = await createCheckout(req);
 
     expect(res.status).toBe(401);
+  });
+
+  it("rejects cross-site checkout creation requests", async () => {
+    const res = await createCheckout(
+      createCrossSiteRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
+    );
+
+    expect(res.status).toBe(403);
   });
 
   it("returns 404 cleanly instead of crashing when profile is not found", async () => {

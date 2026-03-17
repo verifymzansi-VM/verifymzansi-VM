@@ -33,6 +33,15 @@ const providerResult = {
   provider_status: "pending",
 };
 
+function pendingStep(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "step-1",
+    status: "pending",
+    risk_score: 10,
+    ...overrides,
+  };
+}
+
 // ── Tests ────────────────────────────────────────────────────
 
 describe("POST /api/webhooks/kyc/provider", () => {
@@ -105,7 +114,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({
-                  data: { id: "step-1", risk_score: 10 },
+                  data: pendingStep(),
                   error: null,
                 }),
               }),
@@ -174,7 +183,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({
-                  data: { id: "step-1", risk_score: 20 },
+                  data: pendingStep({ risk_score: 20 }),
                   error: null,
                 }),
               }),
@@ -238,7 +247,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({
-                  data: { id: "step-1", risk_score: 90 },
+                  data: pendingStep({ risk_score: 90 }),
                   error: null,
                 }),
               }),
@@ -298,6 +307,57 @@ describe("POST /api/webhooks/kyc/provider", () => {
         targetId: "pr-1",
       })
     );
+  });
+
+  it("does not overwrite an already-decided verification step", async () => {
+    const stepUpdateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "kyc_provider_results") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { step_type: "id_doc" }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: pendingStep({ status: "approved", risk_score: 40 }),
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+          update: stepUpdateMock,
+        };
+      }
+      return {};
+    });
+
+    const res = await POST(createMockRequest({ provider_ref: "ref-1", status: "rejected" }));
+
+    expect(res.status).toBe(200);
+    expect(stepUpdateMock).not.toHaveBeenCalled();
   });
 
   it("returns 503 in production without secret and without test mode", async () => {
@@ -368,7 +428,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({
-                  data: { id: "step-1", risk_score: 10 },
+                  data: pendingStep(),
                   error: null,
                 }),
               }),

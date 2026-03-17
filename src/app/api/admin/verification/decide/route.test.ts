@@ -38,6 +38,17 @@ function createMockRequest(body: Record<string, unknown>) {
   const json = JSON.stringify(body);
   return {
     text: async () => json,
+    headers: new Headers(),
+    url: "https://verifymzansi.com/api/admin/verification/decide",
+  } as unknown as Request;
+}
+
+function createCrossSiteMockRequest(body: Record<string, unknown>) {
+  const json = JSON.stringify(body);
+  return {
+    text: async () => json,
+    headers: new Headers({ origin: "https://evil.example" }),
+    url: "https://verifymzansi.com/api/admin/verification/decide",
   } as unknown as Request;
 }
 
@@ -115,6 +126,14 @@ describe("POST /api/admin/verification/decide", () => {
     mockAuth(null);
     const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
     expect(response.status).toBe(401);
+  });
+
+  it("returns 403 for cross-site verification decisions", async () => {
+    const response = await POST(
+      createCrossSiteMockRequest({ stepId: STEP_UUID, decision: "approved" })
+    );
+
+    expect(response.status).toBe(403);
   });
 
   it("returns 403 when user is not admin or moderator", async () => {

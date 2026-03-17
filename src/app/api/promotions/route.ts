@@ -29,6 +29,7 @@ import {
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -110,6 +111,9 @@ function isPlaceholderPromotion(promotion: { title: string | null; description?:
  */
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -164,23 +168,29 @@ export async function POST(request: NextRequest) {
 
     // Check free post availability for unpaid users
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { data: freePostRow } = await admin
+      const { error: claimError } = await admin
         .from("free_posts_used")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("area", AREA)
-        .maybeSingle();
+        .insert({ user_id: user.id, area: AREA });
 
-      if (freePostRow) {
-        return NextResponse.json(
-          {
-            error: "Free post already used",
-            reason:
-              "You have already used your free post for Promotions & Events. Subscribe to a plan to post more.",
-            upgradeUrl: "/billing",
-          },
-          { status: 403 }
-        );
+      if (claimError) {
+        if (claimError.code === "23505") {
+          return NextResponse.json(
+            {
+              error: "Free post already used",
+              reason:
+                "You have already used your free post for Promotions & Events. Subscribe to a plan to post more.",
+              upgradeUrl: "/billing",
+            },
+            { status: 403 }
+          );
+        }
+
+        log.error("Failed to claim free post slot", {
+          error: claimError.message,
+          code: claimError.code,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
       }
     }
 
@@ -296,20 +306,36 @@ export async function POST(request: NextRequest) {
 
     if (insertError || !promotion) {
       log.error("Failed to create promotion", { error: insertError?.message });
+      if (!hasPaidPlan && !postingLimitBypassEnabled) {
+        await admin.from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+      }
       return NextResponse.json({ error: "Failed to create promotion" }, { status: 500 });
     }
 
-    // ── Mark free post as used if no paid entitlement ────────
-    if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: freePostError } = await admin
-        .from("free_posts_used")
-        .upsert({ user_id: user.id, area: AREA }, { onConflict: "user_id,area" });
+    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
+      const postCountQuery = applyOwnerFilter(
+        admin
+          .from("promotions")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "rejected"),
+        ownerColumn,
+        user.id
+      );
 
-      if (freePostError) {
-        log.error("Failed to mark free post as used", {
-          error: freePostError.message,
+      const { count: postInsertCount } = await postCountQuery;
+      const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
+
+      if (!postCheck.allowed) {
+        await admin.from("promotions").delete().eq("id", promotion.id);
+        log.warn("Rolled back promotion due to concurrent limit breach", {
+          promotionId: promotion.id,
           userId: user.id,
+          count: postInsertCount,
         });
+        return NextResponse.json(
+          { error: "Promotion limit reached", reason: postCheck.reason },
+          { status: 403 }
+        );
       }
     }
 

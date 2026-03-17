@@ -42,8 +42,27 @@ function createRequest(url: string, opts: { method?: string; body?: unknown } = 
         : async () => {
             throw new Error("No body");
           },
-    headers: { get: vi.fn().mockReturnValue(null) },
+    headers: new Headers(),
     nextUrl: new URL(url, "http://localhost:3000"),
+    url: new URL(url, "http://localhost:3000").toString(),
+  } as unknown as NextRequest;
+}
+
+function createCrossSiteRequest(
+  url: string,
+  opts: { method?: string; body?: unknown } = {}
+): NextRequest {
+  return {
+    method: opts.method || "GET",
+    json:
+      opts.body !== undefined
+        ? async () => opts.body
+        : async () => {
+            throw new Error("No body");
+          },
+    headers: new Headers({ origin: "https://evil.example" }),
+    nextUrl: new URL(url, "https://verifymzansi.com"),
+    url: new URL(url, "https://verifymzansi.com").toString(),
   } as unknown as NextRequest;
 }
 
@@ -104,6 +123,16 @@ describe("POST /api/promotions", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(401);
+  });
+
+  it("rejects cross-site promotion creation requests", async () => {
+    const req = createCrossSiteRequest("/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
   });
 
   it("returns 404 when account profile not found", async () => {
@@ -172,6 +201,59 @@ describe("POST /api/promotions", () => {
     await expect(res.json()).resolves.toMatchObject({
       error: "Verification required",
       code: "verification_required",
+    });
+  });
+
+  it("blocks a second free promotion post when no paid plan exists", async () => {
+    mockAuth({ id: USER_ID });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "sp-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            insert: vi.fn().mockResolvedValue({
+              error: { code: "23505", message: "duplicate key value violates unique constraint" },
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Free post already used",
     });
   });
 

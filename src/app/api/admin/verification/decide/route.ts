@@ -9,6 +9,7 @@ import { getRoleFromUser, isModeratorOrAdmin, asAdminRole } from "@/lib/auth/rol
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("AdminVerification");
 
@@ -18,6 +19,9 @@ const log = createLogger("AdminVerification");
  */
 export async function POST(request: Request) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     // Auth check
     const supabase = await createClient();
     const {

@@ -172,44 +172,52 @@ export async function POST(request: NextRequest) {
       // Get all risk signals for this user+step
       const { data: step } = await adminClient
         .from("verification_steps")
-        .select("id, risk_score")
+        .select("id, status, risk_score")
         .eq("user_id", providerResult.user_id)
         .eq("step_type", artifact.step_type)
         .single();
 
       if (step) {
-        // Map provider status to auto_status
-        const autoStatus =
-          payload.status === "approved"
-            ? "approved"
-            : payload.status === "rejected"
-              ? "rejected"
-              : "needs_manual_review";
+        if (step.status !== "pending") {
+          log.info("Skipping KYC webhook step update for already-decided step", {
+            providerRef: payload.provider_ref,
+            stepId: step.id,
+            stepStatus: step.status,
+          });
+        } else {
+          // Map provider status to auto_status
+          const autoStatus =
+            payload.status === "approved"
+              ? "approved"
+              : payload.status === "rejected"
+                ? "rejected"
+                : "needs_manual_review";
 
-        // Bump risk score if provider rejected
-        let additionalRisk = 0;
-        if (payload.status === "rejected") {
-          additionalRisk = 30;
+          // Bump risk score if provider rejected
+          let additionalRisk = 0;
+          if (payload.status === "rejected") {
+            additionalRisk = 30;
+          }
+
+          const newRiskScore = Math.min((step.risk_score || 0) + additionalRisk, 100);
+          const newRiskLevel =
+            newRiskScore <= 25
+              ? "low"
+              : newRiskScore <= 50
+                ? "medium"
+                : newRiskScore <= 75
+                  ? "high"
+                  : "critical";
+
+          await adminClient
+            .from("verification_steps")
+            .update({
+              auto_status: autoStatus,
+              risk_score: newRiskScore,
+              risk_level: newRiskLevel,
+            })
+            .eq("id", step.id);
         }
-
-        const newRiskScore = Math.min((step.risk_score || 0) + additionalRisk, 100);
-        const newRiskLevel =
-          newRiskScore <= 25
-            ? "low"
-            : newRiskScore <= 50
-              ? "medium"
-              : newRiskScore <= 75
-                ? "high"
-                : "critical";
-
-        await adminClient
-          .from("verification_steps")
-          .update({
-            auto_status: autoStatus,
-            risk_score: newRiskScore,
-            risk_level: newRiskLevel,
-          })
-          .eq("id", step.id);
       }
     }
 

@@ -46,7 +46,19 @@ function createRequest(body: unknown): NextRequest {
   return {
     method: "POST",
     json: async () => body,
-    headers: { get: vi.fn().mockReturnValue(null) },
+    url: "https://verifymzansi.com/api/businesses",
+    nextUrl: new URL("https://verifymzansi.com/api/businesses"),
+    headers: new Headers(),
+  } as unknown as NextRequest;
+}
+
+function createCrossSiteRequest(body: unknown): NextRequest {
+  return {
+    method: "POST",
+    json: async () => body,
+    url: "https://verifymzansi.com/api/businesses",
+    nextUrl: new URL("https://verifymzansi.com/api/businesses"),
+    headers: new Headers({ origin: "https://evil.example" }),
   } as unknown as NextRequest;
 }
 
@@ -86,9 +98,9 @@ describe("POST /api/businesses", () => {
         }
         if (table === "free_posts_used") {
           return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "used-1" } }),
+            insert: vi.fn().mockResolvedValue({
+              error: { code: "23505", message: "duplicate key value violates unique constraint" },
+            }),
           };
         }
         return {
@@ -104,6 +116,12 @@ describe("POST /api/businesses", () => {
     await expect(res.json()).resolves.toMatchObject({
       error: "Free post already used",
     });
+  });
+
+  it("rejects cross-site business creation requests", async () => {
+    const res = await POST(createCrossSiteRequest(VALID_BODY));
+
+    expect(res.status).toBe(403);
   });
 
   it("blocks cover video uploads when the plan does not allow them", async () => {
@@ -400,10 +418,12 @@ describe("POST /api/businesses", () => {
         }
         if (table === "free_posts_used") {
           return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            upsert: vi.fn().mockResolvedValue({ error: null }),
+            insert: vi.fn().mockResolvedValue({ error: null }),
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            }),
           };
         }
         if (table === "businesses") {
