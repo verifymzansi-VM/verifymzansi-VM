@@ -1,8 +1,13 @@
 {
   "servers": {
     "cloudflare": {
+      "type": "stdio",
       "command": "npx",
       "args": ["-y", "@cloudflare/mcp-server-cloudflare", "run"]
+    },
+    "cloudflare-remote": {
+      "type": "sse",
+      "url": "https://mcp.cloudflare.com/sse"
     }
   }
 }

@@ -72,3 +72,8 @@ export const adminDsarDecideSchema = z.object({
   }),
   notes: z.string().max(2000).optional(),
 });
+
+export const adminDsarCompleteSchema = z.object({
+  requestId: z.string().uuid("requestId must be a valid UUID"),
+  notes: z.string().max(2000).optional(),
+});

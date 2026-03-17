@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import AdminDSARPage from "./page";
+import AdminAuditLogPage from "./page";
 
 const { mockGetUser, mockSessionFrom, mockAdminFrom, redirectMock } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
@@ -41,17 +41,7 @@ vi.mock("@/components/layout/page-header", () => ({
   ),
 }));
 
-vi.mock("./dsar-action-buttons", () => ({
-  DsarActionButtons: ({
-    requestId,
-    status,
-  }: {
-    requestId: string;
-    status: "submitted" | "in_progress";
-  }) => <div data-testid={`dsar-actions-${requestId}-${status}`}>Actions</div>,
-}));
-
-describe("AdminDSARPage", () => {
+describe("AdminAuditLogPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetUser.mockResolvedValue({
@@ -59,27 +49,19 @@ describe("AdminDSARPage", () => {
     });
   });
 
-  it("only renders action buttons for submitted requests", async () => {
+  it("reads audit logs through the admin client after auth gating", async () => {
     mockAdminFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
         order: vi.fn().mockReturnValue({
           limit: vi.fn().mockResolvedValue({
             data: [
               {
-                id: "req-submitted",
-                requester_email: "submitted@example.com",
-                description: "Submitted request",
-                status: "submitted",
-                type: "access",
-                created_at: "2026-03-10T10:00:00.000Z",
-              },
-              {
-                id: "req-progress",
-                requester_email: "progress@example.com",
-                description: "Already in progress",
-                status: "in_progress",
-                type: "delete",
-                created_at: "2026-03-10T09:00:00.000Z",
+                id: "log-1",
+                action: "dsar_completed",
+                actor_id: "admin-1",
+                target_type: "dsar_case",
+                metadata: { requestId: "req-1" },
+                created_at: "2026-03-17T10:00:00.000Z",
               },
             ],
           }),
@@ -87,18 +69,15 @@ describe("AdminDSARPage", () => {
       }),
     });
 
-    render(await AdminDSARPage());
+    render(await AdminAuditLogPage());
 
     expect(mockSessionFrom).not.toHaveBeenCalled();
-    expect(mockAdminFrom).toHaveBeenCalledWith("dsar_cases");
-    expect(screen.getByText("s***d@example.com")).toBeInTheDocument();
-    expect(screen.getByText("p***s@example.com")).toBeInTheDocument();
-    expect(screen.getByTestId("dsar-actions-req-submitted-submitted")).toBeInTheDocument();
-    expect(screen.getByTestId("dsar-actions-req-progress-in_progress")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: /export json/i })).toHaveLength(2);
+    expect(mockAdminFrom).toHaveBeenCalledWith("audit_logs");
+    expect(screen.getByText("dsar_completed")).toBeInTheDocument();
+    expect(screen.getByText(/admin-1/i)).toBeInTheDocument();
   });
 
-  it("uses neutral empty-state copy when there are no data requests", async () => {
+  it("shows the empty state when there are no audit entries", async () => {
     mockAdminFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
         order: vi.fn().mockReturnValue({
@@ -107,8 +86,8 @@ describe("AdminDSARPage", () => {
       }),
     });
 
-    render(await AdminDSARPage());
+    render(await AdminAuditLogPage());
 
-    expect(screen.getByText("No data requests found.")).toBeInTheDocument();
+    expect(screen.getByText("No audit entries recorded yet.")).toBeInTheDocument();
   });
 });

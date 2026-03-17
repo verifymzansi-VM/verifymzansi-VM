@@ -9,11 +9,18 @@ interface BoostButtonProps {
   listingId: string;
   isBoosted: boolean;
   canBoost: boolean;
+  itemTypeLabel?: string;
   /** Override the API endpoint for boosting. Defaults to `/api/listings/${listingId}/boost` */
   boostApiPath?: string;
 }
 
-export function BoostButton({ listingId, isBoosted, canBoost, boostApiPath }: BoostButtonProps) {
+export function BoostButton({
+  listingId,
+  isBoosted,
+  canBoost,
+  itemTypeLabel = "listing",
+  boostApiPath,
+}: BoostButtonProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -39,8 +46,8 @@ export function BoostButton({ listingId, isBoosted, canBoost, boostApiPath }: Bo
         size="icon"
         className="h-8 w-8"
         disabled
-        title="Upgrade to Growth or Pro to boost"
-        aria-label="Upgrade to Growth or Pro to boost"
+        title={`Upgrade to Growth or Pro to boost this ${itemTypeLabel}`}
+        aria-label={`Upgrade to Growth or Pro to boost this ${itemTypeLabel}`}
       >
         <Zap className="h-3.5 w-3.5 text-muted-foreground" />
       </Button>
@@ -86,8 +93,8 @@ export function BoostButton({ listingId, isBoosted, canBoost, boostApiPath }: Bo
       className="h-8 w-8 transition-colors hover:text-brand-blue"
       onClick={handleBoost}
       disabled={loading}
-      title="Boost this listing (R15 for 7 days)"
-      aria-label="Boost this listing"
+      title={`Boost this ${itemTypeLabel} (R15 for 7 days)`}
+      aria-label={`Boost this ${itemTypeLabel}`}
     >
       <Zap className={`h-3.5 w-3.5 ${loading ? "animate-pulse" : ""}`} />
     </Button>

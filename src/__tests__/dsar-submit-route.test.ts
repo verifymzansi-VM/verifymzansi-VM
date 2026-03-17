@@ -1,13 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateAdminClient, mockLogAuditEvent } = vi.hoisted(() => ({
-  mockCreateAdminClient: vi.fn(),
-  mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
-}));
+const { mockCreateAdminClient, mockLogAuditEvent, mockSendDsarSubmissionEmail } = vi.hoisted(
+  () => ({
+    mockCreateAdminClient: vi.fn(),
+    mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
+    mockSendDsarSubmissionEmail: vi.fn().mockResolvedValue({ success: true }),
+  })
+);
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
+vi.mock("@/lib/services/email", () => ({
+  sendDsarSubmissionEmail: mockSendDsarSubmissionEmail,
+}));
 
 import { POST } from "@/app/api/dsar/submit/route";
 
@@ -67,5 +73,10 @@ describe("POST /api/dsar/submit", () => {
       reference: expect.stringContaining("DSAR-"),
     });
     expect(mockLogAuditEvent).toHaveBeenCalled();
+    expect(mockSendDsarSubmissionEmail).toHaveBeenCalledWith(
+      "nomsa@example.com",
+      expect.stringContaining("DSAR-"),
+      expect.any(String)
+    );
   });
 });

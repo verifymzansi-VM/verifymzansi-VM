@@ -4,6 +4,7 @@ import {
   adminVerificationDecideSchema,
   adminFlaggingActionSchema,
   adminDsarDecideSchema,
+  adminDsarCompleteSchema,
 } from "./admin";
 
 describe("adminContentDecideSchema", () => {
@@ -232,6 +233,30 @@ describe("adminDsarDecideSchema", () => {
     const result = adminDsarDecideSchema.safeParse({
       requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       decision: "ignore",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("adminDsarCompleteSchema", () => {
+  it("accepts valid completion payload", () => {
+    const result = adminDsarCompleteSchema.safeParse({
+      requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      notes: "Export prepared and securely delivered",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts completion without notes", () => {
+    const result = adminDsarCompleteSchema.safeParse({
+      requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing requestId", () => {
+    const result = adminDsarCompleteSchema.safeParse({
+      notes: "done",
     });
     expect(result.success).toBe(false);
   });

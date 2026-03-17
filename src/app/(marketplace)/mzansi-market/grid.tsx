@@ -64,6 +64,22 @@ interface GridFetchError {
 
 type ViewMode = "grid" | "list";
 
+const STAGGER_DELAY_CLASSES = [
+  "[animation-delay:0ms]",
+  "[animation-delay:50ms]",
+  "[animation-delay:100ms]",
+  "[animation-delay:150ms]",
+  "[animation-delay:200ms]",
+  "[animation-delay:250ms]",
+  "[animation-delay:300ms]",
+  "[animation-delay:350ms]",
+  "[animation-delay:400ms]",
+] as const;
+
+function getStaggerDelayClass(index: number) {
+  return STAGGER_DELAY_CLASSES[Math.min(index, STAGGER_DELAY_CLASSES.length - 1)];
+}
+
 export function MzansiMarketGrid() {
   const { filters, page, setPage, setFilter, resetFilters } = useMarketplaceStore();
   const [listings, setListings] = useState<ListingRow[]>([]);
@@ -355,8 +371,7 @@ export function MzansiMarketGrid() {
             return (
               <div
                 key={listing.id}
-                className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms]"
-                style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
+                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] ${getStaggerDelayClass(index)}`}
               >
                 <ListingCard
                   id={listing.id}
@@ -397,8 +412,7 @@ export function MzansiMarketGrid() {
             return (
               <div
                 key={listing.id}
-                className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms]"
-                style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
+                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] ${getStaggerDelayClass(index)}`}
               >
                 <ListingCardList
                   id={listing.id}

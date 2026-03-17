@@ -7,8 +7,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
+import { BoostButton } from "@/components/listings/boost-button";
 import { timeAgo, expiresIn } from "@/lib/utils/format";
 import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
+import { canBoost as checkCanBoost } from "@/lib/services/entitlements";
+import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import {
   BUSINESS_TYPE_LABELS,
   BUSINESS_CATEGORY_LABELS,
@@ -41,6 +44,7 @@ export default async function MyBusinessesPage() {
 
   const admin = createAdminClient();
   const businessOwnerColumn = await getOwnerColumn(admin, "businesses");
+  const businessTier = await getActivePlanTierForArea(user.id, "MZANSI_BUSINESS");
 
   const businessesQuery = applyOwnerFilter(
     admin
@@ -171,6 +175,16 @@ export default async function MyBusinessesPage() {
                         Edit
                       </Link>
                     </Button>
+                    <BoostButton
+                      listingId={b.id}
+                      isBoosted={Boolean(isBoosted)}
+                      canBoost={
+                        b.status === "live" &&
+                        checkCanBoost(businessTier, "MZANSI_BUSINESS").allowed
+                      }
+                      itemTypeLabel="business"
+                      boostApiPath={`/api/businesses/${b.id}/boost`}
+                    />
                     {b.status === "live" && (
                       <Button asChild size="sm" variant="ghost" className="h-8 gap-1">
                         <Link href={`/post/create-promotion?business_id=${b.id}`}>

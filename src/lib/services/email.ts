@@ -289,6 +289,125 @@ export async function sendPaymentReceiptEmail(
 }
 
 /**
+ * Send a DSAR submission confirmation email.
+ */
+export async function sendDsarSubmissionEmail(
+  email: string,
+  reference: string,
+  dueByIso: string
+): Promise<SendEmailResult> {
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const dueDate = new Date(dueByIso).toLocaleDateString("en-ZA", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const safeReference = escapeHtml(reference);
+  const safeDueDate = escapeHtml(dueDate);
+  const subject = `VerifyMzansi data request received (${reference})`;
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #111827; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
+          .button { display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .meta { background: #f9fafb; padding: 16px; border-radius: 8px; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">Data Request Received</h1>
+          </div>
+          <div class="content">
+            <p>Hi,</p>
+            <p>We have received your VerifyMzansi data request. Our team will review and process it according to POPIA requirements.</p>
+            <div class="meta">
+              <p style="margin: 0 0 8px;"><strong>Reference:</strong> ${safeReference}</p>
+              <p style="margin: 0;"><strong>Target response date:</strong> ${safeDueDate}</p>
+            </div>
+            <p>If we need more information to verify your identity or clarify your request, we will contact you using this email address.</p>
+            <p style="text-align: center;">
+              <a href="${appUrl}/dsar" class="button">View Data Request Information</a>
+            </p>
+            <p>Best regards,<br>The VerifyMzansi Team</p>
+          </div>
+          <div class="footer">
+            <p>Questions? Email us at support@verifymzansi.com</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `Hi,\n\nWe have received your VerifyMzansi data request.\n\nReference: ${reference}\nTarget response date: ${dueDate}\n\nIf we need more information to verify your identity or clarify your request, we will contact you using this email address.\n\nLearn more: ${appUrl}/dsar\n\nBest regards,\nThe VerifyMzansi Team`;
+
+  return sendEmail({ to: email, subject, html, text });
+}
+
+/**
+ * Send a DSAR completion notification email.
+ */
+export async function sendDsarCompletedEmail(
+  email: string,
+  reference: string,
+  summary?: string
+): Promise<SendEmailResult> {
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const safeReference = escapeHtml(reference);
+  const safeSummary = summary ? escapeHtml(summary) : null;
+  const subject = `VerifyMzansi data request completed (${reference})`;
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #10b981; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
+          .summary { background: #f9fafb; padding: 16px; border-radius: 8px; margin: 20px 0; }
+          .button { display: inline-block; background: #111827; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">Data Request Completed</h1>
+          </div>
+          <div class="content">
+            <p>Hi,</p>
+            <p>Your VerifyMzansi data request has been marked as completed.</p>
+            <p><strong>Reference:</strong> ${safeReference}</p>
+            ${safeSummary ? `<div class="summary"><strong>Summary:</strong><br>${safeSummary}</div>` : ""}
+            <p>If you still need assistance or believe something is missing, please reply to this email or contact support.</p>
+            <p style="text-align: center;">
+              <a href="${appUrl}/dsar" class="button">Data Request Information</a>
+            </p>
+            <p>Best regards,<br>The VerifyMzansi Team</p>
+          </div>
+          <div class="footer">
+            <p>Questions? Email us at support@verifymzansi.com</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `Hi,\n\nYour VerifyMzansi data request has been marked as completed.\n\nReference: ${reference}${summary ? `\nSummary: ${summary}` : ""}\n\nIf you still need assistance or believe something is missing, please contact support.\n\nMore information: ${appUrl}/dsar\n\nBest regards,\nThe VerifyMzansi Team`;
+
+  return sendEmail({ to: email, subject, html, text });
+}
+
+/**
  * Send a notification to an existing user when someone tries to register
  * with their email. This avoids email enumeration while giving the real
  * owner an actionable path (sign in or reset password).

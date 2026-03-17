@@ -1,3 +1,5 @@
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import { chromium, devices, type Page } from "playwright";
 
 const baseUrl =
@@ -8,6 +10,8 @@ if (!baseUrl) {
 }
 
 const requireRealTurnstile = process.env.PUBLIC_VERIFY_REQUIRE_TURNSTILE !== "0";
+const turnstileTimeoutMs = Number(process.env.PUBLIC_VERIFY_TURNSTILE_TIMEOUT_MS || 15_000);
+const artifactsDir = process.env.PUBLIC_VERIFY_ARTIFACTS_DIR || "test-results/public-verify";
 
 function report(message: string) {
   process.stdout.write(`${message}\n`);
@@ -59,11 +63,47 @@ function collectHydrationErrors(page: Page) {
 
 async function assertAuthUi(page: Page) {
   const unavailableCopy = page.getByText(/security verification is temporarily unavailable/i);
+  const failedCopy = page.getByText(/security check failed to load/i);
   const iframeCount = await page.locator('iframe[src*="challenges.cloudflare.com"]').count();
   const unavailableCount = await unavailableCopy.count();
 
+  // Turnstile render is async and can take a few seconds on real deployments.
+  // Wait up to the same window our auth pages use before declaring it missing.
   if (requireRealTurnstile && iframeCount === 0 && unavailableCount === 0) {
-    throw new Error("Auth page rendered without a Turnstile iframe or explicit unavailable state");
+    const iframe = page.locator('iframe[src*="challenges.cloudflare.com"]');
+    await Promise.race([
+      iframe
+        .first()
+        .waitFor({ state: "attached", timeout: turnstileTimeoutMs })
+        .catch(() => {}),
+      unavailableCopy
+        .first()
+        .waitFor({ state: "visible", timeout: turnstileTimeoutMs })
+        .catch(() => {}),
+      failedCopy
+        .first()
+        .waitFor({ state: "visible", timeout: turnstileTimeoutMs })
+        .catch(() => {}),
+    ]);
+
+    const iframeCountAfter = await iframe.count();
+    const unavailableAfter = await unavailableCopy.count();
+    const failedAfter = await failedCopy.count();
+
+    if (iframeCountAfter === 0 && unavailableAfter === 0) {
+      const turnstileSiteKey = await page.evaluate(() => {
+        const el = document.getElementById("vmz-public-config");
+        return el instanceof HTMLElement ? el.dataset.turnstileSiteKey || "" : "";
+      });
+
+      throw new Error(
+        [
+          "Auth page rendered without a Turnstile iframe or explicit unavailable state",
+          `turnstileSiteKey=${turnstileSiteKey || "(missing)"}`,
+          `sawFailureCopy=${failedAfter > 0}`,
+        ].join("; ")
+      );
+    }
   }
 
   await page
@@ -139,6 +179,13 @@ async function verifyTarget(target: Target) {
     }
 
     report(`[OK] ${target.name}`);
+  } catch (error) {
+    await mkdir(artifactsDir, { recursive: true });
+    await page.screenshot({
+      path: path.join(artifactsDir, `${target.name}.png`),
+      fullPage: true,
+    });
+    throw error;
   } finally {
     await context.close();
     await browser.close();

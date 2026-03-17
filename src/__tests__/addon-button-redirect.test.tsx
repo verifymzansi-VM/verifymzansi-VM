@@ -134,6 +134,29 @@ describe("FeaturedButton redirect", () => {
 
     expect(mockRouterPush).not.toHaveBeenCalled();
   });
+
+  it("uses the override API path and custom item label when provided", async () => {
+    mockFetchSuccess();
+
+    render(
+      <FeaturedButton
+        listingId={LISTING_ID}
+        isFeatured={false}
+        canFeature={true}
+        itemTypeLabel="promotion"
+        featuredApiPath={`/api/promotions/${LISTING_ID}/featured`}
+      />
+    );
+
+    const button = screen.getByTitle(/Feature this promotion/i);
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(`/api/promotions/${LISTING_ID}/featured`, {
+        method: "POST",
+      });
+    });
+  });
 });
 
 // ── Boost Button ───────────────────────────────────────────────
@@ -168,6 +191,29 @@ describe("BoostButton redirect", () => {
     });
 
     expect(mockRouterPush).not.toHaveBeenCalled();
+  });
+
+  it("uses the override API path and custom item label when provided", async () => {
+    mockFetchSuccess();
+
+    render(
+      <BoostButton
+        listingId={LISTING_ID}
+        isBoosted={false}
+        canBoost={true}
+        itemTypeLabel="promotion"
+        boostApiPath={`/api/promotions/${LISTING_ID}/boost`}
+      />
+    );
+
+    const button = screen.getByTitle(/Boost this promotion/i);
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(`/api/promotions/${LISTING_ID}/boost`, {
+        method: "POST",
+      });
+    });
   });
 });
 
@@ -287,6 +333,19 @@ describe("FeaturedButton disabled states", () => {
     expect(btn).toBeDisabled();
   });
 
+  it("renders item-specific upgrade text when itemTypeLabel is provided", () => {
+    render(
+      <FeaturedButton
+        listingId={LISTING_ID}
+        isFeatured={false}
+        canFeature={false}
+        itemTypeLabel="promotion"
+      />
+    );
+    const btn = screen.getByTitle(/Upgrade to Pro to feature this promotion/i);
+    expect(btn).toBeDisabled();
+  });
+
   it("does NOT call fetch when clicking a disabled isFeatured button", async () => {
     render(<FeaturedButton listingId={LISTING_ID} isFeatured={true} canFeature={true} />);
     const btn = screen.getByTitle(/Already featured/i);
@@ -305,6 +364,19 @@ describe("BoostButton disabled states", () => {
   it("renders disabled 'Upgrade to Growth or Pro' button when canBoost=false", () => {
     render(<BoostButton listingId={LISTING_ID} isBoosted={false} canBoost={false} />);
     const btn = screen.getByTitle(/Upgrade to Growth or Pro/i);
+    expect(btn).toBeDisabled();
+  });
+
+  it("renders item-specific upgrade text when itemTypeLabel is provided", () => {
+    render(
+      <BoostButton
+        listingId={LISTING_ID}
+        isBoosted={false}
+        canBoost={false}
+        itemTypeLabel="business"
+      />
+    );
+    const btn = screen.getByTitle(/Upgrade to Growth or Pro to boost this business/i);
     expect(btn).toBeDisabled();
   });
 

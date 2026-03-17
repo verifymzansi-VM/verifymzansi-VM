@@ -127,4 +127,27 @@ describe("ozow payments", () => {
     expect(verifyOzowWebhookSignature(body, signature)).toBe(true);
     expect(verifyOzowWebhookSignature(body, "bad-signature")).toBe(false);
   });
+
+  it("normalizes transactionReference webhooks into providerPaymentId", async () => {
+    const { normalizeOzowWebhook } = await import("./ozow");
+
+    const payload = normalizeOzowWebhook({
+      eventType: "transaction.complete",
+      data: {
+        merchantReference: "payment-1",
+        transactionReference: "ozow-tx-1",
+        amount: "25.00",
+        currencyCode: "ZAR",
+      },
+    });
+
+    expect(payload).toEqual(
+      expect.objectContaining({
+        merchantReference: "payment-1",
+        providerPaymentId: "ozow-tx-1",
+        amount: "25.00",
+        currencyCode: "ZAR",
+      })
+    );
+  });
 });

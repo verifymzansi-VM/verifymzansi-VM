@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,8 +23,10 @@ export default async function AdminAuditLogPage() {
     redirect("/dashboard");
   }
 
+  const admin = createAdminClient();
+
   // Read from audit_logs table
-  const { data: logs } = await supabase
+  const { data: logs } = await admin
     .from("audit_logs")
     .select("*")
     .order("created_at", { ascending: false })

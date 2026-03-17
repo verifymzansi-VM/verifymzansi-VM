@@ -112,7 +112,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const { paymentId, checkoutUrl } = await createHostedCheckout({
       admin: admin as never,
       userId: user.id,
-      area: "MZANSI_MARKET",
+      area,
       amountCents: ADDON_PRICES.boost,
       itemName: `Boost: ${promotion.title}`.slice(0, 100),
       itemDescription: `${BOOST_DURATION_DAYS}-day promotion boost`,
@@ -130,7 +130,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       await logAuditEvent({
         actorId: user.id,
         actorRole: "member",
-        action: "listing_boosted",
+        action: "promotion_boosted",
         targetType: "promotion",
         targetId: promotionId,
         metadata: {

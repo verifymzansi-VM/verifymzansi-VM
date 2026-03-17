@@ -344,6 +344,9 @@ describe("POST /api/promotions/[id]/boost", () => {
     expect(body.success).toBe(true);
     expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
     expect(body.paymentId).toBe("payment-1");
+    expect(mockCreateHostedCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ area: "PROMOTIONS_EVENTS" })
+    );
   });
 
   it("passes amount cents to the hosted checkout helper", async () => {
@@ -366,5 +369,6 @@ describe("POST /api/promotions/[id]/boost", () => {
     expect(auditEntry.actorId).toBe(USER_ID);
     expect(auditEntry.targetId).toBe(VALID_UUID);
     expect(auditEntry.targetType).toBe("promotion");
+    expect(auditEntry.action).toBe("promotion_boosted");
   });
 });

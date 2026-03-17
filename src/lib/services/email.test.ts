@@ -16,6 +16,8 @@ import {
   sendVerificationApprovedEmail,
   sendVerificationRejectedEmail,
   sendPaymentReceiptEmail,
+  sendDsarCompletedEmail,
+  sendDsarSubmissionEmail,
   sendContactFormNotification,
 } from "./email";
 
@@ -114,6 +116,38 @@ describe("email service", () => {
       expect(call.html).toContain("Buyer Guy");
       expect(call.html).toContain("Is this still available?");
       expect(call.subject).toContain("Toyota Hilux 2022");
+    });
+  });
+
+  describe("sendDsarSubmissionEmail", () => {
+    it("sends DSAR confirmation with reference and due date", async () => {
+      const result = await sendDsarSubmissionEmail(
+        "user@example.com",
+        "DSAR-1234ABCD",
+        "2026-04-16T00:00:00.000Z"
+      );
+
+      expect(result.success).toBe(true);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.subject).toContain("DSAR-1234ABCD");
+      expect(call.html).toContain("DSAR-1234ABCD");
+      expect(call.text).toContain("DSAR-1234ABCD");
+    });
+  });
+
+  describe("sendDsarCompletedEmail", () => {
+    it("sends DSAR completion with summary when provided", async () => {
+      const result = await sendDsarCompletedEmail(
+        "user@example.com",
+        "DSAR-1234ABCD",
+        "Your account export was delivered securely"
+      );
+
+      expect(result.success).toBe(true);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.subject).toContain("DSAR-1234ABCD");
+      expect(call.html).toContain("Your account export was delivered securely");
+      expect(call.text).toContain("Your account export was delivered securely");
     });
   });
 

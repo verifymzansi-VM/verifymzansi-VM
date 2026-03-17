@@ -247,6 +247,8 @@ export function normalizeOzowWebhook(body: unknown): NormalizedOzowWebhook | nul
   const merchantReference =
     toSafeString(data.merchantReference) || toSafeString(data.merchant_reference);
   const providerPaymentId =
+    toSafeString(data.transactionReference) ||
+    toSafeString(data.transaction_reference) ||
     toSafeString(data.transactionId) ||
     toSafeString(data.transaction_id) ||
     toSafeString(data.paymentRequestId) ||

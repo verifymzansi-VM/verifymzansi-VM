@@ -7,7 +7,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
+import { BoostButton } from "@/components/listings/boost-button";
+import { FeaturedButton } from "@/components/listings/featured-button";
 import { timeAgo, expiresIn } from "@/lib/utils/format";
+import {
+  canBoost as checkCanBoost,
+  canFeatured as checkCanFeatured,
+} from "@/lib/services/entitlements";
+import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import { PROMOTION_TYPE_LABELS, type PromotionType } from "@/types/enums";
 import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 
@@ -49,6 +56,7 @@ export default async function MyPromotionsPage() {
     getOwnerColumn(supabase, "listings"),
     getOwnerColumn(admin, "promotions"),
   ]);
+  const promotionsTier = await getActivePlanTierForArea(user.id, "PROMOTIONS_EVENTS");
 
   // ── Fetch all user's active promotions in parallel ───────
   const [boostedRes, featuredRes, urgentRes, myPromotionsRes] = await Promise.all([
@@ -301,6 +309,26 @@ export default async function MyPromotionsPage() {
                               Featured
                             </Badge>
                           )}
+                          <BoostButton
+                            listingId={p.id}
+                            isBoosted={Boolean(isBoosted)}
+                            canBoost={
+                              p.status === "live" &&
+                              checkCanBoost(promotionsTier, "PROMOTIONS_EVENTS").allowed
+                            }
+                            itemTypeLabel="promotion"
+                            boostApiPath={`/api/promotions/${p.id}/boost`}
+                          />
+                          <FeaturedButton
+                            listingId={p.id}
+                            isFeatured={Boolean(isFeatured)}
+                            canFeature={
+                              p.status === "live" &&
+                              checkCanFeatured(promotionsTier, "PROMOTIONS_EVENTS").allowed
+                            }
+                            itemTypeLabel="promotion"
+                            featuredApiPath={`/api/promotions/${p.id}/featured`}
+                          />
                           <Button
                             asChild
                             size="sm"

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
+import { sendDsarSubmissionEmail } from "@/lib/services/email";
 import { dsarRequestSchema } from "@/lib/validations/verification";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { createLogger } from "@/lib/utils/logger";
@@ -111,6 +112,13 @@ export async function POST(request: NextRequest) {
 
     // Generate a human-readable reference
     const reference = `DSAR-${dsarRecord.id.slice(0, 8).toUpperCase()}`;
+
+    sendDsarSubmissionEmail(email, reference, dueBy.toISOString()).catch((emailError) => {
+      log.warn("Failed to send DSAR submission confirmation email", {
+        requestId: dsarRecord.id,
+        error: emailError instanceof Error ? emailError.message : "unknown error",
+      });
+    });
 
     return NextResponse.json({
       success: true,

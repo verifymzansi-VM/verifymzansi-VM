@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { useToast } from "@/hooks/use-toast";
@@ -126,7 +127,7 @@ export default function ContactPage() {
                         required
                         placeholder="Your full name"
                         autoComplete="name"
-                        aria-invalid={!!fieldErrors.name}
+                        aria-invalid={fieldErrors.name ? "true" : undefined}
                         aria-describedby={fieldErrors.name ? "name-error" : undefined}
                       />
                       {fieldErrors.name && (
@@ -150,7 +151,7 @@ export default function ContactPage() {
                         required
                         placeholder="you@example.com"
                         autoComplete="email"
-                        aria-invalid={!!fieldErrors.email}
+                        aria-invalid={fieldErrors.email ? "true" : undefined}
                         aria-describedby={fieldErrors.email ? "email-error" : undefined}
                       />
                       {fieldErrors.email && (
@@ -162,7 +163,7 @@ export default function ContactPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="message">Message *</Label>
-                      <textarea
+                      <Textarea
                         id="message"
                         name="message"
                         value={message}
@@ -172,9 +173,9 @@ export default function ContactPage() {
                         }}
                         required
                         rows={3}
-                        className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="min-h-[60px]"
                         placeholder="How can we help?"
-                        aria-invalid={!!fieldErrors.message}
+                        aria-invalid={fieldErrors.message ? "true" : undefined}
                         aria-describedby={fieldErrors.message ? "message-error" : undefined}
                       />
                       {fieldErrors.message && (

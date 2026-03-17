@@ -47,6 +47,7 @@ export type AuditAction =
   | "dsar_requested"
   | "dsar_started"
   | "dsar_completed"
+  | "dsar_exported"
   | "dsar_rejected"
   | "consent_updated"
   | "moderation_action"

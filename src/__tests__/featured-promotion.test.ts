@@ -230,6 +230,9 @@ describe("POST /api/promotions/[id]/featured", () => {
     expect(body.success).toBe(true);
     expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
     expect(body.paymentId).toBe("payment-1");
+    expect(mockCreateHostedCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ area: "PROMOTIONS_EVENTS" })
+    );
   });
 
   it("passes featured amount cents to the hosted checkout helper", async () => {
@@ -251,6 +254,6 @@ describe("POST /api/promotions/[id]/featured", () => {
     const auditEntry = mockLogAuditEvent.mock.calls[0][0];
     expect(auditEntry.actorId).toBe(USER_ID);
     expect(auditEntry.targetType).toBe("promotion");
-    expect(auditEntry.action).toBe("listing_featured");
+    expect(auditEntry.action).toBe("promotion_featured");
   });
 });
