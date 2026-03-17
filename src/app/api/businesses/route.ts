@@ -269,7 +269,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, business: { id: business.id } }, { status: 201 });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "Unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Failed to create business" }, { status: 500 });
   }
 }
@@ -476,7 +479,10 @@ export async function GET(request: NextRequest) {
       limit,
     });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "Unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Failed to fetch businesses" }, { status: 500 });
   }
 }

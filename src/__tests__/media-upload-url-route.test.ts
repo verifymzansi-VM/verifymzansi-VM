@@ -76,7 +76,7 @@ describe("POST /api/media/upload-url", () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
+        maybeSingle: vi.fn().mockResolvedValue({
           data: null,
           error: { message: "permission denied" },
         }),
@@ -103,7 +103,7 @@ describe("POST /api/media/upload-url", () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
       }),
     });
 
@@ -132,7 +132,7 @@ describe("POST /api/media/upload-url", () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
       }),
     });
 

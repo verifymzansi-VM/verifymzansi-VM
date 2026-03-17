@@ -96,7 +96,7 @@ describe("Media Upload Routes", () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
       });
 
       // Create a file with valid JPEG magic bytes (0xFF, 0xD8, 0xFF)
@@ -121,7 +121,7 @@ describe("Media Upload Routes", () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
       });
 
       const formData = new FormData();
@@ -155,7 +155,7 @@ describe("Media Upload Routes", () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
       });
 
       const req = createFormDataRequest([new File([], "empty.jpg", { type: "image/jpeg" })]);
@@ -170,7 +170,7 @@ describe("Media Upload Routes", () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
       });
 
       const files = Array(11).fill(new File(["dummy content"], "test.jpg", { type: "image/jpeg" }));
@@ -188,7 +188,7 @@ describe("Media Upload Routes", () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
       });
 
       const file = new File(["hello"], "test.txt", { type: "text/plain" });

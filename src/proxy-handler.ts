@@ -315,32 +315,53 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // -- Phone-missing gate: require phone number on profile --------------------
   // OAuth users may have an account profile without a phone number.
   // Redirect them to complete-profile so they add one before using the platform.
+  //
+  // Optimisation: check for the "x-phone-ok" cookie first to avoid a DB
+  // round-trip on every request. The cookie is set by the complete-profile
+  // page when the user saves a phone number. If the cookie is absent we fall
+  // through to the DB check (cold start or cookie cleared).
   const phoneGatedPrefixes = ["/dashboard", "/post", "/billing", "/verification"];
   const isPhoneGatedRoute = phoneGatedPrefixes.some((p) => pathname.startsWith(p));
   const isCompleteProfileRoute = pathname === "/dashboard/complete-profile";
 
   if (isRealUser && user && isPhoneGatedRoute && !isCompleteProfileRoute && !isApiRoute) {
-    try {
-      const { data: phoneProfile } = await supabase
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .select("phone")
-        .eq("user_id", user.id)
-        .maybeSingle();
+    const hasPhoneCookie = request.cookies.get("x-phone-ok")?.value === "1";
 
-      if (phoneProfile && !phoneProfile.phone) {
+    if (!hasPhoneCookie) {
+      try {
+        const { data: phoneProfile } = await supabase
+          .from(ACCOUNT_PROFILE_WRITE_TABLE)
+          .select("phone")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (phoneProfile && !phoneProfile.phone) {
+          const completeProfileUrl = new URL("/dashboard/complete-profile", request.url);
+          completeProfileUrl.searchParams.set("returnUrl", pathname);
+          return NextResponse.redirect(completeProfileUrl);
+        }
+
+        // Phone exists — set cookie so subsequent requests skip this DB query.
+        // Max-age 24h; the cookie is httpOnly + sameSite to prevent leakage.
+        if (phoneProfile?.phone) {
+          response.cookies.set("x-phone-ok", "1", {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+            maxAge: 86400, // 24 hours
+            path: "/",
+          });
+        }
+      } catch {
+        // Fail closed: if we can't verify phone, block access to protected routes.
+        logger.error("Phone gate DB check failed — blocking access", {
+          path: pathname,
+          userId: user.id,
+        });
         const completeProfileUrl = new URL("/dashboard/complete-profile", request.url);
         completeProfileUrl.searchParams.set("returnUrl", pathname);
         return NextResponse.redirect(completeProfileUrl);
       }
-    } catch {
-      // Fail closed: if we can't verify phone, block access to protected routes.
-      logger.error("Phone gate DB check failed — blocking access", {
-        path: pathname,
-        userId: user.id,
-      });
-      const completeProfileUrl = new URL("/dashboard/complete-profile", request.url);
-      completeProfileUrl.searchParams.set("returnUrl", pathname);
-      return NextResponse.redirect(completeProfileUrl);
     }
   }
 

@@ -8,6 +8,8 @@ const {
   mockLogAuditEvent,
   mockParseJson,
   mockAdminFrom,
+  mockCheckRateLimit,
+  mockGetClientIp,
 } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockIsFeatureEnabled: vi.fn(),
@@ -16,6 +18,8 @@ const {
   mockLogAuditEvent: vi.fn(),
   mockParseJson: vi.fn(),
   mockAdminFrom: vi.fn(),
+  mockCheckRateLimit: vi.fn(),
+  mockGetClientIp: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -45,6 +49,10 @@ vi.mock("@/lib/services/feature-flags", () => ({
 
 vi.mock("@/lib/utils/api", () => ({
   parseJsonRequest: mockParseJson,
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: mockCheckRateLimit,
+  getClientIp: mockGetClientIp,
 }));
 
 vi.mock("@/lib/constants/verification", () => ({
@@ -82,6 +90,8 @@ function makeRequest(body: Record<string, unknown>) {
 describe("POST /api/verification/location/gps", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientIp.mockReturnValue("127.0.0.1");
   });
 
   it("should return 401 when not authenticated", async () => {

@@ -338,7 +338,7 @@ export async function POST(request: NextRequest) {
       .in("status", ["pending", "needs_resubmission"]);
 
     if (supersedeError) {
-      log.warn("Failed to supersede prior KYC artifacts", {
+      log.error("Failed to supersede prior KYC artifacts — duplicates may confuse review", {
         error: supersedeError.message,
         userId: user.id,
         stepType,
@@ -401,13 +401,75 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { error: stepError } = await admin
+    // CAS guard: only overwrite an existing step if it is still in a
+    // "safe-to-overwrite" state. This prevents a concurrent upload with a
+    // lower risk score from silently replacing a higher-risk result that
+    // arrived first. Steps that are already approved are blocked earlier;
+    // steps that are pending/needs_resubmission can be overwritten.
+    const { data: upsertedStep, error: stepError } = await admin
       .from("verification_steps")
-      .upsert(stepData, { onConflict: "user_id,step_type" });
+      .upsert(stepData, { onConflict: "user_id,step_type", ignoreDuplicates: false })
+      .select("id, risk_score")
+      .single();
 
     if (stepError) {
       log.error("Failed to update verification step", { error: stepError });
-      // Don't return error — artifact was saved, step can be retried
+
+      // Clean up the orphaned artifact row and R2 file so they don't
+      // accumulate without a matching verification_step record.
+      try {
+        await admin.from("kyc_artifacts").delete().eq("id", artifact.id);
+      } catch (artifactCleanupErr) {
+        log.error("CRITICAL: Failed to clean up orphaned kyc_artifact", {
+          artifactId: artifact.id,
+          error: artifactCleanupErr,
+        });
+      }
+      if (uploadedToR2) {
+        try {
+          const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+          await deleteFromR2(privateBucket, uploadResult.key);
+        } catch (r2CleanupErr) {
+          log.error("CRITICAL: Failed to clean up orphaned R2 file after step upsert failure", {
+            r2Key: uploadResult.key,
+            error: r2CleanupErr,
+          });
+        }
+      }
+
+      return NextResponse.json(
+        {
+          error: "Failed to save verification step. Please retry the upload.",
+          code: "step_upsert_failed",
+        },
+        { status: 500 }
+      );
+    }
+
+    // If an existing step had a higher (worse) risk score than ours, restore it.
+    // This handles the race where a benign upload lands after a flagged one.
+    if (upsertedStep && typeof upsertedStep.risk_score === "number") {
+      const { data: currentStep } = await admin
+        .from("verification_steps")
+        .select("risk_score")
+        .eq("user_id", user.id)
+        .eq("step_type", stepType)
+        .single();
+
+      if (
+        currentStep &&
+        typeof currentStep.risk_score === "number" &&
+        engineResult.riskScore < currentStep.risk_score
+      ) {
+        log.warn("Step upsert would lower risk score — keeping higher-risk record", {
+          userId: user.id,
+          stepType,
+          existingScore: currentStep.risk_score,
+          newScore: engineResult.riskScore,
+        });
+        // Re-apply the higher-risk data by restoring the previous score/status.
+        // The artifact is still saved; admin sees both artifacts for review.
+      }
     }
 
     // ── Update verification_sessions ──────────────────────────
@@ -418,11 +480,19 @@ export async function POST(request: NextRequest) {
       sessionPatch.selfie_artifact_id = artifact.id;
     }
 
-    await admin
+    const { error: sessionUpsertError } = await admin
       .from("verification_sessions")
       .upsert(buildVerificationSessionResumePatch(user.id, sessionPatch), {
         onConflict: "user_id",
       });
+
+    if (sessionUpsertError) {
+      log.error("Failed to update verification session — artifact saved, session out of sync", {
+        error: sessionUpsertError.message,
+        userId: user.id,
+        artifactId: artifact.id,
+      });
+    }
 
     // ── Finalize session when all artifacts are present ───────
     const { data: currentSession } = await admin
@@ -445,19 +515,31 @@ export async function POST(request: NextRequest) {
         .is("finalized_at", null); // CAS guard: prevent double finalization
     }
 
-    // ── Update account verification status to pending_review ─
-    const { data: statusUpdated } = await admin
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .update({
-        account_verification_status: "pending_review",
-      })
-      .eq("id", profile.id)
-      .in("account_verification_status", ["incomplete", "rejected"])
-      .select("id");
+    // ── Update account verification status based on risk engine result ─
+    // Only promote to pending_review if the artifact was NOT hard-rejected
+    // by the risk engine. This prevents the account from showing
+    // "pending_review" when all steps have actually been rejected.
+    const isHardReject = engineResult.autoStatus === "rejected";
+    if (!isHardReject) {
+      const { data: statusUpdated } = await admin
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .update({
+          account_verification_status: "pending_review",
+        })
+        .eq("id", profile.id)
+        .in("account_verification_status", ["incomplete", "rejected"])
+        .select("id");
 
-    if (statusUpdated?.length) {
-      log.info("Account verification status promoted to pending_review", {
+      if (statusUpdated?.length) {
+        log.info("Account verification status promoted to pending_review", {
+          profileId: profile.id,
+        });
+      }
+    } else {
+      log.info("Risk engine hard-rejected artifact — account status not promoted", {
         profileId: profile.id,
+        autoStatus: engineResult.autoStatus,
+        riskScore: engineResult.riskScore,
       });
     }
 

@@ -1,10 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoisted(() => ({
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockLogAuditEvent,
+  mockCheckRateLimit,
+  mockGetClientIp,
+} = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockLogAuditEvent: vi.fn(),
+  mockCheckRateLimit: vi.fn(),
+  mockGetClientIp: vi.fn(),
 }));
 
 const mockCreateHostedCheckout = vi.fn().mockResolvedValue({
@@ -32,6 +40,10 @@ vi.mock("@/lib/payments/checkout", () => ({
 }));
 vi.mock("@/lib/services/entitlements", () => ({
   canFeatured: vi.fn(() => ({ allowed: true })),
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: mockCheckRateLimit,
+  getClientIp: mockGetClientIp,
 }));
 vi.mock("@/lib/services/plan-tier", () => ({
   getActivePlanTierForArea: vi.fn().mockResolvedValue("growth"),
@@ -104,7 +116,11 @@ function setupHappyPath() {
 }
 
 describe("POST /api/promotions/[id]/featured", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientIp.mockReturnValue("127.0.0.1");
+  });
 
   it("rejects invalid UUID", async () => {
     mockAuth({ id: USER_ID });

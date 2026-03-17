@@ -3,11 +3,14 @@ import { NextRequest } from "next/server";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────────────
 
-const { mockGetUser, mockAdminFrom, mockSendOtpSms } = vi.hoisted(() => ({
-  mockGetUser: vi.fn(),
-  mockAdminFrom: vi.fn(),
-  mockSendOtpSms: vi.fn(),
-}));
+const { mockGetUser, mockAdminFrom, mockSendOtpSms, mockCheckRateLimit, mockGetClientIp } =
+  vi.hoisted(() => ({
+    mockGetUser: vi.fn(),
+    mockAdminFrom: vi.fn(),
+    mockSendOtpSms: vi.fn(),
+    mockCheckRateLimit: vi.fn(),
+    mockGetClientIp: vi.fn(),
+  }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
@@ -30,6 +33,10 @@ vi.mock("@/lib/utils/logger", () => ({
     error: vi.fn(),
     debug: vi.fn(),
   }),
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: mockCheckRateLimit,
+  getClientIp: mockGetClientIp,
 }));
 
 import { POST } from "@/app/api/otp/send/route";
@@ -80,6 +87,8 @@ describe("OTP send — no OTP exposure", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientIp.mockReturnValue("127.0.0.1");
     mockAuthenticatedUser();
     mockOtpDbSuccess();
     mockSendOtpSms.mockResolvedValue({ success: true });

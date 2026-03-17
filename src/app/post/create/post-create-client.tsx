@@ -88,7 +88,7 @@ export function PostCreateClient({
   useEffect(() => {
     let isCancelled = false;
 
-    if (initialVerificationStatus === "verified") {
+    if (initialVerificationStatus === "verified" || resolvedVerificationStatus === "verified") {
       return;
     }
 
@@ -131,10 +131,19 @@ export function PostCreateClient({
 
     void refreshVerificationStatus();
 
+    // Poll every 30 s while unverified so status updates without a
+    // full page refresh (e.g. after admin approves verification).
+    const intervalId = setInterval(() => {
+      if (!isCancelled) {
+        void refreshVerificationStatus();
+      }
+    }, 30_000);
+
     return () => {
       isCancelled = true;
+      clearInterval(intervalId);
     };
-  }, [initialVerificationStatus, isAuthenticated]);
+  }, [initialVerificationStatus, isAuthenticated, resolvedVerificationStatus]);
 
   return (
     <div className="space-y-4">

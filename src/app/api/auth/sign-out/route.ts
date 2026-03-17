@@ -23,7 +23,10 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     await supabase.auth.signOut();
   } catch (err) {
-    log.error("Sign-out error", { error: err instanceof Error ? err.message : "unknown error" });
+    log.error("Sign-out error", {
+      error: err instanceof Error ? err.message : "unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     // Continue to redirect even if sign-out fails
   }
 

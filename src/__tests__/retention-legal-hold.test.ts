@@ -55,6 +55,8 @@ function mockAuth(user: { id: string; app_metadata?: Record<string, unknown> } |
 function createMockRequest(body: Record<string, unknown>) {
   return {
     text: async () => JSON.stringify(body),
+    headers: { get: vi.fn().mockReturnValue(null) },
+    url: "http://localhost:3000/api/admin/verification/decide",
   } as unknown as Request;
 }
 

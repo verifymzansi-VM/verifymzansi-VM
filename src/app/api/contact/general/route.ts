@@ -86,7 +86,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "unknown" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "unknown",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Failed to submit message" }, { status: 500 });
   }
 }

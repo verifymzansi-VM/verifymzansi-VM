@@ -16,6 +16,10 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: mockCreateAdminClient,
 }));
 
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+}));
+
 import { GET } from "@/app/(auth)/auth/callback/route";
 
 describe("GET /auth/callback", () => {
@@ -91,7 +95,14 @@ describe("GET /auth/callback", () => {
               maybeSingle: vi.fn().mockResolvedValue({ data: null }),
             }),
           }),
-          upsert: mockUpsert,
+          upsert: mockUpsert.mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { id: "new-profile-id" },
+                error: null,
+              }),
+            }),
+          }),
         };
       }
 

@@ -106,6 +106,7 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
   });
   mockCreateAdminClient.mockReturnValue({
     from: vi.fn((table: string) => makeChain(table)),
+    rpc: vi.fn().mockResolvedValue({ error: null }),
   });
 }
 

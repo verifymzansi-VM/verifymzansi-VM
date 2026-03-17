@@ -105,7 +105,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, profile: updatedProfile });
+    // Set/clear the phone-gate cache cookie so the middleware doesn't
+    // need a DB round-trip to verify phone presence on every request.
+    const res = NextResponse.json({ success: true, profile: updatedProfile });
+    if (normalizedPhone) {
+      res.cookies.set("x-phone-ok", "1", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 86400, // 24 hours
+        path: "/",
+      });
+    }
+    return res;
   } catch (error) {
     logApiError(log, "Unexpected profile update error", error);
     return internalApiError();

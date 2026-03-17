@@ -383,6 +383,58 @@ describe("POST /api/listings", () => {
     );
     expect(insertSpy).not.toHaveBeenCalledWith(expect.objectContaining({ owner_id: USER_ID }));
   });
+
+  it("does not consume free post slot when media validation fails (regression)", async () => {
+    const freePostInsertSpy = vi.fn().mockResolvedValue({ error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            insert: freePostInsertSpy,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    // Submit with too many images to trigger 422 from media validation
+    const tooManyImages = Array.from(
+      { length: 10 },
+      (_, i) => `https://media.verifymzansi.com/img${i}.jpg`
+    );
+    const res = await POST(createRequest({ ...VALID_BODY, images: tooManyImages }));
+
+    expect(res.status).toBe(422);
+    // free_posts_used.insert must NOT have been called — validation fires before claim
+    expect(freePostInsertSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET /api/listings", () => {

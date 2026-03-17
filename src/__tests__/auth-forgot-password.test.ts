@@ -2,10 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import type * as TurnstileModule from "@/lib/utils/turnstile";
 
-const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockVerifyTurnstile: vi.fn(),
-}));
+const { mockCreateClient, mockVerifyTurnstile, mockCheckRateLimit, mockGetClientIp } = vi.hoisted(
+  () => ({
+    mockCreateClient: vi.fn(),
+    mockVerifyTurnstile: vi.fn(),
+    mockCheckRateLimit: vi.fn(),
+    mockGetClientIp: vi.fn(),
+  })
+);
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/utils/turnstile", async () => {
@@ -24,6 +28,10 @@ vi.mock("@/lib/utils/api", () => ({
     }
   }),
 }));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: mockCheckRateLimit,
+  getClientIp: mockGetClientIp,
+}));
 
 import { POST } from "@/app/api/auth/forgot-password/route";
 
@@ -40,6 +48,8 @@ function createRequest(body: unknown): NextRequest {
 describe("POST /api/auth/forgot-password", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientIp.mockReturnValue("127.0.0.1");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
     delete process.env.TURNSTILE_SECRET_KEY;
   });

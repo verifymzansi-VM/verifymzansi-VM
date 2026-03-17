@@ -15,6 +15,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClien
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
+  checkLocalRateLimit: vi.fn().mockReturnValue({ limited: false }),
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 vi.mock("@/lib/utils/logger", () => ({

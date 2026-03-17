@@ -172,10 +172,17 @@ function setupDefaultAdminMocks() {
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
             }),
           }),
         }),
-        upsert: vi.fn().mockResolvedValue({ error: null }),
+        upsert: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi
+              .fn()
+              .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+          }),
+        }),
       };
     }
     if (table === "verification_sessions") {
@@ -413,10 +420,17 @@ describe("POST /api/verification/upload", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
               }),
             }),
           }),
-          upsert: vi.fn().mockResolvedValue({ error: null }),
+          upsert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi
+                .fn()
+                .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+            }),
+          }),
         };
       }
       if (table === "verification_sessions") {
@@ -486,6 +500,7 @@ describe("POST /api/verification/upload", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
               }),
             }),
           }),
@@ -572,10 +587,17 @@ describe("POST /api/verification/upload", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
               }),
             }),
           }),
-          upsert: vi.fn().mockResolvedValue({ error: null }),
+          upsert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi
+                .fn()
+                .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+            }),
+          }),
         };
       }
       if (table === "verification_sessions") {
@@ -635,7 +657,11 @@ describe("POST /api/verification/upload", () => {
   it("clears prior review metadata and reopens the verification session on resubmission", async () => {
     mockAuth({ id: "user-1", email: "test@example.com" });
 
-    const stepUpsert = vi.fn().mockResolvedValue({ error: null });
+    const stepUpsert = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+      }),
+    });
     const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
 
     mockFrom.mockImplementation((table: string) => {
@@ -687,6 +713,7 @@ describe("POST /api/verification/upload", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
               }),
             }),
           }),
@@ -744,7 +771,7 @@ describe("POST /api/verification/upload", () => {
         reason_note: null,
         override_reason_code: null,
       }),
-      { onConflict: "user_id,step_type" }
+      expect.objectContaining({ onConflict: "user_id,step_type" })
     );
     expect(sessionUpsert).toHaveBeenCalledWith(
       expect.objectContaining({

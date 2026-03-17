@@ -48,17 +48,23 @@ export async function GET(request: Request) {
                 userId: user.id,
                 message: ACCOUNT_PROFILE_NOT_FOUND_ERROR,
               });
+              // Redirect to login with error instead of continuing without a profile.
+              // Without a profile row the user would hit errors on every protected page.
+              return NextResponse.redirect(`${origin}/login?error=profile_creation_failed`);
             } else {
               isNewOAuthUser = true;
             }
           }
         } catch (err) {
-          // Non-blocking: downstream API routes now self-heal missing profiles.
+          // Profile creation threw — redirect to login with error so the user
+          // can retry rather than landing on a broken dashboard.
           log.error("Failed to create account profile for OAuth user", {
             userId: user.id,
             message: ACCOUNT_PROFILE_NOT_FOUND_ERROR,
             error: err instanceof Error ? err.message : "Unknown",
+            stack: err instanceof Error ? err.stack : undefined,
           });
+          return NextResponse.redirect(`${origin}/login?error=profile_creation_failed`);
         }
 
         // New OAuth users go to complete-profile to add their phone number;

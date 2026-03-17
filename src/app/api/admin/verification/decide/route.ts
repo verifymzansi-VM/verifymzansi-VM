@@ -202,22 +202,35 @@ export async function POST(request: Request) {
           .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
       }
     } else if (decision === "rejected") {
+      // Include "verified" so that rejecting a step on a verified account
+      // properly downgrades the account status (prevents verified + rejected step desync).
       await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_verification_status: "rejected",
         })
         .eq("user_id", step.user_id)
-        .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
+        .in("account_verification_status", [
+          "incomplete",
+          "pending_review",
+          "rejected",
+          "verified",
+        ]);
     } else {
-      // needs_resubmission — keep as pending_review so the user isn't shown "rejected"
+      // needs_resubmission — keep as pending_review so the user isn't shown "rejected".
+      // Include "verified" so re-review of a step on a verified account is handled.
       await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_verification_status: "pending_review",
         })
         .eq("user_id", step.user_id)
-        .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
+        .in("account_verification_status", [
+          "incomplete",
+          "pending_review",
+          "rejected",
+          "verified",
+        ]);
     }
 
     // Log audit event
@@ -303,6 +316,7 @@ export async function POST(request: Request) {
   } catch (err) {
     log.error("Verification decide failed", {
       error: err instanceof Error ? err.message : "Unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
     });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

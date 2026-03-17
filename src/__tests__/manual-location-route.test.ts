@@ -1,10 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetUser, mockLogAuditEvent, mockParseJson, mockAdminFrom } = vi.hoisted(() => ({
+const {
+  mockGetUser,
+  mockLogAuditEvent,
+  mockParseJson,
+  mockAdminFrom,
+  mockCheckRateLimit,
+  mockGetClientIp,
+} = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockParseJson: vi.fn(),
   mockAdminFrom: vi.fn(),
+  mockCheckRateLimit: vi.fn(),
+  mockGetClientIp: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -29,6 +38,10 @@ vi.mock("@/lib/utils/api", () => ({
 
 vi.mock("@/lib/constants/verification", () => ({
   MANUAL_ONLY_BASELINE_RISK: 20,
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: mockCheckRateLimit,
+  getClientIp: mockGetClientIp,
 }));
 
 import { POST } from "@/app/api/verification/location/manual/route";
@@ -84,6 +97,8 @@ function setupAuthenticatedUser() {
 describe("POST /api/verification/location/manual", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientIp.mockReturnValue("127.0.0.1");
   });
 
   it("should return 401 when not authenticated", async () => {

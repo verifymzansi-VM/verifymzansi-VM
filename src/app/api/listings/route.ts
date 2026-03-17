@@ -366,6 +366,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     log.error("Unexpected error in listing fetch", {
       error: err instanceof Error ? err.message : "unknown",
+      stack: err instanceof Error ? err.stack : undefined,
     });
     return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
   }
@@ -468,6 +469,41 @@ export async function POST(request: NextRequest) {
     const tier = (activeEntitlement?.tier as string) || null;
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
+    // ── Enforce photo/video limits based on plan ─────────────
+    // Validated BEFORE claiming the free post slot so that a validation
+    // failure never consumes the user's one-time free post quota.
+    const ent =
+      hasPaidPlan && tier
+        ? getEntitlements(tier as PlanTier, AREA)
+        : {
+            maxPhotos: FREE_POST_CONFIG.maxPhotos,
+            maxVideos: FREE_POST_CONFIG.maxVideos,
+            videoAllowed: FREE_POST_CONFIG.videoAllowed,
+          };
+
+    if (data.images.length > ent.maxPhotos) {
+      return NextResponse.json(
+        {
+          error: `Maximum ${ent.maxPhotos} photos allowed on your plan`,
+        },
+        { status: 422 }
+      );
+    }
+
+    if (data.videos.length > 0 && !ent.videoAllowed) {
+      return NextResponse.json(
+        { error: "Video upload is not available on your current plan." },
+        { status: 422 }
+      );
+    }
+
+    if (data.videos.length > ent.maxVideos) {
+      return NextResponse.json(
+        { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
+        { status: 422 }
+      );
+    }
+
     // Check free post availability for unpaid users
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
       // Atomic claim: INSERT (not upsert) to prevent TOCTOU race.
@@ -521,39 +557,6 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
-    }
-
-    // ── Enforce photo/video limits based on plan ─────────────
-    const ent =
-      hasPaidPlan && tier
-        ? getEntitlements(tier as PlanTier, AREA)
-        : {
-            maxPhotos: FREE_POST_CONFIG.maxPhotos,
-            maxVideos: FREE_POST_CONFIG.maxVideos,
-            videoAllowed: FREE_POST_CONFIG.videoAllowed,
-          };
-
-    if (data.images.length > ent.maxPhotos) {
-      return NextResponse.json(
-        {
-          error: `Maximum ${ent.maxPhotos} photos allowed on your plan`,
-        },
-        { status: 422 }
-      );
-    }
-
-    if (data.videos.length > 0 && !ent.videoAllowed) {
-      return NextResponse.json(
-        { error: "Video upload is not available on your current plan." },
-        { status: 422 }
-      );
-    }
-
-    if (data.videos.length > ent.maxVideos) {
-      return NextResponse.json(
-        { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
-        { status: 422 }
-      );
     }
 
     // ── Prepare listing record ───────────────────────────────
@@ -660,6 +663,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     log.error("Unexpected error in listing creation", {
       error: err instanceof Error ? err.message : "unknown",
+      stack: err instanceof Error ? err.stack : undefined,
     });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
