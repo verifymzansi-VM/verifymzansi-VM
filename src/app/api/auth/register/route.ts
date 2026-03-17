@@ -51,8 +51,21 @@ export async function POST(request: NextRequest) {
     }
 
     const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({ key: ip, action: "auth:register" });
+    const rateCheck = await checkRateLimit({
+      key: ip,
+      action: "auth:register",
+      degradedMode: "block",
+    });
     if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          {
+            error: "Registration protection is temporarily unavailable. Please try again shortly.",
+          },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
         { error: "Too many registration attempts. Please try again later." },
         { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }

@@ -119,9 +119,25 @@ describe("POST /api/webhooks/ozow", () => {
       user_id: "user-1",
     };
 
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValueOnce({ data: paymentRecord })
+      .mockResolvedValueOnce({ data: { ...paymentRecord, status: "processing" } })
+      .mockResolvedValueOnce({
+        data: {
+          ...paymentRecord,
+          status: "processing",
+          provider_payment_id: "ozow-tx-1",
+          provider_data: {
+            ...paymentRecord.provider_data,
+            processing_started_at: "2026-03-17T10:00:00.000Z",
+            fulfillment_completed_at: "2026-03-17T10:00:05.000Z",
+          },
+        },
+      });
     const paymentsSelect = {
       eq: vi.fn().mockReturnValue({
-        maybeSingle: vi.fn().mockResolvedValue({ data: paymentRecord }),
+        maybeSingle,
       }),
     };
     const claimSelect = vi.fn().mockResolvedValue({ data: [{ id: "payment-1" }] });
@@ -136,6 +152,13 @@ describe("POST /api/webhooks/ozow", () => {
         }),
       }),
     };
+    const markerUpdateChain = {
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    };
     const completeUpdateChain = {
       eq: vi.fn().mockReturnValue({
         eq: vi.fn().mockResolvedValue({ error: null }),
@@ -146,6 +169,7 @@ describe("POST /api/webhooks/ozow", () => {
       update: vi
         .fn()
         .mockReturnValueOnce(claimUpdateChain)
+        .mockReturnValueOnce(markerUpdateChain)
         .mockReturnValueOnce(completeUpdateChain),
     };
 
@@ -178,5 +202,89 @@ describe("POST /api/webhooks/ozow", () => {
         }),
       })
     );
+  });
+
+  it("finalizes a previously-fulfilled processing payment without rerunning fulfillment", async () => {
+    const crypto = await import("crypto");
+    const body = {
+      eventType: "transaction.complete",
+      data: {
+        merchantReference: "payment-1",
+        transactionReference: "ozow-tx-1",
+        amount: "25.00",
+        currencyCode: "ZAR",
+      },
+    };
+    const raw = JSON.stringify(body);
+    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
+
+    const processingPayment = {
+      id: "payment-1",
+      area: "PROMOTIONS_EVENTS",
+      status: "processing",
+      provider: "ozow",
+      provider_payment_id: "ozow-tx-1",
+      provider_reference: "payment-1",
+      provider_data: {
+        type: "featured_promotion",
+        promotion_id: "00000000-0000-0000-0000-000000000001",
+        feature_days: 7,
+        processing_started_at: "2026-03-17T10:00:00.000Z",
+        fulfillment_completed_at: "2026-03-17T10:00:05.000Z",
+      },
+      amount_cents: 2500,
+      user_id: "user-1",
+    };
+
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValueOnce({ data: processingPayment })
+      .mockResolvedValueOnce({ data: processingPayment });
+    const paymentsSelect = {
+      eq: vi.fn().mockReturnValue({
+        maybeSingle,
+      }),
+    };
+    const claimSelect = vi.fn().mockResolvedValue({ data: [] });
+    const claimUpdateChain = {
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          neq: vi.fn().mockReturnValue({
+            neq: vi.fn().mockReturnValue({
+              select: claimSelect,
+            }),
+          }),
+        }),
+      }),
+    };
+    const completeUpdateChain = {
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    };
+    const paymentsFrom = {
+      select: vi.fn().mockReturnValue(paymentsSelect),
+      update: vi
+        .fn()
+        .mockReturnValueOnce(claimUpdateChain)
+        .mockReturnValueOnce(completeUpdateChain),
+    };
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "payments") {
+          return paymentsFrom;
+        }
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    });
+
+    const response = await POST(createSignedRequest(body, signature));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.recovered).toBe(true);
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
   });
 });

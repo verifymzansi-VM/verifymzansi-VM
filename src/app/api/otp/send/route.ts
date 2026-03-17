@@ -125,8 +125,20 @@ export async function POST(request: NextRequest) {
       key: phone,
       action: "otp:send",
       deviceId,
+      degradedMode: "block",
     });
     if (externalLimit.limited) {
+      if (externalLimit.degraded) {
+        return otpSendError(
+          "OTP protection is temporarily unavailable. Please try again shortly.",
+          503,
+          {
+            code: "rate_limited",
+            retryAfter: externalLimit.retryAfter ?? 60,
+          }
+        );
+      }
+
       return otpSendError("Too many OTP requests. Please wait before trying again.", 429, {
         code: "rate_limited",
         retryAfter: externalLimit.retryAfter ?? 60,

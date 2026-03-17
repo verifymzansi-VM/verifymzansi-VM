@@ -37,8 +37,22 @@ export async function POST(request: NextRequest) {
 
     // Rate limit aggressively — this triggers outbound emails
     const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({ key: ip, action: "auth:resend-confirmation" });
+    const rateCheck = await checkRateLimit({
+      key: ip,
+      action: "auth:resend-confirmation",
+      degradedMode: "block",
+    });
     if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          {
+            error:
+              "Confirmation email protection is temporarily unavailable. Please try again shortly.",
+          },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
         { error: "Too many requests. Please wait before trying again." },
         { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }

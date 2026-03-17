@@ -16,8 +16,22 @@ export async function POST(request: NextRequest) {
     }
 
     const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({ key: ip, action: "auth:change-password" });
+    const rateCheck = await checkRateLimit({
+      key: ip,
+      action: "auth:change-password",
+      degradedMode: "block",
+    });
     if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          {
+            error:
+              "Password change protection is temporarily unavailable. Please try again shortly.",
+          },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
         { error: "Too many attempts. Please try again later." },
         { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }

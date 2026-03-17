@@ -84,11 +84,22 @@ interface RateLimitOptions {
   action: string;
   /** Optional device/session identifier */
   deviceId?: string;
+  /**
+   * How to behave when the shared rate-limiter worker is unavailable.
+   * `local` preserves availability with a per-instance fallback.
+   * `block` fails closed for sensitive flows that should not continue without shared abuse controls.
+   */
+  degradedMode?: "local" | "block";
 }
 
 interface RateLimitResult {
   limited: boolean;
   retryAfter?: number;
+  degraded?: boolean;
+}
+
+function degradedBlockResult(retryAfter = 60): RateLimitResult {
+  return { limited: true, retryAfter, degraded: true };
 }
 
 /**
@@ -102,9 +113,16 @@ interface RateLimitResult {
 export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitResult> {
   const url = process.env.OTP_RATE_LIMITER_URL;
   if (!url) {
+    if (opts.degradedMode === "block") {
+      logger.error("Shared rate limiter is not configured for a fail-closed action", {
+        action: opts.action,
+      });
+      return degradedBlockResult();
+    }
+
     // No external rate-limiter configured — fall back to in-memory limiter
     // instead of failing open with no protection.
-    return checkLocalRateLimit(opts.key, opts.action);
+    return { ...checkLocalRateLimit(opts.key, opts.action), degraded: true };
   }
 
   const timeout = Number(process.env.OTP_RATE_LIMITER_TIMEOUT_MS) || 2500;
@@ -145,12 +163,20 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
       clearTimeout(timer);
     }
   } catch (err) {
+    if (opts.degradedMode === "block") {
+      logger.error("Rate limiter worker unreachable for fail-closed action", {
+        action: opts.action,
+        error: err instanceof Error ? err.message : "unknown",
+      });
+      return degradedBlockResult();
+    }
+
     // Fail degraded — use local in-memory rate limiter as fallback
     logger.error("Rate limiter worker unreachable, using local fallback", {
       action: opts.action,
       error: err instanceof Error ? err.message : "unknown",
     });
-    return checkLocalRateLimit(opts.key, opts.action);
+    return { ...checkLocalRateLimit(opts.key, opts.action), degraded: true };
   }
 }
 

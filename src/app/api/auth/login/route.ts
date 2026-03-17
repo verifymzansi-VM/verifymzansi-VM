@@ -29,8 +29,19 @@ export async function POST(request: NextRequest) {
     }
 
     const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({ key: ip, action: "auth:login" });
+    const rateCheck = await checkRateLimit({
+      key: ip,
+      action: "auth:login",
+      degradedMode: "block",
+    });
     if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          { error: "Login protection is temporarily unavailable. Please try again shortly." },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
         { error: "Too many login attempts. Please try again later." },
         { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
@@ -68,8 +79,16 @@ export async function POST(request: NextRequest) {
         const strictCheck = await checkRateLimit({
           key: `strict:${ip}`,
           action: "auth:login:nocaptcha",
+          degradedMode: "block",
         });
         if (strictCheck.limited) {
+          if (strictCheck.degraded) {
+            return NextResponse.json(
+              { error: "Login protection is temporarily unavailable. Please try again shortly." },
+              { status: 503, headers: { "Retry-After": String(strictCheck.retryAfter ?? 120) } }
+            );
+          }
+
           return NextResponse.json(
             { error: "Too many login attempts without CAPTCHA. Please try again later." },
             { status: 429, headers: { "Retry-After": String(strictCheck.retryAfter ?? 120) } }

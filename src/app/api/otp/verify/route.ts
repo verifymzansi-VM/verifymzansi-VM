@@ -186,8 +186,19 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limit by IP to prevent brute-force across multiple OTP challenges
     const ip = getClientIp(request);
-    const rl = await checkRateLimit({ key: ip, action: "otp:verify" });
+    const rl = await checkRateLimit({
+      key: ip,
+      action: "otp:verify",
+      degradedMode: "block",
+    });
     if (rl.limited) {
+      if (rl.degraded) {
+        return NextResponse.json(
+          { error: "OTP protection is temporarily unavailable. Please try again shortly." },
+          { status: 503, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
         { error: "Too many attempts. Please try again later." },
         { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }

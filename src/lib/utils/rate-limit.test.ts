@@ -18,6 +18,21 @@ describe("rate-limit", () => {
 
       const result = await checkRateLimit({ key: "test", action: "login" });
       expect(result.limited).toBe(false);
+      expect(result.degraded).toBe(true);
+    });
+
+    it("fails closed when a sensitive action requires the shared rate limiter", async () => {
+      vi.stubEnv("OTP_RATE_LIMITER_URL", "");
+
+      const result = await checkRateLimit({
+        key: "test",
+        action: "auth:login",
+        degradedMode: "block",
+      });
+
+      expect(result.limited).toBe(true);
+      expect(result.degraded).toBe(true);
+      expect(result.retryAfter).toBe(60);
     });
 
     it("returns { limited: false } when external worker returns 200", async () => {
@@ -75,6 +90,21 @@ describe("rate-limit", () => {
       // First request should pass (local fallback allows it)
       const result = await checkRateLimit({ key: "test-ip", action: "test" });
       expect(result.limited).toBe(false);
+      expect(result.degraded).toBe(true);
+    });
+
+    it("fails closed on fetch errors when degradedMode is block", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
+
+      const result = await checkRateLimit({
+        key: "test-ip",
+        action: "billing:checkout",
+        degradedMode: "block",
+      });
+
+      expect(result.limited).toBe(true);
+      expect(result.degraded).toBe(true);
+      expect(result.retryAfter).toBe(60);
     });
 
     it("local fallback limits after exceeding threshold", async () => {

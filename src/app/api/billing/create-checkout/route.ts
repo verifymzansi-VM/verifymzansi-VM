@@ -43,8 +43,19 @@ export async function POST(request: NextRequest) {
 
     // ── Rate limit ──────────────────────────────────────────
     const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({ key: ip, action: "billing:checkout" });
+    const rateCheck = await checkRateLimit({
+      key: ip,
+      action: "billing:checkout",
+      degradedMode: "block",
+    });
     if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          { error: "Checkout protection is temporarily unavailable. Please try again shortly." },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
         { error: "Too many checkout attempts. Please try again later." },
         { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }

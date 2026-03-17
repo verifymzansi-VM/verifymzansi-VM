@@ -34,8 +34,21 @@ export async function POST(request: NextRequest) {
   // Rate limit password resets by IP to prevent email spam (before Turnstile
   // to avoid triggering outbound Turnstile requests for spammy clients)
   const ip = getClientIp(request) || "unknown";
-  const rl = await checkRateLimit({ key: ip, action: "auth:forgot-password" });
+  const rl = await checkRateLimit({
+    key: ip,
+    action: "auth:forgot-password",
+    degradedMode: "block",
+  });
   if (rl.limited) {
+    if (rl.degraded) {
+      return NextResponse.json(
+        {
+          error: "Password reset protection is temporarily unavailable. Please try again shortly.",
+        },
+        { status: 503, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     return NextResponse.json(
       { error: "Too many requests. Please try again later." },
       { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
@@ -60,8 +73,18 @@ export async function POST(request: NextRequest) {
   const emailRl = await checkRateLimit({
     key: parsed.data.email.toLowerCase(),
     action: "auth:forgot-password-email",
+    degradedMode: "block",
   });
   if (emailRl.limited) {
+    if (emailRl.degraded) {
+      return NextResponse.json(
+        {
+          error: "Password reset protection is temporarily unavailable. Please try again shortly.",
+        },
+        { status: 503, headers: { "Retry-After": String(emailRl.retryAfter ?? 60) } }
+      );
+    }
+
     // Return generic success to avoid revealing whether the email exists
     return NextResponse.json({ success: true });
   }

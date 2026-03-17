@@ -58,6 +58,81 @@ interface CleanupRecord {
   reason: string;
 }
 
+interface KycArtifactOwnership {
+  r2_key: string;
+  user_id: string;
+}
+
+interface AccountHoldRow {
+  user_id: string;
+}
+
+function buildInFilter(values: string[]): string {
+  return `(${values.map((value) => JSON.stringify(value)).join(",")})`;
+}
+
+function isPrivateBucket(bucket: string): boolean {
+  return bucket === "private" || bucket === "verifymzansi-private";
+}
+
+function isPublicBucket(bucket: string): boolean {
+  return bucket === "public" || bucket === "verifymzansi-public";
+}
+
+async function getHeldKycKeys(
+  records: CleanupRecord[],
+  env: Env,
+  headers: Record<string, string>
+): Promise<Set<string>> {
+  const candidateKeys = records
+    .filter((record) => isPrivateBucket(record.bucket))
+    .map((r) => r.r2_key);
+  if (candidateKeys.length === 0) {
+    return new Set<string>();
+  }
+
+  const artifactsResponse = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/kyc_artifacts?select=r2_key,user_id&r2_key=in.${encodeURIComponent(buildInFilter(candidateKeys))}`,
+    { headers }
+  );
+
+  if (!artifactsResponse.ok) {
+    console.error(
+      "Failed to resolve queued KYC artifacts for legal-hold check:",
+      await artifactsResponse.text()
+    );
+    return new Set<string>();
+  }
+
+  const artifacts = (await artifactsResponse.json()) as KycArtifactOwnership[];
+  const userIds = [...new Set(artifacts.map((artifact) => artifact.user_id))];
+  if (userIds.length === 0) {
+    return new Set<string>();
+  }
+
+  const holdsResponse = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/account_profiles?select=user_id&legal_hold=is.true&user_id=in.${encodeURIComponent(buildInFilter(userIds))}`,
+    { headers }
+  );
+
+  if (!holdsResponse.ok) {
+    console.error(
+      "Failed to resolve legal holds for queued KYC artifacts:",
+      await holdsResponse.text()
+    );
+    return new Set<string>();
+  }
+
+  const heldUsers = new Set(
+    ((await holdsResponse.json()) as AccountHoldRow[]).map((row) => row.user_id)
+  );
+  return new Set(
+    artifacts
+      .filter((artifact) => heldUsers.has(artifact.user_id))
+      .map((artifact) => artifact.r2_key)
+  );
+}
+
 const worker: ExportedHandler<Env> = {
   /**
    * Cron trigger: runs daily at 03:00 UTC
@@ -95,6 +170,9 @@ const worker: ExportedHandler<Env> = {
 
     let successCount = 0;
     let failCount = 0;
+    let heldSkipCount = 0;
+
+    const heldKeys = await getHeldKycKeys(records, env, headers);
 
     // Batch R2 deletes (the API accepts an array of keys) and track results.
     // Records can target different buckets, so each batch is grouped per bucket.
@@ -109,8 +187,11 @@ const worker: ExportedHandler<Env> = {
       }
 
       for (const [bucket, bucketRecords] of bucketGroups.entries()) {
-        const bucketBinding =
-          bucket === "private" ? env.R2_PRIVATE : bucket === "public" ? env.R2_PUBLIC : null;
+        const bucketBinding = isPrivateBucket(bucket)
+          ? env.R2_PRIVATE
+          : isPublicBucket(bucket)
+            ? env.R2_PUBLIC
+            : null;
 
         if (!bucketBinding) {
           console.error(`Unsupported cleanup bucket '${bucket}'`);
@@ -118,29 +199,56 @@ const worker: ExportedHandler<Env> = {
           continue;
         }
 
-        const keys = bucketRecords.map((record) => record.r2_key);
+        const actionableRecords = bucketRecords.filter((record) => !heldKeys.has(record.r2_key));
+        const skippedRecords = bucketRecords.filter((record) => heldKeys.has(record.r2_key));
+
+        if (skippedRecords.length > 0) {
+          heldSkipCount += skippedRecords.length;
+          console.warn(
+            `Skipping ${skippedRecords.length} queued cleanup record(s) because a legal hold is active.`
+          );
+        }
+
+        if (actionableRecords.length === 0) {
+          continue;
+        }
+
+        const keys = actionableRecords.map((record) => record.r2_key);
 
         try {
           await bucketBinding.delete(keys);
         } catch (err) {
           console.error(`Failed to batch-delete ${bucket} R2 keys:`, err);
-          failCount += bucketRecords.length;
+          failCount += actionableRecords.length;
           continue;
         }
 
-        const batchIds = bucketRecords.map((record) => record.id);
+        const batchIds = actionableRecords.map((record) => record.id);
         try {
-          await fetch(`${supabaseUrl}/rest/v1/r2_cleanup_queue?id=in.(${batchIds.join(",")})`, {
-            method: "PATCH",
-            headers,
-            body: JSON.stringify({
-              processed_at: new Date().toISOString(),
-            }),
-          });
-          successCount += bucketRecords.length;
+          const markResponse = await fetch(
+            `${supabaseUrl}/rest/v1/r2_cleanup_queue?id=in.(${batchIds.join(",")})`,
+            {
+              method: "PATCH",
+              headers,
+              body: JSON.stringify({
+                processed_at: new Date().toISOString(),
+              }),
+            }
+          );
+
+          if (!markResponse.ok) {
+            console.error(
+              `Failed to mark ${bucket} cleanup batch as processed:`,
+              await markResponse.text()
+            );
+            failCount += actionableRecords.length;
+            continue;
+          }
+
+          successCount += actionableRecords.length;
         } catch (err) {
           console.error(`Failed to mark ${bucket} cleanup batch as processed:`, err);
-          failCount += bucketRecords.length;
+          failCount += actionableRecords.length;
         }
       }
     }
@@ -157,6 +265,7 @@ const worker: ExportedHandler<Env> = {
         total: records.length,
         success: successCount,
         failed: failCount,
+        held_skipped: heldSkipCount,
         run_at: new Date().toISOString(),
       },
       created_at: new Date().toISOString(),
@@ -174,7 +283,9 @@ const worker: ExportedHandler<Env> = {
       );
     }
 
-    console.warn(`Retention cleanup complete: ${successCount} deleted, ${failCount} failed.`);
+    console.warn(
+      `Retention cleanup complete: ${successCount} deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold.`
+    );
   },
 
   /**

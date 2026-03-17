@@ -6,6 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 ENVIRONMENT = "production"
 SUPABASE_URL = "https://tnygdgormnofpgjknlhr.supabase.co"
+PROCESSING_PAYMENT_STALE_MINUTES = "30"
 
 [triggers]
 crons = ["*/10 * * * *"]
