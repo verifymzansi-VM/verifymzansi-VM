@@ -1,4 +1,5 @@
 import { appendProviderWebhook } from "@/lib/payments/types";
+import type { MarketplaceArea } from "@/types/enums";
 
 export type PaymentStoreClient = {
   from: (table: string) => {
@@ -50,7 +51,7 @@ export type PaymentStoreClient = {
 
 export type PaymentRow = {
   id: string;
-  area: string;
+  area: MarketplaceArea;
   status: string;
   provider: string;
   provider_payment_id: string | null;
