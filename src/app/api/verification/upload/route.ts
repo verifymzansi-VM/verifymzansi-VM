@@ -19,25 +19,8 @@ import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("VerificationUpload");
 
-function getDefaultDisplayName(user: { email?: string | null; user_metadata?: unknown }): string {
-  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
-  const displayName = metadata.display_name;
-  const fullName = metadata.full_name;
-
-  if (typeof displayName === "string" && displayName.trim().length > 0) {
-    return displayName.trim();
-  }
-
-  if (typeof fullName === "string" && fullName.trim().length > 0) {
-    return fullName.trim();
-  }
-
-  if (user.email) {
-    return user.email.split("@")[0] || "New Member";
-  }
-
-  return "New Member";
-}
+// Re-exported from shared module
+import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
 
 /**
  * POST /api/verification/upload

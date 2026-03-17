@@ -2,11 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
-import {
-  ACCOUNT_PROFILE_NOT_FOUND_ERROR,
-  ACCOUNT_PROFILE_TABLE,
-  ACCOUNT_PROFILE_WRITE_TABLE,
-} from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
+import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("AuthCallback");
@@ -37,34 +34,27 @@ export async function GET(request: Request) {
         let isNewOAuthUser = false;
         try {
           const admin = createAdminClient();
-          const { data: profile } = await admin
-            .from(ACCOUNT_PROFILE_TABLE)
+          // Check existence first so we know whether ensureAccountProfile creates a new row.
+          const { data: existingProfile } = await admin
+            .from("account_profiles")
             .select("user_id")
             .eq("user_id", user.id)
             .maybeSingle();
 
-          // Auto-create an account profile for new OAuth users.
-          if (!profile) {
-            isNewOAuthUser = true;
-            const displayName =
-              user.user_metadata?.full_name ||
-              user.user_metadata?.name ||
-              user.email?.split("@")[0] ||
-              "User";
-
-            await admin.from(ACCOUNT_PROFILE_WRITE_TABLE).upsert(
-              {
-                user_id: user.id,
-                display_name: displayName,
-                account_verification_status: "incomplete",
-                account_status: "active",
-              },
-              { onConflict: "user_id" }
-            );
+          if (!existingProfile) {
+            const profile = await ensureAccountProfile(admin, user);
+            if (!profile) {
+              log.error("Failed to create account profile for OAuth user", {
+                userId: user.id,
+                message: ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+              });
+            } else {
+              isNewOAuthUser = true;
+            }
           }
         } catch (err) {
-          // Non-blocking: OAuth users can still proceed; the account profile can be created later.
-          log.warn("Failed to create account profile for OAuth user", {
+          // Non-blocking: downstream API routes now self-heal missing profiles.
+          log.error("Failed to create account profile for OAuth user", {
             userId: user.id,
             message: ACCOUNT_PROFILE_NOT_FOUND_ERROR,
             error: err instanceof Error ? err.message : "Unknown",

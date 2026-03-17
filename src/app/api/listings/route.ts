@@ -18,6 +18,7 @@ import {
   withOwnerColumn,
   withOwnerField,
 } from "@/lib/account/compat";
+import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
@@ -406,10 +407,14 @@ export async function POST(request: NextRequest) {
 
     // ── Get account profile ──────────────────────────────────
     const verification = await resolveAccountVerification(admin, user.id);
-    const profile = verification.profile;
+    let profile = verification.profile;
 
     if (!profile) {
-      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+      profile = await ensureAccountProfile(admin, user);
+      if (!profile) {
+        return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+      }
+      // Auto-created profiles are always "incomplete" → caught by isVerifiedMember below
     }
 
     if (!isVerifiedMember(verification.accountVerificationStatus)) {

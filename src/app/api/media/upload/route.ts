@@ -3,7 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { uploadToR2, generateStorageKey } from "@/lib/services/storage";
 import { createLogger } from "@/lib/utils/logger";
 import { UPLOAD_AREAS } from "@/types/enums";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
+import { ensureAccountProfile } from "@/lib/account/ensure-profile";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -70,13 +72,17 @@ export async function POST(request: NextRequest) {
 
     // ── Get account profile ──────────────────────────────────
     const { data: profile } = await supabase
-      .from("account_profiles")
+      .from(ACCOUNT_PROFILE_TABLE)
       .select("id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+      const admin = createAdminClient();
+      const autoProfile = await ensureAccountProfile(admin, user);
+      if (!autoProfile) {
+        return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+      }
     }
 
     // ── Parse form data ──────────────────────────────────────

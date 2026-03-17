@@ -3,7 +3,9 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { generateStorageKey, generatePresignedUploadUrl } from "@/lib/services/storage";
 import { createLogger } from "@/lib/utils/logger";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
+import { ensureAccountProfile } from "@/lib/account/ensure-profile";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { UPLOAD_AREAS } from "@/types/enums";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
@@ -64,11 +66,11 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Get account profile ──────────────────────────────────
-    const { data: profile, error: profileError } = await supabase
-      .from("account_profiles")
+    let { data: profile, error: profileError } = await supabase
+      .from(ACCOUNT_PROFILE_TABLE)
       .select("id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (profileError) {
       log.error("Failed to fetch account profile for upload URL", {
@@ -79,7 +81,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!profile) {
-      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+      const admin = createAdminClient();
+      profile = await ensureAccountProfile(admin, user);
+      if (!profile) {
+        return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+      }
     }
 
     // ── Parse request body ───────────────────────────────────
