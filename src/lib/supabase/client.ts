@@ -52,12 +52,14 @@ function getBrowserCookie(name: string): string | null {
 
 function setBrowserCookie(name: string, value: string) {
   if (typeof document === "undefined") return;
-  document.cookie = `${name}=${value}; path=/; SameSite=Lax`;
+  const secure = globalThis.location?.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${name}=${value}; path=/; SameSite=Lax${secure}`;
 }
 
 function removeBrowserCookie(name: string) {
   if (typeof document === "undefined") return;
-  document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
+  const secure = globalThis.location?.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax${secure}`;
 }
 
 function createBrowserPlaywrightStubClient(): SupabaseClient {

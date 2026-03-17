@@ -9,6 +9,18 @@
  * has its own Map, so lockout state is not shared across instances and resets
  * when the isolate is recycled. For stronger protection, persist lockout state
  * in Cloudflare KV or a Durable Object.
+ *
+ * MITIGATIONS (defense-in-depth):
+ *  - The DO-backed IP rate limiter (`checkRateLimit` with action "auth:login")
+ *    persists across isolate recycling and limits login attempts per IP.
+ *  - Cloudflare Turnstile CAPTCHA blocks automated brute-force tooling.
+ *  - Supabase Auth has its own internal rate limits.
+ *  - Isolates stay warm during active attacks, so in-memory state is retained
+ *    while the attack is in progress.
+ *
+ * FUTURE: To add cross-isolate per-email lockout, extend the rate-limiter
+ * Durable Object with a dedicated "auth:lockout" action that uses a 5/hour
+ * limit keyed by email hash, avoiding the OTP-specific key limits.
  */
 
 const MAX_FAILED_ATTEMPTS = 5;

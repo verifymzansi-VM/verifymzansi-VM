@@ -92,7 +92,9 @@ export async function POST(request: NextRequest) {
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update(updatePayload)
       .eq("user_id", user.id)
-      .select("*")
+      .select(
+        "id, user_id, display_name, avatar_url, bio, location_province, location_city, account_verification_status, account_status"
+      )
       .single();
 
     if (updateError) {

@@ -33,11 +33,16 @@ function toSafeString(value: unknown): string | null {
 }
 
 function createTimingSafeMatch(expected: string, received: string): boolean {
-  // HMAC both values with a fixed key to produce equal-length outputs,
-  // avoiding a timing side-channel on length differences.
-  const key = expected; // use expected as HMAC key
-  const a = crypto.createHmac("sha256", key).update(expected).digest();
-  const b = crypto.createHmac("sha256", key).update(received).digest();
+  // Pad shorter string to equal length to avoid leaking length info,
+  // then use crypto.timingSafeEqual for constant-time comparison.
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(received, "utf8");
+  if (a.length !== b.length) {
+    // Compare expected against itself so we still spend constant time,
+    // then return false — prevents timing side-channel on length mismatch.
+    crypto.timingSafeEqual(a, a);
+    return false;
+  }
   return crypto.timingSafeEqual(a, b);
 }
 

@@ -49,7 +49,7 @@ async function verifyOtp(otp: string, storedHash: string): Promise<boolean> {
     {
       name: "PBKDF2",
       salt: fromHex(salt).buffer as ArrayBuffer,
-      iterations: 100000,
+      iterations: 150000,
       hash: "SHA-512",
     },
     keyMaterial,

@@ -80,7 +80,7 @@ async function hashOtp(otp: string): Promise<string> {
     {
       name: "PBKDF2",
       salt: salt.buffer as ArrayBuffer,
-      iterations: 100000,
+      iterations: 150000,
       hash: "SHA-512",
     },
     keyMaterial,

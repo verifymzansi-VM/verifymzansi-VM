@@ -7,6 +7,23 @@ describe("sanitizeReturnUrl", () => {
     expect(sanitizeReturnUrl("/billing/checkout")).toBe("/billing/checkout");
   });
 
+  it("allows known route prefixes", () => {
+    expect(sanitizeReturnUrl("/verification")).toBe("/verification");
+    expect(sanitizeReturnUrl("/post/create")).toBe("/post/create");
+    expect(sanitizeReturnUrl("/admin/users")).toBe("/admin/users");
+    expect(sanitizeReturnUrl("/mzansi-market")).toBe("/mzansi-market");
+    expect(sanitizeReturnUrl("/dashboard?tab=listings")).toBe("/dashboard?tab=listings");
+  });
+
+  it("blocks unknown route prefixes", () => {
+    expect(sanitizeReturnUrl("/evil-page")).toBe("/dashboard");
+    expect(sanitizeReturnUrl("/unknown/route")).toBe("/dashboard");
+  });
+
+  it("allows the home page", () => {
+    expect(sanitizeReturnUrl("/")).toBe("/");
+  });
+
   it("returns /dashboard for null/undefined", () => {
     expect(sanitizeReturnUrl(null)).toBe("/dashboard");
     expect(sanitizeReturnUrl(undefined)).toBe("/dashboard");
