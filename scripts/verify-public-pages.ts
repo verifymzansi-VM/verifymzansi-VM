@@ -10,7 +10,7 @@ if (!baseUrl) {
 }
 
 const requireRealTurnstile = process.env.PUBLIC_VERIFY_REQUIRE_TURNSTILE !== "0";
-const turnstileTimeoutMs = Number(process.env.PUBLIC_VERIFY_TURNSTILE_TIMEOUT_MS || 15_000);
+const turnstileTimeoutMs = Number(process.env.PUBLIC_VERIFY_TURNSTILE_TIMEOUT_MS || 30_000);
 const artifactsDir = process.env.PUBLIC_VERIFY_ARTIFACTS_DIR || "test-results/public-verify";
 
 function report(message: string) {
@@ -62,6 +62,26 @@ function collectHydrationErrors(page: Page) {
 }
 
 async function assertAuthUi(page: Page) {
+  const consoleErrors: string[] = [];
+
+  page.on("console", (msg) => {
+    if (msg.type() === "error" || msg.type() === "warning") {
+      consoleErrors.push(`[${msg.type()}] ${msg.text()}`);
+    }
+  });
+  page.on("pageerror", (err) => consoleErrors.push(`[pageerror] ${err.message}`));
+
+  // Listen for CSP violation reports via SecurityPolicyViolationEvent
+  await page.addInitScript(() => {
+    document.addEventListener("securitypolicyviolation", (e) => {
+      (window as unknown as Record<string, string[]>).__cspViolations =
+        (window as unknown as Record<string, string[]>).__cspViolations || [];
+      (window as unknown as Record<string, string[]>).__cspViolations.push(
+        `${e.violatedDirective}: ${e.blockedURI}`
+      );
+    });
+  });
+
   const unavailableCopy = page.getByText(/security verification is temporarily unavailable/i);
   const failedCopy = page.getByText(/security check failed to load/i);
   const iframeCount = await page.locator('iframe[src*="challenges.cloudflare.com"]').count();
@@ -91,16 +111,27 @@ async function assertAuthUi(page: Page) {
     const failedAfter = await failedCopy.count();
 
     if (iframeCountAfter === 0 && unavailableAfter === 0) {
-      const turnstileSiteKey = await page.evaluate(() => {
+      const diagnostics = await page.evaluate(() => {
         const el = document.getElementById("vmz-public-config");
-        return el instanceof HTMLElement ? el.dataset.turnstileSiteKey || "" : "";
+        const turnstileSiteKey = el instanceof HTMLElement ? el.dataset.turnstileSiteKey || "" : "";
+        const scriptTags = Array.from(document.querySelectorAll("script[src]")).map(
+          (s) => (s as HTMLScriptElement).src
+        );
+        const turnstileScripts = scriptTags.filter((s) => s.includes("challenges.cloudflare"));
+        const cspViolations = (window as unknown as Record<string, string[]>).__cspViolations || [];
+        const iframes = Array.from(document.querySelectorAll("iframe")).map((f) => f.src);
+        return { turnstileSiteKey, turnstileScripts, iframes, cspViolations };
       });
 
       throw new Error(
         [
           "Auth page rendered without a Turnstile iframe or explicit unavailable state",
-          `turnstileSiteKey=${turnstileSiteKey || "(missing)"}`,
+          `turnstileSiteKey=${diagnostics.turnstileSiteKey || "(missing)"}`,
           `sawFailureCopy=${failedAfter > 0}`,
+          `turnstileScriptsLoaded=${diagnostics.turnstileScripts.length}`,
+          `allIframes=${JSON.stringify(diagnostics.iframes)}`,
+          `cspViolations=${JSON.stringify(diagnostics.cspViolations)}`,
+          `consoleErrors=${JSON.stringify(consoleErrors.slice(0, 10))}`,
         ].join("; ")
       );
     }
