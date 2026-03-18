@@ -110,6 +110,22 @@ ext4-backed workspace. Native Windows remains unsupported.
 - No new warning classes appear beyond the documented OpenNext/Cloudflare
   warning classes
 
+## 6. Sensitive Calls Hardening Verification
+
+- [ ] Register → login redirect does NOT include `?email=` in the URL
+- [ ] Password reset uses `/api/auth/reset-password` (not direct Supabase client
+      call)
+- [ ] POST `/api/listings/[id]/boost`, `/featured`, `/urgent` reject
+      cross-origin requests (403)
+- [ ] POST `/api/businesses/[id]/boost` rejects cross-origin requests (403)
+- [ ] PUT+DELETE `/api/promotions/[id]` reject cross-origin requests (403)
+- [ ] Admin evidence desk fetches artifacts via POST body (not GET query params)
+- [ ] `GET /api/media/serve/kyc/...` returns 400 (key prefix blocked)
+- [ ] `GET /api/promotions?business_id=not-a-uuid` returns 400
+- [ ] No PII (email, ID number, artifact IDs) appears in browser URL bar during
+      normal flows
+- [ ] Full inventory: `docs/sensitive-calls-inventory.md`
+
 ## 6. Release Decision
 
 Call the release launch-ready only when:

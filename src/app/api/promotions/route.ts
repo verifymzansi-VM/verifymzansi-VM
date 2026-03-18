@@ -386,6 +386,12 @@ export async function GET(request: NextRequest) {
     const city = searchParams.get("city");
     const search = searchParams.get("q");
     const businessId = searchParams.get("business_id");
+    if (
+      businessId &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(businessId)
+    ) {
+      return NextResponse.json({ error: "Invalid business_id" }, { status: 400 });
+    }
     const eventState = normalizeEventStateParam(searchParams.get("event_state"));
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));

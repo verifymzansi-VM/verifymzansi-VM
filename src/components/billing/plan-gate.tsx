@@ -739,216 +739,135 @@ function PlanPickerWithTrial({
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Hook: usePlanMaxPhotos
+   Shared entitlement fetch — deduplicates getUser() + DB calls
+   when multiple hooks are used in the same component / page.
    ───────────────────────────────────────────────────────────── */
-export function usePlanMaxPhotos(area: MarketplaceArea): number {
-  const [maxPhotos, setMaxPhotos] = useState<number>(() =>
-    isPlaywrightTestMode() ? FREE_POST_CONFIG.maxPhotos : FREE_POST_CONFIG.maxPhotos
-  ); // default free tier (5)
+interface PlanEntitlementInfo {
+  maxPhotos: number;
+  maxVideos: number;
+  videoAllowed: boolean;
+  coverVideoAllowed: boolean;
+}
+
+const ENTITLEMENT_CACHE_TTL = 30_000; // 30 s
+const _entitlementCache = new Map<string, { promise: Promise<PlanEntitlementInfo>; ts: number }>();
+
+function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlementInfo> {
+  const now = Date.now();
+  const cached = _entitlementCache.get(area);
+  if (cached && now - cached.ts < ENTITLEMENT_CACHE_TTL) return cached.promise;
+
+  const promise = (async (): Promise<PlanEntitlementInfo> => {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return {
+        maxPhotos: FREE_POST_CONFIG.maxPhotos,
+        maxVideos: FREE_POST_CONFIG.maxVideos,
+        videoAllowed: false,
+        coverVideoAllowed: false,
+      };
+    }
+
+    const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
+
+    const { data: entitlement } = await supabase
+      .from("entitlements")
+      .select("tier, expires_at")
+      .eq("user_id", user.id)
+      .eq("area", area)
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const tier = (entitlement?.tier as PlanTier) || null;
+
+    if (tier) {
+      const ent = getEntitlements(tier, area);
+      return {
+        maxPhotos: ent.maxPhotos,
+        maxVideos: ent.maxVideos,
+        videoAllowed: ent.videoAllowed,
+        coverVideoAllowed: ent.coverVideoAllowed,
+      };
+    }
+
+    if (postingLimitBypassEnabled) {
+      return {
+        maxPhotos: FREE_POST_CONFIG.maxPhotos,
+        maxVideos: FREE_POST_CONFIG.maxVideos,
+        videoAllowed: FREE_POST_CONFIG.videoAllowed,
+        coverVideoAllowed: false,
+      };
+    }
+
+    // No plan, no bypass — check if free post is still available
+    const { data: freePostRow } = await supabase
+      .from("free_posts_used")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("area", area)
+      .maybeSingle();
+
+    return {
+      maxPhotos: FREE_POST_CONFIG.maxPhotos,
+      maxVideos: freePostRow ? 0 : FREE_POST_CONFIG.maxVideos,
+      videoAllowed: !freePostRow,
+      coverVideoAllowed: false,
+    };
+  })();
+
+  _entitlementCache.set(area, { promise, ts: now });
+  return promise;
+}
+
+function usePlanEntitlements(area: MarketplaceArea): PlanEntitlementInfo {
+  const [info, setInfo] = useState<PlanEntitlementInfo>(() => ({
+    maxPhotos: FREE_POST_CONFIG.maxPhotos,
+    maxVideos: isPlaywrightTestMode() ? FREE_POST_CONFIG.maxVideos : FREE_POST_CONFIG.maxVideos,
+    videoAllowed: isPlaywrightTestMode() ? FREE_POST_CONFIG.videoAllowed : false,
+    coverVideoAllowed: false,
+  }));
 
   useEffect(() => {
     if (isPlaywrightTestMode()) return;
-
-    async function fetchMaxPhotos() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Check for active entitlement for this area
-        const { data: entitlement } = await supabase
-          .from("entitlements")
-          .select("tier, expires_at")
-          .eq("user_id", user.id)
-          .eq("area", area)
-          .eq("status", "active")
-          .gt("expires_at", new Date().toISOString())
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const tier = (entitlement?.tier as PlanTier) || null;
-        if (tier) {
-          const ent = getEntitlements(tier, area);
-          setMaxPhotos(ent.maxPhotos);
-        } else {
-          // No active paid plan — use free post photo limit
-          setMaxPhotos(FREE_POST_CONFIG.maxPhotos);
-        }
-      } catch {
-        // Keep default
-      }
-    }
-
-    fetchMaxPhotos();
+    let cancelled = false;
+    fetchSharedEntitlements(area).then((result) => {
+      if (!cancelled) setInfo(result);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [area]);
 
-  return maxPhotos;
+  return info;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Hook: usePlanMaxPhotos
+   ───────────────────────────────────────────────────────────── */
+export function usePlanMaxPhotos(area: MarketplaceArea): number {
+  return usePlanEntitlements(area).maxPhotos;
 }
 
 /* ─────────────────────────────────────────────────────────────
    Hook: usePlanVideoAllowed
    ───────────────────────────────────────────────────────────── */
 export function usePlanVideoAllowed(area: MarketplaceArea): boolean {
-  const [videoAllowed, setVideoAllowed] = useState(() =>
-    isPlaywrightTestMode() ? FREE_POST_CONFIG.videoAllowed : false
-  ); // default free tier
-
-  useEffect(() => {
-    if (isPlaywrightTestMode()) return;
-
-    async function fetchVideoAllowed() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-        const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
-
-        // Check for active entitlement for this area
-        const { data: entitlement } = await supabase
-          .from("entitlements")
-          .select("tier, expires_at")
-          .eq("user_id", user.id)
-          .eq("area", area)
-          .eq("status", "active")
-          .gt("expires_at", new Date().toISOString())
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const tier = (entitlement?.tier as PlanTier) || null;
-        if (tier) {
-          const ent = getEntitlements(tier, area);
-          setVideoAllowed(ent.videoAllowed);
-        } else if (postingLimitBypassEnabled) {
-          setVideoAllowed(FREE_POST_CONFIG.videoAllowed);
-        } else {
-          // Check if free post is still available (not yet used)
-          const { data: freePostRow } = await supabase
-            .from("free_posts_used")
-            .select("id")
-            .eq("user_id", user.id)
-            .eq("area", area)
-            .maybeSingle();
-
-          // Free post includes video; if already used → no video without a plan
-          setVideoAllowed(!freePostRow);
-        }
-      } catch {
-        // Keep default
-      }
-    }
-
-    fetchVideoAllowed();
-  }, [area]);
-
-  return videoAllowed;
+  return usePlanEntitlements(area).videoAllowed;
 }
 
 /* ─────────────────────────────────────────────────────────────
    Hook: usePlanMaxVideos
    ───────────────────────────────────────────────────────────── */
 export function usePlanMaxVideos(area: MarketplaceArea): number {
-  const [maxVideos, setMaxVideos] = useState<number>(() =>
-    isPlaywrightTestMode() ? FREE_POST_CONFIG.maxVideos : FREE_POST_CONFIG.maxVideos
-  );
-
-  useEffect(() => {
-    if (isPlaywrightTestMode()) return;
-
-    async function fetchMaxVideos() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-        const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
-
-        const { data: entitlement } = await supabase
-          .from("entitlements")
-          .select("tier, expires_at")
-          .eq("user_id", user.id)
-          .eq("area", area)
-          .eq("status", "active")
-          .gt("expires_at", new Date().toISOString())
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const tier = (entitlement?.tier as PlanTier) || null;
-        if (tier) {
-          const ent = getEntitlements(tier, area);
-          setMaxVideos(ent.maxVideos);
-        } else if (postingLimitBypassEnabled) {
-          setMaxVideos(FREE_POST_CONFIG.maxVideos);
-        } else {
-          const { data: freePostRow } = await supabase
-            .from("free_posts_used")
-            .select("id")
-            .eq("user_id", user.id)
-            .eq("area", area)
-            .maybeSingle();
-
-          setMaxVideos(freePostRow ? 0 : FREE_POST_CONFIG.maxVideos);
-        }
-      } catch {
-        // Keep default
-      }
-    }
-
-    fetchMaxVideos();
-  }, [area]);
-
-  return maxVideos;
+  return usePlanEntitlements(area).maxVideos;
 }
 
 export function usePlanCoverVideoAllowed(area: MarketplaceArea): boolean {
-  const [coverVideoAllowed, setCoverVideoAllowed] = useState(() =>
-    isPlaywrightTestMode() ? false : false
-  );
-
-  useEffect(() => {
-    if (isPlaywrightTestMode()) return;
-
-    async function fetchCoverVideoAllowed() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data: entitlement } = await supabase
-          .from("entitlements")
-          .select("tier, expires_at")
-          .eq("user_id", user.id)
-          .eq("area", area)
-          .eq("status", "active")
-          .gt("expires_at", new Date().toISOString())
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const tier = (entitlement?.tier as PlanTier) || null;
-        if (tier) {
-          const ent = getEntitlements(tier, area);
-          setCoverVideoAllowed(ent.coverVideoAllowed);
-          return;
-        }
-
-        setCoverVideoAllowed(false);
-      } catch {
-        // Keep default
-      }
-    }
-
-    fetchCoverVideoAllowed();
-  }, [area]);
-
-  return coverVideoAllowed;
+  return usePlanEntitlements(area).coverVideoAllowed;
 }

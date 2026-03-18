@@ -123,6 +123,12 @@ export async function GET(
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
+  // Security: only serve known public-bucket prefixes
+  const ALLOWED_PREFIXES = ["media/", "listings/"];
+  if (!ALLOWED_PREFIXES.some((p) => key.startsWith(p))) {
+    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  }
+
   // ── Conditional GET (If-None-Match) ─────────────────────────────────
   const ifNoneMatch = request.headers.get("if-none-match");
   const rangeHeader = request.headers.get("range");

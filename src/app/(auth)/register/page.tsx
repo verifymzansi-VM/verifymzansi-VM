@@ -136,8 +136,7 @@ export default function RegisterPage() {
         description: "Check your email to confirm, then complete your account verification.",
         variant: "success",
       });
-      const encodedEmail = encodeURIComponent(data.email);
-      router.push(`/login?registered=true&email=${encodedEmail}`);
+      router.push("/login?registered=true");
     } catch {
       toast({
         title: "Something went wrong",

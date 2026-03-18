@@ -140,7 +140,11 @@ export function KycPreviewLightbox({
 
     async function loadBlob() {
       try {
-        const res = await fetch(`/api/admin/verification/evidence?artifactId=${artifact.id}`);
+        const res = await fetch(`/api/admin/verification/evidence`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ artifactId: artifact.id }),
+        });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           throw new Error(data.error || `HTTP ${res.status}`);

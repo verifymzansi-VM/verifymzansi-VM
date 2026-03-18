@@ -16,6 +16,7 @@ import {
   withOwnerColumn,
 } from "@/lib/account/compat";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("BoostBusiness");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,6 +36,9 @@ type BusinessCheckoutRow = {
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const originBlock = enforceSameOriginMutation(_request, log);
+    if (originBlock) return originBlock;
+
     const { id: businessId } = await params;
 
     if (!UUID_RE.test(businessId)) {

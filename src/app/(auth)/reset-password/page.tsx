@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validations/auth";
-import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ResetPasswordPage() {
@@ -22,11 +21,14 @@ export default function ResetPasswordPage() {
 
   // Check if the user has a valid recovery session (set by the reset link)
   useEffect(() => {
-    const supabase = createClient();
-
     async function checkSession() {
-      const { data } = await supabase.auth.getSession();
-      setSessionValid(!!data.session);
+      try {
+        const res = await fetch("/api/auth/reset-password");
+        const data = await res.json();
+        setSessionValid(data.valid === true);
+      } catch {
+        setSessionValid(false);
+      }
     }
 
     void checkSession();
@@ -52,24 +54,25 @@ export default function ResetPasswordPage() {
 
   async function onSubmit(data: ResetPasswordInput) {
     try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.updateUser({
-        password: data.password,
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password: data.password,
+          confirmPassword: data.confirmPassword,
+        }),
       });
 
-      if (error) {
-        // Handle expired or invalid session specifically
-        if (
-          error.message?.toLowerCase().includes("session") ||
-          error.message?.toLowerCase().includes("token") ||
-          error.message?.toLowerCase().includes("expired")
-        ) {
+      const result = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (res.status === 401) {
           setSessionValid(false);
           return;
         }
         toast({
           title: "Error",
-          description: error.message,
+          description: typeof result.error === "string" ? result.error : "Please try again.",
           variant: "destructive",
         });
         return;

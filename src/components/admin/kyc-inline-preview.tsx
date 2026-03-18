@@ -77,11 +77,11 @@ export function KycInlinePreview({
 
       try {
         // 1. Fetch metadata to get artifact ID
-        const metaParams = new URLSearchParams({
-          stepId,
-          userId,
+        const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stepId, userId }),
         });
-        const metaRes = await fetch(`/api/admin/verification/evidence/metadata?${metaParams}`);
         if (!metaRes.ok) {
           throw new Error("Failed to load metadata");
         }
@@ -99,7 +99,11 @@ export function KycInlinePreview({
         if (!cancelled) setArtifact(match);
 
         // 2. Fetch decrypted blob
-        const evidenceRes = await fetch(`/api/admin/verification/evidence?artifactId=${match.id}`);
+        const evidenceRes = await fetch(`/api/admin/verification/evidence`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ artifactId: match.id }),
+        });
         if (!evidenceRes.ok) {
           throw new Error("Failed to load document");
         }

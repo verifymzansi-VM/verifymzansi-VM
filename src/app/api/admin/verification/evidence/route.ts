@@ -180,3 +180,41 @@ function hashIp(ip: string, secret: string | undefined): string {
   const key = secret || "dev-only-local-not-for-production";
   return crypto.createHmac("sha256", key).update(ip).digest("hex").slice(0, 16);
 }
+
+/**
+ * POST /api/admin/verification/evidence
+ * Same as GET but reads artifactId from the JSON body instead of query params
+ * to prevent sensitive IDs from leaking into server logs and browser history.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    let artifactId: string | null = null;
+    try {
+      const body = await request.json();
+      artifactId = typeof body?.artifactId === "string" ? body.artifactId : null;
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    if (!artifactId) {
+      return NextResponse.json(
+        { error: "artifactId is required in request body" },
+        { status: 400 }
+      );
+    }
+
+    // Rewrite into the query-string so the GET handler logic can be reused
+    const url = new URL(request.url);
+    url.searchParams.set("artifactId", artifactId);
+    const syntheticRequest = new NextRequest(url, {
+      method: "GET",
+      headers: request.headers,
+    });
+    return GET(syntheticRequest);
+  } catch (err) {
+    log.error("POST wrapper error", {
+      error: err instanceof Error ? err.message : "unknown error",
+    });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

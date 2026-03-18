@@ -32,7 +32,6 @@ export default function LoginPage() {
   const [justRegistered, setJustRegistered] = useState(false);
   const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
   const [emailConfirmed, setEmailConfirmed] = useState(false);
-  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,12 +70,6 @@ export default function LoginPage() {
       setEmailConfirmed(true);
       // Clean URL to prevent re-flash on refresh/back navigation
       window.history.replaceState({}, "", window.location.pathname);
-    }
-    // Pre-fill email from query param (e.g. after registration redirect)
-    const emailParam = params.get("email");
-    if (emailParam) {
-      setValue("email", emailParam);
-      setRegisteredEmail(emailParam);
     }
     const error = params.get("error");
     if (error === "auth_callback_failed") {
@@ -172,7 +165,7 @@ export default function LoginPage() {
   async function handleResendConfirmation() {
     if (resendCooldown > 0) return;
 
-    const email = getValues("email") || registeredEmail;
+    const email = getValues("email");
     const turnstileToken = getValues("turnstileToken");
     if (!email) {
       toast({
@@ -293,16 +286,8 @@ export default function LoginPage() {
           <div className="space-y-2">
             <p className="text-sm font-medium text-foreground">Check your email</p>
             <p className="text-sm text-muted-foreground">
-              We&apos;ve sent a confirmation link
-              {registeredEmail ? (
-                <>
-                  {" "}
-                  to <strong className="text-foreground">{registeredEmail}</strong>
-                </>
-              ) : (
-                <> to your email address</>
-              )}
-              . Please click the link to verify your account before signing in.
+              We&apos;ve sent a confirmation link to your email address. Please click the link to
+              verify your account before signing in.
             </p>
             <button
               type="button"

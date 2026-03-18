@@ -16,6 +16,7 @@ import {
 } from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("BoostCheckout");
 type ListingCheckoutRow = {
@@ -36,6 +37,9 @@ type ListingCheckoutRow = {
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const originBlock = enforceSameOriginMutation(_request, log);
+    if (originBlock) return originBlock;
+
     const { id: listingId } = await params;
 
     // Validate UUID format to avoid unnecessary DB queries

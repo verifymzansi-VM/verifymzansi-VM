@@ -191,3 +191,44 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+/**
+ * POST /api/admin/verification/evidence/metadata
+ * Same as GET but reads stepId/userId from the JSON body instead of query params
+ * to prevent sensitive IDs from leaking into server logs and browser history.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    let stepId: string | null = null;
+    let userId: string | null = null;
+    try {
+      const body = await request.json();
+      stepId = typeof body?.stepId === "string" ? body.stepId : null;
+      userId = typeof body?.userId === "string" ? body.userId : null;
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    if (!stepId && !userId) {
+      return NextResponse.json(
+        { error: "stepId or userId is required in request body" },
+        { status: 400 }
+      );
+    }
+
+    // Rewrite into the query-string so the GET handler logic can be reused
+    const url = new URL(request.url);
+    if (stepId) url.searchParams.set("stepId", stepId);
+    if (userId) url.searchParams.set("userId", userId);
+    const syntheticRequest = new NextRequest(url, {
+      method: "GET",
+      headers: request.headers,
+    });
+    return GET(syntheticRequest);
+  } catch (err) {
+    log.error("POST wrapper error", {
+      error: err instanceof Error ? err.message : "unknown error",
+    });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

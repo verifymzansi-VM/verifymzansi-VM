@@ -155,11 +155,14 @@ export function EvidenceDeskClient({
 
       setLoading(true);
       try {
-        const params = new URLSearchParams();
-        if (queryStepId) params.set("stepId", queryStepId);
-        if (queryUserId) params.set("userId", queryUserId);
-
-        const res = await fetch(`/api/admin/verification/evidence/metadata?${params}`);
+        const res = await fetch(`/api/admin/verification/evidence/metadata`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...(queryStepId ? { stepId: queryStepId } : {}),
+            ...(queryUserId ? { userId: queryUserId } : {}),
+          }),
+        });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           throw new Error(data.error || "Failed to fetch evidence");
