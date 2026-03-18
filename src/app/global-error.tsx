@@ -15,11 +15,12 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log error with structured data so monitoring tools (Cloudflare, Sentry, etc.) can ingest it
+    // Log error with structured data so monitoring tools (Cloudflare, Sentry, etc.) can ingest it.
+    // Strip stack traces in production to avoid leaking internal paths in the browser console.
     console.error("[GlobalError]", {
       message: error.message,
       digest: error.digest,
-      stack: error.stack,
+      ...(process.env.NODE_ENV !== "production" && { stack: error.stack }),
     });
   }, [error]);
   return (

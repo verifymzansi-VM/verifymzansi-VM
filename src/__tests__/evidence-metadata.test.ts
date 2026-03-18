@@ -65,7 +65,7 @@ const MOCK_STEP = {
   id: "step-1",
   user_id: "seller-1",
   step_type: "id_doc",
-  status: "pending",
+  status: "pending_review",
   risk_level: "low",
   risk_score: 10,
   created_at: "2025-01-01T00:00:00Z",

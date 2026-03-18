@@ -81,6 +81,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Verification step(s) not found" }, { status: 404 });
     }
 
+    // M1 guard: require at least one step in a reviewable state to access
+    // metadata. Prevents unrestricted browsing of biometric assessment data.
+    const REVIEWABLE_STATES = [
+      "submitted",
+      "pending_review",
+      "pending_auto",
+      "auto_approved",
+      "auto_rejected",
+    ];
+    const hasActiveCase = steps.some((s: { status: string }) =>
+      REVIEWABLE_STATES.includes(s.status)
+    );
+    if (!hasActiveCase) {
+      log.warn("Evidence metadata access denied: no active review case", {
+        actorId: user.id,
+        targetStepId: stepId,
+        targetUserId: userId,
+      });
+      return NextResponse.json(
+        { error: "No active verification case for this user" },
+        { status: 403 }
+      );
+    }
+
     const targetUserId = steps[0].user_id;
 
     // Fetch all artifacts for this user

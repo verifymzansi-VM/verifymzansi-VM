@@ -36,6 +36,9 @@ type BusinessOwnerRow = {
   video_thumbnail?: string | null;
   gallery_photos?: string[] | null;
   business_details?: BusinessDetails | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
 };
 
 function getMallPhotoUrls(details: BusinessDetails | null | undefined): string[] {
@@ -106,6 +109,18 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     // Strip owner identifiers from public response (POPIA data minimization)
     const { owner_id: _oid, seller_id: _sid, ...publicBusiness } = normalizedBusiness;
+
+    // M3: Redact contact fields for unauthenticated requests to prevent
+    // email/phone harvesting. Authenticated users can see full details.
+    const supabaseForContact = await createClient();
+    const {
+      data: { user: contactUser },
+    } = await supabaseForContact.auth.getUser();
+    if (!contactUser) {
+      const { phone: _p, whatsapp: _w, email: _e, ...redactedBusiness } = publicBusiness;
+      return NextResponse.json({ business: redactedBusiness, promotions: promotions ?? [] });
+    }
+
     return NextResponse.json({ business: publicBusiness, promotions: promotions ?? [] });
   } catch (err) {
     log.error("Unexpected error", {

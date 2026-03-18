@@ -5,7 +5,13 @@ import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turn
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
-import { checkAccountLockout, recordFailedLogin, clearLockout } from "@/lib/utils/account-lockout";
+import {
+  checkAccountLockout,
+  recordFailedLogin,
+  clearLockout,
+  checkDistributedLockout,
+  recordDistributedFailedLogin,
+} from "@/lib/utils/account-lockout";
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("Login");
@@ -59,6 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Account lockout: block login after 5 failed attempts within 1 hour
+    // Check in-memory lockout first (fast, single-isolate)
     const lockout = checkAccountLockout(parsedBody.data.email);
     if (lockout.locked) {
       log.warn("Account locked due to too many failed attempts", {
@@ -68,6 +75,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Account temporarily locked due to too many failed attempts. Try again later." },
         { status: 429, headers: { "Retry-After": String(lockout.retryAfter ?? 3600) } }
+      );
+    }
+    // Cross-isolate distributed lockout (survives worker restarts)
+    const distLockout = await checkDistributedLockout(parsedBody.data.email);
+    if (distLockout.locked) {
+      log.warn("Account locked (distributed) due to too many failed attempts", {
+        email: parsedBody.data.email,
+        ip,
+      });
+      return NextResponse.json(
+        { error: "Account temporarily locked due to too many failed attempts. Try again later." },
+        { status: 429, headers: { "Retry-After": String(distLockout.retryAfter ?? 3600) } }
       );
     }
 
@@ -126,6 +145,7 @@ export async function POST(request: NextRequest) {
         log.info("Login failed: email not confirmed", { email: parsedBody.data.email });
       }
       recordFailedLogin(parsedBody.data.email);
+      recordDistributedFailedLogin(parsedBody.data.email).catch(() => {});
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 

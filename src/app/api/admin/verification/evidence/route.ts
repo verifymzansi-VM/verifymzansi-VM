@@ -69,6 +69,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Artifact not found" }, { status: 404 });
     }
 
+    // M1 guard: only allow evidence access when the user has at least one
+    // verification step in a reviewable state. Prevents unrestricted
+    // browsing of biometric data for users with no pending review.
+    const REVIEWABLE_STATES = [
+      "submitted",
+      "pending_review",
+      "pending_auto",
+      "auto_approved",
+      "auto_rejected",
+    ];
+    const { count: activeStepCount } = await adminClient
+      .from("verification_steps")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", artifact.user_id)
+      .in("status", REVIEWABLE_STATES);
+
+    if (!activeStepCount || activeStepCount === 0) {
+      log.warn("Evidence access denied: no active review case for user", {
+        actorId: user.id,
+        targetUserId: artifact.user_id,
+        artifactId,
+      });
+      return NextResponse.json(
+        { error: "No active verification case for this user" },
+        { status: 403 }
+      );
+    }
+
     // Validate IP hashing secret — required in production for privacy-compliant logging
     const ipHashSecret = process.env.IP_HASH_SECRET;
     if (!ipHashSecret && process.env.NODE_ENV === "production") {

@@ -53,6 +53,8 @@ interface Env {
 interface RateCheckPayload {
   phone: string;
   deviceId?: string;
+  action?: string;
+  readOnly?: boolean;
 }
 
 interface RateCheck {
@@ -61,6 +63,14 @@ interface RateCheck {
   /** Time-to-live in seconds */
   ttl: number;
 }
+
+/**
+ * Action-specific rate limit configurations.
+ * Used for generic (non-OTP) rate limiting via the same DO infrastructure.
+ */
+const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
+  "auth:lockout": [{ limit: 5, ttl: 3600 }], // 5 failed logins per email per hour
+};
 
 interface CounterEntry {
   count: number;
@@ -95,7 +105,10 @@ export class RateLimiterDO {
       return Response.json({ error: "Method not allowed" }, { status: 405 });
     }
 
-    const { checks } = (await request.json()) as { checks: RateCheck[] };
+    const { checks, readOnly } = (await request.json()) as {
+      checks: RateCheck[];
+      readOnly?: boolean;
+    };
     const now = Date.now();
 
     // All reads and writes happen within a single DO — fully serialized
@@ -107,6 +120,11 @@ export class RateLimiterDO {
         const retryAfter = entry ? Math.ceil((entry.expiresAt - now) / 1000) : check.ttl;
         return Response.json({ error: "rate_limited", retryAfter }, { status: 429 });
       }
+    }
+
+    // Skip increment when readOnly is true (check-only mode for lockout queries)
+    if (readOnly) {
+      return Response.json({ ok: true });
     }
 
     // Atomically increment all counters
@@ -174,8 +192,51 @@ const worker = {
       return Response.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    const { phone: rawPhone, deviceId } = payload;
+    const { phone: rawPhone, deviceId, action, readOnly } = payload;
 
+    // Generic action-based rate limiting (e.g. auth:lockout)
+    if (action && ACTION_LIMITS[action]) {
+      const rateKey = rawPhone || "";
+      if (!rateKey) {
+        return Response.json({ error: "key (phone) is required" }, { status: 400 });
+      }
+
+      if (env.RATE_LIMITER_DO) {
+        try {
+          const doId = env.RATE_LIMITER_DO.idFromName(`${action}:${rateKey}`);
+          const stub = env.RATE_LIMITER_DO.get(doId);
+          const checks: RateCheck[] = ACTION_LIMITS[action].map((c) => ({
+            key: `${action}:${rateKey}`,
+            limit: c.limit,
+            ttl: c.ttl,
+          }));
+          return await stub.fetch(
+            new Request("https://do.internal/check", {
+              method: "POST",
+              body: JSON.stringify({ checks, readOnly: !!readOnly }),
+            })
+          );
+        } catch {
+          // Fall through to KV fallback
+        }
+      }
+
+      // KV fallback for generic actions
+      const actionConfig = ACTION_LIMITS[action];
+      for (const c of actionConfig) {
+        const k = `${action}:${rateKey}`;
+        const current = parseInt((await env.OTP_RATE_LIMITS.get(k)) || "0", 10);
+        if (current >= c.limit) {
+          return Response.json({ error: "rate_limited", retryAfter: c.ttl }, { status: 429 });
+        }
+        if (!readOnly) {
+          await env.OTP_RATE_LIMITS.put(k, String(current + 1), { expirationTtl: c.ttl });
+        }
+      }
+      return Response.json({ ok: true });
+    }
+
+    // ── OTP-specific rate limiting (default flow) ───────────────────────
     if (!rawPhone) {
       return Response.json({ error: "phone is required" }, { status: 400 });
     }

@@ -362,6 +362,16 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         completeProfileUrl.searchParams.set("returnUrl", pathname);
         return NextResponse.redirect(completeProfileUrl);
       }
+    } else {
+      // L3: Sliding window — refresh the cookie TTL on each gated request
+      // so active users don't hit an unnecessary DB round-trip after 24h.
+      response.cookies.set("x-phone-ok", "1", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 86400,
+        path: "/",
+      });
     }
   }
 

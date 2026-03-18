@@ -90,6 +90,8 @@ interface RateLimitOptions {
    * `block` fails closed for sensitive flows that should not continue without shared abuse controls.
    */
   degradedMode?: "local" | "block";
+  /** When true, check the counter without incrementing (read-only). */
+  readOnly?: boolean;
 }
 
 interface RateLimitResult {
@@ -151,6 +153,7 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
           phone: opts.key, // worker uses `phone` as the key field
           action: opts.action,
           deviceId: opts.deviceId,
+          readOnly: opts.readOnly,
         }),
         signal: controller.signal,
       });

@@ -5,9 +5,25 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const log = createLogger("MockOzow");
 
+function isPrivateIp(hostname: string): boolean {
+  if (hostname === "[::1]") return true;
+  const parts = hostname.split(".");
+  if (parts.length !== 4 || parts.some((p) => !/^\d+$/.test(p))) return false;
+  const [a, b] = parts.map(Number);
+  return (
+    a === 10 ||
+    a === 127 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) ||
+    a === 0
+  );
+}
+
 function isSafeUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
+    if (isPrivateIp(parsed.hostname)) return false;
     const allowedHosts = ["localhost", "127.0.0.1", "verifymzansi.com", "www.verifymzansi.com"];
     return allowedHosts.some(
       (host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`)

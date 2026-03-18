@@ -109,6 +109,15 @@ describe("KYC Security", () => {
             }),
           };
         }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          };
+        }
         if (table === "kyc_evidence_access_logs") {
           return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
@@ -151,6 +160,15 @@ describe("KYC Security", () => {
             }),
           };
         }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          };
+        }
         if (table === "kyc_evidence_access_logs") {
           return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
@@ -189,6 +207,15 @@ describe("KYC Security", () => {
                   },
                   error: null,
                 }),
+              }),
+            }),
+          };
+        }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ count: 1, error: null }),
               }),
             }),
           };
@@ -283,6 +310,15 @@ describe("KYC Security", () => {
             }),
           };
         }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          };
+        }
         if (table === "kyc_evidence_access_logs") {
           return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
@@ -317,6 +353,15 @@ describe("KYC Security", () => {
                   },
                   error: null,
                 }),
+              }),
+            }),
+          };
+        }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ count: 1, error: null }),
               }),
             }),
           };

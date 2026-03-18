@@ -75,8 +75,9 @@ allowed_cidrs = ["0.0.0.0/0"]
 allowed_cidrs_v6 = ["::/0"]
 
 # Reject non-secure connections to the database.
-[db.ssl_enforcement]
-enabled = true
+# NOTE: ssl_enforcement is managed via the Supabase dashboard, not supported by CLI v2.75.
+# [db.ssl_enforcement]
+# enabled = true
 
 [realtime]
 enabled = true

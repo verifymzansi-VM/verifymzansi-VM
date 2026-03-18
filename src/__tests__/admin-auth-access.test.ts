@@ -145,6 +145,15 @@ describe("Admin auth access control", () => {
             }),
           };
         }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          };
+        }
         if (table === "kyc_evidence_access_logs") {
           return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
@@ -175,6 +184,15 @@ describe("Admin auth access control", () => {
                   },
                   error: null,
                 }),
+              }),
+            }),
+          };
+        }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ count: 1, error: null }),
               }),
             }),
           };

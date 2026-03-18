@@ -17,11 +17,12 @@
  *  - Supabase Auth has its own internal rate limits.
  *  - Isolates stay warm during active attacks, so in-memory state is retained
  *    while the attack is in progress.
- *
- * FUTURE: To add cross-isolate per-email lockout, extend the rate-limiter
- * Durable Object with a dedicated "auth:lockout" action that uses a 5/hour
- * limit keyed by email hash, avoiding the OTP-specific key limits.
+ *  - `checkDistributedLockout` / `recordDistributedFailedLogin` use the
+ *    Durable Object rate-limiter with action "auth:lockout" to persist
+ *    per-email lockout state across all isolates.
  */
+
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
@@ -128,4 +129,37 @@ export function clearLockout(email: string): void {
 export function _resetForTesting(): void {
   failedAttempts.clear();
   lastCleanup = Date.now();
+}
+
+// ── Distributed (cross-isolate) lockout via Durable Object ─────────────────
+
+/**
+ * Check if an account is locked out across all isolates (read-only, no increment).
+ * Falls back gracefully to `{ locked: false }` if the DO is unavailable.
+ */
+export async function checkDistributedLockout(
+  email: string
+): Promise<{ locked: boolean; retryAfter?: number }> {
+  const result = await checkRateLimit({
+    key: normalizeEmail(email),
+    action: "auth:lockout",
+    readOnly: true,
+    degradedMode: "local",
+  });
+  return { locked: result.limited, retryAfter: result.retryAfter };
+}
+
+/**
+ * Record a failed login in the Durable Object (increments the counter).
+ * Also returns whether the account is now locked.
+ */
+export async function recordDistributedFailedLogin(
+  email: string
+): Promise<{ locked: boolean; retryAfter?: number }> {
+  const result = await checkRateLimit({
+    key: normalizeEmail(email),
+    action: "auth:lockout",
+    degradedMode: "local",
+  });
+  return { locked: result.limited, retryAfter: result.retryAfter };
 }
