@@ -101,12 +101,21 @@ export function TurnstileWidget({
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const renderAttemptRef = useRef(0);
+  const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { mode, siteKey } = getTurnstileClientState();
   const isBypassMode = mode === "bypass";
   const isConfigured = mode === "configured";
   const isUnavailable = mode === "unavailable";
 
+  const clearRenderTimeout = useCallback(() => {
+    if (renderTimeoutRef.current !== null) {
+      clearTimeout(renderTimeoutRef.current);
+      renderTimeoutRef.current = null;
+    }
+  }, []);
+
   const cleanupWidget = useCallback(() => {
+    clearRenderTimeout();
     if (
       widgetIdRef.current !== null &&
       typeof window !== "undefined" &&
@@ -125,7 +134,7 @@ export function TurnstileWidget({
     if (containerRef.current) {
       containerRef.current.innerHTML = "";
     }
-  }, []);
+  }, [clearRenderTimeout]);
 
   const renderWidget = useCallback(async () => {
     if (!siteKey || !containerRef.current) return;
@@ -169,11 +178,39 @@ export function TurnstileWidget({
       sitekey: siteKey,
       theme,
       size,
-      callback: onSuccess,
-      "expired-callback": onExpire,
-      "error-callback": onError,
+      callback: (token: string) => {
+        clearRenderTimeout();
+        onSuccess(token);
+      },
+      "expired-callback": () => {
+        clearRenderTimeout();
+        onExpire?.();
+      },
+      "error-callback": (err: string) => {
+        clearRenderTimeout();
+        onError?.(err);
+      },
     });
-  }, [siteKey, theme, size, onSuccess, onExpire, onError, onLoad, cleanupWidget]);
+
+    // If Turnstile never fires any callback (e.g. headless browsers), trigger
+    // an error after a generous timeout so the auth page shows its fallback UI.
+    renderTimeoutRef.current = setTimeout(() => {
+      renderTimeoutRef.current = null;
+      if (renderAttemptRef.current === attemptId) {
+        onError?.("Turnstile widget did not respond in time");
+      }
+    }, 15_000);
+  }, [
+    siteKey,
+    theme,
+    size,
+    onSuccess,
+    onExpire,
+    onError,
+    onLoad,
+    cleanupWidget,
+    clearRenderTimeout,
+  ]);
 
   useEffect(() => {
     if (!isConfigured) return;

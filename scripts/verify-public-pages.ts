@@ -83,7 +83,7 @@ async function assertAuthUi(page: Page) {
   });
 
   const unavailableCopy = page.getByText(/security verification is temporarily unavailable/i);
-  const failedCopy = page.getByText(/security check failed to load/i);
+  const failedCopy = page.getByText(/security check failed/i);
   const iframeCount = await page.locator('iframe[src*="challenges.cloudflare.com"]').count();
   const unavailableCount = await unavailableCopy.count();
 
