@@ -110,7 +110,7 @@ async function assertAuthUi(page: Page) {
     const unavailableAfter = await unavailableCopy.count();
     const failedAfter = await failedCopy.count();
 
-    if (iframeCountAfter === 0 && unavailableAfter === 0) {
+    if (iframeCountAfter === 0 && unavailableAfter === 0 && failedAfter === 0) {
       const diagnostics = await page.evaluate(() => {
         const el = document.getElementById("vmz-public-config");
         const turnstileSiteKey = el instanceof HTMLElement ? el.dataset.turnstileSiteKey || "" : "";

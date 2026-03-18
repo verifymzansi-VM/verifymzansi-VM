@@ -76,9 +76,11 @@ export default function RegisterPage() {
 
   const handleTurnstileLoad = useCallback(() => {
     setCaptchaUnavailable(false);
-    setTurnstileLoaded(true);
     setTurnstileError(null);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    // Don't set turnstileLoaded or clear the timeout here — only
+    // handleTurnstileSuccess should do that once a real token arrives.
+    // This ensures the 15 s safety timeout still fires when the script
+    // loads but the challenge iframe never renders (e.g. headless CI).
   }, []);
 
   const handleTurnstileError = useCallback(() => {
