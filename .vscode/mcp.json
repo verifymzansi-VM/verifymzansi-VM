@@ -6,8 +6,8 @@
       "args": ["-y", "@cloudflare/mcp-server-cloudflare", "run"]
     },
     "cloudflare-remote": {
-      "type": "sse",
-      "url": "https://mcp.cloudflare.com/sse"
+      "type": "http",
+      "url": "https://mcp.cloudflare.com/mcp"
     }
   }
 }

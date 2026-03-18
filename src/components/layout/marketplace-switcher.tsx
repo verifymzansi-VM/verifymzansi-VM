@@ -55,7 +55,7 @@ export function MarketplaceSwitcher() {
 
   return (
     <nav
-      className="mx-auto flex w-full items-center justify-center gap-1 overflow-x-auto pb-1 scrollbar-hide md:w-fit md:max-w-full md:overflow-visible md:pb-0"
+      className="mx-auto flex w-full items-center justify-center gap-1 overflow-x-auto pb-1 scrollbar-hide lg:w-fit lg:max-w-full lg:overflow-visible lg:pb-0"
       aria-label="Marketplace areas"
     >
       {AREA_TABS.map((tab) => {
@@ -69,7 +69,7 @@ export function MarketplaceSwitcher() {
             aria-label={tab.label}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "inline-flex min-w-[6.5rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium leading-none transition-colors md:min-w-0 md:flex-none md:px-4 md:py-2 md:text-sm",
+              "inline-flex min-w-[6.5rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium leading-none transition-colors lg:min-w-0 lg:flex-none lg:px-4 lg:py-2 lg:text-sm",
               isActive
                 ? tab.activeClass
                 : cn(
@@ -80,10 +80,10 @@ export function MarketplaceSwitcher() {
           >
             <Icon
               aria-hidden="true"
-              className={cn("h-3.5 w-3.5 shrink-0 md:h-4 md:w-4", !isActive && tab.iconColor)}
+              className={cn("h-3.5 w-3.5 shrink-0 lg:h-4 lg:w-4", !isActive && tab.iconColor)}
             />
-            <span className="truncate md:hidden">{tab.mobileLabel}</span>
-            <span className="hidden md:inline">{tab.label}</span>
+            <span className="truncate lg:hidden">{tab.mobileLabel}</span>
+            <span className="hidden lg:inline">{tab.label}</span>
           </Link>
         );
       })}

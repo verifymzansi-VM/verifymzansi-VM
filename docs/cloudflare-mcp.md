@@ -25,6 +25,10 @@ Cloudflare server through `npx`:
     "cloudflare": {
       "command": "npx",
       "args": ["-y", "@cloudflare/mcp-server-cloudflare", "run"]
+    },
+    "cloudflare-remote": {
+      "type": "http",
+      "url": "https://mcp.cloudflare.com/mcp"
     }
   }
 }
@@ -44,6 +48,11 @@ The repo also includes a remote Cloudflare MCP endpoint definition:
   }
 }
 ```
+
+For VS Code, use the remote server as `type: "http"`, not `type: "sse"`.
+Cloudflare's hosted MCP endpoints use the current Streamable HTTP transport on
+`/mcp`. A workspace entry that still points at `https://mcp.cloudflare.com/sse`
+will fail with a 404.
 
 ## Resources In Scope
 

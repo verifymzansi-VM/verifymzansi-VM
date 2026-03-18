@@ -115,12 +115,12 @@ function HeaderInner({
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background md:bg-background/95 md:backdrop-blur md:supports-[backdrop-filter]:bg-background/60">
-      <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+    <header className="sticky top-0 z-50 w-full border-b bg-background lg:bg-background/95 lg:backdrop-blur lg:supports-[backdrop-filter]:bg-background/60">
+      <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
         <Link
           href="/"
           aria-label="VerifyMzansi — Home"
-          className="group flex items-center gap-2 sm:gap-3 md:justify-self-start"
+          className="group flex items-center gap-2 sm:gap-3 lg:justify-self-start"
         >
           <BrandLogo
             size="md"
@@ -130,13 +130,13 @@ function HeaderInner({
           />
         </Link>
 
-        {/* Marketplace Switcher — hidden on mobile, shown md+ */}
-        <div className="hidden md:flex md:justify-self-center">
+        {/* Marketplace Switcher — hidden on mobile, shown lg+ */}
+        <div className="hidden lg:flex lg:justify-self-center">
           <MarketplaceSwitcher />
         </div>
 
         {/* Desktop Right — Auth */}
-        <div className="hidden items-center gap-2 md:flex md:justify-self-end">
+        <div className="hidden items-center gap-2 lg:flex lg:justify-self-end">
           {/* Theme toggle */}
           <Button
             variant="ghost"
@@ -244,7 +244,7 @@ function HeaderInner({
 
         {/* Mobile Hamburger */}
         <button
-          className="justify-self-end p-2 md:hidden"
+          className="justify-self-end p-2 lg:hidden"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
           aria-controls="mobile-nav-menu"
@@ -255,7 +255,7 @@ function HeaderInner({
       </div>
 
       {/* Mobile Marketplace Tabs — always visible on mobile */}
-      <div className="md:hidden w-full border-t bg-background/95">
+      <div className="lg:hidden w-full border-t bg-background/95">
         <div className="px-3 py-1.5">
           <MarketplaceSwitcher />
         </div>
@@ -266,7 +266,7 @@ function HeaderInner({
         <nav
           id="mobile-nav-menu"
           aria-label="Mobile navigation"
-          className="md:hidden border-t bg-background animate-fade-in-up"
+          className="lg:hidden border-t bg-background animate-fade-in-up"
         >
           <div className="container-page py-4 space-y-4">
             <div className="flex flex-col gap-2">
