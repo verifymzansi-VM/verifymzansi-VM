@@ -230,7 +230,14 @@ export async function GET(request: NextRequest) {
           fallbackFields: LISTING_SELECT_FALLBACK_FIELDS,
           runQuery: (selectClause) =>
             applyBaseMarketFilters(
-              admin.from("listings").select(selectClause).eq("status", "live").eq("area", AREA),
+              // SECURITY: admin client bypasses RLS for efficient JOINs.
+              // These application-level status filters are the security boundary.
+              admin
+                .from("listings")
+                .select(selectClause)
+                .eq("status", "live")
+                .neq("status", "rejected")
+                .eq("area", AREA),
               filters
             ).range(from, from + batchSize - 1),
         });
@@ -287,10 +294,13 @@ export async function GET(request: NextRequest) {
         fallbackFields: LISTING_SELECT_FALLBACK_FIELDS,
         runQuery: (selectClause) =>
           applyBaseMarketFilters(
+            // SECURITY: admin client bypasses RLS for efficient JOINs.
+            // These application-level status filters are the security boundary.
             admin
               .from("listings")
               .select(selectClause, { count: "exact" })
               .eq("status", "live")
+              .neq("status", "rejected")
               .eq("area", AREA),
             filters
           ).range(offset, offset + limit - 1),

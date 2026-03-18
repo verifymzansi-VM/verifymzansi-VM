@@ -43,6 +43,15 @@ export async function POST(request: NextRequest) {
 
     const { type, name, email, idNumber, details, turnstileToken } = parsedBody.data;
 
+    // Per-email rate limit to prevent mass DSAR submissions with different addresses
+    const emailRl = checkLocalRateLimit(email.toLowerCase(), "dsar:submit:email");
+    if (emailRl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests for this email address" },
+        { status: 429, headers: { "Retry-After": String(emailRl.retryAfter ?? 60) } }
+      );
+    }
+
     // Validate ID number format if provided (must be 13 digits for SA ID)
     if (idNumber && !/^\d{13}$/.test(idNumber)) {
       return NextResponse.json({ error: "ID number must be exactly 13 digits" }, { status: 400 });
