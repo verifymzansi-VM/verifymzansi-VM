@@ -19,7 +19,12 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { VerificationProgress } from "@/components/trust/verification-progress";
-import { ACCOUNT_PROFILE_TABLE, applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
+import {
+  ACCOUNT_PROFILE_TABLE,
+  applyOwnerFilter,
+  getOwnerColumn,
+  type OwnerColumn,
+} from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { AttentionBanner } from "@/components/dashboard/attention-banner";
@@ -27,6 +32,35 @@ import { NeedsAttention } from "@/components/dashboard/needs-attention";
 import { RecentActivity, type ActivityItem } from "@/components/dashboard/recent-activity";
 import { EmailConfirmedToast } from "@/components/dashboard/email-confirmed-toast";
 import type { VerificationStepType, VerificationStatus } from "@/types/enums";
+
+/** Safely resolve owner column — fall back to "owner_id" on error. */
+async function safeGetOwnerColumn(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: Parameters<typeof getOwnerColumn>[1]
+): Promise<OwnerColumn> {
+  try {
+    return await getOwnerColumn(supabase, table);
+  } catch {
+    return "owner_id";
+  }
+}
+
+/** Supabase-shaped empty response for use as a fallback. */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const EMPTY_OK = { data: null, count: 0, error: null, status: 200, statusText: "OK" } as any;
+const EMPTY_LIST_OK = {
+  data: [] as never[],
+  count: 0,
+  error: null,
+  status: 200,
+  statusText: "OK",
+} as any;
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/** Extract value from a settled promise, returning a fallback on rejection. */
+function settled<T>(result: PromiseSettledResult<T>, fallback: T): T {
+  return result.status === "fulfilled" ? result.value : fallback;
+}
 
 export const metadata = {
   title: "Dashboard",
@@ -49,29 +83,15 @@ export default async function DashboardPage() {
   const fortyEightHoursFromNow = new Date(nowDate.getTime() + 48 * 60 * 60 * 1000).toISOString();
   const [listingOwnerColumn, businessOwnerColumn, leadsOwnerColumn, contactOwnerColumn] =
     await Promise.all([
-      getOwnerColumn(supabase, "listings"),
-      getOwnerColumn(supabase, "businesses"),
-      getOwnerColumn(supabase, "leads"),
-      getOwnerColumn(supabase, "contact_events"),
+      safeGetOwnerColumn(supabase, "listings"),
+      safeGetOwnerColumn(supabase, "businesses"),
+      safeGetOwnerColumn(supabase, "leads"),
+      safeGetOwnerColumn(supabase, "contact_events"),
     ]);
 
-  // Fetch all data in parallel for maximum performance
-  const [
-    profileResult,
-    verificationStepsResult,
-    activeListingsResult,
-    ownerListingsResult,
-    unreadLeadsResult,
-    totalLeadsResult,
-    activePromosResult,
-    rejectedListingsResult,
-    pendingModerationResult,
-    expiringListingsResult,
-    expiringPromosResult,
-    businessCountResult,
-    recentLeadsResult,
-    recentListingChangesResult,
-  ] = await Promise.all([
+  // Fetch all data in parallel — use allSettled so a single query failure
+  // does not crash the entire dashboard (common on slow mobile connections).
+  const results = await Promise.allSettled([
     // Account profile (maybeSingle – new users may not have a profile yet)
     supabase.from(ACCOUNT_PROFILE_TABLE).select("*").eq("user_id", user.id).maybeSingle(),
     // Verification steps
@@ -183,11 +203,28 @@ export default async function DashboardPage() {
     ),
   ]);
 
+  const emptyResult = EMPTY_OK;
+  const emptyListResult = EMPTY_LIST_OK;
+  const profileResult = settled(results[0], emptyResult);
+  const verificationStepsResult = settled(results[1], emptyListResult);
+  const activeListingsResult = settled(results[2], emptyResult);
+  const ownerListingsResult = settled(results[3], emptyListResult);
+  const unreadLeadsResult = settled(results[4], emptyResult);
+  const totalLeadsResult = settled(results[5], emptyResult);
+  const activePromosResult = settled(results[6], emptyResult);
+  const rejectedListingsResult = settled(results[7], emptyResult);
+  const pendingModerationResult = settled(results[8], emptyResult);
+  const expiringListingsResult = settled(results[9], emptyResult);
+  const expiringPromosResult = settled(results[10], emptyResult);
+  const businessCountResult = settled(results[11], emptyResult);
+  const recentLeadsResult = settled(results[12], emptyListResult);
+  const recentListingChangesResult = settled(results[13], emptyListResult);
+
   const profile = profileResult.data;
   const verificationSteps = verificationStepsResult.data;
   const activeListings = activeListingsResult.count;
   const ownerListings = ownerListingsResult.data;
-  const listingIds = ownerListings?.map((l) => l.id) ?? [];
+  const listingIds = ownerListings?.map((l: { id: string }) => l.id) ?? [];
   const unreadLeadCount = unreadLeadsResult.count || 0;
   const totalLeadCount = totalLeadsResult.count || 0;
   const activePromos = activePromosResult.count;
@@ -197,14 +234,19 @@ export default async function DashboardPage() {
   const expiringPromoCount = expiringPromosResult.count || 0;
   const businessCount = businessCountResult.count || 0;
 
-  // Fetch total views (depends on listingIds)
-  const { count: totalViews } =
-    listingIds.length > 0
-      ? await supabase
-          .from("listing_views")
-          .select("*", { count: "exact", head: true })
-          .in("target_id", listingIds)
-      : { count: 0 };
+  // Fetch total views (depends on listingIds) — wrapped for resilience
+  let totalViews = 0;
+  try {
+    if (listingIds.length > 0) {
+      const viewsResult = await supabase
+        .from("listing_views")
+        .select("*", { count: "exact", head: true })
+        .in("target_id", listingIds);
+      totalViews = viewsResult.count ?? 0;
+    }
+  } catch {
+    // Non-critical — default to 0
+  }
 
   // Compute conversion rate
   const conversionRate =

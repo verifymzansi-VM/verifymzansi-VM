@@ -30,6 +30,7 @@ import { TrustBadge } from "@/components/trust/trust-badge";
 import { NotificationBell } from "@/components/notification-bell";
 import { MarketplaceSwitcher } from "./marketplace-switcher";
 import { useAuth } from "@/hooks/use-auth";
+import { ErrorBoundary } from "@/components/shared/error-boundary";
 import type { TrustLevel } from "@/types/enums";
 
 interface HeaderProps {
@@ -39,7 +40,26 @@ interface HeaderProps {
   trustLevel?: TrustLevel;
 }
 
-export function Header({
+export function Header(props: HeaderProps) {
+  return (
+    <ErrorBoundary
+      label="Header"
+      fallback={
+        <header className="sticky top-0 z-50 w-full border-b bg-background">
+          <div className="container-page flex h-16 items-center">
+            <Link href="/" className="text-lg font-bold">
+              VerifyMzansi
+            </Link>
+          </div>
+        </header>
+      }
+    >
+      <HeaderInner {...props} />
+    </ErrorBoundary>
+  );
+}
+
+function HeaderInner({
   isAuthenticated: isAuthProp,
   displayName: displayNameProp,
   trustLevel: trustLevelProp = 0,
