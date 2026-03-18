@@ -168,6 +168,10 @@ test.describe("Posting flows in Chromium", () => {
     ).toBeVisible();
 
     await page.goto(`/post/edit-listing/${listingId}`);
+    // Wait for existing listing data to populate before editing
+    await expect(page.getByLabel(/^Title \*$/)).toHaveValue(/Playwright iPhone 15 Pro/, {
+      timeout: 15_000,
+    });
     await page.getByLabel(/^Title \*$/).fill("Playwright iPhone 15 Pro Max");
     const updatePromise = page.waitForResponse(
       (response) =>

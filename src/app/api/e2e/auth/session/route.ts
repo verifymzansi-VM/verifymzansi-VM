@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
   response.cookies.set({
     name: PLAYWRIGHT_SESSION_COOKIE,
     value: token,
-    httpOnly: true,
+    httpOnly: false,
     sameSite: "lax",
     path: "/",
   });
@@ -62,7 +62,7 @@ export async function DELETE(_request: NextRequest) {
   response.cookies.set({
     name: PLAYWRIGHT_SESSION_COOKIE,
     value: "",
-    httpOnly: true,
+    httpOnly: false,
     sameSite: "lax",
     path: "/",
     maxAge: 0,
