@@ -15,6 +15,7 @@ import {
   updateProviderResult,
   updateVerificationStepRiskDecision,
 } from "@/lib/services/kyc-webhook-store";
+import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("KycWebhook");
 
@@ -51,10 +52,9 @@ function isExplicitLocalUnsignedWebhookBypass(request: NextRequest): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
+    const isPlaywrightTestMode = checkPlaywrightTestMode();
     const allowUnsignedWebhook =
-      isExplicitLocalUnsignedWebhookBypass(request) ||
-      (process.env.NODE_ENV !== "production" && isPlaywrightTestMode);
+      isExplicitLocalUnsignedWebhookBypass(request) || isPlaywrightTestMode;
 
     // ── Webhook signature validation ──────────────────────────
     // When KYC_WEBHOOK_SECRET is set, validate HMAC-SHA256 signature

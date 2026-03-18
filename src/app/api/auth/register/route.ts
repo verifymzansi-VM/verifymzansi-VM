@@ -14,6 +14,7 @@ import {
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { sendAlreadyRegisteredEmail } from "@/lib/services/email";
+import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("Register");
 
@@ -38,8 +39,7 @@ async function deleteOrphanedAuthUser(userId: string, admin: ReturnType<typeof c
 
 export async function POST(request: NextRequest) {
   try {
-    const isPlaywrightTestMode =
-      process.env.NODE_ENV !== "production" && process.env.PLAYWRIGHT_TEST_MODE === "1";
+    const isPlaywrightTestMode = checkPlaywrightTestMode();
     const turnstileStatus = getTurnstileConfigStatus();
 
     if (

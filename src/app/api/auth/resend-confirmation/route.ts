@@ -6,6 +6,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
+import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { z } from "zod";
 
 const log = createLogger("ResendConfirmation");
@@ -20,8 +21,7 @@ export async function POST(request: NextRequest) {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
 
-    const isPlaywrightTestMode =
-      process.env.NODE_ENV !== "production" && process.env.PLAYWRIGHT_TEST_MODE === "1";
+    const isPlaywrightTestMode = checkPlaywrightTestMode();
     const turnstileStatus = getTurnstileConfigStatus();
 
     if (

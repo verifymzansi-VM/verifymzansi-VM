@@ -6,13 +6,13 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { checkAccountLockout, recordFailedLogin, clearLockout } from "@/lib/utils/account-lockout";
+import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("Login");
 
 export async function POST(request: NextRequest) {
   try {
-    const isPlaywrightTestMode =
-      process.env.NODE_ENV !== "production" && process.env.PLAYWRIGHT_TEST_MODE === "1";
+    const isPlaywrightTestMode = checkPlaywrightTestMode();
     const turnstileStatus = getTurnstileConfigStatus();
     if (
       process.env.NODE_ENV === "production" &&

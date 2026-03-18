@@ -5,10 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 export async function POST(request: NextRequest) {
-  const isPlaywrightTestMode =
-    process.env.NODE_ENV !== "production" && process.env.PLAYWRIGHT_TEST_MODE === "1";
+  const isPlaywrightTestMode = checkPlaywrightTestMode();
   const turnstileStatus = getTurnstileConfigStatus();
   if (
     process.env.NODE_ENV === "production" &&
