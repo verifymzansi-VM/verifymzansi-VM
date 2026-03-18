@@ -37,8 +37,6 @@ export default async function MzansiBusinessPage() {
     )
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS")
-    .not("business_name", "ilike", "%seed%")
-    .not("business_name", "ilike", "%[seed]%")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(10);

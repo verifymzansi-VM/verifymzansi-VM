@@ -230,15 +230,7 @@ export async function GET(request: NextRequest) {
           fallbackFields: LISTING_SELECT_FALLBACK_FIELDS,
           runQuery: (selectClause) =>
             applyBaseMarketFilters(
-              admin
-                .from("listings")
-                .select(selectClause)
-                .eq("status", "live")
-                .eq("area", AREA)
-                .not("title", "ilike", "%seed%")
-                .not("title", "ilike", "%[seed]%")
-                .not("title", "ilike", "%demo%")
-                .not("title", "ilike", "%sample%"),
+              admin.from("listings").select(selectClause).eq("status", "live").eq("area", AREA),
               filters
             ).range(from, from + batchSize - 1),
         });
@@ -299,11 +291,7 @@ export async function GET(request: NextRequest) {
               .from("listings")
               .select(selectClause, { count: "exact" })
               .eq("status", "live")
-              .eq("area", AREA)
-              .not("title", "ilike", "%seed%")
-              .not("title", "ilike", "%[seed]%")
-              .not("title", "ilike", "%demo%")
-              .not("title", "ilike", "%sample%"),
+              .eq("area", AREA),
             filters
           ).range(offset, offset + limit - 1),
       });

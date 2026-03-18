@@ -19,8 +19,6 @@ export async function HomeMzansiMarketShowcase() {
     )
     .eq("status", "live")
     .eq("area", "MZANSI_MARKET")
-    .not("title", "ilike", "%seed%")
-    .not("title", "ilike", "%[seed]%")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured", { ascending: false })
     .order("created_at", { ascending: false })

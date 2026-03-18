@@ -39,8 +39,6 @@ export async function HomePromotionsShowcase() {
       "id, title, price_cents, price_negotiable, category, category_key, photos, videos, video_thumbnail, location_province, location_city, promotion_type, view_count, boost_until, featured_until, start_date, end_date, created_at"
     )
     .eq("status", "live")
-    .not("title", "ilike", "%seed%")
-    .not("title", "ilike", "%[seed]%")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })

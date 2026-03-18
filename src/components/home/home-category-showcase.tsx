@@ -26,8 +26,6 @@ export async function HomeCategoryShowcase() {
       .select("id, title, description, photos", { count: "exact" })
       .eq("status", "live")
       .eq("area", "MZANSI_MARKET")
-      .not("title", "ilike", "%seed%")
-      .not("title", "ilike", "%[seed]%")
       .order("created_at", { ascending: false })
       .limit(5),
     supabase
@@ -35,16 +33,12 @@ export async function HomeCategoryShowcase() {
       .select("id, business_name, description, cover_photo", { count: "exact" })
       .eq("status", "live")
       .eq("area", "MZANSI_BUSINESS")
-      .not("business_name", "ilike", "%seed%")
-      .not("business_name", "ilike", "%[seed]%")
       .order("created_at", { ascending: false })
       .limit(5),
     supabase
       .from("promotions")
       .select("id, title, photos", { count: "exact" })
       .eq("status", "live")
-      .not("title", "ilike", "%seed%")
-      .not("title", "ilike", "%[seed]%")
       .order("created_at", { ascending: false })
       .limit(5),
   ]);

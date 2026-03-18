@@ -402,11 +402,7 @@ export async function GET(request: NextRequest) {
         .from("businesses")
         .select(selectClause, { count: "exact" })
         .eq("status", "live")
-        .eq("area", "MZANSI_BUSINESS")
-        .not("business_name", "ilike", "%seed%")
-        .not("business_name", "ilike", "%[seed]%")
-        .not("business_name", "ilike", "%demo%")
-        .not("business_name", "ilike", "%sample%");
+        .eq("area", "MZANSI_BUSINESS");
 
       if (businessType) {
         query = query.eq("business_type", businessType);
