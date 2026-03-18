@@ -83,11 +83,11 @@ async function completeMobileListingCreate(page: Page) {
 async function completeMobileBusinessCreate(page: Page) {
   const businessName = `Mobile Chrome Business ${RUN_SUFFIX}`;
   const businessSlug = `mobile-chrome-business-${RUN_SUFFIX}`;
-  const businessTypeOption = page.getByRole("radio", { name: /Standalone Shop/i });
+  const businessTypeLabel = page.locator("label").filter({ hasText: /Standalone Shop/ });
 
   await page.goto("/post/create-business");
-  await enterPostingForm(page, businessTypeOption);
-  await businessTypeOption.click();
+  await enterPostingForm(page, businessTypeLabel);
+  await businessTypeLabel.click();
   await page.getByLabel(/Business Name/i).fill(businessName);
   await page.getByLabel(/URL Slug/i).fill(businessSlug);
   await page.getByLabel(/^Category$/).selectOption("fashion_accessories");

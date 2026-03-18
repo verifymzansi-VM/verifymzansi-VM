@@ -75,10 +75,10 @@ async function completeBusinessCreate(page: Page) {
   const businessSlug = `playwright-business-studio-${RUN_SUFFIX}`;
   const businessesHeading = page.getByRole("heading", { name: "My Businesses" });
   const businessLink = page.getByRole("link", { name: businessName });
-  const businessTypeOption = page.getByRole("radio", { name: /Standalone Shop/i });
+  const businessTypeLabel = page.locator("label").filter({ hasText: /Standalone Shop/ });
   await page.goto("/post/create-business");
-  await enterPostingForm(page, businessTypeOption);
-  await businessTypeOption.click();
+  await enterPostingForm(page, businessTypeLabel);
+  await businessTypeLabel.click();
   await page.getByLabel(/Business Name/i).fill(businessName);
   await page.getByLabel(/URL Slug/i).fill(businessSlug);
   await page.getByLabel(/^Category$/).selectOption("fashion_accessories");
