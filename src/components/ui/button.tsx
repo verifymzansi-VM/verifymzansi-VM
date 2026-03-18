@@ -9,7 +9,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground hover:bg-primary/95 hover:shadow-md shadow-sm active:bg-primary/80",
+          "bg-primary text-primary-foreground hover:bg-primary/95 hover:shadow-md shadow-sm active:bg-primary/80 disabled:opacity-100 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:shadow-md hover:shadow-destructive/20 active:bg-destructive/80",
         outline:
@@ -20,7 +20,7 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         // Trust-scale-aware variants
         "trust-verified":
-          "bg-brand-green text-white hover:bg-brand-green-600 hover:shadow-md hover:shadow-brand-green/20 active:bg-brand-green-700",
+          "bg-brand-green text-white hover:bg-brand-green-600 hover:shadow-md hover:shadow-brand-green/20 active:bg-brand-green-700 disabled:opacity-100 disabled:bg-brand-green-100 disabled:text-brand-green-700",
         "trust-gold":
           "bg-brand-gold text-brand-gold-950 hover:bg-brand-gold-500 hover:shadow-md hover:shadow-brand-gold/30 active:bg-brand-gold-600",
       },

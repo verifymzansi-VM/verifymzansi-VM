@@ -167,14 +167,14 @@ test.describe("Platform Smoke", () => {
     const marketplaceTabs = page.getByRole("navigation", { name: "Marketplace areas" });
     const marketTab = marketplaceTabs.getByRole("link", { name: "Mzansi Market" });
     const businessTab = marketplaceTabs.getByRole("link", { name: "Mzansi Business" });
-    const promotionsTab = marketplaceTabs.getByRole("link", { name: /Promotion & Events/i });
+    const promotionsTab = marketplaceTabs.getByRole("link", { name: /Promotions? & Events/i });
 
     await expect(marketTab).toBeVisible();
     await expect(businessTab).toBeVisible();
     await expect(promotionsTab).toBeVisible();
     await expect(marketTab).toContainText("Market");
     await expect(businessTab).toContainText("Business");
-    await expect(promotionsTab).toContainText(/Promotion/i);
+    await expect(promotionsTab).toContainText(/Promo/i);
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 

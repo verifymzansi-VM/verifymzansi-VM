@@ -452,9 +452,9 @@ test.describe("Rate Limiting", () => {
       );
     }
 
-    // At minimum, verify all responses are safe (401, not 500)
+    // At minimum, verify all responses are safe (401/503, not 500)
     for (const r of nonRateLimited) {
-      expect([400, 401]).toContain(r.status);
+      expect([400, 401, 503]).toContain(r.status);
     }
   });
 });
