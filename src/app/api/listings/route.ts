@@ -161,6 +161,16 @@ function normalizeListingSelectShape(
  */
 export async function GET(request: NextRequest) {
   try {
+    // Rate limit public marketplace queries to prevent scraping/DoS
+    const ip = getClientIp(request);
+    const rl = await checkRateLimit({ key: ip, action: "listings:read" });
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     const admin = createAdminClient();
     const ownerColumn = await getOwnerColumn(admin, "listings");
     const filters = parseMarketplaceFiltersFromSearchParams(request.nextUrl.searchParams);

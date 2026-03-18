@@ -27,7 +27,7 @@ function buildCsp(
   const connectSrcValues = [
     "'self'",
     "https://tnygdgormnofpgjknlhr.supabase.co",
-    "https://*.sentry.io",
+    "https://*.ingest.us.sentry.io",
     "https://challenges.cloudflare.com",
     "https://*.r2.cloudflarestorage.com",
   ];
@@ -42,9 +42,9 @@ function buildCsp(
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    `script-src 'self' 'nonce-${nonce}' https://challenges.cloudflare.com`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com`,
     `style-src 'self' 'nonce-${nonce}'`,
-    "img-src 'self' data: blob: https://tnygdgormnofpgjknlhr.supabase.co https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com",
+    "img-src 'self' blob: https://tnygdgormnofpgjknlhr.supabase.co https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com",
     "media-src 'self' blob: https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com",
     "font-src 'self'",
     connectSrc,

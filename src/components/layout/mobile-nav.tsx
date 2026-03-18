@@ -27,7 +27,7 @@ const TABS: TabDef[] = [
     dotSource: "leads",
     requiresAuth: true,
   },
-  { href: "/dashboard", icon: User, label: "Profile", dotSource: "profile" },
+  { href: "/dashboard", icon: User, label: "Profile", dotSource: "profile", requiresAuth: true },
 ];
 
 /** Marketplace prefixes the Browse tab should match */

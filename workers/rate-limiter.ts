@@ -210,16 +210,20 @@ const worker = {
       }
     }
 
-    // KV fallback — kept for backward compatibility during migration
+    // KV fallback — kept for backward compatibility during migration.
+    // Read-check-increment in a single pass to minimise the TOCTOU window.
+    // (True atomicity requires the Durable Object path above.)
+    const kvSnapshots: { check: RateCheck; current: number }[] = [];
     for (const check of checks) {
       const current = parseInt((await env.OTP_RATE_LIMITS.get(check.key)) || "0", 10);
       if (current >= check.limit) {
         return Response.json({ error: "rate_limited", retryAfter: check.ttl }, { status: 429 });
       }
+      kvSnapshots.push({ check, current });
     }
 
-    for (const check of checks) {
-      const current = parseInt((await env.OTP_RATE_LIMITS.get(check.key)) || "0", 10);
+    // Increment immediately after all checks pass — no second read pass.
+    for (const { check, current } of kvSnapshots) {
       await env.OTP_RATE_LIMITS.put(check.key, String(current + 1), {
         expirationTtl: check.ttl,
       });

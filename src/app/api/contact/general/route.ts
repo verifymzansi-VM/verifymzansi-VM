@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 import { z } from "zod";
 
 const log = createLogger("ContactGeneral");
@@ -65,8 +66,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Sanitize message: strip HTML tags to prevent stored XSS ──
-    const sanitizedMessage = message.replace(/<[^>]*>/g, "");
+    // ── Sanitize message: escape HTML entities + strip tags to prevent stored XSS ──
+    const sanitizedMessage = sanitizeUserMessage(message);
 
     // ── Store inquiry ────────────────────────────────────────
     const admin = createAdminClient();

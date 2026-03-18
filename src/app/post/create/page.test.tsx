@@ -2,11 +2,24 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CreatePostPage from "./page";
 
-const { mockCreateClient, mockResolveAccountVerification, mockFetch } = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockResolveAccountVerification: vi.fn(),
-  mockFetch: vi.fn(),
-}));
+const { mockCreateClient, mockResolveAccountVerification, mockFetch, mockRedirect } = vi.hoisted(
+  () => {
+    class RedirectError extends Error {
+      digest = "NEXT_REDIRECT";
+      constructor(public url: string) {
+        super(`NEXT_REDIRECT;${url}`);
+      }
+    }
+    return {
+      mockCreateClient: vi.fn(),
+      mockResolveAccountVerification: vi.fn(),
+      mockFetch: vi.fn(),
+      mockRedirect: vi.fn((url: string) => {
+        throw new RedirectError(url);
+      }),
+    };
+  }
+);
 
 vi.mock("next/link", () => ({
   default: ({
@@ -22,6 +35,10 @@ vi.mock("next/link", () => ({
       {children}
     </a>
   ),
+}));
+
+vi.mock("next/navigation", () => ({
+  redirect: mockRedirect,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -151,22 +168,18 @@ describe("CreatePostPage", () => {
     );
   });
 
-  it("keeps unauthenticated users on verification-linked entry points without a member-only banner", async () => {
+  it("redirects unauthenticated users to login with returnUrl", async () => {
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
       },
     });
 
-    render(await CreatePostPage());
-
-    expect(screen.queryByText("Verification required before posting")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Mzansi Market/i }).getAttribute("href")).toContain(
-      "/verification?returnUrl=%2Fpost%2Fcreate-listing"
-    );
+    await expect(CreatePostPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(mockRedirect).toHaveBeenCalledWith("/login?returnUrl=%2Fpost%2Fcreate");
   });
 
-  it("upgrades stale server gating when the live verification API reports the user is verified", async () => {
+  it("redirects unauthenticated users even when verification API would report verified", async () => {
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
@@ -181,21 +194,7 @@ describe("CreatePostPage", () => {
       json: vi.fn().mockResolvedValue({ accountVerificationStatus: "verified" }),
     });
 
-    render(await CreatePostPage());
-
-    await waitFor(() => {
-      expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
-        "href",
-        "/post/create-listing"
-      );
-      expect(screen.getByRole("link", { name: /Mzansi Business/i })).toHaveAttribute(
-        "href",
-        "/post/create-business"
-      );
-      expect(screen.getByRole("link", { name: /Promotions & Events/i })).toHaveAttribute(
-        "href",
-        "/post/create-promotion"
-      );
-    });
+    await expect(CreatePostPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(mockRedirect).toHaveBeenCalledWith("/login?returnUrl=%2Fpost%2Fcreate");
   });
 });

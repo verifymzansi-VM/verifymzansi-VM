@@ -125,3 +125,73 @@ export function isJpegWithExif(buffer: Uint8Array): boolean {
 
   return false;
 }
+
+// ── PNG metadata stripping ──────────────────────────────────────────────────
+
+/** PNG magic bytes */
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/** Ancillary chunk types that may contain PII (GPS, camera info, etc.) */
+const PNG_PII_CHUNKS = new Set([
+  "tEXt", // Uncompressed text (can hold EXIF-like data)
+  "zTXt", // Compressed text
+  "iTXt", // International text (XMP, EXIF tags)
+  "eXIf", // EXIF data (PNG 1.5+)
+]);
+
+/**
+ * Strip metadata chunks from a PNG buffer that may contain PII.
+ *
+ * PNG files are structured as: 8-byte signature + sequence of chunks.
+ * Each chunk is: [4-byte length][4-byte type][data][4-byte CRC].
+ * We copy all chunks except those in PNG_PII_CHUNKS.
+ */
+export function stripMetadataFromPng(buffer: Uint8Array): Uint8Array {
+  // Verify PNG signature
+  if (buffer.length < 8 || !PNG_SIGNATURE.every((b, i) => buffer[i] === b)) {
+    return buffer; // Not a PNG, return as-is
+  }
+
+  const result: number[] = [];
+
+  // Copy PNG signature
+  for (let i = 0; i < 8; i++) {
+    result.push(buffer[i]);
+  }
+
+  let offset = 8;
+  while (offset + 12 <= buffer.length) {
+    // Read chunk length (big-endian u32)
+    const chunkLength =
+      (buffer[offset] << 24) |
+      (buffer[offset + 1] << 16) |
+      (buffer[offset + 2] << 8) |
+      buffer[offset + 3];
+
+    // Read chunk type (4 ASCII bytes)
+    const chunkType = String.fromCharCode(
+      buffer[offset + 4],
+      buffer[offset + 5],
+      buffer[offset + 6],
+      buffer[offset + 7]
+    );
+
+    // Total chunk size: 4 (length) + 4 (type) + data + 4 (CRC)
+    const totalChunkSize = 12 + chunkLength;
+
+    if (offset + totalChunkSize > buffer.length) break; // Truncated
+
+    if (!PNG_PII_CHUNKS.has(chunkType)) {
+      for (let i = offset; i < offset + totalChunkSize; i++) {
+        result.push(buffer[i]);
+      }
+    }
+
+    offset += totalChunkSize;
+
+    // IEND marks end of PNG
+    if (chunkType === "IEND") break;
+  }
+
+  return new Uint8Array(result);
+}

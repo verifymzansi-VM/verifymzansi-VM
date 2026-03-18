@@ -7,7 +7,7 @@ import { fileUploadSchema, validateUploadedFile } from "@/lib/validations/verifi
 import { processKycArtifact } from "@/lib/services/kyc-engine";
 import { createLogger } from "@/lib/utils/logger";
 import { isStrictLocalDevelopmentRequest } from "@/lib/utils/local-dev";
-import { stripExifFromJpeg } from "@/lib/utils/exif-strip";
+import { stripExifFromJpeg, stripMetadataFromPng } from "@/lib/utils/exif-strip";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import {
@@ -251,6 +251,8 @@ export async function POST(request: NextRequest) {
     // ── Strip EXIF metadata from JPEG files (POPIA data minimization) ──
     if (file.type === "image/jpeg" || integrity.detectedMime === "image/jpeg") {
       fileBuffer = Buffer.from(stripExifFromJpeg(fileBuffer));
+    } else if (file.type === "image/png" || integrity.detectedMime === "image/png") {
+      fileBuffer = Buffer.from(stripMetadataFromPng(fileBuffer));
     }
 
     // ── Upload encrypted file to R2 (or local dev fallback) ──

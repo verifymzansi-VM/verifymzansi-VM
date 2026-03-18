@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
@@ -16,17 +17,19 @@ export default async function PostCreatePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const initialVerificationStatus = user
-    ? (
-        await resolveAccountVerification(supabase, user.id, {
-          includeStepsWhenVerified: true,
-        })
-      ).accountVerificationStatus
-    : null;
+  if (!user) {
+    redirect("/login?returnUrl=%2Fpost%2Fcreate");
+  }
+
+  const initialVerificationStatus = (
+    await resolveAccountVerification(supabase, user.id, {
+      includeStepsWhenVerified: true,
+    })
+  ).accountVerificationStatus;
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header isAuthenticated={Boolean(user)} />
+      <Header isAuthenticated />
 
       <main className="flex-1">
         <div className="container-page py-6 space-y-4">
@@ -36,10 +39,7 @@ export default async function PostCreatePage() {
             breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Create Post" }]}
           />
 
-          <PostCreateClient
-            initialVerificationStatus={initialVerificationStatus}
-            isAuthenticated={Boolean(user)}
-          />
+          <PostCreateClient initialVerificationStatus={initialVerificationStatus} isAuthenticated />
         </div>
       </main>
 

@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 
 const log = createLogger("EvidenceMetadata");
 
@@ -30,6 +31,14 @@ export async function GET(request: NextRequest) {
     const role = getRoleFromUser(user);
     if (!isModeratorOrAdmin(user) || !role) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const rl = checkLocalRateLimit(user.id, "admin:evidence:metadata");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
     }
 
     const stepId = request.nextUrl.searchParams.get("stepId");

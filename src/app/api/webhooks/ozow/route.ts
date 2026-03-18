@@ -19,6 +19,21 @@ function toAmountString(amountCents: number): string {
   return (amountCents / 100).toFixed(2);
 }
 
+/**
+ * Parse a decimal amount string (e.g. "1000.00") to integer cents
+ * without using floating-point multiplication.
+ *
+ * Returns null if the input is not a valid non-negative decimal number.
+ */
+function parseAmountToCents(amount: string): number | null {
+  const trimmed = amount.trim();
+  // Match optional digits, optional dot with up to 2 decimal places
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null;
+  const [whole, frac = ""] = trimmed.split(".");
+  const cents = parseInt(whole, 10) * 100 + parseInt(frac.padEnd(2, "0"), 10);
+  return Number.isFinite(cents) && cents >= 0 ? cents : null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text();
@@ -74,8 +89,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (payload.amount) {
-      const receivedCents = Math.round(parseFloat(payload.amount) * 100);
-      if (!Number.isFinite(receivedCents) || receivedCents !== payment.amount_cents) {
+      // Parse amount string as integer cents without floating-point arithmetic
+      // to avoid precision errors (e.g. "1000.009" * 100 = 100000.899...)
+      const receivedCents = parseAmountToCents(payload.amount);
+      if (receivedCents === null || receivedCents !== payment.amount_cents) {
         log.error("Ozow amount mismatch", {
           paymentId: payment.id,
           expected: toAmountString(payment.amount_cents),
@@ -116,6 +133,20 @@ export async function POST(request: NextRequest) {
 
       if (currentPayment?.status !== "processing") {
         return NextResponse.json({ success: true, duplicate: true });
+      }
+
+      // Re-validate amount against the recovered payment record to prevent
+      // a stale webhook from fulfilling with mismatched amounts.
+      if (payload.amount) {
+        const recoveryCents = parseAmountToCents(payload.amount);
+        if (recoveryCents === null || recoveryCents !== currentPayment.amount_cents) {
+          log.error("Ozow recovery amount mismatch", {
+            paymentId: currentPayment.id,
+            expected: toAmountString(currentPayment.amount_cents),
+            received: payload.amount,
+          });
+          return NextResponse.json({ error: "Amount mismatch" }, { status: 400 });
+        }
       }
 
       if (hasFulfillmentCompletion(currentPayment)) {

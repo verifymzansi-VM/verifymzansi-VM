@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { isAdmin } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
 
 const log = createLogger("DSARExport");
@@ -84,6 +85,14 @@ export async function GET(request: NextRequest) {
 
     if (!user || !isAdmin(user)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const rl = checkLocalRateLimit(user.id, "admin:dsar:export");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
     }
 
     const admin = createAdminClient();

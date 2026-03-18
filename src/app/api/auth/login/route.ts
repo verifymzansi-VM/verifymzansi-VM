@@ -120,14 +120,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (error) {
+      // Return generic error for all auth failures to prevent email enumeration.
+      // Log the specific reason server-side for debugging.
       if (error.message?.toLowerCase().includes("email not confirmed")) {
-        return NextResponse.json(
-          {
-            error:
-              "Please confirm your email address before signing in. Check your inbox for the confirmation link.",
-          },
-          { status: 403 }
-        );
+        log.info("Login failed: email not confirmed", { email: parsedBody.data.email });
       }
       recordFailedLogin(parsedBody.data.email);
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });

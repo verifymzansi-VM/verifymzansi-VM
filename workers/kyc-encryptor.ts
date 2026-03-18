@@ -42,6 +42,8 @@ export interface Env {
   TEMP_BUCKET: R2Bucket;
   PRIVATE_BUCKET: R2Bucket;
   KYC_ENCRYPTION_KEY: string; // 64-char hex string (32 bytes)
+  /** Previous encryption key kept during rotation so old blobs stay readable. */
+  KYC_ENCRYPTION_KEY_PREVIOUS?: string;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   WORKER_API_KEY: string; // Shared secret for authenticating callers
@@ -58,7 +60,7 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     // Health check endpoint
     if (request.method === "GET") {
@@ -139,7 +141,7 @@ export default {
   },
 
   async processEncryption(tempKey: string, sellerId: string, artifactId: string, env: Env) {
-    console.log(`[KYC Worker] Starting encryption for artifact ${artifactId}`);
+    console.warn(`[KYC Worker] Starting encryption for artifact ${artifactId}`);
 
     // ── Constants matching src/lib/utils/encryption.ts ──────────
     const SALT_LENGTH = 64;
@@ -224,10 +226,10 @@ export default {
 
     const finalKey = `kyc/id_document/${sellerId}/${Date.now()}-encrypted.bin`;
 
-    // Save to private bucket
+    // Save to private bucket with key version for future rotation support
     await env.PRIVATE_BUCKET.put(finalKey, encryptedData, {
       httpMetadata: fileObj.httpMetadata,
-      customMetadata: { encrypted: "true", sellerId },
+      customMetadata: { encrypted: "true", sellerId, key_version: "1" },
     });
 
     // Delete temp file to avoid storage bloat
@@ -248,6 +250,8 @@ export default {
       }
     );
 
-    console.log(`[KYC Worker] Processing complete for ${artifactId}`);
+    console.warn(`[KYC Worker] Processing complete for ${artifactId}`);
   },
 };
+
+export default worker;

@@ -110,3 +110,27 @@ bucket_name = "verifymzansi-private"
 #   pnpm wrangler secret put IP_HASH_SECRET
 #
 # Verify with: pnpm wrangler secret list
+
+# ────────────────────────────────────────────────────────────────────────────
+# Staging Environment   (deploy with: pnpm wrangler deploy --env staging)
+# Inherits all top-level bindings (DO, KV, R2, migrations).
+# Override only the vars that differ from production.
+# Secrets must also be set per-env:
+#   pnpm wrangler secret put SUPABASE_SERVICE_ROLE_KEY --env staging
+# ────────────────────────────────────────────────────────────────────────────
+[env.staging]
+name = "verifymzansi-staging"
+workers_dev = true
+
+[env.staging.vars]
+NODE_ENV = "production"
+ENVIRONMENT = "staging"
+NEXT_PUBLIC_APP_URL = "https://staging.verifymzansi.com"
+NEXT_PUBLIC_MEDIA_URL = "https://media-staging.verifymzansi.com"
+R2_PUBLIC_URL = "https://media-staging.verifymzansi.com"
+NEXT_PUBLIC_SUPABASE_URL = "https://tnygdgormnofpgjknlhr.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRueWdkZ29ybW5vZnBnamtubGhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0OTE3MTYsImV4cCI6MjA4NzA2NzcxNn0.HmPHCahnbYDoT0X8IbCsclCbhg3K2Mr0mlDa8RKFML0"
+NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
+NEXT_PUBLIC_CF_IMAGE_RESIZING = "false"
+OTP_RATE_LIMITER_URL = "https://verifymzansi-rate-limiter.verifymzansi.workers.dev"
+OTP_RATE_LIMITER_TIMEOUT_MS = "2500"

@@ -9,6 +9,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 
 const log = createLogger("ContactRoute");
 
@@ -99,8 +100,8 @@ export async function POST(request: NextRequest) {
 
     // Create leads row for buyer message content
     if (parsedBody.data.message) {
-      // Sanitize message: strip HTML tags to prevent stored XSS
-      const sanitizedMessage = parsedBody.data.message.replace(/<[^>]*>/g, "").trim();
+      // Sanitize message: escape HTML entities + strip tags to prevent stored XSS
+      const sanitizedMessage = sanitizeUserMessage(parsedBody.data.message);
       const { error: leadsError } = await admin.from("leads").insert({
         target_id: parsedBody.data.targetId,
         target_type: parsedBody.data.targetType,

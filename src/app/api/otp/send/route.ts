@@ -120,11 +120,11 @@ export async function POST(request: NextRequest) {
     // otp_logs is service-only; use admin client to bypass RLS safely in this server route.
     const adminSupabase = createAdminClient();
 
-    const deviceId = request.headers.get("x-device-id") || undefined;
+    // Rate limit by phone only — do NOT use client-supplied x-device-id as a
+    // rate-limit key because attackers can rotate the header to bypass limits.
     const externalLimit = await checkRateLimit({
       key: phone,
       action: "otp:send",
-      deviceId,
       degradedMode: "block",
     });
     if (externalLimit.limited) {
