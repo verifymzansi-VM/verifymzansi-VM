@@ -23,6 +23,10 @@ import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import {
+  BUSINESS_SLUG_CONFLICT_RESPONSE,
+  isBusinessSlugConflictError,
+} from "@/lib/businesses/slug-conflict";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -129,33 +133,6 @@ export async function POST(request: NextRequest) {
     const tier = (activeEntitlement?.tier as string) || null;
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
-    if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: claimError } = await supabase
-        .from("free_posts_used")
-        .insert({ user_id: user.id, area: AREA });
-
-      if (claimError) {
-        if (claimError.code === "23505") {
-          return NextResponse.json(
-            {
-              error: "Free post already used",
-              reason:
-                "You have already used your free post for Mzansi Business. Subscribe to a plan to post more.",
-              upgradeUrl: "/billing",
-            },
-            { status: 403 }
-          );
-        }
-
-        log.error("Failed to claim free post slot", {
-          error: claimError.message,
-          code: claimError.code,
-          userId: user.id,
-        });
-        return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
-      }
-    }
-
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       const countQuery = applyOwnerFilter(
         supabase
@@ -201,6 +178,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { data: slugConflict } = await getAdmin()
+      .from("businesses")
+      .select("id")
+      .eq("slug", data.slug)
+      .maybeSingle();
+
+    if (slugConflict) {
+      return NextResponse.json(BUSINESS_SLUG_CONFLICT_RESPONSE, { status: 409 });
+    }
+
+    if (!hasPaidPlan && !postingLimitBypassEnabled) {
+      const { error: claimError } = await supabase
+        .from("free_posts_used")
+        .insert({ user_id: user.id, area: AREA });
+
+      if (claimError) {
+        if (claimError.code === "23505") {
+          return NextResponse.json(
+            {
+              error: "Free post already used",
+              reason:
+                "You have already used your free post for Mzansi Business. Subscribe to a plan to post more.",
+              upgradeUrl: "/billing",
+            },
+            { status: 403 }
+          );
+        }
+
+        log.error("Failed to claim free post slot", {
+          error: claimError.message,
+          code: claimError.code,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
+      }
+    }
+
     const businessPayload = {
       area: AREA,
       business_type: data.business_type,
@@ -238,6 +252,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError || !business) {
+      if (isBusinessSlugConflictError(insertError)) {
+        if (!hasPaidPlan && !postingLimitBypassEnabled) {
+          await getAdmin().from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+        }
+
+        return NextResponse.json(BUSINESS_SLUG_CONFLICT_RESPONSE, { status: 409 });
+      }
+
       log.error("Failed to create business", { error: insertError?.message });
       if (!hasPaidPlan && !postingLimitBypassEnabled) {
         await getAdmin().from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);

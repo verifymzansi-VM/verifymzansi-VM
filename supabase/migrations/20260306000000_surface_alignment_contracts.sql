@@ -10,14 +10,11 @@ ALTER TABLE public.listings
   CHECK (
     condition IS NULL OR condition IN ('new', 'like_new', 'good', 'fair', 'for_parts')
   );
-
 COMMENT ON COLUMN public.listings.condition IS
   'Canonical listing condition stored separately from attributes JSON.';
-
 CREATE INDEX IF NOT EXISTS idx_listings_condition
   ON public.listings (condition)
   WHERE condition IS NOT NULL;
-
 UPDATE public.listings
 SET condition = CASE lower(coalesce(attributes ->> 'condition', ''))
   WHEN 'new' THEN 'new'
@@ -29,16 +26,12 @@ SET condition = CASE lower(coalesce(attributes ->> 'condition', ''))
 END
 WHERE condition IS NULL
   AND attributes ? 'condition';
-
 ALTER TABLE public.promotions
   ADD COLUMN IF NOT EXISTS category_key business_category;
-
 COMMENT ON COLUMN public.promotions.category_key IS
   'Canonical business taxonomy key used for filtering promotions.';
-
 CREATE INDEX IF NOT EXISTS idx_promotions_category_key
   ON public.promotions (category_key);
-
 UPDATE public.promotions
 SET category_key = CASE
   WHEN lower(coalesce(category, '')) ~ '(fashion|clothing|apparel|shoe|jewel|boutique|bag)' THEN 'fashion_accessories'::business_category

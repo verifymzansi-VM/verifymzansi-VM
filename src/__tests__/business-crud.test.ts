@@ -172,6 +172,7 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "business-2" } }),
             neq: vi.fn().mockReturnThis(),
           };
         }
@@ -193,6 +194,265 @@ describe("POST /api/businesses", () => {
     await expect(res.json()).resolves.toMatchObject({
       error: "Cover video is not available on your current plan.",
     });
+  });
+
+  it("returns 409 when the requested slug is already in use", async () => {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "growth" } }),
+          };
+        }
+
+        if (table === "businesses") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          neq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "growth" } }),
+          };
+        }
+        if (table === "businesses") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "business-2" } }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Business slug already in use",
+      details: { slug: "This URL slug is already taken." },
+    });
+  });
+
+  it("returns 409 when the database unique index rejects a racing duplicate slug", async () => {
+    const freePostCleanup = vi.fn().mockResolvedValue({ error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "businesses") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: null }),
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: freePostCleanup,
+              }),
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
+      from: vi.fn((table: string) => {
+        const adminClient = mockCreateAdminClient();
+        if (table === "businesses") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return { limit: vi.fn().mockResolvedValue({ error: null }) };
+              }
+
+              return {
+                eq: vi.fn().mockReturnThis(),
+                neq: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+              };
+            }),
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: {
+                    code: "23505",
+                    message:
+                      'duplicate key value violates unique constraint "idx_businesses_slug_unique"',
+                    constraint: "idx_businesses_slug_unique",
+                  },
+                }),
+              }),
+            }),
+          };
+        }
+
+        if (adminClient && typeof adminClient.from === "function") {
+          return adminClient.from(table);
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          neq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Business slug already in use",
+      details: { slug: "This URL slug is already taken." },
+    });
+    expect(freePostCleanup).toHaveBeenCalled();
+  });
+
+  it("does not claim a free post before validation passes", async () => {
+    const freePostInsert = vi.fn().mockResolvedValue({ error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            insert: freePostInsert,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        ...VALID_BODY,
+        cover_video: "https://media.verifymzansi.com/business/cover-video.mp4",
+      })
+    );
+
+    expect(res.status).toBe(422);
+    expect(freePostInsert).not.toHaveBeenCalled();
   });
 
   it("persists business_details on successful create", async () => {
@@ -228,6 +488,7 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
             neq: vi.fn().mockReturnThis(),
             insert: insertSpy,
             single: singleSpy,
@@ -385,6 +646,7 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
             neq: vi.fn().mockReturnThis(),
             insert: insertSpy,
             single: vi.fn().mockResolvedValue({ data: { id: "business-1" }, error: null }),
@@ -461,6 +723,12 @@ describe("POST /api/businesses", () => {
               if (fields === "id, seller_id") {
                 return {
                   limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+              if (fields === "id") {
+                return {
+                  eq: vi.fn().mockReturnThis(),
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null }),
                 };
               }
               return {

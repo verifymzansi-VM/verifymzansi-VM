@@ -12,12 +12,10 @@ ALTER TABLE public.feature_flags
   ADD COLUMN IF NOT EXISTS allowlist_roles TEXT[] NOT NULL DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES auth.users(id),
   ADD COLUMN IF NOT EXISTS updated_reason TEXT;
-
 -- Backfill mode from existing enabled boolean
 UPDATE public.feature_flags
 SET mode = CASE WHEN enabled THEN 'on' ELSE 'off' END
 WHERE mode = 'off' AND enabled = true;
-
 -- ── Audit trigger for flag config changes ───────────────────
 CREATE OR REPLACE FUNCTION log_feature_flag_change()
 RETURNS TRIGGER
@@ -54,7 +52,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 CREATE TRIGGER trg_feature_flag_audit
   AFTER UPDATE ON public.feature_flags
   FOR EACH ROW

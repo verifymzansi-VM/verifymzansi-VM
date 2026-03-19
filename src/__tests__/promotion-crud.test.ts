@@ -277,6 +277,57 @@ describe("POST /api/promotions", () => {
     });
   });
 
+  it("does not claim a free post before validation passes", async () => {
+    const freePostInsert = vi.fn().mockResolvedValue({ error: null });
+
+    mockAuth({ id: USER_ID });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "sp-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            insert: freePostInsert,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: { title: "AB" },
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    expect(freePostInsert).not.toHaveBeenCalled();
+  });
+
   it("allows promotion creation when the profile is stale but all verification steps are approved", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({

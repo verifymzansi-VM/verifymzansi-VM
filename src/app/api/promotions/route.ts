@@ -171,34 +171,6 @@ export async function POST(request: NextRequest) {
     const tier = (activeEntitlement?.tier as string) || null;
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
-    // Check free post availability for unpaid users
-    if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: claimError } = await supabase
-        .from("free_posts_used")
-        .insert({ user_id: user.id, area: AREA });
-
-      if (claimError) {
-        if (claimError.code === "23505") {
-          return NextResponse.json(
-            {
-              error: "Free post already used",
-              reason:
-                "You have already used your free post for Promotions & Events. Subscribe to a plan to post more.",
-              upgradeUrl: "/billing",
-            },
-            { status: 403 }
-          );
-        }
-
-        log.error("Failed to claim free post slot", {
-          error: claimError.message,
-          code: claimError.code,
-          userId: user.id,
-        });
-        return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
-      }
-    }
-
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       // Paid plan — check promotion count against plan limits
       const countQuery = applyOwnerFilter(
@@ -281,6 +253,33 @@ export async function POST(request: NextRequest) {
         { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
         { status: 422 }
       );
+    }
+
+    if (!hasPaidPlan && !postingLimitBypassEnabled) {
+      const { error: claimError } = await supabase
+        .from("free_posts_used")
+        .insert({ user_id: user.id, area: AREA });
+
+      if (claimError) {
+        if (claimError.code === "23505") {
+          return NextResponse.json(
+            {
+              error: "Free post already used",
+              reason:
+                "You have already used your free post for Promotions & Events. Subscribe to a plan to post more.",
+              upgradeUrl: "/billing",
+            },
+            { status: 403 }
+          );
+        }
+
+        log.error("Failed to claim free post slot", {
+          error: claimError.message,
+          code: claimError.code,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
+      }
     }
 
     // Build the promotion row

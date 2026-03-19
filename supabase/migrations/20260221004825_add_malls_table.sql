@@ -6,22 +6,17 @@ CREATE TABLE public.malls (
     cover_photo TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
-
 -- Enable RLS
 ALTER TABLE public.malls ENABLE ROW LEVEL SECURITY;
-
 -- Allow public read access to malls
 CREATE POLICY "Public malls are viewable by everyone."
   ON public.malls FOR SELECT
   USING ( true );
-
 -- Add mall_id foreign key to storefronts
 ALTER TABLE public.storefronts
 ADD COLUMN mall_id UUID REFERENCES public.malls(id) ON DELETE SET NULL;
-
 -- Create an index to quickly look up shops by mall
 CREATE INDEX idx_storefronts_mall_id ON public.storefronts(mall_id);
-
 -- Insert common SA malls
 INSERT INTO public.malls (name, location_province, location_city) VALUES
 ('Sandton City', 'Gauteng', 'Johannesburg'),
@@ -56,7 +51,6 @@ INSERT INTO public.malls (name, location_province, location_city) VALUES
 ('Matlosana Mall', 'North West', 'Klerksdorp'),
 ('Diamond Pavilion', 'Northern Cape', 'Kimberley'),
 ('Kalahari Mall', 'Northern Cape', 'Upington');
-
 -- Map existing storefronts to matching malls based on mall_name column (best effort)
 UPDATE public.storefronts s
 SET mall_id = m.id

@@ -27,8 +27,10 @@ export async function POST(request: Request) {
       error: err instanceof Error ? err.message : "unknown error",
       stack: err instanceof Error ? err.stack : undefined,
     });
-    // Continue to redirect even if sign-out fails
+    return NextResponse.json({ error: "Failed to sign out. Please try again." }, { status: 503 });
   }
 
-  return NextResponse.redirect(`${resolveAppOrigin(request)}/`, { status: 302 });
+  const response = NextResponse.redirect(`${resolveAppOrigin(request)}/`, { status: 302 });
+  response.cookies.delete("x-phone-ok");
+  return response;
 }

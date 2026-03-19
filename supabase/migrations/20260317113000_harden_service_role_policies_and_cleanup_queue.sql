@@ -4,40 +4,32 @@
 
 DROP POLICY IF EXISTS "Service role full access on r2_cleanup_queue"
   ON public.r2_cleanup_queue;
-
 CREATE POLICY "Service role full access on r2_cleanup_queue"
   ON public.r2_cleanup_queue
   FOR ALL
   USING (auth.role() = 'service_role')
   WITH CHECK (auth.role() = 'service_role');
-
 DROP POLICY IF EXISTS "Service role can insert notifications"
   ON public.notifications;
-
 CREATE POLICY "Service role can insert notifications"
   ON public.notifications
   FOR INSERT
   WITH CHECK (auth.role() = 'service_role');
-
 DROP POLICY IF EXISTS "Service role full access on otp_challenges"
   ON public.otp_challenges;
-
 CREATE POLICY "Service role full access on otp_challenges"
   ON public.otp_challenges
   FOR ALL
   USING (auth.role() = 'service_role')
   WITH CHECK (auth.role() = 'service_role');
-
 UPDATE public.r2_cleanup_queue
 SET bucket = 'private'
 WHERE processed_at IS NULL
   AND bucket IN ('verifymzansi-private');
-
 UPDATE public.r2_cleanup_queue
 SET bucket = 'public'
 WHERE processed_at IS NULL
   AND bucket IN ('verifymzansi-public');
-
 DO $$
 DECLARE
   job_id bigint;

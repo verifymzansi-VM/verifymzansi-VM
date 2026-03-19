@@ -36,16 +36,22 @@ describe("POST /api/auth/sign-out", () => {
     expect(mockSignOut).toHaveBeenCalled();
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toContain("/");
+    expect(res.cookies.get("x-phone-ok")).toMatchObject({
+      name: "x-phone-ok",
+      value: "",
+    });
   });
 
-  it("redirects even if signOut throws", async () => {
+  it("returns 503 when signOut throws", async () => {
     mockCreateClient.mockResolvedValue({
       auth: { signOut: vi.fn().mockRejectedValue(new Error("fail")) },
     });
 
     const res = await POST(createRequest());
-    // Should still redirect, not throw
-    expect(res.status).toBe(302);
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Failed to sign out. Please try again.",
+    });
   });
 
   it("uses the public request origin when a stale localhost app url is configured in production", async () => {

@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
-import { middleware as handleMiddleware } from "@/proxy-handler";
+import { proxy as handleProxy } from "@/proxy-handler";
 
-export function middleware(request: NextRequest) {
-  return handleMiddleware(request);
+export function proxy(request: NextRequest) {
+  return handleProxy(request);
 }
 
 export const config = {

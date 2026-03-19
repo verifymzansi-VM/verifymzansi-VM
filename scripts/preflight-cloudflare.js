@@ -193,10 +193,11 @@ if (isWSL()) {
   console.log(`✓ Running on ${platform} — Cloudflare build should work.`);
 }
 
-// Cloudflare's build cache can restore a stale src/proxy.ts from older
-// builds. Remove it so Next sees only the active Edge middleware entrypoint.
-const staleProxy = path.join(__dirname, "..", "src", "proxy.ts");
-if (fs.existsSync(staleProxy)) {
-  fs.rmSync(staleProxy);
-  console.log("✓ Removed stale src/proxy.ts (restored from build cache).");
+// Cloudflare's build cache can restore a stale src/middleware.ts from older
+// builds that used the deprecated middleware convention. Remove it so Next
+// sees only the active src/proxy.ts Edge entrypoint.
+const staleMiddleware = path.join(__dirname, "..", "src", "middleware.ts");
+if (fs.existsSync(staleMiddleware)) {
+  fs.rmSync(staleMiddleware);
+  console.log("✓ Removed stale src/middleware.ts (restored from build cache).");
 }

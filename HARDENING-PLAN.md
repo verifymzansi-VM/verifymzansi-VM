@@ -4,9 +4,9 @@
 codebase audit — 32 API routes, 104 components/hooks/stores, 40+ lib modules, 3
 workers, 6 scripts, 4 CI workflows, middleware **KYC Decision:** Stub provider
 accepted (manual-only verification queue at launch) **Middleware Convention:**
-`src/middleware.ts` is the active request gate for Cloudflare compatibility on
-Next.js 16. `src/proxy.ts` remains incompatible because it runs on the Node.js
-runtime. **Status:** ✅ **IMPLEMENTATION COMPLETE** (2026-02-24)
+`src/proxy.ts` is the active request gate (migrated from the deprecated
+`middleware.ts` convention on Next.js 16.2). **Status:** ✅ **IMPLEMENTATION
+COMPLETE** (2026-02-24)
 
 ---
 
@@ -230,7 +230,7 @@ All findings have been addressed — **102/107 items implemented, 5 deferred**
 
 ### 19. ✅ Tighten CSP directives in middleware
 
-- **File:** [src/middleware.ts](src/middleware.ts)
+- **File:** [src/proxy.ts](src/proxy.ts) (via `proxy-handler.ts`)
 - **Fix:**
   - Replace `connect-src 'self' https:` with explicit origins (Supabase, Sentry,
     Cloudflare)
@@ -241,7 +241,7 @@ All findings have been addressed — **102/107 items implemented, 5 deferred**
 
 ### 20. ✅ Fix anonymous user bypass in middleware
 
-- **File:** [src/middleware.ts](src/middleware.ts)
+- **File:** [src/proxy.ts](src/proxy.ts) (via `proxy-handler.ts`)
 - **Problem:** `!user` check passes for anonymous Supabase users since `user` is
   non-null. Anonymous sessions can access `/dashboard`, `/billing`,
   `/verification`.
@@ -651,14 +651,14 @@ Document:
 
 ## Accepted Decisions
 
-| Decision                                           | Rationale                                                                                                                                                                                           |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **KYC stub provider at launch**                    | Intentional manual-only review. Documented with `KYC_PROVIDER=stub` env var and startup warning.                                                                                                    |
-| **`src/middleware.ts` is the active request gate** | Next.js 16 `proxy.ts` currently runs on the Node.js runtime, which breaks OpenNext Cloudflare builds. Edge `middleware.ts` is used instead despite the deprecation warning.                         |
-| **MD5 in Ozow signatures**                         | Ozow-mandated. Documented as accepted business risk.                                                                                                                                                |
-| **`style-src 'unsafe-inline'`**                    | Required by Tailwind CSS + shadcn component styles. Nonce-based styles deferred post-launch.                                                                                                        |
-| **No MFA at launch**                               | Supabase MFA disabled. Acceptable for initial launch; plan to add for admin accounts in first sprint.                                                                                               |
-| **Items 66-69, 73 deferred**                       | Major component extraction/DRY refactors (VideoCard, HeroCarousel, CategoryStrip, GridHeader, plan entitlements hook). Too high regression risk pre-launch. Scheduled for first post-launch sprint. |
+| Decision                                      | Rationale                                                                                                                                                                                           |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **KYC stub provider at launch**               | Intentional manual-only review. Documented with `KYC_PROVIDER=stub` env var and startup warning.                                                                                                    |
+| **`src/proxy.ts` is the active request gate** | Migrated from deprecated `middleware.ts` to `proxy.ts` on Next.js 16.2. Shared logic remains in `proxy-handler.ts`.                                                                                 |
+| **MD5 in Ozow signatures**                    | Ozow-mandated. Documented as accepted business risk.                                                                                                                                                |
+| **`style-src 'unsafe-inline'`**               | Required by Tailwind CSS + shadcn component styles. Nonce-based styles deferred post-launch.                                                                                                        |
+| **No MFA at launch**                          | Supabase MFA disabled. Acceptable for initial launch; plan to add for admin accounts in first sprint.                                                                                               |
+| **Items 66-69, 73 deferred**                  | Major component extraction/DRY refactors (VideoCard, HeroCarousel, CategoryStrip, GridHeader, plan entitlements hook). Too high regression risk pre-launch. Scheduled for first post-launch sprint. |
 
 ---
 

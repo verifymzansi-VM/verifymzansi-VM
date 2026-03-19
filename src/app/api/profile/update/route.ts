@@ -94,6 +94,8 @@ export async function POST(request: NextRequest) {
         maxAge: 86400, // 24 hours
         path: "/",
       });
+    } else if (parsedBody.data.phone !== undefined) {
+      res.cookies.delete("x-phone-ok");
     }
     return res;
   } catch (error) {

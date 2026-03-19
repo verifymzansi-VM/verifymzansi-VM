@@ -117,6 +117,35 @@ function getFieldId(key: string): string | undefined {
   return undefined;
 }
 
+function getStepForFieldKey(key: string): number {
+  if (
+    key === "gallery_photos" ||
+    key === "cover_video" ||
+    STEP_SOCIAL_FIELDS.includes(key as (typeof STEP_SOCIAL_FIELDS)[number])
+  ) {
+    return 2;
+  }
+
+  if (
+    key === "location_province" ||
+    key === "location_city" ||
+    STEP_CONTACT_FIELDS.includes(key as (typeof STEP_CONTACT_FIELDS)[number])
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function getStepForServerErrors(errors: Record<string, string>): number {
+  const keys = Object.keys(errors);
+  if (keys.length === 0) {
+    return 0;
+  }
+
+  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 2);
+}
+
 function generateSlug(name: string): string {
   return name
     .toLowerCase()
@@ -551,9 +580,11 @@ function CreateBusinessContent() {
       const payload = await res.json().catch(() => null);
       if (!res.ok) {
         const normalized = normalizeCreatePostError(payload, "Failed to create business.");
+        const targetStep = getStepForServerErrors(normalized.fieldErrors);
+        setStep(targetStep);
         setFieldErrors(normalized.fieldErrors);
         setFormError(normalized.formError);
-        focusFirstError(normalized.fieldErrors);
+        focusFirstError(normalized.fieldErrors, targetStep);
         return;
       }
       toast({ title: "Business submitted for review.", variant: "success" });

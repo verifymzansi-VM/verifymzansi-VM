@@ -19,6 +19,10 @@ import {
   diffRemovedMediaUrls,
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
+import {
+  BUSINESS_SLUG_CONFLICT_RESPONSE,
+  isBusinessSlugConflictError,
+} from "@/lib/businesses/slug-conflict";
 import type { PlanTier } from "@/types/enums";
 import type { BusinessDetails } from "@/types/business-details";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
@@ -227,6 +231,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
+    const admin = createAdminClient();
+    const { data: slugConflict } = await admin
+      .from("businesses")
+      .select("id")
+      .eq("slug", data.slug)
+      .neq("id", id)
+      .maybeSingle();
+
+    if (slugConflict) {
+      return NextResponse.json(BUSINESS_SLUG_CONFLICT_RESPONSE, { status: 409 });
+    }
+
     const nextMediaUrls = collectMediaUrls(
       data.logo_url || null,
       data.cover_photo || null,
@@ -288,13 +304,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { error: updateError } = await updateQuery;
 
     if (updateError) {
+      if (isBusinessSlugConflictError(updateError)) {
+        return NextResponse.json(BUSINESS_SLUG_CONFLICT_RESPONSE, { status: 409 });
+      }
+
       log.error("Failed to update business", { error: updateError.message });
       return NextResponse.json({ error: "Failed to update business" }, { status: 500 });
     }
 
     if (removedMediaUrls.length > 0) {
       try {
-        const admin = createAdminClient();
         await queuePublicMediaCleanup(admin, removedMediaUrls, "business_media_replaced");
       } catch (cleanupError) {
         log.error("Failed to queue replaced business media for cleanup", {

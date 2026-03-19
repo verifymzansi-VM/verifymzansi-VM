@@ -312,6 +312,44 @@ describe("middleware — authenticated routing", () => {
     expect(res.status).toBe(200);
   });
 
+  it("does not trust a stale x-phone-ok cookie when the profile no longer has a phone", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          is_anonymous: false,
+          app_metadata: { role: "seller" },
+        },
+      },
+    });
+
+    mockFrom.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () =>
+            Promise.resolve({
+              data: {
+                phone: null,
+                account_verification_status: "verified",
+                account_status: "active",
+                suspended_until: null,
+              },
+              error: null,
+            }),
+        }),
+      }),
+    });
+
+    const res = await routeRequest(
+      createMockRequest("/dashboard", { cookieHeader: "x-phone-ok=1" })
+    );
+
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/dashboard/complete-profile");
+    expect(location.searchParams.get("returnUrl")).toBe("/dashboard");
+  });
+
   it("allows /api/post/create for verified users through posting gate", async () => {
     mockGetUser.mockResolvedValue({
       data: {

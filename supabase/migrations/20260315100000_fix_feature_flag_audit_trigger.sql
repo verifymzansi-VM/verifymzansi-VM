@@ -3,7 +3,6 @@
 -- 2. Fix target_id type mismatch (text key → UUID column)
 
 ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'system';
-
 CREATE OR REPLACE FUNCTION log_feature_flag_change()
 RETURNS TRIGGER
 LANGUAGE plpgsql

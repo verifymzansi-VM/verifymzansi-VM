@@ -12,11 +12,9 @@ ALTER TABLE kyc_artifacts
   ADD COLUMN IF NOT EXISTS sha256 TEXT,
   ADD COLUMN IF NOT EXISTS provider_ref TEXT,
   ADD COLUMN IF NOT EXISTS purge_after TIMESTAMPTZ;
-
 CREATE INDEX IF NOT EXISTS idx_kyc_artifacts_purge
   ON kyc_artifacts(purge_after)
   WHERE purge_after IS NOT NULL;
-
 -- ============================================================
 -- 2. Extend verification_steps
 -- ============================================================
@@ -30,11 +28,9 @@ ALTER TABLE verification_steps
     CHECK (auto_status IN ('pending', 'approved', 'rejected', 'needs_manual_review')),
   ADD COLUMN IF NOT EXISTS override_reason_code TEXT,
   ADD COLUMN IF NOT EXISTS id_number_hmac TEXT;
-
 CREATE INDEX IF NOT EXISTS idx_verification_steps_id_hmac
   ON verification_steps(id_number_hmac)
   WHERE id_number_hmac IS NOT NULL;
-
 -- ============================================================
 -- 3. New table: verification_sessions
 -- One row per seller; UNIQUE(user_id) enforces a single
@@ -53,25 +49,19 @@ CREATE TABLE IF NOT EXISTS verification_sessions (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(user_id)
 );
-
 ALTER TABLE verification_sessions ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Owner reads own session"
   ON verification_sessions FOR SELECT
   USING (auth.uid() = user_id OR public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner writes own session"
   ON verification_sessions FOR INSERT
   WITH CHECK (auth.uid() = user_id);
-
 CREATE POLICY "Owner updates own session"
   ON verification_sessions FOR UPDATE
   USING (auth.uid() = user_id OR public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE TRIGGER set_verification_sessions_updated_at
   BEFORE UPDATE ON verification_sessions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
 -- ============================================================
 -- 4. New table: kyc_provider_results
 -- Stores the structured result from the KYC provider (stub or real).
@@ -92,23 +82,17 @@ CREATE TABLE IF NOT EXISTS kyc_provider_results (
   provider_ref TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 ALTER TABLE kyc_provider_results ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Staff reads provider results"
   ON kyc_provider_results FOR SELECT
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE INDEX IF NOT EXISTS idx_kyc_provider_results_artifact
   ON kyc_provider_results(artifact_id);
-
 CREATE INDEX IF NOT EXISTS idx_kyc_provider_results_user
   ON kyc_provider_results(user_id);
-
 CREATE INDEX IF NOT EXISTS idx_kyc_provider_results_ref
   ON kyc_provider_results(provider_ref)
   WHERE provider_ref IS NOT NULL;
-
 -- ============================================================
 -- 5. New table: kyc_risk_signals
 -- One row per detected fraud/risk indicator per artifact.
@@ -126,24 +110,18 @@ CREATE TABLE IF NOT EXISTS kyc_risk_signals (
   value_json JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 ALTER TABLE kyc_risk_signals ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Staff reads risk signals"
   ON kyc_risk_signals FOR SELECT
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE INDEX IF NOT EXISTS idx_kyc_risk_signals_user
   ON kyc_risk_signals(user_id);
-
 CREATE INDEX IF NOT EXISTS idx_kyc_risk_signals_step
   ON kyc_risk_signals(step_id)
   WHERE step_id IS NOT NULL;
-
 CREATE INDEX IF NOT EXISTS idx_kyc_risk_signals_artifact
   ON kyc_risk_signals(artifact_id)
   WHERE artifact_id IS NOT NULL;
-
 -- ============================================================
 -- 6. New table: kyc_evidence_access_logs
 -- Audits every admin/moderator view of a KYC document.
@@ -159,15 +137,11 @@ CREATE TABLE IF NOT EXISTS kyc_evidence_access_logs (
   ip_hash TEXT,
   accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 ALTER TABLE kyc_evidence_access_logs ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Admin reads evidence logs"
   ON kyc_evidence_access_logs FOR SELECT
   USING (public.has_role('admin'));
-
 CREATE INDEX IF NOT EXISTS idx_kyc_evidence_access_actor
   ON kyc_evidence_access_logs(actor_id, accessed_at DESC);
-
 CREATE INDEX IF NOT EXISTS idx_kyc_evidence_access_artifact
   ON kyc_evidence_access_logs(artifact_id);

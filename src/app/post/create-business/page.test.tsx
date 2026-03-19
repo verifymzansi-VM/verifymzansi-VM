@@ -274,4 +274,26 @@ describe("CreateBusinessPage", () => {
     const details = screen.getByText("Optional extras").closest("details");
     expect(details).not.toHaveAttribute("open");
   });
+
+  it("shows an inline slug error when the API rejects a duplicate slug", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      json: async () => ({
+        error: "Business slug already in use",
+        reason: "Choose a different URL slug for this business.",
+        details: { slug: "This URL slug is already taken." },
+      }),
+    });
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    expect(await screen.findByText("This URL slug is already taken.")).toBeInTheDocument();
+    expect(screen.getByText("Choose a different URL slug for this business.")).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
 });

@@ -4,6 +4,5 @@
 
 ALTER FUNCTION public.update_feature_flag_timestamp()
   SET search_path = pg_catalog, public;
-
 ALTER FUNCTION public.log_feature_flag_change()
   SET search_path = pg_catalog, public;

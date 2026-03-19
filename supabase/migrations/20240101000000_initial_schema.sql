@@ -7,38 +7,29 @@
 -- ============================================================
 
 CREATE TYPE marketplace_area AS ENUM ('MZANSI_MARKET', 'BUSINESS_ADS', 'MALL_SHOPS');
-
 CREATE TYPE verification_step_type AS ENUM ('phone', 'id_doc', 'selfie', 'location');
 CREATE TYPE verification_status AS ENUM ('pending', 'approved', 'rejected', 'needs_resubmission');
 CREATE TYPE seller_verification_status AS ENUM ('incomplete', 'pending_review', 'verified');
 CREATE TYPE document_type AS ENUM ('sa_id_card', 'sa_id_book', 'sa_passport', 'sa_drivers_license');
 CREATE TYPE location_method AS ENUM ('gps', 'proof_of_address');
-
 CREATE TYPE listing_status AS ENUM ('draft', 'pending_moderation', 'flagged_for_review', 'live', 'hidden', 'expired', 'rejected');
 CREATE TYPE listing_category AS ENUM ('property', 'cars_vehicles', 'auto_parts_tools', 'electronics_tech', 'home_lifestyle', 'jobs_other');
 CREATE TYPE contact_method AS ENUM ('call', 'whatsapp', 'form');
-
 CREATE TYPE plan_tier AS ENUM ('starter', 'growth', 'pro');
 CREATE TYPE entitlement_type AS ENUM ('subscription', 'trial', 'pay_per_post');
 CREATE TYPE entitlement_status AS ENUM ('active', 'expired', 'cancelled');
 CREATE TYPE payment_status AS ENUM ('pending', 'complete', 'failed', 'refunded');
-
 CREATE TYPE lead_status AS ENUM ('new', 'read', 'contacted', 'closed');
 CREATE TYPE contact_event_type AS ENUM ('call', 'whatsapp', 'form');
-
 CREATE TYPE report_category AS ENUM ('scam', 'prohibited_item', 'impersonation', 'harassment', 'misleading_info');
 CREATE TYPE report_severity AS ENUM ('high', 'standard');
 CREATE TYPE report_status AS ENUM ('open', 'in_progress', 'resolved', 'dismissed');
 CREATE TYPE enforcement_action AS ENUM ('warn', 'hide', 'suspend', 'ban', 'dismiss');
 CREATE TYPE account_status AS ENUM ('active', 'warned', 'suspended', 'banned');
-
 CREATE TYPE user_role AS ENUM ('seller', 'moderator', 'admin');
-
 CREATE TYPE dsar_type AS ENUM ('access', 'correction', 'deletion');
 CREATE TYPE dsar_status AS ENUM ('submitted', 'identity_pending', 'in_progress', 'completed', 'rejected');
-
 CREATE TYPE buyer_token_status AS ENUM ('valid', 'expired', 'revoked');
-
 -- ============================================================
 -- HELPER FUNCTIONS
 -- ============================================================
@@ -53,7 +44,6 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
-
 CREATE OR REPLACE FUNCTION public.has_any_role(roles TEXT[])
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -64,7 +54,6 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
-
 -- Shared updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
@@ -73,7 +62,6 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 -- ============================================================
 -- TABLES
 -- ============================================================
@@ -100,11 +88,9 @@ CREATE TABLE seller_profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(user_id)
 );
-
 CREATE INDEX idx_seller_profiles_user_id ON seller_profiles(user_id);
 CREATE INDEX idx_seller_profiles_status ON seller_profiles(seller_verification_status);
 CREATE INDEX idx_seller_profiles_account ON seller_profiles(account_status);
-
 -- verification_steps
 CREATE TABLE verification_steps (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -133,11 +119,9 @@ CREATE TABLE verification_steps (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(user_id, step_type)
 );
-
 CREATE INDEX idx_verification_steps_user ON verification_steps(user_id);
 CREATE INDEX idx_verification_steps_status ON verification_steps(status);
 CREATE INDEX idx_verification_steps_pending ON verification_steps(status) WHERE status = 'pending';
-
 -- kyc_artifacts
 CREATE TABLE kyc_artifacts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -149,10 +133,8 @@ CREATE TABLE kyc_artifacts (
   status verification_status NOT NULL DEFAULT 'pending',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_kyc_artifacts_user ON kyc_artifacts(user_id);
 CREATE INDEX idx_kyc_artifacts_status ON kyc_artifacts(status);
-
 -- plans
 CREATE TABLE plans (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -166,7 +148,6 @@ CREATE TABLE plans (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(area, tier)
 );
-
 -- entitlements
 CREATE TABLE entitlements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -182,12 +163,10 @@ CREATE TABLE entitlements (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_entitlements_user ON entitlements(user_id);
 CREATE INDEX idx_entitlements_user_area ON entitlements(user_id, area);
 CREATE INDEX idx_entitlements_active ON entitlements(user_id, area, status) WHERE status = 'active';
 CREATE INDEX idx_entitlements_trial ON entitlements(user_id, area) WHERE type = 'trial';
-
 -- listings (Mzansi Market)
 CREATE TABLE listings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -218,7 +197,6 @@ CREATE TABLE listings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_listings_seller ON listings(seller_id);
 CREATE INDEX idx_listings_status ON listings(status);
 CREATE INDEX idx_listings_category ON listings(category);
@@ -228,7 +206,6 @@ CREATE INDEX idx_listings_price ON listings(price_cents) WHERE price_cents IS NO
 CREATE INDEX idx_listings_search ON listings USING GIN(search_vector);
 CREATE INDEX idx_listings_attributes ON listings USING GIN(attributes);
 CREATE INDEX idx_listings_live ON listings(created_at DESC) WHERE status = 'live';
-
 -- Full-text search trigger for listings
 CREATE FUNCTION listings_search_update() RETURNS trigger AS $$
 BEGIN
@@ -238,11 +215,9 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 CREATE TRIGGER listings_search_trigger
   BEFORE INSERT OR UPDATE OF title, description ON listings
   FOR EACH ROW EXECUTE FUNCTION listings_search_update();
-
 -- storefronts (Mall Shops)
 CREATE TABLE storefronts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -268,13 +243,11 @@ CREATE TABLE storefronts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_storefronts_seller ON storefronts(seller_id);
 CREATE INDEX idx_storefronts_status ON storefronts(status);
 CREATE INDEX idx_storefronts_province_city ON storefronts(location_province, location_city);
 CREATE INDEX idx_storefronts_search ON storefronts USING GIN(search_vector);
 CREATE INDEX idx_storefronts_live ON storefronts(created_at DESC) WHERE status = 'live';
-
 CREATE FUNCTION storefronts_search_update() RETURNS trigger AS $$
 BEGIN
   NEW.search_vector :=
@@ -283,11 +256,9 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 CREATE TRIGGER storefronts_search_trigger
   BEFORE INSERT OR UPDATE OF mall_name, description ON storefronts
   FOR EACH ROW EXECUTE FUNCTION storefronts_search_update();
-
 -- storefront_posts
 CREATE TABLE storefront_posts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -301,9 +272,7 @@ CREATE TABLE storefront_posts (
   status listing_status NOT NULL DEFAULT 'draft',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_storefront_posts_storefront ON storefront_posts(storefront_id);
-
 -- business_profiles (Business Ads)
 CREATE TABLE business_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -328,12 +297,10 @@ CREATE TABLE business_profiles (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_business_profiles_seller ON business_profiles(seller_id);
 CREATE INDEX idx_business_profiles_status ON business_profiles(status);
 CREATE INDEX idx_business_profiles_search ON business_profiles USING GIN(search_vector);
 CREATE INDEX idx_business_profiles_live ON business_profiles(created_at DESC) WHERE status = 'live';
-
 CREATE FUNCTION business_profiles_search_update() RETURNS trigger AS $$
 BEGIN
   NEW.search_vector :=
@@ -342,11 +309,9 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 CREATE TRIGGER business_profiles_search_trigger
   BEFORE INSERT OR UPDATE OF business_name, about ON business_profiles
   FOR EACH ROW EXECUTE FUNCTION business_profiles_search_update();
-
 -- business_posts
 CREATE TABLE business_posts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -360,9 +325,7 @@ CREATE TABLE business_posts (
   status listing_status NOT NULL DEFAULT 'draft',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_business_posts_profile ON business_posts(business_profile_id);
-
 -- payments
 CREATE TABLE payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -376,10 +339,8 @@ CREATE TABLE payments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_payments_user ON payments(user_id);
 CREATE INDEX idx_payments_status ON payments(status);
-
 -- invoices
 CREATE TABLE invoices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -393,10 +354,8 @@ CREATE TABLE invoices (
   pdf_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_invoices_user ON invoices(user_id);
 CREATE SEQUENCE invoice_number_seq START 1;
-
 -- leads
 CREATE TABLE leads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -411,11 +370,9 @@ CREATE TABLE leads (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_leads_seller ON leads(seller_id);
 CREATE INDEX idx_leads_target ON leads(target_id, target_type);
 CREATE INDEX idx_leads_status ON leads(seller_id, status);
-
 -- contact_events
 CREATE TABLE contact_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -426,11 +383,9 @@ CREATE TABLE contact_events (
   contact_type contact_event_type NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_contact_events_seller ON contact_events(seller_id);
 CREATE INDEX idx_contact_events_date ON contact_events(created_at);
 CREATE INDEX idx_contact_events_tcr ON contact_events(seller_verified, created_at);
-
 -- reports
 CREATE TABLE reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -449,12 +404,10 @@ CREATE TABLE reports (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_reports_area_status ON reports(area, status);
 CREATE INDEX idx_reports_severity ON reports(severity, status) WHERE status = 'open';
 CREATE INDEX idx_reports_target ON reports(target_id, target_type);
 CREATE INDEX idx_reports_open ON reports(created_at) WHERE status = 'open';
-
 -- moderation_actions
 CREATE TABLE moderation_actions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -468,11 +421,9 @@ CREATE TABLE moderation_actions (
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_moderation_actions_report ON moderation_actions(report_id);
 CREATE INDEX idx_moderation_actions_actor ON moderation_actions(actor_id);
 CREATE INDEX idx_moderation_actions_area ON moderation_actions(area, created_at);
-
 -- audit_logs
 CREATE TABLE audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -485,12 +436,10 @@ CREATE TABLE audit_logs (
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_audit_logs_area ON audit_logs(area, created_at DESC);
 CREATE INDEX idx_audit_logs_actor ON audit_logs(actor_id);
 CREATE INDEX idx_audit_logs_action ON audit_logs(action, created_at DESC);
 CREATE INDEX idx_audit_logs_target ON audit_logs(target_type, target_id);
-
 -- otp_logs
 CREATE TABLE otp_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -501,10 +450,8 @@ CREATE TABLE otp_logs (
   verified_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_otp_logs_phone ON otp_logs(phone, created_at DESC);
 CREATE INDEX idx_otp_logs_cleanup ON otp_logs(created_at);
-
 -- buyer_verifications
 CREATE TABLE buyer_verifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -518,10 +465,8 @@ CREATE TABLE buyer_verifications (
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE UNIQUE INDEX idx_buyer_tokens_token ON buyer_verifications(token);
 CREATE INDEX idx_buyer_verifications_expiry ON buyer_verifications(expires_at) WHERE status = 'valid';
-
 -- dsar_cases
 CREATE TABLE dsar_cases (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -538,10 +483,8 @@ CREATE TABLE dsar_cases (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_dsar_status ON dsar_cases(status);
 CREATE INDEX idx_dsar_due ON dsar_cases(due_by) WHERE status != 'completed';
-
 -- consent_records
 CREATE TABLE consent_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -552,9 +495,7 @@ CREATE TABLE consent_records (
   ip_hash TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_consent_user ON consent_records(user_id);
-
 -- listing_views
 CREATE TABLE listing_views (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -564,11 +505,9 @@ CREATE TABLE listing_views (
   viewer_user_id UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX idx_listing_views_target ON listing_views(target_id, target_type);
 CREATE INDEX idx_listing_views_date ON listing_views(created_at);
 CREATE INDEX idx_listing_views_target_date ON listing_views(target_id, target_type, created_at);
-
 -- ============================================================
 -- UPDATED_AT TRIGGERS
 -- ============================================================
@@ -583,7 +522,6 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON payments FOR EACH ROW EXECUTE FUN
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON leads FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON reports FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON dsar_cases FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- ============================================================
@@ -610,7 +548,6 @@ ALTER TABLE buyer_verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dsar_cases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE consent_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE listing_views ENABLE ROW LEVEL SECURITY;
-
 -- ============================================================
 -- RLS POLICIES
 -- ============================================================
@@ -618,170 +555,121 @@ ALTER TABLE listing_views ENABLE ROW LEVEL SECURITY;
 -- seller_profiles
 CREATE POLICY "Owner reads own profile" ON seller_profiles FOR SELECT
   USING (auth.uid() = user_id OR public.has_role('admin'));
-
 CREATE POLICY "Owner creates profile" ON seller_profiles FOR INSERT
   WITH CHECK (auth.uid() = user_id);
-
 CREATE POLICY "Owner or admin updates profile" ON seller_profiles FOR UPDATE
   USING (auth.uid() = user_id OR public.has_role('admin'));
-
 CREATE POLICY "Admin deletes profile" ON seller_profiles FOR DELETE
   USING (public.has_role('admin'));
-
 -- verification_steps
 CREATE POLICY "Owner reads own steps" ON verification_steps FOR SELECT
   USING (auth.uid() = user_id OR public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Reviewer updates steps" ON verification_steps FOR UPDATE
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 -- kyc_artifacts
 CREATE POLICY "Owner reads own artifacts" ON kyc_artifacts FOR SELECT
   USING (auth.uid() = user_id OR public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner uploads artifact" ON kyc_artifacts FOR INSERT
   WITH CHECK (auth.uid() = user_id);
-
 -- listings
 CREATE POLICY "Public reads live listings" ON listings FOR SELECT
   USING (status = 'live' OR auth.uid() = seller_id);
-
 CREATE POLICY "Staff reads all listings" ON listings FOR SELECT
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner creates listing" ON listings FOR INSERT
   WITH CHECK (auth.uid() = seller_id);
-
 CREATE POLICY "Owner or moderator updates listing" ON listings FOR UPDATE
   USING (auth.uid() = seller_id OR public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner or admin deletes listing" ON listings FOR DELETE
   USING (auth.uid() = seller_id OR public.has_role('admin'));
-
 -- storefronts
 CREATE POLICY "Public reads live storefronts" ON storefronts FOR SELECT
   USING (status = 'live' OR auth.uid() = seller_id);
-
 CREATE POLICY "Staff reads all storefronts" ON storefronts FOR SELECT
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner creates storefront" ON storefronts FOR INSERT
   WITH CHECK (auth.uid() = seller_id);
-
 CREATE POLICY "Owner or moderator updates storefront" ON storefronts FOR UPDATE
   USING (auth.uid() = seller_id OR public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner or admin deletes storefront" ON storefronts FOR DELETE
   USING (auth.uid() = seller_id OR public.has_role('admin'));
-
 -- business_profiles
 CREATE POLICY "Public reads live business profiles" ON business_profiles FOR SELECT
   USING (status = 'live' OR auth.uid() = seller_id);
-
 CREATE POLICY "Staff reads all business profiles" ON business_profiles FOR SELECT
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner creates business profile" ON business_profiles FOR INSERT
   WITH CHECK (auth.uid() = seller_id);
-
 CREATE POLICY "Owner or moderator updates business profile" ON business_profiles FOR UPDATE
   USING (auth.uid() = seller_id OR public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner or admin deletes business profile" ON business_profiles FOR DELETE
   USING (auth.uid() = seller_id OR public.has_role('admin'));
-
 -- storefront_posts
 CREATE POLICY "Public reads live storefront posts" ON storefront_posts FOR SELECT
   USING (status = 'live' OR auth.uid() = (SELECT seller_id FROM storefronts WHERE id = storefront_posts.storefront_id));
-
 CREATE POLICY "Staff reads all storefront posts" ON storefront_posts FOR SELECT
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner creates storefront post" ON storefront_posts FOR INSERT
   WITH CHECK (auth.uid() = (SELECT seller_id FROM storefronts WHERE id = storefront_posts.storefront_id));
-
 CREATE POLICY "Owner or moderator updates storefront post" ON storefront_posts FOR UPDATE
   USING (auth.uid() = (SELECT seller_id FROM storefronts WHERE id = storefront_posts.storefront_id) OR public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner or admin deletes storefront post" ON storefront_posts FOR DELETE
   USING (auth.uid() = (SELECT seller_id FROM storefronts WHERE id = storefront_posts.storefront_id) OR public.has_role('admin'));
-
 -- business_posts
 CREATE POLICY "Public reads live business posts" ON business_posts FOR SELECT
   USING (status = 'live' OR auth.uid() = (SELECT seller_id FROM business_profiles WHERE id = business_posts.business_profile_id));
-
 CREATE POLICY "Staff reads all business posts" ON business_posts FOR SELECT
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner creates business post" ON business_posts FOR INSERT
   WITH CHECK (auth.uid() = (SELECT seller_id FROM business_profiles WHERE id = business_posts.business_profile_id));
-
 CREATE POLICY "Owner or moderator updates business post" ON business_posts FOR UPDATE
   USING (auth.uid() = (SELECT seller_id FROM business_profiles WHERE id = business_posts.business_profile_id) OR public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner or admin deletes business post" ON business_posts FOR DELETE
   USING (auth.uid() = (SELECT seller_id FROM business_profiles WHERE id = business_posts.business_profile_id) OR public.has_role('admin'));
-
 -- leads
 CREATE POLICY "Owner reads own leads" ON leads FOR SELECT
   USING (auth.uid() = seller_id);
-
 CREATE POLICY "Admin reads all leads" ON leads FOR SELECT
   USING (public.has_role('admin'));
-
 CREATE POLICY "Owner updates lead status" ON leads FOR UPDATE
   USING (auth.uid() = seller_id);
-
 -- contact_events
 CREATE POLICY "Admin reads contact events" ON contact_events FOR SELECT
   USING (public.has_role('admin'));
-
 -- reports
 CREATE POLICY "Staff reads reports" ON reports FOR SELECT
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Staff updates reports" ON reports FOR UPDATE
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 -- moderation_actions
 CREATE POLICY "Staff reads moderation actions" ON moderation_actions FOR SELECT
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Staff creates moderation action" ON moderation_actions FOR INSERT
   WITH CHECK (public.has_any_role(ARRAY['moderator', 'admin']));
-
 -- audit_logs
 CREATE POLICY "Admin reads audit logs" ON audit_logs FOR SELECT
   USING (public.has_role('admin'));
-
 -- entitlements
 CREATE POLICY "Owner reads own entitlements" ON entitlements FOR SELECT
   USING (auth.uid() = user_id OR public.has_role('admin'));
-
 -- payments
 CREATE POLICY "Owner reads own payments" ON payments FOR SELECT
   USING (auth.uid() = user_id OR public.has_role('admin'));
-
 -- invoices
 CREATE POLICY "Owner reads own invoices" ON invoices FOR SELECT
   USING (auth.uid() = user_id OR public.has_role('admin'));
-
 -- plans
 CREATE POLICY "Public reads plans" ON plans FOR SELECT
   USING (true);
-
 CREATE POLICY "Admin manages plans" ON plans FOR ALL
   USING (public.has_role('admin'))
   WITH CHECK (public.has_role('admin'));
-
 -- otp_logs
 CREATE POLICY "Admin reads otp logs" ON otp_logs FOR SELECT
   USING (public.has_role('admin'));
-
 -- buyer_verifications
 CREATE POLICY "Admin reads buyer verifications" ON buyer_verifications FOR SELECT
   USING (public.has_role('admin'));
-
 -- Token-holder lookup via security definer function (bypasses RLS safely)
 -- Buyers verify their token via this function rather than direct table access.
 CREATE OR REPLACE FUNCTION public.lookup_buyer_verification(lookup_token UUID)
@@ -799,25 +687,19 @@ RETURNS TABLE (
     AND bv.status = 'valid'
     AND bv.expires_at > NOW();
 $$;
-
 -- dsar_cases
 CREATE POLICY "Admin reads dsar cases" ON dsar_cases FOR SELECT
   USING (public.has_role('admin'));
-
 CREATE POLICY "Admin updates dsar cases" ON dsar_cases FOR UPDATE
   USING (public.has_role('admin'));
-
 -- consent_records
 CREATE POLICY "Owner reads own consent" ON consent_records FOR SELECT
   USING (auth.uid() = user_id);
-
 CREATE POLICY "Admin reads all consent" ON consent_records FOR SELECT
   USING (public.has_role('admin'));
-
 -- listing_views
 CREATE POLICY "Admin reads listing views" ON listing_views FOR SELECT
   USING (public.has_role('admin'));
-
 -- ============================================================
 -- SEED DATA: Plans
 -- ============================================================

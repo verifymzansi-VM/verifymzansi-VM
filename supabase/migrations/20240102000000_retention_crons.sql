@@ -6,10 +6,8 @@
 -- Enable pg_cron if not already enabled
 -- ============================================================
 CREATE EXTENSION IF NOT EXISTS pg_cron;
-
 -- Grant usage to postgres (Supabase default)
 GRANT USAGE ON SCHEMA cron TO postgres;
-
 -- ============================================================
 -- 1. Rejected KYC artifacts → 30 days
 -- Deletes kyc_artifacts with status = 'rejected' older than 30 days,
@@ -31,7 +29,6 @@ SELECT cron.schedule(
       );
   $$
 );
-
 -- ============================================================
 -- 2. Buyer V2M verification data → 6 months
 -- Deletes expired or revoked buyer_verifications older than 6 months.
@@ -46,7 +43,6 @@ SELECT cron.schedule(
       AND created_at < NOW() - INTERVAL '6 months';
   $$
 );
-
 -- ============================================================
 -- 3. OTP logs → 90 days
 -- Deletes all OTP log entries older than 90 days.
@@ -60,7 +56,6 @@ SELECT cron.schedule(
     WHERE created_at < NOW() - INTERVAL '90 days';
   $$
 );
-
 -- ============================================================
 -- 4. Contact events → 12 months
 -- Deletes contact_events older than 12 months,
@@ -81,7 +76,6 @@ SELECT cron.schedule(
       );
   $$
 );
-
 -- ============================================================
 -- 5. Listing views → 90 days
 -- Deletes listing_views older than 90 days.
@@ -95,7 +89,6 @@ SELECT cron.schedule(
     WHERE created_at < NOW() - INTERVAL '90 days';
   $$
 );
-
 -- ============================================================
 -- 6. Audit logs → 24 months
 -- Deletes audit_logs older than 24 months,
@@ -116,7 +109,6 @@ SELECT cron.schedule(
       );
   $$
 );
-
 -- ============================================================
 -- 7. Rejected KYC artifacts flagged for R2 cleanup → mark for worker
 -- Inserts into a cleanup_queue table so the Cloudflare Worker
@@ -132,15 +124,12 @@ CREATE TABLE IF NOT EXISTS r2_cleanup_queue (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   processed_at TIMESTAMPTZ
 );
-
 ALTER TABLE r2_cleanup_queue ENABLE ROW LEVEL SECURITY;
-
 -- Only service role can access this table
 CREATE POLICY "Service role full access on r2_cleanup_queue"
   ON r2_cleanup_queue FOR ALL
   USING (true)
   WITH CHECK (true);
-
 -- Cron job: Queue rejected KYC R2 keys for deletion daily at 02:55 UTC
 SELECT cron.schedule(
   'queue_r2_rejected_kyc_cleanup',

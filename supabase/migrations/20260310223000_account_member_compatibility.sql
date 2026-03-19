@@ -19,7 +19,6 @@ BEGIN
   END IF;
 END
 $$;
-
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -38,14 +37,11 @@ BEGIN
   END IF;
 END
 $$;
-
 ALTER TABLE public.seller_profiles
   ADD COLUMN IF NOT EXISTS account_verification_status public.account_verification_status;
-
 UPDATE public.seller_profiles
 SET account_verification_status = seller_verification_status::text::public.account_verification_status
 WHERE account_verification_status IS NULL;
-
 CREATE OR REPLACE FUNCTION public.sync_account_profile_verification_fields()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -80,15 +76,12 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 DROP TRIGGER IF EXISTS sync_account_profile_verification_fields ON public.seller_profiles;
-
 CREATE TRIGGER sync_account_profile_verification_fields
 BEFORE INSERT OR UPDATE OF seller_verification_status, account_verification_status
 ON public.seller_profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_account_profile_verification_fields();
-
 CREATE OR REPLACE VIEW public.account_profiles AS
 SELECT
   sp.id,
@@ -112,10 +105,8 @@ SELECT
   sp.created_at,
   sp.updated_at
 FROM public.seller_profiles sp;
-
 COMMENT ON VIEW public.account_profiles IS
   'Compatibility view exposing seller_profiles through neutral account/member terminology.';
-
 CREATE OR REPLACE FUNCTION public.sync_owner_id_with_seller_id()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -144,7 +135,6 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 CREATE OR REPLACE FUNCTION public.sync_target_owner_id_with_target_seller_id()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -173,7 +163,6 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 ALTER TABLE public.listings
   ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 UPDATE public.listings SET owner_id = seller_id WHERE owner_id IS NULL;
@@ -184,7 +173,6 @@ BEFORE INSERT OR UPDATE OF seller_id, owner_id
 ON public.listings
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_owner_id_with_seller_id();
-
 ALTER TABLE public.storefronts
   ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 UPDATE public.storefronts SET owner_id = seller_id WHERE owner_id IS NULL;
@@ -195,7 +183,6 @@ BEFORE INSERT OR UPDATE OF seller_id, owner_id
 ON public.storefronts
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_owner_id_with_seller_id();
-
 ALTER TABLE public.storefront_posts
   ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 UPDATE public.storefront_posts SET owner_id = seller_id WHERE owner_id IS NULL;
@@ -206,7 +193,6 @@ BEFORE INSERT OR UPDATE OF seller_id, owner_id
 ON public.storefront_posts
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_owner_id_with_seller_id();
-
 ALTER TABLE public.business_profiles
   ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 UPDATE public.business_profiles SET owner_id = seller_id WHERE owner_id IS NULL;
@@ -217,7 +203,6 @@ BEFORE INSERT OR UPDATE OF seller_id, owner_id
 ON public.business_profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_owner_id_with_seller_id();
-
 ALTER TABLE public.business_posts
   ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 UPDATE public.business_posts SET owner_id = seller_id WHERE owner_id IS NULL;
@@ -228,7 +213,6 @@ BEFORE INSERT OR UPDATE OF seller_id, owner_id
 ON public.business_posts
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_owner_id_with_seller_id();
-
 ALTER TABLE public.businesses
   ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 UPDATE public.businesses SET owner_id = seller_id WHERE owner_id IS NULL;
@@ -239,7 +223,6 @@ BEFORE INSERT OR UPDATE OF seller_id, owner_id
 ON public.businesses
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_owner_id_with_seller_id();
-
 ALTER TABLE public.promotions
   ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 UPDATE public.promotions SET owner_id = seller_id WHERE owner_id IS NULL;
@@ -250,7 +233,6 @@ BEFORE INSERT OR UPDATE OF seller_id, owner_id
 ON public.promotions
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_owner_id_with_seller_id();
-
 ALTER TABLE public.leads
   ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 UPDATE public.leads SET owner_id = seller_id WHERE owner_id IS NULL;
@@ -261,7 +243,6 @@ BEFORE INSERT OR UPDATE OF seller_id, owner_id
 ON public.leads
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_owner_id_with_seller_id();
-
 ALTER TABLE public.contact_events
   ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 UPDATE public.contact_events SET owner_id = seller_id WHERE owner_id IS NULL;
@@ -272,7 +253,6 @@ BEFORE INSERT OR UPDATE OF seller_id, owner_id
 ON public.contact_events
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_owner_id_with_seller_id();
-
 ALTER TABLE public.moderation_actions
   ADD COLUMN IF NOT EXISTS target_owner_id UUID REFERENCES auth.users(id);
 UPDATE public.moderation_actions

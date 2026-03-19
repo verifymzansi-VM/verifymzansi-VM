@@ -12,7 +12,6 @@ BEGIN
     ALTER TYPE payment_status ADD VALUE 'processing' AFTER 'pending';
   END IF;
 END $$;
-
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -25,13 +24,11 @@ BEGIN
     ALTER TYPE payment_status ADD VALUE 'expired' AFTER 'failed';
   END IF;
 END $$;
-
 ALTER TABLE public.payments
   ADD COLUMN IF NOT EXISTS provider TEXT,
   ADD COLUMN IF NOT EXISTS provider_payment_id TEXT,
   ADD COLUMN IF NOT EXISTS provider_reference TEXT,
   ADD COLUMN IF NOT EXISTS provider_data JSONB;
-
 UPDATE public.payments
 SET
   provider = COALESCE(provider, 'payfast'),
@@ -43,11 +40,9 @@ WHERE
   OR provider_payment_id IS NULL
   OR provider_reference IS NULL
   OR provider_data IS NULL;
-
 ALTER TABLE public.payments
   ALTER COLUMN provider SET DEFAULT 'payfast',
   ALTER COLUMN provider SET NOT NULL;
-
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_provider_reference
 ON public.payments(provider, provider_reference)
 WHERE provider_reference IS NOT NULL;

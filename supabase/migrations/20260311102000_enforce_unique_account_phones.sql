@@ -1,7 +1,6 @@
 CREATE INDEX IF NOT EXISTS idx_seller_profiles_phone
 ON public.seller_profiles(phone)
 WHERE phone IS NOT NULL;
-
 CREATE OR REPLACE FUNCTION public.sync_seller_profile_phone_fields()
 RETURNS TRIGGER AS $$
 DECLARE
