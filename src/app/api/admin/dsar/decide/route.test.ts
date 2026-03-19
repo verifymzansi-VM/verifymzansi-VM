@@ -11,7 +11,7 @@ const {
   mockCreateAdminClient: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(),
-  mockEnforceSameOriginMutation: vi.fn(() => null),
+  mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({

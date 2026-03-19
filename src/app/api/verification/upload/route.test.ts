@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import type { ScanResult } from "@/lib/utils/malware-scan";
 
 const CSRF_TOKEN = "a".repeat(64);
 
@@ -35,7 +36,9 @@ const {
     detectedMime: "image/jpeg",
     mismatch: false,
   })),
-  mockScanForMalware: vi.fn(() => ({ safe: true })),
+  mockScanForMalware: vi.fn<(buffer: Uint8Array, declaredMime: string) => ScanResult>(() => ({
+    safe: true,
+  })),
   mockStripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
   mockStripMetadataFromPng: vi.fn((buf: Uint8Array) => buf),
 }));

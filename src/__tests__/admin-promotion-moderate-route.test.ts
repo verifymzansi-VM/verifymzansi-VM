@@ -12,7 +12,7 @@ const {
   mockCreateAdminClient: vi.fn(),
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
   mockLoggerError: vi.fn(),
-  mockEnforceSameOriginMutation: vi.fn(() => null),
+  mockEnforceSameOriginMutation: vi.fn<(request: NextRequest) => Response | null>(() => null),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));

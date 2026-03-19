@@ -49,7 +49,7 @@ describe("POST /api/webhooks/ozow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.OZOW_WEBHOOK_SECRET = "webhook-secret";
-    process.env.NODE_ENV = "development";
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
   });
 
   it("rejects webhooks when the secret is not configured", async () => {
