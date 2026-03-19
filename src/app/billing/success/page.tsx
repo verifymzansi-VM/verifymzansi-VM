@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = {
   title: "Payment Status",
@@ -28,8 +27,7 @@ async function resolvePaymentStatus(paymentId?: string): Promise<PaymentStatusVi
     return "missing";
   }
 
-  const admin = createAdminClient();
-  const { data: payment } = await admin
+  const { data: payment } = await supabase
     .from("payments")
     .select("status")
     .eq("id", paymentId)

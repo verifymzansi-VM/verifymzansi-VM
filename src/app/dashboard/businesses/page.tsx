@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Building2, Plus, Pencil, Eye, Megaphone, Clock } from "lucide-react";
@@ -42,12 +41,11 @@ export default async function MyBusinessesPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const admin = createAdminClient();
-  const businessOwnerColumn = await getOwnerColumn(admin, "businesses");
+  const businessOwnerColumn = await getOwnerColumn(supabase, "businesses");
   const businessTier = await getActivePlanTierForArea(user.id, "MZANSI_BUSINESS");
 
   const businessesQuery = applyOwnerFilter(
-    admin
+    supabase
       .from("businesses")
       .select(
         "id, business_name, business_type, category, status, boost_until, featured_until, created_at"

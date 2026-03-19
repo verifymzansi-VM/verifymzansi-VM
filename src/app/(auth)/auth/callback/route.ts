@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
@@ -33,16 +32,15 @@ export async function GET(request: Request) {
       if (user?.app_metadata?.provider && user.app_metadata.provider !== "email") {
         let isNewOAuthUser = false;
         try {
-          const admin = createAdminClient();
           // Check existence first so we know whether ensureAccountProfile creates a new row.
-          const { data: existingProfile } = await admin
+          const { data: existingProfile } = await supabase
             .from("account_profiles")
             .select("user_id")
             .eq("user_id", user.id)
             .maybeSingle();
 
           if (!existingProfile) {
-            const profile = await ensureAccountProfile(admin, user);
+            const profile = await ensureAccountProfile(supabase, user);
             if (!profile) {
               log.error("Failed to create account profile for OAuth user", {
                 userId: user.id,

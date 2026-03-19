@@ -106,6 +106,7 @@ function mockStepsTable({
 
 function mockAuth(user: { id: string } | null) {
   mockCreateClient.mockResolvedValue({
+    from: mockFrom,
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: { user },

@@ -1,14 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCreateAdminClient, mockCheckRateLimit } = vi.hoisted(() => ({
+const { mockCreateClient, mockCheckRateLimit } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
-  mockCreateAdminClient: vi.fn(),
   mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
@@ -63,21 +61,24 @@ describe("POST /api/profile/update", () => {
   });
 
   it("returns 409 when the new phone number is already used elsewhere", async () => {
+    const updateSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "23505", message: "duplicate key value violates unique constraint" },
+    });
+
     mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: updateSingle,
+            }),
+          }),
+        }),
+      }),
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
       },
-    });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        neq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: { user_id: "user-2" },
-          error: null,
-        }),
-      }),
     });
 
     const res = await POST(
@@ -110,6 +111,7 @@ describe("POST /api/profile/update", () => {
     });
 
     mockCreateClient.mockResolvedValue({
+      from,
       auth: {
         getUser: vi.fn().mockResolvedValue({
           data: { user: { id: "user-1" } },
@@ -117,7 +119,6 @@ describe("POST /api/profile/update", () => {
         }),
       },
     });
-    mockCreateAdminClient.mockReturnValue({ from });
 
     const res = await POST(
       createRequest({

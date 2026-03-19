@@ -123,8 +123,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "promotions");
+    let admin: ReturnType<typeof createAdminClient> | null = null;
+    const getAdmin = () => {
+      admin ??= createAdminClient();
+      return admin;
+    };
+    const ownerColumn = await getOwnerColumn(supabase, "promotions");
     const ip = getClientIp(request);
     const rl = await checkRateLimit({
       key: user.id,
@@ -139,7 +143,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check account profile exists
-    const verification = await resolveAccountVerification(admin, user.id);
+    const verification = await resolveAccountVerification(supabase, user.id);
     const profile = verification.profile;
 
     if (!profile) {
@@ -151,7 +155,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Check entitlement / plan limits ──────────────────────
-    const { data: activeEntitlement } = await admin
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -168,7 +172,7 @@ export async function POST(request: NextRequest) {
 
     // Check free post availability for unpaid users
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: claimError } = await admin
+      const { error: claimError } = await supabase
         .from("free_posts_used")
         .insert({ user_id: user.id, area: AREA });
 
@@ -197,7 +201,7 @@ export async function POST(request: NextRequest) {
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       // Paid plan — check promotion count against plan limits
       const countQuery = applyOwnerFilter(
-        admin
+        supabase
           .from("promotions")
           .select("id", { count: "exact", head: true })
           .neq("status", "rejected"),
@@ -274,7 +278,7 @@ export async function POST(request: NextRequest) {
     // Build the promotion row
     const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
 
-    const { data: promotion, error: insertError } = await admin
+    const { data: promotion, error: insertError } = await supabase
       .from("promotions")
       .insert(
         withOwnerField(
@@ -307,14 +311,14 @@ export async function POST(request: NextRequest) {
     if (insertError || !promotion) {
       log.error("Failed to create promotion", { error: insertError?.message });
       if (!hasPaidPlan && !postingLimitBypassEnabled) {
-        await admin.from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+        await getAdmin().from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
       }
       return NextResponse.json({ error: "Failed to create promotion" }, { status: 500 });
     }
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       const postCountQuery = applyOwnerFilter(
-        admin
+        supabase
           .from("promotions")
           .select("id", { count: "exact", head: true })
           .neq("status", "rejected"),
@@ -326,7 +330,7 @@ export async function POST(request: NextRequest) {
       const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
 
       if (!postCheck.allowed) {
-        await admin.from("promotions").delete().eq("id", promotion.id);
+        await getAdmin().from("promotions").delete().eq("id", promotion.id);
         log.warn("Rolled back promotion due to concurrent limit breach", {
           promotionId: promotion.id,
           userId: user.id,

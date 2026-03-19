@@ -1,17 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCreateAdminClient, mockIsModeratorOrAdmin, mockLogAuditEvent } =
-  vi.hoisted(() => ({
-    mockCreateClient: vi.fn(),
-    mockCreateAdminClient: vi.fn(),
-    mockIsModeratorOrAdmin: vi.fn(),
-    mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
-  }));
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockIsModeratorOrAdmin,
+  mockGetRoleFromUser,
+  mockAsAdminRole,
+  mockLogAuditEvent,
+} = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
+  mockIsModeratorOrAdmin: vi.fn(),
+  mockGetRoleFromUser: vi.fn(),
+  mockAsAdminRole: vi.fn(),
+  mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
-vi.mock("@/lib/auth/roles", () => ({ isModeratorOrAdmin: mockIsModeratorOrAdmin }));
+vi.mock("@/lib/auth/roles", () => ({
+  isModeratorOrAdmin: mockIsModeratorOrAdmin,
+  getRoleFromUser: mockGetRoleFromUser,
+  asAdminRole: mockAsAdminRole,
+}));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 
 import { POST } from "@/app/api/admin/flagging/action/route";
@@ -32,6 +44,8 @@ function createRequest(body: unknown, headers: Record<string, string> = {}) {
 describe("POST /api/admin/flagging/action", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetRoleFromUser.mockReturnValue("moderator");
+    mockAsAdminRole.mockReturnValue("moderator");
   });
 
   it("rejects cross-site moderation requests", async () => {
@@ -55,6 +69,8 @@ describe("POST /api/admin/flagging/action", () => {
       },
     });
     mockIsModeratorOrAdmin.mockReturnValue(false);
+    mockGetRoleFromUser.mockReturnValue(null);
+    mockAsAdminRole.mockReturnValue(null);
 
     const res = await POST(
       createRequest({
@@ -149,5 +165,11 @@ describe("POST /api/admin/flagging/action", () => {
       reportStatus: "resolved",
     });
     expect(mockLogAuditEvent).toHaveBeenCalled();
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: "mod-1",
+        actorRole: "moderator",
+      })
+    );
   });
 });

@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Megaphone, Star, Zap, Flame, Clock, Tag, Building2, Pencil, Plus } from "lucide-react";
@@ -51,10 +50,9 @@ export default async function MyPromotionsPage() {
   if (!user) redirect("/login");
 
   const now = new Date().toISOString();
-  const admin = createAdminClient();
   const [listingOwnerColumn, promotionOwnerColumn] = await Promise.all([
     getOwnerColumn(supabase, "listings"),
-    getOwnerColumn(admin, "promotions"),
+    getOwnerColumn(supabase, "promotions"),
   ]);
   const promotionsTier = await getActivePlanTierForArea(user.id, "PROMOTIONS_EVENTS");
 
@@ -98,7 +96,7 @@ export default async function MyPromotionsPage() {
 
     // User's promotions (unified — includes migrated storefront_posts + business_posts)
     applyOwnerFilter(
-      admin
+      supabase
         .from("promotions")
         .select(
           "id, title, promotion_type, business_id, status, boost_until, featured_until, created_at"
@@ -121,7 +119,11 @@ export default async function MyPromotionsPage() {
     ...new Set(myPromotions.map((p) => p.business_id).filter(Boolean)),
   ] as string[];
   const { data: businesses } = businessIds.length
-    ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
+    ? await applyOwnerFilter(
+        supabase.from("businesses").select("id, business_name").in("id", businessIds),
+        await getOwnerColumn(supabase, "businesses"),
+        user.id
+      )
     : { data: [] };
 
   const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));

@@ -270,6 +270,13 @@ describe("OTP Routes", () => {
         eq: challengeUpdateEq,
         is: challengeUpdateIs,
       }));
+      const profileSelectMaybeSingle = vi.fn().mockResolvedValue({
+        data: { id: "profile-1" },
+        error: null,
+      });
+      const profileSelectEq = vi.fn().mockReturnValue({
+        maybeSingle: profileSelectMaybeSingle,
+      });
       const profileUpdateEq = vi.fn().mockResolvedValue({ error: null });
       const verificationStepUpsert = vi.fn().mockResolvedValue({ error: null });
       const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -304,30 +311,9 @@ describe("OTP Routes", () => {
             };
           }
 
-          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
-            return {
-              select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  maybeSingle: vi
-                    .fn()
-                    .mockResolvedValue({ data: { id: "profile-1" }, error: null }),
-                }),
-              }),
-              update: vi.fn().mockReturnValue({
-                eq: profileUpdateEq,
-              }),
-            };
-          }
-
           if (table === "verification_steps") {
             return {
               upsert: verificationStepUpsert,
-            };
-          }
-
-          if (table === "verification_sessions") {
-            return {
-              upsert: sessionUpsert,
             };
           }
 
@@ -344,6 +330,26 @@ describe("OTP Routes", () => {
       };
 
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: profileSelectEq,
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: profileUpdateEq,
+            }),
+          };
+        }
+
+        if (table === "verification_sessions") {
+          return {
+            upsert: sessionUpsert,
+          };
+        }
+
+        return {};
+      });
 
       const res = await verifyOtp(
         createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
@@ -375,6 +381,13 @@ describe("OTP Routes", () => {
 
     it("returns 409 when the verified phone already belongs to another account", async () => {
       const storedHash = await hashOtpForTest("123456");
+      const profileSelectMaybeSingle = vi.fn().mockResolvedValue({
+        data: { id: "profile-1" },
+        error: null,
+      });
+      const profileSelectEq = vi.fn().mockReturnValue({
+        maybeSingle: profileSelectMaybeSingle,
+      });
 
       const mockAdminClient = {
         from: vi.fn((table: string) => {
@@ -405,33 +418,7 @@ describe("OTP Routes", () => {
             };
           }
 
-          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
-            return {
-              select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  maybeSingle: vi
-                    .fn()
-                    .mockResolvedValue({ data: { id: "profile-1" }, error: null }),
-                }),
-              }),
-              update: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({
-                  error: {
-                    code: "23505",
-                    message: "Phone number already linked to another account",
-                  },
-                }),
-              }),
-            };
-          }
-
           if (table === "verification_steps") {
-            return {
-              upsert: vi.fn().mockResolvedValue({ error: null }),
-            };
-          }
-
-          if (table === "verification_sessions") {
             return {
               upsert: vi.fn().mockResolvedValue({ error: null }),
             };
@@ -442,6 +429,31 @@ describe("OTP Routes", () => {
       };
 
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: profileSelectEq,
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({
+                error: {
+                  code: "23505",
+                  message: "Phone number already linked to another account",
+                },
+              }),
+            }),
+          };
+        }
+
+        if (table === "verification_sessions") {
+          return {
+            upsert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+
+        return {};
+      });
 
       const res = await verifyOtp(
         createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })

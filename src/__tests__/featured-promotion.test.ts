@@ -7,12 +7,14 @@ const {
   mockLogAuditEvent,
   mockCheckRateLimit,
   mockGetClientIp,
+  mockClientFrom,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockGetClientIp: vi.fn(),
+  mockClientFrom: vi.fn(),
 }));
 
 const mockCreateHostedCheckout = vi.fn().mockResolvedValue({
@@ -69,6 +71,7 @@ function createRequest(url: string): NextRequest {
 
 function mockAuth(user: { id: string; email?: string } | null) {
   mockCreateClient.mockResolvedValue({
+    from: mockClientFrom,
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: { user },
@@ -92,22 +95,41 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
   });
 }
 
+function mockPromotionRow(row: Record<string, unknown> | null) {
+  mockClientFrom.mockImplementation((table: string) => {
+    if (table === "promotions") {
+      return {
+        select: vi.fn((fields: string) => {
+          if (fields === "id, owner_id") {
+            return {
+              limit: vi.fn().mockResolvedValue({ error: null }),
+            };
+          }
+
+          return {
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: row }),
+          };
+        }),
+      };
+    }
+
+    throw new Error(`Unexpected client table ${table}`);
+  });
+}
+
 function setupHappyPath() {
   mockAuth({ id: USER_ID, email: "test@example.com" });
+  mockPromotionRow({
+    id: VALID_UUID,
+    title: "Test Promotion",
+    status: "live",
+    owner_id: USER_ID,
+    featured_until: null,
+  });
   mockAdmin({
     account_profiles: {
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-    },
-    promotions: {
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: {
-          id: VALID_UUID,
-          title: "Test Promotion",
-          status: "live",
-          owner_id: USER_ID,
-          featured_until: null,
-        },
-      }),
     },
     payments: {
       single: vi.fn().mockResolvedValue({ data: { id: "payment-1" }, error: null }),
@@ -118,6 +140,26 @@ function setupHappyPath() {
 describe("POST /api/promotions/[id]/featured", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockClientFrom.mockImplementation((table: string) => {
+      if (table === "promotions") {
+        return {
+          select: vi.fn((fields: string) => {
+            if (fields === "id, owner_id") {
+              return {
+                limit: vi.fn().mockResolvedValue({ error: null }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            };
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected client table ${table}`);
+    });
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
   });
@@ -154,8 +196,17 @@ describe("POST /api/promotions/[id]/featured", () => {
       account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
-      promotions: {
-        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    });
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/featured`);
+    const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when user does not own the promotion", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
     });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/featured`);
@@ -163,45 +214,18 @@ describe("POST /api/promotions/[id]/featured", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 403 when user does not own the promotion", async () => {
-    mockAuth({ id: USER_ID });
-    mockAdmin({
-      account_profiles: {
-        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-      },
-      promotions: {
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: {
-            id: VALID_UUID,
-            title: "Other",
-            status: "live",
-            owner_id: "different-user",
-            featured_until: null,
-          },
-        }),
-      },
-    });
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/featured`);
-    const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
-    expect(res.status).toBe(403);
-  });
-
   it("returns 400 when promotion is not live", async () => {
     mockAuth({ id: USER_ID });
+    mockPromotionRow({
+      id: VALID_UUID,
+      title: "Draft",
+      status: "draft",
+      owner_id: USER_ID,
+      featured_until: null,
+    });
     mockAdmin({
       account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-      },
-      promotions: {
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: {
-            id: VALID_UUID,
-            title: "Draft",
-            status: "draft",
-            owner_id: USER_ID,
-            featured_until: null,
-          },
-        }),
       },
     });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/featured`);
@@ -214,20 +238,16 @@ describe("POST /api/promotions/[id]/featured", () => {
   it("returns 400 when promotion is already featured", async () => {
     mockAuth({ id: USER_ID });
     const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    mockPromotionRow({
+      id: VALID_UUID,
+      title: "Featured",
+      status: "live",
+      owner_id: USER_ID,
+      featured_until: futureDate,
+    });
     mockAdmin({
       account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-      },
-      promotions: {
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: {
-            id: VALID_UUID,
-            title: "Featured",
-            status: "live",
-            owner_id: USER_ID,
-            featured_until: futureDate,
-          },
-        }),
       },
     });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/featured`);

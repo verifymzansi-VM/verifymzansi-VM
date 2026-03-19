@@ -47,16 +47,14 @@ describe("POST /api/content/delete", () => {
 
   it("returns 404 when the item cannot be found", async () => {
     mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
-      },
-    });
-    mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: "not found" } }),
       }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
     });
 
     const res = await POST(
@@ -71,11 +69,6 @@ describe("POST /api/content/delete", () => {
 
   it("returns 403 when the item belongs to a different owner", async () => {
     mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
-      },
-    });
-    mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
@@ -84,6 +77,9 @@ describe("POST /api/content/delete", () => {
           error: null,
         }),
       }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
     });
 
     const res = await POST(
@@ -117,11 +113,11 @@ describe("POST /api/content/delete", () => {
     });
 
     mockCreateClient.mockResolvedValue({
+      from,
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
       },
     });
-    mockCreateAdminClient.mockReturnValue({ from });
 
     const res = await POST(
       createRequest({
@@ -178,6 +174,7 @@ describe("POST /api/content/delete", () => {
     });
 
     mockCreateClient.mockResolvedValue({
+      from,
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
       },

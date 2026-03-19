@@ -58,9 +58,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Invalid business ID" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
-
-    const { data: business, error } = await admin
+    const supabase = await createClient();
+    const { data: business, error } = await supabase
       .from("businesses")
       .select(
         "id, owner_id, seller_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, services_offered, service_areas, business_details, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, status, area, created_at, updated_at"
@@ -76,7 +75,6 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     // Only allow public access to live businesses
     if (normalizedBusiness.status !== "live") {
-      const supabase = await createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -87,7 +85,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     // Fetch linked promotions
-    const { data: promotions } = await admin
+    const { data: promotions } = await supabase
       .from("promotions")
       .select(
         "id, title, promotion_type, photos, price_cents, start_date, end_date, boost_until, created_at"
@@ -99,6 +97,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       .limit(12);
 
     // Track view (best-effort)
+    const admin = createAdminClient();
     admin
       .from("listing_views")
       .insert({
@@ -112,10 +111,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     // M3: Redact contact fields for unauthenticated requests to prevent
     // email/phone harvesting. Authenticated users can see full details.
-    const supabaseForContact = await createClient();
     const {
       data: { user: contactUser },
-    } = await supabaseForContact.auth.getUser();
+    } = await supabase.auth.getUser();
     if (!contactUser) {
       const { phone: _p, whatsapp: _w, email: _e, ...redactedBusiness } = publicBusiness;
       return NextResponse.json({ business: redactedBusiness, promotions: promotions ?? [] });
@@ -161,28 +159,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "businesses");
+    const ownerColumn = await getOwnerColumn(supabase, "businesses");
 
     // Check ownership
-    const { data: rawExisting } = await admin
-      .from("businesses")
-      .select(
-        withOwnerColumn(
-          "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details",
-          ownerColumn
+    const { data: rawExisting } = await applyOwnerFilter(
+      supabase
+        .from("businesses")
+        .select(
+          withOwnerColumn(
+            "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details",
+            ownerColumn
+          )
         )
-      )
-      .eq("id", id)
-      .maybeSingle();
+        .eq("id", id),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const existing = rawExisting as BusinessOwnerRow | null;
 
     if (!existing) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
-    }
-
-    if (readOwnerId(existing) !== user.id) {
-      return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, businessSchema, {
@@ -194,7 +190,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const data = parsedBody.data;
-    const { data: activeEntitlement } = await admin
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -252,7 +248,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
 
     const updateQuery = applyOwnerFilter(
-      admin
+      supabase
         .from("businesses")
         .update({
           business_type: data.business_type,
@@ -298,6 +294,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (removedMediaUrls.length > 0) {
       try {
+        const admin = createAdminClient();
         await queuePublicMediaCleanup(admin, removedMediaUrls, "business_media_replaced");
       } catch (cleanupError) {
         log.error("Failed to queue replaced business media for cleanup", {
@@ -364,27 +361,25 @@ export async function DELETE(
       );
     }
 
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "businesses");
+    const ownerColumn = await getOwnerColumn(supabase, "businesses");
 
-    const { data: rawExisting } = await admin
-      .from("businesses")
-      .select(
-        withOwnerColumn(
-          "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details",
-          ownerColumn
+    const { data: rawExisting } = await applyOwnerFilter(
+      supabase
+        .from("businesses")
+        .select(
+          withOwnerColumn(
+            "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details",
+            ownerColumn
+          )
         )
-      )
-      .eq("id", id)
-      .maybeSingle();
+        .eq("id", id),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const existing = rawExisting as BusinessOwnerRow | null;
 
     if (!existing) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
-    }
-
-    if (readOwnerId(existing) !== user.id) {
-      return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 
     if (!["draft", "rejected"].includes(existing.status)) {
@@ -395,7 +390,7 @@ export async function DELETE(
     }
 
     const deleteQuery = applyOwnerFilter(
-      admin.from("businesses").delete().eq("id", id),
+      supabase.from("businesses").delete().eq("id", id),
       ownerColumn,
       user.id
     );
@@ -418,6 +413,7 @@ export async function DELETE(
 
     if (deletedMediaUrls.length > 0) {
       try {
+        const admin = createAdminClient();
         await queuePublicMediaCleanup(admin, deletedMediaUrls, "business_deleted");
       } catch (cleanupError) {
         log.error("Failed to queue deleted business media for cleanup", {

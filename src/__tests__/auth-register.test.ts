@@ -87,7 +87,7 @@ const validBody = {
   turnstileToken: "tok-valid",
 };
 
-function createAdminMock(existingPhoneProfile: { id: string } | null = null) {
+function createAdminMock() {
   return {
     auth: {
       admin: {
@@ -95,9 +95,6 @@ function createAdminMock(existingPhoneProfile: { id: string } | null = null) {
       },
     },
     from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: existingPhoneProfile, error: null }),
       upsert: mockProfileUpsert,
     }),
   };
@@ -292,11 +289,18 @@ describe("POST /api/auth/register", () => {
   });
 
   it("returns 409 when the phone number is already linked to another account", async () => {
-    mockCreateAdminClient.mockReturnValue(createAdminMock({ id: "sp-1" }) as never);
+    const profileConflict = Object.assign(new Error("duplicate key"), { code: "23505" });
+    mockProfileUpsert.mockResolvedValueOnce({ error: profileConflict });
+    const mockSignUp = vi.fn().mockResolvedValue({
+      data: { user: { id: "u-conflict", identities: [{ id: "identity-1" }] } },
+      error: null,
+    });
+    mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
 
     const res = await POST(createRequest(validBody));
 
     expect(res.status).toBe(409);
+    expect(mockDeleteUser).toHaveBeenCalledWith("u-conflict");
     await expect(res.json()).resolves.toMatchObject({
       error: "This phone number is already linked to another account.",
     });

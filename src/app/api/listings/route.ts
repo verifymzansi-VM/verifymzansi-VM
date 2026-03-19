@@ -416,15 +416,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "listings");
+    let admin: ReturnType<typeof createAdminClient> | null = null;
+    const getAdmin = () => {
+      admin ??= createAdminClient();
+      return admin;
+    };
+    const ownerColumn = await getOwnerColumn(supabase, "listings");
 
     // ── Get account profile ──────────────────────────────────
-    const verification = await resolveAccountVerification(admin, user.id);
+    const verification = await resolveAccountVerification(supabase, user.id);
     let profile = verification.profile;
 
     if (!profile) {
-      profile = await ensureAccountProfile(admin, user);
+      profile = await ensureAccountProfile(getAdmin(), user);
       if (!profile) {
         return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
       }
@@ -462,7 +466,7 @@ export async function POST(request: NextRequest) {
 
     // ── Check entitlement / plan limits ──────────────────────
     // Check if user has a paid entitlement (not expired)
-    const { data: activeEntitlement } = await admin
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -517,7 +521,7 @@ export async function POST(request: NextRequest) {
       // Atomic claim: INSERT (not upsert) to prevent TOCTOU race.
       // If a concurrent request already claimed, the unique constraint
       // on (user_id, area) causes a conflict error → return 403.
-      const { error: claimError } = await admin
+      const { error: claimError } = await supabase
         .from("free_posts_used")
         .insert({ user_id: user.id, area: AREA });
 
@@ -546,7 +550,7 @@ export async function POST(request: NextRequest) {
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       // Paid plan — check listing count against plan limits
       const countQuery = applyOwnerFilter(
-        admin
+        supabase
           .from("listings")
           .select("id", { count: "exact", head: true })
           .neq("status", "rejected"),
@@ -594,7 +598,7 @@ export async function POST(request: NextRequest) {
     );
 
     // ── Insert listing ───────────────────────────────────────
-    const { data: newListing, error: insertError } = await admin
+    const { data: newListing, error: insertError } = await supabase
       .from("listings")
       .insert(listingRecord)
       .select("id")
@@ -607,7 +611,7 @@ export async function POST(request: NextRequest) {
       });
       // Release free post slot if listing insert failed
       if (!hasPaidPlan && !postingLimitBypassEnabled) {
-        await admin.from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+        await getAdmin().from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
       }
       return NextResponse.json(
         { error: "Failed to create listing", details: insertError.message },
@@ -618,7 +622,7 @@ export async function POST(request: NextRequest) {
     // ── Post-insert limit check (closes TOCTOU window for paid plans) ──
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       const postCountQuery = applyOwnerFilter(
-        admin
+        supabase
           .from("listings")
           .select("id", { count: "exact", head: true })
           .neq("status", "rejected"),
@@ -629,7 +633,7 @@ export async function POST(request: NextRequest) {
       const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
       if (!postCheck.allowed) {
         // Over limit due to concurrent insert — roll back
-        await admin.from("listings").delete().eq("id", newListing.id);
+        await getAdmin().from("listings").delete().eq("id", newListing.id);
         log.warn("Rolled back listing due to concurrent limit breach", {
           listingId: newListing.id,
           userId: user.id,

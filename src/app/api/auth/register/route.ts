@@ -107,27 +107,6 @@ export async function POST(request: NextRequest) {
     const accountPhoneFields = buildAccountPhoneFields(normalizedPhone);
     const admin = createAdminClient();
 
-    const { data: existingPhoneProfile, error: existingPhoneError } = await admin
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("id")
-      .eq("phone", normalizedPhone)
-      .maybeSingle();
-
-    if (existingPhoneError) {
-      log.error("Failed to check phone uniqueness during registration", {
-        error: existingPhoneError.message,
-        code: existingPhoneError.code,
-      });
-      return NextResponse.json(
-        { error: "Registration is temporarily unavailable. Please try again." },
-        { status: 500 }
-      );
-    }
-
-    if (existingPhoneProfile) {
-      return NextResponse.json({ error: ACCOUNT_PHONE_IN_USE_ERROR }, { status: 409 });
-    }
-
     const supabase = await createClient();
     const callbackUrl = buildAuthCallbackUrl(request, "/login?confirmed=true");
     const { data: signUpData, error } = await supabase.auth.signUp({

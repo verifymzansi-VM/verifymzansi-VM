@@ -105,6 +105,7 @@ function mockAuth(
   user: { id: string; email?: string; user_metadata?: Record<string, unknown> } | null
 ) {
   mockCreateClient.mockResolvedValue({
+    from: mockFrom,
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: { user },

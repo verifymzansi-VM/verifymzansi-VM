@@ -1,5 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { readAccountVerificationStatus } from "@/lib/account/compat";
+import {
+  getOwnerColumn,
+  readAccountVerificationStatus,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { contactAccountHolderSchema } from "@/lib/validations/contact";
@@ -62,21 +67,35 @@ export async function POST(request: NextRequest) {
     const notFoundLabel = parsedBody.data.targetType === "promotion" ? "Promotion" : "Listing";
 
     // Get the content owner (use admin client so unauthenticated users can still contact)
-    const { data: targetRecord } = await admin
+    const ownerColumn = await getOwnerColumn(admin, targetTable);
+    const { data: targetRecord, error: targetError } = await admin
       .from(targetTable)
-      .select("owner_id, title")
+      .select(withOwnerColumn("owner_id, title, status", ownerColumn))
       .eq("id", parsedBody.data.targetId)
-      .single();
+      .maybeSingle();
 
-    if (!targetRecord) {
+    if (targetError || !targetRecord) {
       return NextResponse.json({ error: `${notFoundLabel} not found` }, { status: 404 });
+    }
+
+    if (targetRecord.status !== "live") {
+      return NextResponse.json({ error: `${notFoundLabel} not found` }, { status: 404 });
+    }
+
+    const targetOwnerId = readOwnerId(targetRecord);
+    if (!targetOwnerId) {
+      log.error("Target record missing owner identifier", {
+        targetType: parsedBody.data.targetType,
+        targetId: parsedBody.data.targetId,
+      });
+      return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
     }
 
     // Check account verification status
     const { data: accountProfile } = await admin
       .from("account_profiles")
       .select("account_verification_status")
-      .eq("user_id", targetRecord.owner_id)
+      .eq("user_id", targetOwnerId)
       .maybeSingle();
 
     const ownerVerified = readAccountVerificationStatus(accountProfile) === "verified";
@@ -88,7 +107,7 @@ export async function POST(request: NextRequest) {
     const { error: contactError } = await admin.from("contact_events").insert({
       target_id: parsedBody.data.targetId,
       target_type: parsedBody.data.targetType,
-      owner_id: targetRecord.owner_id,
+      owner_id: targetOwnerId,
       member_verified: ownerVerified,
       contact_type: contactType,
     });
@@ -105,7 +124,7 @@ export async function POST(request: NextRequest) {
       const { error: leadsError } = await admin.from("leads").insert({
         target_id: parsedBody.data.targetId,
         target_type: parsedBody.data.targetType,
-        owner_id: targetRecord.owner_id,
+        owner_id: targetOwnerId,
         buyer_name: null,
         buyer_email: user?.email || null,
         buyer_phone: null,
@@ -123,7 +142,7 @@ export async function POST(request: NextRequest) {
       const itemTitle = targetRecord.title?.slice(0, 40) || `your ${parsedBody.data.targetType}`;
 
       await createNotification({
-        userId: targetRecord.owner_id,
+        userId: targetOwnerId,
         type: "info",
         title: "New lead received!",
         message: `Someone is interested in "${itemTitle}".`,

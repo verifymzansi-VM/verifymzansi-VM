@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { profileUpdateSchema } from "@/lib/validations/profile";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PHONE_IN_USE_ERROR, normalizeSaPhone } from "@/lib/utils/phone";
@@ -47,30 +46,9 @@ export async function POST(request: NextRequest) {
       return parsedBody.response;
     }
 
-    const admin = createAdminClient();
-
     let normalizedPhone: string | null = null;
     if (parsedBody.data.phone && parsedBody.data.phone !== "") {
       normalizedPhone = normalizeSaPhone(parsedBody.data.phone);
-
-      const { data: existingPhoneProfile, error: phoneCheckError } = await admin
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .select("user_id")
-        .eq("phone", normalizedPhone)
-        .neq("user_id", user.id)
-        .maybeSingle();
-
-      if (phoneCheckError) {
-        log.error("Phone uniqueness check failed", { error: phoneCheckError.message });
-        return NextResponse.json(
-          { error: "Unable to update profile. Please try again." },
-          { status: 500 }
-        );
-      }
-
-      if (existingPhoneProfile) {
-        return NextResponse.json({ error: ACCOUNT_PHONE_IN_USE_ERROR }, { status: 409 });
-      }
     }
 
     const updatePayload: Record<string, unknown> = {
@@ -88,7 +66,7 @@ export async function POST(request: NextRequest) {
       updatePayload.phone = normalizedPhone;
     }
 
-    const { data: updatedProfile, error: updateError } = await admin
+    const { data: updatedProfile, error: updateError } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update(updatePayload)
       .eq("user_id", user.id)

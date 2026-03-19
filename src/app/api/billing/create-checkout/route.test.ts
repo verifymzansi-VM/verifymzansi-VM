@@ -74,6 +74,7 @@ function createCrossSiteRequest(body: Record<string, unknown>) {
 
 describe("POST /api/billing/create-checkout", () => {
   const mockSupabase = {
+    from: vi.fn(),
     auth: { getUser: vi.fn() },
   };
 
@@ -85,6 +86,7 @@ describe("POST /api/billing/create-checkout", () => {
     vi.clearAllMocks();
     vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
     vi.mocked(createAdminClient).mockReturnValue(mockAdmin as never);
+    mockSupabase.from.mockImplementation((table: string) => mockAdmin.from(table));
   });
 
   it("returns 401 if user is not authenticated", async () => {

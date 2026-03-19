@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { adminDsarDecideSchema } from "@/lib/validations/admin";
-import { isAdmin } from "@/lib/auth/roles";
+import { getAdminActorRole } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -26,7 +26,12 @@ export async function POST(req: Request) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user || !isAdmin(user)) {
+    if (!user) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const actorRole = getAdminActorRole(user);
+    if (!actorRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -80,7 +85,7 @@ export async function POST(req: Request) {
     await logAuditEvent({
       action: decision === "approve" ? "dsar_started" : "dsar_rejected",
       actorId: user.id,
-      actorRole: "admin",
+      actorRole,
       targetId: requestId,
       targetType: "dsar_case",
       metadata: { decision, notes },

@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { adminContentDecideSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
-import { getRoleFromUser, isModeratorOrAdmin, asAdminRole } from "@/lib/auth/roles";
+import { getStaffActorRole } from "@/lib/auth/admin-access";
 import { getOwnerColumn, readOwnerId } from "@/lib/account/compat";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
@@ -30,12 +30,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!isModeratorOrAdmin(user)) {
+    const adminRole = getStaffActorRole(user);
+    if (!adminRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-
-    const role = getRoleFromUser(user);
-    const adminRole = asAdminRole(role);
 
     const rl = checkLocalRateLimit(user.id, "admin:content:decide");
     if (rl.limited) {
@@ -141,7 +139,7 @@ export async function POST(request: Request) {
     const { targetType, approveAction, rejectAction } = auditConfig[table];
     await logAuditEvent({
       actorId: user.id,
-      actorRole: adminRole || "admin",
+      actorRole: adminRole,
       action: decision === "approve" ? approveAction : rejectAction,
       targetType,
       targetId: itemId,

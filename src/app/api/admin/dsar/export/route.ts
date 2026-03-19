@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
-import { isAdmin } from "@/lib/auth/roles";
+import { getAdminActorRole } from "@/lib/auth/admin-access";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
@@ -83,7 +83,12 @@ export async function GET(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user || !isAdmin(user)) {
+    if (!user) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const actorRole = getAdminActorRole(user);
+    if (!actorRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -239,7 +244,7 @@ export async function GET(request: NextRequest) {
     await logAuditEvent({
       action: "dsar_exported",
       actorId: user.id,
-      actorRole: "admin",
+      actorRole,
       targetId: requestId,
       targetType: "dsar_case",
       metadata: {

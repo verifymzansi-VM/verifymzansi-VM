@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
@@ -22,8 +22,10 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 
 import { GET, POST } from "@/app/api/businesses/route";
+import { GET as GET_DETAIL } from "@/app/api/businesses/[id]/route";
 
 const USER_ID = "user-1";
+const VALID_BUSINESS_ID = "00000000-0000-0000-0000-000000000002";
 
 const VALID_BODY = {
   business_name: "Nomsa Fashion",
@@ -67,6 +69,23 @@ describe("POST /api/businesses", () => {
     vi.clearAllMocks();
     resetOwnerColumnCacheForTesting();
     mockCreateClient.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        const adminClient = mockCreateAdminClient();
+        if (adminClient && typeof adminClient.from === "function") {
+          return adminClient.from(table);
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          neq: vi.fn().mockReturnThis(),
+          insert: vi.fn().mockResolvedValue({ error: null }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
     });
   });
@@ -471,22 +490,264 @@ describe("POST /api/businesses", () => {
   });
 });
 
+describe("GET /api/businesses/[id]", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+  });
+
+  afterEach(() => {
+    mockCreateClient.mockReset();
+    mockCreateAdminClient.mockReset();
+  });
+
+  it("returns 404 for missing business", async () => {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: [] }),
+      }),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) }),
+    });
+
+    const request = {
+      nextUrl: new URL(`http://localhost:3000/api/businesses/${USER_ID}`),
+      url: `http://localhost:3000/api/businesses/${USER_ID}`,
+      method: "GET",
+      headers: new Headers(),
+    } as NextRequest;
+
+    const response = await GET_DETAIL(request, {
+      params: Promise.resolve({ id: VALID_BUSINESS_ID }),
+    });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns live business publicly and redacts direct contact fields for anonymous viewers", async () => {
+    const from = vi.fn((table: string) => {
+      if (table === "businesses") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: VALID_BUSINESS_ID,
+              status: "live",
+              owner_id: USER_ID,
+              business_name: "Nomsa Fashion",
+              phone: "+27110000000",
+              whatsapp: "+27110000000",
+              email: "owner@example.com",
+            },
+            error: null,
+          }),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue({ data: [] }),
+        };
+      }
+
+      if (table === "promotions") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue({ data: [] }),
+        };
+      }
+
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      }
+
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) }),
+    });
+
+    const request = {
+      nextUrl: new URL(`http://localhost:3000/api/businesses/${VALID_BUSINESS_ID}`),
+      url: `http://localhost:3000/api/businesses/${VALID_BUSINESS_ID}`,
+      method: "GET",
+      headers: new Headers(),
+    } as NextRequest;
+
+    const response = await GET_DETAIL(request, {
+      params: Promise.resolve({ id: VALID_BUSINESS_ID }),
+    });
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.business.id).toBe(VALID_BUSINESS_ID);
+    expect(json.business.phone).toBeUndefined();
+    expect(json.business.whatsapp).toBeUndefined();
+    expect(json.business.email).toBeUndefined();
+  });
+
+  it("returns 404 for non-live businesses when the viewer is not the owner", async () => {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        if (table === "businesses") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: VALID_BUSINESS_ID, status: "draft", owner_id: "owner-2" },
+              error: null,
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) }),
+    });
+
+    const request = {
+      nextUrl: new URL(`http://localhost:3000/api/businesses/${VALID_BUSINESS_ID}`),
+      url: `http://localhost:3000/api/businesses/${VALID_BUSINESS_ID}`,
+      method: "GET",
+      headers: new Headers(),
+    } as NextRequest;
+
+    const response = await GET_DETAIL(request, {
+      params: Promise.resolve({ id: VALID_BUSINESS_ID }),
+    });
+
+    expect(response.status).toBe(404);
+  });
+});
+
 describe("GET /api/businesses", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetOwnerColumnCacheForTesting();
   });
 
-  it("applies placeholder-content exclusions to public business queries", async () => {
-    const rangeSpy = vi.fn().mockResolvedValue({ data: [], count: 0, error: null });
+  it("uses the user-scoped client for mine mode", async () => {
     const orderSpy = vi.fn().mockReturnThis();
-    const notSpy = vi.fn().mockReturnThis();
+    const limitSpy = vi.fn().mockReturnThis();
+    const eqSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "business-owned-1",
+          business_name: "Nomsa Fashion",
+          business_type: "standalone_shop",
+          category: "fashion_accessories",
+          status: "pending_moderation",
+          created_at: "2026-03-19T08:00:00.000Z",
+        },
+      ],
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        if (table === "businesses") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }
+
+              return {
+                order: orderSpy,
+                limit: limitSpy,
+                eq: eqSpy,
+              };
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
+    });
+
+    const request = {
+      nextUrl: new URL("http://localhost:3000/api/businesses?mine=true&limit=10"),
+    } as NextRequest;
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      businesses: [
+        expect.objectContaining({
+          id: "business-owned-1",
+          business_name: "Nomsa Fashion",
+        }),
+      ],
+    });
+    expect(eqSpy).toHaveBeenCalledWith("owner_id", USER_ID);
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("requires authentication for mine mode", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    });
+
+    const request = {
+      nextUrl: new URL("http://localhost:3000/api/businesses?mine=true"),
+    } as NextRequest;
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(401);
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("applies placeholder-content exclusions to public business queries", async () => {
+    const rangeSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "business-seed",
+          owner_id: USER_ID,
+          business_name: "Seed Demo Shop",
+          description: "Sample marketplace placeholder",
+        },
+        {
+          id: "business-real",
+          owner_id: USER_ID,
+          business_name: "Nomsa Fashion",
+          description: "A valid business profile description.",
+        },
+      ],
+      count: 2,
+      error: null,
+    });
+    const orderSpy = vi.fn().mockReturnThis();
     const eqSpy = vi.fn().mockReturnThis();
     const selectSpy = vi.fn().mockReturnThis();
     const fromSpy = vi.fn().mockReturnValue({
       select: selectSpy,
       eq: eqSpy,
-      not: notSpy,
       order: orderSpy,
       range: rangeSpy,
     });
@@ -502,10 +763,13 @@ describe("GET /api/businesses", () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    expect(notSpy).toHaveBeenCalledWith("business_name", "ilike", "%seed%");
-    expect(notSpy).toHaveBeenCalledWith("business_name", "ilike", "%[seed]%");
-    expect(notSpy).toHaveBeenCalledWith("business_name", "ilike", "%demo%");
-    expect(notSpy).toHaveBeenCalledWith("business_name", "ilike", "%sample%");
+    const json = await response.json();
+    expect(json.businesses).toHaveLength(1);
+    expect(json.businesses[0]).toMatchObject({
+      id: "business-real",
+      business_name: "Nomsa Fashion",
+    });
+    expect(json.total).toBe(1);
   });
 
   it("falls back to seller_id and normalizes business responses back to owner_id", async () => {

@@ -1,5 +1,27 @@
 # VerifyMzansi — Recent Development Log
 
+## RLS Access-Boundary Hardening Follow-up (2026-03-19)
+
+- **Owner and self-service cleanup:** Removed the remaining low-risk admin reads
+  from `src/app/dashboard/businesses/page.tsx`,
+  `src/app/billing/success/page.tsx`, and `src/app/billing/cancel/page.tsx` so
+  those pages now use the authenticated Supabase client for caller-owned data.
+- **OAuth callback cleanup:** `src/app/(auth)/auth/callback/route.ts` now uses
+  the authenticated client created by `exchangeCodeForSession()` to check or
+  create the current user's `account_profiles` row instead of using an admin
+  client for that self bootstrap path.
+- **Audit artifact:** Added `docs/rls-access-boundary-hardening-2026-03-19.md`
+  to document the completed route hardening pass, residual intentional elevated
+  access, and regression evidence.
+- **Anonymous intake tightening:** `src/app/api/contact/route.ts` still uses
+  service access for lead and contact-event writes, but now rejects non-live
+  targets and supports legacy `seller_id` ownership when resolving listing or
+  promotion owners.
+- **Validation:** Focused callback regression passed with
+  `pnpm vitest run src/__tests__/auth-callback-route.test.ts`. Focused
+  contact-route regression passed with
+  `pnpm vitest run src/__tests__/contact-route.test.ts`.
+
 ## Cloudflare Warning Cleanup Without Runtime Migration (2026-03-12)
 
 - **Toolchain upgrades:** Bumped `@opennextjs/cloudflare` from `1.16.5` to

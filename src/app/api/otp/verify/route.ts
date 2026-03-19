@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { otpVerifySchema } from "@/lib/validations/auth";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import {
   ACCOUNT_PHONE_IN_USE_ERROR,
   buildAccountPhoneFields,
@@ -69,21 +70,22 @@ async function verifyOtp(otp: string, storedHash: string): Promise<boolean> {
 }
 
 async function finalizePhoneVerification(
+  supabase: Awaited<ReturnType<typeof createClient>>,
   adminSupabase: ReturnType<typeof createAdminClient>,
   user: { id: string; email?: string | null; user_metadata?: unknown },
   accountPhoneFields: ReturnType<typeof buildAccountPhoneFields>,
   nowIso: string,
   otpLogLookup: { phone: string; otpHash: string }
 ): Promise<{ success: true } | { success: false; error: string; status: number }> {
-  let { data: profile } = await adminSupabase
-    .from("account_profiles")
+  let { data: profile } = await supabase
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (!profile) {
-    const { data: createdProfile, error: createProfileError } = await adminSupabase
-      .from("account_profiles")
+    const { data: createdProfile, error: createProfileError } = await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .upsert(
         {
           user_id: user.id,
@@ -115,8 +117,8 @@ async function finalizePhoneVerification(
   }
 
   if (profile) {
-    const { error: profileUpdateError } = await adminSupabase
-      .from("account_profiles")
+    const { error: profileUpdateError } = await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update(accountPhoneFields)
       .eq("id", profile.id);
 
@@ -151,7 +153,7 @@ async function finalizePhoneVerification(
     log.error("Failed to update verification steps", { error: stepsError.message });
   }
 
-  const { error: sessionError } = await adminSupabase.from("verification_sessions").upsert(
+  const { error: sessionError } = await supabase.from("verification_sessions").upsert(
     {
       user_id: user.id,
       phone_verified_at: nowIso,
@@ -293,6 +295,7 @@ export async function POST(request: NextRequest) {
       .is("verified_at", null);
 
     const verificationResult = await finalizePhoneVerification(
+      supabase,
       adminSupabase,
       user,
       accountPhoneFields,

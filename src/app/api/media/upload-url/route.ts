@@ -65,6 +65,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let admin: ReturnType<typeof createAdminClient> | null = null;
+    const getAdmin = () => {
+      admin ??= createAdminClient();
+      return admin;
+    };
+
     // ── Get account profile ──────────────────────────────────
     let { data: profile, error: profileError } = await supabase
       .from(ACCOUNT_PROFILE_TABLE)
@@ -81,8 +87,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!profile) {
-      const admin = createAdminClient();
-      profile = await ensureAccountProfile(admin, user);
+      profile = await ensureAccountProfile(getAdmin(), user);
       if (!profile) {
         return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
       }

@@ -75,9 +75,14 @@ export async function POST(request: NextRequest) {
 
     const { planId } = parsed.data;
 
+    let admin: ReturnType<typeof createAdminClient> | null = null;
+    const getAdmin = () => {
+      admin ??= createAdminClient();
+      return admin;
+    };
+
     // ── Get account profile ──────────────────────────────────
-    const admin = createAdminClient();
-    const { data: profile } = await admin
+    const { data: profile } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id, display_name")
       .eq("user_id", user.id)
@@ -88,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Fetch plan ───────────────────────────────────────────
-    const { data: plan } = await admin
+    const { data: plan } = await supabase
       .from("plans")
       .select("*")
       .eq("id", planId)
@@ -100,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Prevent Duplicate Active Entitlements ─────────────
-    const { data: activeEntitlement } = await admin
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("id")
       .eq("user_id", user.id)
@@ -126,7 +131,7 @@ export async function POST(request: NextRequest) {
     let checkoutUrl: string;
     try {
       const checkout = await createHostedCheckout({
-        admin: admin as never,
+        admin: getAdmin() as never,
         userId: user.id,
         area: plan.area,
         amountCents: plan.price_cents,

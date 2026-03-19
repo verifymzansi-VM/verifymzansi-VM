@@ -5,7 +5,6 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { logAuditEvent } from "@/lib/services/audit";
 import { REQUIRED_VERIFICATION_STEPS } from "@/lib/constants/verification";
@@ -64,10 +63,8 @@ export async function POST(_request: NextRequest) {
       );
     }
 
-    const adminClient = createAdminClient();
-
     // Fetch the most recent non-finalized verification session
-    const { data: existingSession } = await adminClient
+    const { data: existingSession } = await supabase
       .from("verification_sessions")
       .select("*")
       .eq("user_id", user.id)
@@ -83,7 +80,7 @@ export async function POST(_request: NextRequest) {
       const expiresAt = new Date(new Date(session.created_at).getTime() + 24 * 60 * 60 * 1000);
       if (expiresAt < new Date()) {
         // Check if phone was already verified in verification_steps
-        const { data: phoneStep } = await adminClient
+        const { data: phoneStep } = await supabase
           .from("verification_steps")
           .select("phone_verified_at")
           .eq("user_id", user.id)
@@ -93,7 +90,7 @@ export async function POST(_request: NextRequest) {
 
         // Reset the expired session in-place instead of finalize + insert
         // (inserting would violate the UNIQUE(user_id) constraint)
-        const { data: resetSession, error: resetErr } = await adminClient
+        const { data: resetSession, error: resetErr } = await supabase
           .from("verification_sessions")
           .update({
             finalized_at: null,
@@ -129,7 +126,7 @@ export async function POST(_request: NextRequest) {
 
     if (!session) {
       // Check if phone was already verified in verification_steps
-      const { data: phoneStep } = await adminClient
+      const { data: phoneStep } = await supabase
         .from("verification_steps")
         .select("phone_verified_at")
         .eq("user_id", user.id)
@@ -138,7 +135,7 @@ export async function POST(_request: NextRequest) {
         .maybeSingle();
 
       // Use upsert to handle edge case where a finalized row already exists
-      const { data: newSession, error: insertErr } = await adminClient
+      const { data: newSession, error: insertErr } = await supabase
         .from("verification_sessions")
         .upsert(
           {
@@ -174,7 +171,7 @@ export async function POST(_request: NextRequest) {
     }
 
     // Fetch all existing verification steps for this user
-    const { data: steps } = await adminClient
+    const { data: steps } = await supabase
       .from("verification_steps")
       .select("step_type, status")
       .eq("user_id", user.id);

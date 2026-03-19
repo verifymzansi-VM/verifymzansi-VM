@@ -103,17 +103,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const data = parsed.data;
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "listings");
+    const ownerColumn = await getOwnerColumn(supabase, "listings");
 
     // ── Check listing exists and user owns it ────────────────
-    const { data: rawListing } = await admin
-      .from("listings")
-      .select(
-        withOwnerColumn("id, owner_id, status, area, photos, videos, video_thumbnail", ownerColumn)
-      )
-      .eq("id", listingId)
-      .maybeSingle();
+    const { data: rawListing } = await applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select(
+          withOwnerColumn(
+            "id, owner_id, status, area, photos, videos, video_thumbnail",
+            ownerColumn
+          )
+        )
+        .eq("id", listingId),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const listing = rawListing as ListingUpdateRow | null;
 
     if (!listing) {
@@ -137,7 +142,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // ── Enforce photo/video limits based on plan ─────────────
     // Check if user has a paid entitlement (not expired)
-    const { data: activeEntitlement } = await admin
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -214,7 +219,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // ── Update listing ───────────────────────────────────────
     const updateQuery = applyOwnerFilter(
-      admin.from("listings").update(updateRecord).eq("id", listingId),
+      supabase.from("listings").update(updateRecord).eq("id", listingId),
       ownerColumn,
       user.id
     ); // Double-check ownership at DB level
@@ -235,6 +240,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (removedMediaUrls.length > 0) {
       try {
+        const admin = createAdminClient();
         await queuePublicMediaCleanup(admin, removedMediaUrls, "listing_media_replaced");
       } catch (cleanupError) {
         log.error("Failed to queue replaced listing media for cleanup", {

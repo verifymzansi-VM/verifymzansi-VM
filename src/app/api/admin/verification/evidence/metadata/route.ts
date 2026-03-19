@@ -9,7 +9,7 @@ import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/li
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
-import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
+import { getStaffActorRole } from "@/lib/auth/admin-access";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 
@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const role = getRoleFromUser(user);
-    if (!isModeratorOrAdmin(user) || !role) {
+    const role = getStaffActorRole(user);
+    if (!role) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
     // Log this evidence view
     await logAuditEvent({
       actorId: user.id,
-      actorRole: (["admin", "moderator"].includes(role) ? role : "admin") as "admin" | "moderator",
+      actorRole: role,
       action: "kyc_evidence_viewed",
       targetType: "verification_step",
       targetId: stepId || targetUserId,

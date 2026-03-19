@@ -158,11 +158,11 @@ export async function POST(request: NextRequest) {
     const adminClient = createAdminClient();
 
     // Check account profile exists
-    const { data: profile } = await adminClient
+    const { data: profile } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (!profile) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
@@ -339,7 +339,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Update account profile — use declared values in confirmation mode
-    await adminClient
+    await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
         location_province: isConfirmationMode ? declaredProvince! : resolvedProvince,
@@ -348,7 +348,7 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user.id);
 
     // Set pending_review if currently incomplete
-    await adminClient
+    await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
         account_verification_status: "pending_review",

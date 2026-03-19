@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     // ── Audit log ────────────────────────────────────────────
     await logAuditEvent({
       actorId: "00000000-0000-0000-0000-000000000000",
-      actorRole: "admin",
+      actorRole: "system",
       action: "dsar_requested",
       targetType: "dsar_case",
       targetId: dsarRecord.id,

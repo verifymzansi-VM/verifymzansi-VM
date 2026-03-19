@@ -52,9 +52,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Invalid promotion ID" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
-
-    const { data: promotion, error } = await admin
+    const supabase = await createClient();
+    const { data: promotion, error } = await supabase
       .from("promotions")
       .select(
         "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
@@ -70,8 +69,6 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     // Only allow public access to live promotions
     if (normalizedPromotion.status !== "live") {
-      // Check if the current user is the owner
-      const supabase = await createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -82,6 +79,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     // Increment view count atomically (best-effort, non-blocking).
+    const admin = createAdminClient();
     admin.rpc("increment_promotion_view_count", { promotion_id: id }).then(() => {});
 
     return NextResponse.json({ promotion: normalizedPromotion });
@@ -127,23 +125,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "promotions");
+    const ownerColumn = await getOwnerColumn(supabase, "promotions");
 
     // Check ownership
-    const { data: rawExisting } = await admin
-      .from("promotions")
-      .select(withOwnerColumn("id, owner_id, status, photos, videos, video_thumbnail", ownerColumn))
-      .eq("id", id)
-      .maybeSingle();
+    const { data: rawExisting } = await applyOwnerFilter(
+      supabase
+        .from("promotions")
+        .select(
+          withOwnerColumn("id, owner_id, status, photos, videos, video_thumbnail", ownerColumn)
+        )
+        .eq("id", id),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const existing = rawExisting as PromotionOwnerRow | null;
 
     if (!existing) {
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
-    }
-
-    if (readOwnerId(existing) !== user.id) {
-      return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, promotionSchema, {
@@ -157,7 +155,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const data = parsedBody.data;
     const categoryKey =
       data.category_key ?? inferPromotionCategoryKey(data.category, data.promotion_type);
-    const { data: activeEntitlement } = await admin
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -208,7 +206,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
 
     const updateQuery = applyOwnerFilter(
-      admin
+      supabase
         .from("promotions")
         .update({
           title: data.title,
@@ -244,6 +242,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (removedMediaUrls.length > 0) {
       try {
+        const admin = createAdminClient();
         await queuePublicMediaCleanup(admin, removedMediaUrls, "promotion_media_replaced");
       } catch (cleanupError) {
         log.error("Failed to queue replaced promotion media for cleanup", {
@@ -312,22 +311,22 @@ export async function DELETE(
       );
     }
 
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "promotions");
+    const ownerColumn = await getOwnerColumn(supabase, "promotions");
 
-    const { data: rawExisting } = await admin
-      .from("promotions")
-      .select(withOwnerColumn("id, owner_id, status, photos, videos, video_thumbnail", ownerColumn))
-      .eq("id", id)
-      .maybeSingle();
+    const { data: rawExisting } = await applyOwnerFilter(
+      supabase
+        .from("promotions")
+        .select(
+          withOwnerColumn("id, owner_id, status, photos, videos, video_thumbnail", ownerColumn)
+        )
+        .eq("id", id),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const existing = rawExisting as PromotionOwnerRow | null;
 
     if (!existing) {
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
-    }
-
-    if (readOwnerId(existing) !== user.id) {
-      return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
     if (!["draft", "rejected"].includes(existing.status)) {
@@ -338,7 +337,7 @@ export async function DELETE(
     }
 
     const deleteQuery = applyOwnerFilter(
-      admin.from("promotions").delete().eq("id", id),
+      supabase.from("promotions").delete().eq("id", id),
       ownerColumn,
       user.id
     );
@@ -358,6 +357,7 @@ export async function DELETE(
 
     if (deletedMediaUrls.length > 0) {
       try {
+        const admin = createAdminClient();
         await queuePublicMediaCleanup(admin, deletedMediaUrls, "promotion_deleted");
       } catch (cleanupError) {
         log.error("Failed to queue deleted promotion media for cleanup", {

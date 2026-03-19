@@ -10,8 +10,8 @@ import { createHostedCheckout } from "@/lib/payments/checkout";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  applyOwnerFilter,
   getOwnerColumn,
-  readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
@@ -77,7 +77,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "promotions");
+    const ownerColumn = await getOwnerColumn(supabase, "promotions");
 
     // Check account profile
     const { data: profile } = await admin
@@ -91,19 +91,18 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     // Check promotion exists and belongs to user
-    const { data: rawPromotion } = await admin
-      .from("promotions")
-      .select(withOwnerColumn("id, title, status, owner_id, featured_until", ownerColumn))
-      .eq("id", promotionId)
-      .maybeSingle();
+    const { data: rawPromotion } = await applyOwnerFilter(
+      supabase
+        .from("promotions")
+        .select(withOwnerColumn("id, title, status, owner_id, featured_until", ownerColumn))
+        .eq("id", promotionId),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const promotion = rawPromotion as PromotionCheckoutRow | null;
 
     if (!promotion) {
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
-    }
-
-    if (readOwnerId(promotion) !== user.id) {
-      return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
     if (promotion.status !== "live") {

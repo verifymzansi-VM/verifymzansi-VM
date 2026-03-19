@@ -22,6 +22,7 @@ vi.mock("@/lib/services/audit", () => ({
 
 vi.mock("@/lib/auth/roles", () => ({
   isAdmin: () => true,
+  getRoleFromUser: () => "admin",
 }));
 
 vi.mock("@/lib/account/compat", async () => {
@@ -159,6 +160,7 @@ describe("GET /api/admin/dsar/export", () => {
     expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "dsar_exported",
+        actorRole: "admin",
       })
     );
   });

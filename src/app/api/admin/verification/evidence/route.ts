@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { downloadKycDocument } from "@/lib/services/storage";
 import crypto from "crypto";
-import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
+import { getStaffActorRole } from "@/lib/auth/admin-access";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 
@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const role = getRoleFromUser(user);
-    if (!isModeratorOrAdmin(user) || !role) {
+    const role = getStaffActorRole(user);
+    if (!role) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

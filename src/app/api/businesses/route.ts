@@ -11,6 +11,7 @@ import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  applyOwnerFilter,
   getOwnerColumn,
   normalizeOwnerRecords,
   withOwnerColumn,
@@ -64,8 +65,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "businesses");
+    let admin: ReturnType<typeof createAdminClient> | null = null;
+    const getAdmin = () => {
+      admin ??= createAdminClient();
+      return admin;
+    };
+    const ownerColumn = await getOwnerColumn(supabase, "businesses");
     const ip = getClientIp(request);
     const rl = await checkRateLimit({
       key: user.id,
@@ -80,7 +85,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check account profile exists
-    const verification = await resolveAccountVerification(admin, user.id);
+    const verification = await resolveAccountVerification(supabase, user.id);
     const profile = verification.profile;
 
     if (!profile) {
@@ -100,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsedBody.data;
-    const { data: activeEntitlement } = await admin
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -116,7 +121,7 @@ export async function POST(request: NextRequest) {
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: claimError } = await admin
+      const { error: claimError } = await supabase
         .from("free_posts_used")
         .insert({ user_id: user.id, area: AREA });
 
@@ -143,12 +148,16 @@ export async function POST(request: NextRequest) {
     }
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
-      const countQuery = admin
-        .from("businesses")
-        .select("id", { count: "exact", head: true })
-        .neq("status", "rejected");
+      const countQuery = applyOwnerFilter(
+        supabase
+          .from("businesses")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "rejected"),
+        ownerColumn,
+        user.id
+      );
 
-      const { count } = await countQuery.eq(ownerColumn, user.id);
+      const { count } = await countQuery;
 
       const check = canCreateListing(count ?? 0, tier as PlanTier, AREA);
       if (!check.allowed) {
@@ -213,7 +222,7 @@ export async function POST(request: NextRequest) {
       status: "pending_moderation" as const,
     };
 
-    const { data: business, error: insertError } = await admin
+    const { data: business, error: insertError } = await supabase
       .from("businesses")
       .insert(withOwnerField(businessPayload, ownerColumn, user.id))
       .select("id")
@@ -222,22 +231,26 @@ export async function POST(request: NextRequest) {
     if (insertError || !business) {
       log.error("Failed to create business", { error: insertError?.message });
       if (!hasPaidPlan && !postingLimitBypassEnabled) {
-        await admin.from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+        await getAdmin().from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
       }
       return NextResponse.json({ error: "Failed to create business" }, { status: 500 });
     }
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
-      const postCountQuery = admin
-        .from("businesses")
-        .select("id", { count: "exact", head: true })
-        .neq("status", "rejected");
+      const postCountQuery = applyOwnerFilter(
+        supabase
+          .from("businesses")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "rejected"),
+        ownerColumn,
+        user.id
+      );
 
-      const { count: postInsertCount } = await postCountQuery.eq(ownerColumn, user.id);
+      const { count: postInsertCount } = await postCountQuery;
       const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
 
       if (!postCheck.allowed) {
-        await admin.from("businesses").delete().eq("id", business.id);
+        await getAdmin().from("businesses").delete().eq("id", business.id);
         log.warn("Rolled back business due to concurrent limit breach", {
           businessId: business.id,
           userId: user.id,
@@ -286,12 +299,11 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "businesses");
     const { searchParams } = request.nextUrl;
 
     // Category counts mode — for auto-hiding empty categories
     if (searchParams.get("categories_only") === "true") {
+      const admin = createAdminClient();
       const { data: counts, error } = await admin.rpc("get_business_category_counts");
 
       if (error) {
@@ -323,6 +335,7 @@ export async function GET(request: NextRequest) {
     const mine = searchParams.get("mine") === "true";
     if (mine) {
       const supabase = await createClient();
+      const ownerColumn = await getOwnerColumn(supabase, "businesses");
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -332,16 +345,21 @@ export async function GET(request: NextRequest) {
       }
 
       const mineLimit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
-      const myBusinessesQuery = admin
-        .from("businesses")
-        .select("id, business_name, business_type, category, status, created_at")
-        .order("created_at", { ascending: false })
-        .limit(mineLimit);
-
-      const { data: myBusinesses } = await myBusinessesQuery.eq(ownerColumn, user.id);
+      const { data: myBusinesses } = await applyOwnerFilter(
+        supabase
+          .from("businesses")
+          .select("id, business_name, business_type, category, status, created_at")
+          .order("created_at", { ascending: false })
+          .limit(mineLimit),
+        ownerColumn,
+        user.id
+      );
 
       return NextResponse.json({ businesses: myBusinesses ?? [] });
     }
+
+    const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "businesses");
 
     const businessType = searchParams.get("type");
     const category = searchParams.get("category");

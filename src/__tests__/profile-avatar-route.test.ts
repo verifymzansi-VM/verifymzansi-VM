@@ -84,6 +84,11 @@ describe("POST /api/profile/avatar", () => {
     const updateEq = vi.fn().mockResolvedValue({ error: null });
 
     mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: updateEq,
+        }),
+      }),
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
       },
@@ -95,11 +100,6 @@ describe("POST /api/profile/avatar", () => {
           getPublicUrl,
         }),
       },
-      from: vi.fn().mockReturnValue({
-        update: vi.fn().mockReturnValue({
-          eq: updateEq,
-        }),
-      }),
     });
 
     const formData = new FormData();

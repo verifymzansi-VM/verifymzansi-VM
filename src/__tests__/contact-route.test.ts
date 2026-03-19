@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
 import type * as ApiModule from "@/lib/utils/api";
+import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
 const {
   mockCreateClient,
@@ -52,6 +53,9 @@ vi.mock("@/lib/utils/api", async () => {
 
 import { POST } from "@/app/api/contact/route";
 
+const VALID_LISTING_ID = "00000000-0000-4000-8000-000000000001";
+const VALID_PROMOTION_ID = "00000000-0000-4000-8000-000000000002";
+
 function createRequest(body: unknown) {
   return {
     method: "POST",
@@ -85,6 +89,7 @@ function mockAuth(user: { id: string; email?: string } | null) {
 describe("POST /api/contact", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
     // Default: admin client from() succeeds
     mockFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
@@ -142,5 +147,163 @@ describe("POST /api/contact", () => {
     // The message with HTML should have tags stripped
     const xssPayload = '<script>alert("xss")</script>Hello';
     expect(xssPayload.replace(/<[^>]*>/g, "").trim()).toBe('alert("xss")Hello');
+  });
+
+  it("returns 404 when the target listing is not live", async () => {
+    mockAuth(null);
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "listings") {
+        return {
+          select: vi.fn((fields: string) => {
+            if (fields === "owner_id, title, status") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      owner_id: "account-owner-1",
+                      title: "Draft listing",
+                      status: "draft",
+                    },
+                    error: null,
+                  }),
+                }),
+              };
+            }
+
+            if (fields === "id, owner_id") {
+              return {
+                limit: vi.fn().mockResolvedValue({ error: null }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            };
+          }),
+        };
+      }
+
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+          }),
+        };
+      }
+
+      return {
+        insert: vi.fn().mockResolvedValue({ error: null }),
+      };
+    });
+
+    const res = await POST(
+      createRequest({
+        listingId: VALID_LISTING_ID,
+        message: "I want to know more",
+        contactMethod: "form",
+        turnstileToken: "tok-valid",
+      })
+    );
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ error: "Listing not found" });
+  });
+
+  it("accepts legacy seller_id ownership on contact targets", async () => {
+    mockAuth({ id: "user-1", email: "buyer@test.com" });
+    const contactInsert = vi.fn().mockResolvedValue({ error: null });
+    const leadsInsert = vi.fn().mockResolvedValue({ error: null });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "promotions") {
+        return {
+          select: vi.fn((fields: string) => {
+            if (fields === "id, owner_id") {
+              return {
+                limit: vi.fn().mockResolvedValue({
+                  error: {
+                    code: "42703",
+                    message: "column promotions.owner_id does not exist",
+                  },
+                }),
+              };
+            }
+
+            if (fields === "id, seller_id") {
+              return {
+                limit: vi.fn().mockResolvedValue({ error: null }),
+              };
+            }
+
+            if (fields === "seller_id, title, status") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      seller_id: "legacy-owner-1",
+                      title: "Legacy promotion",
+                      status: "live",
+                    },
+                    error: null,
+                  }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            };
+          }),
+        };
+      }
+
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { account_verification_status: "verified" },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "contact_events") {
+        return { insert: contactInsert };
+      }
+
+      if (table === "leads") {
+        return { insert: leadsInsert };
+      }
+
+      return {
+        insert: vi.fn().mockResolvedValue({ error: null }),
+      };
+    });
+
+    const res = await POST(
+      createRequest({
+        promotionId: VALID_PROMOTION_ID,
+        message: "Please contact me back",
+        contactMethod: "form",
+        turnstileToken: "tok-valid",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(contactInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ owner_id: "legacy-owner-1", target_type: "promotion" })
+    );
+    expect(leadsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ owner_id: "legacy-owner-1", target_type: "promotion" })
+    );
   });
 });

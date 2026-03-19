@@ -12,7 +12,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { toggleFeatureFlag, updateFeatureFlagConfig } from "@/lib/services/feature-flags";
 import { logAuditEvent } from "@/lib/services/audit";
-import { isAdmin } from "@/lib/auth/roles";
+import { getAdminActorRole } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!isAdmin(user)) {
+    const actorRole = getAdminActorRole(user);
+    if (!actorRole) {
       return NextResponse.json({ error: "Forbidden — admin only" }, { status: 403 });
     }
 
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
 
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "admin",
+        actorRole,
         action: "feature_flag_toggled",
         targetType: "feature_flag",
         targetId: key,
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
 
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "admin",
+        actorRole,
         action: "feature_flag_toggled",
         targetType: "feature_flag",
         targetId: key,

@@ -11,8 +11,8 @@ import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
   ACCOUNT_PROFILE_WRITE_TABLE,
+  applyOwnerFilter,
   getOwnerColumn,
-  readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
@@ -63,7 +63,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "businesses");
+    const ownerColumn = await getOwnerColumn(supabase, "businesses");
 
     const { data: accountProfile } = await admin
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
@@ -75,19 +75,18 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    const { data: rawBusiness } = await admin
-      .from("businesses")
-      .select(withOwnerColumn("id, business_name, status, owner_id, boost_until", ownerColumn))
-      .eq("id", businessId)
-      .maybeSingle();
+    const { data: rawBusiness } = await applyOwnerFilter(
+      supabase
+        .from("businesses")
+        .select(withOwnerColumn("id, business_name, status, owner_id, boost_until", ownerColumn))
+        .eq("id", businessId),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const business = rawBusiness as BusinessCheckoutRow | null;
 
     if (!business) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
-    }
-
-    if (readOwnerId(business) !== user.id) {
-      return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 
     if (business.status !== "live") {

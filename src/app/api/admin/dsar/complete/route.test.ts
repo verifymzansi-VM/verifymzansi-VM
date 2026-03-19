@@ -36,6 +36,7 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 
 vi.mock("@/lib/auth/roles", () => ({
   isAdmin: () => true,
+  getRoleFromUser: () => "admin",
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -101,6 +102,7 @@ describe("POST /api/admin/dsar/complete", () => {
     expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "dsar_completed",
+        actorRole: "admin",
         targetId: requestId,
       })
     );

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { getStaffActorRole } from "@/lib/auth/admin-access";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { z } from "zod";
@@ -41,7 +41,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user || !isModeratorOrAdmin(user)) {
+    const adminRole = getStaffActorRole(user);
+    if (!user || !adminRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "admin",
+        actorRole: adminRole,
         action: "moderation_action",
         targetType: "promotion",
         targetId: promotionId,

@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
 
     // ── Get account profile ──────────────────────────────────
     const admin = createAdminClient();
-    let { data: profile } = await admin
+    let { data: profile } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id")
       .eq("user_id", user.id)
@@ -523,7 +523,7 @@ export async function POST(request: NextRequest) {
     // "pending_review" when all steps have actually been rejected.
     const isHardReject = engineResult.autoStatus === "rejected";
     if (!isHardReject) {
-      const { data: statusUpdated } = await admin
+      const { data: statusUpdated } = await supabase
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_verification_status: "pending_review",

@@ -80,8 +80,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid area" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
-
     let item: {
       id: string;
       status: string;
@@ -91,12 +89,15 @@ export async function POST(request: Request) {
     let updateErrorMessage: string | null = null;
 
     if (config.ownerCompatible && isOwnerCompatibleTable(config.table)) {
-      const ownerColumn = await getOwnerColumn(admin, config.table);
-      const { data: fetchedItem, error: fetchError } = await admin
-        .from(config.table)
-        .select(withOwnerColumn("id, status, owner_id", ownerColumn))
-        .eq("id", itemId)
-        .maybeSingle();
+      const ownerColumn = await getOwnerColumn(supabase, config.table);
+      const { data: fetchedItem, error: fetchError } = await applyOwnerFilter(
+        supabase
+          .from(config.table)
+          .select(withOwnerColumn("id, status, owner_id", ownerColumn))
+          .eq("id", itemId),
+        ownerColumn,
+        user.id
+      ).maybeSingle();
 
       if (fetchError || !fetchedItem) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
@@ -122,7 +123,7 @@ export async function POST(request: Request) {
       }
 
       const updateQuery = applyOwnerFilter(
-        admin
+        supabase
           .from(config.table)
           .update({ status: "pending_moderation", status_reason: null })
           .eq("id", itemId),
@@ -134,6 +135,7 @@ export async function POST(request: Request) {
       updateErrorMessage =
         (updateResult.error as unknown as { message?: string | null } | null)?.message ?? null;
     } else {
+      const admin = createAdminClient();
       const { data: fetchedItem, error: fetchError } = await admin
         .from(config.table)
         .select("id, status, owner_id")

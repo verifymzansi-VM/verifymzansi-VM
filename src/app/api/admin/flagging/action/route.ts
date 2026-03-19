@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { adminFlaggingActionSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
-import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { getStaffActorRole } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -32,7 +32,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!isModeratorOrAdmin(user)) {
+    const adminRole = getStaffActorRole(user);
+    if (!adminRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -234,7 +235,7 @@ export async function POST(request: Request) {
 
     await logAuditEvent({
       actorId: user.id,
-      actorRole: (user.app_metadata?.role as "admin" | "moderator") || "admin",
+      actorRole: adminRole,
       action: (auditActionMap[action] || "moderation_action") as
         | "moderation_action"
         | "account_suspended"

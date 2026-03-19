@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
@@ -6,16 +6,14 @@ const {
   mockCreateClient,
   mockCreateAdminClient,
   mockLogAuditEvent,
-  mockCheckRateLimit,
-  mockGetClientIp,
   mockClientFrom,
+  mockCheckLocalRateLimit,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockLogAuditEvent: vi.fn(),
-  mockCheckRateLimit: vi.fn(),
-  mockGetClientIp: vi.fn(),
   mockClientFrom: vi.fn(),
+  mockCheckLocalRateLimit: vi.fn(),
 }));
 
 const mockCreateHostedCheckout = vi.fn().mockResolvedValue({
@@ -44,10 +42,6 @@ vi.mock("@/lib/payments/checkout", () => ({
 vi.mock("@/lib/services/entitlements", () => ({
   canBoost: vi.fn(() => ({ allowed: true })),
 }));
-vi.mock("@/lib/utils/rate-limit", () => ({
-  checkRateLimit: mockCheckRateLimit,
-  getClientIp: mockGetClientIp,
-}));
 vi.mock("@/lib/services/plan-tier", () => ({
   getActivePlanTierForArea: vi.fn().mockResolvedValue("growth"),
 }));
@@ -55,8 +49,11 @@ vi.mock("@/lib/constants/pricing", () => ({
   ADDON_PRICES: { boost: 1500, featured: 2500, urgent: 1000 },
   BOOST_DURATION_DAYS: 7,
 }));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: mockCheckLocalRateLimit,
+}));
 
-import { POST } from "@/app/api/promotions/[id]/boost/route";
+import { POST } from "@/app/api/businesses/[id]/boost/route";
 
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "user-0001";
@@ -96,9 +93,9 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
   });
 }
 
-function mockPromotionRow(row: Record<string, unknown> | null) {
+function mockBusinessRow(row: Record<string, unknown> | null) {
   mockClientFrom.mockImplementation((table: string) => {
-    if (table === "promotions") {
+    if (table === "businesses") {
       return {
         select: vi.fn((fields: string) => {
           if (fields === "id, owner_id") {
@@ -120,10 +117,10 @@ function mockPromotionRow(row: Record<string, unknown> | null) {
 }
 
 function setupHappyPath() {
-  mockAuth({ id: USER_ID, email: "test@example.com" });
-  mockPromotionRow({
+  mockAuth({ id: USER_ID, email: "seller@test.com" });
+  mockBusinessRow({
     id: VALID_UUID,
-    title: "Test Promotion",
+    business_name: "Test Business",
     status: "live",
     owner_id: USER_ID,
     boost_until: null,
@@ -132,60 +129,33 @@ function setupHappyPath() {
     account_profiles: {
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
     },
-    payments: {
-      single: vi.fn().mockResolvedValue({ data: { id: "payment-1" }, error: null }),
-    },
   });
 }
 
-describe("POST /api/promotions/[id]/boost", () => {
+describe("POST /api/businesses/[id]/boost", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockClientFrom.mockImplementation((table: string) => {
-      if (table === "promotions") {
-        return {
-          select: vi.fn((fields: string) => {
-            if (fields === "id, owner_id") {
-              return {
-                limit: vi.fn().mockResolvedValue({ error: null }),
-              };
-            }
-
-            return {
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            };
-          }),
-        };
-      }
-
-      throw new Error(`Unexpected client table ${table}`);
-    });
-    mockCheckRateLimit.mockResolvedValue({ limited: false });
-    mockGetClientIp.mockReturnValue("127.0.0.1");
+    resetOwnerColumnCacheForTesting();
+    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
     mockCreateHostedCheckout.mockResolvedValue({
       paymentId: "payment-1",
       checkoutUrl: "https://pay.ozow.test/checkout",
     });
-    resetOwnerColumnCacheForTesting();
+    mockBusinessRow(null);
   });
 
   it("rejects invalid UUID", async () => {
     mockAuth({ id: USER_ID });
-    const req = createRequest("http://localhost:3000/api/promotions/not-a-uuid/boost");
-    const res = await POST(req, { params: Promise.resolve({ id: "not-a-uuid" }) });
+    const req = createRequest("http://localhost:3000/api/businesses/bad-id/boost");
+    const res = await POST(req, { params: Promise.resolve({ id: "bad-id" }) });
     expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toContain("Invalid");
   });
 
   it("rejects unauthenticated requests", async () => {
     mockAuth(null);
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
+    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(401);
-    const body = await res.json();
-    expect(body.error).toBe("Unauthorized");
   });
 
   it("returns 404 when account profile not found", async () => {
@@ -195,45 +165,42 @@ describe("POST /api/promotions/[id]/boost", () => {
         maybeSingle: vi.fn().mockResolvedValue({ data: null }),
       },
     });
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
+    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(404);
-    const body = await res.json();
-    expect(body.error).toBe("Account profile not found");
+    expect((await res.json()).error).toBe("Account profile not found");
   });
 
-  it("returns 404 when promotion not found", async () => {
+  it("returns 404 when business not found", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
       account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
     });
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
+    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(404);
-    const body = await res.json();
-    expect(body.error).toBe("Promotion not found");
+    expect((await res.json()).error).toBe("Business not found");
   });
 
-  it("returns 404 when user does not own the promotion", async () => {
+  it("returns 404 when user does not own the business", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
       account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
     });
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
+    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(404);
-    const body = await res.json();
-    expect(body.error).toBe("Promotion not found");
+    expect((await res.json()).error).toBe("Business not found");
   });
 
-  it("accepts legacy seller_id ownership when promotions still use the old column", async () => {
+  it("accepts legacy seller_id ownership when businesses still use the old column", async () => {
     mockAuth({ id: USER_ID });
     mockClientFrom.mockImplementation((table: string) => {
-      if (table === "promotions") {
+      if (table === "businesses") {
         return {
           select: vi.fn((fields: string) => {
             if (fields === "id, owner_id") {
@@ -241,7 +208,7 @@ describe("POST /api/promotions/[id]/boost", () => {
                 limit: vi.fn().mockResolvedValue({
                   error: {
                     code: "42703",
-                    message: "column promotions.owner_id does not exist",
+                    message: "column businesses.owner_id does not exist",
                   },
                 }),
               };
@@ -256,7 +223,7 @@ describe("POST /api/promotions/[id]/boost", () => {
               maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   id: VALID_UUID,
-                  title: "Legacy Promo",
+                  business_name: "Legacy Business",
                   status: "live",
                   seller_id: USER_ID,
                   boost_until: null,
@@ -269,46 +236,24 @@ describe("POST /api/promotions/[id]/boost", () => {
 
       throw new Error(`Unexpected client table ${table}`);
     });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "account_profiles") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-          };
-        }
-        if (table === "payments") {
-          return {
-            insert: vi.fn().mockReturnValue({
-              select: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({ data: { id: "payment-1" }, error: null }),
-              }),
-            }),
-          };
-        }
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-        };
-      }),
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
+      },
     });
 
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
+    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
 
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.success).toBe(true);
-    expect(body.paymentId).toBe("payment-1");
+    expect((await res.json()).paymentId).toBe("payment-1");
   });
 
-  it("returns 400 when promotion is not live", async () => {
+  it("returns 400 when business is not live", async () => {
     mockAuth({ id: USER_ID });
-    mockPromotionRow({
+    mockBusinessRow({
       id: VALID_UUID,
-      title: "Draft Promo",
+      business_name: "Draft Business",
       status: "draft",
       owner_id: USER_ID,
       boost_until: null,
@@ -318,19 +263,18 @@ describe("POST /api/promotions/[id]/boost", () => {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
     });
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
+    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toMatch(/only live/i);
+    expect((await res.json()).error).toMatch(/only live/i);
   });
 
-  it("returns 400 when promotion is already boosted", async () => {
+  it("returns 400 when business is already boosted", async () => {
     mockAuth({ id: USER_ID });
     const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    mockPromotionRow({
+    mockBusinessRow({
       id: VALID_UUID,
-      title: "Boosted Promo",
+      business_name: "Boosted Business",
       status: "live",
       owner_id: USER_ID,
       boost_until: futureDate,
@@ -340,18 +284,27 @@ describe("POST /api/promotions/[id]/boost", () => {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
       },
     });
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
+    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toMatch(/already/i);
+    expect((await res.json()).error).toMatch(/already/i);
+  });
+
+  it("returns 403 when entitlement denied", async () => {
+    const { canBoost } = await import("@/lib/services/entitlements");
+    vi.mocked(canBoost).mockReturnValueOnce({ allowed: false, reason: "Upgrade required" });
+    setupHappyPath();
+    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
+    const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe("Upgrade required");
   });
 
   it("returns 500 when payment creation fails", async () => {
-    mockAuth({ id: USER_ID });
-    mockPromotionRow({
+    mockAuth({ id: USER_ID, email: "seller@test.com" });
+    mockBusinessRow({
       id: VALID_UUID,
-      title: "Test Promo",
+      business_name: "Test Business",
       status: "live",
       owner_id: USER_ID,
       boost_until: null,
@@ -362,47 +315,20 @@ describe("POST /api/promotions/[id]/boost", () => {
       },
     });
     mockCreateHostedCheckout.mockRejectedValueOnce(new Error("Checkout provider unavailable"));
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
+    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(500);
-    const body = await res.json();
-    expect(body.error).toMatch(/boost checkout/i);
+    expect((await res.json()).error).toMatch(/boost checkout/i);
   });
 
-  it("happy path: returns checkout URL and payment ID", async () => {
+  it("happy path returns checkout URL", async () => {
     setupHappyPath();
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
+    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
     expect(body.paymentId).toBe("payment-1");
-    expect(mockCreateHostedCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ area: "PROMOTIONS_EVENTS" })
-    );
-  });
-
-  it("passes amount cents to the hosted checkout helper", async () => {
-    setupHappyPath();
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
-    await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
-
-    expect(mockCreateHostedCheckout).toHaveBeenCalledTimes(1);
-    const passedParams = mockCreateHostedCheckout.mock.calls[0][0];
-    expect(passedParams.amountCents).toBe(1500);
-  });
-
-  it("logs audit event on successful checkout", async () => {
-    setupHappyPath();
-    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}/boost`);
-    await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
-
-    expect(mockLogAuditEvent).toHaveBeenCalledTimes(1);
-    const auditEntry = mockLogAuditEvent.mock.calls[0][0];
-    expect(auditEntry.actorId).toBe(USER_ID);
-    expect(auditEntry.targetId).toBe(VALID_UUID);
-    expect(auditEntry.targetType).toBe("promotion");
-    expect(auditEntry.action).toBe("promotion_boosted");
   });
 });

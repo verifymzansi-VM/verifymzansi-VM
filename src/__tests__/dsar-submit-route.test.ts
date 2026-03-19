@@ -72,7 +72,13 @@ describe("POST /api/dsar/submit", () => {
       success: true,
       reference: expect.stringContaining("DSAR-"),
     });
-    expect(mockLogAuditEvent).toHaveBeenCalled();
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: "00000000-0000-0000-0000-000000000000",
+        actorRole: "system",
+        action: "dsar_requested",
+      })
+    );
     expect(mockSendDsarSubmissionEmail).toHaveBeenCalledWith(
       "nomsa@example.com",
       expect.stringContaining("DSAR-"),

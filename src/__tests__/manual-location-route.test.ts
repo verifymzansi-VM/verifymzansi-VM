@@ -19,6 +19,7 @@ const {
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: { getUser: mockGetUser },
+    from: mockAdminFrom,
   }),
 }));
 
@@ -67,6 +68,7 @@ function setupAuthenticatedUser() {
     in: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
     maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+    update: vi.fn().mockReturnThis(),
   };
 
   const mockUpsertChain = {

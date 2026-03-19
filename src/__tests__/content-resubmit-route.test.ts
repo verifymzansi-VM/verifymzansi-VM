@@ -69,11 +69,11 @@ describe("POST /api/content/resubmit", () => {
     });
 
     mockCreateClient.mockResolvedValue({
+      from,
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
       },
     });
-    mockCreateAdminClient.mockReturnValue({ from });
 
     const response = await POST(
       createRequest({
@@ -85,5 +85,27 @@ describe("POST /api/content/resubmit", () => {
     expect(response.status).toBe(200);
     expect(updateEq).toHaveBeenCalledWith("id", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11");
     expect(mockLogAuditEvent).toHaveBeenCalled();
+  });
+
+  it("returns 404 when the owned item is not visible through the user-scoped client", async () => {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: "not found" } }),
+      }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+    });
+
+    const response = await POST(
+      createRequest({
+        itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        area: "MZANSI_MARKET",
+      })
+    );
+
+    expect(response.status).toBe(404);
   });
 });

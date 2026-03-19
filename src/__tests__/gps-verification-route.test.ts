@@ -25,6 +25,7 @@ const {
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: { getUser: mockGetUser },
+    from: mockAdminFrom,
   }),
 }));
 

@@ -108,6 +108,20 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
   });
 
   it("approves unpublished promotions and stamps published_at", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: "mod-1",
+              app_metadata: { role: "moderator" },
+              is_anonymous: false,
+            },
+          },
+        }),
+      },
+    });
+
     const updateEq = vi.fn().mockResolvedValue({ error: null });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
     const from = vi.fn((table: string) => {
@@ -149,7 +163,8 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
     );
     expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        actorId: "admin-1",
+        actorId: "mod-1",
+        actorRole: "moderator",
         targetType: "promotion",
         targetId: VALID_UUID,
         metadata: expect.objectContaining({

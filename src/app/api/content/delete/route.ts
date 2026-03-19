@@ -86,8 +86,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid area" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
-
     let item: {
       id: string;
       status: string;
@@ -97,12 +95,15 @@ export async function POST(request: Request) {
     let deleteErrorMessage: string | null = null;
 
     if (config.ownerCompatible && isOwnerCompatibleTable(config.table)) {
-      const ownerColumn = await getOwnerColumn(admin, config.table);
-      const { data: fetchedItem, error: fetchError } = await admin
-        .from(config.table)
-        .select(withOwnerColumn("id, status, owner_id", ownerColumn))
-        .eq("id", itemId)
-        .maybeSingle();
+      const ownerColumn = await getOwnerColumn(supabase, config.table);
+      const { data: fetchedItem, error: fetchError } = await applyOwnerFilter(
+        supabase
+          .from(config.table)
+          .select(withOwnerColumn("id, status, owner_id", ownerColumn))
+          .eq("id", itemId),
+        ownerColumn,
+        user.id
+      ).maybeSingle();
 
       if (fetchError || !fetchedItem) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
       }
 
       const deleteQuery = applyOwnerFilter(
-        admin.from(config.table).delete().eq("id", itemId),
+        supabase.from(config.table).delete().eq("id", itemId),
         ownerColumn,
         user.id
       );
@@ -129,6 +130,7 @@ export async function POST(request: Request) {
       deleteErrorMessage =
         (deleteResult.error as unknown as { message?: string | null } | null)?.message ?? null;
     } else {
+      const admin = createAdminClient();
       // Storefronts (MALL_SHOPS) — probe owner column since the table
       // may use owner_id or seller_id depending on migration state.
       let storefrontOwnerCol: "owner_id" | "seller_id" = "owner_id";

@@ -1,19 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockCreateClient, mockCreateAdminClient, mockExchangeCodeForSession, mockFrom } =
-  vi.hoisted(() => ({
-    mockCreateClient: vi.fn(),
-    mockCreateAdminClient: vi.fn(),
-    mockExchangeCodeForSession: vi.fn(),
-    mockFrom: vi.fn(),
-  }));
+const { mockCreateClient, mockExchangeCodeForSession, mockFrom } = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockExchangeCodeForSession: vi.fn(),
+  mockFrom: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
-}));
-
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: mockCreateAdminClient,
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -26,10 +20,8 @@ describe("GET /auth/callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCreateClient.mockResolvedValue({
-      auth: { exchangeCodeForSession: mockExchangeCodeForSession },
-    });
-    mockCreateAdminClient.mockReturnValue({
       from: mockFrom,
+      auth: { exchangeCodeForSession: mockExchangeCodeForSession },
     });
   });
 

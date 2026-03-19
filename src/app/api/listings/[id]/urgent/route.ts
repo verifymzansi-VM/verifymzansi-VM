@@ -10,8 +10,8 @@ import { createHostedCheckout } from "@/lib/payments/checkout";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  applyOwnerFilter,
   getOwnerColumn,
-  readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
@@ -66,7 +66,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "listings");
+    const ownerColumn = await getOwnerColumn(supabase, "listings");
 
     // ── Get account profile ──────────────────────────────────
     const { data: profile } = await admin
@@ -80,19 +80,18 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     // ── Check listing exists and belongs to user ─────────────
-    const { data: rawListing } = await admin
-      .from("listings")
-      .select(withOwnerColumn("id, title, status, area, owner_id, urgent_until", ownerColumn))
-      .eq("id", listingId)
-      .maybeSingle();
+    const { data: rawListing } = await applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select(withOwnerColumn("id, title, status, area, owner_id, urgent_until", ownerColumn))
+        .eq("id", listingId),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const listing = rawListing as ListingCheckoutRow | null;
 
     if (!listing) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
-    }
-
-    if (readOwnerId(listing) !== user.id) {
-      return NextResponse.json({ error: "You don't own this listing" }, { status: 403 });
     }
 
     if (listing.status !== "live") {
