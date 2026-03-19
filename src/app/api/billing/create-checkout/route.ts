@@ -9,6 +9,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createHostedCheckout } from "@/lib/payments/checkout";
 import { z } from "zod";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("Checkout");
@@ -30,6 +31,9 @@ export async function POST(request: NextRequest) {
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();

@@ -8,6 +8,7 @@ import {
   PLAYWRIGHT_SESSION_COOKIE,
 } from "@/lib/supabase/playwright-session";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
+import { ensureCsrfCookie } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger("Proxy");
@@ -138,6 +139,7 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
   }
 
   applySecurityHeaders(response, csp);
+  ensureCsrfCookie(request, response);
   response.headers.set("x-nonce", nonce);
 
   return response;

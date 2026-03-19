@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { type NextRequest } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
@@ -58,7 +60,11 @@ function createMockRequest(body: Record<string, unknown>) {
     text: async () => json,
     json: async () => body,
     url: "https://verifymzansi.com/api/billing/create-checkout",
-    headers: new Headers(),
+    headers: new Headers({
+      origin: "https://verifymzansi.com",
+      cookie: `vm_csrf=${CSRF_TOKEN}`,
+      "x-csrf-token": CSRF_TOKEN,
+    }),
   } as unknown as NextRequest;
 }
 
@@ -68,7 +74,21 @@ function createCrossSiteRequest(body: Record<string, unknown>) {
     text: async () => json,
     json: async () => body,
     url: "https://verifymzansi.com/api/billing/create-checkout",
-    headers: new Headers({ origin: "https://evil.example" }),
+    headers: new Headers({
+      origin: "https://evil.example",
+      cookie: `vm_csrf=${CSRF_TOKEN}`,
+      "x-csrf-token": CSRF_TOKEN,
+    }),
+  } as unknown as NextRequest;
+}
+
+function createMissingCsrfRequest(body: Record<string, unknown>) {
+  const json = JSON.stringify(body);
+  return {
+    text: async () => json,
+    json: async () => body,
+    url: "https://verifymzansi.com/api/billing/create-checkout",
+    headers: new Headers({ origin: "https://verifymzansi.com" }),
   } as unknown as NextRequest;
 }
 
@@ -101,6 +121,14 @@ describe("POST /api/billing/create-checkout", () => {
   it("rejects cross-site checkout creation requests", async () => {
     const res = await createCheckout(
       createCrossSiteRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
+    );
+
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects checkout creation when the CSRF token is missing", async () => {
+    const res = await createCheckout(
+      createMissingCsrfRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
     );
 
     expect(res.status).toBe(403);

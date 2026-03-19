@@ -221,6 +221,25 @@ describe("validateUploadedFile", () => {
     );
     expect(result.valid).toBe(true);
   });
+
+  it("rejects files whose extension does not match the declared MIME type", () => {
+    const result = validateUploadedFile({
+      size: 1000,
+      type: "image/jpeg",
+      name: "renamed.png",
+    });
+    expect(result.valid).toBe(false);
+    expect((result as { error: string }).error).toContain("extension does not match");
+  });
+
+  it("accepts uppercase extensions after normalization", () => {
+    const result = validateUploadedFile({
+      size: 1000,
+      type: "image/jpeg",
+      name: "PHOTO.JPG",
+    });
+    expect(result.valid).toBe(true);
+  });
 });
 
 // ── DSAR Request Schema ─────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { saPhoneSchema } from "@/lib/validations/shared";
 import { sendOtpSms } from "@/lib/services/sms";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { normalizeSaPhone } from "@/lib/utils/phone";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
@@ -95,6 +96,11 @@ export async function POST(request: NextRequest) {
     const sameOriginFailure = enforceSameOriginMutation(request, log);
     if (sameOriginFailure) {
       return sameOriginFailure;
+    }
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) {
+      return csrfBlock;
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, otpSendSchema, {

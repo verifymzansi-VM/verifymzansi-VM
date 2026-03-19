@@ -10,6 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { downloadKycDocument } from "@/lib/services/storage";
 import crypto from "crypto";
 import { getStaffActorRole } from "@/lib/auth/admin-access";
+import { getLinkedEvidenceArtifactIds } from "@/lib/services/kyc-evidence-access";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 
@@ -69,9 +70,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Artifact not found" }, { status: 404 });
     }
 
-    // M1 guard: only allow evidence access when the user has at least one
-    // verification step in a reviewable state. Prevents unrestricted
-    // browsing of biometric data for users with no pending review.
     const REVIEWABLE_STATES = [
       "submitted",
       "pending_review",
@@ -93,6 +91,23 @@ export async function GET(request: NextRequest) {
       });
       return NextResponse.json(
         { error: "No active verification case for this user" },
+        { status: 403 }
+      );
+    }
+
+    const allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, artifact.user_id);
+
+    if (!allowedArtifactIds.includes(artifact.id)) {
+      log.warn(
+        "Evidence access denied: artifact is not linked to the current verification session",
+        {
+          actorId: user.id,
+          targetUserId: artifact.user_id,
+          artifactId,
+        }
+      );
+      return NextResponse.json(
+        { error: "Artifact is not linked to the current verification session" },
         { status: 403 }
       );
     }

@@ -8,6 +8,8 @@ import * as smsService from "@/lib/services/sms";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 async function hashOtpForTest(otp: string): Promise<string> {
   const salt = new Uint8Array(16);
   salt.fill(7);
@@ -53,7 +55,23 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 function createMockRequest(path: string, body: Record<string, unknown>) {
   return new NextRequest(`http://localhost${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      origin: "http://localhost",
+      cookie: `vm_csrf=${CSRF_TOKEN}`,
+      "x-csrf-token": CSRF_TOKEN,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function createMissingCsrfRequest(path: string, body: Record<string, unknown>) {
+  return new NextRequest(`http://localhost${path}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "http://localhost",
+    },
     body: JSON.stringify(body),
   });
 }
@@ -75,6 +93,14 @@ describe("OTP Routes", () => {
   });
 
   describe("POST /api/otp/send", () => {
+    it("rejects requests without a CSRF token", async () => {
+      const res = await sendOtp(
+        createMissingCsrfRequest("/api/otp/send", { phone: "+27821234567" })
+      );
+
+      expect(res.status).toBe(403);
+    });
+
     it("returns the shared rate-limit response when the external limiter blocks the request", async () => {
       vi.mocked(checkRateLimit).mockResolvedValue({ limited: true, retryAfter: 45 });
 
@@ -207,6 +233,14 @@ describe("OTP Routes", () => {
   });
 
   describe("POST /api/otp/verify", () => {
+    it("rejects OTP verification requests without a CSRF token", async () => {
+      const res = await verifyOtp(
+        createMissingCsrfRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+
+      expect(res.status).toBe(403);
+    });
+
     it("returns 400 when there is no active challenge for the user+phone", async () => {
       const mockAdminClient = {
         from: vi.fn((table: string) => {

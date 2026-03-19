@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { toast } from "@/hooks/use-toast";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { isPostingLimitBypassEnabled } from "../../lib/utils/posting-limit-bypass";
 
@@ -383,7 +384,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
       // Use the checkout API
       const res = await fetch("/api/billing/create-checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ planId: dbPlan.id, area: plan.area }),
       });
       const data = await res.json();

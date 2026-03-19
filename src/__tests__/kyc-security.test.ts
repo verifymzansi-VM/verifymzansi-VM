@@ -118,6 +118,22 @@ describe("KYC Security", () => {
             }),
           };
         }
+        if (table === "verification_sessions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id_artifact_id: "art-1",
+                    selfie_artifact_id: null,
+                    location_submitted_at: null,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
         if (table === "kyc_evidence_access_logs") {
           return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
@@ -169,6 +185,22 @@ describe("KYC Security", () => {
             }),
           };
         }
+        if (table === "verification_sessions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id_artifact_id: "art-1",
+                    selfie_artifact_id: null,
+                    location_submitted_at: null,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
         if (table === "kyc_evidence_access_logs") {
           return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
@@ -216,6 +248,22 @@ describe("KYC Security", () => {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 in: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          };
+        }
+        if (table === "verification_sessions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id_artifact_id: "art-1",
+                    selfie_artifact_id: null,
+                    location_submitted_at: null,
+                  },
+                  error: null,
+                }),
               }),
             }),
           };
@@ -319,6 +367,22 @@ describe("KYC Security", () => {
             }),
           };
         }
+        if (table === "verification_sessions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id_artifact_id: "art-1",
+                    selfie_artifact_id: null,
+                    location_submitted_at: null,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
         if (table === "kyc_evidence_access_logs") {
           return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
@@ -366,6 +430,22 @@ describe("KYC Security", () => {
             }),
           };
         }
+        if (table === "verification_sessions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id_artifact_id: "art-1",
+                    selfie_artifact_id: null,
+                    location_submitted_at: null,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
         if (table === "kyc_evidence_access_logs") {
           return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
@@ -381,6 +461,70 @@ describe("KYC Security", () => {
       expect(res.headers.get("Content-Type")).toBe("text/plain");
       // Should NOT call downloadKycDocument for dev:// keys
       expect(mockDownloadKycDocument).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Session-bound artifact access", () => {
+    it("returns 403 when the artifact is not linked to the current verification session", async () => {
+      mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
+
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "kyc_artifacts") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id: "art-99",
+                    user_id: "seller-1",
+                    r2_key: "kyc/seller-1/old-id.enc",
+                    content_type: "image/jpeg",
+                    artifact_kind: "id_doc",
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          };
+        }
+        if (table === "verification_sessions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id_artifact_id: "art-1",
+                    selfie_artifact_id: null,
+                    location_submitted_at: null,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
+      });
+
+      const res = await getEvidence(
+        createMockNextRequest(
+          "http://localhost:3000/api/admin/verification/evidence?artifactId=00000000-0000-0000-0000-000000000001"
+        )
+      );
+
+      expect(res.status).toBe(403);
+      await expect(res.json()).resolves.toMatchObject({
+        error: "Artifact is not linked to the current verification session",
+      });
     });
   });
 });

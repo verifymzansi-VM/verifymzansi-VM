@@ -16,6 +16,7 @@ import {
 } from "@/lib/services/verification-state";
 import crypto from "crypto";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
@@ -77,6 +78,11 @@ export async function POST(request: NextRequest) {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) {
       return originBlock;
+    }
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) {
+      return csrfBlock;
     }
 
     // ── Authenticate ─────────────────────────────────────────

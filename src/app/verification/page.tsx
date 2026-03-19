@@ -31,6 +31,7 @@ import {
   extractDobFromSaId,
   extractGenderFromSaId,
 } from "@/lib/utils/sa-id-validation";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { formatPhone } from "@/lib/utils/format";
 import type {
@@ -430,6 +431,7 @@ export default function VerificationPage() {
       try {
         const res = await fetch("/api/verification/session/start", {
           method: "POST",
+          headers: withCsrfHeaders(),
         });
         if (res.ok) {
           const data = await res.json();
@@ -562,7 +564,7 @@ export default function VerificationPage() {
           }
           const res = await fetch("/api/verification/location/gps", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify(gpsBody),
           });
           if (res.ok) {
@@ -681,7 +683,7 @@ export default function VerificationPage() {
     try {
       const res = await fetch("/api/otp/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ phone }),
       });
       const payload = (await res.json().catch(() => ({}))) as OtpSendResponse;
@@ -727,7 +729,7 @@ export default function VerificationPage() {
     try {
       const res = await fetch("/api/otp/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ phone, otp }),
       });
       const payload = await res.json().catch(() => ({}));
@@ -805,6 +807,7 @@ export default function VerificationPage() {
     const attempt = async () => {
       const res = await fetch("/api/verification/upload", {
         method: "POST",
+        headers: withCsrfHeaders(),
         body: buildFormData(),
       });
       const payload = await res.json().catch(() => ({}));
@@ -896,7 +899,7 @@ export default function VerificationPage() {
     try {
       const res = await fetch("/api/verification/location/manual", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ province, city }),
       });
       if (res.ok) {

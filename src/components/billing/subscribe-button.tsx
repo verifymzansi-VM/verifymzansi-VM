@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { useToast } from "@/hooks/use-toast";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
@@ -47,7 +48,7 @@ export function SubscribeButton({ area, tier, priceCents, isPopular }: Subscribe
 
       const res = await fetch("/api/billing/create-checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ planId: dbPlan.id, area }),
       });
 

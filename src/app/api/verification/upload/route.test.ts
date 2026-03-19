@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 // ── Hoisted mocks ────────────────────────────────────────────
 
 const {
@@ -91,7 +93,13 @@ function createFormDataRequest(fields: Record<string, string | Blob>) {
     url: "http://localhost/api/verification/upload",
     nextUrl: new URL("http://localhost/api/verification/upload"),
     headers: {
-      get: vi.fn((name: string) => (name.toLowerCase() === "origin" ? "http://localhost" : null)),
+      get: vi.fn((name: string) => {
+        const normalizedName = name.toLowerCase();
+        if (normalizedName === "origin") return "http://localhost";
+        if (normalizedName === "cookie") return `vm_csrf=${CSRF_TOKEN}`;
+        if (normalizedName === "x-csrf-token") return CSRF_TOKEN;
+        return null;
+      }),
     },
   } as unknown as NextRequest;
   return req;

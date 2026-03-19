@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { getStaffActorRole } from "@/lib/auth/admin-access";
+import { getLinkedEvidenceArtifactIds } from "@/lib/services/kyc-evidence-access";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 
@@ -81,8 +82,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Verification step(s) not found" }, { status: 404 });
     }
 
-    // M1 guard: require at least one step in a reviewable state to access
-    // metadata. Prevents unrestricted browsing of biometric assessment data.
+    const targetUserId = steps[0].user_id;
     const REVIEWABLE_STATES = [
       "submitted",
       "pending_review",
@@ -105,16 +105,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const targetUserId = steps[0].user_id;
+    const allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, targetUserId);
 
-    // Fetch all artifacts for this user
-    const { data: artifacts } = await adminClient
-      .from("kyc_artifacts")
-      .select(
-        "id, user_id, step_type, artifact_kind, r2_key, content_type, file_size_bytes, sha256, provider_ref, purge_after, status, created_at"
-      )
-      .eq("user_id", targetUserId)
-      .order("created_at", { ascending: false });
+    // Fetch only artifacts linked to the current verification session.
+    let artifacts: Array<Record<string, unknown>> = [];
+    if (allowedArtifactIds.length > 0) {
+      const { data } = await adminClient
+        .from("kyc_artifacts")
+        .select(
+          "id, user_id, step_type, artifact_kind, r2_key, content_type, file_size_bytes, sha256, provider_ref, purge_after, status, created_at"
+        )
+        .in("id", allowedArtifactIds)
+        .order("created_at", { ascending: false });
+      artifacts = data || [];
+    }
 
     // Fetch provider results for all artifacts
     const artifactIds = (artifacts || []).map((a) => a.id);

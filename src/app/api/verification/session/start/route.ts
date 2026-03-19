@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { logAuditEvent } from "@/lib/services/audit";
 import { REQUIRED_VERIFICATION_STEPS } from "@/lib/constants/verification";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -20,6 +21,11 @@ export async function POST(_request: NextRequest) {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) {
       return originBlock;
+    }
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) {
+      return csrfBlock;
     }
 
     // Auth check

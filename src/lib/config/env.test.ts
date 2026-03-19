@@ -178,7 +178,7 @@ describe("env config", () => {
       expect(result.IP_HASH_SECRET).toBe("a".repeat(32));
     });
 
-    it("allows missing IP_HASH_SECRET (optional field)", async () => {
+    it("allows missing IP_HASH_SECRET outside production", async () => {
       vi.resetModules();
       stubNoBypassFlags();
       for (const [key, value] of Object.entries(VALID_ENV)) {
@@ -189,6 +189,21 @@ describe("env config", () => {
       const mod = await import("./env");
       const result = mod.validateEnv();
       expect(result.IP_HASH_SECRET).toBeUndefined();
+    });
+
+    it("requires IP_HASH_SECRET in production", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VerifyMzansi");
+      vi.stubEnv("OZOW_ENV", "production");
+      delete process.env.IP_HASH_SECRET;
+      const mod = await import("./env");
+
+      expect(() => mod.validateEnv()).toThrow("IP_HASH_SECRET is required for launch paths");
     });
 
     it("rejects IP_HASH_SECRET shorter than 32 characters", async () => {

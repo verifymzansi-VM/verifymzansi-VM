@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 const { mockCreateClient, mockCheckRateLimit, mockGetClientIp } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCheckRateLimit: vi.fn(),
@@ -34,7 +36,19 @@ function createRequest(origin?: string) {
   return {
     url: "http://localhost/api/verification/location/manual",
     nextUrl: new URL("http://localhost/api/verification/location/manual"),
-    headers: new Headers(origin ? { origin } : {}),
+    headers: new Headers({
+      ...(origin ? { origin } : {}),
+      cookie: `vm_csrf=${CSRF_TOKEN}`,
+      "x-csrf-token": CSRF_TOKEN,
+    }),
+  } as unknown as NextRequest;
+}
+
+function createMissingCsrfRequest(origin = "http://localhost") {
+  return {
+    url: "http://localhost/api/verification/location/manual",
+    nextUrl: new URL("http://localhost/api/verification/location/manual"),
+    headers: new Headers({ origin }),
   } as unknown as NextRequest;
 }
 
@@ -52,6 +66,11 @@ describe("POST /api/verification/location/manual", () => {
 
   it("rejects cross-site manual location requests", async () => {
     const response = await POST(createRequest("https://evil.example"));
+    expect(response.status).toBe(403);
+  });
+
+  it("rejects manual location requests without a CSRF token", async () => {
+    const response = await POST(createMissingCsrfRequest());
     expect(response.status).toBe(403);
   });
 

@@ -154,6 +154,22 @@ describe("Admin auth access control", () => {
             }),
           };
         }
+        if (table === "verification_sessions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id_artifact_id: "art-1",
+                    selfie_artifact_id: null,
+                    location_submitted_at: null,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
         if (table === "kyc_evidence_access_logs") {
           return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
@@ -193,6 +209,22 @@ describe("Admin auth access control", () => {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 in: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          };
+        }
+        if (table === "verification_sessions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id_artifact_id: "art-1",
+                    selfie_artifact_id: null,
+                    location_submitted_at: null,
+                  },
+                  error: null,
+                }),
               }),
             }),
           };

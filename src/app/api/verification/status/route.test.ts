@@ -7,8 +7,16 @@ const { mockCreateClient, mockFrom } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
 }));
 
+const { mockCheckRateLimit } = vi.hoisted(() => ({
+  mockCheckRateLimit: vi.fn(),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
+}));
+
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: mockCheckRateLimit,
 }));
 
 import { GET } from "./route";
@@ -16,6 +24,7 @@ import { GET } from "./route";
 describe("GET /api/verification/status", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -93,6 +102,17 @@ describe("GET /api/verification/status", () => {
       status: "approved",
       reviewed_at: "2026-03-12T12:00:00.000Z",
     });
+  });
+
+  it("returns 429 when verification status polling is rate limited", async () => {
+    mockCheckRateLimit.mockResolvedValue({ limited: true, retryAfter: 12 });
+
+    const response = await GET({} as unknown as NextRequest);
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("12");
+    expect(body.error).toMatch(/Too many verification status requests/i);
   });
 
   it("falls back to incomplete when account has no verification status", async () => {

@@ -302,6 +302,19 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
 
   validateRateLimiterConfig(result.data);
 
+  if (result.data.NODE_ENV === "production" && !result.data.IP_HASH_SECRET) {
+    throw new Error(
+      [
+        "",
+        "VerifyMzansi — Environment Configuration Error",
+        "",
+        "IP_HASH_SECRET is required in production.",
+        "Configure it before starting the app so audit and access logs can hash IP addresses safely.",
+        "",
+      ].join("\n")
+    );
+  }
+
   for (const warning of launchSummary.warnings) {
     console.warn(`[ENV] WARNING: ${warning.name}: ${warning.detail}`);
   }

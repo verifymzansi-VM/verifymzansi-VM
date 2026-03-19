@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 // ── Hoisted mocks ────────────────────────────────────────────
 
 const {
@@ -49,7 +51,18 @@ import { POST } from "./route";
 function createMockRequest(origin?: string) {
   return new NextRequest("http://localhost/api/verification/session/start", {
     method: "POST",
-    headers: origin ? { origin } : undefined,
+    headers: {
+      ...(origin ? { origin } : {}),
+      cookie: `${origin ? "" : ""}vm_csrf=${CSRF_TOKEN}`,
+      "x-csrf-token": CSRF_TOKEN,
+    },
+  });
+}
+
+function createMissingCsrfRequest(origin = "http://localhost") {
+  return new NextRequest("http://localhost/api/verification/session/start", {
+    method: "POST",
+    headers: { origin },
   });
 }
 
@@ -128,6 +141,11 @@ describe("POST /api/verification/session/start", () => {
 
   it("rejects cross-site session-start requests", async () => {
     const response = await POST(createMockRequest("https://evil.example"));
+    expect(response.status).toBe(403);
+  });
+
+  it("rejects session-start requests without a CSRF token", async () => {
+    const response = await POST(createMissingCsrfRequest());
     expect(response.status).toBe(403);
   });
 

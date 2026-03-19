@@ -213,6 +213,12 @@ describe("Evidence Metadata API", () => {
         switch (table) {
           case "verification_steps":
             return chainStub([MOCK_STEP]);
+          case "verification_sessions":
+            return chainStub({
+              id_artifact_id: "art-1",
+              selfie_artifact_id: null,
+              location_submitted_at: null,
+            });
           case "kyc_artifacts":
             return chainStub([MOCK_ARTIFACT]);
           case "kyc_provider_results":
@@ -255,6 +261,12 @@ describe("Evidence Metadata API", () => {
         switch (table) {
           case "verification_steps":
             return chainStub([MOCK_STEP]);
+          case "verification_sessions":
+            return chainStub({
+              id_artifact_id: "art-1",
+              selfie_artifact_id: null,
+              location_submitted_at: null,
+            });
           case "kyc_artifacts":
             return chainStub([MOCK_ARTIFACT]);
           case "kyc_provider_results":
@@ -292,6 +304,12 @@ describe("Evidence Metadata API", () => {
         switch (table) {
           case "verification_steps":
             return chainStub([MOCK_STEP]);
+          case "verification_sessions":
+            return chainStub({
+              id_artifact_id: "art-1",
+              selfie_artifact_id: null,
+              location_submitted_at: null,
+            });
           case "kyc_artifacts":
             return chainStub([MOCK_ARTIFACT]);
           case "kyc_provider_results":
@@ -339,6 +357,47 @@ describe("Evidence Metadata API", () => {
       );
 
       expect(mockLogAuditEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Session-bound metadata", () => {
+    it("returns no artifacts when the current verification session links none", async () => {
+      mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
+
+      mockFrom.mockImplementation((table: string) => {
+        switch (table) {
+          case "verification_steps":
+            return chainStub([MOCK_STEP]);
+          case "verification_sessions":
+            return chainStub({
+              id_artifact_id: null,
+              selfie_artifact_id: null,
+              location_submitted_at: null,
+            });
+          case "kyc_artifacts":
+            return chainStub([MOCK_ARTIFACT]);
+          case "kyc_provider_results":
+            return chainStub([]);
+          case "kyc_risk_signals":
+            return chainStub([]);
+          case "account_profiles":
+            return chainStub(MOCK_SELLER_PROFILE);
+          case "kyc_evidence_access_logs":
+            return chainStub([]);
+          default:
+            return chainStub([]);
+        }
+      });
+
+      const res = await GET(
+        createMockNextRequest(
+          "/api/admin/verification/evidence/metadata?stepId=00000000-0000-0000-0000-000000000010"
+        )
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.artifacts).toEqual([]);
     });
   });
 });

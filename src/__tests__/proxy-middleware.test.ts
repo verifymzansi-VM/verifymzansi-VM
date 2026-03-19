@@ -104,6 +104,7 @@ describe("proxy security headers", () => {
   it("adds the full security header set to successful responses", async () => {
     const res = await middleware(createMockRequest("/"));
     const csp = res.headers.get("Content-Security-Policy");
+    const setCookie = res.headers.get("set-cookie");
 
     expect(res.status).toBe(200);
     expect(csp).toContain("default-src 'self'");
@@ -112,6 +113,7 @@ describe("proxy security headers", () => {
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
     expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
+    expect(setCookie).toContain("vm_csrf=");
   });
 
   it("keeps basic security headers on redirects", async () => {

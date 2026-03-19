@@ -3,8 +3,10 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { otpVerifySchema } from "@/lib/validations/auth";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import {
   ACCOUNT_PHONE_IN_USE_ERROR,
@@ -186,6 +188,16 @@ async function finalizePhoneVerification(
 
 export async function POST(request: NextRequest) {
   try {
+    const sameOriginFailure = enforceSameOriginMutation(request, log);
+    if (sameOriginFailure) {
+      return sameOriginFailure;
+    }
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) {
+      return csrfBlock;
+    }
+
     // Rate limit by IP to prevent brute-force across multiple OTP challenges
     const ip = getClientIp(request);
     const rl = await checkRateLimit({

@@ -66,6 +66,13 @@ export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as 
 /** Allowed MIME types for document uploads (images + PDF). */
 export const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"] as const;
 
+const EXTENSIONS_BY_TYPE: Record<string, readonly string[]> = {
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/png": ["png"],
+  "image/webp": ["webp"],
+  "application/pdf": ["pdf"],
+};
+
 /** Maximum file upload size in bytes (5 MB). */
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -105,6 +112,15 @@ export function validateUploadedFile(
     return {
       valid: false,
       error: `File type "${file.type}" is not allowed. Accepted: ${allowedTypes.join(", ")}`,
+    };
+  }
+
+  const extension = file.name.split(".").pop()?.trim().toLowerCase();
+  const allowedExtensions = EXTENSIONS_BY_TYPE[file.type] ?? [];
+  if (!extension || !allowedExtensions.includes(extension)) {
+    return {
+      valid: false,
+      error: `File extension does not match "${file.type}". Accepted extensions: ${allowedExtensions.join(", ")}`,
     };
   }
 

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 /**
  * Regression test: when verification_steps upsert fails after a successful
  * R2 upload + kyc_artifacts insert, the handler must clean up both the
@@ -109,10 +111,14 @@ function createUploadRequest(docType = "id_document"): NextRequest {
       get: vi.fn((name: string) => {
         if (name === "origin") return "http://localhost:3000";
         if (name === "x-forwarded-for") return "127.0.0.1";
+        if (name === "cookie") return `vm_csrf=${CSRF_TOKEN}`;
+        if (name === "x-csrf-token") return CSRF_TOKEN;
         return null;
       }),
     },
     ip: "127.0.0.1",
+    url: "http://localhost:3000/api/verification/upload",
+    nextUrl: new URL("http://localhost:3000/api/verification/upload"),
   } as unknown as NextRequest;
 }
 
@@ -150,6 +156,24 @@ describe("POST /api/verification/upload — R2 cleanup on step failure", () => {
           data: { user: { id: USER_ID, email: "test@example.com" } },
         }),
       },
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return chainable({
+            select: () =>
+              chainable({
+                maybeSingle: () =>
+                  Promise.resolve({
+                    data: { id: "profile-1" },
+                    error: null,
+                  }),
+              }),
+          });
+        }
+
+        return chainable({
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        });
+      }),
     });
 
     mockUploadKycDocument.mockResolvedValue({ url: `https://r2/${R2_KEY}`, key: R2_KEY });

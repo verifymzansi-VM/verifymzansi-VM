@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, CreditCard, AlertCircle } from "lucide-react";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 function CheckoutContent() {
   const router = useRouter();
@@ -29,7 +30,7 @@ function CheckoutContent() {
       try {
         const res = await fetch("/api/billing/create-checkout", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ planId }),
         });
 
