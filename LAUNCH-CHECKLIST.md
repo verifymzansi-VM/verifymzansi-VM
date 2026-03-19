@@ -75,6 +75,9 @@ it the same as other dev bypass flags.
 
 - Confirm Ozow is in production mode and can receive callbacks at
   `/api/webhooks/ozow`.
+- Confirm the Ozow webhook path rejects unsigned requests, amount mismatches,
+  and currency mismatches before fulfillment, and that fulfillment failures roll
+  back `processing` status.
 - Confirm the KYC provider webhook secret is configured before enabling live
   provider callbacks at `/api/webhooks/kyc/provider`.
 - Confirm Africa's Talking sender approval is complete for the live sender ID.

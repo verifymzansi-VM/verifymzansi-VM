@@ -1,20 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockLoggerError } = vi.hoisted(
-  () => ({
-    mockCreateClient: vi.fn(),
-    mockCreateAdminClient: vi.fn(),
-    mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
-    mockLoggerError: vi.fn(),
-  })
-);
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockLogAuditEvent,
+  mockLoggerError,
+  mockEnforceSameOriginMutation,
+} = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
+  mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
+  mockLoggerError: vi.fn(),
+  mockEnforceSameOriginMutation: vi.fn(() => null),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ error: mockLoggerError, info: vi.fn(), warn: vi.fn() }),
+}));
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: mockEnforceSameOriginMutation,
 }));
 
 import { POST } from "@/app/api/admin/promotions/[id]/moderate/route";
@@ -37,6 +45,7 @@ function createParams(id = VALID_UUID) {
 describe("POST /api/admin/promotions/[id]/moderate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockEnforceSameOriginMutation.mockReturnValue(null);
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -50,6 +59,21 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
         }),
       },
     });
+  });
+
+  it("rejects cross-origin moderation requests before auth or validation", async () => {
+    mockEnforceSameOriginMutation.mockReturnValue(
+      new Response(JSON.stringify({ error: "Cross-origin request blocked" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const response = await POST(createRequest({ decision: "approve" }), createParams());
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "Cross-origin request blocked" });
+    expect(mockCreateClient).not.toHaveBeenCalled();
   });
 
   it("rejects invalid promotion ids", async () => {

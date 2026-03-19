@@ -36,10 +36,29 @@ npx supabase db push
 
 This applies SQL files in `supabase/migrations` to the linked remote database.
 
+Important current state:
+
+- The linked production project has the billing policy migration applied:
+  `20260319103000_explicit_billing_service_role_policies.sql`
+- The linked production project also has the follow-up moderator visibility
+  migration applied for `kyc_evidence_access_logs`:
+  `20260319171500_expand_kyc_evidence_access_log_staff_read.sql`
+- The linked production project also has the follow-up explicit audit/intake
+  insert-policy migration applied:
+  `20260319194000_explicit_audit_service_role_insert_policies.sql`
+- If `supabase migration list` or `supabase db push` fails with pooler auth
+  errors for `postgres.tnygdgormnofpgjknlhr`, the local Postgres password is
+  still not accepted by the remote database. Reconcile `SUPABASE_DB_PASSWORD`
+  with the current project database password before relying on the CLI path
+  again.
+
 If the database is missing the `PROMOTIONS_EVENTS` marketplace area enum value, make sure the latest migrations include:
 
 - `20260307113000_add_promotions_events_marketplace_area.sql`
 - `20260307110000_add_rejected_seller_verification_status.sql`
+- `20260319103000_explicit_billing_service_role_policies.sql`
+- `20260319171500_expand_kyc_evidence_access_log_staff_read.sql`
+- `20260319194000_explicit_audit_service_role_insert_policies.sql`
 
 ## 4. Reload PostgREST schema cache
 
@@ -48,6 +67,9 @@ Run the following SQL in Supabase SQL editor:
 ```sql
 NOTIFY pgrst, 'reload schema';
 ```
+
+If you apply a migration through an alternative database-admin path instead of
+the CLI, still reload the schema cache before running API-level verification.
 
 ## 5. Verify required tables are visible through PostgREST
 

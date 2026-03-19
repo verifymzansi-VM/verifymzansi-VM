@@ -7,6 +7,7 @@ const {
   mockLogAuditEvent,
   mockCreateNotification,
   mockCheckLocalRateLimit,
+  mockEnforceSameOriginMutation,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -14,6 +15,7 @@ const {
   mockLogAuditEvent: vi.fn(),
   mockCreateNotification: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(),
+  mockEnforceSameOriginMutation: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -55,7 +57,7 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 
 vi.mock("@/lib/utils/mutation-origin", () => ({
-  enforceSameOriginMutation: () => null,
+  enforceSameOriginMutation: mockEnforceSameOriginMutation,
 }));
 
 import { POST } from "./route";
@@ -79,8 +81,30 @@ describe("POST /api/admin/content/decide", () => {
     });
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
+    mockEnforceSameOriginMutation.mockReturnValue(null);
     mockLogAuditEvent.mockResolvedValue(undefined);
     mockCreateNotification.mockResolvedValue(true);
+  });
+
+  it("rejects cross-origin moderation requests before auth or body parsing", async () => {
+    mockEnforceSameOriginMutation.mockReturnValue(
+      new Response(JSON.stringify({ error: "Cross-origin request blocked" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const response = await POST(
+      createMockRequest({
+        itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        area: "PROMOTIONS_EVENTS",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "Cross-origin request blocked" });
+    expect(mockCreateClient).not.toHaveBeenCalled();
   });
 
   it("approves promotions surfaced in the moderation queue", async () => {

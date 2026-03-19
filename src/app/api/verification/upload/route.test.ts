@@ -16,6 +16,10 @@ const {
   mockProcessKycArtifact,
   mockCheckRateLimit,
   mockGetClientIp,
+  mockValidateBufferIntegrity,
+  mockScanForMalware,
+  mockStripExifFromJpeg,
+  mockStripMetadataFromPng,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -26,6 +30,14 @@ const {
   mockProcessKycArtifact: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockGetClientIp: vi.fn(),
+  mockValidateBufferIntegrity: vi.fn(() => ({
+    valid: true,
+    detectedMime: "image/jpeg",
+    mismatch: false,
+  })),
+  mockScanForMalware: vi.fn(() => ({ safe: true })),
+  mockStripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
+  mockStripMetadataFromPng: vi.fn((buf: Uint8Array) => buf),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -58,19 +70,16 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 
 vi.mock("@/lib/utils/file-validation", () => ({
-  validateBufferIntegrity: vi.fn(() => ({
-    valid: true,
-    detectedMime: "image/jpeg",
-    mismatch: false,
-  })),
+  validateBufferIntegrity: mockValidateBufferIntegrity,
 }));
 
 vi.mock("@/lib/utils/malware-scan", () => ({
-  scanForMalware: vi.fn(() => ({ safe: true })),
+  scanForMalware: mockScanForMalware,
 }));
 
 vi.mock("@/lib/utils/exif-strip", () => ({
-  stripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
+  stripExifFromJpeg: mockStripExifFromJpeg,
+  stripMetadataFromPng: mockStripMetadataFromPng,
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -235,6 +244,14 @@ describe("POST /api/verification/upload", () => {
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
+    mockValidateBufferIntegrity.mockReturnValue({
+      valid: true,
+      detectedMime: "image/jpeg",
+      mismatch: false,
+    });
+    mockScanForMalware.mockReturnValue({ safe: true });
+    mockStripExifFromJpeg.mockImplementation((buf: Uint8Array) => buf);
+    mockStripMetadataFromPng.mockImplementation((buf: Uint8Array) => buf);
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv(
       "ID_ENCRYPTION_KEY",
@@ -320,6 +337,94 @@ describe("POST /api/verification/upload", () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.stepType).toBe("selfie");
+  });
+
+  it("rejects uploads when the declared MIME type does not match the file bytes", async () => {
+    mockAuth({ id: "user-1" });
+    setupDefaultAdminMocks();
+    mockValidateBufferIntegrity.mockReturnValue({
+      valid: false,
+      detectedMime: "application/pdf",
+      mismatch: true,
+    });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("File type does not match its content"),
+      })
+    );
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects uploads flagged by malware scanning", async () => {
+    mockAuth({ id: "user-1" });
+    setupDefaultAdminMocks();
+    mockScanForMalware.mockReturnValue({ safe: false, threat: "eicar" });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("suspicious content"),
+      })
+    );
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
+  });
+
+  it("strips JPEG metadata before upload", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+    setupDefaultAdminMocks();
+    mockValidateBufferIntegrity.mockReturnValue({
+      valid: true,
+      detectedMime: "image/jpeg",
+      mismatch: false,
+    });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockStripExifFromJpeg).toHaveBeenCalledTimes(1);
+    expect(mockStripMetadataFromPng).not.toHaveBeenCalled();
+  });
+
+  it("strips PNG metadata before upload", async () => {
+    mockAuth({ id: "user-1" });
+    setupDefaultAdminMocks();
+    mockValidateBufferIntegrity.mockReturnValue({
+      valid: true,
+      detectedMime: "image/png",
+      mismatch: false,
+    });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile("selfie-data", "image/png", "selfie.png"),
+        docType: "selfie",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockStripMetadataFromPng).toHaveBeenCalledTimes(1);
+    expect(mockStripExifFromJpeg).not.toHaveBeenCalled();
   });
 
   it("calls processKycArtifact with correct params", async () => {
