@@ -54,14 +54,15 @@
   production. That needed environment cleanup in Cloudflare, not code changes in
   this warning-cleanup pass.
 
-## Cloudflare Middleware Compatibility Fix (2026-03-12)
+## Cloudflare Middleware Compatibility Fix (2026-03-20)
 
-- **Root cause fixed:** Next.js 16 `src/proxy.ts` runs on the Node.js runtime,
-  which OpenNext Cloudflare rejects with
+- **Root cause fixed:** Next.js 16 `src/proxy.ts` resolves to the Node.js
+  runtime, which OpenNext Cloudflare rejects with
   `Node.js middleware is not currently supported`.
-- **Implementation:** Replaced the active request gate with Edge
-  `src/middleware.ts`, removed `src/proxy.ts`, and kept the existing auth, CSP,
-  and route-protection logic intact.
+- **Implementation:** Restored Edge `src/middleware.ts` as the active request
+  gate, removed `src/proxy.ts`, kept the existing auth/CSP/route-protection
+  logic in `src/proxy-handler.ts`, and updated the Cloudflare preflight cleanup
+  so build-cache restores cannot reintroduce the stale proxy entry.
 - **Tests updated:** Middleware routing tests now import from
   `src/middleware.ts` and use the current naming.
 - **Validation:** `pnpm run build` passes and

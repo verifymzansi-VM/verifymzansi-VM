@@ -606,20 +606,14 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   return response;
 }
 
-// -- Next.js proxy entry point ----------------------------------------------
+// -- Shared request handler -------------------------------------------------
 
 /**
- * Edge proxy called by Next.js on every matched request.
+ * Shared Edge-safe request handler used by the framework entrypoint.
  * Delegates to routeRequest() for auth/routing, then wraps
  * the response with security headers (CSP nonce, HSTS, etc.).
  */
-export async function proxy(request: NextRequest): Promise<NextResponse> {
+export async function handleMiddlewareRequest(request: NextRequest): Promise<NextResponse> {
   const routeResponse = await routeRequest(request);
   return withSecurityHeaders(request, routeResponse);
 }
-
-export const middleware = proxy;
-
-export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/health|api/webhooks).*)"],
-};

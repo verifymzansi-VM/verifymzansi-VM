@@ -14,7 +14,8 @@ vi.mock("@supabase/ssr", () => ({
   }),
 }));
 
-import { middleware, proxy, routeRequest } from "@/proxy-handler";
+import { middleware } from "@/middleware";
+import { routeRequest } from "@/proxy-handler";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -117,7 +118,7 @@ describe("proxy security headers", () => {
   });
 
   it("keeps basic security headers on redirects", async () => {
-    const res = await proxy(createMockRequest("/dashboard"));
+    const res = await middleware(createMockRequest("/dashboard"));
 
     expect(res.status).toBe(307);
     expect(res.headers.get("Content-Security-Policy")).toBeNull();

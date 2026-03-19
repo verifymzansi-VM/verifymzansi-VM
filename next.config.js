@@ -64,7 +64,8 @@ const nextConfig = {
   },
   async headers() {
     // Security headers (CSP, X-Frame-Options, etc.) are set per-request
-    // in src/proxy.ts with a nonce-based CSP. Only cache headers remain here.
+    // in src/middleware.ts via the shared proxy-handler nonce/CSP logic.
+    // Only cache headers remain here.
     return [
       {
         source: "/api/:path*",
