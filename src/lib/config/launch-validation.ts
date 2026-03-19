@@ -24,6 +24,9 @@ const DEV_ONLY_FLAGS = [
   "ENABLE_MOCK_OZOW",
   "DEV_EXPOSE_OTP",
   "ENABLE_DEV_KYC_WEBHOOK_BYPASS",
+  "ENABLE_TEST_POSTING_BYPASS",
+  "NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS",
+  "ENABLE_DEV_TURNSTILE_BYPASS",
 ] as const;
 
 /**
@@ -31,7 +34,12 @@ const DEV_ONLY_FLAGS = [
  * Unlike DEV_ONLY_FLAGS (which are boolean toggles), these carry
  * values that directly weaken security when present.
  */
-const DANGEROUS_IN_PRODUCTION = ["BYPASS_OTP_CODE", "TEST_PHONE_NUMBERS", "SMS_MOCK"] as const;
+const DANGEROUS_IN_PRODUCTION = [
+  "BYPASS_OTP_CODE",
+  "TEST_PHONE_NUMBERS",
+  "SMS_MOCK",
+  "PLAYWRIGHT_TEST_MODE",
+] as const;
 
 const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
   development: [

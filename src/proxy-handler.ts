@@ -57,6 +57,8 @@ function buildCsp(
     directives.push("upgrade-insecure-requests");
   }
 
+  directives.push("report-to csp-endpoint");
+
   return directives.join("; ");
 }
 
@@ -69,6 +71,14 @@ function applySecurityHeaders(response: NextResponse, csp: string): void {
   response.headers.set(
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()"
+  );
+  response.headers.set(
+    "Report-To",
+    JSON.stringify({
+      group: "csp-endpoint",
+      max_age: 86400,
+      endpoints: [{ url: "/api/csp-report" }],
+    })
   );
 
   if (process.env.NODE_ENV === "production") {

@@ -70,6 +70,7 @@ describe("turnstile verification", () => {
 
     it("allows bypass in development mode with placeholder token", async () => {
       vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("ENABLE_DEV_TURNSTILE_BYPASS", "true");
       vi.stubEnv("TURNSTILE_SECRET_KEY", "");
       vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
 

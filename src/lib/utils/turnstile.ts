@@ -82,9 +82,10 @@ export async function verifyTurnstileToken(
 
   if (!configStatus.configured) {
     log.error("Secret key not configured or is dummy");
-    // In development or Playwright test mode, allow bypass token
+    // In local dev with explicit bypass, or Playwright test mode, allow bypass token
     if (
-      (process.env.NODE_ENV === "development" || process.env.PLAYWRIGHT_TEST_MODE === "1") &&
+      (process.env.ENABLE_DEV_TURNSTILE_BYPASS === "true" ||
+        process.env.PLAYWRIGHT_TEST_MODE === "1") &&
       params.token === "dev-turnstile-bypass"
     ) {
       return { success: true };

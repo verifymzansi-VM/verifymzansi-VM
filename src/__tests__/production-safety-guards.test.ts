@@ -83,6 +83,36 @@ describe("launch-validation: dev-only flags in production", () => {
     expect(devFlagCheck?.detail).toContain("ENABLE_DEV_KYC_WEBHOOK_BYPASS");
   });
 
+  it("fails when ENABLE_TEST_POSTING_BYPASS is set in production", () => {
+    const env = { ...createBaseProductionEnv(), ENABLE_TEST_POSTING_BYPASS: "true" };
+    const result = validateLaunchConfiguration(env, { mode: "production" });
+
+    expect(result.isValid).toBe(false);
+    const devFlagCheck = result.checks.find((c) => c.name === "Dev-only flags");
+    expect(devFlagCheck?.status).toBe("fail");
+    expect(devFlagCheck?.detail).toContain("ENABLE_TEST_POSTING_BYPASS");
+  });
+
+  it("fails when NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS is set in production", () => {
+    const env = { ...createBaseProductionEnv(), NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS: "true" };
+    const result = validateLaunchConfiguration(env, { mode: "production" });
+
+    expect(result.isValid).toBe(false);
+    const devFlagCheck = result.checks.find((c) => c.name === "Dev-only flags");
+    expect(devFlagCheck?.status).toBe("fail");
+    expect(devFlagCheck?.detail).toContain("NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS");
+  });
+
+  it("fails when ENABLE_DEV_TURNSTILE_BYPASS is set in production", () => {
+    const env = { ...createBaseProductionEnv(), ENABLE_DEV_TURNSTILE_BYPASS: "true" };
+    const result = validateLaunchConfiguration(env, { mode: "production" });
+
+    expect(result.isValid).toBe(false);
+    const devFlagCheck = result.checks.find((c) => c.name === "Dev-only flags");
+    expect(devFlagCheck?.status).toBe("fail");
+    expect(devFlagCheck?.detail).toContain("ENABLE_DEV_TURNSTILE_BYPASS");
+  });
+
   it("warns but passes when dev flags are set in development", () => {
     const env = { ...createBaseProductionEnv(), ENABLE_MOCK_OZOW: "true" };
     const result = validateLaunchConfiguration(env, { mode: "development" });
@@ -132,6 +162,16 @@ describe("launch-validation: dangerous env vars in production", () => {
     const dangerCheck = result.checks.find((c) => c.name === "Dangerous env vars");
     expect(dangerCheck?.status).toBe("fail");
     expect(dangerCheck?.detail).toContain("SMS_MOCK");
+  });
+
+  it("fails when PLAYWRIGHT_TEST_MODE is set in production", () => {
+    const env = { ...createBaseProductionEnv(), PLAYWRIGHT_TEST_MODE: "1" };
+    const result = validateLaunchConfiguration(env, { mode: "production" });
+
+    expect(result.isValid).toBe(false);
+    const dangerCheck = result.checks.find((c) => c.name === "Dangerous env vars");
+    expect(dangerCheck?.status).toBe("fail");
+    expect(dangerCheck?.detail).toContain("PLAYWRIGHT_TEST_MODE");
   });
 
   it("fails when multiple dangerous vars are set in production", () => {
@@ -202,6 +242,10 @@ describe("instrumentation: dev bypass startup guard", () => {
     delete process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS;
     delete process.env.DEV_EXPOSE_OTP;
     delete process.env.SMS_MOCK;
+    delete process.env.PLAYWRIGHT_TEST_MODE;
+    delete process.env.ENABLE_TEST_POSTING_BYPASS;
+    delete process.env.NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS;
+    delete process.env.ENABLE_DEV_TURNSTILE_BYPASS;
   });
 
   it("allows startup when no dev bypasses are set", async () => {
@@ -238,6 +282,33 @@ describe("instrumentation: dev bypass startup guard", () => {
     _resetInstrumentationForTesting();
 
     await expect(register()).rejects.toThrow("ENABLE_DEV_KYC_WEBHOOK_BYPASS");
+  });
+
+  it("blocks startup in production when PLAYWRIGHT_TEST_MODE is set", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.PLAYWRIGHT_TEST_MODE = "1";
+    const { register, _resetInstrumentationForTesting } = await import("../instrumentation");
+    _resetInstrumentationForTesting();
+
+    await expect(register()).rejects.toThrow("PLAYWRIGHT_TEST_MODE");
+  });
+
+  it("blocks startup in production when ENABLE_TEST_POSTING_BYPASS is set", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.ENABLE_TEST_POSTING_BYPASS = "true";
+    const { register, _resetInstrumentationForTesting } = await import("../instrumentation");
+    _resetInstrumentationForTesting();
+
+    await expect(register()).rejects.toThrow("ENABLE_TEST_POSTING_BYPASS");
+  });
+
+  it("blocks startup in production when ENABLE_DEV_TURNSTILE_BYPASS is set", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.ENABLE_DEV_TURNSTILE_BYPASS = "true";
+    const { register, _resetInstrumentationForTesting } = await import("../instrumentation");
+    _resetInstrumentationForTesting();
+
+    await expect(register()).rejects.toThrow("ENABLE_DEV_TURNSTILE_BYPASS");
   });
 
   it("does not block startup in development even with dev bypasses", async () => {

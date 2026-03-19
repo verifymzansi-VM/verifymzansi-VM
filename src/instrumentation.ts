@@ -16,6 +16,10 @@ function assertNoDevBypassesInProduction(): string[] {
     ENABLE_DEV_KYC_WEBHOOK_BYPASS: "Allows unsigned KYC webhooks in local development",
     DEV_EXPOSE_OTP: "Exposes OTP codes in API responses",
     SMS_MOCK: "Prevents real SMS delivery",
+    PLAYWRIGHT_TEST_MODE: "Enables Turnstile CAPTCHA bypass and unsigned KYC webhooks",
+    ENABLE_TEST_POSTING_BYPASS: "Removes posting count limits",
+    NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS: "Client-side posting limit bypass",
+    ENABLE_DEV_TURNSTILE_BYPASS: "Allows CAPTCHA verification bypass",
   };
 
   for (const [key, description] of Object.entries(dangerous)) {

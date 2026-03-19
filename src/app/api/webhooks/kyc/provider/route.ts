@@ -74,6 +74,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Missing webhook signature" }, { status: 401 });
       }
 
+      // Validate signature is hex-encoded before comparison
+      if (!/^[a-f0-9]+$/i.test(signature)) {
+        log.warn("Webhook signature is not valid hex encoding");
+        return NextResponse.json({ error: "Invalid webhook signature format" }, { status: 401 });
+      }
+
       const expectedSignature = crypto
         .createHmac("sha256", webhookSecret)
         .update(rawBody)
