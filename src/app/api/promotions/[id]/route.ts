@@ -21,6 +21,7 @@ import {
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
+import { userOwnsBusiness } from "@/lib/account/owned-business";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
@@ -155,6 +156,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const data = parsedBody.data;
     const categoryKey =
       data.category_key ?? inferPromotionCategoryKey(data.category, data.promotion_type);
+
+    if (data.business_id) {
+      const ownsBusiness = await userOwnsBusiness(supabase, user.id, data.business_id);
+      if (!ownsBusiness) {
+        return NextResponse.json({ error: "Linked business not found" }, { status: 404 });
+      }
+    }
+
     const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("tier")

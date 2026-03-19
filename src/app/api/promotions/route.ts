@@ -26,6 +26,7 @@ import {
   withOwnerColumn,
   withOwnerField,
 } from "@/lib/account/compat";
+import { userOwnsBusiness } from "@/lib/account/owned-business";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
@@ -241,6 +242,13 @@ export async function POST(request: NextRequest) {
     const data = parsed.data;
     const categoryKey =
       data.category_key ?? inferPromotionCategoryKey(data.category, data.promotion_type);
+
+    if (data.business_id) {
+      const ownsBusiness = await userOwnsBusiness(supabase, user.id, data.business_id);
+      if (!ownsBusiness) {
+        return NextResponse.json({ error: "Linked business not found" }, { status: 404 });
+      }
+    }
 
     // ── Enforce photo/video limits based on plan ─────────────
     const ent =
@@ -521,7 +529,11 @@ export async function GET(request: NextRequest) {
           .in("user_id", accountIds)
       : { data: [] };
     const { data: businesses } = businessIds.length
-      ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
+      ? await admin
+          .from("businesses")
+          .select("id, business_name")
+          .eq("status", "live")
+          .in("id", businessIds)
       : { data: [] };
 
     const serializedAccountProfiles =

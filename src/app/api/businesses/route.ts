@@ -45,6 +45,15 @@ function normalizeBusinessSelectShape(
   }));
 }
 
+function redactBusinessListContactFields(
+  businesses: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> {
+  return businesses.map((business) => {
+    const { phone: _phone, whatsapp: _whatsapp, email: _email, ...safeBusiness } = business;
+    return safeBusiness;
+  });
+}
+
 /**
  * POST /api/businesses
  *
@@ -373,35 +382,35 @@ export async function GET(request: NextRequest) {
     const selectAttempts = [
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
+          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
           ownerColumn
         ),
         omittedFields: [] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
+          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
           ownerColumn
         ),
         omittedFields: ["gallery_photos"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
+          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
           ownerColumn
         ),
         omittedFields: ["business_details"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
+          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
           ownerColumn
         ),
         omittedFields: ["gallery_photos", "business_details"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, description, category, logo_url, cover_photo, cover_video, location_province, location_city, store_number, phone, whatsapp, email, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, created_at",
+          "id, owner_id, business_type, business_name, description, category, logo_url, cover_photo, cover_video, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, created_at",
           ownerColumn
         ),
         omittedFields: [
@@ -483,8 +492,10 @@ export async function GET(request: NextRequest) {
         )
     );
 
+    const publicBusinesses = redactBusinessListContactFields(filteredBusinesses);
+
     return NextResponse.json({
-      businesses: filteredBusinesses,
+      businesses: publicBusinesses,
       total: Math.max(
         0,
         (count ?? filteredBusinesses.length) - (businesses.length - filteredBusinesses.length)

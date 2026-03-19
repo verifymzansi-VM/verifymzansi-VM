@@ -346,6 +346,32 @@ describe("POST /api/promotions", () => {
     expect(json.promotion.id).toBe(VALID_UUID);
   });
 
+  it("returns 404 when linked business is not owned by the caller", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
+        }),
+      },
+      businesses: {
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: { ...VALID_BODY, business_id: "123e4567-e89b-42d3-a456-426614174000" },
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ error: "Linked business not found" });
+  });
+
   it("logs audit event on successful creation", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
@@ -542,6 +568,45 @@ describe("GET /api/promotions", () => {
     ]);
     expect(json.sellers).toEqual(json.accountProfiles);
     expect(json.total).toBe(1);
+  });
+
+  it("only returns live linked businesses in public promotion results", async () => {
+    mockAdmin({
+      promotions: {
+        range: vi.fn().mockResolvedValue({
+          data: [
+            { id: VALID_UUID, title: "Test", owner_id: USER_ID, business_id: "business-live" },
+          ],
+          count: 1,
+          error: null,
+        }),
+      },
+      account_profiles: {
+        in: vi.fn().mockResolvedValue({
+          data: [
+            {
+              user_id: USER_ID,
+              display_name: "Nomsa",
+              account_verification_status: "verified",
+            },
+          ],
+        }),
+      },
+      businesses: {
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({
+            data: [{ id: "business-live", business_name: "Visible Business" }],
+          }),
+        }),
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.businesses).toEqual([{ id: "business-live", business_name: "Visible Business" }]);
   });
 
   it("handles pagination params", async () => {
@@ -790,6 +855,15 @@ describe("PUT /api/promotions/[id]", () => {
   it("updates promotion successfully", async () => {
     const updateEq = vi.fn().mockResolvedValue({ error: null });
     const from = vi.fn((table: string) => {
+      if (table === "businesses") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "123e4567-e89b-42d3-a456-426614174000", owner_id: USER_ID },
+          }),
+        };
+      }
       if (table === "entitlements") {
         return {
           select: vi.fn().mockReturnThis(),
@@ -836,6 +910,61 @@ describe("PUT /api/promotions/[id]", () => {
     const json = await res.json();
     expect(json.success).toBe(true);
     expect(updateEq).toHaveBeenCalledWith("id", VALID_UUID);
+  });
+
+  it("returns 404 when updating to a linked business the caller does not own", async () => {
+    const from = vi.fn((table: string) => {
+      if (table === "businesses") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }
+      if (table === "promotions") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: VALID_UUID, owner_id: USER_ID, status: "live" },
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      };
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
+      },
+    });
+
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "PUT",
+      body: { ...VALID_BODY, business_id: "123e4567-e89b-42d3-a456-426614174000" },
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ error: "Linked business not found" });
   });
 });
 

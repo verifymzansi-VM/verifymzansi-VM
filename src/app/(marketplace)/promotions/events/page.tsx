@@ -147,7 +147,11 @@ export default async function EventsPage() {
   // Gather unique business IDs for linked business names
   const businessIds = [...new Set(allEvents.map((e) => e.business_id).filter(Boolean))] as string[];
   const { data: businesses } = businessIds.length
-    ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
+    ? await admin
+        .from("businesses")
+        .select("id, business_name")
+        .eq("status", "live")
+        .in("id", businessIds)
     : { data: [] };
 
   const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
