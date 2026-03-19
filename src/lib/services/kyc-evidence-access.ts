@@ -1,43 +1,7 @@
-interface VerificationSessionRecord {
-  id_artifact_id: string | null;
-  selfie_artifact_id: string | null;
-  location_submitted_at: string | null;
-}
-
-interface VerificationSessionQuery {
-  eq(
-    column: string,
-    value: string
-  ): {
-    single(): Promise<{ data: VerificationSessionRecord | null }>;
-  };
-}
-
-interface LocationArtifactRecord {
-  id: string;
-}
-
-interface LocationArtifactQuery {
-  eq(column: string, value: string): LocationArtifactQuery;
-  order(
-    column: string,
-    options: { ascending: boolean }
-  ): {
-    limit(count: number): Promise<{ data: LocationArtifactRecord[] | null }>;
-  };
-}
-
-interface AdminClientLike {
-  from(table: "verification_sessions"): {
-    select(columns: string): VerificationSessionQuery;
-  };
-  from(table: "kyc_artifacts"): {
-    select(columns: string): LocationArtifactQuery;
-  };
-}
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export async function getLinkedEvidenceArtifactIds(
-  adminClient: AdminClientLike,
+  adminClient: SupabaseClient,
   userId: string
 ): Promise<string[]> {
   const { data: session } = await adminClient

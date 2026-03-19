@@ -1,20 +1,8 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { applyOwnerFilter, getOwnerColumn, withOwnerColumn } from "@/lib/account/compat";
 
-type BusinessLookupClient = {
-  from: (table: string) => {
-    select: (columns: string) => {
-      eq: (
-        column: string,
-        value: unknown
-      ) => {
-        maybeSingle: () => Promise<{
-          data: Record<string, unknown> | null;
-          error?: { message?: string | null } | null;
-        }>;
-      };
-    };
-  };
-};
+type BusinessLookupClient = Pick<SupabaseClient, "from">;
 
 export async function userOwnsBusiness(
   client: BusinessLookupClient,
