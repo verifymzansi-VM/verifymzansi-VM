@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   getOwnerColumn,
+  normalizeOwnerRecord,
   readAccountVerificationStatus,
   readOwnerId,
   withOwnerColumn,
@@ -17,6 +18,24 @@ import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/li
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 
 const log = createLogger("ContactRoute");
+
+type ContactTargetRow = {
+  id: string;
+  status: string;
+  title?: string | null;
+  owner_id?: string | null;
+  seller_id?: string | null;
+};
+
+function isContactTargetRow(record: unknown): record is ContactTargetRow {
+  if (!record || typeof record !== "object") {
+    return false;
+  }
+
+  const candidate = record as Record<string, unknown>;
+
+  return typeof candidate.id === "string" && typeof candidate.status === "string";
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,11 +97,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `${notFoundLabel} not found` }, { status: 404 });
     }
 
-    if (targetRecord.status !== "live") {
+    if (!isContactTargetRow(targetRecord)) {
+      log.error("Target record shape was invalid", {
+        targetType: parsedBody.data.targetType,
+        targetId: parsedBody.data.targetId,
+      });
+      return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+    }
+
+    const normalizedTargetRecord = normalizeOwnerRecord(targetRecord);
+
+    if (normalizedTargetRecord.status !== "live") {
       return NextResponse.json({ error: `${notFoundLabel} not found` }, { status: 404 });
     }
 
-    const targetOwnerId = readOwnerId(targetRecord);
+    const targetOwnerId = readOwnerId(normalizedTargetRecord);
     if (!targetOwnerId) {
       log.error("Target record missing owner identifier", {
         targetType: parsedBody.data.targetType,
@@ -139,7 +168,8 @@ export async function POST(request: NextRequest) {
 
     // Notify the account holder about the new lead/contact
     try {
-      const itemTitle = targetRecord.title?.slice(0, 40) || `your ${parsedBody.data.targetType}`;
+      const itemTitle =
+        normalizedTargetRecord.title?.slice(0, 40) || `your ${parsedBody.data.targetType}`;
 
       await createNotification({
         userId: targetOwnerId,
