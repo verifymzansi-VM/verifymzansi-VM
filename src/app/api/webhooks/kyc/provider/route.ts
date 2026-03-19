@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
     // Audit log
     await logAuditEvent({
       actorId: "system",
-      actorRole: "admin",
+      actorRole: "system",
       action: "kyc_provider_webhook_received",
       targetType: "kyc_provider_result",
       targetId: providerResult.id,

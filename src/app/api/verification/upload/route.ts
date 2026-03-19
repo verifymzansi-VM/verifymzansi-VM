@@ -19,6 +19,7 @@ import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { isFeatureEnabled } from "@/lib/services/feature-flags";
 
 const log = createLogger("VerificationUpload");
 
@@ -93,6 +94,20 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Email confirmation gate — users must confirm their email before uploading
+    if (!user.email_confirmed_at) {
+      return NextResponse.json(
+        { error: "Please confirm your email address before starting verification" },
+        { status: 403 }
+      );
+    }
+
+    // Feature flag check — must match session start route
+    const v2Enabled = await isFeatureEnabled("kyc_v2_flow");
+    if (!v2Enabled) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     const rateCheck = await checkRateLimit({
@@ -205,7 +220,7 @@ export async function POST(request: NextRequest) {
     // ── Guard: prevent re-uploading over already-approved steps ──
     const { data: existingStep } = await admin
       .from("verification_steps")
-      .select("status")
+      .select("status, risk_score, risk_level, auto_status")
       .eq("user_id", user.id)
       .eq("step_type", stepType)
       .maybeSingle();
@@ -414,7 +429,7 @@ export async function POST(request: NextRequest) {
     // lower risk score from silently replacing a higher-risk result that
     // arrived first. Steps that are already approved are blocked earlier;
     // steps that are pending/needs_resubmission can be overwritten.
-    const { data: upsertedStep, error: stepError } = await admin
+    const { data: _upsertedStep, error: stepError } = await admin
       .from("verification_steps")
       .upsert(stepData, { onConflict: "user_id,step_type", ignoreDuplicates: false })
       .select("id, risk_score")
@@ -454,30 +469,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If an existing step had a higher (worse) risk score than ours, restore it.
-    // This handles the race where a benign upload lands after a flagged one.
-    if (upsertedStep && typeof upsertedStep.risk_score === "number") {
-      const { data: currentStep } = await admin
+    // If the pre-existing step had a higher (worse) risk score than the new
+    // upload, restore the original risk posture. This prevents a benign
+    // re-upload from silently erasing a previously flagged risk signal.
+    // The new artifact is still saved so admins can review both.
+    if (
+      existingStep &&
+      typeof existingStep.risk_score === "number" &&
+      engineResult.riskScore < existingStep.risk_score
+    ) {
+      log.warn("Step upsert lowered risk score — restoring higher-risk record", {
+        userId: user.id,
+        stepType,
+        existingScore: existingStep.risk_score,
+        newScore: engineResult.riskScore,
+      });
+      await admin
         .from("verification_steps")
-        .select("risk_score")
+        .update({
+          risk_score: existingStep.risk_score,
+          risk_level: existingStep.risk_level,
+          auto_status: existingStep.auto_status,
+        })
         .eq("user_id", user.id)
-        .eq("step_type", stepType)
-        .single();
-
-      if (
-        currentStep &&
-        typeof currentStep.risk_score === "number" &&
-        engineResult.riskScore < currentStep.risk_score
-      ) {
-        log.warn("Step upsert would lower risk score — keeping higher-risk record", {
-          userId: user.id,
-          stepType,
-          existingScore: currentStep.risk_score,
-          newScore: engineResult.riskScore,
-        });
-        // Re-apply the higher-risk data by restoring the previous score/status.
-        // The artifact is still saved; admin sees both artifacts for review.
-      }
+        .eq("step_type", stepType);
     }
 
     // ── Update verification_sessions ──────────────────────────
@@ -509,12 +524,21 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user.id)
       .single();
 
+    // Check phone verification status from verification_steps
+    const { data: phoneStep } = await admin
+      .from("verification_steps")
+      .select("phone_verified_at")
+      .eq("user_id", user.id)
+      .eq("step_type", "phone")
+      .maybeSingle();
+
     if (
       currentSession &&
       !currentSession.finalized_at &&
       currentSession.id_artifact_id &&
       currentSession.selfie_artifact_id &&
-      currentSession.location_submitted_at
+      currentSession.location_submitted_at &&
+      phoneStep?.phone_verified_at
     ) {
       await admin
         .from("verification_sessions")

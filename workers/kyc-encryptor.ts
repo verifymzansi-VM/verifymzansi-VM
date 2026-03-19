@@ -1,10 +1,29 @@
 /**
- * Background Cloudflare Worker for asynchronously encrypting KYC documents.
+ * @deprecated — This worker is NO LONGER TRIGGERED by the application.
  *
- * 1. User uploads document to a temporary R2 bucket using presigned URL.
- * 2. Upload triggers this worker via R2 Event Notification or HTTP trigger.
- * 3. Worker streams file from temp bucket, encrypts using AES-256-GCM, and pipes to private bucket.
- * 4. Worker updates Supabase kyc_artifacts status from 'pending' to 'encrypted'.
+ * The canonical encryption path is now the inline `uploadKycDocument()` flow
+ * in `src/lib/services/storage.ts`, which uses v2 HMAC-SHA256 key derivation
+ * from `src/lib/utils/encryption.ts`.
+ *
+ * This worker remains deployed ONLY to support decryption of files it
+ * previously encrypted (using 100k PBKDF2 iteration format). Legacy
+ * decryption is handled by `decryptLegacy()` in `src/lib/utils/encryption.ts`.
+ *
+ * Known bug: the hardcoded `id_document` path (line ~227) is incorrect but
+ * will NOT be fixed since no new files are routed through this worker.
+ *
+ * This worker can be safely undeployed once all v1/worker-encrypted files
+ * have been decrypted or purged by the retention-cleanup cron.
+ */
+
+/**
+ * Legacy Cloudflare Worker that previously handled asynchronous KYC document encryption.
+ *
+ * Original flow (no longer active):
+ * 1. User uploaded document to a temporary R2 bucket using presigned URL.
+ * 2. Upload triggered this worker via R2 Event Notification or HTTP trigger.
+ * 3. Worker streamed file from temp bucket, encrypted using AES-256-GCM, and piped to private bucket.
+ * 4. Worker updated Supabase kyc_artifacts status from 'pending' to 'encrypted'.
  */
 
 // ---------------------------------------------------------------------------

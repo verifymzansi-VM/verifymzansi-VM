@@ -256,7 +256,7 @@ const worker: ExportedHandler<Env> = {
     // 4. Log cleanup summary to audit_logs via REST API
     const auditPayload = {
       actor_id: "00000000-0000-0000-0000-000000000000", // system actor
-      actor_role: "admin",
+      actor_role: "system",
       action: "retention_r2_cleanup",
       target_type: "r2_cleanup_queue",
       target_id: "batch",

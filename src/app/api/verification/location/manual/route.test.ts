@@ -3,11 +3,14 @@ import type { NextRequest } from "next/server";
 
 const CSRF_TOKEN = "a".repeat(64);
 
-const { mockCreateClient, mockCheckRateLimit, mockGetClientIp } = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockCheckRateLimit: vi.fn(),
-  mockGetClientIp: vi.fn(),
-}));
+const { mockCreateClient, mockCheckRateLimit, mockGetClientIp, mockIsFeatureEnabled } = vi.hoisted(
+  () => ({
+    mockCreateClient: vi.fn(),
+    mockCheckRateLimit: vi.fn(),
+    mockGetClientIp: vi.fn(),
+    mockIsFeatureEnabled: vi.fn(),
+  })
+);
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
@@ -28,6 +31,10 @@ vi.mock("@/lib/utils/logger", () => ({
     warn: vi.fn(),
     error: vi.fn(),
   }),
+}));
+
+vi.mock("@/lib/services/feature-flags", () => ({
+  isFeatureEnabled: (...args: unknown[]) => mockIsFeatureEnabled(...args),
 }));
 
 import { POST } from "./route";
@@ -62,6 +69,7 @@ describe("POST /api/verification/location/manual", () => {
     });
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
+    mockIsFeatureEnabled.mockResolvedValue(true);
   });
 
   it("rejects cross-site manual location requests", async () => {

@@ -185,7 +185,7 @@ const worker: ExportedHandler<Env> = {
 
     const auditPayload = {
       actor_id: "00000000-0000-0000-0000-000000000000",
-      actor_role: "admin",
+      actor_role: "system",
       action: "payment_cleanup_reconciliation",
       target_type: "payment",
       target_id: "batch",

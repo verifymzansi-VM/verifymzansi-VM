@@ -117,12 +117,20 @@ function mockStepsTable({
   };
 }
 
-function mockAuth(user: { id: string } | null) {
+function mockAuth(user: { id: string; email_confirmed_at?: string | null } | null) {
   mockCreateClient.mockResolvedValue({
     from: mockFrom,
     auth: {
       getUser: vi.fn().mockResolvedValue({
-        data: { user },
+        data: {
+          user: user
+            ? {
+                ...user,
+                email_confirmed_at:
+                  "email_confirmed_at" in user ? user.email_confirmed_at : new Date().toISOString(),
+              }
+            : null,
+        },
         error: user ? null : { message: "Not authenticated" },
       }),
     },
@@ -174,6 +182,15 @@ describe("POST /api/verification/session/start", () => {
     expect(response.status).toBe(404);
     const data = await response.json();
     expect(data.error).toContain("not yet enabled");
+  });
+
+  it("returns 403 when user has not confirmed their email", async () => {
+    mockAuth({ id: "user-1", email_confirmed_at: null });
+
+    const response = await POST(createMockRequest());
+    expect(response.status).toBe(403);
+    const data = await response.json();
+    expect(data.error).toContain("confirm your email");
   });
 
   it("creates a new session when none exists", async () => {

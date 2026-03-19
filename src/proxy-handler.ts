@@ -324,6 +324,19 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
+  // -- Consolidated profile query ------------------------------------------------
+  // Phone gate, ban/suspension enforcement, and posting gate all query
+  // account_profiles by user_id.  We consolidate them into a single query
+  // to eliminate redundant DB round-trips on every authenticated request.
+  //
+  // The result is cached in `cachedProfile` and reused by all three gates.
+  let cachedProfile: {
+    phone?: string | null;
+    account_status?: string | null;
+    suspended_until?: string | null;
+    account_verification_status?: string | null;
+  } | null = null;
+
   // -- Phone-missing gate: require phone number on profile --------------------
   // OAuth users may have an account profile without a phone number.
   // Redirect them to complete-profile so they add one before using the platform.
@@ -343,9 +356,11 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
       try {
         const { data: phoneProfile } = await supabase
           .from(ACCOUNT_PROFILE_WRITE_TABLE)
-          .select("phone")
+          .select("phone, account_status, suspended_until, account_verification_status")
           .eq("user_id", user.id)
           .maybeSingle();
+
+        cachedProfile = phoneProfile;
 
         if (phoneProfile && !phoneProfile.phone) {
           const completeProfileUrl = new URL("/dashboard/complete-profile", request.url);
@@ -435,13 +450,34 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
 
   // -- Ban/suspension enforcement: block banned/suspended users from all protected routes --
   if (user && isProtectedRoute) {
-    const { data: statusProfile, error: statusError } = await supabase
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("account_status, suspended_until")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    // Reuse the consolidated profile query from the phone gate if available;
+    // otherwise fetch the needed columns now (e.g. API routes skip the phone gate).
+    let statusProfile = cachedProfile;
+    if (!statusProfile) {
+      const { data, error: statusError } = await supabase
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("account_status, suspended_until, account_verification_status")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-    if (!statusError && statusProfile) {
+      if (!statusError) {
+        statusProfile = data;
+        cachedProfile = data;
+      } else {
+        logger.error("Ban enforcement DB check failed — blocking access", {
+          userId: user.id,
+          error: statusError.message,
+          code: statusError.code,
+          path: pathname,
+        });
+        if (isApiRoute) {
+          return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+        }
+        return NextResponse.redirect(new URL("/error", request.url));
+      }
+    }
+
+    if (statusProfile) {
       if (statusProfile.account_status === "banned") {
         if (isApiRoute) return NextResponse.json({ error: "Banned" }, { status: 403 });
         return NextResponse.redirect(new URL("/banned", request.url));
@@ -484,11 +520,21 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     pathname.startsWith("/api/post/edit");
   if (isPostingRoute) {
     if (user) {
-      const { data: profile, error: profileError } = await supabase
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .select("account_verification_status, account_status, suspended_until")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // Reuse the consolidated profile from phone gate / ban check if available.
+      let profile = cachedProfile;
+      let profileError: { message: string; code?: string } | null = null;
+
+      if (!profile) {
+        const { data, error } = await supabase
+          .from(ACCOUNT_PROFILE_WRITE_TABLE)
+          .select("account_verification_status, account_status, suspended_until")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        profile = data;
+        profileError = error;
+        cachedProfile = data;
+      }
 
       if (profileError) {
         logger.error("Account profile lookup failed in posting gate", {

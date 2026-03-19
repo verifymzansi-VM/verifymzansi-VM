@@ -95,6 +95,13 @@ echo "⚙️  Deploying Cloudflare Workers..."
 
 for config in wrangler.kyc-encryptor.toml wrangler.rate-limiter.toml wrangler.retention-cleanup.toml; do
   if [[ -f "$config" ]]; then
+    if [[ "$config" == "wrangler.kyc-encryptor.toml" ]]; then
+      # NOTE: kyc-encryptor deployment is for legacy compatibility only.
+      # The canonical encryption path is now inline in the upload route.
+      # This worker can be removed once all v1/worker-encrypted files have
+      # been decrypted or purged by the retention-cleanup cron.
+      echo "  ⚠️  kyc-encryptor is deprecated — deploying for legacy compatibility"
+    fi
     echo "  → Deploying $(basename "$config" .toml)..."
     pnpm exec wrangler deploy --config "$config" || {
       echo "  ⚠️  Worker deploy failed for $config (non-blocking)"

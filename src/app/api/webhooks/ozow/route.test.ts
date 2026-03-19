@@ -32,6 +32,10 @@ vi.mock("@/lib/config/env", () => ({
   }),
 }));
 
+vi.mock("@/lib/services/audit", () => ({
+  logAuditEvent: vi.fn(),
+}));
+
 import { POST } from "./route";
 
 function createSignedRequest(body: Record<string, unknown>, signature = "bad-signature") {

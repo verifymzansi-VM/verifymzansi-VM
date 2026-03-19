@@ -39,6 +39,14 @@ export async function POST(_request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Email confirmation gate — users must confirm their email before starting verification
+    if (!user.email_confirmed_at) {
+      return NextResponse.json(
+        { error: "Please confirm your email address before starting verification" },
+        { status: 403 }
+      );
+    }
+
     const rateCheck = await checkRateLimit({
       key: getClientIp(request),
       action: "verification:session-start",

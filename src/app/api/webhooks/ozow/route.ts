@@ -12,8 +12,41 @@ import {
   claimPaymentProcessing,
   type PaymentStoreClient,
 } from "@/lib/payments/store";
+import { logAuditEvent } from "@/lib/services/audit";
 
 const log = createLogger("OzowWebhook");
+
+const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
+
+/** Non-blocking audit log for completed payments. */
+async function auditPaymentCompleted(payment: {
+  id: string;
+  provider: string;
+  amount_cents: number;
+  provider_payment_id?: string | null;
+  area?: string | null;
+}): Promise<void> {
+  try {
+    await logAuditEvent({
+      actorId: SYSTEM_ACTOR_ID,
+      actorRole: "system",
+      action: "payment_completed",
+      targetType: "payment",
+      targetId: payment.id,
+      metadata: {
+        provider: payment.provider,
+        amount_cents: payment.amount_cents,
+        provider_payment_id: payment.provider_payment_id ?? undefined,
+        area: payment.area ?? undefined,
+      },
+    });
+  } catch (auditErr) {
+    log.error("Failed to write payment audit log", {
+      paymentId: payment.id,
+      error: auditErr instanceof Error ? auditErr.message : "Unknown error",
+    });
+  }
+}
 
 function toAmountString(amountCents: number): string {
   return (amountCents / 100).toFixed(2);
@@ -155,6 +188,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Payment finalization failed" }, { status: 500 });
         }
 
+        await auditPaymentCompleted(currentPayment);
+
         return NextResponse.json({ success: true, recovered: true });
       }
 
@@ -192,6 +227,8 @@ export async function POST(request: NextRequest) {
       if (!finalized) {
         return NextResponse.json({ error: "Payment finalization failed" }, { status: 500 });
       }
+
+      await auditPaymentCompleted(reloadedPayment);
 
       return NextResponse.json({ success: true, recovered: true });
     }
@@ -236,6 +273,8 @@ export async function POST(request: NextRequest) {
     if (!finalized) {
       return NextResponse.json({ error: "Payment finalization failed" }, { status: 500 });
     }
+
+    await auditPaymentCompleted(finalPayment);
 
     return NextResponse.json({ success: true });
   } catch (error) {

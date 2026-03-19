@@ -266,6 +266,10 @@ else
     fi
 
     info "Deploying KYC Encryptor worker..."
+    # NOTE: kyc-encryptor deployment is for legacy compatibility only.
+    # The canonical encryption path is now inline in the upload route.
+    # This worker can be removed once all v1/worker-encrypted files have
+    # been decrypted or purged by the retention-cleanup cron.
     if pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml; then
       pass "KYC Encryptor worker deployed"
     else

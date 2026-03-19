@@ -21,6 +21,7 @@ const {
   mockScanForMalware,
   mockStripExifFromJpeg,
   mockStripMetadataFromPng,
+  mockIsFeatureEnabled,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -31,6 +32,7 @@ const {
   mockProcessKycArtifact: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockGetClientIp: vi.fn(),
+  mockIsFeatureEnabled: vi.fn(),
   mockValidateBufferIntegrity: vi.fn(() => ({
     valid: true,
     detectedMime: "image/jpeg",
@@ -88,6 +90,10 @@ vi.mock("@/lib/utils/exif-strip", () => ({
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
   getClientIp: (...args: unknown[]) => mockGetClientIp(...args),
+}));
+
+vi.mock("@/lib/services/feature-flags", () => ({
+  isFeatureEnabled: (...args: unknown[]) => mockIsFeatureEnabled(...args),
 }));
 
 import { POST } from "./route";
@@ -247,6 +253,7 @@ describe("POST /api/verification/upload", () => {
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
+    mockIsFeatureEnabled.mockResolvedValue(true);
     mockValidateBufferIntegrity.mockReturnValue({
       valid: true,
       detectedMime: "image/jpeg",
