@@ -10,6 +10,39 @@ import "@/styles/globals.css";
 const TURBOPACK_NAME_POLYFILL =
   'if(typeof globalThis.__name!=="function"){globalThis.__name=function(fn,name){Object.defineProperty(fn,"name",{value:name,configurable:true});return fn;};}var __name=globalThis.__name;';
 
+const DEV_SW_CACHE_RESET = `
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  const cleanupKey = "vm-dev-inline-sw-reset-v1";
+  const cleanupAttempted = window.sessionStorage.getItem(cleanupKey) === "1";
+  Promise.all([
+    navigator.serviceWorker.getRegistrations().catch(() => []),
+    typeof caches !== "undefined" ? caches.keys().catch(() => []) : Promise.resolve([]),
+  ])
+    .then(async ([registrations, cacheKeys]) => {
+      const relevantCacheKeys = cacheKeys.filter((key) => key.startsWith("verifymzansi-"));
+      const hadStaleState =
+        registrations.length > 0 || relevantCacheKeys.length > 0 || navigator.serviceWorker.controller;
+
+      await Promise.allSettled(registrations.map((registration) => registration.unregister()));
+
+      if (typeof caches !== "undefined") {
+        await Promise.allSettled(relevantCacheKeys.map((key) => caches.delete(key)));
+      }
+
+      if (hadStaleState && !cleanupAttempted) {
+        window.sessionStorage.setItem(cleanupKey, "1");
+        window.location.reload();
+        return;
+      }
+
+      if (cleanupAttempted) {
+        window.sessionStorage.removeItem(cleanupKey);
+      }
+    })
+    .catch(() => {});
+}
+`;
+
 export const metadata: Metadata = {
   title: {
     default: "VerifyMzansi — SA's Trusted Marketplace",
@@ -90,6 +123,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     >
       <body className="min-h-screen antialiased">
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: TURBOPACK_NAME_POLYFILL }} />
+        {process.env.NODE_ENV === "development" ? (
+          <script nonce={nonce} dangerouslySetInnerHTML={{ __html: DEV_SW_CACHE_RESET }} />
+        ) : null}
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"

@@ -20,9 +20,13 @@ function generateNonce(): string {
   return btoa(crypto.randomUUID());
 }
 
+function shouldUseStrictNonceCsp(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
 /** Build a nonce-based Content-Security-Policy string. */
 function buildCsp(
-  nonce: string,
+  nonce: string | null,
   options?: { allowDevWebSocket?: boolean; enforceHttps?: boolean }
 ): string {
   const connectSrcValues = [
@@ -38,13 +42,17 @@ function buildCsp(
   }
 
   const connectSrc = `connect-src ${connectSrcValues.join(" ")}`;
+  const scriptSrc = nonce
+    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com`
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com";
+  const styleSrc = nonce ? `style-src 'self' 'nonce-${nonce}'` : "style-src 'self' 'unsafe-inline'";
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    scriptSrc,
+    styleSrc,
     "img-src 'self' blob: https://tnygdgormnofpgjknlhr.supabase.co https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com",
     "media-src 'self' blob: https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com",
     "font-src 'self'",
@@ -116,7 +124,7 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
     return proxyResponse;
   }
 
-  const nonce = generateNonce();
+  const nonce = shouldUseStrictNonceCsp() ? generateNonce() : null;
   const isSecureRequest =
     request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
   const csp = buildCsp(nonce, {
@@ -126,7 +134,11 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
 
   // Inject x-nonce so Server Components can read it via `headers()`
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-nonce", nonce);
+  if (nonce) {
+    requestHeaders.set("x-nonce", nonce);
+  } else {
+    requestHeaders.delete("x-nonce");
+  }
   requestHeaders.set("Content-Security-Policy", csp);
 
   const response = NextResponse.next({
@@ -154,7 +166,9 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
 
   applySecurityHeaders(response, csp);
   ensureCsrfCookie(request, response);
-  response.headers.set("x-nonce", nonce);
+  if (nonce) {
+    response.headers.set("x-nonce", nonce);
+  }
 
   return response;
 }

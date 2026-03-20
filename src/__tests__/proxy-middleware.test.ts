@@ -95,11 +95,19 @@ describe("middleware — missing Supabase env", () => {
 });
 
 describe("proxy security headers", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.PLAYWRIGHT_SUPABASE_MODE;
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    process.env.NODE_ENV = "development";
+  });
+
+  afterEach(() => {
+    if (originalNodeEnv) process.env.NODE_ENV = originalNodeEnv;
+    else delete process.env.NODE_ENV;
   });
 
   it("adds the full security header set to successful responses", async () => {
@@ -115,6 +123,27 @@ describe("proxy security headers", () => {
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
     expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(setCookie).toContain("vm_csrf=");
+  });
+
+  it("uses a development-friendly CSP without x-nonce in development", async () => {
+    const res = await middleware(createMockRequest("/"));
+    const csp = res.headers.get("Content-Security-Policy");
+
+    expect(csp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
+    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(res.headers.get("x-nonce")).toBeNull();
+  });
+
+  it("uses strict nonce CSP in production", async () => {
+    process.env.NODE_ENV = "production";
+
+    const res = await middleware(createMockRequest("/", { hostname: "verifymzansi.com" }));
+    const csp = res.headers.get("Content-Security-Policy");
+    const nonce = res.headers.get("x-nonce");
+
+    expect(nonce).toBeTruthy();
+    expect(csp).toContain("script-src 'self' 'nonce-");
+    expect(csp).toContain("style-src 'self' 'nonce-");
   });
 
   it("keeps basic security headers on redirects", async () => {

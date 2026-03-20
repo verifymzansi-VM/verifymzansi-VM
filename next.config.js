@@ -13,6 +13,9 @@ const clientEnv = Object.fromEntries(
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Disable the Next.js devtools indicator so localhost matches production
+  // without the floating `N` badge and bottom drawer dimming the page.
+  devIndicators: false,
   // Explicitly inline NEXT_PUBLIC_* vars into the client bundle.
   // Turbopack on Cloudflare may not replace process.env.NEXT_PUBLIC_*
   // at build time; the `env` field forces inlining without masking missing config.
