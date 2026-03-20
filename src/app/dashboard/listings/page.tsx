@@ -29,9 +29,9 @@ import { AREA_LABELS, type MarketplaceArea, type PlanTier } from "@/types/enums"
 const LISTING_DASHBOARD_FALLBACK_FIELDS = ["featured_until", "urgent_until"] as const;
 
 export const metadata = {
-  title: "My Listings",
+  title: "Mzansi Market",
   description:
-    "Manage your marketplace content across Mzansi Market, Mzansi Business, and Promotions.",
+    "Manage your marketplace content across Mzansi Market, Mzansi Business, and Promotions & Events.",
 };
 
 type DashboardItem = {
@@ -232,9 +232,9 @@ export default async function ListingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="My Listings"
-        description="Manage your marketplace content."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Listings" }]}
+        title="Mzansi Market"
+        description="Manage your marketplace listings."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Mzansi Market" }]}
       >
         <Button asChild variant="trust-verified" size="sm" className="gap-2">
           <Link href="/post/create">

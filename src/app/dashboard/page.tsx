@@ -2,8 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
-  Package,
-  Eye,
+  ShoppingBag,
   MessageSquare,
   TrendingUp,
   ArrowRight,
@@ -405,28 +404,33 @@ export default async function DashboardPage() {
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-brand-green-50 dark:bg-brand-green-950 text-brand-green">
-                  <Package className="h-5 w-5" />
+                  <ShoppingBag className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold font-display">{activeListings || 0}</p>
-                  <p className="text-xs text-muted-foreground">Active Listings</p>
+                  <p className="text-xs text-muted-foreground">Mzansi Market</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {totalViews || 0} views · {conversionRate}% conversion
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </Link>
 
-        <Link href="/dashboard/metrics">
+        <Link href="/dashboard/businesses">
           <Card className="hover:shadow-md transition-all cursor-pointer h-full">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600">
-                  <Eye className="h-5 w-5" />
+                  <Building2 className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold font-display">{totalViews || 0}</p>
-                  <p className="text-xs text-muted-foreground">Total Views</p>
-                  <p className="text-[10px] text-muted-foreground">{conversionRate}% conversion</p>
+                  <p className="text-2xl font-bold font-display">{businessCount || 0}</p>
+                  <p className="text-xs text-muted-foreground">Mzansi Business</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {businessCount === 1 ? "1 registered" : `${businessCount} registered`}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -459,12 +463,12 @@ export default async function DashboardPage() {
           <Card className="hover:shadow-md transition-all cursor-pointer h-full">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-950 text-purple-600">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-red-50 dark:bg-red-950 text-red-500">
                   <Megaphone className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold font-display">{activePromos || 0}</p>
-                  <p className="text-xs text-muted-foreground">Active Promos</p>
+                  <p className="text-xs text-muted-foreground">Promotions & Events</p>
                   {expiringPromoCount > 0 && (
                     <p className="text-[10px] text-amber-600">{expiringPromoCount} expiring soon</p>
                   )}
@@ -482,7 +486,7 @@ export default async function DashboardPage() {
             <CardContent className="flex items-center gap-3 py-4">
               <Building2 className="h-5 w-5 text-muted-foreground" />
               <span className="text-sm font-medium">
-                Businesses{businessCount > 0 ? ` (${businessCount})` : ""}
+                Mzansi Business{businessCount > 0 ? ` (${businessCount})` : ""}
               </span>
               <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
             </CardContent>

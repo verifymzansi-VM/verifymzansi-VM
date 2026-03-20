@@ -38,7 +38,7 @@ interface DashboardPromotion {
 }
 
 export const metadata = {
-  title: "My Promotions",
+  title: "Promotions & Events",
   description: "Manage your promotions, ads, and event listings on VerifyMzansi.",
 };
 
@@ -133,9 +133,9 @@ export default async function MyPromotionsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="My Promotions"
+        title="Promotions & Events"
         description="Track boosts, features, and promotions."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Promotions" }]}
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Promotions & Events" }]}
       >
         <div className="flex gap-2">
           <Button asChild size="sm" variant="outline" className="gap-1">

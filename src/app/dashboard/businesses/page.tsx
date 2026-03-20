@@ -19,7 +19,7 @@ import {
 } from "@/types/enums";
 
 export const metadata = {
-  title: "My Businesses",
+  title: "Mzansi Business",
   description: "Manage your registered businesses on VerifyMzansi.",
 };
 
@@ -64,9 +64,9 @@ export default async function MyBusinessesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="My Businesses"
+        title="Mzansi Business"
         description="Manage your Mzansi Business listings."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Businesses" }]}
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Mzansi Business" }]}
       >
         <Button asChild size="sm" className="gap-1">
           <Link href="/post/create-business">

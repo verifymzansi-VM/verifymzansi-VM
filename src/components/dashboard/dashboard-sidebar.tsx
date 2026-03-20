@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  Package,
+  ShoppingBag,
   MessageSquare,
   ShieldCheck,
   CreditCard,
@@ -26,10 +26,10 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Overview" },
-  { href: "/dashboard/listings", icon: Package, label: "My Listings" },
+  { href: "/dashboard/listings", icon: ShoppingBag, label: "Mzansi Market" },
   { href: "/dashboard/leads", icon: MessageSquare, label: "Leads" },
-  { href: "/dashboard/businesses", icon: Building2, label: "My Businesses" },
-  { href: "/dashboard/promotions", icon: Megaphone, label: "Promotions" },
+  { href: "/dashboard/businesses", icon: Building2, label: "Mzansi Business" },
+  { href: "/dashboard/promotions", icon: Megaphone, label: "Promotions & Events" },
   { href: "/verification", icon: ShieldCheck, label: "Verification" },
   { href: "/billing", icon: CreditCard, label: "Billing" },
   { href: "/dashboard/profile", icon: User, label: "My Profile" },
