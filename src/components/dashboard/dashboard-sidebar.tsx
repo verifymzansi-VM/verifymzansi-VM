@@ -25,14 +25,14 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Overview" },
-  { href: "/dashboard/listings", icon: ShoppingBag, label: "Mzansi Market" },
+  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/dashboard/listings", icon: ShoppingBag, label: "Listings" },
   { href: "/dashboard/leads", icon: MessageSquare, label: "Leads" },
-  { href: "/dashboard/businesses", icon: Building2, label: "Mzansi Business" },
-  { href: "/dashboard/promotions", icon: Megaphone, label: "Promotions & Events" },
+  { href: "/dashboard/businesses", icon: Building2, label: "Businesses" },
+  { href: "/dashboard/promotions", icon: Megaphone, label: "Promotions" },
   { href: "/verification", icon: ShieldCheck, label: "Verification" },
   { href: "/billing", icon: CreditCard, label: "Billing" },
-  { href: "/dashboard/profile", icon: User, label: "My Profile" },
+  { href: "/dashboard/profile", icon: User, label: "Profile" },
 ];
 
 export interface DashboardSidebarBadges {

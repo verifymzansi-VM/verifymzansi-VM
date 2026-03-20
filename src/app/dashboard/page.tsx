@@ -4,12 +4,10 @@ import Link from "next/link";
 import {
   ShoppingBag,
   MessageSquare,
-  ArrowRight,
   ShieldCheck,
   Plus,
   Megaphone,
   Building2,
-  Clock,
   BadgeCheck,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +24,7 @@ import {
 } from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import { AttentionBanner } from "@/components/dashboard/attention-banner";
+import { NeedsAttention } from "@/components/dashboard/needs-attention";
 import { RecentActivity, type ActivityItem } from "@/components/dashboard/recent-activity";
 import { EmailConfirmedToast } from "@/components/dashboard/email-confirmed-toast";
 import { MyRecentPosts, type RecentPost } from "@/components/dashboard/my-recent-posts";
@@ -75,6 +73,81 @@ export const metadata = {
     "Your VerifyMzansi dashboard — listings, businesses, verification status, and quick actions.",
 };
 
+interface DashboardSummaryCardProps {
+  title: string;
+  value: number;
+  description: string;
+  href: string;
+  icon: React.ElementType;
+  toneClassName: string;
+}
+
+function DashboardSummaryCard({
+  title,
+  value,
+  description,
+  href,
+  icon: Icon,
+  toneClassName,
+}: DashboardSummaryCardProps) {
+  return (
+    <Link href={href} className="group block h-full">
+      <Card className="h-full border-border/70 transition-all hover:-translate-y-0.5 hover:border-foreground/15 hover:shadow-md">
+        <CardContent className="flex h-full flex-col gap-4 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div
+              className={`inline-flex h-11 w-11 items-center justify-center rounded-xl ${toneClassName}`}
+            >
+              <Icon className="h-5 w-5" />
+            </div>
+            <span className="text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
+              Open
+            </span>
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            <p className="font-display text-3xl font-bold tracking-tight">{value}</p>
+          </div>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
+function getVerificationCopy(status: string, stepsRemaining: number) {
+  if (status === "verified") {
+    return {
+      title: "Your account is verified",
+      description: "Your identity checks are complete and your trust badge is live.",
+      ctaLabel: "Manage verification",
+    };
+  }
+
+  if (status === "pending_review") {
+    return {
+      title: "Verification is under review",
+      description:
+        "Our team is checking your documents. You can follow progress from the verification page.",
+      ctaLabel: "View status",
+    };
+  }
+
+  if (status === "rejected") {
+    return {
+      title: "Verification needs changes",
+      description: "Review the failed checks and resubmit the missing or incorrect information.",
+      ctaLabel: "Fix verification",
+    };
+  }
+
+  return {
+    title: "Complete your verification",
+    description: `${stepsRemaining} step${stepsRemaining === 1 ? "" : "s"} remaining to unlock full trust signals across the platform.`,
+    ctaLabel: "Continue verification",
+  };
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient();
 
@@ -115,7 +188,7 @@ export default async function DashboardPage() {
         .from("listings")
         .select("id, title, status, photos, view_count, created_at, updated_at")
         .order("updated_at", { ascending: false })
-        .limit(50),
+        .limit(5),
       listingOwnerColumn,
       user.id
     ),
@@ -239,29 +312,14 @@ export default async function DashboardPage() {
   const verificationSteps = verificationStepsResult.data;
   const activeListings = activeListingsResult.count;
   const ownerListings = ownerListingsResult.data;
-  const listingIds = ownerListings?.map((l: { id: string }) => l.id) ?? [];
   const unreadLeadCount = unreadLeadsResult.count || 0;
   const totalLeadCount = totalLeadsResult.count || 0;
   const activePromos = activePromosResult.count;
   const rejectedListingCount = rejectedListingsResult.count || 0;
   const pendingModerationCount = pendingModerationResult.count || 0;
-  const _expiringListingCount = expiringListingsResult.count || 0;
+  const expiringListingCount = expiringListingsResult.count || 0;
   const expiringPromoCount = expiringPromosResult.count || 0;
   const businessCount = businessCountResult.count || 0;
-
-  // Fetch total views (depends on listingIds) — wrapped for resilience
-  let totalViews = 0;
-  try {
-    if (listingIds.length > 0) {
-      const viewsResult = await supabase
-        .from("listing_views")
-        .select("*", { count: "exact", head: true })
-        .in("target_id", listingIds);
-      totalViews = viewsResult.count ?? 0;
-    }
-  } catch {
-    // Non-critical — default to 0
-  }
 
   const verificationSummary = summarizeVerification(
     profile?.account_verification_status,
@@ -284,31 +342,34 @@ export default async function DashboardPage() {
   const displayName = profile?.display_name || user.user_metadata?.display_name || "Member";
 
   // Build recent posts list for preview section
-  const recentPosts: RecentPost[] = (ownerListings ?? [])
-    .slice(0, 5)
-    .map(
-      (l: {
-        id: string;
-        title: string | null;
-        status: string;
-        photos?: string[] | null;
-        view_count?: number | null;
-        created_at: string;
-      }) => ({
-        id: l.id,
-        title: l.title,
-        status: l.status,
-        photos: l.photos,
-        view_count: l.view_count,
-        created_at: l.created_at,
-      })
-    );
+  const recentPosts: RecentPost[] = (ownerListings ?? []).map(
+    (l: {
+      id: string;
+      title: string | null;
+      status: string;
+      photos?: string[] | null;
+      view_count?: number | null;
+      created_at: string;
+    }) => ({
+      id: l.id,
+      title: l.title,
+      status: l.status,
+      photos: l.photos,
+      view_count: l.view_count,
+      created_at: l.created_at,
+    })
+  );
 
   // Build plan summary info
   const AREA_LABELS: Record<string, string> = {
-    MZANSI_MARKET: "Market",
-    MZANSI_BUSINESS: "Business",
-    PROMOTIONS_EVENTS: "Promos",
+    MZANSI_MARKET: "Listings",
+    MZANSI_BUSINESS: "Businesses",
+    PROMOTIONS_EVENTS: "Promotions",
+  };
+  const AREA_COUNTS: Record<string, number> = {
+    MZANSI_MARKET: activeListings || 0,
+    MZANSI_BUSINESS: businessCount,
+    PROMOTIONS_EVENTS: activePromos || 0,
   };
   const planInfos: PlanInfo[] = [];
   const activeEntitlements = entitlementsResult.data ?? [];
@@ -323,7 +384,7 @@ export default async function DashboardPage() {
       area: ent.area,
       areaLabel,
       tierLabel,
-      currentCount: 0, // approximate — exact count would need another query
+      currentCount: AREA_COUNTS[ent.area] ?? 0,
       maxAllowed: entitlementSet.maxAllowed,
     });
   }
@@ -386,11 +447,72 @@ export default async function DashboardPage() {
   // Sort by timestamp descending, take top 10
   activityItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   const recentActivity = activityItems.slice(0, 10);
+  const verificationCopy = getVerificationCopy(
+    verificationSummary.accountVerificationStatus,
+    verificationSummary.stepsRemaining
+  );
+  const overviewCards: DashboardSummaryCardProps[] = [
+    {
+      title: "Listings",
+      value: activeListings || 0,
+      description:
+        rejectedListingCount > 0
+          ? `${rejectedListingCount} need edits before they can go live.`
+          : pendingModerationCount > 0
+            ? `${pendingModerationCount} currently under review.`
+            : expiringListingCount > 0
+              ? `${expiringListingCount} expiring in the next 7 days.`
+              : "Manage your live, draft, and archived listings.",
+      href: "/dashboard/listings",
+      icon: ShoppingBag,
+      toneClassName:
+        "bg-brand-green-50 text-brand-green dark:bg-brand-green-950 dark:text-brand-green-100",
+    },
+    {
+      title: "Leads",
+      value: unreadLeadCount,
+      description:
+        totalLeadCount > 0
+          ? `${totalLeadCount} total enquiries received across your account.`
+          : "New buyer messages and contact requests appear here.",
+      href: "/dashboard/leads",
+      icon: MessageSquare,
+      toneClassName: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-100",
+    },
+    {
+      title: "Businesses",
+      value: businessCount,
+      description:
+        businessCount > 0
+          ? "Keep your business details, category, and visibility current."
+          : "Add a business profile so buyers can discover your brand.",
+      href: "/dashboard/businesses",
+      icon: Building2,
+      toneClassName: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-100",
+    },
+    {
+      title: "Promotions",
+      value: activePromos || 0,
+      description:
+        expiringPromoCount > 0
+          ? `${expiringPromoCount} ending soon and ready for renewal.`
+          : activePromos > 0
+            ? "Track the visibility boosts currently running on your listings."
+            : "Boost listings when you need extra reach or urgency.",
+      href: "/dashboard/promotions",
+      icon: Megaphone,
+      toneClassName: "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-100",
+    },
+  ];
 
   return (
     <div className="space-y-6">
       <EmailConfirmedToast />
-      <PageHeader title={`Welcome back, ${displayName}`} breadcrumbs={[{ label: "Dashboard" }]}>
+      <PageHeader
+        title={`Welcome back, ${displayName}`}
+        description="Keep your listings, leads, businesses, and promotions organised in one place."
+        breadcrumbs={[{ label: "Dashboard" }]}
+      >
         <div className="flex items-center gap-2">
           {trustLevel >= 3 && (
             <Badge className="bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800 gap-1">
@@ -407,138 +529,94 @@ export default async function DashboardPage() {
         </div>
       </PageHeader>
 
-      {/* Attention Banners — dismissible alerts for urgent items */}
-      <AttentionBanner
-        verificationStatus={verificationSummary.accountVerificationStatus}
-        stepsRemaining={verificationSummary.stepsRemaining}
-        unreadLeadCount={unreadLeadCount}
-        rejectedListingCount={rejectedListingCount}
-        pendingModerationCount={pendingModerationCount}
-        expiringPromoCount={expiringPromoCount}
-      />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
+        <div className="space-y-6">
+          <NeedsAttention
+            unreadLeadCount={unreadLeadCount}
+            rejectedListingCount={rejectedListingCount}
+            pendingModerationCount={pendingModerationCount}
+            expiringListingCount={expiringListingCount}
+            expiringPromoCount={expiringPromoCount}
+            verificationStatus={verificationSummary.accountVerificationStatus}
+            stepsRemaining={verificationSummary.stepsRemaining}
+          />
 
-      {/* Trust & Verification — only shown for unverified users */}
-      {trustLevel < 3 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-display flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-brand-green" />
-                Trust Status
-              </CardTitle>
-              <TrustBadge level={trustLevel} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <VerificationProgress steps={verificationProgressSteps} />
-            {trustLevel === 2 ? (
-              <p className="mt-3 text-sm text-muted-foreground flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-amber-500" />
-                Your documents are under review — we&apos;ll update your status within 24–48 hours.
+          <section className="space-y-3" aria-labelledby="workspace-overview-heading">
+            <div className="space-y-1">
+              <h2 id="workspace-overview-heading" className="font-display text-lg font-semibold">
+                Workspace overview
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Jump straight into the areas you manage most often.
               </p>
-            ) : (
-              <Button asChild variant="outline" size="sm" className="mt-3 inline-flex gap-1">
-                <Link href="/verification">
-                  Increase Trust Level
-                  <ArrowRight className="h-3 w-3" />
-                </Link>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {overviewCards.map((card) => (
+                <DashboardSummaryCard key={card.title} {...card} />
+              ))}
+            </div>
+          </section>
+
+          {isNewUser ? (
+            <DashboardOnboarding
+              isVerified={trustLevel >= 3}
+              hasListings={(activeListings || 0) > 0}
+              hasBusinesses={businessCount > 0}
+            />
+          ) : (
+            <MyRecentPosts posts={recentPosts} />
+          )}
+
+          <RecentActivity items={recentActivity} />
+        </div>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <CardTitle className="flex items-center gap-2 text-base font-display">
+                    <ShieldCheck className="h-5 w-5 text-brand-green" />
+                    Account status
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">{verificationCopy.description}</p>
+                </div>
+                <TrustBadge level={trustLevel} />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{verificationCopy.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Trust level {trustLevel} on your account.
+                    </p>
+                  </div>
+                  {trustLevel >= 3 && (
+                    <Badge className="gap-1 bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800">
+                      <BadgeCheck className="h-3 w-3" />
+                      Verified
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {trustLevel < 3 && <VerificationProgress steps={verificationProgressSteps} />}
+
+              <Button
+                asChild
+                variant={trustLevel >= 3 ? "outline" : "default"}
+                className="w-full sm:w-auto"
+              >
+                <Link href="/verification">{verificationCopy.ctaLabel}</Link>
               </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Stats Grid — all cards are now clickable */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Link href="/dashboard/listings">
-          <Card className="hover:shadow-md transition-all cursor-pointer h-full">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-brand-green-50 dark:bg-brand-green-950 text-brand-green">
-                  <ShoppingBag className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold font-display">{activeListings || 0}</p>
-                  <p className="text-xs text-muted-foreground">Mzansi Market</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {totalViews || 0} views · {totalLeadCount} enquiries
-                  </p>
-                </div>
-              </div>
             </CardContent>
           </Card>
-        </Link>
 
-        <Link href="/dashboard/businesses">
-          <Card className="hover:shadow-md transition-all cursor-pointer h-full">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600">
-                  <Building2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold font-display">{businessCount || 0}</p>
-                  <p className="text-xs text-muted-foreground">Mzansi Business</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/dashboard/leads">
-          <Card className="hover:shadow-md transition-all cursor-pointer h-full">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-600 relative">
-                  <MessageSquare className="h-5 w-5" />
-                  {unreadLeadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
-                      {unreadLeadCount > 9 ? "9+" : unreadLeadCount}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <p className="text-2xl font-bold font-display">{unreadLeadCount}</p>
-                  <p className="text-xs text-muted-foreground">New Leads</p>
-                  <p className="text-[10px] text-muted-foreground">{totalLeadCount} total</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/dashboard/promotions">
-          <Card className="hover:shadow-md transition-all cursor-pointer h-full">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-red-50 dark:bg-red-950 text-red-500">
-                  <Megaphone className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold font-display">{activePromos || 0}</p>
-                  <p className="text-xs text-muted-foreground">Promotions & Events</p>
-                  {expiringPromoCount > 0 && (
-                    <p className="text-[10px] text-amber-600">{expiringPromoCount} expiring soon</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
+          {planInfos.length > 0 && <PlanSummary plans={planInfos} />}
+        </div>
       </div>
-
-      {/* Plan Summary */}
-      {planInfos.length > 0 && <PlanSummary plans={planInfos} />}
-
-      {/* New user onboarding OR post previews */}
-      {isNewUser ? (
-        <DashboardOnboarding isVerified={trustLevel >= 3} />
-      ) : (
-        <MyRecentPosts posts={recentPosts} />
-      )}
-
-      {/* Recent Activity Feed */}
-      <RecentActivity items={recentActivity} />
     </div>
   );
 }

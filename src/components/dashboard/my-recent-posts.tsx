@@ -65,7 +65,10 @@ export function MyRecentPosts({ posts }: MyRecentPostsProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base font-display">My Posts</CardTitle>
+          <CardTitle className="text-base font-display">Continue where you left off</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Your latest listings are here so you can jump back in without searching.
+          </p>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
@@ -85,10 +88,15 @@ export function MyRecentPosts({ posts }: MyRecentPostsProps) {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-display">My Posts</CardTitle>
+          <div className="space-y-1">
+            <CardTitle className="text-base font-display">Continue where you left off</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Open a recent listing, review its status, or make quick edits.
+            </p>
+          </div>
           <Button asChild variant="ghost" size="sm" className="text-xs gap-1">
             <Link href="/dashboard/listings">
-              View All
+              Manage Listings
               <ArrowRight className="h-3 w-3" />
             </Link>
           </Button>

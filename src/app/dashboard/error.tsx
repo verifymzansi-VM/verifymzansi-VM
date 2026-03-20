@@ -30,7 +30,8 @@ export default function DashboardError({
         <div className="space-y-2">
           <h1 className="text-xl font-display font-bold">Dashboard Error</h1>
           <p className="text-muted-foreground max-w-md">
-            Something went wrong loading your dashboard. Please try again.
+            We couldn&apos;t load your dashboard summary. Retry the page or reload the dashboard
+            shell.
           </p>
         </div>
         <div className="flex gap-3">

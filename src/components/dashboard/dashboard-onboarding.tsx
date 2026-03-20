@@ -14,9 +14,15 @@ interface OnboardingStep {
 
 interface DashboardOnboardingProps {
   isVerified: boolean;
+  hasListings: boolean;
+  hasBusinesses: boolean;
 }
 
-export function DashboardOnboarding({ isVerified }: DashboardOnboardingProps) {
+export function DashboardOnboarding({
+  isVerified,
+  hasListings,
+  hasBusinesses,
+}: DashboardOnboardingProps) {
   const steps: OnboardingStep[] = [
     {
       label: "Complete your verification",
@@ -26,27 +32,27 @@ export function DashboardOnboarding({ isVerified }: DashboardOnboardingProps) {
       completed: isVerified,
     },
     {
-      label: "Post your first ad",
-      description: "List an item on Mzansi Market to start getting leads",
+      label: "Post your first listing",
+      description: "Create a listing so buyers can start contacting you",
       href: "/post/create",
       icon: PlusCircle,
-      completed: false,
+      completed: hasListings,
     },
     {
-      label: "Add your business",
-      description: "Showcase your brand and link promotions",
+      label: "Add your business profile",
+      description: "Showcase your brand and connect it to your listings",
       href: "/post/create-business",
       icon: Building2,
-      completed: false,
+      completed: hasBusinesses,
     },
   ];
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base font-display">Get Started</CardTitle>
+        <CardTitle className="text-base font-display">Next steps</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Complete these steps to make the most of VerifyMzansi
+          Finish the basics once, then come back here to manage your account faster.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">

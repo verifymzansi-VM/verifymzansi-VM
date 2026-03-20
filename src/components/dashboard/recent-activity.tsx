@@ -71,6 +71,9 @@ export function RecentActivity({ items }: RecentActivityProps) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-display">Recent Activity</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Account updates, buyer messages, and listing changes appear here.
+          </p>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
@@ -87,9 +90,12 @@ export function RecentActivity({ items }: RecentActivityProps) {
     <Card>
       <CardHeader>
         <CardTitle className="text-base font-display">Recent Activity</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Track the latest buyer conversations and listing changes from one feed.
+        </p>
       </CardHeader>
       <CardContent className="px-0">
-        <ul className="divide-y" aria-label="Recent activity feed">
+        <div className="divide-y" role="list" aria-label="Recent activity feed">
           {items.map((item) => {
             const config = typeConfig[item.type];
             const Icon = config.icon;
@@ -121,7 +127,7 @@ export function RecentActivity({ items }: RecentActivityProps) {
             );
 
             return (
-              <li key={item.id} className="px-6 py-3">
+              <div key={item.id} role="listitem" className="px-6 py-3">
                 {item.href ? (
                   <Link
                     href={item.href}
@@ -132,10 +138,10 @@ export function RecentActivity({ items }: RecentActivityProps) {
                 ) : (
                   inner
                 )}
-              </li>
+              </div>
             );
           })}
-        </ul>
+        </div>
       </CardContent>
     </Card>
   );

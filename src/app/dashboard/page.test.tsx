@@ -22,22 +22,21 @@ vi.mock("@/lib/account/compat", async () => {
 });
 
 vi.mock("@/components/layout/page-header", () => ({
-  PageHeader: ({ title, children }: { title: string; children?: React.ReactNode }) => (
+  PageHeader: ({
+    title,
+    description,
+    children,
+  }: {
+    title: string;
+    description?: string;
+    children?: React.ReactNode;
+  }) => (
     <div>
       <h1>{title}</h1>
+      {description ? <p>{description}</p> : null}
       {children}
     </div>
   ),
-}));
-
-vi.mock("@/components/dashboard/attention-banner", () => ({
-  AttentionBanner: ({
-    verificationStatus,
-    stepsRemaining,
-  }: {
-    verificationStatus: string;
-    stepsRemaining: number;
-  }) => <div>{`attention:${verificationStatus}:${stepsRemaining}`}</div>,
 }));
 
 vi.mock("@/components/dashboard/needs-attention", () => ({
@@ -62,6 +61,26 @@ vi.mock("@/components/trust/verification-progress", () => ({
 
 vi.mock("@/components/dashboard/recent-activity", () => ({
   RecentActivity: () => <div>recent-activity</div>,
+}));
+
+vi.mock("@/components/dashboard/my-recent-posts", () => ({
+  MyRecentPosts: () => <div>recent-posts</div>,
+}));
+
+vi.mock("@/components/dashboard/dashboard-onboarding", () => ({
+  DashboardOnboarding: ({
+    isVerified,
+    hasListings,
+    hasBusinesses,
+  }: {
+    isVerified: boolean;
+    hasListings: boolean;
+    hasBusinesses: boolean;
+  }) => <div>{`onboarding:${isVerified}:${hasListings}:${hasBusinesses}`}</div>,
+}));
+
+vi.mock("@/components/dashboard/plan-summary", () => ({
+  PlanSummary: () => <div>plan-summary</div>,
 }));
 
 vi.mock("@/components/dashboard/email-confirmed-toast", () => ({
@@ -151,9 +170,10 @@ describe("DashboardPage", () => {
     const ui = await DashboardPage();
     render(ui);
 
-    expect(screen.getByText("attention:verified:0")).toBeInTheDocument();
-    expect(screen.queryByText(/needs:/)).not.toBeInTheDocument();
+    expect(screen.getByText("needs:verified:0")).toBeInTheDocument();
     expect(screen.getByText("trust:3")).toBeInTheDocument();
+    expect(screen.getByText(/Workspace overview/i)).toBeInTheDocument();
+    expect(screen.getByText(/Manage verification/i)).toBeInTheDocument();
   });
 
   it("calculates the real number of steps remaining for incomplete verification", async () => {
@@ -168,7 +188,8 @@ describe("DashboardPage", () => {
     const ui = await DashboardPage();
     render(ui);
 
-    expect(screen.getByText("attention:incomplete:2")).toBeInTheDocument();
     expect(screen.getByText("needs:incomplete:2")).toBeInTheDocument();
+    expect(screen.getByText(/Continue verification/i)).toBeInTheDocument();
+    expect(screen.getByText("onboarding:false:false:false")).toBeInTheDocument();
   });
 });
