@@ -37,7 +37,8 @@ test.describe("Dashboard verification state", () => {
 
       await expect(page).toHaveURL(/\/dashboard$/);
       await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible();
-      await expect(page.getByText(/trust status/i)).toBeVisible();
+      // Verified users see inline badge instead of Trust Status card
+      await expect(page.getByText(/verified/i)).toBeVisible();
       await expect(page.getByText(/complete your verification/i)).toHaveCount(0);
       await expect(page.getByText(/steps left/i)).toHaveCount(0);
       await expect(page.getByText(/verification under review/i)).toHaveCount(0);

@@ -4,17 +4,17 @@ import Link from "next/link";
 import {
   ShoppingBag,
   MessageSquare,
-  TrendingUp,
   ArrowRight,
   ShieldCheck,
   Plus,
   Megaphone,
   Building2,
   Clock,
-  CreditCard,
+  BadgeCheck,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { VerificationProgress } from "@/components/trust/verification-progress";
@@ -27,10 +27,18 @@ import {
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { AttentionBanner } from "@/components/dashboard/attention-banner";
-import { NeedsAttention } from "@/components/dashboard/needs-attention";
 import { RecentActivity, type ActivityItem } from "@/components/dashboard/recent-activity";
 import { EmailConfirmedToast } from "@/components/dashboard/email-confirmed-toast";
-import type { VerificationStepType, VerificationStatus } from "@/types/enums";
+import { MyRecentPosts, type RecentPost } from "@/components/dashboard/my-recent-posts";
+import { PlanSummary, type PlanInfo } from "@/components/dashboard/plan-summary";
+import { DashboardOnboarding } from "@/components/dashboard/dashboard-onboarding";
+import { getEntitlements } from "@/lib/services/entitlements";
+import type {
+  VerificationStepType,
+  VerificationStatus,
+  MarketplaceArea,
+  PlanTier,
+} from "@/types/enums";
 
 /** Safely resolve owner column — fall back to "owner_id" on error. */
 async function safeGetOwnerColumn(
@@ -101,11 +109,11 @@ export default async function DashboardPage() {
       listingOwnerColumn,
       user.id
     ),
-    // All listing records for views and activity
+    // All listing records for views, activity, and post previews
     applyOwnerFilter(
       supabase
         .from("listings")
-        .select("id, title, status, created_at, updated_at")
+        .select("id, title, status, photos, view_count, created_at, updated_at")
         .order("updated_at", { ascending: false })
         .limit(50),
       listingOwnerColumn,
@@ -174,12 +182,19 @@ export default async function DashboardPage() {
       listingOwnerColumn,
       user.id
     ),
-    // Business count (for quick actions)
+    // Business count
     applyOwnerFilter(
       supabase.from("businesses").select("*", { count: "exact", head: true }),
       businessOwnerColumn,
       user.id
     ),
+    // Active entitlements (for plan summary)
+    supabase
+      .from("entitlements")
+      .select("area, tier, status")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .gt("expires_at", now),
     // Recent leads for activity feed
     applyOwnerFilter(
       supabase
@@ -216,8 +231,9 @@ export default async function DashboardPage() {
   const expiringListingsResult = settled(results[9], emptyResult);
   const expiringPromosResult = settled(results[10], emptyResult);
   const businessCountResult = settled(results[11], emptyResult);
-  const recentLeadsResult = settled(results[12], emptyListResult);
-  const recentListingChangesResult = settled(results[13], emptyListResult);
+  const entitlementsResult = settled(results[12], emptyListResult);
+  const recentLeadsResult = settled(results[13], emptyListResult);
+  const recentListingChangesResult = settled(results[14], emptyListResult);
 
   const profile = profileResult.data;
   const verificationSteps = verificationStepsResult.data;
@@ -229,7 +245,7 @@ export default async function DashboardPage() {
   const activePromos = activePromosResult.count;
   const rejectedListingCount = rejectedListingsResult.count || 0;
   const pendingModerationCount = pendingModerationResult.count || 0;
-  const expiringListingCount = expiringListingsResult.count || 0;
+  const _expiringListingCount = expiringListingsResult.count || 0;
   const expiringPromoCount = expiringPromosResult.count || 0;
   const businessCount = businessCountResult.count || 0;
 
@@ -246,10 +262,6 @@ export default async function DashboardPage() {
   } catch {
     // Non-critical — default to 0
   }
-
-  // Compute conversion rate
-  const conversionRate =
-    (totalViews || 0) > 0 ? ((totalLeadCount / (totalViews || 1)) * 100).toFixed(1) : "0.0";
 
   const verificationSummary = summarizeVerification(
     profile?.account_verification_status,
@@ -271,6 +283,53 @@ export default async function DashboardPage() {
 
   const displayName = profile?.display_name || user.user_metadata?.display_name || "Member";
 
+  // Build recent posts list for preview section
+  const recentPosts: RecentPost[] = (ownerListings ?? [])
+    .slice(0, 5)
+    .map(
+      (l: {
+        id: string;
+        title: string | null;
+        status: string;
+        photos?: string[] | null;
+        view_count?: number | null;
+        created_at: string;
+      }) => ({
+        id: l.id,
+        title: l.title,
+        status: l.status,
+        photos: l.photos,
+        view_count: l.view_count,
+        created_at: l.created_at,
+      })
+    );
+
+  // Build plan summary info
+  const AREA_LABELS: Record<string, string> = {
+    MZANSI_MARKET: "Market",
+    MZANSI_BUSINESS: "Business",
+    PROMOTIONS_EVENTS: "Promos",
+  };
+  const planInfos: PlanInfo[] = [];
+  const activeEntitlements = entitlementsResult.data ?? [];
+  for (const ent of activeEntitlements) {
+    const areaLabel = AREA_LABELS[ent.area] ?? ent.area;
+    const tierLabel = ent.tier ? ent.tier.charAt(0).toUpperCase() + ent.tier.slice(1) : "Free";
+    const entitlementSet = getEntitlements(
+      (ent.tier ?? "basic") as PlanTier,
+      ent.area as MarketplaceArea
+    );
+    planInfos.push({
+      area: ent.area,
+      areaLabel,
+      tierLabel,
+      currentCount: 0, // approximate — exact count would need another query
+      maxAllowed: entitlementSet.maxAllowed,
+    });
+  }
+
+  const isNewUser = (activeListings ?? 0) === 0 && businessCount === 0;
+
   // Build activity feed from recent leads + listing changes
   const activityItems: ActivityItem[] = [];
 
@@ -283,6 +342,7 @@ export default async function DashboardPage() {
         title: `New lead from ${lead.buyer_name || "a buyer"}`,
         description: lead.message ? lead.message.slice(0, 80) : undefined,
         timestamp: lead.created_at,
+        href: "/dashboard/leads",
       });
     }
   }
@@ -297,6 +357,7 @@ export default async function DashboardPage() {
           type: "listing_approved",
           title: `"${titleSnippet}" is now live`,
           timestamp: listing.updated_at || listing.created_at,
+          href: "/dashboard/listings",
         });
       } else if (listing.status === "rejected") {
         activityItems.push({
@@ -305,6 +366,7 @@ export default async function DashboardPage() {
           title: `"${titleSnippet}" was rejected`,
           description: "Check the rejection reason and edit your listing.",
           timestamp: listing.updated_at || listing.created_at,
+          href: "/dashboard/listings",
         });
       } else if (
         listing.status === "pending_moderation" ||
@@ -315,6 +377,7 @@ export default async function DashboardPage() {
           type: "listing_pending",
           title: `"${titleSnippet}" is under review`,
           timestamp: listing.updated_at || listing.created_at,
+          href: "/dashboard/listings",
         });
       }
     }
@@ -324,25 +387,24 @@ export default async function DashboardPage() {
   activityItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   const recentActivity = activityItems.slice(0, 10);
 
-  // Check if there are any items needing attention
-  const hasAttentionItems =
-    rejectedListingCount > 0 ||
-    unreadLeadCount > 0 ||
-    pendingModerationCount > 0 ||
-    expiringListingCount > 0 ||
-    expiringPromoCount > 0 ||
-    verificationSummary.accountVerificationStatus !== "verified";
-
   return (
     <div className="space-y-6">
       <EmailConfirmedToast />
       <PageHeader title={`Welcome back, ${displayName}`} breadcrumbs={[{ label: "Dashboard" }]}>
-        <Button asChild variant="trust-verified" size="sm" className="gap-2">
-          <Link href="/post/create">
-            <Plus className="h-4 w-4" />
-            Post Ad
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          {trustLevel >= 3 && (
+            <Badge className="bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800 gap-1">
+              <BadgeCheck className="h-3 w-3" />
+              Verified
+            </Badge>
+          )}
+          <Button asChild variant="trust-verified" size="sm" className="gap-2">
+            <Link href="/post/create">
+              <Plus className="h-4 w-4" />
+              Post Ad
+            </Link>
+          </Button>
+        </div>
       </PageHeader>
 
       {/* Attention Banners — dismissible alerts for urgent items */}
@@ -355,47 +417,36 @@ export default async function DashboardPage() {
         expiringPromoCount={expiringPromoCount}
       />
 
-      {/* Needs Attention — clickable cards for items needing action */}
-      {hasAttentionItems && (
-        <NeedsAttention
-          unreadLeadCount={unreadLeadCount}
-          rejectedListingCount={rejectedListingCount}
-          pendingModerationCount={pendingModerationCount}
-          expiringListingCount={expiringListingCount}
-          expiringPromoCount={expiringPromoCount}
-          verificationStatus={verificationSummary.accountVerificationStatus}
-          stepsRemaining={verificationSummary.stepsRemaining}
-        />
+      {/* Trust & Verification — only shown for unverified users */}
+      {trustLevel < 3 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-display flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-brand-green" />
+                Trust Status
+              </CardTitle>
+              <TrustBadge level={trustLevel} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <VerificationProgress steps={verificationProgressSteps} />
+            {trustLevel === 2 ? (
+              <p className="mt-3 text-sm text-muted-foreground flex items-center gap-1.5">
+                <Clock className="h-4 w-4 text-amber-500" />
+                Your documents are under review — we&apos;ll update your status within 24–48 hours.
+              </p>
+            ) : (
+              <Button asChild variant="outline" size="sm" className="mt-3 inline-flex gap-1">
+                <Link href="/verification">
+                  Increase Trust Level
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       )}
-
-      {/* Trust & Verification */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-display flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-brand-green" />
-              Trust Status
-            </CardTitle>
-            <TrustBadge level={trustLevel} />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <VerificationProgress steps={verificationProgressSteps} />
-          {trustLevel === 2 ? (
-            <p className="mt-3 text-sm text-muted-foreground flex items-center gap-1.5">
-              <Clock className="h-4 w-4 text-amber-500" />
-              Your documents are under review — we&apos;ll update your status within 24–48 hours.
-            </p>
-          ) : trustLevel < 3 ? (
-            <Button asChild variant="outline" size="sm" className="mt-3 inline-flex gap-1">
-              <Link href="/verification">
-                Increase Trust Level
-                <ArrowRight className="h-3 w-3" />
-              </Link>
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
 
       {/* Stats Grid — all cards are now clickable */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -410,7 +461,7 @@ export default async function DashboardPage() {
                   <p className="text-2xl font-bold font-display">{activeListings || 0}</p>
                   <p className="text-xs text-muted-foreground">Mzansi Market</p>
                   <p className="text-[10px] text-muted-foreground">
-                    {totalViews || 0} views · {conversionRate}% conversion
+                    {totalViews || 0} views · {totalLeadCount} enquiries
                   </p>
                 </div>
               </div>
@@ -428,9 +479,6 @@ export default async function DashboardPage() {
                 <div>
                   <p className="text-2xl font-bold font-display">{businessCount || 0}</p>
                   <p className="text-xs text-muted-foreground">Mzansi Business</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {businessCount === 1 ? "1 registered" : `${businessCount} registered`}
-                  </p>
                 </div>
               </div>
             </CardContent>
@@ -479,38 +527,15 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Link href="/dashboard/businesses">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardContent className="flex items-center gap-3 py-4">
-              <Building2 className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm font-medium">
-                Mzansi Business{businessCount > 0 ? ` (${businessCount})` : ""}
-              </span>
-              <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/dashboard/metrics">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardContent className="flex items-center gap-3 py-4">
-              <TrendingUp className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm font-medium">Metrics</span>
-              <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/billing">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardContent className="flex items-center gap-3 py-4">
-              <CreditCard className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm font-medium">Upgrade Plan</span>
-              <ArrowRight className="h-4 w-4 ml-auto text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
+      {/* Plan Summary */}
+      {planInfos.length > 0 && <PlanSummary plans={planInfos} />}
+
+      {/* New user onboarding OR post previews */}
+      {isNewUser ? (
+        <DashboardOnboarding isVerified={trustLevel >= 3} />
+      ) : (
+        <MyRecentPosts posts={recentPosts} />
+      )}
 
       {/* Recent Activity Feed */}
       <RecentActivity items={recentActivity} />
