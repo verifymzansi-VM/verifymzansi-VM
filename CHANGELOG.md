@@ -1,5 +1,35 @@
 # VerifyMzansi — Recent Development Log
 
+## Next.js 16.2.0 Rollback to 16.1.5 (2026-03-20)
+
+- **Reason for rollback:** Production started returning Cloudflare 1101
+  `Worker threw exception` responses after upgrading to Next.js `16.2.0`, so the
+  app was rolled back to the closest supported pre-16.2 release to reduce
+  regression risk before considering a deeper runtime-entrypoint migration.
+- **Dependency rollback:** Pinned `next`, `@next/env`, and `eslint-config-next`
+  from `16.2.0` to `16.1.5` in `package.json` and regenerated `pnpm-lock.yaml`.
+  `@opennextjs/cloudflare@1.17.1` remained in place and resolved cleanly against
+  `next@16.1.5`.
+- **Code-path decision:** Kept the existing `src/middleware.ts` +
+  `src/proxy-handler.ts` request path unchanged because the smaller downgrade
+  validated successfully without restoring the older `src/proxy.ts` convention.
+- **Validation:** `pnpm install`, `pnpm run build`, and
+  `pnpm exec vitest run src/__tests__/proxy-middleware.test.ts` passed on
+  Windows. A full `pnpm run build:cloudflare` also passed from the Ubuntu WSL
+  ext4 workspace with Next.js `16.1.5` and OpenNext generating
+  `.open-next/worker.js` successfully.
+- **Deploy follow-up:** The first production deploy still returned HTTP 500
+  because `.env.local` contained `ENABLE_TEST_POSTING_BYPASS` and
+  `NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS`, and
+  `scripts/preflight-cloudflare.js` was not yet blanking those variables for
+  production builds. Adding both vars to `blockedProductionVars`, rebuilding,
+  and redeploying fixed startup and restored HTTP 200 responses for `/`,
+  `/login`, and `/api/health` on worker version
+  `d569f782-6774-41ba-ab29-9bd8d98a5049`.
+- **Residual warning:** The Cloudflare build still reports the expected Next.js
+  deprecation warning for the `src/middleware.ts` convention, but it does not
+  block the OpenNext bundle on `16.1.5`.
+
 ## RLS Access-Boundary Hardening Follow-up (2026-03-19)
 
 - **Owner and self-service cleanup:** Removed the remaining low-risk admin reads
