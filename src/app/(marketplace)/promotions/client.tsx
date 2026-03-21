@@ -277,11 +277,10 @@ export function PromotionsExplorer() {
         title="Promotions & Events"
         description="Deals, promotions, launches, and events from verified South African businesses and members."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Promotions & Events" }]}
-        className="hidden lg:block"
       >
         <Button asChild size="sm" className="gap-1">
-          <Link href="/post/create">
-            Create a Post
+          <Link href="/post/create-promotion">
+            Create Promotion
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
@@ -343,8 +342,8 @@ export function PromotionsExplorer() {
               {total === 1 ? "" : "s"} found
             </p>
             <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex gap-1">
-              <Link href="/post/create">
-                Create a Post
+              <Link href="/post/create-promotion">
+                Create Promotion
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>

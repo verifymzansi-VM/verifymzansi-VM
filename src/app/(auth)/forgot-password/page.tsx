@@ -99,7 +99,7 @@ export default function ForgotPasswordPage() {
 
       if (!response.ok) {
         toast({
-          title: "Error",
+          title: "Reset request failed",
           description:
             typeof result.error === "string" ? result.error : "Unable to submit request.",
           variant: "destructive",
@@ -191,7 +191,7 @@ export default function ForgotPasswordPage() {
         {captchaUnavailable && <p className="inline-form-error">{TURNSTILE_UNAVAILABLE_MESSAGE}</p>}
         {turnstileError && (
           <div className="flex items-center gap-2">
-            <p className="inline-form-error">Security verification failed to load.</p>
+            <p className="inline-form-error">Security check failed to load. Please try again.</p>
             <button
               type="button"
               onClick={handleRetry}

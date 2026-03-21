@@ -303,7 +303,7 @@ export default function EditPromotionPage() {
             title="Edit Promotion"
             breadcrumbs={[
               { label: "Dashboard", href: "/dashboard" },
-              { label: "Promotions", href: "/dashboard/promotions" },
+              { label: "Promotions & Events", href: "/dashboard/promotions" },
               { label: "Edit" },
             ]}
           />

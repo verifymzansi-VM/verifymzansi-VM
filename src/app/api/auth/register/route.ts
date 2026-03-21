@@ -6,15 +6,12 @@ import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turn
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
-import {
-  ACCOUNT_PHONE_IN_USE_ERROR,
-  buildAccountPhoneFields,
-  normalizeSaPhone,
-} from "@/lib/utils/phone";
+import { buildAccountPhoneFields, normalizeSaPhone } from "@/lib/utils/phone";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { sendAlreadyRegisteredEmail } from "@/lib/services/email";
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("Register");
 
@@ -39,6 +36,9 @@ async function deleteOrphanedAuthUser(userId: string, admin: ReturnType<typeof c
 
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     const isPlaywrightTestMode = checkPlaywrightTestMode();
     const turnstileStatus = getTurnstileConfigStatus();
 
@@ -175,7 +175,12 @@ export async function POST(request: NextRequest) {
         if (profileError) {
           if (profileError.code === "23505") {
             await deleteOrphanedAuthUser(signUpData.user.id, admin);
-            return NextResponse.json({ error: ACCOUNT_PHONE_IN_USE_ERROR }, { status: 409 });
+            // Return generic success to prevent phone number enumeration
+            // (matches the existing email-exists behavior above).
+            log.info("Registration blocked: phone already in use", {
+              userId: signUpData.user.id,
+            });
+            return NextResponse.json({ success: true });
           }
 
           throw profileError;
@@ -187,7 +192,11 @@ export async function POST(request: NextRequest) {
           (profileError as unknown as { code: string }).code === "23505"
         ) {
           await deleteOrphanedAuthUser(signUpData.user.id, admin);
-          return NextResponse.json({ error: ACCOUNT_PHONE_IN_USE_ERROR }, { status: 409 });
+          // Return generic success to prevent phone number enumeration.
+          log.info("Registration blocked (catch): phone already in use", {
+            userId: signUpData.user.id,
+          });
+          return NextResponse.json({ success: true });
         }
 
         log.error("Failed to create account profile on registration — cleaning up auth user", {

@@ -5,6 +5,7 @@ import { Building2, Plus, Pencil, Eye, Megaphone, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PageHeader } from "@/components/layout/page-header";
 import { BoostButton } from "@/components/listings/boost-button";
 import { timeAgo, expiresIn } from "@/lib/utils/format";
@@ -34,8 +35,13 @@ interface DashboardBusiness {
   created_at: string;
 }
 
-export default async function MyBusinessesPage() {
+export default async function MyBusinessesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ created?: string; updated?: string }>;
+} = {}) {
   const supabase = await createClient();
+  const params = searchParams ? await searchParams : {};
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -60,9 +66,31 @@ export default async function MyBusinessesPage() {
   const { data: businesses } = await businessesQuery;
 
   const myBusinesses = (businesses ?? []) as unknown as DashboardBusiness[];
+  const successState = params.updated
+    ? {
+        title: "Business updated",
+        description:
+          "Your changes were saved and the business was resubmitted for review before it goes live again.",
+      }
+    : params.created
+      ? {
+          title: "Business submitted",
+          description:
+            "Your business profile was created successfully and is now waiting for moderation.",
+        }
+      : null;
 
   return (
     <div className="space-y-6">
+      {successState && (
+        <Alert variant="success">
+          <div>
+            <AlertTitle>{successState.title}</AlertTitle>
+            <AlertDescription>{successState.description}</AlertDescription>
+          </div>
+        </Alert>
+      )}
+
       <PageHeader
         title="Mzansi Business"
         description="Manage your Mzansi Business listings."

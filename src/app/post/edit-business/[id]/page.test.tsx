@@ -89,6 +89,7 @@ describe("EditBusinessPage", () => {
         json: async () => ({
           business: {
             id: "business-1",
+            status: "live",
             business_type: "home_business",
             business_name: "Nomsa Home Studio",
             slug: "nomsa-home-studio",
@@ -150,6 +151,10 @@ describe("EditBusinessPage", () => {
     const secondCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1];
     const payload = JSON.parse(secondCall[1].body as string);
 
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Updated and resubmitted for review", variant: "success" })
+    );
+    expect(mockPush).toHaveBeenCalledWith("/dashboard/businesses?updated=true");
     expect(payload.map_directions).toBe("https://maps.example.com/home-studio");
     expect(payload.business_details).toMatchObject({
       type: "home_business",

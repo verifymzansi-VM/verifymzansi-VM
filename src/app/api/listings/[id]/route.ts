@@ -125,6 +125,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
 
+    // Defense-in-depth: applyOwnerFilter already scopes results to the current
+    // user, so this check should never trigger. Kept as a safety net.
     if (readOwnerId(listing) !== user.id) {
       return NextResponse.json(
         { error: "Forbidden — you do not own this listing" },

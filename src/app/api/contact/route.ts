@@ -16,6 +16,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("ContactRoute");
 
@@ -39,6 +40,9 @@ function isContactTargetRow(record: unknown): record is ContactTargetRow {
 
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     const parsedBody = await parseAndValidateJsonRequest(request, contactAccountHolderSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",

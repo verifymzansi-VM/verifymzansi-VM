@@ -146,7 +146,8 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
       },
     });
 
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const updateIn = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = vi.fn().mockReturnValue({ in: updateIn });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
     const from = vi.fn((table: string) => {
       if (table === "promotions") {
@@ -202,8 +203,10 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
 
   it("returns a safe error when the status update fails", async () => {
     const update = vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({
-        error: { message: "raw db failure" },
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({
+          error: { message: "raw db failure" },
+        }),
       }),
     });
 

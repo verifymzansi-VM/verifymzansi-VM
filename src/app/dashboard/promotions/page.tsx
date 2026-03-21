@@ -5,9 +5,12 @@ import { Megaphone, Star, Zap, Flame, Clock, Tag, Building2, Pencil, Plus } from
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PageHeader } from "@/components/layout/page-header";
 import { BoostButton } from "@/components/listings/boost-button";
 import { FeaturedButton } from "@/components/listings/featured-button";
+import { ResubmitButton } from "@/components/listings/resubmit-button";
+import { DeletePostButton } from "@/components/listings/delete-post-button";
 import { timeAgo, expiresIn } from "@/lib/utils/format";
 import {
   canBoost as checkCanBoost,
@@ -32,6 +35,7 @@ interface DashboardPromotion {
   promotion_type: string;
   business_id: string | null;
   status: string;
+  status_reason: string | null;
   boost_until: string | null;
   featured_until: string | null;
   created_at: string;
@@ -42,8 +46,13 @@ export const metadata = {
   description: "Manage your promotions, ads, and event listings on VerifyMzansi.",
 };
 
-export default async function MyPromotionsPage() {
+export default async function MyPromotionsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ created?: string; updated?: string }>;
+} = {}) {
   const supabase = await createClient();
+  const params = searchParams ? await searchParams : {};
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -99,9 +108,9 @@ export default async function MyPromotionsPage() {
       supabase
         .from("promotions")
         .select(
-          "id, title, promotion_type, business_id, status, boost_until, featured_until, created_at"
+          "id, title, promotion_type, business_id, status, status_reason, boost_until, featured_until, created_at"
         )
-        .in("status", ["live", "pending_moderation", "draft"])
+        .in("status", ["live", "pending_moderation", "draft", "rejected"])
         .order("created_at", { ascending: false })
         .limit(50),
       promotionOwnerColumn,
@@ -113,6 +122,19 @@ export default async function MyPromotionsPage() {
   const featured = (featuredRes.data ?? []) as unknown as DashboardListing[];
   const urgent = (urgentRes.data ?? []) as unknown as DashboardListing[];
   const myPromotions = (myPromotionsRes.data ?? []) as unknown as DashboardPromotion[];
+  const successState = params.updated
+    ? {
+        title: "Promotion updated",
+        description:
+          "Your changes were saved and the promotion was resubmitted for review before it goes live again.",
+      }
+    : params.created
+      ? {
+          title: "Promotion submitted",
+          description:
+            "Your promotion or event was created successfully and is now waiting for moderation.",
+        }
+      : null;
 
   // Gather linked business names
   const businessIds = [
@@ -128,10 +150,19 @@ export default async function MyPromotionsPage() {
 
   const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
 
-  const totalActive = boosted.length + featured.length + urgent.length + myPromotions.length;
+  const totalItems = boosted.length + featured.length + urgent.length + myPromotions.length;
 
   return (
     <div className="space-y-6">
+      {successState && (
+        <Alert variant="success">
+          <div>
+            <AlertTitle>{successState.title}</AlertTitle>
+            <AlertDescription>{successState.description}</AlertDescription>
+          </div>
+        </Alert>
+      )}
+
       <PageHeader
         title="Promotions & Events"
         description="Track boosts, features, and promotions."
@@ -147,19 +178,19 @@ export default async function MyPromotionsPage() {
           <Button asChild size="sm" className="gap-1">
             <Link href="/post/create-promotion">
               <Plus className="h-4 w-4" />
-              New Promotion
+              Create Promotion
             </Link>
           </Button>
         </div>
       </PageHeader>
 
-      {totalActive === 0 ? (
+      {totalItems === 0 ? (
         <Card>
           <CardContent className="p-6 text-center space-y-3">
             <Megaphone className="h-8 w-8 text-muted-foreground mx-auto" />
-            <h2 className="font-display text-lg font-semibold">No active promotions</h2>
+            <h2 className="font-display text-lg font-semibold">No promotions yet</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Boost your listings or create promotions to reach more buyers.
+              Create a promotion or event to reach more buyers from your dashboard.
             </p>
             <div className="flex justify-center gap-2">
               <Button asChild variant="outline" size="sm">
@@ -301,6 +332,7 @@ export default async function MyPromotionsPage() {
                             <Badge variant="secondary">Pending</Badge>
                           )}
                           {p.status === "draft" && <Badge variant="outline">Draft</Badge>}
+                          {p.status === "rejected" && <Badge variant="destructive">Rejected</Badge>}
                           {isBoosted && (
                             <Badge variant="outline" className="text-orange-600">
                               Boosted
@@ -311,26 +343,28 @@ export default async function MyPromotionsPage() {
                               Featured
                             </Badge>
                           )}
-                          <BoostButton
-                            listingId={p.id}
-                            isBoosted={Boolean(isBoosted)}
-                            canBoost={
-                              p.status === "live" &&
-                              checkCanBoost(promotionsTier, "PROMOTIONS_EVENTS").allowed
-                            }
-                            itemTypeLabel="promotion"
-                            boostApiPath={`/api/promotions/${p.id}/boost`}
-                          />
-                          <FeaturedButton
-                            listingId={p.id}
-                            isFeatured={Boolean(isFeatured)}
-                            canFeature={
-                              p.status === "live" &&
-                              checkCanFeatured(promotionsTier, "PROMOTIONS_EVENTS").allowed
-                            }
-                            itemTypeLabel="promotion"
-                            featuredApiPath={`/api/promotions/${p.id}/featured`}
-                          />
+                          {p.status === "live" && (
+                            <>
+                              <BoostButton
+                                listingId={p.id}
+                                isBoosted={Boolean(isBoosted)}
+                                canBoost={
+                                  checkCanBoost(promotionsTier, "PROMOTIONS_EVENTS").allowed
+                                }
+                                itemTypeLabel="promotion"
+                                boostApiPath={`/api/promotions/${p.id}/boost`}
+                              />
+                              <FeaturedButton
+                                listingId={p.id}
+                                isFeatured={Boolean(isFeatured)}
+                                canFeature={
+                                  checkCanFeatured(promotionsTier, "PROMOTIONS_EVENTS").allowed
+                                }
+                                itemTypeLabel="promotion"
+                                featuredApiPath={`/api/promotions/${p.id}/featured`}
+                              />
+                            </>
+                          )}
                           <Button
                             asChild
                             size="sm"
@@ -344,6 +378,22 @@ export default async function MyPromotionsPage() {
                           </Button>
                         </div>
                       </CardContent>
+                      {p.status === "rejected" && (
+                        <CardContent className="pt-0 space-y-3">
+                          <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3 text-sm">
+                            <p className="font-medium text-destructive">Reason for rejection</p>
+                            <p className="mt-1 text-muted-foreground">
+                              {p.status_reason ||
+                                "This promotion needs updates before it can go live."}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <ResubmitButton itemId={p.id} area="PROMOTIONS_EVENTS" />
+                            <DeletePostButton itemId={p.id} area="PROMOTIONS_EVENTS" />
+                            <span>Edit your promotion, then resubmit it for review.</span>
+                          </div>
+                        </CardContent>
+                      )}
                     </Card>
                   );
                 })}

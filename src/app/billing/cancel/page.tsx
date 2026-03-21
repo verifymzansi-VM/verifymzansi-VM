@@ -126,7 +126,7 @@ export default async function BillingCancelPage({
           <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button asChild className="gap-2">
               <Link href="/billing">
-                Try Again
+                View Plans
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>

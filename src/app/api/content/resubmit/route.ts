@@ -13,6 +13,8 @@ import {
   withOwnerColumn,
 } from "@/lib/account/compat";
 
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+
 const log = createLogger("ContentResubmit");
 
 const resubmitSchema = z.object({
@@ -47,6 +49,9 @@ function isOwnerCompatibleTable(table: TableConfig["table"]): table is Compatibl
  */
 export async function POST(request: Request) {
   try {
+    const sameOriginFailure = enforceSameOriginMutation(request, log);
+    if (sameOriginFailure) return sameOriginFailure;
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -172,11 +177,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to resubmit content" }, { status: 500 });
     }
 
-    const targetType = config.table.replace(/s$/, "") as string;
+    const targetTypeMap: Record<string, string> = {
+      listings: "listing",
+      businesses: "business",
+      storefronts: "storefront",
+      promotions: "promotion",
+    };
+    const targetType = targetTypeMap[config.table] || config.table;
     const actionMap: Record<string, string> = {
       listing: "listing_updated",
-      business_profile: "business_profile_updated",
+      business: "business_profile_updated",
       storefront: "storefront_updated",
+      promotion: "listing_updated",
     };
     await logAuditEvent({
       actorId: user.id,

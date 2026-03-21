@@ -94,6 +94,7 @@ describe("ListingsPage", () => {
     render(ui);
 
     // Assertions
+    expect(screen.getByRole("heading", { name: /Your Content/i })).toBeDefined();
     expect(screen.getByText(/Active \(1\)/)).toBeDefined();
     expect(screen.getByText(/Pending \(1\)/)).toBeDefined();
   });

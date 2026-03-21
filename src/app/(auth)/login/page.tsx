@@ -30,7 +30,6 @@ export default function LoginPage() {
     getTurnstileClientState().mode === "unavailable"
   );
   const [justRegistered, setJustRegistered] = useState(false);
-  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
   const [emailConfirmed, setEmailConfirmed] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -222,7 +221,6 @@ export default function LoginPage() {
   }
 
   async function onSubmit(data: LoginInput) {
-    setEmailNotConfirmed(false);
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -233,13 +231,6 @@ export default function LoginPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        if (
-          response.status === 403 &&
-          typeof result.error === "string" &&
-          /confirm|verif/i.test(result.error)
-        ) {
-          setEmailNotConfirmed(true);
-        }
         toast({
           title: "Sign in failed",
           description:
@@ -303,34 +294,6 @@ export default function LoginPage() {
               {resendCooldown > 0
                 ? `Resend available in ${resendCooldown}s`
                 : "Didn't receive it? Resend"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {emailNotConfirmed && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
-          <Mail className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Email not confirmed</p>
-            <p className="text-sm text-muted-foreground">
-              Your email address hasn&apos;t been confirmed yet. Check your inbox for the
-              confirmation link, or request a new one.
-            </p>
-            <button
-              type="button"
-              onClick={handleResendConfirmation}
-              disabled={resendingEmail || resendCooldown > 0}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green underline hover:text-brand-green/80 disabled:opacity-50 disabled:no-underline"
-            >
-              {resendingEmail ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Send className="h-3.5 w-3.5" />
-              )}
-              {resendCooldown > 0
-                ? `Resend available in ${resendCooldown}s`
-                : "Resend confirmation email"}
             </button>
           </div>
         </div>
@@ -429,7 +392,7 @@ export default function LoginPage() {
         {captchaUnavailable && <p className="inline-form-error">{TURNSTILE_UNAVAILABLE_MESSAGE}</p>}
         {turnstileError && (
           <div className="flex items-center gap-2">
-            <p className="inline-form-error">Security check failed to load.</p>
+            <p className="inline-form-error">Security check failed to load. Please try again.</p>
             <button
               type="button"
               onClick={handleRetry}
@@ -451,6 +414,36 @@ export default function LoginPage() {
           Sign In
         </Button>
       </form>
+
+      {!emailConfirmed && (
+        <div className="rounded-lg border border-border bg-muted/30 p-4">
+          <div className="flex items-start gap-3">
+            <Mail className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">Need a new confirmation email?</p>
+              <p className="text-sm text-muted-foreground">
+                If your account is still waiting for email confirmation, enter your email above and
+                request a fresh confirmation link.
+              </p>
+              <button
+                type="button"
+                onClick={handleResendConfirmation}
+                disabled={resendingEmail || resendCooldown > 0}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green underline hover:text-brand-green/80 disabled:opacity-50 disabled:no-underline"
+              >
+                {resendingEmail ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                {resendCooldown > 0
+                  ? `Request another link in ${resendCooldown}s`
+                  : "Resend confirmation email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <p className="text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}

@@ -76,6 +76,7 @@ export default function EditBusinessPage() {
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [existingStatus, setExistingStatus] = useState<string | null>(null);
 
   // Business Type
   const [businessType, setBusinessType] = useState<BusinessType>("standalone_shop");
@@ -177,6 +178,7 @@ export default function EditBusinessPage() {
         const data = await res.json();
         const b = data.business;
 
+        setExistingStatus(b.status || null);
         setBusinessType(b.business_type || "standalone_shop");
         setBusinessName(b.business_name || "");
         setSlug(b.slug || "");
@@ -522,7 +524,11 @@ export default function EditBusinessPage() {
         return;
       }
 
-      toast({ title: "Business updated!", variant: "success" });
+      toast({
+        title:
+          existingStatus === "live" ? "Updated and resubmitted for review" : "Business updated!",
+        variant: "success",
+      });
       router.push("/dashboard/businesses?updated=true");
     } catch (error: unknown) {
       setError(normalizeCreatePostRuntimeError(error, "Something went wrong. Please try again."));

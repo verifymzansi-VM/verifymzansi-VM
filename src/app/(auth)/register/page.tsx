@@ -55,7 +55,7 @@ export default function RegisterPage() {
   useEffect(() => {
     if (skipTurnstileTimeout || turnstileLoaded) return;
     timeoutRef.current = setTimeout(() => {
-      setTurnstileError("Security check failed to load.");
+      setTurnstileError("Security check failed to load. Please try again.");
       setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
     }, 15000);
     return () => {
@@ -85,7 +85,7 @@ export default function RegisterPage() {
 
   const handleTurnstileError = useCallback(() => {
     setCaptchaUnavailable(false);
-    setTurnstileError("Security check failed. Please try again.");
+    setTurnstileError("Security check failed to load. Please try again.");
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
   }, [setValue]);
@@ -159,7 +159,7 @@ export default function RegisterPage() {
           <span className="w-full border-t" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">or register with email</span>
+          <span className="bg-background px-2 text-muted-foreground">or continue with email</span>
         </div>
       </div>
 

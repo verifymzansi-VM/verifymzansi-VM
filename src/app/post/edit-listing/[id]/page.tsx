@@ -61,6 +61,7 @@ export default function EditListingPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [existingStatus, setExistingStatus] = useState<string | null>(null);
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [existingVideos, setExistingVideos] = useState<string[]>([]);
   const [existingVideoThumbnail, setExistingVideoThumbnail] = useState<string | null>(null);
@@ -155,6 +156,7 @@ export default function EditListingPage() {
         setTitle(data.title || "");
         setDescription(data.description || "");
         setPrice(data.price_cents ? (data.price_cents / 100).toString() : "");
+        setExistingStatus((data.status as string | null) ?? null);
         setCategory((data.category as ListingCategory) || "");
         setCondition(
           ((data.condition as ListingCondition | null) ??
@@ -424,7 +426,11 @@ export default function EditListingPage() {
         return;
       }
 
-      toast({ title: "Listing updated!", variant: "success" });
+      toast({
+        title:
+          existingStatus === "live" ? "Updated and resubmitted for review" : "Listing updated!",
+        variant: "success",
+      });
       router.push("/dashboard/listings");
     } catch (error: unknown) {
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));

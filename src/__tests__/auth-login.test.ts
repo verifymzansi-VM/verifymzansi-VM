@@ -159,6 +159,7 @@ describe("POST /api/auth/login", () => {
     expect(res.status).toBe(401);
     const body = await res.json();
     expect(body.error).toBe("Invalid email or password");
+    expect(body).not.toHaveProperty("code");
   });
 
   it("validates Turnstile when configured", async () => {

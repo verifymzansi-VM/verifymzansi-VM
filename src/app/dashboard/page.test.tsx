@@ -174,6 +174,11 @@ describe("DashboardPage", () => {
     expect(screen.getByText("trust:3")).toBeInTheDocument();
     expect(screen.getByText(/Workspace overview/i)).toBeInTheDocument();
     expect(screen.getByText(/Manage verification/i)).toBeInTheDocument();
+    expect(screen.getByText("Promotions & Events")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Create Post/i })).toHaveAttribute(
+      "href",
+      "/post/create"
+    );
   });
 
   it("calculates the real number of steps remaining for incomplete verification", async () => {

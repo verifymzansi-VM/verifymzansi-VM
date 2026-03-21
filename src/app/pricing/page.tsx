@@ -48,13 +48,13 @@ function PlanGrid({ plans }: { plans: PlanDefinition[] }) {
       {plans.map((plan) => (
         <Card
           key={`${plan.area}-${plan.tier}`}
-          className={plan.tier === "pro" ? "border-brand-green shadow-lg relative" : ""}
+          className={plan.tier === "growth" ? "border-brand-green shadow-lg relative" : ""}
         >
-          {plan.tier === "pro" && (
+          {plan.tier === "growth" && (
             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
               <Badge className="bg-brand-green text-white gap-1">
                 <Sparkles className="h-3 w-3" />
-                Best Value
+                Most Popular
               </Badge>
             </div>
           )}
@@ -86,10 +86,10 @@ function PlanGrid({ plans }: { plans: PlanDefinition[] }) {
               <Button
                 asChild
                 className="w-full gap-2"
-                variant={plan.tier === "pro" ? "default" : "outline"}
+                variant={plan.tier === "growth" ? "default" : "outline"}
               >
-                <Link href="/register">
-                  {plan.priceCents === 0 ? "Get Started Free" : "Choose Plan"}
+                <Link href={plan.priceCents === 0 ? "/post/create" : "/billing"}>
+                  {plan.priceCents === 0 ? "Start Free Post" : "View Billing Plans"}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>

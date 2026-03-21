@@ -5,6 +5,7 @@ import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turn
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import {
   checkAccountLockout,
   recordFailedLogin,
@@ -18,6 +19,9 @@ const log = createLogger("Login");
 
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     const isPlaywrightTestMode = checkPlaywrightTestMode();
     const turnstileStatus = getTurnstileConfigStatus();
     if (
@@ -26,7 +30,7 @@ export async function POST(request: NextRequest) {
       !isPlaywrightTestMode
     ) {
       log.error("Turnstile not configured in production", {
-        reason: !turnstileStatus.configured ? turnstileStatus.reason : "N/A",
+        reason: turnstileStatus.reason,
       });
       return NextResponse.json(
         { error: "Authentication temporarily unavailable" },
@@ -38,7 +42,7 @@ export async function POST(request: NextRequest) {
     const rateCheck = await checkRateLimit({
       key: ip,
       action: "auth:login",
-      degradedMode: "block",
+      degradedMode: "local",
     });
     if (rateCheck.limited) {
       if (rateCheck.degraded) {
@@ -139,11 +143,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (error) {
-      // Return generic error for all auth failures to prevent email enumeration.
-      // Log the specific reason server-side for debugging.
       if (error.message?.toLowerCase().includes("email not confirmed")) {
         log.info("Login failed: email not confirmed", { email: parsedBody.data.email });
       }
+
+      // Return the same generic error for all auth failures to avoid leaking
+      // whether an account exists or is merely awaiting confirmation.
       recordFailedLogin(parsedBody.data.email);
       recordDistributedFailedLogin(parsedBody.data.email).catch(() => {});
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });

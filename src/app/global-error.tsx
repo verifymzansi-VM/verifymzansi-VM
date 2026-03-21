@@ -33,7 +33,7 @@ export default function GlobalError({
           </p>
           {error.digest && (
             <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
-              Error ID: {error.digest}
+              Error reference: {error.digest}
             </p>
           )}
           <button

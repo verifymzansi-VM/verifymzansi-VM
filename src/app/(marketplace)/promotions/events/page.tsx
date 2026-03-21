@@ -171,7 +171,7 @@ export default async function EventsPage() {
         ]}
       >
         <Button asChild size="sm" className="gap-1">
-          <Link href="/post/create">Create a Post</Link>
+          <Link href="/post/create-promotion?type=event">Create Event</Link>
         </Button>
       </PageHeader>
 
@@ -244,6 +244,9 @@ export default async function EventsPage() {
             <p className="mx-auto max-w-md text-sm text-muted-foreground">
               Check back soon for events from verified businesses!
             </p>
+            <Button asChild size="sm" className="mx-auto w-fit gap-1">
+              <Link href="/post/create-promotion?type=event">Create Event</Link>
+            </Button>
           </CardContent>
         </Card>
       )}

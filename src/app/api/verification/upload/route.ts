@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
     let { data: profile } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("id")
+      .select("id, phone")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -187,7 +187,7 @@ export async function POST(request: NextRequest) {
           },
           { onConflict: "user_id" }
         )
-        .select("id")
+        .select("id, phone")
         .single();
 
       if (createProfileError || !createdProfile) {
@@ -201,6 +201,19 @@ export async function POST(request: NextRequest) {
       }
 
       profile = createdProfile;
+    }
+
+    // Phone gate for API routes: the middleware phone gate only covers
+    // page routes (not API routes), so we check here to prevent uploads
+    // from accounts without a phone number.
+    if (!profile.phone) {
+      return NextResponse.json(
+        {
+          error: "Please complete your profile with a phone number before starting verification.",
+          code: "phone_required",
+        },
+        { status: 403 }
+      );
     }
 
     // ── Map docType → verification step_type / artifact_kind ─
@@ -553,7 +566,7 @@ export async function POST(request: NextRequest) {
     // "pending_review" when all steps have actually been rejected.
     const isHardReject = engineResult.autoStatus === "rejected";
     if (!isHardReject) {
-      const { data: statusUpdated } = await supabase
+      const { data: statusUpdated } = await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_verification_status: "pending_review",

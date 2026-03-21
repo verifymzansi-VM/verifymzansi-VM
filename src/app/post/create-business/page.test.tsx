@@ -296,4 +296,25 @@ describe("CreateBusinessPage", () => {
     expect(screen.getByText("Choose a different URL slug for this business.")).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });
+
+  it("keeps the submitted-for-review state after redirecting to the dashboard", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    });
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Business submitted for review.", variant: "success" })
+      );
+    });
+    expect(mockPush).toHaveBeenCalledWith("/dashboard/businesses?created=true");
+  });
 });

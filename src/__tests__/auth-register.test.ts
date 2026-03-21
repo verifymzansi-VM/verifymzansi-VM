@@ -288,7 +288,7 @@ describe("POST /api/auth/register", () => {
     expect(body.error).toContain("rate-limited");
   });
 
-  it("returns 409 when the phone number is already linked to another account", async () => {
+  it("returns generic success when the phone number is already linked to another account", async () => {
     const profileConflict = Object.assign(new Error("duplicate key"), { code: "23505" });
     mockProfileUpsert.mockResolvedValueOnce({ error: profileConflict });
     const mockSignUp = vi.fn().mockResolvedValue({
@@ -299,14 +299,12 @@ describe("POST /api/auth/register", () => {
 
     const res = await POST(createRequest(validBody));
 
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
     expect(mockDeleteUser).toHaveBeenCalledWith("u-conflict");
-    await expect(res.json()).resolves.toMatchObject({
-      error: "This phone number is already linked to another account.",
-    });
+    await expect(res.json()).resolves.toMatchObject({ success: true });
   });
 
-  it("deletes the just-created auth user when the profile insert loses a phone uniqueness race", async () => {
+  it("returns generic success when the profile insert loses a phone uniqueness race", async () => {
     const profileConflict = Object.assign(new Error("duplicate key"), { code: "23505" });
     mockProfileUpsert.mockResolvedValueOnce({ error: profileConflict });
     const mockSignUp = vi.fn().mockResolvedValue({
@@ -317,10 +315,8 @@ describe("POST /api/auth/register", () => {
 
     const res = await POST(createRequest(validBody));
 
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
     expect(mockDeleteUser).toHaveBeenCalledWith("u-race");
-    await expect(res.json()).resolves.toMatchObject({
-      error: "This phone number is already linked to another account.",
-    });
+    await expect(res.json()).resolves.toMatchObject({ success: true });
   });
 });

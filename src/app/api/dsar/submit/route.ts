@@ -22,7 +22,7 @@ const dsarSubmitSchema = dsarRequestSchema.extend({
  */
 export async function POST(request: NextRequest) {
   try {
-    const clientIp = getClientIp(request);
+    const clientIp = getClientIp(request) || "unknown";
     const rl = checkLocalRateLimit(clientIp, "dsar:submit");
     if (rl.limited) {
       return NextResponse.json(

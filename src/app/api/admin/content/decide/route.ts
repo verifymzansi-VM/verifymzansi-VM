@@ -84,6 +84,7 @@ export async function POST(request: Request) {
       .from(table)
       .update(updatePayload)
       .eq("id", itemId)
+      .eq("status", "pending_moderation")
       .select("id");
 
     if (updateError) {

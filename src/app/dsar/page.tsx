@@ -139,7 +139,7 @@ export default function DsarPage() {
           <PageHeader
             title="Data Access Request"
             description="Exercise your POPIA data rights."
-            breadcrumbs={[{ label: "POPIA Request" }]}
+            breadcrumbs={[{ label: "Data Access Request" }]}
           />
 
           <div className="mx-auto max-w-xl">

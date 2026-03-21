@@ -588,7 +588,7 @@ function CreateBusinessContent() {
         return;
       }
       toast({ title: "Business submitted for review.", variant: "success" });
-      router.push("/dashboard/businesses");
+      router.push("/dashboard/businesses?created=true");
     } catch (error: unknown) {
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {

@@ -115,6 +115,9 @@ export function useAuth() {
       log.error("Sign-out failed", { error: err instanceof Error ? err.message : String(err) });
     }
     reset();
+    // Clear the phone-gate cookie client-side (server sign-out route also
+    // does this, but the client hook may be used directly).
+    document.cookie = "x-phone-ok=; path=/; max-age=0";
     window.location.href = "/";
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reset]);

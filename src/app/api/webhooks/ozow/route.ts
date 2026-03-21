@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { fulfillPayment, rollbackPaymentProcessing } from "@/lib/payments/fulfillment";
 import { normalizeOzowWebhook, verifyOzowWebhookSignature } from "@/lib/payments/ozow";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import {
   finalizeCompletedPayment,
   getPaymentById,
@@ -69,6 +70,20 @@ function parseAmountToCents(amount: string): number | null {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit webhook by IP to prevent flood attacks
+    const ip = getClientIp(request);
+    const rateCheck = await checkRateLimit({
+      key: ip,
+      action: "webhook:ozow",
+      degradedMode: "local",
+    });
+    if (rateCheck.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+      );
+    }
+
     const rawBody = await request.text();
     const signature = request.headers.get("x-ozow-signature");
     const webhookSecret = process.env.OZOW_WEBHOOK_SECRET;

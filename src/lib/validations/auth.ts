@@ -70,6 +70,10 @@ export const changePasswordSchema = z
   .refine((data) => data.newPassword === data.confirmNewPassword, {
     message: "Passwords do not match",
     path: ["confirmNewPassword"],
+  })
+  .refine((data) => data.newPassword !== data.currentPassword, {
+    message: "New password must be different from current password",
+    path: ["newPassword"],
   });
 
 /** Inferred input type for {@link loginSchema}. */

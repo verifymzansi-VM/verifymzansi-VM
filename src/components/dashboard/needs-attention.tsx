@@ -106,8 +106,8 @@ export function NeedsAttention({
   if (expiringPromoCount > 0) {
     items.push({
       count: expiringPromoCount,
-      label: "Promos Ending",
-      description: "Promotions ending in 48h",
+      label: "Promotions Ending",
+      description: "Promotions or events ending in 48h",
       href: "/dashboard/promotions",
       icon: TrendingUp,
       variant: "warning",

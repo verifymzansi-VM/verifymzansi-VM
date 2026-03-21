@@ -9,10 +9,15 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+
 const log = createLogger("Reports");
 
 export async function POST(request: NextRequest) {
   try {
+    const sameOriginFailure = enforceSameOriginMutation(request, log);
+    if (sameOriginFailure) return sameOriginFailure;
+
     const parsedBody = await parseAndValidateJsonRequest(request, reportSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
@@ -63,7 +68,7 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
 
     // Compute IP hash for anonymous reports
-    const sourceIp = getClientIp(request);
+    const sourceIp = getClientIp(request) || "unknown";
     const hmacKey = process.env.IP_HASH_SECRET;
     if (!hmacKey) {
       if (process.env.NODE_ENV === "production") {

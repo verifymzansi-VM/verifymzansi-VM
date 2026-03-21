@@ -71,7 +71,7 @@ export default function ResetPasswordPage() {
           return;
         }
         toast({
-          title: "Error",
+          title: "Password reset failed",
           description: typeof result.error === "string" ? result.error : "Please try again.",
           variant: "destructive",
         });
@@ -87,6 +87,7 @@ export default function ResetPasswordPage() {
     } catch {
       toast({
         title: "Something went wrong",
+        description: "Please try again later.",
         variant: "destructive",
       });
     }

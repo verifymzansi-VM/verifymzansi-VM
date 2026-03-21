@@ -230,9 +230,17 @@ export function createClient(): SupabaseClient {
   const hasAnonKey = typeof anonKey === "string" && anonKey.length > 0;
 
   if (!validUrl || !hasAnonKey) {
-    // Gracefully degrade instead of crashing the entire app.
-    // Auth and data features will be unavailable but the UI remains usable.
-    if (typeof window !== "undefined") {
+    // In production, fail loudly so the issue is surfaced immediately
+    // instead of letting users see a broken UI with no explanation.
+    if (typeof window !== "undefined" && process.env.NODE_ENV === "production") {
+      log.error(
+        "Missing or invalid NEXT_PUBLIC_SUPABASE_* env values. Auth and data features will not work."
+      );
+      // Surface a visible console error so devtools catches it immediately
+      console.error(
+        "[VerifyMzansi] CRITICAL: Supabase is not configured. Authentication is unavailable."
+      );
+    } else if (typeof window !== "undefined") {
       log.error(
         "Missing or invalid NEXT_PUBLIC_SUPABASE_* env values. Auth and data features will not work."
       );

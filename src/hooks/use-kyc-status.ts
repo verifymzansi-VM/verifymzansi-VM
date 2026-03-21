@@ -63,10 +63,10 @@ export function useKycStatus() {
 
         setSteps(verificationSteps || []);
 
-        const hasPending = verificationSteps?.some(
-          (s: { status: string }) => s.status === "pending"
+        const hasPendingOrAction = verificationSteps?.some(
+          (s: { status: string }) => s.status === "pending" || s.status === "needs_resubmission"
         );
-        setStatus(hasPending ? "pending" : "unverified");
+        setStatus(hasPendingOrAction ? "pending" : "unverified");
       }
     } catch (err) {
       log.error("Failed to fetch KYC status", {

@@ -42,7 +42,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } = await supabase.auth.getUser();
 
     const adminRole = getStaffActorRole(user);
-    if (!user || !adminRole) {
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!adminRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -96,7 +99,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { error: updateError } = await admin
       .from("promotions")
       .update(updateData)
-      .eq("id", promotionId);
+      .eq("id", promotionId)
+      .in("status", ["pending_moderation", "live", "hidden"]);
 
     if (updateError) {
       log.error("Failed to moderate promotion", { error: updateError.message });

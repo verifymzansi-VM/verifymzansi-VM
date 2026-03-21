@@ -103,7 +103,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
             title={promotion.title}
             breadcrumbs={[
               { label: "Home", href: "/" },
-              { label: "Promotions", href: "/promotions" },
+              { label: "Promotions & Events", href: "/promotions" },
               { label: promotion.title },
             ]}
           />

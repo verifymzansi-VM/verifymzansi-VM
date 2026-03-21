@@ -88,6 +88,7 @@ describe("EditListingPage", () => {
       data: {
         id: "listing-1",
         seller_id: "user-1",
+        status: "live",
         title: "Used iPhone 15",
         description: "Clean phone in excellent condition.",
         price_cents: 150000,
@@ -137,6 +138,11 @@ describe("EditListingPage", () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
+
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Updated and resubmitted for review", variant: "success" })
+    );
+    expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
 
     const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
     const payload = JSON.parse(request[1].body as string);

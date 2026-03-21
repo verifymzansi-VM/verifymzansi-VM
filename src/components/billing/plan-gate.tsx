@@ -2,6 +2,7 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ShieldCheck,
   AlertTriangle,
@@ -219,10 +220,12 @@ function InlinePlanGrid({
    PlanGate — main component
    ───────────────────────────────────────────────────────────── */
 export function PlanGate({ area, children }: PlanGateProps) {
+  const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isPlaywrightTestMode()) {
@@ -366,6 +369,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
   async function handleSubscribe(plan: PlanDefinition) {
     const key = `${plan.area}-${plan.tier}`;
     setSubscribing(key);
+    setCheckoutError(null);
     try {
       // First fetch the plan ID from the plans table
       const supabase = createClient();
@@ -398,7 +402,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
       logger.error("Checkout error", { error: err instanceof Error ? err.message : String(err) });
       // Show user-facing error feedback
       const errorMessage = err instanceof Error ? err.message : "Could not start checkout";
-      setError("failed");
+      setCheckoutError(`${errorMessage}. Please try again.`);
       toast({
         title: "Checkout failed",
         description: `${errorMessage}. Please try again.`,
@@ -429,7 +433,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto" />
           <h2 className="font-display text-xl font-bold">Sign In Required</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            You need to be signed in and have an account profile to post on VerifyMzansi.
+            Sign in to choose a plan or use your free post on VerifyMzansi.
           </p>
           <div className="flex gap-3 justify-center">
             <Button asChild variant="outline">
@@ -452,14 +456,14 @@ export function PlanGate({ area, children }: PlanGateProps) {
       <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
         <CardContent className="p-6 text-center space-y-3">
           <ShieldCheck className="h-8 w-8 text-amber-500 mx-auto" />
-          <h2 className="font-display text-xl font-bold">Complete Your Profile</h2>
+          <h2 className="font-display text-xl font-bold">Add Your Phone Number</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            Set up your account profile to start posting on VerifyMzansi. It takes less than 5
-            minutes.
+            Add your phone number before posting so buyers can trust your account and receive your
+            updates.
           </p>
           <Button asChild className="gap-2">
-            <Link href="/register">
-              Set Up Profile <ArrowRight className="h-4 w-4" />
+            <Link href={`/dashboard/complete-profile?returnUrl=${encodeURIComponent(pathname)}`}>
+              Complete Phone Setup <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
         </CardContent>
@@ -565,6 +569,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
         areaPlans={areaPlans}
         onSubscribe={handleSubscribe}
         subscribing={subscribing}
+        checkoutError={checkoutError}
       >
         {children}
       </PlanPickerWithTrial>
@@ -618,6 +623,7 @@ function PlanPickerWithTrial({
   areaPlans,
   onSubscribe,
   subscribing,
+  checkoutError,
   children,
 }: {
   area: MarketplaceArea;
@@ -625,6 +631,7 @@ function PlanPickerWithTrial({
   areaPlans: PlanDefinition[];
   onSubscribe: (plan: PlanDefinition) => void;
   subscribing: string | null;
+  checkoutError: string | null;
   children: ReactNode;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -668,6 +675,14 @@ function PlanPickerWithTrial({
 
   return (
     <div className="space-y-3">
+      {checkoutError && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="p-4 text-sm">
+            <p className="font-medium text-destructive">Checkout unavailable</p>
+            <p className="mt-1 text-muted-foreground">{checkoutError}</p>
+          </CardContent>
+        </Card>
+      )}
       {/* Header + Free Post Combined */}
       {planInfo.isTrial ? (
         <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-lg p-4 text-white shadow-md">

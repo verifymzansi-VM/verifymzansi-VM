@@ -118,28 +118,39 @@ export async function POST(request: Request) {
       );
     }
 
-    // Sync the latest artifact status to match the step decision
+    // Sync the latest artifact status to match the step decision.
+    // NOTE: PostgREST ignores .order()/.limit() on UPDATE, so we SELECT
+    // the latest artifact first, then update by its specific ID.
     const artifactStatus =
       decision === "approved"
         ? "approved"
         : decision === "needs_resubmission"
           ? "needs_resubmission"
           : "rejected";
-    const { error: artifactSyncError } = await admin
+
+    const { data: latestArtifact } = await admin
       .from("kyc_artifacts")
-      .update({ status: artifactStatus })
+      .select("id")
       .eq("user_id", step.user_id)
       .eq("step_type", step.step_type)
       .in("status", ["pending", "needs_resubmission"])
       .order("created_at", { ascending: false })
-      .limit(1);
+      .limit(1)
+      .maybeSingle();
 
-    if (artifactSyncError) {
-      log.warn("Failed to sync artifact status (non-fatal)", {
-        error: artifactSyncError.message,
-        stepId,
-        decision,
-      });
+    if (latestArtifact) {
+      const { error: artifactSyncError } = await admin
+        .from("kyc_artifacts")
+        .update({ status: artifactStatus })
+        .eq("id", latestArtifact.id);
+
+      if (artifactSyncError) {
+        log.warn("Failed to sync artifact status (non-fatal)", {
+          error: artifactSyncError.message,
+          stepId,
+          decision,
+        });
+      }
     }
 
     // If approved, check if all 4 steps are now approved → update the account to verified

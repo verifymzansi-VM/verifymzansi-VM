@@ -60,6 +60,7 @@ function createRequest(body: unknown) {
   return {
     method: "POST",
     json: async () => body,
+    url: "http://localhost:3000/api/contact",
     headers: { get: vi.fn().mockReturnValue(null) },
     nextUrl: new URL("http://localhost:3000/api/contact"),
   } as unknown as NextRequest;
@@ -113,6 +114,7 @@ describe("POST /api/contact", () => {
       json: async () => {
         throw new Error("bad json");
       },
+      url: "http://localhost:3000/api/contact",
       headers: { get: vi.fn().mockReturnValue(null) },
       nextUrl: new URL("http://localhost:3000/api/contact"),
     } as unknown as NextRequest;
@@ -160,6 +162,7 @@ describe("POST /api/contact", () => {
                 eq: vi.fn().mockReturnValue({
                   maybeSingle: vi.fn().mockResolvedValue({
                     data: {
+                      id: VALID_LISTING_ID,
                       owner_id: "account-owner-1",
                       title: "Draft listing",
                       status: "draft",
@@ -244,6 +247,7 @@ describe("POST /api/contact", () => {
                 eq: vi.fn().mockReturnValue({
                   maybeSingle: vi.fn().mockResolvedValue({
                     data: {
+                      id: VALID_PROMOTION_ID,
                       seller_id: "legacy-owner-1",
                       title: "Legacy promotion",
                       status: "live",

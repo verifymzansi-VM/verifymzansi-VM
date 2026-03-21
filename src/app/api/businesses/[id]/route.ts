@@ -77,11 +77,15 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const normalizedBusiness = normalizeOwnerRecord(business as BusinessOwnerRow);
 
+    // Fetch user once — reused for both ownership and contact redaction checks
+    let currentUser: { id: string } | null = null;
+
     // Only allow public access to live businesses
     if (normalizedBusiness.status !== "live") {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      currentUser = user;
 
       if (!user || user.id !== readOwnerId(normalizedBusiness)) {
         return NextResponse.json({ error: "Business not found" }, { status: 404 });
@@ -100,25 +104,31 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       .order("created_at", { ascending: false })
       .limit(12);
 
-    // Track view (best-effort)
+    // Track view (best-effort — never block the response)
     const admin = createAdminClient();
-    admin
+    void admin
       .from("listing_views")
       .insert({
         target_id: id,
         target_type: "business",
       })
-      .then(() => {});
+      .then(({ error: viewErr }) => {
+        if (viewErr) log.warn("View tracking failed", { error: viewErr.message, businessId: id });
+      });
 
     // Strip owner identifiers from public response (POPIA data minimization)
     const { owner_id: _oid, seller_id: _sid, ...publicBusiness } = normalizedBusiness;
 
     // M3: Redact contact fields for unauthenticated requests to prevent
     // email/phone harvesting. Authenticated users can see full details.
-    const {
-      data: { user: contactUser },
-    } = await supabase.auth.getUser();
-    if (!contactUser) {
+    // Reuse the user fetched above for non-live checks; fetch lazily otherwise.
+    if (!currentUser) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      currentUser = user;
+    }
+    if (!currentUser) {
       const { phone: _p, whatsapp: _w, email: _e, ...redactedBusiness } = publicBusiness;
       return NextResponse.json({ business: redactedBusiness, promotions: promotions ?? [] });
     }

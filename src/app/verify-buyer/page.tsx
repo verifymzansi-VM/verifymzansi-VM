@@ -90,7 +90,7 @@ export default function VerifyBuyerPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Verify a Buyer"
-            description="Check if a buyer is verified."
+            description="Sellers can check if a buyer's verification is still valid by entering their buyer token."
             breadcrumbs={[{ label: "Verify a Buyer" }]}
           />
 

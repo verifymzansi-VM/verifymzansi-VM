@@ -84,7 +84,8 @@ export function SubscribeButton({ area, tier, priceCents, isPopular }: Subscribe
     }
   }
 
-  const label = priceCents === 0 ? "Current Plan" : `Choose ${tier}`;
+  const tierLabel = `${tier.charAt(0).toUpperCase()}${tier.slice(1)}`;
+  const label = priceCents === 0 ? "Current Plan" : `Choose ${tierLabel}`;
 
   return (
     <Button

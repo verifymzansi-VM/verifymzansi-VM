@@ -29,7 +29,7 @@ import { AREA_LABELS, type MarketplaceArea, type PlanTier } from "@/types/enums"
 const LISTING_DASHBOARD_FALLBACK_FIELDS = ["featured_until", "urgent_until"] as const;
 
 export const metadata = {
-  title: "Mzansi Market",
+  title: "Your Content",
   description:
     "Manage your marketplace content across Mzansi Market, Mzansi Business, and Promotions & Events.",
 };
@@ -232,14 +232,14 @@ export default async function ListingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Mzansi Market"
-        description="Manage your marketplace listings."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Mzansi Market" }]}
+        title="Your Content"
+        description="Manage listings, businesses, and promotions from one place."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Your Content" }]}
       >
         <Button asChild variant="trust-verified" size="sm" className="gap-2">
           <Link href="/post/create">
             <Plus className="h-4 w-4" />
-            New Listing
+            Create Post
           </Link>
         </Button>
       </PageHeader>
@@ -255,16 +255,28 @@ export default async function ListingsPage() {
         </TabsList>
 
         <TabsContent value="active" className="mt-4">
-          <ListingList listings={active} planTiers={planTiers} />
+          <ListingList
+            listings={active}
+            planTiers={planTiers}
+            emptyStateLabel="No live posts yet. Create your first listing, business, or promotion."
+          />
         </TabsContent>
         <TabsContent value="pending" className="mt-4">
-          <ListingList listings={pending} planTiers={planTiers} />
+          <ListingList
+            listings={pending}
+            planTiers={planTiers}
+            emptyStateLabel="Nothing is waiting for review right now."
+          />
         </TabsContent>
         <TabsContent value="rejected" className="mt-4">
           <RejectedListingList listings={rejected} />
         </TabsContent>
         <TabsContent value="expired" className="mt-4">
-          <ListingList listings={expired} planTiers={planTiers} />
+          <ListingList
+            listings={expired}
+            planTiers={planTiers}
+            emptyStateLabel="No expired or sold posts yet."
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -346,18 +358,22 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
 function ListingList({
   listings,
   planTiers,
+  emptyStateLabel = "No posts in this section yet.",
+  emptyStateCta = "Create Post",
 }: {
   listings: DashboardItem[];
   planTiers: Record<MarketplaceArea, PlanTier>;
+  emptyStateLabel?: string;
+  emptyStateCta?: string;
 }) {
   if (!listings.length) {
     return (
       <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
         <Package className="h-8 w-8 opacity-30" />
-        <p>No listings in this category.</p>
+        <p>{emptyStateLabel}</p>
         <Link href="/post/create">
           <Button size="sm" variant="outline" className="mt-1">
-            <Plus className="h-4 w-4 mr-1" /> Create Listing
+            <Plus className="h-4 w-4 mr-1" /> {emptyStateCta}
           </Button>
         </Link>
       </div>

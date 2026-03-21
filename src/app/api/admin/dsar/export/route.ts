@@ -71,6 +71,9 @@ async function resolveUserIdByEmail(
   return { status: "not_found", userId: null };
 }
 
+// NOTE: This GET handler writes an audit log entry (dsar_exported). This is a
+// deliberate side-effect — the export is a significant privacy action that must
+// be audited. The endpoint is protected by admin auth, mitigating CSRF risk.
 export async function GET(request: NextRequest) {
   try {
     const requestId = request.nextUrl.searchParams.get("requestId");

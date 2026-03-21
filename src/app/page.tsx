@@ -153,7 +153,7 @@ export default async function HomePage() {
                         {
                           title: "Complete verification",
                           detail:
-                            "Verify your identity with a phone OTP, ID document, selfie, and location — it only takes a few minutes.",
+                            "Verify your identity with a quick phone, ID, and location check — it only takes a few minutes.",
                         },
                         {
                           title: "Browse or post in the area that fits your goal",

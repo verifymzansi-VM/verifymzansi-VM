@@ -8,6 +8,8 @@ const {
   mockCreateNotification,
   mockCheckLocalRateLimit,
   mockEnforceSameOriginMutation,
+  mockGetStaffActorRole,
+  mockGetOwnerColumn,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -16,6 +18,8 @@ const {
   mockCreateNotification: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(),
   mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
+  mockGetStaffActorRole: vi.fn(() => "admin"),
+  mockGetOwnerColumn: vi.fn(async () => "owner_id"),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -38,14 +42,16 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: mockCheckLocalRateLimit,
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  getRoleFromUser: (user: { app_metadata?: Record<string, unknown> }) =>
-    (user.app_metadata?.role as string) || "admin",
-  isModeratorOrAdmin: (user: { app_metadata?: Record<string, unknown> }) => {
-    const role = user.app_metadata?.role;
-    return role === "admin" || role === "moderator";
-  },
-  asAdminRole: (role: string) => (role === "moderator" ? "moderator" : "admin"),
+vi.mock("@/lib/auth/admin-access", () => ({
+  getStaffActorRole: mockGetStaffActorRole,
+}));
+
+vi.mock("@/lib/account/compat", () => ({
+  getOwnerColumn: mockGetOwnerColumn,
+  readOwnerId: (record: Record<string, unknown>) =>
+    (record.owner_id as string | null | undefined) ??
+    (record.seller_id as string | null | undefined) ??
+    null,
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -112,11 +118,12 @@ describe("POST /api/admin/content/decide", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === "promotions") {
+        const eqStatus = vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+        });
         return {
           update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
-            }),
+            eq: vi.fn().mockReturnValue({ eq: eqStatus }),
           }),
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -165,11 +172,12 @@ describe("POST /api/admin/content/decide", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === "businesses") {
+        const eqStatus = vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+        });
         return {
           update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
-            }),
+            eq: vi.fn().mockReturnValue({ eq: eqStatus }),
           }),
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({

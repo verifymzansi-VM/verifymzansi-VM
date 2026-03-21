@@ -25,6 +25,9 @@ export default function CompleteProfilePage() {
 
   useEffect(() => {
     async function load() {
+      const returnUrl = sanitizeReturnUrl(
+        new URLSearchParams(window.location.search).get("returnUrl")
+      );
       const supabase = createClient();
       const {
         data: { user },
@@ -41,8 +44,8 @@ export default function CompleteProfilePage() {
         .maybeSingle();
 
       if (profile?.phone) {
-        // Phone already set — redirect to dashboard
-        router.push("/dashboard");
+        // Phone already set — continue to the requested destination
+        router.push(returnUrl);
         return;
       }
 
@@ -119,9 +122,9 @@ export default function CompleteProfilePage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Complete Your Profile"
-        description="Add your phone number to access all features."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Complete Profile" }]}
+        title="Add Your Phone Number"
+        description="Add your phone number before you continue."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Phone Setup" }]}
       />
 
       <Card className="max-w-xl">

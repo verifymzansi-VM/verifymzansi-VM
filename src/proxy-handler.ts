@@ -196,18 +196,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     "/api/admin",
     "/api/otp",
   ];
-  const protectedPrefixes = [
-    "/dashboard",
-    "/post",
-    "/billing",
-    "/verification",
-    "/admin",
-    "/api/dashboard",
-    "/api/post",
-    "/api/billing",
-    "/api/verification",
-    "/api/admin",
-  ];
+  const protectedPrefixes = protectedPrefixesAll.filter((p) => p !== "/api/otp");
 
   // Recover legacy signup links that land on "/?code=..." instead of the
   // dedicated auth callback route. Keep this scoped to the root path so
@@ -392,17 +381,14 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
       }
 
       setPhoneOkCookie(response);
-    } catch {
-      // Fail closed: if we can't verify phone, block access to protected routes.
-      logger.error("Phone gate DB check failed — blocking access", {
+    } catch (phoneGateErr) {
+      // Fail closed: if we can't verify phone, redirect to error page.
+      logger.error("Phone gate DB check failed — redirecting to error page", {
         path: pathname,
         userId: user.id,
+        error: phoneGateErr instanceof Error ? phoneGateErr.message : "Unknown",
       });
-      const completeProfileUrl = new URL("/dashboard/complete-profile", request.url);
-      completeProfileUrl.searchParams.set("returnUrl", pathname);
-      const redirect = NextResponse.redirect(completeProfileUrl);
-      clearPhoneOkCookie(redirect);
-      return redirect;
+      return NextResponse.redirect(new URL("/error?reason=unavailable", request.url));
     }
   }
 
@@ -453,6 +439,8 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   }
 
   // -- Ban/suspension enforcement: block banned/suspended users from all protected routes --
+  // TODO: The suspension auto-unsuspend logic below is duplicated in the posting gate
+  // (line ~552). Extract into a shared helper to prevent future divergence.
   if (user && isProtectedRoute) {
     // Reuse the consolidated profile query from the phone gate if available;
     // otherwise fetch the needed columns now (e.g. API routes skip the phone gate).
@@ -497,10 +485,22 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
               .from(ACCOUNT_PROFILE_WRITE_TABLE)
               .update({ account_status: "active", suspended_until: null })
               .eq("user_id", user.id);
-          } catch {
-            // Auto-unsuspend failed — still allow the request
+          } catch (unsuspendErr) {
+            // Auto-unsuspend failed — still allow the request so the user
+            // isn't permanently locked out; the next request will retry.
+            logger.error("Auto-unsuspend DB update failed — user will retry on next request", {
+              userId: user.id,
+              error: unsuspendErr instanceof Error ? unsuspendErr.message : "Unknown",
+            });
           }
         } else {
+          // Avoid redirect loop: if already on /dashboard with ?suspended, let it through
+          if (
+            pathname === "/dashboard" &&
+            request.nextUrl.searchParams.get("suspended") === "true"
+          ) {
+            return response;
+          }
           if (isApiRoute) return NextResponse.json({ error: "Suspended" }, { status: 403 });
           const suspendedUrl = new URL("/dashboard", request.url);
           suspendedUrl.searchParams.set("suspended", "true");
@@ -569,9 +569,16 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
             // Content is restored via the admin enforcement unban flow
             // (enforceAction with action="unban"), which scopes restoration
             // to items hidden after the suspension timestamp.
-          } catch {
+          } catch (unsuspendErr2) {
             // Auto-unsuspend failed — still allow the request so the user
             // isn't permanently locked out; the next request will retry.
+            logger.error(
+              "Auto-unsuspend DB update failed in posting gate — user will retry on next request",
+              {
+                userId: user.id,
+                error: unsuspendErr2 instanceof Error ? unsuspendErr2.message : "Unknown",
+              }
+            );
           }
         } else {
           if (isApiRoute) return NextResponse.json({ error: "Suspended" }, { status: 403 });

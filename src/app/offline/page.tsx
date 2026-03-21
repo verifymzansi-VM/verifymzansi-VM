@@ -10,8 +10,7 @@ export default function OfflinePage() {
       <WifiOff className="mb-3 h-10 w-10 text-muted-foreground" />
       <h1 className="text-2xl font-display font-bold">You&apos;re Offline</h1>
       <p className="mt-2 max-w-md text-muted-foreground">
-        You&apos;re currently offline. Check your internet connection and try again. Any drafts you
-        started are saved locally.
+        You&apos;re currently offline. Check your internet connection and try again.
       </p>
       <div className="mt-6 flex gap-3">
         <Button onClick={() => window.location.reload()}>Try Again</Button>

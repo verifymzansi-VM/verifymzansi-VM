@@ -364,7 +364,7 @@ export default async function DashboardPage() {
   const AREA_LABELS: Record<string, string> = {
     MZANSI_MARKET: "Listings",
     MZANSI_BUSINESS: "Businesses",
-    PROMOTIONS_EVENTS: "Promotions",
+    PROMOTIONS_EVENTS: "Promotions & Events",
   };
   const AREA_COUNTS: Record<string, number> = {
     MZANSI_MARKET: activeListings || 0,
@@ -491,14 +491,14 @@ export default async function DashboardPage() {
       toneClassName: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-100",
     },
     {
-      title: "Promotions",
+      title: "Promotions & Events",
       value: activePromos || 0,
       description:
         expiringPromoCount > 0
           ? `${expiringPromoCount} ending soon and ready for renewal.`
           : activePromos > 0
-            ? "Track the visibility boosts currently running on your listings."
-            : "Boost listings when you need extra reach or urgency.",
+            ? "Manage your active promotions, upcoming events, and visibility boosts."
+            : "Create promotions or events when you need extra reach or urgency.",
       href: "/dashboard/promotions",
       icon: Megaphone,
       toneClassName: "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-100",
@@ -510,7 +510,7 @@ export default async function DashboardPage() {
       <EmailConfirmedToast />
       <PageHeader
         title={`Welcome back, ${displayName}`}
-        description="Keep your listings, leads, businesses, and promotions organised in one place."
+        description="Keep your listings, leads, businesses, and promotions and events organised in one place."
         breadcrumbs={[{ label: "Dashboard" }]}
       >
         <div className="flex items-center gap-2">
@@ -523,7 +523,7 @@ export default async function DashboardPage() {
           <Button asChild variant="trust-verified" size="sm" className="gap-2">
             <Link href="/post/create">
               <Plus className="h-4 w-4" />
-              Post Ad
+              Create Post
             </Link>
           </Button>
         </div>

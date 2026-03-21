@@ -232,12 +232,7 @@ export async function GET(request: NextRequest) {
             applyBaseMarketFilters(
               // SECURITY: admin client bypasses RLS for efficient JOINs.
               // These application-level status filters are the security boundary.
-              admin
-                .from("listings")
-                .select(selectClause)
-                .eq("status", "live")
-                .neq("status", "rejected")
-                .eq("area", AREA),
+              admin.from("listings").select(selectClause).eq("status", "live").eq("area", AREA),
               filters
             ).range(from, from + batchSize - 1),
         });
@@ -300,7 +295,6 @@ export async function GET(request: NextRequest) {
               .from("listings")
               .select(selectClause, { count: "exact" })
               .eq("status", "live")
-              .neq("status", "rejected")
               .eq("area", AREA),
             filters
           ).range(offset, offset + limit - 1),

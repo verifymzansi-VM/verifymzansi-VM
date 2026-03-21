@@ -113,9 +113,9 @@ describe("HomePromotionsShowcase", () => {
     expect(
       screen.getByText("No promotions yet. Be the first to post a promotion or event.")
     ).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Create a Post/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Create Promotion/i })).toHaveAttribute(
       "href",
-      "/post/create"
+      "/post/create-promotion"
     );
   });
 

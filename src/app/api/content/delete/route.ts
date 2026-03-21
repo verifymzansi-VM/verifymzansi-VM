@@ -179,11 +179,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to delete content" }, { status: 500 });
     }
 
-    const targetType = config.table.replace(/s$/, "") as string;
+    const targetTypeMap: Record<string, string> = {
+      listings: "listing",
+      businesses: "business",
+      storefronts: "storefront",
+      promotions: "promotion",
+    };
+    const targetType = targetTypeMap[config.table] || config.table;
     const actionMap: Record<string, string> = {
       listing: "listing_deleted",
-      business_profile: "business_profile_deleted",
+      business: "business_profile_deleted",
       storefront: "storefront_deleted",
+      promotion: "listing_deleted",
     };
     await logAuditEvent({
       actorId: user.id,

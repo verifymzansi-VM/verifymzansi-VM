@@ -332,6 +332,20 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
 
+    // Rate limit public reads by IP to prevent scraping
+    const ip = getClientIp(request) || "unknown";
+    const rl = await checkRateLimit({
+      key: ip,
+      action: "businesses:read",
+      degradedMode: "local",
+    });
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     // Category counts mode — for auto-hiding empty categories
     if (searchParams.get("categories_only") === "true") {
       const admin = createAdminClient();

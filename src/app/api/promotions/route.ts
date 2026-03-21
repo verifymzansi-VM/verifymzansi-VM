@@ -387,6 +387,20 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    // Rate limit public reads by IP to prevent scraping
+    const ip = getClientIp(request) || "unknown";
+    const rl = await checkRateLimit({
+      key: ip,
+      action: "promotions:read",
+      degradedMode: "local",
+    });
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     const admin = createAdminClient();
     const ownerColumn = await getOwnerColumn(admin, "promotions");
     const { searchParams } = request.nextUrl;

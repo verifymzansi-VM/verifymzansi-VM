@@ -380,6 +380,33 @@ describe("middleware — authenticated routing", () => {
     expect(location.searchParams.get("returnUrl")).toBe("/dashboard");
   });
 
+  it("redirects to the recovery page when the phone gate profile lookup fails", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          is_anonymous: false,
+          app_metadata: { role: "seller" },
+        },
+      },
+    });
+
+    mockFrom.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () => Promise.reject(new Error("database offline")),
+        }),
+      }),
+    });
+
+    const res = await routeRequest(createMockRequest("/dashboard"));
+
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/error");
+    expect(location.searchParams.get("reason")).toBe("unavailable");
+  });
+
   it("allows /api/post/create for verified users through posting gate", async () => {
     mockGetUser.mockResolvedValue({
       data: {

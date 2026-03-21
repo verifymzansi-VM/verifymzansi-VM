@@ -68,8 +68,8 @@ export async function HomePromotionsShowcase() {
               size="sm"
               className="bg-red-700 hover:bg-red-800 text-white rounded-full"
             >
-              <Link href="/post/create">
-                Create a Post
+              <Link href="/post/create-promotion">
+                Create Promotion
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Link>
             </Button>

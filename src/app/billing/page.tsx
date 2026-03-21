@@ -58,7 +58,7 @@ export default function BillingPage() {
                 className="bg-brand-green hover:bg-brand-green/90 text-white font-semibold shrink-0"
               >
                 <Link href="/post/create">
-                  Post Free <ArrowRight className="ml-1 h-3 w-3" />
+                  Choose Your Free Post <ArrowRight className="ml-1 h-3 w-3" />
                 </Link>
               </Button>
             </div>

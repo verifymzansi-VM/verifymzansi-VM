@@ -128,14 +128,26 @@ function createTestFile(content = "fake-image-content", type = "image/jpeg", nam
 }
 
 function mockAuth(
-  user: { id: string; email?: string; user_metadata?: Record<string, unknown> } | null
+  user: {
+    id: string;
+    email?: string;
+    email_confirmed_at?: string | null;
+    user_metadata?: Record<string, unknown>;
+  } | null
 ) {
+  const normalizedUser = user
+    ? {
+        email_confirmed_at: "2026-03-21T00:00:00.000Z",
+        ...user,
+      }
+    : null;
+
   mockCreateClient.mockResolvedValue({
     from: mockFrom,
     auth: {
       getUser: vi.fn().mockResolvedValue({
-        data: { user },
-        error: user ? null : { message: "Not authenticated" },
+        data: { user: normalizedUser },
+        error: normalizedUser ? null : { message: "Not authenticated" },
       }),
     },
   });
@@ -147,7 +159,9 @@ function setupDefaultAdminMocks() {
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+            maybeSingle: vi
+              .fn()
+              .mockResolvedValue({ data: { id: "profile-1", phone: "+27123456789" }, error: null }),
           }),
         }),
         update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
@@ -482,7 +496,9 @@ describe("POST /api/verification/upload", () => {
 
     const upsertMock = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { id: "new-profile" }, error: null }),
+        single: vi
+          .fn()
+          .mockResolvedValue({ data: { id: "new-profile", phone: "+27123456789" }, error: null }),
       }),
     });
 
@@ -601,7 +617,12 @@ describe("POST /api/verification/upload", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({
+                  data: { id: "profile-1", phone: "+27123456789" },
+                  error: null,
+                }),
             }),
           }),
         };
@@ -659,7 +680,12 @@ describe("POST /api/verification/upload", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({
+                  data: { id: "profile-1", phone: "+27123456789" },
+                  error: null,
+                }),
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
@@ -793,7 +819,12 @@ describe("POST /api/verification/upload", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({
+                  data: { id: "profile-1", phone: "+27123456789" },
+                  error: null,
+                }),
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
