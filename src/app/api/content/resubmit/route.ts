@@ -38,6 +38,12 @@ const tableMap = {
 
 type TableConfig = (typeof tableMap)[keyof typeof tableMap];
 type CompatibleTable = "listings" | "businesses" | "promotions";
+type NonCompatibleFetchedItem = {
+  id: string;
+  status: string;
+  owner_id?: string | null;
+  seller_id?: string | null;
+};
 
 function isOwnerCompatibleTable(table: TableConfig["table"]): table is CompatibleTable {
   return table === "listings" || table === "businesses" || table === "promotions";
@@ -162,8 +168,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
       }
 
-      const fetchedOwner = (fetchedItem as Record<string, unknown>)[ownerCol] as string | null;
-      item = { ...(fetchedItem as { id: string; status: string }), owner_id: fetchedOwner };
+      const normalizedItem = fetchedItem as unknown as NonCompatibleFetchedItem;
+      const fetchedOwner = readOwnerId(normalizedItem);
+      item = { id: normalizedItem.id, status: normalizedItem.status, owner_id: fetchedOwner };
 
       if (!item || fetchedOwner !== user.id) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
