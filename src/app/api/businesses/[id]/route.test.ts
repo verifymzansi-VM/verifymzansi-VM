@@ -13,6 +13,9 @@ vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: vi.fn().mockReturnValue(null),
+}));
 
 import { PATCH } from "./route";
 

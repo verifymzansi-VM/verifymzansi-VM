@@ -114,6 +114,21 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "This promotion is already boosted" }, { status: 400 });
     }
 
+    // ── Prevent duplicate in-flight payments ─────────────────
+    const { data: pendingPmt } = await admin
+      .from("payments")
+      .select("id")
+      .eq("user_id", user.id)
+      .in("status", ["pending", "processing"])
+      .contains("provider_data", { type: "boost_promotion", promotion_id: promotionId })
+      .maybeSingle();
+    if (pendingPmt) {
+      return NextResponse.json(
+        { error: "A boost payment is already in progress for this promotion" },
+        { status: 409 }
+      );
+    }
+
     // Check entitlement — requires Growth or Pro plan
     const area = "PROMOTIONS_EVENTS" as MarketplaceArea;
     const tier = await getActivePlanTierForArea(user.id, area);

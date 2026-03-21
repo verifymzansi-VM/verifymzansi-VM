@@ -47,7 +47,7 @@ export default async function ErrorPage({
           href="/dashboard"
           className="inline-flex items-center justify-center rounded-md bg-brand-green px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-green/90"
         >
-          Retry from dashboard
+          Go to dashboard
         </Link>
         <Link
           href="/"

@@ -103,6 +103,21 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "This listing is already featured" }, { status: 400 });
     }
 
+    // ── Prevent duplicate in-flight payments ─────────────────
+    const { data: pendingPmt } = await admin
+      .from("payments")
+      .select("id")
+      .eq("user_id", user.id)
+      .in("status", ["pending", "processing"])
+      .contains("provider_data", { type: "featured", listing_id: listingId })
+      .maybeSingle();
+    if (pendingPmt) {
+      return NextResponse.json(
+        { error: "A featured payment is already in progress for this listing" },
+        { status: 409 }
+      );
+    }
+
     // ── Check entitlement ────────────────────────────────────
     const area = (listing.area || "MZANSI_MARKET") as MarketplaceArea;
     const tier = await getActivePlanTierForArea(user.id, area);

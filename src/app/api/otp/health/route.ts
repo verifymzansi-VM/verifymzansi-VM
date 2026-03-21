@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 
 /**
  * OTP pipeline health check — verifies env vars, DB table,
@@ -16,7 +16,7 @@ export async function GET() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !isModeratorOrAdmin(user)) {
+  if (!user || !(await verifyStaffActorRoleFromDb(user))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

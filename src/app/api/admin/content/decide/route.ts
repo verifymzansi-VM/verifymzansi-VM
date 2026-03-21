@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { adminContentDecideSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
-import { getStaffActorRole } from "@/lib/auth/admin-access";
+import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { getOwnerColumn, readOwnerId } from "@/lib/account/compat";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const adminRole = getStaffActorRole(user);
+    const adminRole = await verifyStaffActorRoleFromDb(user);
     if (!adminRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

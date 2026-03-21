@@ -253,7 +253,57 @@ const worker: ExportedHandler<Env> = {
       }
     }
 
-    // 4. Log cleanup summary to audit_logs via REST API
+    // 4. Clean up orphaned media uploads (uploaded but never confirmed after 24 hours)
+    let orphanDeleteCount = 0;
+    try {
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const orphanRes = await fetch(
+        `${supabaseUrl}/rest/v1/media_uploads?confirmed_at=is.null&created_at=lt.${cutoff}&order=created_at.asc&limit=100&select=id,r2_key,bucket`,
+        { headers }
+      );
+
+      if (orphanRes.ok) {
+        const orphans: { id: string; r2_key: string; bucket: string }[] = await orphanRes.json();
+        if (orphans.length > 0) {
+          console.warn(`Found ${orphans.length} orphaned media upload(s) to clean up.`);
+
+          const publicKeys = orphans.filter((o) => isPublicBucket(o.bucket)).map((o) => o.r2_key);
+          const privateKeys = orphans.filter((o) => isPrivateBucket(o.bucket)).map((o) => o.r2_key);
+
+          if (publicKeys.length > 0) {
+            try {
+              await env.R2_PUBLIC.delete(publicKeys);
+            } catch (e) {
+              console.error("Failed to delete orphaned public R2 keys:", e);
+            }
+          }
+          if (privateKeys.length > 0) {
+            try {
+              await env.R2_PRIVATE.delete(privateKeys);
+            } catch (e) {
+              console.error("Failed to delete orphaned private R2 keys:", e);
+            }
+          }
+
+          const orphanIds = orphans.map((o) => o.id);
+          const deleteRes = await fetch(
+            `${supabaseUrl}/rest/v1/media_uploads?id=in.(${orphanIds.join(",")})`,
+            { method: "DELETE", headers }
+          );
+          if (deleteRes.ok) {
+            orphanDeleteCount = orphans.length;
+          } else {
+            console.error("Failed to delete orphan tracking records:", await deleteRes.text());
+          }
+        }
+      } else {
+        console.warn("Failed to fetch orphaned media uploads:", await orphanRes.text());
+      }
+    } catch (orphanErr) {
+      console.error("Orphan media cleanup failed:", orphanErr);
+    }
+
+    // 5. Log cleanup summary to audit_logs via REST API
     const auditPayload = {
       actor_id: "00000000-0000-0000-0000-000000000000", // system actor
       actor_role: "system",
@@ -266,6 +316,7 @@ const worker: ExportedHandler<Env> = {
         success: successCount,
         failed: failCount,
         held_skipped: heldSkipCount,
+        orphan_media_deleted: orphanDeleteCount,
         run_at: new Date().toISOString(),
       },
       created_at: new Date().toISOString(),
@@ -284,7 +335,7 @@ const worker: ExportedHandler<Env> = {
     }
 
     console.warn(
-      `Retention cleanup complete: ${successCount} deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold.`
+      `Retention cleanup complete: ${successCount} deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold, ${orphanDeleteCount} orphaned media deleted.`
     );
   },
 

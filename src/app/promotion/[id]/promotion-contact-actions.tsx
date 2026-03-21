@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Phone, MessageCircle, Tag, Share2, Flag, Loader2, CheckCircle, Check } from "lucide-react";
+import { Phone, MessageCircle, Share2, Flag, Loader2, CheckCircle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -159,7 +159,7 @@ export function PromotionContactActions({
         {contactMethods.includes("call") && (
           <Button className="w-full gap-2" size="lg" onClick={() => setShowContact(true)}>
             <Phone className="h-4 w-4" />
-            {showContact && advertiserPhone ? advertiserPhone : "Call Advertiser"}
+            {showContact && advertiserPhone ? advertiserPhone : "Show Contact"}
           </Button>
         )}
 
@@ -187,8 +187,8 @@ export function PromotionContactActions({
               setEnquiryOpen(true);
             }}
           >
-            <Tag className="h-4 w-4" />
-            Send Enquiry
+            <MessageCircle className="h-4 w-4" />
+            Send Message
           </Button>
         )}
       </div>
@@ -214,13 +214,13 @@ export function PromotionContactActions({
         </Button>
       </div>
 
-      {/* Enquiry Dialog */}
+      {/* Message Dialog */}
       <Dialog open={enquiryOpen} onOpenChange={setEnquiryOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Send an Enquiry</DialogTitle>
+            <DialogTitle>Send a Message</DialogTitle>
             <DialogDescription>
-              Your enquiry will be sent to the advertiser. They will see your email if you are
+              Your message will be sent to the advertiser. They will see your email if you are
               logged in.
             </DialogDescription>
           </DialogHeader>
@@ -228,7 +228,7 @@ export function PromotionContactActions({
           {msgSent ? (
             <div className="flex flex-col items-center gap-3 py-6">
               <CheckCircle className="h-10 w-10 text-brand-green" />
-              <p className="font-medium">Enquiry sent!</p>
+              <p className="font-medium">Message sent!</p>
               <p className="text-sm text-muted-foreground">The advertiser has been notified.</p>
               <DialogClose asChild>
                 <Button variant="outline" size="sm">
@@ -267,7 +267,7 @@ export function PromotionContactActions({
                   className="gap-2"
                 >
                   {msgSending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Send
+                  Send message
                 </Button>
               </DialogFooter>
             </div>

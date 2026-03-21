@@ -55,8 +55,11 @@ export async function fulfillPayment(
   payment: PaymentRecordShape
 ): Promise<void> {
   const meta = getPaymentMetadata(payment);
-  if (!meta || !payment.user_id) {
-    return;
+  if (!meta) {
+    throw new Error(`Payment ${payment.id} has no parseable metadata — cannot fulfil`);
+  }
+  if (!payment.user_id) {
+    throw new Error(`Payment ${payment.id} has no user_id — cannot fulfil`);
   }
 
   // Resolve owner columns dynamically via compat layer instead of hardcoding "owner_id"

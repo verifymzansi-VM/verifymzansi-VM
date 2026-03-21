@@ -74,21 +74,21 @@ export function MediaUpload({
         if (accept && accept.startsWith("image/") && !IMAGE_TYPES.includes(file.type)) {
           toast({
             title: "Unsupported file type",
-            description: `"${file.name}" is not a supported image format.`,
+            description: `"${file.name}" is not supported. Use JPG, PNG, WebP, GIF, or AVIF images up to 5 MB.`,
             variant: "destructive",
           });
           continue;
         } else if (accept && accept.startsWith("video/") && !VIDEO_TYPES.includes(file.type)) {
           toast({
             title: "Unsupported file type",
-            description: `"${file.name}" is not a supported video format.`,
+            description: `"${file.name}" is not supported. Use MP4, MOV, or WebM videos up to 50 MB.`,
             variant: "destructive",
           });
           continue;
         } else if (!accept && ![...IMAGE_TYPES, ...VIDEO_TYPES].includes(file.type)) {
           toast({
             title: "Unsupported file type",
-            description: `"${file.name}" is not a supported image or video format.`,
+            description: `"${file.name}" is not supported. Use JPG, PNG, WebP, GIF, or AVIF images, or MP4, MOV, or WebM videos.`,
             variant: "destructive",
           });
           continue;

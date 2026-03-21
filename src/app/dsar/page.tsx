@@ -152,9 +152,9 @@ export default function DsarPage() {
                     We&apos;ve received your request and will respond within 30 days as required by
                     POPIA. You&apos;ll receive a confirmation email at <strong>{email}</strong>.
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Reference: {submittedReference || "Pending reference"}
-                  </p>
+                  {submittedReference ? (
+                    <p className="text-xs text-muted-foreground">Reference: {submittedReference}</p>
+                  ) : null}
                   {submittedRequestId ? (
                     <p className="text-xs text-muted-foreground">Case ID: {submittedRequestId}</p>
                   ) : null}
@@ -272,7 +272,7 @@ export default function DsarPage() {
                             setFieldErrors((prev) => ({ ...prev, idNumber: "" }));
                           }
                         }}
-                        placeholder="13-digit SA ID number"
+                        placeholder="e.g. 8501015800083"
                         maxLength={13}
                         required
                         aria-invalid={!!fieldErrors.idNumber}

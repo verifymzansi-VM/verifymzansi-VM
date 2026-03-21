@@ -20,6 +20,8 @@ interface EnforceParams {
   reportId?: string;
   /** Marketplace area for accurate moderation record tracking */
   area?: string;
+  /** Number of days for suspension duration (default: 7). Only used for "suspend" action. */
+  durationDays?: number;
 }
 
 /**
@@ -52,9 +54,21 @@ export async function enforceAction(params: EnforceParams) {
   }
 
   // Update account status
+  const updatePayload: Record<string, unknown> = {
+    account_status: statusMap[params.action],
+  };
+  if (params.action === "suspend") {
+    const days = params.durationDays ?? 7;
+    const suspendUntil = new Date();
+    suspendUntil.setDate(suspendUntil.getDate() + days);
+    updatePayload.suspended_until = suspendUntil.toISOString();
+  }
+  if (params.action === "unban") {
+    updatePayload.suspended_until = null;
+  }
   const { error } = await supabase
     .from(ACCOUNT_PROFILE_WRITE_TABLE)
-    .update({ account_status: statusMap[params.action] })
+    .update(updatePayload)
     .eq("user_id", params.ownerId);
 
   if (error) {

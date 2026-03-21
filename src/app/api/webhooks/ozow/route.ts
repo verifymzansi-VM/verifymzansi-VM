@@ -169,6 +169,23 @@ export async function POST(request: NextRequest) {
 
     const claimed = await claimPaymentProcessing(supabase, payment, payload);
 
+    // Double-fulfillment guard: after claiming, re-read the payment to verify
+    // we truly own the processing state. This closes the TOCTOU window where
+    // two concurrent webhooks could both pass claimPaymentProcessing().
+    if (claimed) {
+      const claimedPayment = await getPaymentById(supabase, payment.id);
+      if (
+        !claimedPayment ||
+        claimedPayment.status !== "processing" ||
+        hasFulfillmentCompletion(claimedPayment)
+      ) {
+        log.info("Payment was already fulfilled by a concurrent request", {
+          paymentId: payment.id,
+        });
+        return NextResponse.json({ success: true, duplicate: true });
+      }
+    }
+
     if (!claimed) {
       const currentPayment = await getPaymentById(supabase, payment.id);
 

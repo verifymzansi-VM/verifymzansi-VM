@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [sessionValid, setSessionValid] = useState<boolean | null>(null);
   const router = useRouter();
   const { toast } = useToast();
@@ -181,17 +182,28 @@ export default function ResetPasswordPage() {
 
         <div className="space-y-2">
           <Label htmlFor="confirmPassword">Confirm password</Label>
-          <Input
-            id="confirmPassword"
-            type="password"
-            placeholder="Confirm your password"
-            autoComplete="new-password"
-            spellCheck={false}
-            autoCapitalize="none"
-            aria-invalid={!!errors.confirmPassword}
-            aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
-            {...register("confirmPassword")}
-          />
+          <div className="relative">
+            <Input
+              id="confirmPassword"
+              type={showConfirmPassword ? "text" : "password"}
+              placeholder="Confirm your password"
+              autoComplete="new-password"
+              spellCheck={false}
+              autoCapitalize="none"
+              aria-invalid={!!errors.confirmPassword}
+              aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
+              {...register("confirmPassword")}
+            />
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              tabIndex={-1}
+              aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           {errors.confirmPassword && (
             <p id="confirmPassword-error" className="inline-form-error" role="alert">
               {errors.confirmPassword.message}

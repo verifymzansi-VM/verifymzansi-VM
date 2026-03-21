@@ -217,7 +217,20 @@ function setupDefaultAdminMocks() {
             }),
           }),
         }),
-        upsert: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              neq: vi.fn().mockReturnValue({
+                select: vi.fn().mockReturnValue({
+                  maybeSingle: vi
+                    .fn()
+                    .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+                }),
+              }),
+            }),
+          }),
+        }),
+        insert: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
             single: vi
               .fn()
@@ -564,7 +577,20 @@ describe("POST /api/verification/upload", () => {
               }),
             }),
           }),
-          upsert: vi.fn().mockReturnValue({
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockReturnValue({
+                    maybeSingle: vi
+                      .fn()
+                      .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
               single: vi
                 .fn()
@@ -617,12 +643,10 @@ describe("POST /api/verification/upload", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi
-                .fn()
-                .mockResolvedValue({
-                  data: { id: "profile-1", phone: "+27123456789" },
-                  error: null,
-                }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", phone: "+27123456789" },
+                error: null,
+              }),
             }),
           }),
         };
@@ -680,12 +704,10 @@ describe("POST /api/verification/upload", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi
-                .fn()
-                .mockResolvedValue({
-                  data: { id: "profile-1", phone: "+27123456789" },
-                  error: null,
-                }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", phone: "+27123456789" },
+                error: null,
+              }),
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
@@ -741,7 +763,20 @@ describe("POST /api/verification/upload", () => {
               }),
             }),
           }),
-          upsert: vi.fn().mockReturnValue({
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockReturnValue({
+                    maybeSingle: vi
+                      .fn()
+                      .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
               single: vi
                 .fn()
@@ -807,9 +842,17 @@ describe("POST /api/verification/upload", () => {
   it("clears prior review metadata and reopens the verification session on resubmission", async () => {
     mockAuth({ id: "user-1", email: "test@example.com" });
 
-    const stepUpsert = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+    const stepUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          neq: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+            }),
+          }),
+        }),
       }),
     });
     const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -819,12 +862,10 @@ describe("POST /api/verification/upload", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi
-                .fn()
-                .mockResolvedValue({
-                  data: { id: "profile-1", phone: "+27123456789" },
-                  error: null,
-                }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", phone: "+27123456789" },
+                error: null,
+              }),
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
@@ -872,7 +913,14 @@ describe("POST /api/verification/upload", () => {
               }),
             }),
           }),
-          upsert: stepUpsert,
+          update: stepUpdate,
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi
+                .fn()
+                .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+            }),
+          }),
         };
       }
       if (table === "verification_sessions") {
@@ -917,7 +965,7 @@ describe("POST /api/verification/upload", () => {
 
     const response = await POST(req);
     expect(response.status).toBe(200);
-    expect(stepUpsert).toHaveBeenCalledWith(
+    expect(stepUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "pending",
         reviewed_by: null,
@@ -925,8 +973,7 @@ describe("POST /api/verification/upload", () => {
         reason_code: null,
         reason_note: null,
         override_reason_code: null,
-      }),
-      expect.objectContaining({ onConflict: "user_id,step_type" })
+      })
     );
     expect(sessionUpsert).toHaveBeenCalledWith(
       expect.objectContaining({

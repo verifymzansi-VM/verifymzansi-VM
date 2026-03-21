@@ -90,7 +90,7 @@ export default function VerifyBuyerPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Verify a Buyer"
-            description="Sellers can check if a buyer's verification is still valid by entering their buyer token."
+            description="Sellers can check whether a buyer's verification is still valid by entering the buyer token from that buyer's profile."
             breadcrumbs={[{ label: "Verify a Buyer" }]}
           />
 
@@ -116,7 +116,8 @@ export default function VerifyBuyerPage() {
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Buyers share this token from their profile.
+                      Paste the 36-character buyer token from the buyer's profile, for example
+                      550e8400-e29b-41d4-a716-446655440000.
                     </p>
                   </div>
 
@@ -126,7 +127,7 @@ export default function VerifyBuyerPage() {
                     ) : (
                       <Search className="h-4 w-4" />
                     )}
-                    Verify Token
+                    Verify buyer token
                   </Button>
                 </form>
 
@@ -158,7 +159,7 @@ export default function VerifyBuyerPage() {
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                       <p className="font-semibold text-sm text-amber-900 dark:text-amber-200">
-                        Token Expired
+                        Token expired
                       </p>
                     </div>
                     <p className="text-xs text-amber-900/90 dark:text-amber-100/90">
@@ -171,7 +172,7 @@ export default function VerifyBuyerPage() {
                   <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
                     <div className="flex items-center gap-2">
                       <XCircle className="h-4 w-4 text-destructive" />
-                      <p className="font-semibold text-sm text-destructive">Token Revoked</p>
+                      <p className="font-semibold text-sm text-destructive">Token revoked</p>
                     </div>
                     <p className="text-xs text-muted-foreground">This token has been revoked.</p>
                   </div>
@@ -181,7 +182,7 @@ export default function VerifyBuyerPage() {
                   <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
                     <div className="flex items-center gap-2">
                       <XCircle className="h-4 w-4 text-destructive" />
-                      <p className="font-semibold text-sm text-destructive">Token Not Found</p>
+                      <p className="font-semibold text-sm text-destructive">Token not found</p>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Invalid token. Ask the buyer to share their current token.

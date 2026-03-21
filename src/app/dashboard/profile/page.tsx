@@ -429,7 +429,7 @@ export default function ProfilePage() {
                     id="displayName"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value.slice(0, 50))}
-                    placeholder="How people see your name"
+                    placeholder="Your public display name"
                     maxLength={50}
                     required
                   />
@@ -656,7 +656,7 @@ export default function ProfilePage() {
                   </p>
                 </div>
                 <Button asChild variant="outline" size="sm">
-                  <Link href="/forgot-password">Reset</Link>
+                  <Link href="/forgot-password">Reset Password</Link>
                 </Button>
               </div>
             </CardContent>
@@ -719,7 +719,7 @@ export default function ProfilePage() {
                 <div>
                   <p className="text-sm font-medium text-destructive">Delete account</p>
                   <p className="text-xs text-muted-foreground">
-                    Permanently delete your data under POPIA.
+                    Permanently delete your account and all personal data. This cannot be undone.
                   </p>
                 </div>
                 <Button variant="destructive" size="sm" asChild className="gap-1.5">

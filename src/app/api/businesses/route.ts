@@ -27,6 +27,7 @@ import {
   BUSINESS_SLUG_CONFLICT_RESPONSE,
   isBusinessSlugConflictError,
 } from "@/lib/businesses/slug-conflict";
+import { hasPhoneNumber } from "@/lib/account/require-phone";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -107,6 +108,14 @@ export async function POST(request: NextRequest) {
 
     if (!isVerifiedMember(verification.accountVerificationStatus)) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
+    }
+
+    // Phone gate: prevent content creation without a verified phone number
+    if (!(await hasPhoneNumber(supabase, user.id))) {
+      return NextResponse.json(
+        { error: "Phone number required", redirectUrl: "/dashboard/complete-profile" },
+        { status: 403 }
+      );
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, businessSchema, {

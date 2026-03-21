@@ -129,6 +129,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Prevent duplicate in-flight payments ─────────────
+    const { data: pendingPayment } = await supabase
+      .from("payments")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("area", plan.area)
+      .in("status", ["pending", "processing"])
+      .maybeSingle();
+
+    if (pendingPayment) {
+      return NextResponse.json(
+        {
+          error:
+            "You already have a pending payment for this area. Please wait for it to complete or cancel it.",
+        },
+        { status: 409 }
+      );
+    }
+
     const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
 
     let paymentId: string;

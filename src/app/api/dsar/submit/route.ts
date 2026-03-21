@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const emailRl = checkLocalRateLimit(email.toLowerCase(), "dsar:submit:email");
     if (emailRl.limited) {
       return NextResponse.json(
-        { error: "Too many requests for this email address" },
+        { error: "Too many requests" },
         { status: 429, headers: { "Retry-After": String(emailRl.retryAfter ?? 60) } }
       );
     }

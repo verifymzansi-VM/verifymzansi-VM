@@ -114,6 +114,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Invalidate the recovery session so the reset link can't be reused
+    await supabase.auth.signOut();
+
     return NextResponse.json({ success: true });
   } catch (error) {
     logApiError(log, "Unexpected password reset error", error);

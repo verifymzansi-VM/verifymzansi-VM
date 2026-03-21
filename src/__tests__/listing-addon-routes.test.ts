@@ -127,6 +127,10 @@ function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_u
   const paymentBuilder = {
     insert: vi.fn().mockReturnThis(),
     select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    contains: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null }),
     single: vi.fn().mockResolvedValue({ data: { id: "pay-001" }, error: null }),
   };
 

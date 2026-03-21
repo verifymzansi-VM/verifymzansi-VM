@@ -80,7 +80,6 @@ export default async function LeadsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {}
           {(leads as unknown as LeadRow[]).map((lead) => (
             <Card key={lead.id}>
               <CardContent className="py-4 space-y-2">
@@ -88,7 +87,13 @@ export default async function LeadsPage() {
                   <div>
                     <p className="text-sm font-medium">Re: {lead.listings?.title || "Listing"}</p>
                     <Badge variant="outline" className="text-[10px] mt-1">
-                      {lead.status}
+                      {lead.status === "new"
+                        ? "New"
+                        : lead.status === "contacted"
+                          ? "Contacted"
+                          : lead.status === "closed"
+                            ? "Closed"
+                            : lead.status}
                     </Badge>
                   </div>
                   <span className="text-xs text-muted-foreground whitespace-nowrap">

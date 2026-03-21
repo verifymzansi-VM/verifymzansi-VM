@@ -16,7 +16,7 @@ describe("App error page", () => {
       screen.getByRole("heading", { name: /service temporarily unavailable/i })
     ).toBeInTheDocument();
     expect(screen.getByText(/couldn't verify your account details right now/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /retry from dashboard/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /go to dashboard/i })).toHaveAttribute(
       "href",
       "/dashboard"
     );

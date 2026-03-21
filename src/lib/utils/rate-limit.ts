@@ -150,7 +150,7 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
         method: "POST",
         headers,
         body: JSON.stringify({
-          phone: opts.key, // worker uses `phone` as the key field
+          key: opts.key,
           action: opts.action,
           deviceId: opts.deviceId,
           readOnly: opts.readOnly,

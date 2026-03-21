@@ -674,7 +674,11 @@ export default function VerificationPage() {
 
   async function handleSendOtp() {
     if (!isPhoneValid) {
-      toast({ title: "Enter a valid SA mobile number", variant: "destructive" });
+      toast({
+        title: "Enter a valid SA mobile number",
+        description: "Use a South African mobile number such as 071 234 5678.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -721,7 +725,11 @@ export default function VerificationPage() {
 
   async function handleVerifyOtp() {
     if (!isOtpValid) {
-      toast({ title: "Enter the 6-digit OTP", variant: "destructive" });
+      toast({
+        title: "Enter the 6-digit code",
+        description: "Use the code sent to your phone, then try again.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -741,7 +749,11 @@ export default function VerificationPage() {
       markStepComplete("phone");
       await syncVerificationStatus();
       setStep("id_doc");
-      toast({ title: "Phone verified", variant: "success" });
+      toast({
+        title: "Phone number verified",
+        description: `${formattedPhone} is now linked to your verification profile.`,
+        variant: "success",
+      });
     } catch (err) {
       toast({
         title: "Invalid OTP",
@@ -1144,7 +1156,7 @@ export default function VerificationPage() {
                         ) : (
                           <ArrowRight className="h-4 w-4" />
                         )}
-                        {otpSent ? "Resend OTP" : "Send OTP"}
+                        {isLoading ? "Sending code..." : otpSent ? "Resend code" : "Send code"}
                       </Button>
                       {otpRetryAfterSeconds > 0 && (
                         <p className="text-xs text-muted-foreground">
@@ -1183,15 +1195,17 @@ export default function VerificationPage() {
                         onClick={handleVerifyOtp}
                         disabled={isLoading || !isOtpValid}
                         variant="trust-verified"
+                        className="gap-2"
                       >
-                        Verify OTP
+                        {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {isLoading ? "Verifying code..." : "Verify code"}
                       </Button>
                     </div>
                   )}
 
                   {phoneVerified && (
                     <div className="rounded-md border border-brand-green/30 bg-brand-green-50 p-3 text-sm text-brand-green-900">
-                      Phone verified: {phone}
+                      Phone number verified: {formattedPhone}
                     </div>
                   )}
                 </CardContent>

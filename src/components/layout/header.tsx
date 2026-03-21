@@ -233,7 +233,7 @@ function HeaderInner({
                 className="border-brand-green border-2 hover:bg-brand-green/10"
                 size="sm"
               >
-                <Link href="/login">Sign In</Link>
+                <Link href="/login">Sign in</Link>
               </Button>
               <Button asChild variant="trust-verified" size="sm">
                 <Link href="/register">Register</Link>

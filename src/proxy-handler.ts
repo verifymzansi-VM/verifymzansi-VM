@@ -439,9 +439,11 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   }
 
   // -- Ban/suspension enforcement: block banned/suspended users from all protected routes --
-  // TODO: The suspension auto-unsuspend logic below is duplicated in the posting gate
-  // (line ~552). Extract into a shared helper to prevent future divergence.
-  if (user && isProtectedRoute) {
+  // Also enforce on authenticated mutation API requests (POST/PUT/PATCH/DELETE)
+  // to prevent banned users from creating/modifying content via unprotected API routes.
+  const isMutationRequest = ["POST", "PUT", "PATCH", "DELETE"].includes(request.method);
+  const isBanEnforced = isProtectedRoute || (isApiRoute && isMutationRequest);
+  if (user && isBanEnforced) {
     // Reuse the consolidated profile query from the phone gate if available;
     // otherwise fetch the needed columns now (e.g. API routes skip the phone gate).
     let statusProfile = cachedProfile;

@@ -87,12 +87,20 @@ export function SubscribeButton({ area, tier, priceCents, isPopular }: Subscribe
   const tierLabel = `${tier.charAt(0).toUpperCase()}${tier.slice(1)}`;
   const label = priceCents === 0 ? "Current Plan" : `Choose ${tierLabel}`;
 
+  if (priceCents === 0) {
+    return (
+      <div className="flex h-11 w-full items-center justify-center rounded-md border border-border bg-muted/40 px-4 text-sm font-medium text-muted-foreground">
+        Included with your free plan
+      </div>
+    );
+  }
+
   return (
     <Button
       size="lg"
       variant={isPopular ? "trust-verified" : "outline"}
       className={`w-full font-semibold ${isPopular ? "shadow-md" : ""}`}
-      disabled={loading || priceCents === 0}
+      disabled={loading}
       onClick={handleClick}
     >
       {loading ? (

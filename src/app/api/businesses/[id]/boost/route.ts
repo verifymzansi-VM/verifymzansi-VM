@@ -97,6 +97,21 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "This business is already boosted" }, { status: 400 });
     }
 
+    // ── Prevent duplicate in-flight payments ─────────────────
+    const { data: pendingPmt } = await admin
+      .from("payments")
+      .select("id")
+      .eq("user_id", user.id)
+      .in("status", ["pending", "processing"])
+      .contains("provider_data", { type: "boost_business", business_id: businessId })
+      .maybeSingle();
+    if (pendingPmt) {
+      return NextResponse.json(
+        { error: "A boost payment is already in progress for this business" },
+        { status: 409 }
+      );
+    }
+
     const tier = await getActivePlanTierForArea(user.id, "MZANSI_BUSINESS");
     const boostCheck = canBoost(tier, "MZANSI_BUSINESS");
 

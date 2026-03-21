@@ -82,7 +82,7 @@ export async function createHostedCheckout(
       cancelUrl,
     });
 
-    await input.admin
+    const { error: updateError } = await input.admin
       .from("payments")
       .update({
         provider_payment_id: ozowPayment.providerPaymentId,
@@ -97,6 +97,26 @@ export async function createHostedCheckout(
       })
       .eq("id", paymentId)
       .eq("provider", "ozow");
+
+    if (updateError) {
+      log.error("Failed to update payment with provider details", {
+        paymentId,
+        error: updateError.message,
+      });
+      // Mark payment as failed so it doesn't dangle without provider details
+      await input.admin
+        .from("payments")
+        .update({
+          status: "failed",
+          provider_data: {
+            ...providerData,
+            last_error: `Post-checkout update failed: ${updateError.message}`,
+          },
+        })
+        .eq("id", paymentId)
+        .eq("provider", "ozow");
+      throw new Error(`Failed to update payment with provider details: ${updateError.message}`);
+    }
 
     return {
       paymentId,

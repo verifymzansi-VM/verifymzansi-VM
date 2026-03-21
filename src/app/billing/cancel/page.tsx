@@ -54,34 +54,33 @@ function getCopy(status: PaymentStatusView) {
     case "complete":
       return {
         icon: <CheckCircle2 className="h-6 w-6 text-brand-green" />,
-        title: "Payment Already Confirmed",
-        description:
-          "This payment has already completed successfully, even though you returned here.",
+        title: "Payment complete",
+        description: "Your payment went through and your plan is now active.",
       };
     case "pending":
       return {
         icon: <Clock3 className="h-6 w-6 text-brand-green" />,
-        title: "Payment Still Pending",
+        title: "Payment still processing",
         description:
-          "We have not received the final payment confirmation yet. Please check again shortly.",
+          "We're still waiting for final confirmation from the payment provider. Check again in 30 seconds or return to billing.",
       };
     case "failed":
       return {
         icon: <XCircle className="h-6 w-6 text-destructive" />,
-        title: "Payment Not Completed",
+        title: "Payment not completed",
         description:
           "Your payment was not completed. This could be because you cancelled, or because there was a processing issue. No charge was made.",
       };
     case "expired":
       return {
         icon: <AlertCircle className="h-6 w-6 text-destructive" />,
-        title: "Payment Expired",
+        title: "Payment expired",
         description: "This checkout session expired. Start a new payment to continue.",
       };
     default:
       return {
         icon: <AlertCircle className="h-6 w-6 text-muted-foreground" />,
-        title: "Payment Not Found",
+        title: "Payment not found",
         description: "We could not resolve a matching payment for this request.",
       };
   }

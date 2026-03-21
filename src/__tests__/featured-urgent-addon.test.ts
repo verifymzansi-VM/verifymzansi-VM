@@ -82,6 +82,8 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
   const makeChain = (table: string) => ({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    contains: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue({ data: null }),
     single: vi.fn().mockResolvedValue({ data: { id: "payment-1" }, error: null }),
     insert: vi.fn().mockReturnThis(),

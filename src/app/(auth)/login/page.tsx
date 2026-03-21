@@ -232,10 +232,10 @@ export default function LoginPage() {
 
       if (!response.ok) {
         toast({
-          title: "Sign in failed",
+          title: typeof result.error === "string" ? result.error : "Sign in failed",
           description:
             typeof result.error === "string"
-              ? result.error
+              ? undefined
               : "Please check your credentials and try again.",
           variant: "destructive",
         });
@@ -292,8 +292,8 @@ export default function LoginPage() {
                 <Send className="h-3.5 w-3.5" />
               )}
               {resendCooldown > 0
-                ? `Resend available in ${resendCooldown}s`
-                : "Didn't receive it? Resend"}
+                ? `Resend confirmation email in ${resendCooldown}s`
+                : "Resend confirmation email"}
             </button>
           </div>
         </div>
@@ -411,11 +411,11 @@ export default function LoginPage() {
           disabled={!isInteractive || isSubmitting || captchaUnavailable}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Sign In
+          Sign in
         </Button>
       </form>
 
-      {!emailConfirmed && (
+      {!emailConfirmed && !justRegistered && (
         <div className="rounded-lg border border-border bg-muted/30 p-4">
           <div className="flex items-start gap-3">
             <Mail className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
@@ -437,7 +437,7 @@ export default function LoginPage() {
                   <Send className="h-3.5 w-3.5" />
                 )}
                 {resendCooldown > 0
-                  ? `Request another link in ${resendCooldown}s`
+                  ? `Resend confirmation email in ${resendCooldown}s`
                   : "Resend confirmation email"}
               </button>
             </div>

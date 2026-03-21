@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getStaffActorRole } from "@/lib/auth/admin-access";
+import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { z } from "zod";
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       data: { user },
     } = await supabase.auth.getUser();
 
-    const adminRole = getStaffActorRole(user);
+    const adminRole = await verifyStaffActorRoleFromDb(user);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .from("promotions")
       .update(updateData)
       .eq("id", promotionId)
-      .in("status", ["pending_moderation", "live", "hidden"]);
+      .in("status", ["pending_moderation", "live", "hidden", "rejected"]);
 
     if (updateError) {
       log.error("Failed to moderate promotion", { error: updateError.message });

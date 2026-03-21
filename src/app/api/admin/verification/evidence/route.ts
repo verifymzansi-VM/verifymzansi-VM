@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { downloadKycDocument } from "@/lib/services/storage";
 import crypto from "crypto";
-import { getStaffActorRole } from "@/lib/auth/admin-access";
+import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { getLinkedEvidenceArtifactIds } from "@/lib/services/kyc-evidence-access";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const role = getStaffActorRole(user);
+    const role = await verifyStaffActorRoleFromDb(user);
     if (!role) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

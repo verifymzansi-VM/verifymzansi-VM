@@ -438,15 +438,46 @@ export async function POST(request: NextRequest) {
     }
 
     // CAS guard: only overwrite an existing step if it is still in a
-    // "safe-to-overwrite" state. This prevents a concurrent upload with a
-    // lower risk score from silently replacing a higher-risk result that
-    // arrived first. Steps that are already approved are blocked earlier;
-    // steps that are pending/needs_resubmission can be overwritten.
-    const { data: _upsertedStep, error: stepError } = await admin
+    // "safe-to-overwrite" state. This prevents a concurrent upload from
+    // overwriting a step that was approved between our earlier check and now.
+    // Use conditional update + insert instead of upsert to avoid TOCTOU.
+    let stepUpsertError: { message: string; code?: string; details?: string } | null = null;
+    const { data: updatedStep, error: updateError } = await admin
       .from("verification_steps")
-      .upsert(stepData, { onConflict: "user_id,step_type", ignoreDuplicates: false })
+      .update(stepData)
+      .eq("user_id", user.id)
+      .eq("step_type", stepType)
+      .neq("status", "approved")
       .select("id, risk_score")
-      .single();
+      .maybeSingle();
+
+    if (updateError) {
+      stepUpsertError = updateError;
+    } else if (!updatedStep) {
+      // No row was updated — either no row exists yet, or it's approved.
+      // Try inserting; if the row exists and is approved, the unique
+      // constraint will cause a conflict and we return 409.
+      const { data: _insertedStep, error: insertError } = await admin
+        .from("verification_steps")
+        .insert(stepData)
+        .select("id, risk_score")
+        .single();
+
+      if (insertError) {
+        // Unique constraint violation means the step was approved concurrently
+        if (insertError.code === "23505") {
+          return NextResponse.json(
+            {
+              error: "This verification step has already been approved.",
+              code: "step_already_approved",
+            },
+            { status: 409 }
+          );
+        }
+        stepUpsertError = insertError;
+      }
+    }
+    const stepError = stepUpsertError;
 
     if (stepError) {
       log.error("Failed to update verification step", { error: stepError });
@@ -486,15 +517,28 @@ export async function POST(request: NextRequest) {
     // upload, restore the original risk posture. This prevents a benign
     // re-upload from silently erasing a previously flagged risk signal.
     // The new artifact is still saved so admins can review both.
+    //
+    // Re-read the step after upsert to avoid TOCTOU — a concurrent upload
+    // may have written a higher score between our pre-read and now.
+    const { data: currentStep } = await admin
+      .from("verification_steps")
+      .select("risk_score, risk_level, auto_status")
+      .eq("user_id", user.id)
+      .eq("step_type", stepType)
+      .single();
+
     if (
       existingStep &&
       typeof existingStep.risk_score === "number" &&
-      engineResult.riskScore < existingStep.risk_score
+      currentStep &&
+      typeof currentStep.risk_score === "number" &&
+      currentStep.risk_score < existingStep.risk_score
     ) {
       log.warn("Step upsert lowered risk score — restoring higher-risk record", {
         userId: user.id,
         stepType,
         existingScore: existingStep.risk_score,
+        currentScore: currentStep.risk_score,
         newScore: engineResult.riskScore,
       });
       await admin

@@ -35,7 +35,7 @@ export default function TermsPage() {
         "• Post only items, businesses, offers, or events you legally own or are authorised to advertise",
         "• Provide accurate descriptions, images, pricing, and business details",
         "• Not list prohibited items (weapons, illegal substances, counterfeit goods)",
-        "• Comply with the Consumer Protection Act and all applicable SA laws",
+        "• Comply with the Consumer Protection Act (CPA) of South Africa and all applicable SA laws",
       ],
     },
     {
@@ -74,7 +74,7 @@ export default function TermsPage() {
               Terms of Service
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Last updated: February 2026 · Governed by South African law
+              Last updated: March 2026 · Governed by South African law
             </p>
           </div>
         </div>

@@ -74,7 +74,7 @@ interface AuditLogEntry {
 
 /** Counter for monitoring audit write failures (POPIA compliance). */
 let auditFailureCount = 0;
-const AUDIT_FAILURE_ALERT_THRESHOLD = 5;
+const _AUDIT_FAILURE_ALERT_THRESHOLD = 5;
 
 /** Return the current count of audit write failures for monitoring. */
 export function getAuditFailureCount(): number {
@@ -111,38 +111,22 @@ export async function logAuditEvent(entry: AuditLogEntry): Promise<void> {
 
     if (error) {
       auditFailureCount++;
-      log.error("Audit log write failed (POPIA compliance risk)", {
+      log.error("CRITICAL: Audit log write failed (POPIA compliance risk)", {
+        severity: "critical",
         action: entry.action,
         targetType: entry.targetType,
         targetId: entry.targetId,
         dbError: error.message,
         failureCount: auditFailureCount,
       });
-      if (auditFailureCount >= AUDIT_FAILURE_ALERT_THRESHOLD) {
-        log.error(
-          "CRITICAL: Audit failure threshold exceeded — POPIA compliance at risk. Investigate immediately.",
-          {
-            failureCount: auditFailureCount,
-            threshold: AUDIT_FAILURE_ALERT_THRESHOLD,
-          }
-        );
-      }
     }
   } catch (err) {
     auditFailureCount++;
-    log.error("Audit log exception (POPIA compliance risk)", {
+    log.error("CRITICAL: Audit log exception (POPIA compliance risk)", {
+      severity: "critical",
       action: entry.action,
       error: err instanceof Error ? err.message : "Unknown error",
       failureCount: auditFailureCount,
     });
-    if (auditFailureCount >= AUDIT_FAILURE_ALERT_THRESHOLD) {
-      log.error(
-        "CRITICAL: Audit failure threshold exceeded — POPIA compliance at risk. Investigate immediately.",
-        {
-          failureCount: auditFailureCount,
-          threshold: AUDIT_FAILURE_ALERT_THRESHOLD,
-        }
-      );
-    }
   }
 }

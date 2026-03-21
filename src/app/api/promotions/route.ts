@@ -31,6 +31,7 @@ import { resolveAccountVerification } from "@/lib/account/resolved-verification"
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { hasPhoneNumber } from "@/lib/account/require-phone";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -153,6 +154,14 @@ export async function POST(request: NextRequest) {
 
     if (!isVerifiedMember(verification.accountVerificationStatus)) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
+    }
+
+    // Phone gate: prevent content creation without a verified phone number
+    if (!(await hasPhoneNumber(supabase, user.id))) {
+      return NextResponse.json(
+        { error: "Phone number required", redirectUrl: "/dashboard/complete-profile" },
+        { status: 403 }
+      );
     }
 
     // ── Check entitlement / plan limits ──────────────────────

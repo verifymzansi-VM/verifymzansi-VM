@@ -247,25 +247,25 @@ export default async function ListingsPage() {
       <Tabs defaultValue="active">
         <TabsList>
           <TabsTrigger value="active">Active ({active.length})</TabsTrigger>
-          <TabsTrigger value="pending">Pending ({pending.length})</TabsTrigger>
+          <TabsTrigger value="pending">Under Review ({pending.length})</TabsTrigger>
           <TabsTrigger value="rejected">
             Rejected{rejected.length > 0 ? ` (${rejected.length})` : ""}
           </TabsTrigger>
-          <TabsTrigger value="expired">Expired ({expired.length})</TabsTrigger>
+          <TabsTrigger value="expired">Sold / Expired ({expired.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active" className="mt-4">
           <ListingList
             listings={active}
             planTiers={planTiers}
-            emptyStateLabel="No live posts yet. Create your first listing, business, or promotion."
+            emptyStateLabel="No posts yet. Create your first post to get started."
           />
         </TabsContent>
         <TabsContent value="pending" className="mt-4">
           <ListingList
             listings={pending}
             planTiers={planTiers}
-            emptyStateLabel="Nothing is waiting for review right now."
+            emptyStateLabel="No posts are waiting for review right now."
           />
         </TabsContent>
         <TabsContent value="rejected" className="mt-4">
@@ -275,7 +275,7 @@ export default async function ListingsPage() {
           <ListingList
             listings={expired}
             planTiers={planTiers}
-            emptyStateLabel="No expired or sold posts yet."
+            emptyStateLabel="No expired or sold posts right now."
           />
         </TabsContent>
       </Tabs>
@@ -475,7 +475,7 @@ function Thumbnail({ item, muted = false }: { item: DashboardItem; muted?: boole
         />
       ) : (
         <div className="flex items-center justify-center h-full text-xs text-warm-400 dark:text-warm-500">
-          No img
+          No image
         </div>
       )}
     </div>

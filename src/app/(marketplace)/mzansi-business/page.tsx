@@ -80,7 +80,7 @@ export default async function MzansiBusinessPage() {
 
   return (
     <div className="space-y-0">
-      <Suspense fallback={null}>
+      <Suspense fallback={<div className="h-10" />}>
         <MzansiBusinessFilterSync />
       </Suspense>
 
@@ -97,7 +97,7 @@ export default async function MzansiBusinessPage() {
       <div className="container-page py-4 sm:py-6 space-y-4">
         <PageHeader
           title="Mzansi Business"
-          description="Browse verified South African businesses, compare service providers, and discover trusted shops near you."
+          description="Browse verified South African businesses, and discover trusted shops near you."
           breadcrumbs={[{ label: "Mzansi Business" }]}
           className="hidden lg:block"
         >

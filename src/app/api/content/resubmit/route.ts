@@ -141,9 +141,20 @@ export async function POST(request: Request) {
         (updateResult.error as unknown as { message?: string | null } | null)?.message ?? null;
     } else {
       const admin = createAdminClient();
+      // Detect owner column for tables not in the standard compat list (e.g. storefronts)
+      let ownerCol = "owner_id";
+      try {
+        const probe = await admin.from(config.table).select("id, owner_id").limit(1);
+        if ((probe.error as unknown as { code?: string } | null)?.code === "42703") {
+          ownerCol = "seller_id";
+        }
+      } catch {
+        // fall back to owner_id
+      }
+
       const { data: fetchedItem, error: fetchError } = await admin
         .from(config.table)
-        .select("id, status, owner_id")
+        .select(`id, status, ${ownerCol}`)
         .eq("id", itemId)
         .single();
 
@@ -151,9 +162,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
       }
 
-      item = fetchedItem;
+      const fetchedOwner = (fetchedItem as Record<string, unknown>)[ownerCol] as string | null;
+      item = { ...(fetchedItem as { id: string; status: string }), owner_id: fetchedOwner };
 
-      if (!item || item.owner_id !== user.id) {
+      if (!item || fetchedOwner !== user.id) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
 

@@ -68,7 +68,7 @@ const SCAM_TYPES = [
       "Scammers often ask to move to WhatsApp or Telegram to avoid platform protections.",
     tips: [
       "Keep communication on VerifyMzansi",
-      "Report accounts insisting on off-platform deals",
+      "Report accounts insisting on off-platform deals — use our contact form",
       "Screenshot conversations as evidence",
     ],
   },

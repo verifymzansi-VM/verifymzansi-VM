@@ -67,7 +67,7 @@ export default function PrivacyPolicyPage() {
               Privacy Policy
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Last updated: February 2026 · POPIA compliant
+              Last updated: March 2026 · POPIA compliant
             </p>
           </div>
         </div>

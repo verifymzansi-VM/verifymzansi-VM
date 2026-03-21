@@ -93,8 +93,8 @@ export default async function MzansiMarketPage() {
           className="hidden lg:block"
         >
           <Button asChild size="sm" className="gap-1">
-            <Link href="/post/create">
-              Post an ad
+            <Link href="/post/create-listing">
+              Create a listing
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>

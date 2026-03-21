@@ -26,6 +26,7 @@ import {
 import type { PlanTier } from "@/types/enums";
 import type { BusinessDetails } from "@/types/business-details";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("BusinessDetail");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -150,6 +151,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     const { id } = await params;
 
     if (!UUID_RE.test(id)) {

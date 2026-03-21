@@ -197,17 +197,40 @@ export async function POST(request: NextRequest) {
           contentType: file.type,
         });
         uploadedUrls.push(result.url);
+
+        // Track upload for orphan detection — non-blocking
+        supabase
+          .from("media_uploads")
+          .insert({
+            user_id: user.id,
+            r2_key: key,
+            bucket,
+            url: result.url,
+            content_type: file.type,
+            file_size: file.size,
+            area,
+          })
+          .then(({ error: trackErr }) => {
+            if (trackErr)
+              log.warn("Failed to track media upload", { key, error: trackErr.message });
+          });
       } catch (err) {
         log.error(`Failed to upload ${file.name}`, { error: err });
         errors.push(`"${file.name}": upload failed`);
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      urls: uploadedUrls,
-      errors: errors.length > 0 ? errors : undefined,
-    });
+    const hasErrors = errors.length > 0;
+    const allFailed = hasErrors && uploadedUrls.length === 0;
+
+    return NextResponse.json(
+      {
+        success: !hasErrors,
+        urls: uploadedUrls,
+        errors: hasErrors ? errors : undefined,
+      },
+      { status: allFailed ? 500 : hasErrors ? 207 : 200 }
+    );
   } catch (err) {
     log.error("Unexpected error", {
       error: err instanceof Error ? err.message : "Unknown error",

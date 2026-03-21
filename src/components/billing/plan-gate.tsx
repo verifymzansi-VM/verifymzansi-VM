@@ -363,6 +363,16 @@ export function PlanGate({ area, children }: PlanGateProps) {
     }
 
     checkEntitlements();
+
+    // Re-check when tab becomes visible (handles cross-tab free post consumption)
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        _entitlementCache.clear();
+        checkEntitlements();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [area]);
 
   // Handle subscribe — redirect to checkout
@@ -419,7 +429,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
       <div className="flex items-center justify-center py-8">
         <div className="text-center space-y-3">
           <Loader2 className="h-8 w-8 animate-spin text-brand-green mx-auto" />
-          <p className="text-sm text-muted-foreground">Checking your plan...</p>
+          <p className="text-sm text-muted-foreground">Checking your plan</p>
         </div>
       </div>
     );
@@ -431,13 +441,13 @@ export function PlanGate({ area, children }: PlanGateProps) {
       <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
         <CardContent className="p-6 text-center space-y-3">
           <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto" />
-          <h2 className="font-display text-xl font-bold">Sign In Required</h2>
+          <h2 className="font-display text-xl font-bold">Sign in required</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
             Sign in to choose a plan or use your free post on VerifyMzansi.
           </p>
           <div className="flex gap-3 justify-center">
             <Button asChild variant="outline">
-              <Link href="/login">Sign In</Link>
+              <Link href="/login">Sign in</Link>
             </Button>
             <Button asChild className="gap-2">
               <Link href="/register">
@@ -463,7 +473,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           </p>
           <Button asChild className="gap-2">
             <Link href={`/dashboard/complete-profile?returnUrl=${encodeURIComponent(pathname)}`}>
-              Complete Phone Setup <ArrowRight className="h-4 w-4" />
+              Add Phone Number <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
         </CardContent>
@@ -477,10 +487,8 @@ export function PlanGate({ area, children }: PlanGateProps) {
       <Card className="border-destructive/50">
         <CardContent className="p-6 text-center space-y-3">
           <AlertTriangle className="h-8 w-8 text-destructive mx-auto" />
-          <h2 className="font-display text-xl font-bold">Something Went Wrong</h2>
-          <p className="text-muted-foreground">
-            We couldn&apos;t check your plan. Please try again.
-          </p>
+          <h2 className="font-display text-xl font-bold">We couldn't load your plan</h2>
+          <p className="text-muted-foreground">Try again in a moment.</p>
         </CardContent>
       </Card>
     );
@@ -542,7 +550,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
                   <Badge variant="outline" className="capitalize mx-1 text-xs">
                     {planInfo.isTrial ? "Free Post" : planInfo.tier}
                   </Badge>{" "}
-                  plan. Upgrade to post more and unlock premium features.
+                  plan. Upgrade to continue posting in this category.
                 </p>
               </div>
             </div>

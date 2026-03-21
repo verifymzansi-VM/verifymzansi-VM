@@ -188,9 +188,9 @@ export default async function MyPromotionsPage({
         <Card>
           <CardContent className="p-6 text-center space-y-3">
             <Megaphone className="h-8 w-8 text-muted-foreground mx-auto" />
-            <h2 className="font-display text-lg font-semibold">No promotions yet</h2>
+            <h2 className="font-display text-lg font-semibold">No promotions or events yet</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Create a promotion or event to reach more buyers from your dashboard.
+              Create your first promotion or event to reach more buyers from your dashboard.
             </p>
             <div className="flex justify-center gap-2">
               <Button asChild variant="outline" size="sm">

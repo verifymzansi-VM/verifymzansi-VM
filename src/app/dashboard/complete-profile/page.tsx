@@ -75,7 +75,7 @@ export default function CompleteProfilePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          displayName: displayName || "User",
+          displayName: displayName || "Member",
           phone,
         }),
       });
@@ -105,7 +105,11 @@ export default function CompleteProfilePage() {
       );
       router.push(returnUrl);
     } catch {
-      toast({ title: "Something went wrong", variant: "destructive" });
+      toast({
+        title: "Couldn’t save phone number",
+        description: "Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -113,8 +117,9 @@ export default function CompleteProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Loading your profile...</p>
       </div>
     );
   }
@@ -124,7 +129,7 @@ export default function CompleteProfilePage() {
       <PageHeader
         title="Add Your Phone Number"
         description="Add your phone number before you continue."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Phone Setup" }]}
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Add Phone Number" }]}
       />
 
       <Card className="max-w-xl">

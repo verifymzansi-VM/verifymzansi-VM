@@ -141,8 +141,8 @@ export default function MeetingChecklistPage() {
             <div>
               <p className="font-semibold text-xs text-destructive">Emergency</p>
               <p className="text-xs text-muted-foreground">
-                Call <strong>10111</strong> (SAPS) or <strong>112</strong> (cellphone) immediately
-                if unsafe.
+                Call <strong>10111</strong> (SAPS) or <strong>112</strong> (any cellphone)
+                immediately if you feel unsafe.
               </p>
             </div>
           </div>

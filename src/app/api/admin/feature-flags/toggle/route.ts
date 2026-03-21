@@ -12,7 +12,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { toggleFeatureFlag, updateFeatureFlagConfig } from "@/lib/services/feature-flags";
 import { logAuditEvent } from "@/lib/services/audit";
-import { getAdminActorRole } from "@/lib/auth/admin-access";
+import { verifyAdminActorRoleFromDb } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const actorRole = getAdminActorRole(user);
+    const actorRole = await verifyAdminActorRoleFromDb(user);
     if (!actorRole) {
       return NextResponse.json({ error: "Forbidden — admin only" }, { status: 403 });
     }

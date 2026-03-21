@@ -29,6 +29,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rl = checkLocalRateLimit(user.id, "notifications:read");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     const url = new URL(request.url);
     const unreadOnly = url.searchParams.get("unread") === "true";
     const rawLimit = url.searchParams.get("limit");

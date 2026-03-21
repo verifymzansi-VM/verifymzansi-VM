@@ -133,6 +133,13 @@ export default function ForgotPasswordPage() {
         <p className="text-sm text-muted-foreground max-w-sm mx-auto">
           We&apos;ve sent a password reset link to your email. It may take a few minutes to arrive.
         </p>
+        <button
+          type="button"
+          onClick={() => setSent(false)}
+          className="text-sm text-brand-green hover:underline"
+        >
+          Didn&apos;t receive it? Try again
+        </button>
         <Button asChild variant="outline" className="gap-2">
           <Link href="/login">
             <ArrowLeft className="h-4 w-4" />

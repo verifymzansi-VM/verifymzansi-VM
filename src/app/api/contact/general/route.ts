@@ -5,6 +5,7 @@ import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { z } from "zod";
 
 const log = createLogger("ContactGeneral");
@@ -30,6 +31,9 @@ const contactFormSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     const body = await parseJsonRequest(request);
     if (!body) {
       return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });

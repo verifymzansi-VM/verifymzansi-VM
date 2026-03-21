@@ -51,7 +51,10 @@ interface Env {
 }
 
 interface RateCheckPayload {
-  phone: string;
+  /** Generic rate-limit key (user ID, IP, phone, etc.) */
+  key?: string;
+  /** @deprecated Use `key` instead. Kept for backward compatibility. */
+  phone?: string;
   deviceId?: string;
   action?: string;
   readOnly?: boolean;
@@ -192,13 +195,14 @@ const worker = {
       return Response.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    const { phone: rawPhone, deviceId, action, readOnly } = payload;
+    const { key: rawKey, phone: legacyPhone, deviceId, action, readOnly } = payload;
+    const rawPhone = rawKey || legacyPhone;
 
     // Generic action-based rate limiting (e.g. auth:lockout)
     if (action && ACTION_LIMITS[action]) {
       const rateKey = rawPhone || "";
       if (!rateKey) {
-        return Response.json({ error: "key (phone) is required" }, { status: 400 });
+        return Response.json({ error: "key is required" }, { status: 400 });
       }
 
       if (env.RATE_LIMITER_DO) {
@@ -238,7 +242,7 @@ const worker = {
 
     // ── OTP-specific rate limiting (default flow) ───────────────────────
     if (!rawPhone) {
-      return Response.json({ error: "phone is required" }, { status: 400 });
+      return Response.json({ error: "key is required" }, { status: 400 });
     }
 
     // Normalize phone to E.164 format to prevent bypass via alternate formats

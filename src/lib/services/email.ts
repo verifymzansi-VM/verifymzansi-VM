@@ -440,7 +440,7 @@ export async function sendAlreadyRegisteredEmail(email: string): Promise<SendEma
             <p>Someone (hopefully you) tried to create a new VerifyMzansi account with this email address, but you already have an account.</p>
             <p>If this was you, you can sign in or reset your password:</p>
             <p style="text-align: center;">
-              <a href="${appUrl}/login" class="button">Sign In</a>
+              <a href="${appUrl}/login" class="button">Sign in</a>
               &nbsp;&nbsp;
               <a href="${appUrl}/forgot-password" class="button-secondary">Reset Password</a>
             </p>

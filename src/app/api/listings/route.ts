@@ -20,6 +20,7 @@ import {
   withOwnerField,
 } from "@/lib/account/compat";
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
+import { hasPhoneNumber } from "@/lib/account/require-phone";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
@@ -431,6 +432,14 @@ export async function POST(request: NextRequest) {
 
     if (!isVerifiedMember(verification.accountVerificationStatus)) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
+    }
+
+    // Phone gate: prevent content creation without a verified phone number
+    if (!(await hasPhoneNumber(supabase, user.id))) {
+      return NextResponse.json(
+        { error: "Phone number required", redirectUrl: "/dashboard/complete-profile" },
+        { status: 403 }
+      );
     }
 
     // ── Parse body ───────────────────────────────────────────

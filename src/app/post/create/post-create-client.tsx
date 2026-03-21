@@ -63,7 +63,7 @@ function getVerificationNote(status: AccountVerificationStatus | null | undefine
     case "pending_review":
       return "Your verification is under review. You can browse categories, but approval is needed before posting.";
     case "rejected":
-      return "Your previous verification was not approved. Please verify again to start posting.";
+      return "Your verification was rejected. Review the feedback and resubmit the required steps before posting.";
     case "incomplete":
     default:
       return "Verification is required before you can post. Browse the categories, then continue to verification.";

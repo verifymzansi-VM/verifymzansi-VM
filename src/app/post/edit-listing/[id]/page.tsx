@@ -342,7 +342,9 @@ export default function EditListingPage() {
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setFormError("Please fix the highlighted fields before saving.");
+      setFormError(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      );
       return;
     }
 

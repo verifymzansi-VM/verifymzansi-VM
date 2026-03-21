@@ -17,12 +17,15 @@ export default function NotFound() {
             This page doesn&apos;t exist or has been moved.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
           <Button asChild variant="outline">
             <Link href="/">Go Home</Link>
           </Button>
           <Button asChild>
             <Link href="/mzansi-market">Browse Marketplace</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/mzansi-market?focus=search">Search Listings</Link>
           </Button>
         </div>
       </main>

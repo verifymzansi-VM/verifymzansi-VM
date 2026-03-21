@@ -93,7 +93,7 @@ export default async function MyBusinessesPage({
 
       <PageHeader
         title="Mzansi Business"
-        description="Manage your Mzansi Business listings."
+        description="Manage your Mzansi Business profiles."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Mzansi Business" }]}
       >
         <Button asChild size="sm" className="gap-1">
@@ -110,10 +110,10 @@ export default async function MyBusinessesPage({
             <Building2 className="h-8 w-8 text-muted-foreground mx-auto" />
             <h2 className="font-display text-lg font-semibold">No businesses yet</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Create your first business to showcase your brand and link promotions.
+              Create your first business profile to showcase your brand and connect promotions.
             </p>
             <Button asChild size="sm">
-              <Link href="/post/create-business">Create Business</Link>
+              <Link href="/post/create-business">Create your first business</Link>
             </Button>
           </CardContent>
         </Card>

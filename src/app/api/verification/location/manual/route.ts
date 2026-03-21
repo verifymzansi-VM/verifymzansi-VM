@@ -127,6 +127,19 @@ export async function POST(request: NextRequest) {
 
     const adminClient = createAdminClient();
 
+    // Reject if verification session is already finalized
+    const { data: existingSession } = await adminClient
+      .from("verification_sessions")
+      .select("finalized_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (existingSession?.finalized_at) {
+      return NextResponse.json(
+        { error: "Verification session is already finalized" },
+        { status: 409 }
+      );
+    }
+
     // Check account profile exists
     const { data: profile } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)

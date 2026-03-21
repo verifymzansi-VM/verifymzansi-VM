@@ -91,7 +91,8 @@ export default function ContactPage() {
                   <h2 className="font-display text-xl font-bold">Message Sent</h2>
                   <p className="text-muted-foreground">
                     Thank you for reaching out! Our team will get back to you at{" "}
-                    <strong>{email}</strong> within 1–2 business days.
+                    <strong>{email}</strong> within 1–2 business days (South African business
+                    hours).
                   </p>
                   <Button
                     variant="outline"

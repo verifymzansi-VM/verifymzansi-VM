@@ -227,7 +227,9 @@ function CreatePromotionContent() {
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
       setFieldErrors(stepErrors[firstInvalidStep]);
-      setFormError("Please fix the highlighted fields before submitting.");
+      setFormError(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      );
       focusFirstError(stepErrors[firstInvalidStep], firstInvalidStep);
       return;
     }
@@ -354,7 +356,7 @@ function CreatePromotionContent() {
           <PlanGate area="PROMOTIONS_EVENTS">
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
-                title="Create a Promotions & Events Post"
+                title={isEvent ? "Create an Event" : "Create a Promotion"}
                 description="Promote your offer or event with the key details people need to act quickly."
                 breadcrumbs={[
                   { label: "Dashboard", href: "/dashboard" },
@@ -383,7 +385,9 @@ function CreatePromotionContent() {
                       const errors = validateStep(step);
                       if (Object.keys(errors).length > 0) {
                         setFieldErrors((current) => ({ ...current, ...errors }));
-                        setFormError("Please fix the highlighted fields before continuing.");
+                        setFormError(
+                          "Some required fields are missing or invalid. Check the highlighted fields above."
+                        );
                         focusFirstError(errors);
                         return;
                       }

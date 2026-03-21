@@ -259,7 +259,9 @@ describe("CreateBusinessPage", () => {
 
     expect(screen.getByText("Enter a valid Facebook URL.")).toBeInTheDocument();
     expect(
-      screen.getByText("Please fix the highlighted fields before submitting.")
+      screen.getByText(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      )
     ).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
     expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();

@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { Calendar } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -77,7 +77,7 @@ function isPlaceholderEvent(event: { title: string | null; description?: string 
 }
 
 export default async function EventsPage() {
-  const admin = createAdminClient();
+  const admin = await createClient();
   const promotionOwnerColumn = await getOwnerColumn(admin, "promotions");
   const now = new Date().toISOString();
 
@@ -242,7 +242,7 @@ export default async function EventsPage() {
             <Calendar className="mx-auto h-8 w-8 text-muted-foreground" />
             <h3 className="font-display text-lg font-semibold">No upcoming events</h3>
             <p className="mx-auto max-w-md text-sm text-muted-foreground">
-              Check back soon for events from verified businesses!
+              Check back soon for events from verified businesses! Past events may appear below.
             </p>
             <Button asChild size="sm" className="mx-auto w-fit gap-1">
               <Link href="/post/create-promotion?type=event">Create Event</Link>

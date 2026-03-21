@@ -89,7 +89,7 @@ function PlanGrid({ plans }: { plans: PlanDefinition[] }) {
                 variant={plan.tier === "growth" ? "default" : "outline"}
               >
                 <Link href={plan.priceCents === 0 ? "/post/create" : "/billing"}>
-                  {plan.priceCents === 0 ? "Start Free Post" : "View Billing Plans"}
+                  {plan.priceCents === 0 ? "Create Free Post" : "Choose Plan"}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
@@ -142,7 +142,7 @@ export default function PricingPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Pricing"
-            description={`1 free post per area with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video. All plans include verification and trust badges.`}
+            description={`1 free post per area every 30 days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} ${FREE_POST_CONFIG.maxVideos === 1 ? "video" : "videos"}. All plans include verification and trust badges.`}
             breadcrumbs={[{ label: "Pricing" }]}
           />
 

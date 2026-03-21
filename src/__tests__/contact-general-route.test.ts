@@ -25,6 +25,9 @@ vi.mock("@/lib/utils/turnstile", () => ({
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => mockLogger,
 }));
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: vi.fn().mockReturnValue(null),
+}));
 
 import { POST } from "@/app/api/contact/general/route";
 

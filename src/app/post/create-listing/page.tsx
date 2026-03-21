@@ -246,7 +246,9 @@ export default function CreateListingPage() {
     const errors = validateStep(step);
     if (Object.keys(errors).length > 0) {
       setFieldErrors((current) => ({ ...current, ...errors }));
-      setFormError("Please fix the highlighted fields before continuing.");
+      setFormError(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      );
       focusFirstError(errors);
       return;
     }
@@ -269,7 +271,9 @@ export default function CreateListingPage() {
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
       setFieldErrors(stepErrors[firstInvalidStep]);
-      setFormError("Please fix the highlighted fields before submitting.");
+      setFormError(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      );
       requestAnimationFrame(() => focusFirstError(stepErrors[firstInvalidStep]));
       return;
     }
