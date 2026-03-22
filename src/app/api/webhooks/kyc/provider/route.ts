@@ -4,6 +4,7 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import crypto from "crypto";
@@ -36,6 +37,49 @@ interface ProviderWebhookPayload {
   raw_response?: Record<string, unknown>;
 }
 
+const PROVIDER_STATUSES = ["approved", "rejected", "needs_manual_review"] as const;
+const providerScoreSchema = z
+  .number({ error: "Score must be a number" })
+  .finite("Score must be a number")
+  .min(0)
+  .max(100);
+const providerMetadataSchema = z
+  .record(z.string().max(200), z.unknown())
+  .superRefine((value, ctx) => {
+    const serialized = JSON.stringify(value);
+    if (serialized.length > 50_000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Payload metadata is too large",
+      });
+    }
+  });
+const providerWebhookPayloadSchema = z.object({
+  provider_ref: z
+    .string()
+    .trim()
+    .min(1, "Missing provider_ref in webhook payload")
+    .max(128, "provider_ref is too long"),
+  status: z.enum(PROVIDER_STATUSES, {
+    error: "Invalid webhook status",
+  }),
+  reason: z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, z.string().max(1_000, "reason is too long").optional()),
+  scores: z
+    .object({
+      face_match_score: providerScoreSchema.optional(),
+      liveness_score: providerScoreSchema.optional(),
+      doc_auth_score: providerScoreSchema.optional(),
+    })
+    .strict()
+    .optional(),
+  ocr_payload: providerMetadataSchema.optional(),
+  raw_response: providerMetadataSchema.optional(),
+});
+
 const TRUTHY_VALUES = new Set(["1", "true", "yes", "on"]);
 
 function isTruthy(value?: string): boolean {
@@ -60,7 +104,7 @@ export async function POST(request: NextRequest) {
     // When KYC_WEBHOOK_SECRET is set, validate HMAC-SHA256 signature
     // from the X-Webhook-Signature header to prevent spoofed callbacks.
     const webhookSecret = process.env.KYC_WEBHOOK_SECRET;
-    let body: Record<string, unknown>;
+    let body: unknown;
 
     if (!webhookSecret && !allowUnsignedWebhook) {
       return NextResponse.json({ error: "KYC webhook temporarily unavailable" }, { status: 503 });
@@ -118,13 +162,31 @@ export async function POST(request: NextRequest) {
 
     // Normalize payload — adapt per-provider format here
     const payload = normalizePayload(body);
+    if (!payload) {
+      if (isPlainObject(body) && !("provider_ref" in body)) {
+        return NextResponse.json(
+          { error: "Missing provider_ref in webhook payload" },
+          { status: 400 }
+        );
+      }
 
-    if (!payload || !payload.provider_ref) {
+      return NextResponse.json({ error: "Invalid webhook payload" }, { status: 400 });
+    }
+
+    const parsedPayload = providerWebhookPayloadSchema.safeParse(payload);
+    if (!parsedPayload.success) {
+      const providerRefIssue = parsedPayload.error.issues.find(
+        (issue) => issue.path[0] === "provider_ref"
+      );
+      const statusIssue = parsedPayload.error.issues.find((issue) => issue.path[0] === "status");
+      const primaryIssue = providerRefIssue ?? statusIssue ?? parsedPayload.error.issues[0];
       return NextResponse.json(
-        { error: "Missing provider_ref in webhook payload" },
+        { error: primaryIssue?.message ?? "Invalid webhook payload" },
         { status: 400 }
       );
     }
+
+    const payloadData = parsedPayload.data;
 
     // In test mode with placeholder Supabase, short-circuit DB calls
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -136,11 +198,11 @@ export async function POST(request: NextRequest) {
     const adminClient = createAdminClient();
     const providerResult = await findProviderResultByRef(
       adminClient as never,
-      payload.provider_ref
+      payloadData.provider_ref
     );
 
     if (!providerResult) {
-      log.warn("No provider result found for ref", { providerRef: payload.provider_ref });
+      log.warn("No provider result found for ref", { providerRef: payloadData.provider_ref });
       // Return 200 anyway to prevent webhook retries for unknown refs
       return NextResponse.json({
         acknowledged: true,
@@ -151,7 +213,7 @@ export async function POST(request: NextRequest) {
     // ── Idempotency: skip if this provider result was already finalized ──
     const alreadyFinalized =
       providerResult.provider_status !== "pending" &&
-      providerResult.provider_status === (payload.status as string);
+      providerResult.provider_status === payloadData.status;
     if (alreadyFinalized) {
       return NextResponse.json({
         acknowledged: true,
@@ -162,27 +224,27 @@ export async function POST(request: NextRequest) {
 
     // Update provider result with new data
     const updateData: Record<string, unknown> = {
-      provider_status: payload.status,
+      provider_status: payloadData.status,
     };
 
-    if (payload.scores) {
-      if (payload.scores.face_match_score !== undefined) {
-        updateData.face_match_score = payload.scores.face_match_score;
+    if (payloadData.scores) {
+      if (payloadData.scores.face_match_score !== undefined) {
+        updateData.face_match_score = payloadData.scores.face_match_score;
       }
-      if (payload.scores.liveness_score !== undefined) {
-        updateData.liveness_score = payload.scores.liveness_score;
+      if (payloadData.scores.liveness_score !== undefined) {
+        updateData.liveness_score = payloadData.scores.liveness_score;
       }
-      if (payload.scores.doc_auth_score !== undefined) {
-        updateData.doc_auth_score = payload.scores.doc_auth_score;
+      if (payloadData.scores.doc_auth_score !== undefined) {
+        updateData.doc_auth_score = payloadData.scores.doc_auth_score;
       }
     }
 
-    if (payload.ocr_payload) {
-      updateData.ocr_payload = payload.ocr_payload;
+    if (payloadData.ocr_payload) {
+      updateData.ocr_payload = payloadData.ocr_payload;
     }
 
-    if (payload.raw_response) {
-      updateData.raw_response = payload.raw_response;
+    if (payloadData.raw_response) {
+      updateData.raw_response = payloadData.raw_response;
     }
 
     await updateProviderResult(adminClient as never, providerResult.id, updateData);
@@ -204,22 +266,22 @@ export async function POST(request: NextRequest) {
       if (step) {
         if (step.status !== "pending") {
           log.info("Skipping KYC webhook step update for already-decided step", {
-            providerRef: payload.provider_ref,
+            providerRef: payloadData.provider_ref,
             stepId: step.id,
             stepStatus: step.status,
           });
         } else {
           // Map provider status to auto_status
           const autoStatus =
-            payload.status === "approved"
+            payloadData.status === "approved"
               ? "approved"
-              : payload.status === "rejected"
+              : payloadData.status === "rejected"
                 ? "rejected"
                 : "needs_manual_review";
 
           // Bump risk score if provider rejected
           let additionalRisk = 0;
-          if (payload.status === "rejected") {
+          if (payloadData.status === "rejected") {
             additionalRisk = 30;
           }
 
@@ -250,8 +312,8 @@ export async function POST(request: NextRequest) {
       targetType: "kyc_provider_result",
       targetId: providerResult.id,
       metadata: {
-        provider_ref: payload.provider_ref,
-        status: payload.status,
+        provider_ref: payloadData.provider_ref,
+        status: payloadData.status,
         user_id: providerResult.user_id,
       },
     });
@@ -273,15 +335,17 @@ export async function POST(request: NextRequest) {
  * Normalize provider-specific payloads to our standard format.
  * Extend this function as real providers are integrated.
  */
-function normalizePayload(body: Record<string, unknown>): ProviderWebhookPayload | null {
-  const VALID_STATUSES = new Set(["approved", "rejected", "needs_manual_review"]);
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizePayload(body: unknown): ProviderWebhookPayload | null {
+  if (!isPlainObject(body)) {
+    return null;
+  }
 
   // Direct format (our standard)
   if (body.provider_ref && body.status) {
-    if (!VALID_STATUSES.has(body.status as string)) {
-      log.warn("Invalid status in payload", { status: body.status });
-      return null;
-    }
     return body as unknown as ProviderWebhookPayload;
   }
 

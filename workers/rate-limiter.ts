@@ -14,6 +14,8 @@
  *   # KV kept as fallback if DO is unavailable during migration
  */
 
+import { z } from "zod";
+
 // Cloudflare Workers KV type (provided by @cloudflare/workers-types at runtime)
 declare interface KVNamespace {
   get(key: string): Promise<string | null>;
@@ -50,16 +52,6 @@ interface Env {
   WORKER_API_KEY: string;
 }
 
-interface RateCheckPayload {
-  /** Generic rate-limit key (user ID, IP, phone, etc.) */
-  key?: string;
-  /** @deprecated Use `key` instead. Kept for backward compatibility. */
-  phone?: string;
-  deviceId?: string;
-  action?: string;
-  readOnly?: boolean;
-}
-
 interface RateCheck {
   key: string;
   limit: number;
@@ -78,6 +70,56 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
 interface CounterEntry {
   count: number;
   expiresAt: number;
+}
+
+const rateLimitCheckSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(1, "Rate limit key is required")
+    .max(160, "Rate limit key is too long"),
+  limit: z.number().int().min(1, "Rate limit limit must be at least 1").max(10_000),
+  ttl: z.number().int().min(1, "Rate limit ttl must be at least 1").max(31_536_000),
+});
+
+const durableObjectPayloadSchema = z.object({
+  checks: z.array(rateLimitCheckSchema).min(1, "At least one rate limit check is required").max(10),
+  readOnly: z.boolean().optional(),
+});
+
+const externalWorkerPayloadSchema = z.object({
+  key: z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, z.string().max(160, "key is too long").optional()),
+  phone: z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, z.string().max(32, "phone is too long").optional()),
+  deviceId: z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, z.string().max(160, "deviceId is too long").optional()),
+  action: z.preprocess(
+    (value) => {
+      if (typeof value !== "string") return value;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    },
+    z
+      .string()
+      .max(64, "action is too long")
+      .regex(/^[a-z0-9:_-]+$/i, "action contains invalid characters")
+      .optional()
+  ),
+  readOnly: z.boolean().optional(),
+});
+
+function validationError(message: string): Response {
+  return Response.json({ error: message }, { status: 400 });
 }
 
 /**
@@ -108,10 +150,19 @@ export class RateLimiterDO {
       return Response.json({ error: "Method not allowed" }, { status: 405 });
     }
 
-    const { checks, readOnly } = (await request.json()) as {
-      checks: RateCheck[];
-      readOnly?: boolean;
-    };
+    let payload: unknown;
+    try {
+      payload = await request.json();
+    } catch {
+      return validationError("Invalid JSON body");
+    }
+
+    const parsedPayload = durableObjectPayloadSchema.safeParse(payload);
+    if (!parsedPayload.success) {
+      return validationError(parsedPayload.error.issues[0]?.message ?? "Invalid rate limit checks");
+    }
+
+    const { checks, readOnly } = parsedPayload.data;
     const now = Date.now();
 
     // All reads and writes happen within a single DO — fully serialized
@@ -188,14 +239,19 @@ const worker = {
       });
     }
 
-    let payload: RateCheckPayload;
+    let payload: unknown;
     try {
-      payload = (await request.json()) as RateCheckPayload;
+      payload = await request.json();
     } catch {
       return Response.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    const { key: rawKey, phone: legacyPhone, deviceId, action, readOnly } = payload;
+    const parsedPayload = externalWorkerPayloadSchema.safeParse(payload);
+    if (!parsedPayload.success) {
+      return validationError(parsedPayload.error.issues[0]?.message ?? "Invalid request body");
+    }
+
+    const { key: rawKey, phone: legacyPhone, deviceId, action, readOnly } = parsedPayload.data;
     const rawPhone = rawKey || legacyPhone;
 
     // Generic action-based rate limiting (e.g. auth:lockout)

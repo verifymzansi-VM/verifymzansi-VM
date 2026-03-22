@@ -35,6 +35,16 @@ describe("GET /api/billing/payment-status", () => {
     expect(res.status).toBe(401);
   });
 
+  it("treats blank payment ids as missing instead of querying the database", async () => {
+    const res = await GET(
+      createRequest("https://verifymzansi.com/api/billing/payment-status?payment=%20%20%20")
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ status: "missing", terminal: true });
+    expect(mockSupabase.auth.getUser).not.toHaveBeenCalled();
+  });
+
   it("maps processing payments to pending", async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
     mockSupabase.from.mockReturnValue({

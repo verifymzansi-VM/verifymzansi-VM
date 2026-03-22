@@ -23,13 +23,37 @@ vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 vi.mock("@/lib/utils/api", () => ({
-  parseJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }) => {
-    try {
-      return await req.json();
-    } catch {
-      return null;
+  parseAndValidateJsonRequest: vi.fn(
+    async (
+      req: { json: () => Promise<unknown> },
+      schema: { safeParse: (value: unknown) => { success: boolean; data?: unknown } }
+    ) => {
+      try {
+        const body = await req.json();
+        const parsed = schema.safeParse(body);
+
+        if (!parsed.success) {
+          return {
+            success: false,
+            response: new Response(JSON.stringify({ error: "Invalid request" }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            }),
+          };
+        }
+
+        return { success: true, data: parsed.data };
+      } catch {
+        return {
+          success: false,
+          response: new Response(JSON.stringify({ error: "Invalid JSON payload" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }),
+        };
+      }
     }
-  }),
+  ),
 }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,

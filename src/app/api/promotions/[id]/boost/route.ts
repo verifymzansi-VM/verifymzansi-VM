@@ -17,8 +17,14 @@ import {
 import type { MarketplaceArea } from "@/types/enums";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { parseAndValidateRouteParams } from "@/lib/utils/api";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("PromotionBoostCheckout");
+const promotionBoostParamsSchema = z.object({
+  id: uuidSchema,
+});
 type PromotionCheckoutRow = {
   id: string;
   title: string;
@@ -40,12 +46,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
 
-    const { id: promotionId } = await params;
-
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_RE.test(promotionId)) {
-      return NextResponse.json({ error: "Invalid promotion ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, promotionBoostParamsSchema, {
+      validationErrorMessage: "Invalid promotion ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id: promotionId } = parsedParams.data;
 
     // Authenticate
     const supabase = await createClient();

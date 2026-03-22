@@ -1,6 +1,17 @@
 import { z } from "zod";
 import { validateSaIdFull } from "@/lib/utils/sa-id-validation";
 
+function trimStringInput(value: unknown): unknown {
+  return typeof value === "string" ? value.trim() : value;
+}
+
+function trimToUndefined(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 // ── Phone (SA) ──────────────────────────────────────────────
 
 /** Zod schema for a South African mobile number (`+27` or `0` prefix, 10 digits). */
@@ -75,3 +86,128 @@ export const priceSchema = z
 
 /** Zod schema for a non-empty Cloudflare Turnstile CAPTCHA token. */
 export const turnstileTokenSchema = z.string().min(1, "Complete the CAPTCHA");
+
+// ── Shared ingress helpers ──────────────────────────────────
+
+/** Zod schema for a UUID string used in route params and query params. */
+export const uuidSchema = z
+  .string()
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Enter a valid ID");
+
+/** Zod schema for a required trimmed string. */
+export const trimmedStringSchema = z.preprocess(
+  trimStringInput,
+  z.string().min(1, "This field is required")
+);
+
+/** Zod schema for an optional trimmed string that treats blank input as absent. */
+export const optionalTrimmedStringSchema = z.preprocess(
+  trimToUndefined,
+  z.string().min(1).optional()
+);
+
+/** Zod schema for an optional UUID string that treats blank input as absent. */
+export const optionalUuidSchema = z.preprocess(trimToUndefined, uuidSchema.optional());
+
+/**
+ * Create a bounded integer schema for query params or form fields.
+ * Missing values resolve to the supplied default.
+ */
+export function createBoundedIntegerSchema(options: {
+  defaultValue: number;
+  min: number;
+  max: number;
+  fieldName: string;
+}) {
+  const { defaultValue, min, max, fieldName } = options;
+
+  return z.preprocess(
+    (value) => {
+      if (value === undefined || value === null) {
+        return defaultValue;
+      }
+
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return defaultValue;
+        }
+
+        if (!/^-?\d+$/.test(trimmed)) {
+          return Number.NaN;
+        }
+
+        return Number.parseInt(trimmed, 10);
+      }
+
+      return value;
+    },
+    z
+      .number({ error: `${fieldName} must be a number` })
+      .int(`${fieldName} must be a whole number`)
+      .min(min, `${fieldName} must be at least ${min}`)
+      .max(max, `${fieldName} must be at most ${max}`)
+  );
+}
+
+/**
+ * Create a non-negative number schema for query params or form fields.
+ * Missing values resolve to undefined.
+ */
+export function createNonNegativeNumberSchema(fieldName: string) {
+  return z.preprocess(
+    (value) => {
+      if (value === undefined || value === null) {
+        return undefined;
+      }
+
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return undefined;
+        }
+
+        const parsed = Number(trimmed);
+        return Number.isFinite(parsed) ? parsed : Number.NaN;
+      }
+
+      return value;
+    },
+    z
+      .number({ error: `${fieldName} must be a number` })
+      .min(0, `${fieldName} cannot be negative`)
+      .optional()
+  );
+}
+
+/**
+ * Create a boolean schema for query params or form fields.
+ * Missing values resolve to the supplied default.
+ */
+
+export function createBooleanFlagSchema(defaultValue = false) {
+  return z.preprocess(
+    (value) => {
+      if (value === undefined || value === null) {
+        return defaultValue;
+      }
+
+      if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        if (!normalized) {
+          return defaultValue;
+        }
+        if (normalized === "true") {
+          return true;
+        }
+        if (normalized === "false") {
+          return false;
+        }
+        return value;
+      }
+
+      return value;
+    },
+    z.boolean({ error: "Expected true or false" })
+  );
+}

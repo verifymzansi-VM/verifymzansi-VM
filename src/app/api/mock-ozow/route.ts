@@ -1,9 +1,25 @@
 import crypto from "crypto";
+import { z } from "zod";
 import { NextResponse } from "next/server";
 import { createLogger } from "@/lib/utils/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parseAndValidateSearchParams } from "@/lib/utils/api";
+import {
+  createNonNegativeNumberSchema,
+  optionalTrimmedStringSchema,
+  optionalUuidSchema,
+} from "@/lib/validations/shared";
 
 const log = createLogger("MockOzow");
+
+const mockOzowQuerySchema = z.object({
+  paymentId: optionalUuidSchema,
+  amount: createNonNegativeNumberSchema("amount"),
+  returnUrl: optionalTrimmedStringSchema.refine(
+    (value) => value === undefined || isSafeUrl(value),
+    "returnUrl is invalid"
+  ),
+});
 
 function isPrivateIp(hostname: string): boolean {
   if (hostname === "[::1]") return true;
@@ -46,9 +62,15 @@ export async function GET(request: Request) {
   log.warn("Mock Ozow payment flow activated — this must not happen in production");
 
   const url = new URL(request.url);
-  const paymentId = url.searchParams.get("paymentId");
-  const amount = url.searchParams.get("amount");
-  const returnUrl = url.searchParams.get("returnUrl");
+  const parsedQuery = parseAndValidateSearchParams(url.searchParams, mockOzowQuerySchema, {
+    validationErrorMessage: "Invalid mock payment query",
+  });
+
+  if (!parsedQuery.success) {
+    return parsedQuery.response;
+  }
+
+  const { paymentId, amount, returnUrl } = parsedQuery.data;
 
   if (paymentId) {
     // Guard: verify the payment exists and was created in the mock flow
@@ -80,7 +102,7 @@ export async function GET(request: Request) {
         id: `mock-${paymentId}`,
         transactionId: `mock-${paymentId}`,
         merchantReference: paymentId,
-        amount,
+        amount: amount ?? undefined,
         currencyCode: "ZAR",
       },
     };

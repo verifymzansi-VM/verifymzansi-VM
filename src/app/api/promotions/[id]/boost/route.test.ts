@@ -61,6 +61,15 @@ describe("POST /api/promotions/[id]/boost", () => {
     expect(response.status).toBe(403);
   });
 
+  it("returns 400 for a malformed promotion ID", async () => {
+    const response = await POST(createRequest("https://verifymzansi.com"), {
+      params: Promise.resolve({ id: "not-a-uuid" }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Invalid promotion ID" });
+  });
+
   it("returns 503 when shared checkout protection is degraded", async () => {
     mockCheckRateLimit.mockResolvedValue({ limited: true, degraded: true, retryAfter: 90 });
 

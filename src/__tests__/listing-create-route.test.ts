@@ -511,6 +511,24 @@ describe("GET /api/listings", () => {
     expect(json.total).toBe(0);
   });
 
+  it("returns 400 for an invalid listings limit query", async () => {
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/listings?page=1&limit=abc")
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: "Invalid listings query" });
+  });
+
+  it("returns 400 for an invalid listings category query", async () => {
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/listings?page=1&limit=24&category=bad-category")
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Invalid listing category" });
+  });
+
   it("filters placeholder listings from public results", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {

@@ -71,6 +71,27 @@ describe("POST /api/webhooks/kyc/provider", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 when status is invalid", async () => {
+    const res = await POST(createMockRequest({ provider_ref: "ref-1", status: "pending" }));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("Invalid webhook status");
+  });
+
+  it("returns 400 when score types are invalid", async () => {
+    const res = await POST(
+      createMockRequest({
+        provider_ref: "ref-1",
+        status: "approved",
+        scores: { face_match_score: "high" },
+      })
+    );
+
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("Score must be a number");
+  });
+
   it("acknowledges unknown provider_ref without error", async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === "kyc_provider_results") {

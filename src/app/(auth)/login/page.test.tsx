@@ -50,7 +50,6 @@ describe("LoginPage", () => {
 
     expect(await screen.findByText("Check your email")).toBeInTheDocument();
     expect(screen.getByText(/We've sent a confirmation link/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Didn't receive it\? Resend/i })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /^Resend confirmation email$/i })
     ).toBeInTheDocument();

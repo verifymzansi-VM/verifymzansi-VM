@@ -14,19 +14,20 @@ import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { MANUAL_ONLY_BASELINE_RISK } from "@/lib/constants/verification";
 import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { trimmedStringSchema } from "@/lib/validations/shared";
 
 const log = createLogger("ManualLocationVerification");
 
 const manualLocationSchema = z.object({
-  province: z.string().min(1),
-  city: z.string().min(1),
+  province: trimmedStringSchema,
+  city: trimmedStringSchema,
 });
 
 export async function POST(request: NextRequest) {
@@ -89,23 +90,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse and validate body
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-    const parsed = manualLocationSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: "Invalid input",
-          details: parsed.error.issues.map((i) => i.message),
-        },
-        { status: 400 }
-      );
+    const bodyResult = await parseAndValidateJsonRequest(request, manualLocationSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid input",
+    });
+    if (!bodyResult.success) {
+      return bodyResult.response;
     }
 
-    const { province, city } = parsed.data;
+    const { province, city } = bodyResult.data;
 
     // Validate province
     const validProvinces = getProvinceNames();

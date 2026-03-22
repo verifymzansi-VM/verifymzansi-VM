@@ -2,16 +2,36 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
-import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import {
+  internalApiError,
+  logApiError,
+  parseAndValidateJsonRequest,
+  parseAndValidateSearchParams,
+} from "@/lib/utils/api";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import {
+  createBooleanFlagSchema,
+  createBoundedIntegerSchema,
+  uuidSchema,
+} from "@/lib/validations/shared";
 
 const log = createLogger("NotificationsRoute");
 
 const notificationMutationSchema = z.union([
   z.object({ all: z.literal(true) }),
-  z.object({ id: z.string().uuid("Notification ID must be a valid UUID") }),
+  z.object({ id: uuidSchema }),
 ]);
+
+const notificationQuerySchema = z.object({
+  unread: createBooleanFlagSchema(false),
+  limit: createBoundedIntegerSchema({
+    defaultValue: 25,
+    min: 1,
+    max: 50,
+    fieldName: "limit",
+  }),
+});
 
 /**
  * GET /api/notifications
@@ -37,16 +57,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const url = new URL(request.url);
-    const unreadOnly = url.searchParams.get("unread") === "true";
-    const rawLimit = url.searchParams.get("limit");
-    const parsedLimit = rawLimit ? Number(rawLimit) : 25;
+    const parsedQuery = parseAndValidateSearchParams(
+      new URL(request.url).searchParams,
+      notificationQuerySchema,
+      {
+        validationErrorMessage: "Invalid notifications query",
+      }
+    );
 
-    if (!Number.isFinite(parsedLimit) || parsedLimit < 1) {
-      return NextResponse.json({ error: "limit must be a positive number" }, { status: 400 });
+    if (!parsedQuery.success) {
+      return parsedQuery.response;
     }
 
-    const limit = Math.min(parsedLimit, 50);
+    const { unread: unreadOnly, limit } = parsedQuery.data;
 
     let query = supabase
       .from("notifications")

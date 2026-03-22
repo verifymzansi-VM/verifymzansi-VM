@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -67,14 +67,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Validate input ───────────────────────────────────────
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-    const parsed = checkoutSchema.safeParse(body);
-
+    const parsed = await parseAndValidateJsonRequest(request, checkoutSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid checkout request",
+      includeValidationDetails: false,
+    });
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+      return parsed.response;
     }
 
     const { planId } = parsed.data;

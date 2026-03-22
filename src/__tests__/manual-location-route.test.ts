@@ -3,17 +3,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const {
   mockGetUser,
   mockLogAuditEvent,
-  mockParseJson,
+  mockParseAndValidateJsonRequest,
   mockAdminFrom,
   mockCheckRateLimit,
   mockGetClientIp,
+  mockIsFeatureEnabled,
 } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockLogAuditEvent: vi.fn(),
-  mockParseJson: vi.fn(),
+  mockParseAndValidateJsonRequest: vi.fn(),
   mockAdminFrom: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockGetClientIp: vi.fn(),
+  mockIsFeatureEnabled: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -34,11 +36,14 @@ vi.mock("@/lib/services/audit", () => ({
 }));
 
 vi.mock("@/lib/utils/api", () => ({
-  parseJsonRequest: mockParseJson,
+  parseAndValidateJsonRequest: mockParseAndValidateJsonRequest,
 }));
 
 vi.mock("@/lib/constants/verification", () => ({
   MANUAL_ONLY_BASELINE_RISK: 20,
+}));
+vi.mock("@/lib/services/feature-flags", () => ({
+  isFeatureEnabled: mockIsFeatureEnabled,
 }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
@@ -48,17 +53,25 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 import { POST } from "@/app/api/verification/location/manual/route";
 import type { NextRequest } from "next/server";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 function makeRequest(body: Record<string, unknown>) {
+  const headers = new Headers({
+    cookie: `vm_csrf=${CSRF_TOKEN}`,
+    "x-csrf-token": CSRF_TOKEN,
+  });
+
   return {
+    url: "http://localhost:3000/api/verification/location/manual",
     json: () => Promise.resolve(body),
-    headers: { get: () => null },
+    headers,
     nextUrl: new URL("http://localhost:3000/api/verification/location/manual"),
   } as unknown as NextRequest;
 }
 
 function setupAuthenticatedUser() {
   mockGetUser.mockResolvedValue({
-    data: { user: { id: "u1" } },
+    data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
     error: null,
   });
 
@@ -86,7 +99,14 @@ function setupAuthenticatedUser() {
       return { insert: vi.fn().mockResolvedValue({}) };
     }
     if (table === "verification_sessions") {
-      return { upsert: vi.fn().mockResolvedValue({}) };
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          }),
+        }),
+        upsert: vi.fn().mockResolvedValue({}),
+      };
     }
     // account_profiles
     return {
@@ -101,6 +121,7 @@ describe("POST /api/verification/location/manual", () => {
     vi.clearAllMocks();
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
+    mockIsFeatureEnabled.mockResolvedValue(true);
   });
 
   it("should return 401 when not authenticated", async () => {
@@ -112,12 +133,15 @@ describe("POST /api/verification/location/manual", () => {
 
   it("should return 400 for invalid province", async () => {
     mockGetUser.mockResolvedValue({
-      data: { user: { id: "u1" } },
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
       error: null,
     });
-    mockParseJson.mockResolvedValue({
-      province: "NotAProvince",
-      city: "SomeCity",
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        province: "NotAProvince",
+        city: "SomeCity",
+      },
     });
 
     const res = await POST(makeRequest({ province: "NotAProvince", city: "SomeCity" }));
@@ -128,12 +152,15 @@ describe("POST /api/verification/location/manual", () => {
 
   it("should return 400 for invalid city in valid province", async () => {
     mockGetUser.mockResolvedValue({
-      data: { user: { id: "u1" } },
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
       error: null,
     });
-    mockParseJson.mockResolvedValue({
-      province: "Gauteng",
-      city: "NotACity",
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        province: "Gauteng",
+        city: "NotACity",
+      },
     });
 
     const res = await POST(makeRequest({ province: "Gauteng", city: "NotACity" }));
@@ -144,9 +171,12 @@ describe("POST /api/verification/location/manual", () => {
 
   it("should succeed with valid province and city", async () => {
     setupAuthenticatedUser();
-    mockParseJson.mockResolvedValue({
-      province: "Gauteng",
-      city: "Johannesburg",
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        province: "Gauteng",
+        city: "Johannesburg",
+      },
     });
 
     const res = await POST(makeRequest({ province: "Gauteng", city: "Johannesburg" }));
@@ -161,10 +191,13 @@ describe("POST /api/verification/location/manual", () => {
 
   it("should return 400 for empty body", async () => {
     mockGetUser.mockResolvedValue({
-      data: { user: { id: "u1" } },
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
       error: null,
     });
-    mockParseJson.mockResolvedValue(null);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: false,
+      response: Response.json({ error: "Invalid JSON payload" }, { status: 400 }),
+    });
 
     const res = await POST(makeRequest({}));
     expect(res.status).toBe(400);

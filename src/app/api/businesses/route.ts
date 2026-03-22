@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
-import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
 import { businessSchema } from "@/lib/validations/business-unified";
 import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
@@ -29,6 +29,16 @@ import {
   isBusinessSlugConflictError,
 } from "@/lib/businesses/slug-conflict";
 import { hasPhoneNumber } from "@/lib/account/require-phone";
+import {
+  createBooleanFlagSchema,
+  createBoundedIntegerSchema,
+  optionalTrimmedStringSchema,
+} from "@/lib/validations/shared";
+import {
+  normalizeBusinessCategoryParam,
+  normalizeBusinessTypeParam,
+} from "@/lib/utils/marketplace-query";
+import { z } from "zod";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -40,6 +50,27 @@ const BUSINESS_SELECT_FALLBACK_FIELDS = [
   "video_thumbnail",
   "slug",
 ] as const;
+const businessesQuerySchema = z.object({
+  categories_only: createBooleanFlagSchema(false),
+  mine: createBooleanFlagSchema(false),
+  type: optionalTrimmedStringSchema,
+  category: optionalTrimmedStringSchema,
+  province: optionalTrimmedStringSchema,
+  city: optionalTrimmedStringSchema,
+  q: optionalTrimmedStringSchema,
+  page: createBoundedIntegerSchema({
+    defaultValue: 1,
+    min: 1,
+    max: 10_000,
+    fieldName: "page",
+  }),
+  limit: createBoundedIntegerSchema({
+    defaultValue: 24,
+    min: 1,
+    max: 50,
+    fieldName: "limit",
+  }),
+});
 
 function normalizeBusinessSelectShape(
   businesses: Array<Record<string, unknown>>
@@ -342,7 +373,26 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = request.nextUrl;
+    const parsedQuery = parseAndValidateSearchParams(
+      request.nextUrl.searchParams,
+      businessesQuerySchema,
+      {
+        validationErrorMessage: "Invalid businesses query",
+      }
+    );
+    if (!parsedQuery.success) {
+      return parsedQuery.response;
+    }
+    const query = parsedQuery.data;
+    const businessType = query.type ? normalizeBusinessTypeParam(query.type) : undefined;
+    const category = query.category ? normalizeBusinessCategoryParam(query.category) : undefined;
+
+    if (query.type && !businessType) {
+      return NextResponse.json({ error: "Invalid business type" }, { status: 400 });
+    }
+    if (query.category && !category) {
+      return NextResponse.json({ error: "Invalid business category" }, { status: 400 });
+    }
 
     // Rate limit public reads by IP to prevent scraping
     const ip = getClientIp(request) || "unknown";
@@ -359,7 +409,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Category counts mode — for auto-hiding empty categories
-    if (searchParams.get("categories_only") === "true") {
+    if (query.categories_only) {
       const admin = createAdminClient();
       const { data: counts, error } = await admin.rpc("get_business_category_counts");
 
@@ -389,7 +439,7 @@ export async function GET(request: NextRequest) {
     }
 
     // "mine" mode — fetch current user's businesses (requires auth)
-    const mine = searchParams.get("mine") === "true";
+    const mine = query.mine;
     if (mine) {
       const supabase = await createClient();
       const ownerColumn = await getOwnerColumn(supabase, "businesses");
@@ -401,7 +451,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
 
-      const mineLimit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
+      const mineLimit = request.nextUrl.searchParams.has("limit") ? query.limit : 50;
       const { data: myBusinesses } = await applyOwnerFilter(
         supabase
           .from("businesses")
@@ -418,13 +468,11 @@ export async function GET(request: NextRequest) {
     const admin = createAdminClient();
     const ownerColumn = await getOwnerColumn(admin, "businesses");
 
-    const businessType = searchParams.get("type");
-    const category = searchParams.get("category");
-    const province = searchParams.get("province");
-    const city = searchParams.get("city");
-    const search = searchParams.get("q");
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
+    const province = query.province;
+    const city = query.city;
+    const search = query.q;
+    const page = query.page;
+    const limit = query.limit;
     const offset = (page - 1) * limit;
 
     const selectAttempts = [

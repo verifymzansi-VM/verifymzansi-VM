@@ -26,6 +26,8 @@
  * 4. Worker updated Supabase kyc_artifacts status from 'pending' to 'encrypted'.
  */
 
+import { z } from "zod";
+
 // ---------------------------------------------------------------------------
 // Cloudflare Worker type stubs (avoids needing @cloudflare/workers-types in
 // the main Next.js tsconfig).
@@ -68,6 +70,18 @@ export interface Env {
   WORKER_API_KEY: string; // Shared secret for authenticating callers
 }
 
+const legacyEncryptPayloadSchema = z.object({
+  tempKey: z
+    .string()
+    .trim()
+    .min(1, "tempKey is required")
+    .max(512, "tempKey is too long")
+    .regex(/^temp\/kyc\/[A-Za-z0-9/_.,-]+$/, "Invalid tempKey")
+    .refine((value) => !value.includes(".."), "Invalid tempKey"),
+  sellerId: z.string().trim().min(1, "sellerId is required").max(128, "sellerId is too long"),
+  artifactId: z.string().trim().min(1, "artifactId is required").max(128, "artifactId is too long"),
+});
+
 /**
  * Parse a hex string into a Uint8Array.
  */
@@ -106,23 +120,21 @@ const worker = {
     }
 
     try {
-      const payload = (await request.json()) as {
-        tempKey?: string;
-        sellerId?: string;
-        artifactId?: string;
-      };
-      const objectKey = payload.tempKey;
-      const sellerId = payload.sellerId;
-      const artifactId = payload.artifactId;
-
-      if (!objectKey || !sellerId || !artifactId) {
-        return new Response("Missing required fields", { status: 400 });
+      let payload: unknown;
+      try {
+        payload = await request.json();
+      } catch {
+        return new Response("Invalid JSON body", { status: 400 });
       }
 
-      // Validate tempKey prefix to prevent arbitrary R2 file access
-      if (!objectKey.startsWith("temp/kyc/") || objectKey.includes("..")) {
-        return new Response("Invalid tempKey", { status: 400 });
+      const parsedPayload = legacyEncryptPayloadSchema.safeParse(payload);
+      if (!parsedPayload.success) {
+        return new Response(parsedPayload.error.issues[0]?.message ?? "Invalid request body", {
+          status: 400,
+        });
       }
+
+      const { tempKey: objectKey, sellerId, artifactId } = parsedPayload.data;
 
       // Defer the heavy encryption process to run after returning 202 to the Next.js API
       ctx.waitUntil(

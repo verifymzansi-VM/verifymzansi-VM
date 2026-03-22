@@ -20,10 +20,14 @@ vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: mockLogAuditEvent,
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  isAdmin: () => true,
-  getRoleFromUser: () => "admin",
-}));
+vi.mock("@/lib/auth/roles", async () => {
+  const actual = await vi.importActual("@/lib/auth/roles");
+  return {
+    ...actual,
+    isAdmin: () => true,
+    getRoleFromUser: () => "admin",
+  };
+});
 
 vi.mock("@/lib/account/compat", async () => {
   const actual = await vi.importActual("@/lib/account/compat");
@@ -132,6 +136,10 @@ describe("GET /api/admin/dsar/export", () => {
       ),
       auth: {
         admin: {
+          getUserById: vi.fn().mockResolvedValue({
+            data: { user: { id: "admin-1", app_metadata: { role: "admin" } } },
+            error: null,
+          }),
           listUsers: vi.fn().mockResolvedValue({
             data: { users: [{ id: "user-1", email: "nomsa@example.com" }] },
             error: null,

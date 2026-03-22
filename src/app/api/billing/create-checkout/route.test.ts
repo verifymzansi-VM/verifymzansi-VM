@@ -183,6 +183,17 @@ describe("POST /api/billing/create-checkout", () => {
     expect(data.error).toBe("Plan not found or inactive");
   });
 
+  it("returns 400 for an invalid checkout payload", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    const req = createMockRequest({ planId: "not-a-uuid" });
+    const res = await createCheckout(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data).toEqual({ error: "Invalid checkout request" });
+  });
+
   it("happy path: returns checkoutUrl and paymentId on success", async () => {
     mockSupabase.auth.getUser.mockResolvedValue({
       data: { user: { id: "user-1", email: "member@test.com" } },

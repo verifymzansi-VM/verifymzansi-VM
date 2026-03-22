@@ -34,9 +34,8 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: mockCheckLocalRateLimit,
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  isAdmin: () => true,
-  getRoleFromUser: () => "admin",
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyAdminActorRoleFromDb: vi.fn(async () => "admin"),
 }));
 
 vi.mock("@/lib/utils/logger", () => ({

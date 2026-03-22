@@ -117,7 +117,17 @@ function chainStub(data: unknown, error: unknown = null) {
 describe("Evidence Metadata API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateAdminClient.mockReturnValue({ from: mockFrom });
+    mockCreateAdminClient.mockReturnValue({
+      from: mockFrom,
+      auth: {
+        admin: {
+          getUserById: vi.fn().mockResolvedValue({
+            data: { user: { app_metadata: { role: "admin" } } },
+            error: null,
+          }),
+        },
+      },
+    });
     mockLogAuditEvent.mockResolvedValue(undefined);
   });
 
@@ -174,7 +184,7 @@ describe("Evidence Metadata API", () => {
       expect(res.status).toBe(400);
 
       const body = await res.json();
-      expect(body.error).toContain("stepId or userId");
+      expect(body.error).toBe("Invalid evidence metadata query");
     });
   });
 

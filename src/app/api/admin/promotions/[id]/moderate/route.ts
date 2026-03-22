@@ -5,12 +5,20 @@ import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { z } from "zod";
-import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import {
+  internalApiError,
+  logApiError,
+  parseAndValidateJsonRequest,
+  parseAndValidateRouteParams,
+} from "@/lib/utils/api";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { uuidSchema } from "@/lib/validations/shared";
 
 const log = createLogger("PromotionModeration");
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const promotionModerationParamsSchema = z.object({
+  id: uuidSchema,
+});
 
 const moderateSchema = z.object({
   decision: z.enum(["approve", "reject", "hide"]),
@@ -29,11 +37,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
 
-    const { id: promotionId } = await params;
-
-    if (!UUID_RE.test(promotionId)) {
-      return NextResponse.json({ error: "Invalid promotion ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(
+      await params,
+      promotionModerationParamsSchema,
+      {
+        validationErrorMessage: "Invalid promotion ID",
+        includeValidationDetails: false,
+      }
+    );
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id: promotionId } = parsedParams.data;
 
     // Auth + role check
     const supabase = await createClient();

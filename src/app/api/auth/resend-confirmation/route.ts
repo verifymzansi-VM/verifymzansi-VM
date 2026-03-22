@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
@@ -7,13 +7,14 @@ import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { emailSchema, trimmedStringSchema, turnstileTokenSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 
 const log = createLogger("ResendConfirmation");
 
 const resendSchema = z.object({
-  email: z.string().email("Valid email is required"),
-  turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
+  email: trimmedStringSchema.pipe(emailSchema),
+  turnstileToken: trimmedStringSchema.pipe(turnstileTokenSchema),
 });
 
 export async function POST(request: NextRequest) {
@@ -59,21 +60,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    const bodyResult = await parseAndValidateJsonRequest(request, resendSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
+    if (!bodyResult.success) {
+      return bodyResult.response;
     }
 
-    const parsed = resendSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? "Invalid request" },
-        { status: 400 }
-      );
-    }
+    const parsed = bodyResult.data;
 
     if (turnstileStatus.configured) {
-      if (parsed.data.turnstileToken === "turnstile-unavailable") {
+      if (parsed.turnstileToken === "turnstile-unavailable") {
         return NextResponse.json(
           { error: "Security verification is temporarily unavailable. Please retry." },
           { status: 503 }
@@ -81,7 +80,7 @@ export async function POST(request: NextRequest) {
       }
 
       const captcha = await verifyTurnstileToken({
-        token: parsed.data.turnstileToken,
+        token: parsed.turnstileToken,
         remoteIp: ip,
       });
 
@@ -97,7 +96,7 @@ export async function POST(request: NextRequest) {
     const callbackUrl = buildAuthCallbackUrl(request, "/login?confirmed=true");
     const { error } = await supabase.auth.resend({
       type: "signup",
-      email: parsed.data.email,
+      email: parsed.email,
       options: {
         emailRedirectTo: callbackUrl,
       },

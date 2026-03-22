@@ -8,7 +8,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseJsonRequest, parseAndValidateRouteParams } from "@/lib/utils/api";
 import {
   collectMediaUrls,
   diffRemovedMediaUrls,
@@ -21,9 +21,13 @@ import {
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("ListingUpdate");
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const listingIdParamsSchema = z.object({
+  id: uuidSchema,
+});
 const AREA: MarketplaceArea = "MZANSI_MARKET";
 type ListingUpdateRow = {
   id: string;
@@ -48,12 +52,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
 
-    const { id: listingId } = await params;
-
-    // ── Validate UUID format ─────────────────────────────────
-    if (!UUID_RE.test(listingId)) {
-      return NextResponse.json({ error: "Invalid listing ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, listingIdParamsSchema, {
+      validationErrorMessage: "Invalid listing ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id: listingId } = parsedParams.data;
 
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();

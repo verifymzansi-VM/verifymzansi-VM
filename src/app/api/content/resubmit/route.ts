@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -14,11 +14,12 @@ import {
 } from "@/lib/account/compat";
 
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { uuidSchema } from "@/lib/validations/shared";
 
 const log = createLogger("ContentResubmit");
 
 const resubmitSchema = z.object({
-  itemId: z.string().uuid("itemId must be a valid UUID"),
+  itemId: uuidSchema,
   area: z.enum(
     ["MZANSI_MARKET", "MZANSI_BUSINESS", "BUSINESS_ADS", "MALL_SHOPS", "PROMOTIONS_EVENTS"],
     {
@@ -75,17 +76,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    const bodyResult = await parseAndValidateJsonRequest(request, resubmitSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
+    if (!bodyResult.success) {
+      return bodyResult.response;
     }
 
-    const parsed = resubmitSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
-    }
-
-    const { itemId, area } = parsed.data;
+    const { itemId, area } = bodyResult.data;
     const config = tableMap[area];
     if (!config) {
       return NextResponse.json({ error: "Invalid area" }, { status: 400 });

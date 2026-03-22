@@ -14,13 +14,44 @@ const log = createLogger("MediaUploadUrl");
 
 const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
+const VIDEO_EXTENSIONS_BY_TYPE: Record<string, string[]> = {
+  "video/mp4": ["mp4"],
+  "video/quicktime": ["mov", "qt"],
+  "video/webm": ["webm"],
+};
 
-const uploadUrlRequestSchema = z.object({
-  filename: z.string().trim().min(1, "filename is required").max(255, "filename is too long"),
-  contentType: z.string().trim().min(1, "contentType is required"),
-  size: z.coerce.number().int().positive("size must be a positive number"),
-  area: z.enum(UPLOAD_AREAS).optional().default("listing"),
-});
+const uploadUrlRequestSchema = z
+  .object({
+    filename: z
+      .string()
+      .trim()
+      .min(1, "filename is required")
+      .max(255, "filename is too long")
+      .regex(/^[^\\/\x00-\x1f]+$/, "filename contains invalid characters"),
+    contentType: z.string().trim().min(1, "contentType is required"),
+    size: z.coerce.number().int().positive("size must be a positive number"),
+    area: z.enum(UPLOAD_AREAS).optional().default("listing"),
+  })
+  .superRefine((value, ctx) => {
+    const extension = value.filename.split(".").pop()?.trim().toLowerCase();
+    if (!extension) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["filename"],
+        message: "filename must include a valid video extension",
+      });
+      return;
+    }
+
+    const allowedExtensions = VIDEO_EXTENSIONS_BY_TYPE[value.contentType];
+    if (allowedExtensions && !allowedExtensions.includes(extension)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["filename"],
+        message: `filename extension must match ${value.contentType}`,
+      });
+    }
+  });
 
 /**
  * POST /api/media/upload-url

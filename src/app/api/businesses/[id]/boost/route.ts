@@ -17,9 +17,14 @@ import {
 } from "@/lib/account/compat";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { parseAndValidateRouteParams } from "@/lib/utils/api";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("BoostBusiness");
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const businessBoostParamsSchema = z.object({
+  id: uuidSchema,
+});
 type BusinessCheckoutRow = {
   id: string;
   business_name: string;
@@ -39,11 +44,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const originBlock = enforceSameOriginMutation(_request, log);
     if (originBlock) return originBlock;
 
-    const { id: businessId } = await params;
-
-    if (!UUID_RE.test(businessId)) {
-      return NextResponse.json({ error: "Invalid business ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, businessBoostParamsSchema, {
+      validationErrorMessage: "Invalid business ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id: businessId } = parsedParams.data;
 
     const supabase = await createClient();
     const {

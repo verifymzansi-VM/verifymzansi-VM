@@ -15,9 +15,10 @@ import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { optionalTrimmedStringSchema } from "@/lib/validations/shared";
 
 const log = createLogger("GpsVerification");
-import { parseJsonRequest } from "@/lib/utils/api";
 import {
   GPS_ACCURACY_WARN_METERS,
   GPS_ACCURACY_REJECT_METERS,
@@ -66,8 +67,8 @@ const gpsLocationSchema = z.object({
   longitude: z.number().min(16).max(33),
   accuracy: z.number().positive(),
   timestamp: z.number().positive(),
-  declaredProvince: z.string().optional(),
-  declaredCity: z.string().optional(),
+  declaredProvince: optionalTrimmedStringSchema,
+  declaredCity: optionalTrimmedStringSchema,
 });
 
 export async function POST(request: NextRequest) {
@@ -130,20 +131,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse and validate body
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-    const parsed = gpsLocationSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: "Invalid input",
-          details: parsed.error.issues.map((i) => i.message),
-        },
-        { status: 400 }
-      );
+    const bodyResult = await parseAndValidateJsonRequest(request, gpsLocationSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid input",
+    });
+    if (!bodyResult.success) {
+      return bodyResult.response;
     }
 
     const {
@@ -153,7 +146,7 @@ export async function POST(request: NextRequest) {
       timestamp: _timestamp,
       declaredProvince,
       declaredCity,
-    } = parsed.data;
+    } = bodyResult.data;
     const isConfirmationMode = !!declaredProvince;
 
     // Reject extremely poor accuracy

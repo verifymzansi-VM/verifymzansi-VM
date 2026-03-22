@@ -6,9 +6,14 @@ import { verifyAdminActorRoleFromDb } from "@/lib/auth/admin-access";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
+import { parseAndValidateSearchParams } from "@/lib/utils/api";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("DSARExport");
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const dsarExportQuerySchema = z.object({
+  requestId: uuidSchema,
+});
 
 type AuthListUser = {
   id: string;
@@ -76,10 +81,18 @@ async function resolveUserIdByEmail(
 // be audited. The endpoint is protected by admin auth, mitigating CSRF risk.
 export async function GET(request: NextRequest) {
   try {
-    const requestId = request.nextUrl.searchParams.get("requestId");
-    if (!requestId || !UUID_RE.test(requestId)) {
-      return NextResponse.json({ error: "Valid requestId is required" }, { status: 400 });
+    const parsedQuery = parseAndValidateSearchParams(
+      request.nextUrl.searchParams,
+      dsarExportQuerySchema,
+      {
+        validationErrorMessage: "Valid requestId is required",
+        includeValidationDetails: false,
+      }
+    );
+    if (!parsedQuery.success) {
+      return parsedQuery.response;
     }
+    const { requestId } = parsedQuery.data;
 
     const supabase = await createClient();
     const {

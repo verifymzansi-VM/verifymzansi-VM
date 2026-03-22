@@ -33,6 +33,13 @@ import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { hasPhoneNumber } from "@/lib/account/require-phone";
+import { parseAndValidateSearchParams, parseJsonRequest } from "@/lib/utils/api";
+import {
+  createBoundedIntegerSchema,
+  optionalTrimmedStringSchema,
+  optionalUuidSchema,
+} from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -77,6 +84,28 @@ function normalizeEventStateParam(value: string | null): PromotionEventState | n
   }
   return null;
 }
+
+const promotionsQuerySchema = z.object({
+  type: optionalTrimmedStringSchema,
+  category: optionalTrimmedStringSchema,
+  province: optionalTrimmedStringSchema,
+  city: optionalTrimmedStringSchema,
+  q: optionalTrimmedStringSchema,
+  business_id: optionalUuidSchema,
+  event_state: optionalTrimmedStringSchema,
+  page: createBoundedIntegerSchema({
+    defaultValue: 1,
+    min: 1,
+    max: 10_000,
+    fieldName: "page",
+  }),
+  limit: createBoundedIntegerSchema({
+    defaultValue: 24,
+    min: 1,
+    max: 50,
+    fieldName: "limit",
+  }),
+});
 
 function applyEventStateFilter<T>(query: T, eventState: PromotionEventState, nowIso: string): T {
   const builder = query as T & PromotionQueryOps;
@@ -207,11 +236,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Parse and validate body
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
+    const body = await parseJsonRequest(request);
+    if (body === null) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
@@ -415,23 +441,41 @@ export async function GET(request: NextRequest) {
 
     const admin = createAdminClient();
     const ownerColumn = await getOwnerColumn(admin, "promotions");
-    const { searchParams } = request.nextUrl;
-
-    const promotionType = searchParams.get("type");
-    const categoryKey = normalizeBusinessCategoryParam(searchParams.get("category"));
-    const province = searchParams.get("province");
-    const city = searchParams.get("city");
-    const search = searchParams.get("q");
-    const businessId = searchParams.get("business_id");
-    if (
-      businessId &&
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(businessId)
-    ) {
-      return NextResponse.json({ error: "Invalid business_id" }, { status: 400 });
+    const parsedQuery = parseAndValidateSearchParams(
+      request.nextUrl.searchParams,
+      promotionsQuerySchema,
+      {
+        validationErrorMessage: "Invalid promotions query",
+      }
+    );
+    if (!parsedQuery.success) {
+      return parsedQuery.response;
     }
-    const eventState = normalizeEventStateParam(searchParams.get("event_state"));
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
+
+    const query = parsedQuery.data;
+    const promotionType = query.type;
+    if (
+      promotionType &&
+      !["product", "service", "event", "deal", "general"].includes(promotionType)
+    ) {
+      return NextResponse.json({ error: "Invalid promotion type" }, { status: 400 });
+    }
+
+    const categoryKey = query.category ? normalizeBusinessCategoryParam(query.category) : undefined;
+    if (query.category && !categoryKey) {
+      return NextResponse.json({ error: "Invalid promotion category" }, { status: 400 });
+    }
+
+    const province = query.province;
+    const city = query.city;
+    const search = query.q;
+    const businessId = query.business_id;
+    const eventState = normalizeEventStateParam(query.event_state ?? null);
+    if (query.event_state && !eventState) {
+      return NextResponse.json({ error: "Invalid event_state" }, { status: 400 });
+    }
+    const page = query.page;
+    const limit = query.limit;
     const offset = (page - 1) * limit;
     const nowIso = new Date().toISOString();
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -45,17 +45,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    const bodyResult = await parseAndValidateJsonRequest(request, adminVerificationDecideSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
+    if (!bodyResult.success) {
+      return bodyResult.response;
     }
-    const parsed = adminVerificationDecideSchema.safeParse(body);
 
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
-    }
-
-    const { stepId, decision, reasonCode, reasonNote, overrideReasonCode } = parsed.data;
+    const { stepId, decision, reasonCode, reasonNote, overrideReasonCode } = bodyResult.data;
 
     const admin = createAdminClient();
 

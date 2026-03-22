@@ -20,6 +20,7 @@ import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
+import { parseAndValidateFormData } from "@/lib/utils/api";
 
 const log = createLogger("VerificationUpload");
 
@@ -146,14 +147,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Validate metadata fields ─────────────────────────────
-    const metaParsed = fileUploadSchema.safeParse({
-      docType: formData.get("docType"),
-      idNumber: formData.get("idNumber") || undefined,
-      idDocumentType: formData.get("idDocumentType") || undefined,
+    const metaParsed = parseAndValidateFormData(formData, fileUploadSchema, {
+      validationErrorMessage: "Invalid upload metadata",
+      includeValidationDetails: false,
     });
 
     if (!metaParsed.success) {
-      return NextResponse.json({ error: metaParsed.error.issues[0].message }, { status: 400 });
+      return metaParsed.response;
     }
 
     const { docType, idNumber } = metaParsed.data;

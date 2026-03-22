@@ -31,6 +31,15 @@ vi.mock("@/lib/services/storage", () => ({
   downloadKycDocument: vi.fn().mockResolvedValue(Buffer.from("test")),
 }));
 
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyStaffActorRoleFromDb: vi.fn(
+    async (user: { app_metadata?: Record<string, unknown> } | null | undefined) => {
+      const role = user?.app_metadata?.role;
+      return role === "admin" || role === "moderator" ? role : null;
+    }
+  ),
+}));
+
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({
     info: vi.fn(),

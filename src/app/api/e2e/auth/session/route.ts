@@ -1,25 +1,47 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
 import {
   createPlaywrightSession,
   resetPlaywrightFixtureStoreForPersona,
 } from "@/lib/supabase/playwright-fixture-store";
 import { PLAYWRIGHT_SESSION_COOKIE } from "@/lib/supabase/playwright-stub";
 import { isPlaywrightSupabaseStubMode, isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { parseAndValidateSearchParams } from "@/lib/utils/api";
+
+const playwrightPersonaSchema = z
+  .string()
+  .min(1, "persona is required")
+  .max(64, "persona is too long")
+  .regex(/^[A-Za-z0-9][A-Za-z0-9-]*$/, "persona contains invalid characters");
+
+const playwrightSessionQuerySchema = z.object({
+  persona: z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, playwrightPersonaSchema.optional()),
+  project: z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, playwrightPersonaSchema.optional()),
+  reset: z.preprocess(
+    (value) => {
+      if (value === undefined || value === null) return false;
+      if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        if (["1", "true", "yes", "on"].includes(normalized)) return true;
+        if (["0", "false", "no", "off", ""].includes(normalized)) return false;
+      }
+
+      return value;
+    },
+    z.boolean({ error: "reset must be true or false" })
+  ),
+});
 
 function ensureEnabled() {
   return isPlaywrightTestMode() && isPlaywrightSupabaseStubMode();
-}
-
-function getPersona(request: NextRequest) {
-  return (
-    request.nextUrl.searchParams.get("persona") ||
-    request.nextUrl.searchParams.get("project") ||
-    "verified-member"
-  );
-}
-
-function shouldReset(request: NextRequest) {
-  return request.nextUrl.searchParams.get("reset") === "1";
 }
 
 export async function GET(request: NextRequest) {
@@ -27,8 +49,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const persona = getPersona(request);
-  if (shouldReset(request)) {
+  const parsedQuery = parseAndValidateSearchParams(
+    new URL(request.url).searchParams,
+    playwrightSessionQuerySchema,
+    {
+      validationErrorMessage: "Invalid Playwright session query",
+      includeValidationDetails: false,
+    }
+  );
+
+  if (!parsedQuery.success) {
+    return parsedQuery.response;
+  }
+
+  const persona = parsedQuery.data.persona || parsedQuery.data.project || "verified-member";
+  if (parsedQuery.data.reset) {
     resetPlaywrightFixtureStoreForPersona(persona);
   }
 

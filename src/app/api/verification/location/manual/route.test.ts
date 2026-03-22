@@ -40,14 +40,20 @@ vi.mock("@/lib/services/feature-flags", () => ({
 import { POST } from "./route";
 
 function createRequest(origin?: string) {
+  const headerMap = new Map<string, string>([
+    ["cookie", `vm_csrf=${CSRF_TOKEN}`],
+    ["x-csrf-token", CSRF_TOKEN],
+  ]);
+  if (origin) {
+    headerMap.set("origin", origin);
+  }
+
   return {
     url: "http://localhost/api/verification/location/manual",
     nextUrl: new URL("http://localhost/api/verification/location/manual"),
-    headers: new Headers({
-      ...(origin ? { origin } : {}),
-      cookie: `vm_csrf=${CSRF_TOKEN}`,
-      "x-csrf-token": CSRF_TOKEN,
-    }),
+    headers: {
+      get: (name: string) => headerMap.get(name.toLowerCase()) ?? null,
+    },
   } as unknown as NextRequest;
 }
 
@@ -64,7 +70,10 @@ describe("POST /api/verification/location/manual", () => {
     vi.clearAllMocks();
     mockCreateClient.mockResolvedValue({
       auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1", email_confirmed_at: new Date().toISOString() } },
+          error: null,
+        }),
       },
     });
     mockCheckRateLimit.mockResolvedValue({ limited: false });

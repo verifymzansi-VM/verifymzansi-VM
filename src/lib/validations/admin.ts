@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { optionalTrimmedStringSchema, uuidSchema } from "@/lib/validations/shared";
 
 /**
  * Zod schemas for admin API route input validation
@@ -6,7 +7,7 @@ import { z } from "zod";
 
 export const adminContentDecideSchema = z
   .object({
-    itemId: z.string().uuid("itemId must be a valid UUID"),
+    itemId: uuidSchema,
     area: z.enum(
       ["MZANSI_MARKET", "BUSINESS_ADS", "MALL_SHOPS", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"],
       {
@@ -17,7 +18,7 @@ export const adminContentDecideSchema = z
     decision: z.enum(["approve", "reject"], {
       message: "decision must be approve or reject",
     }),
-    reason: z.string().max(500).optional(),
+    reason: optionalTrimmedStringSchema.pipe(z.string().max(500).optional()),
   })
   .refine((data) => data.decision === "approve" || (data.reason && data.reason.trim().length > 0), {
     message: "A reason is required when rejecting content",
@@ -26,7 +27,7 @@ export const adminContentDecideSchema = z
 
 export const adminVerificationDecideSchema = z
   .object({
-    stepId: z.string().uuid("stepId must be a valid UUID"),
+    stepId: uuidSchema,
     decision: z
       .enum(["approved", "rejected", "needs_resubmission", "resubmit"], {
         message: "decision must be approved, rejected, or needs_resubmission",
@@ -34,9 +35,9 @@ export const adminVerificationDecideSchema = z
       .transform(
         (v) => (v === "resubmit" ? "needs_resubmission" : v) as Exclude<typeof v, "resubmit">
       ),
-    reasonCode: z.string().max(100).optional(),
-    reasonNote: z.string().max(500).optional(),
-    overrideReasonCode: z.string().max(100).optional(),
+    reasonCode: optionalTrimmedStringSchema.pipe(z.string().max(100).optional()),
+    reasonNote: optionalTrimmedStringSchema.pipe(z.string().max(500).optional()),
+    overrideReasonCode: optionalTrimmedStringSchema.pipe(z.string().max(100).optional()),
   })
   .refine((data) => data.decision === "approved" || data.reasonCode, {
     message: "Reason code is required for rejection or resubmission",
@@ -53,11 +54,11 @@ export const adminVerificationDecideSchema = z
 
 export const adminFlaggingActionSchema = z
   .object({
-    reportId: z.string().uuid("reportId must be a valid UUID"),
+    reportId: uuidSchema,
     action: z.enum(["warn", "hide", "suspend", "ban", "dismiss"], {
       message: "action must be warn, hide, suspend, ban, or dismiss",
     }),
-    reason: z.string().max(500).optional(),
+    reason: optionalTrimmedStringSchema.pipe(z.string().max(500).optional()),
     durationDays: z.number().int().positive().max(365).optional(),
   })
   .refine((data) => data.action !== "dismiss" || data.reason, {
@@ -66,14 +67,14 @@ export const adminFlaggingActionSchema = z
   });
 
 export const adminDsarDecideSchema = z.object({
-  requestId: z.string().uuid("requestId must be a valid UUID"),
+  requestId: uuidSchema,
   decision: z.enum(["approve", "reject"], {
     message: "decision must be approve or reject",
   }),
-  notes: z.string().max(2000).optional(),
+  notes: optionalTrimmedStringSchema.pipe(z.string().max(2000).optional()),
 });
 
 export const adminDsarCompleteSchema = z.object({
-  requestId: z.string().uuid("requestId must be a valid UUID"),
-  notes: z.string().max(2000).optional(),
+  requestId: uuidSchema,
+  notes: optionalTrimmedStringSchema.pipe(z.string().max(2000).optional()),
 });

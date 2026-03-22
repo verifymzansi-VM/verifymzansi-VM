@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
-import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
-import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface GoogleOAuthButtonProps {
   mode: "login" | "register";
@@ -14,8 +13,8 @@ interface GoogleOAuthButtonProps {
 /**
  * Google OAuth sign-in / sign-up button.
  *
- * Uses Supabase `signInWithOAuth` which redirects to Google's consent screen,
- * then back to `/auth/callback` where the session is exchanged.
+ * Starts Google OAuth via an internal backend route, which then redirects to
+ * Google's consent screen and back to `/auth/callback` for session exchange.
  *
  * The same flow handles both login and registration — Supabase auto-creates
  * accounts for new Google users.
@@ -27,44 +26,35 @@ export function GoogleOAuthButton({ mode }: GoogleOAuthButtonProps) {
   async function handleGoogleSignIn() {
     setIsLoading(true);
     try {
-      const supabase = createClient();
-      const { appUrl } = getPublicRuntimeConfig();
-
       // Preserve returnUrl from the current page so users land back where they
       // intended after OAuth (e.g. /post/create instead of /dashboard).
       const currentReturnUrl =
         typeof window !== "undefined"
           ? new URLSearchParams(window.location.search).get("returnUrl")
           : null;
-      const callbackBase =
-        typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback`
-          : `${appUrl}/auth/callback`;
-      const redirectTo = currentReturnUrl
-        ? `${callbackBase}?next=${encodeURIComponent(currentReturnUrl)}`
-        : callbackBase;
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo,
-          queryParams: {
-            // Request profile info so we can populate displayName
-            access_type: "offline",
-            prompt: "consent",
-          },
-        },
+      const response = await fetch("/api/auth/oauth/google", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ returnUrl: currentReturnUrl }),
       });
 
-      if (error) {
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || typeof result.url !== "string") {
         toast({
           title: "Google sign-in failed",
-          description: error.message,
+          description:
+            typeof result.error === "string"
+              ? result.error
+              : "Could not connect to Google. Please try again.",
           variant: "destructive",
         });
         setIsLoading(false);
+        return;
       }
-      // If no error, the browser is redirecting to Google — don't reset loading
+
+      window.location.assign(result.url);
     } catch {
       toast({
         title: "Something went wrong",

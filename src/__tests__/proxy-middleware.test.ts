@@ -95,19 +95,16 @@ describe("middleware — missing Supabase env", () => {
 });
 
 describe("proxy security headers", () => {
-  const originalNodeEnv = process.env.NODE_ENV;
-
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.PLAYWRIGHT_SUPABASE_MODE;
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
   });
 
   afterEach(() => {
-    if (originalNodeEnv) process.env.NODE_ENV = originalNodeEnv;
-    else delete process.env.NODE_ENV;
+    vi.unstubAllEnvs();
   });
 
   it("adds the full security header set to successful responses", async () => {
@@ -135,7 +132,7 @@ describe("proxy security headers", () => {
   });
 
   it("uses strict nonce CSP in production", async () => {
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
 
     const res = await middleware(createMockRequest("/", { hostname: "verifymzansi.com" }));
     const csp = res.headers.get("Content-Security-Policy");

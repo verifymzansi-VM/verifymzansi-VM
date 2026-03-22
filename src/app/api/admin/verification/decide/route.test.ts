@@ -22,6 +22,15 @@ vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: mockLogAuditEvent,
 }));
 
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyStaffActorRoleFromDb: vi.fn(
+    async (user: { app_metadata?: Record<string, unknown> } | null | undefined) => {
+      const role = user?.app_metadata?.role;
+      return role === "admin" || role === "moderator" ? role : null;
+    }
+  ),
+}));
+
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -63,21 +72,34 @@ function mockAuth(user: { id: string; app_metadata?: Record<string, unknown> } |
   });
 }
 
-/** Build a chainable mock for the artifact-sync update:
- *  .update().eq().eq().in().order().limit()
+/** Build a chainable mock for the latest-artifact lookup:
+ *  .select().eq().eq().in().order().limit().maybeSingle()
  */
-function artifactSyncChain(resolvedValue = { error: null }) {
+function artifactLookupChain(latestArtifactId = "artifact-1") {
   return {
-    update: vi.fn().mockReturnValue({
+    select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           in: vi.fn().mockReturnValue({
             order: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue(resolvedValue),
+              limit: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { id: latestArtifactId } }),
+              }),
             }),
           }),
         }),
       }),
+    }),
+  };
+}
+
+/** Build a chainable mock for the artifact status sync update:
+ *  .update().eq()
+ */
+function artifactStatusUpdateChain(resolvedValue = { error: null }) {
+  return {
+    update: vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue(resolvedValue),
     }),
   };
 }
@@ -218,6 +240,7 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactLookupReturned = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -246,7 +269,12 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        return artifactSyncChain();
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
       }
       return {};
     });
@@ -275,7 +303,8 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
-    let artifactSyncCalled = false;
+    let artifactLookupReturned = false;
+    let artifactStatusUpdated = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -312,11 +341,17 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        // First call: artifact sync; second call: purge scheduling
-        if (!artifactSyncCalled) {
-          artifactSyncCalled = true;
-          return artifactSyncChain();
+        // First call: artifact lookup; second call: status sync; third call: purge scheduling
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
         }
+
+        if (!artifactStatusUpdated) {
+          artifactStatusUpdated = true;
+          return artifactStatusUpdateChain();
+        }
+
         return artifactPurgeChain();
       }
       return {};
@@ -349,6 +384,7 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactLookupReturned = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -366,7 +402,12 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        return artifactSyncChain();
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
       }
       return {};
     });
@@ -403,6 +444,7 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactLookupReturned = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -431,7 +473,12 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        return artifactSyncChain();
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
       }
       return {};
     });
@@ -457,7 +504,8 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
-    let purgeArtifactSyncCalled = false;
+    let artifactLookupReturned = false;
+    let artifactStatusUpdated = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -492,11 +540,17 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        // First call: artifact sync (succeeds); second call: purge update (FAILS)
-        if (!purgeArtifactSyncCalled) {
-          purgeArtifactSyncCalled = true;
-          return artifactSyncChain();
+        // First call: artifact lookup; second call: status sync; third call: purge update (fails)
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
         }
+
+        if (!artifactStatusUpdated) {
+          artifactStatusUpdated = true;
+          return artifactStatusUpdateChain();
+        }
+
         return artifactPurgeChain({ error: { message: "DB error" } });
       }
       return {};
@@ -528,6 +582,7 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactLookupReturned = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -556,7 +611,12 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        return artifactSyncChain();
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
       }
       return {};
     });
@@ -594,6 +654,7 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactLookupReturned = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -611,7 +672,12 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        return artifactSyncChain();
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
       }
       return {};
     });

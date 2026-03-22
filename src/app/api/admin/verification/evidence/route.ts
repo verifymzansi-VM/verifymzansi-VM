@@ -13,8 +13,17 @@ import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { getLinkedEvidenceArtifactIds } from "@/lib/services/kyc-evidence-access";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("EvidenceProxy");
+const evidenceQuerySchema = z.object({
+  artifactId: uuidSchema,
+});
+const evidenceBodySchema = z.object({
+  artifactId: uuidSchema,
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -43,19 +52,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Get artifact ID from query params
-    const artifactId = request.nextUrl.searchParams.get("artifactId");
-    if (!artifactId) {
-      return NextResponse.json(
-        { error: "artifactId query parameter is required" },
-        { status: 400 }
-      );
+    const parsedQuery = parseAndValidateSearchParams(
+      request.nextUrl.searchParams,
+      evidenceQuerySchema,
+      {
+        validationErrorMessage: "artifactId query parameter is required",
+        includeValidationDetails: false,
+      }
+    );
+    if (!parsedQuery.success) {
+      return parsedQuery.response;
     }
-
-    // Validate UUID format to prevent data enumeration
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_RE.test(artifactId)) {
-      return NextResponse.json({ error: "Invalid artifact ID format" }, { status: 400 });
-    }
+    const { artifactId } = parsedQuery.data;
 
     const adminClient = createAdminClient();
 
@@ -203,20 +211,15 @@ function hashIp(ip: string, secret: string | undefined): string {
  */
 export async function POST(request: NextRequest) {
   try {
-    let artifactId: string | null = null;
-    try {
-      const body = await request.json();
-      artifactId = typeof body?.artifactId === "string" ? body.artifactId : null;
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    const parsedBody = await parseAndValidateJsonRequest(request, evidenceBodySchema, {
+      invalidJsonMessage: "Invalid JSON body",
+      validationErrorMessage: "artifactId is required in request body",
+      includeValidationDetails: false,
+    });
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
-
-    if (!artifactId) {
-      return NextResponse.json(
-        { error: "artifactId is required in request body" },
-        { status: 400 }
-      );
-    }
+    const { artifactId } = parsedBody.data;
 
     // Rewrite into the query-string so the GET handler logic can be reused
     const url = new URL(request.url);

@@ -25,7 +25,7 @@ describe("cleanupDevServiceWorkers", () => {
         controller: {} as ServiceWorker,
         getRegistrations: vi
           .fn()
-          .mockResolvedValue([{ unregister }] as ServiceWorkerRegistration[]),
+          .mockResolvedValue([{ unregister }] as unknown as ServiceWorkerRegistration[]),
       },
       cacheStorage: {
         keys: vi.fn().mockResolvedValue(["verifymzansi-v3-logo-refresh", "other-cache"]),
@@ -57,7 +57,7 @@ describe("cleanupDevServiceWorkers", () => {
         controller: null,
         getRegistrations: vi
           .fn()
-          .mockResolvedValue([{ unregister }] as ServiceWorkerRegistration[]),
+          .mockResolvedValue([{ unregister }] as unknown as ServiceWorkerRegistration[]),
       },
       cacheStorage: {
         keys: vi.fn().mockResolvedValue(["verifymzansi-v3-logo-refresh"]),

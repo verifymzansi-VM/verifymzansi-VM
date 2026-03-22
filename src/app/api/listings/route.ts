@@ -7,7 +7,7 @@ import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { isPostingLimitBypassEnabled } from "../../../lib/utils/posting-limit-bypass";
@@ -24,14 +24,36 @@ import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { hasPhoneNumber } from "@/lib/account/require-phone";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
-import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
+import {
+  normalizeMarketplaceCategoryParam,
+  normalizeMarketplaceConditionParam,
+  parseMarketplaceFiltersFromSearchParams,
+} from "@/lib/utils/marketplace-query";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
+import {
+  createBoundedIntegerSchema,
+  createNonNegativeNumberSchema,
+  optionalTrimmedStringSchema,
+} from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
 const LISTING_SELECT_FALLBACK_FIELDS = ["featured_until", "condition", "video_thumbnail"] as const;
+const listingsQuerySchema = z.object({
+  category: optionalTrimmedStringSchema,
+  q: optionalTrimmedStringSchema,
+  province: optionalTrimmedStringSchema,
+  city: optionalTrimmedStringSchema,
+  condition: optionalTrimmedStringSchema,
+  sort: optionalTrimmedStringSchema,
+  minPrice: createNonNegativeNumberSchema("minPrice"),
+  maxPrice: createNonNegativeNumberSchema("maxPrice"),
+  page: createBoundedIntegerSchema({ defaultValue: 1, min: 1, max: 10_000, fieldName: "page" }),
+  limit: createBoundedIntegerSchema({ defaultValue: 24, min: 1, max: 50, fieldName: "limit" }),
+});
 
 type MarketQueryOps = {
   eq: (column: string, value: unknown) => MarketQueryOps;
@@ -174,11 +196,31 @@ export async function GET(request: NextRequest) {
 
     const admin = createAdminClient();
     const ownerColumn = await getOwnerColumn(admin, "listings");
-    const filters = parseMarketplaceFiltersFromSearchParams(request.nextUrl.searchParams);
-    const limit = Math.min(
-      50,
-      Math.max(1, parseInt(request.nextUrl.searchParams.get("limit") || "24", 10))
+    const parsedQuery = parseAndValidateSearchParams(
+      request.nextUrl.searchParams,
+      listingsQuerySchema,
+      {
+        validationErrorMessage: "Invalid listings query",
+      }
     );
+    if (!parsedQuery.success) {
+      return parsedQuery.response;
+    }
+
+    const query = parsedQuery.data;
+    if (query.category && !normalizeMarketplaceCategoryParam(query.category)) {
+      return NextResponse.json({ error: "Invalid listing category" }, { status: 400 });
+    }
+    if (query.condition && !normalizeMarketplaceConditionParam(query.condition)) {
+      return NextResponse.json({ error: "Invalid listing condition" }, { status: 400 });
+    }
+    if (query.sort && !["newest", "price_asc", "price_desc", "popular"].includes(query.sort)) {
+      return NextResponse.json({ error: "Invalid listing sort" }, { status: 400 });
+    }
+
+    const filters = parseMarketplaceFiltersFromSearchParams(request.nextUrl.searchParams);
+    filters.page = query.page;
+    const limit = query.limit;
     const offset = (filters.page - 1) * limit;
     const selectAttempts = [
       {

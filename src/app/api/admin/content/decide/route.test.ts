@@ -43,7 +43,7 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 }));
 
 vi.mock("@/lib/auth/admin-access", () => ({
-  getStaffActorRole: mockGetStaffActorRole,
+  verifyStaffActorRoleFromDb: vi.fn(async () => mockGetStaffActorRole()),
 }));
 
 vi.mock("@/lib/account/compat", () => ({

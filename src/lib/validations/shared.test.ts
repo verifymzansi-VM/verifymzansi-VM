@@ -7,6 +7,11 @@ import {
   otpSchema,
   priceSchema,
   turnstileTokenSchema,
+  uuidSchema,
+  optionalTrimmedStringSchema,
+  createBoundedIntegerSchema,
+  createBooleanFlagSchema,
+  createNonNegativeNumberSchema,
 } from "./shared";
 
 // ── SA Phone Schema ─────────────────────────────────────────────────────────
@@ -150,5 +155,101 @@ describe("turnstileTokenSchema", () => {
 
   it("rejects empty string", () => {
     expect(turnstileTokenSchema.safeParse("").success).toBe(false);
+  });
+});
+
+describe("uuidSchema", () => {
+  it("accepts UUID values", () => {
+    expect(uuidSchema.safeParse("550e8400-e29b-41d4-a716-446655440000").success).toBe(true);
+  });
+
+  it("rejects malformed UUID values", () => {
+    expect(uuidSchema.safeParse("not-a-uuid").success).toBe(false);
+  });
+});
+
+describe("optionalTrimmedStringSchema", () => {
+  it("trims surrounding whitespace", () => {
+    const result = optionalTrimmedStringSchema.safeParse("  Gauteng  ");
+    expect(result.success).toBe(true);
+    expect(result.data).toBe("Gauteng");
+  });
+
+  it("treats blank strings as undefined", () => {
+    const result = optionalTrimmedStringSchema.safeParse("   ");
+    expect(result.success).toBe(true);
+    expect(result.data).toBeUndefined();
+  });
+});
+
+describe("createBoundedIntegerSchema", () => {
+  const pageSchema = createBoundedIntegerSchema({
+    defaultValue: 1,
+    min: 1,
+    max: 50,
+    fieldName: "page",
+  });
+
+  it("uses the configured default for missing input", () => {
+    const result = pageSchema.safeParse(undefined);
+    expect(result.success).toBe(true);
+    expect(result.data).toBe(1);
+  });
+
+  it("parses numeric strings", () => {
+    const result = pageSchema.safeParse(" 12 ");
+    expect(result.success).toBe(true);
+    expect(result.data).toBe(12);
+  });
+
+  it("rejects invalid numeric strings", () => {
+    expect(pageSchema.safeParse("abc").success).toBe(false);
+    expect(pageSchema.safeParse("0").success).toBe(false);
+    expect(pageSchema.safeParse("51").success).toBe(false);
+  });
+});
+
+describe("createBooleanFlagSchema", () => {
+  const flagSchema = createBooleanFlagSchema();
+
+  it("uses the configured default for missing input", () => {
+    const result = flagSchema.safeParse(undefined);
+    expect(result.success).toBe(true);
+    expect(result.data).toBe(false);
+  });
+
+  it("parses true and false strings", () => {
+    const trueResult = flagSchema.safeParse(" true ");
+    const falseResult = flagSchema.safeParse("false");
+
+    expect(trueResult.success).toBe(true);
+    expect(trueResult.data).toBe(true);
+    expect(falseResult.success).toBe(true);
+    expect(falseResult.data).toBe(false);
+  });
+
+  it("rejects non-boolean strings", () => {
+    expect(flagSchema.safeParse("yes").success).toBe(false);
+  });
+});
+
+describe("createNonNegativeNumberSchema", () => {
+  const priceSchema = createNonNegativeNumberSchema("minPrice");
+
+  it("treats missing input as undefined", () => {
+    const result = priceSchema.safeParse(undefined);
+    expect(result.success).toBe(true);
+    expect(result.data).toBeUndefined();
+  });
+
+  it("parses numeric strings", () => {
+    const result = priceSchema.safeParse(" 12.5 ");
+    expect(result.success).toBe(true);
+    expect(result.data).toBe(12.5);
+  });
+
+  it("rejects invalid or negative numeric strings", () => {
+    expect(priceSchema.safeParse("abc").success).toBe(false);
+    expect(priceSchema.safeParse("-1").success).toBe(false);
   });
 });

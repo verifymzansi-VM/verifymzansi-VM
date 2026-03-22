@@ -17,6 +17,7 @@ const mockGetUser = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: { getUser: (...args: unknown[]) => mockGetUser(...args) },
+    from: (...args: unknown[]) => mockFrom(...args),
   }),
 }));
 
@@ -219,7 +220,7 @@ describe.each([
     const res = await handler()(makeRequest(), makeParams(VALID_UUID));
     expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body.error).toContain("don't own");
+    expect(body.error).toContain("do not own this listing");
   });
 
   it("returns 400 when listing is not live", async () => {

@@ -11,6 +11,8 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { stripExifFromJpeg } from "@/lib/utils/exif-strip";
 import { scanForMalware } from "@/lib/utils/malware-scan";
+import { parseAndValidateFormData } from "@/lib/utils/api";
+import { z } from "zod";
 
 const log = createLogger("MediaUpload");
 
@@ -19,6 +21,9 @@ const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
 const MAX_FILES = 10;
+const mediaUploadMetadataSchema = z.object({
+  area: z.enum(UPLOAD_AREAS).default("listing"),
+});
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);
@@ -98,13 +103,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
     }
 
-    const area = (formData.get("area") as string) || "listing";
-    if (!(UPLOAD_AREAS as readonly string[]).includes(area)) {
-      return NextResponse.json(
-        { error: `Invalid area. Must be one of: ${UPLOAD_AREAS.join(", ")}` },
-        { status: 400 }
-      );
+    const metadata = parseAndValidateFormData(formData, mediaUploadMetadataSchema, {
+      validationErrorMessage: `Invalid area. Must be one of: ${UPLOAD_AREAS.join(", ")}`,
+      includeValidationDetails: false,
+    });
+    if (!metadata.success) {
+      return metadata.response;
     }
+    const { area } = metadata.data;
 
     // Collect all files from the form data
     const files: File[] = [];
@@ -130,6 +136,7 @@ export async function POST(request: NextRequest) {
     const bucket = process.env.R2_PUBLIC_BUCKET || "verifymzansi-public";
     const uploadedUrls: string[] = [];
     const errors: string[] = [];
+    let hadUploadFailure = false;
 
     for (const file of files) {
       const isImage = IMAGE_TYPES.has(file.type);
@@ -218,6 +225,7 @@ export async function POST(request: NextRequest) {
         }
       } catch (err) {
         log.error(`Failed to upload ${file.name}`, { error: err });
+        hadUploadFailure = true;
         errors.push(`"${file.name}": upload failed`);
       }
     }
@@ -231,7 +239,7 @@ export async function POST(request: NextRequest) {
         urls: uploadedUrls,
         errors: hasErrors ? errors : undefined,
       },
-      { status: allFailed ? 500 : hasErrors ? 207 : 200 }
+      { status: allFailed ? (hadUploadFailure ? 500 : 400) : hasErrors ? 207 : 200 }
     );
   } catch (err) {
     log.error("Unexpected error", {

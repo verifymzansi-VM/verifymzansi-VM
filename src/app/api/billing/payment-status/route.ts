@@ -1,9 +1,28 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isTerminalPaymentStatusView, toPaymentStatusView } from "@/lib/payments/status-view";
+import { parseAndValidateSearchParams } from "@/lib/utils/api";
+import { optionalTrimmedStringSchema } from "@/lib/validations/shared";
+import { z } from "zod";
+
+const paymentStatusQuerySchema = z.object({
+  payment: optionalTrimmedStringSchema,
+});
 
 export async function GET(request: NextRequest) {
-  const paymentId = request.nextUrl.searchParams.get("payment")?.trim();
+  const parsedQuery = parseAndValidateSearchParams(
+    request.nextUrl.searchParams,
+    paymentStatusQuerySchema,
+    {
+      validationErrorMessage: "Invalid payment status query",
+      includeValidationDetails: false,
+    }
+  );
+  if (!parsedQuery.success) {
+    return parsedQuery.response;
+  }
+
+  const paymentId = parsedQuery.data.payment;
 
   if (!paymentId) {
     return NextResponse.json(

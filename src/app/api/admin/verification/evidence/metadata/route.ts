@@ -13,8 +13,28 @@ import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { getLinkedEvidenceArtifactIds } from "@/lib/services/kyc-evidence-access";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
+import { optionalUuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("EvidenceMetadata");
+const evidenceMetadataQuerySchema = z
+  .object({
+    stepId: optionalUuidSchema,
+    userId: optionalUuidSchema,
+  })
+  .refine(({ stepId, userId }) => Boolean(stepId || userId), {
+    message: "stepId or userId query parameter is required",
+  });
+
+const evidenceMetadataBodySchema = z
+  .object({
+    stepId: optionalUuidSchema,
+    userId: optionalUuidSchema,
+  })
+  .refine(({ stepId, userId }) => Boolean(stepId || userId), {
+    message: "stepId or userId is required in request body",
+  });
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,24 +62,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const stepId = request.nextUrl.searchParams.get("stepId");
-    const userId = request.nextUrl.searchParams.get("userId");
-
-    if (!stepId && !userId) {
-      return NextResponse.json(
-        { error: "stepId or userId query parameter is required" },
-        { status: 400 }
-      );
+    const parsedQuery = parseAndValidateSearchParams(
+      request.nextUrl.searchParams,
+      evidenceMetadataQuerySchema,
+      {
+        validationErrorMessage: "Invalid evidence metadata query",
+      }
+    );
+    if (!parsedQuery.success) {
+      return parsedQuery.response;
     }
-
-    // Validate UUID format to prevent data enumeration
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (stepId && !UUID_RE.test(stepId)) {
-      return NextResponse.json({ error: "Invalid step ID format" }, { status: 400 });
-    }
-    if (userId && !UUID_RE.test(userId)) {
-      return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 });
-    }
+    const { stepId, userId } = parsedQuery.data;
 
     const adminClient = createAdminClient();
 
@@ -203,22 +216,15 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    let stepId: string | null = null;
-    let userId: string | null = null;
-    try {
-      const body = await request.json();
-      stepId = typeof body?.stepId === "string" ? body.stepId : null;
-      userId = typeof body?.userId === "string" ? body.userId : null;
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    const parsedBody = await parseAndValidateJsonRequest(request, evidenceMetadataBodySchema, {
+      invalidJsonMessage: "Invalid JSON body",
+      validationErrorMessage: "Invalid evidence metadata body",
+    });
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
-    if (!stepId && !userId) {
-      return NextResponse.json(
-        { error: "stepId or userId is required in request body" },
-        { status: 400 }
-      );
-    }
+    const { stepId, userId } = parsedBody.data;
 
     // Rewrite into the query-string so the GET handler logic can be reused
     const url = new URL(request.url);

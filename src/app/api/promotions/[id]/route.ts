@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
-import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest, parseAndValidateRouteParams } from "@/lib/utils/api";
 import { promotionSchema } from "@/lib/validations/promotion";
 import { getEntitlements } from "@/lib/services/entitlements";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
@@ -24,9 +24,13 @@ import {
 import { userOwnsBusiness } from "@/lib/account/owned-business";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("PromotionDetail");
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const promotionIdParamsSchema = z.object({
+  id: uuidSchema,
+});
 type PromotionOwnerRow = {
   id: string;
   status: string;
@@ -47,11 +51,14 @@ type PromotionOwnerRow = {
  */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await params;
-
-    if (!UUID_RE.test(id)) {
-      return NextResponse.json({ error: "Invalid promotion ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, promotionIdParamsSchema, {
+      validationErrorMessage: "Invalid promotion ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id } = parsedParams.data;
 
     const supabase = await createClient();
     const { data: promotion, error } = await supabase
@@ -103,11 +110,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
 
-    const { id } = await params;
-
-    if (!UUID_RE.test(id)) {
-      return NextResponse.json({ error: "Invalid promotion ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, promotionIdParamsSchema, {
+      validationErrorMessage: "Invalid promotion ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id } = parsedParams.data;
 
     const supabase = await createClient();
     const {
@@ -297,11 +307,15 @@ export async function DELETE(
     const originBlock = enforceSameOriginMutation(_request, log);
     if (originBlock) return originBlock;
 
-    const { id } = await params;
-
-    if (!UUID_RE.test(id)) {
-      return NextResponse.json({ error: "Invalid promotion ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, promotionIdParamsSchema, {
+      validationErrorMessage: "Invalid promotion ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+
+    const { id } = parsedParams.data;
 
     const supabase = await createClient();
     const {

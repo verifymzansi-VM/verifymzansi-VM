@@ -93,10 +93,18 @@ describe("Media Upload Routes", () => {
 
     it("should successfully upload valid files", async () => {
       mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === "media_uploads") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+        };
       });
 
       // Create a file with valid JPEG magic bytes (0xFF, 0xD8, 0xFF)
@@ -195,8 +203,8 @@ describe("Media Upload Routes", () => {
       const res = await uploadMedia(createFormDataRequest([file]));
       const data = await res.json();
 
-      expect(res.status).toBe(200);
-      expect(data.success).toBe(true);
+      expect(res.status).toBe(400);
+      expect(data.success).toBe(false);
       expect(data.urls).toEqual([]);
       expect(data.errors).toEqual(['"test.txt": unsupported file type']);
     });

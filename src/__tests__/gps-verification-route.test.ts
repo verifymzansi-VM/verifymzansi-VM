@@ -6,7 +6,7 @@ const {
   mockReverseGeocode,
   mockComputeLocationConfidence,
   mockLogAuditEvent,
-  mockParseJson,
+  mockParseAndValidateJsonRequest,
   mockAdminFrom,
   mockCheckRateLimit,
   mockGetClientIp,
@@ -16,7 +16,7 @@ const {
   mockReverseGeocode: vi.fn(),
   mockComputeLocationConfidence: vi.fn(),
   mockLogAuditEvent: vi.fn(),
-  mockParseJson: vi.fn(),
+  mockParseAndValidateJsonRequest: vi.fn(),
   mockAdminFrom: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockGetClientIp: vi.fn(),
@@ -49,7 +49,7 @@ vi.mock("@/lib/services/feature-flags", () => ({
 }));
 
 vi.mock("@/lib/utils/api", () => ({
-  parseJsonRequest: mockParseJson,
+  parseAndValidateJsonRequest: mockParseAndValidateJsonRequest,
 }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
@@ -80,10 +80,18 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
 import { POST } from "@/app/api/verification/location/gps/route";
 import type { NextRequest } from "next/server";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 function makeRequest(body: Record<string, unknown>) {
+  const headers = new Headers({
+    cookie: `vm_csrf=${CSRF_TOKEN}`,
+    "x-csrf-token": CSRF_TOKEN,
+  });
+
   return {
+    url: "http://localhost:3000/api/verification/location/gps",
     json: () => Promise.resolve(body),
-    headers: { get: () => null },
+    headers,
     nextUrl: new URL("http://localhost:3000/api/verification/location/gps"),
   } as unknown as NextRequest;
 }
@@ -106,7 +114,7 @@ describe("POST /api/verification/location/gps", () => {
 
   it("should return 404 when feature flag is disabled", async () => {
     mockGetUser.mockResolvedValue({
-      data: { user: { id: "u1" } },
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
       error: null,
     });
     mockIsFeatureEnabled.mockResolvedValue(false);
@@ -119,15 +127,13 @@ describe("POST /api/verification/location/gps", () => {
 
   it("should reject coordinates outside SA bounds", async () => {
     mockGetUser.mockResolvedValue({
-      data: { user: { id: "u1" } },
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
       error: null,
     });
     mockIsFeatureEnabled.mockResolvedValue(true);
-    mockParseJson.mockResolvedValue({
-      latitude: 51.5,
-      longitude: -0.1,
-      accuracy: 50,
-      timestamp: Date.now(),
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: false,
+      response: Response.json({ error: "Invalid input" }, { status: 400 }),
     });
 
     const res = await POST(
@@ -139,15 +145,18 @@ describe("POST /api/verification/location/gps", () => {
 
   it("should reject accuracy above threshold", async () => {
     mockGetUser.mockResolvedValue({
-      data: { user: { id: "u1" } },
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
       error: null,
     });
     mockIsFeatureEnabled.mockResolvedValue(true);
-    mockParseJson.mockResolvedValue({
-      latitude: -26.2,
-      longitude: 28.0,
-      accuracy: 600, // > 500
-      timestamp: Date.now(),
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2,
+        longitude: 28.0,
+        accuracy: 600, // > 500
+        timestamp: Date.now(),
+      },
     });
 
     const res = await POST(

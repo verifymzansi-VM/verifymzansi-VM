@@ -140,6 +140,15 @@ describe("PATCH /api/businesses/[id]", () => {
     );
   });
 
+  it("returns 400 when the business id param is malformed", async () => {
+    const res = await PATCH(createRequest({}), {
+      params: Promise.resolve({ id: "not-a-uuid" }),
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({ error: "Invalid business ID" });
+  });
+
   it("returns 409 when updating to a slug that already belongs to another business", async () => {
     mockCreateClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },

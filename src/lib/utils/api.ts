@@ -16,6 +16,44 @@ interface ParseValidatedJsonOptions {
   includeValidationDetails?: boolean;
 }
 
+type KeyValueEntrySource = Pick<FormData, "entries"> | Pick<URLSearchParams, "entries">;
+
+function buildValidationErrorResponse(
+  schemaError: Parameters<typeof toFieldErrorMap>[0],
+  options: ParseValidatedJsonOptions
+): NextResponse {
+  const payload: Record<string, unknown> = {
+    error: options.validationErrorMessage ?? "Validation failed",
+  };
+
+  if (options.includeValidationDetails ?? true) {
+    payload.details = toFieldErrorMap(schemaError);
+  }
+
+  return NextResponse.json(payload, { status: options.validationStatus ?? 400 });
+}
+
+function coerceEntriesToObject(source: KeyValueEntrySource): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+
+  for (const [key, value] of source.entries()) {
+    const existing = data[key];
+    if (existing === undefined) {
+      data[key] = value;
+      continue;
+    }
+
+    if (Array.isArray(existing)) {
+      existing.push(value);
+      continue;
+    }
+
+    data[key] = [existing, value];
+  }
+
+  return data;
+}
+
 /**
  * Safely parse a JSON request body, returning null if invalid
  * to prevent uncaught 500 errors on the server.
@@ -68,17 +106,81 @@ export async function parseAndValidateJsonRequest<TSchema extends ZodTypeAny>(
 
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    const payload: Record<string, unknown> = {
-      error: options.validationErrorMessage ?? "Validation failed",
-    };
-
-    if (options.includeValidationDetails ?? true) {
-      payload.details = toFieldErrorMap(parsed.error);
-    }
-
     return {
       success: false,
-      response: NextResponse.json(payload, { status: options.validationStatus ?? 400 }),
+      response: buildValidationErrorResponse(parsed.error, options),
+    };
+  }
+
+  return { success: true, data: parsed.data };
+}
+
+export function parseAndValidateSearchParams<TSchema extends ZodTypeAny>(
+  searchParams: Pick<URLSearchParams, "entries">,
+  schema: TSchema,
+  options: ParseValidatedJsonOptions = {}
+):
+  | {
+      success: true;
+      data: output<TSchema>;
+    }
+  | {
+      success: false;
+      response: NextResponse;
+    } {
+  const parsed = schema.safeParse(coerceEntriesToObject(searchParams));
+  if (!parsed.success) {
+    return {
+      success: false,
+      response: buildValidationErrorResponse(parsed.error, options),
+    };
+  }
+
+  return { success: true, data: parsed.data };
+}
+
+export function parseAndValidateFormData<TSchema extends ZodTypeAny>(
+  formData: Pick<FormData, "entries">,
+  schema: TSchema,
+  options: ParseValidatedJsonOptions = {}
+):
+  | {
+      success: true;
+      data: output<TSchema>;
+    }
+  | {
+      success: false;
+      response: NextResponse;
+    } {
+  const parsed = schema.safeParse(coerceEntriesToObject(formData));
+  if (!parsed.success) {
+    return {
+      success: false,
+      response: buildValidationErrorResponse(parsed.error, options),
+    };
+  }
+
+  return { success: true, data: parsed.data };
+}
+
+export function parseAndValidateRouteParams<TSchema extends ZodTypeAny>(
+  params: unknown,
+  schema: TSchema,
+  options: ParseValidatedJsonOptions = {}
+):
+  | {
+      success: true;
+      data: output<TSchema>;
+    }
+  | {
+      success: false;
+      response: NextResponse;
+    } {
+  const parsed = schema.safeParse(params);
+  if (!parsed.success) {
+    return {
+      success: false,
+      response: buildValidationErrorResponse(parsed.error, options),
     };
   }
 

@@ -12,13 +12,20 @@ import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
   applyOwnerFilter,
   getOwnerColumn,
+  readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { parseAndValidateRouteParams } from "@/lib/utils/api";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("FeaturedCheckout");
+const listingFeaturedParamsSchema = z.object({
+  id: uuidSchema,
+});
 type ListingCheckoutRow = {
   id: string;
   title: string;
@@ -40,12 +47,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const originBlock = enforceSameOriginMutation(_request, log);
     if (originBlock) return originBlock;
 
-    const { id: listingId } = await params;
-
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_RE.test(listingId)) {
-      return NextResponse.json({ error: "Invalid listing ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, listingFeaturedParamsSchema, {
+      validationErrorMessage: "Invalid listing ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id: listingId } = parsedParams.data;
 
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
@@ -92,6 +101,13 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     if (!listing) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+    }
+
+    if (readOwnerId(listing) !== user.id) {
+      return NextResponse.json(
+        { error: "Forbidden — you do not own this listing" },
+        { status: 403 }
+      );
     }
 
     if (listing.status !== "live") {
