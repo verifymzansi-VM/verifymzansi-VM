@@ -45,7 +45,8 @@ function isSafeUrl(url: string): boolean {
       (host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`)
     );
   } catch {
-    return url.startsWith("/");
+    // Only allow relative paths (starting with "/" but not "//")
+    return url.startsWith("/") && !url.startsWith("//");
   }
 }
 

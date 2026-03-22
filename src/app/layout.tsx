@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { PublicRuntimeConfigBridge } from "@/components/providers/public-runtime-config";
 import { Toaster } from "@/components/ui/toaster";
@@ -112,7 +113,9 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const hdrs = await headers();
+  const nonce = hdrs.get("x-nonce") ?? undefined;
+  const csrfToken = hdrs.get(CSRF_HEADER_NAME) ?? undefined;
   const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
 
   return (
@@ -121,6 +124,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       suppressHydrationWarning
       data-playwright={isPlaywrightTestMode ? "1" : undefined}
     >
+      <head>{csrfToken ? <meta name="csrf-token" content={csrfToken} /> : null}</head>
       <body className="min-h-screen antialiased">
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: TURBOPACK_NAME_POLYFILL }} />
         {process.env.NODE_ENV === "development" ? (

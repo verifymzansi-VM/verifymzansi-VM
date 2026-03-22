@@ -31,7 +31,11 @@ interface UploadResult {
  */
 function assertSafeStorageKey(key: string): void {
   const decoded = decodeURIComponent(key);
-  // All checks applied consistently to the decoded key.
+  // Reject keys that still contain percent-encoded sequences after decoding
+  // to prevent double-encoding attacks (e.g. %252e%252e → %2e%2e → ..).
+  if (decoded.includes("%")) {
+    throw new Error("Invalid storage key");
+  }
   // The regex whitelist [\w\-/.] is the primary defense — it rejects
   // backslashes, null bytes, and any non-alphanumeric/punctuation chars.
   if (

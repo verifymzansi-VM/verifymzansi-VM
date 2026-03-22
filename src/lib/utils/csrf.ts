@@ -84,19 +84,36 @@ export function ensureCsrfCookie(request: NextRequest, response: NextResponse): 
   response.cookies.set({
     name: CSRF_COOKIE_NAME,
     value: token,
-    httpOnly: false,
+    httpOnly: true,
     sameSite: "lax",
     secure: isSecureRequest(request),
     path: "/",
     maxAge: CSRF_COOKIE_MAX_AGE_SECONDS,
   });
 
+  // Expose the token via a response header so Server Components can inject
+  // it into the page as a <meta> tag. Client JS reads the meta tag instead
+  // of document.cookie, so the cookie can stay httpOnly.
+  response.headers.set(CSRF_HEADER_NAME, token);
+
   return token;
 }
 
+/**
+ * Read the CSRF token from the server-injected <meta name="csrf-token"> tag.
+ * Falls back to parsing a raw cookie string when called with an explicit source
+ * (e.g. in unit tests).
+ */
 export function getCsrfTokenFromDocumentCookie(cookieSource?: string): string | null {
-  const source = cookieSource ?? (typeof document === "undefined" ? "" : document.cookie);
-  const token = parseCookieHeader(source, CSRF_COOKIE_NAME);
+  if (cookieSource) {
+    const token = parseCookieHeader(cookieSource, CSRF_COOKIE_NAME);
+    return isValidToken(token) ? token : null;
+  }
+
+  if (typeof document === "undefined") return null;
+
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]');
+  const token = meta?.content ?? null;
   return isValidToken(token) ? token : null;
 }
 

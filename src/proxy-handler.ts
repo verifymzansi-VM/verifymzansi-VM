@@ -8,7 +8,7 @@ import {
   PLAYWRIGHT_SESSION_COOKIE,
 } from "@/lib/supabase/playwright-session";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
-import { ensureCsrfCookie } from "@/lib/utils/csrf";
+import { ensureCsrfCookie, CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger("Proxy");
@@ -141,9 +141,22 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
   }
   requestHeaders.set("Content-Security-Policy", csp);
 
+  // Build a temporary response to let ensureCsrfCookie resolve the token
+  // (reads existing cookie or generates a new one), then forward the token
+  // as a request header so Server Components can inject it via <meta>.
+  const csrfResponse = NextResponse.next();
+  const csrfToken = ensureCsrfCookie(request, csrfResponse);
+  requestHeaders.set(CSRF_HEADER_NAME, csrfToken);
+
   const response = NextResponse.next({
     request: { headers: requestHeaders },
   });
+
+  // Transfer the CSRF cookie from the temporary response
+  const csrfCookie = csrfResponse.cookies.get("vm_csrf");
+  if (csrfCookie) {
+    response.cookies.set(csrfCookie);
+  }
 
   // Preserve cookies set during auth (Supabase session refresh, etc.)
   for (const cookie of proxyResponse.cookies.getAll()) {
@@ -165,7 +178,6 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
   }
 
   applySecurityHeaders(response, csp);
-  ensureCsrfCookie(request, response);
   if (nonce) {
     response.headers.set("x-nonce", nonce);
   }
