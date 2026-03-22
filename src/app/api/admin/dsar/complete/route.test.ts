@@ -50,6 +50,10 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: () => null,
 }));
 
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: () => null,
+}));
+
 import { POST } from "./route";
 
 function createMockRequest(body: Record<string, unknown>) {

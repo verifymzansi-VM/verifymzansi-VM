@@ -3,11 +3,20 @@ import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
-const { mockCreateClient, mockCreateAdminClient, mockFrom, mockLogAuditEvent } = vi.hoisted(() => ({
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockFrom,
+  mockLogAuditEvent,
+  mockEnforceSameOriginMutation,
+  mockEnforceCsrfToken,
+} = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockFrom: vi.fn(),
   mockLogAuditEvent: vi.fn(),
+  mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
+  mockEnforceCsrfToken: vi.fn<(request: Request) => Response | null>(() => null),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -37,6 +46,14 @@ vi.mock("@/lib/utils/logger", () => ({
     warn: vi.fn(),
     error: vi.fn(),
   }),
+}));
+
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: mockEnforceSameOriginMutation,
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: mockEnforceCsrfToken,
 }));
 
 import { POST } from "./route";
@@ -142,6 +159,8 @@ describe("POST /api/admin/verification/decide", () => {
     vi.clearAllMocks();
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
     mockLogAuditEvent.mockResolvedValue(undefined);
+    mockEnforceSameOriginMutation.mockReturnValue(null);
+    mockEnforceCsrfToken.mockReturnValue(null);
   });
 
   it("returns 401 when user is not authenticated", async () => {
@@ -151,6 +170,12 @@ describe("POST /api/admin/verification/decide", () => {
   });
 
   it("returns 403 for cross-site verification decisions", async () => {
+    mockEnforceSameOriginMutation.mockReturnValue(
+      new Response(JSON.stringify({ error: "Cross-origin request blocked" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
     const response = await POST(
       createCrossSiteMockRequest({ stepId: STEP_UUID, decision: "approved" })
     );

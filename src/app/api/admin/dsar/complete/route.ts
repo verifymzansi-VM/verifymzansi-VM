@@ -9,6 +9,7 @@ import { verifyAdminActorRoleFromDb } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const log = createLogger("DSARComplete");
 
@@ -21,6 +22,8 @@ export async function POST(req: Request) {
   try {
     const originBlock = enforceSameOriginMutation(req, log);
     if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(req, log);
+    if (csrfBlock) return csrfBlock;
 
     const supabase = await createClient();
     const {

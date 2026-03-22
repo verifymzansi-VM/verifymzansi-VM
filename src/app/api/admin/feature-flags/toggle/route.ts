@@ -16,6 +16,7 @@ import { verifyAdminActorRoleFromDb } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("FeatureFlagsToggle");
@@ -41,6 +42,8 @@ export async function POST(request: NextRequest) {
     if (sameOriginFailure) {
       return sameOriginFailure;
     }
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const supabase = await createClient();
     const {

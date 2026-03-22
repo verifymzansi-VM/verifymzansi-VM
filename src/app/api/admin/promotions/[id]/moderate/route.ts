@@ -13,6 +13,7 @@ import {
 } from "@/lib/utils/api";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
 
 const log = createLogger("PromotionModeration");
@@ -36,6 +37,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // ── CSRF protection ───────────────────────────────────────
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const parsedParams = parseAndValidateRouteParams(
       await params,

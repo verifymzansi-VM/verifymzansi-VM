@@ -8,6 +8,7 @@ import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("AdminFlagging");
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
     if (sameOriginFailure) {
       return sameOriginFailure;
     }
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const supabase = await createClient();
     const {

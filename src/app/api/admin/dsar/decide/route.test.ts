@@ -6,12 +6,14 @@ const {
   mockLogAuditEvent,
   mockCheckLocalRateLimit,
   mockEnforceSameOriginMutation,
+  mockEnforceCsrfToken,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(),
   mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
+  mockEnforceCsrfToken: vi.fn<(request: Request) => Response | null>(() => null),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -46,6 +48,10 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: mockEnforceSameOriginMutation,
 }));
 
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: mockEnforceCsrfToken,
+}));
+
 import { POST } from "./route";
 
 function createMockRequest(body: Record<string, unknown>) {
@@ -67,6 +73,7 @@ describe("POST /api/admin/dsar/decide", () => {
     });
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
     mockEnforceSameOriginMutation.mockReturnValue(null);
+    mockEnforceCsrfToken.mockReturnValue(null);
     mockLogAuditEvent.mockResolvedValue(undefined);
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({

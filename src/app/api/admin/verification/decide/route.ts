@@ -10,6 +10,7 @@ import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const log = createLogger("AdminVerification");
 
@@ -21,6 +22,8 @@ export async function POST(request: Request) {
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     // Auth check
     const supabase = await createClient();
