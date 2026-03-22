@@ -6,17 +6,27 @@ import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 const {
   mockCreateClient,
   mockCreateAdminClient,
+  mockCreateNotification,
   mockFrom,
+  mockGetUserById,
   mockLogAuditEvent,
   mockEnforceSameOriginMutation,
   mockEnforceCsrfToken,
+  mockSendVerificationApprovedEmail,
+  mockSendVerificationRejectedEmail,
+  mockSendVerificationResubmissionEmail,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
+  mockCreateNotification: vi.fn(),
   mockFrom: vi.fn(),
+  mockGetUserById: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
   mockEnforceCsrfToken: vi.fn<(request: Request) => Response | null>(() => null),
+  mockSendVerificationApprovedEmail: vi.fn(),
+  mockSendVerificationRejectedEmail: vi.fn(),
+  mockSendVerificationResubmissionEmail: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -29,6 +39,16 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: mockLogAuditEvent,
+}));
+
+vi.mock("@/lib/notifications", () => ({
+  createNotification: mockCreateNotification,
+}));
+
+vi.mock("@/lib/services/email", () => ({
+  sendVerificationApprovedEmail: mockSendVerificationApprovedEmail,
+  sendVerificationRejectedEmail: mockSendVerificationRejectedEmail,
+  sendVerificationResubmissionEmail: mockSendVerificationResubmissionEmail,
 }));
 
 vi.mock("@/lib/auth/admin-access", () => ({
@@ -157,7 +177,27 @@ const baseStep = {
 describe("POST /api/admin/verification/decide", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateAdminClient.mockReturnValue({ from: mockFrom });
+    mockCreateAdminClient.mockReturnValue({
+      from: mockFrom,
+      auth: {
+        admin: {
+          getUserById: mockGetUserById,
+        },
+      },
+    });
+    mockCreateNotification.mockResolvedValue(undefined);
+    mockGetUserById.mockResolvedValue({
+      data: {
+        user: {
+          email: "member@example.com",
+          user_metadata: { full_name: "Test Member" },
+        },
+      },
+      error: null,
+    });
+    mockSendVerificationApprovedEmail.mockResolvedValue({ success: true });
+    mockSendVerificationRejectedEmail.mockResolvedValue({ success: true });
+    mockSendVerificationResubmissionEmail.mockResolvedValue({ success: true });
     mockLogAuditEvent.mockResolvedValue(undefined);
     mockEnforceSameOriginMutation.mockReturnValue(null);
     mockEnforceCsrfToken.mockReturnValue(null);
@@ -451,6 +491,11 @@ describe("POST /api/admin/verification/decide", () => {
     expect(profileUpdate).toHaveBeenCalledWith({
       account_verification_status: "rejected",
     });
+    expect(mockSendVerificationRejectedEmail).toHaveBeenCalledWith(
+      "member@example.com",
+      "Test Member",
+      "The photo is very blurry"
+    );
   });
 
   it("moderator can also make decisions", async () => {
@@ -721,5 +766,79 @@ describe("POST /api/admin/verification/decide", () => {
     expect(profileUpdate).toHaveBeenCalledWith({
       account_verification_status: "pending_review",
     });
+    expect(mockSendVerificationResubmissionEmail).toHaveBeenCalledWith(
+      "member@example.com",
+      "Test Member",
+      "Please retake with better lighting"
+    );
+  });
+
+  it("sends verification approved email when an account becomes fully approved", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+        }),
+      }),
+    });
+
+    let artifactLookupReturned = false;
+    let artifactStatusUpdated = false;
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockImplementation((...args: unknown[]) => {
+            if (args[0] === "*") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({
+                data: [
+                  { step_type: "phone", status: "approved" },
+                  { step_type: "id_doc", status: "approved" },
+                  { step_type: "selfie", status: "approved" },
+                  { step_type: "location", status: "approved" },
+                ],
+                error: null,
+              }),
+            };
+          }),
+          update: updateMock,
+        };
+      }
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+        if (!artifactStatusUpdated) {
+          artifactStatusUpdated = true;
+          return artifactStatusUpdateChain();
+        }
+        return artifactPurgeChain();
+      }
+      return {};
+    });
+
+    const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
+    expect(response.status).toBe(200);
+    expect(mockSendVerificationApprovedEmail).toHaveBeenCalledWith(
+      "member@example.com",
+      "Test Member"
+    );
   });
 });

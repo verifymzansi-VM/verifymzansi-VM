@@ -13,8 +13,11 @@ vi.mock("resend", () => {
 });
 
 import {
+  sendAccountEnforcementEmail,
+  sendPaymentFailedEmail,
   sendVerificationApprovedEmail,
   sendVerificationRejectedEmail,
+  sendVerificationResubmissionEmail,
   sendPaymentReceiptEmail,
   sendDsarCompletedEmail,
   sendDsarSubmissionEmail,
@@ -70,6 +73,21 @@ describe("email service", () => {
     });
   });
 
+  describe("sendVerificationResubmissionEmail", () => {
+    it("sends resubmission email with reason", async () => {
+      const result = await sendVerificationResubmissionEmail(
+        "user@example.com",
+        "Sipho",
+        "Please upload a clearer selfie"
+      );
+
+      expect(result.success).toBe(true);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.subject).toContain("resubmission");
+      expect(call.html).toContain("Please upload a clearer selfie");
+    });
+  });
+
   describe("sendPaymentReceiptEmail", () => {
     it("sends receipt with amount and plan name", async () => {
       const result = await sendPaymentReceiptEmail(
@@ -96,6 +114,39 @@ describe("email service", () => {
 
       const call = mockSend.mock.calls[0][0];
       expect(call.html).toContain("https://example.com/invoice/123");
+    });
+  });
+
+  describe("sendPaymentFailedEmail", () => {
+    it("sends failed payment template with billing retry link", async () => {
+      const result = await sendPaymentFailedEmail(
+        "user@example.com",
+        "Nomsa",
+        149,
+        "Mzansi Business"
+      );
+
+      expect(result.success).toBe(true);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.subject).toContain("Payment failed");
+      expect(call.html).toContain("Retry payment");
+    });
+  });
+
+  describe("sendAccountEnforcementEmail", () => {
+    it("sends suspension account update with reason", async () => {
+      const result = await sendAccountEnforcementEmail({
+        email: "user@example.com",
+        accountName: "Lebo",
+        action: "suspend",
+        reason: "Repeated policy violations",
+        suspendedUntil: "2026-04-01T10:00:00.000Z",
+      });
+
+      expect(result.success).toBe(true);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.subject).toContain("Account suspended");
+      expect(call.html).toContain("Repeated policy violations");
     });
   });
 

@@ -33,6 +33,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         const [
           unreadLeads,
+          unreadNotifications,
           rejectedListings,
           pendingModeration,
           verificationSteps,
@@ -43,6 +44,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             leadOwnerColumn,
             user.id
           ),
+          supabase
+            .from("notifications")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", user.id)
+            .eq("read", false),
           applyOwnerFilter(
             supabase
               .from("listings")
@@ -78,6 +84,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         setBadges({
           unreadLeads: unreadLeads.count || 0,
+          unreadNotifications: unreadNotifications.count || 0,
           rejectedListings: rejectedListings.count || 0,
           pendingModeration: pendingModeration.count || 0,
           incompleteVerification:

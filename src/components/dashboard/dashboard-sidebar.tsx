@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   ShoppingBag,
   MessageSquare,
+  Bell,
   ShieldCheck,
   CreditCard,
   Building2,
@@ -28,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/dashboard/listings", icon: ShoppingBag, label: "Listings" },
   { href: "/dashboard/leads", icon: MessageSquare, label: "Leads" },
+  { href: "/dashboard/communication", icon: Bell, label: "Communication" },
   { href: "/dashboard/businesses", icon: Building2, label: "Businesses" },
   { href: "/dashboard/promotions", icon: Megaphone, label: "Promotions & Events" },
   { href: "/verification", icon: ShieldCheck, label: "Verification" },
@@ -37,6 +39,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export interface DashboardSidebarBadges {
   unreadLeads?: number;
+  unreadNotifications?: number;
   rejectedListings?: number;
   pendingModeration?: number;
   incompleteVerification?: boolean;
@@ -54,6 +57,9 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
   function getBadge(href: string): { count: number; variant: "destructive" | "pending" } | null {
     if (href === "/dashboard/leads" && (badges.unreadLeads ?? 0) > 0) {
       return { count: badges.unreadLeads!, variant: "destructive" };
+    }
+    if (href === "/dashboard/communication" && (badges.unreadNotifications ?? 0) > 0) {
+      return { count: badges.unreadNotifications!, variant: "pending" };
     }
     if (href === "/dashboard/listings") {
       const total = (badges.rejectedListings ?? 0) + (badges.pendingModeration ?? 0);

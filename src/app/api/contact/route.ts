@@ -17,6 +17,8 @@ import { createNotification } from "@/lib/notifications";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { sendContactFormNotification } from "@/lib/services/email";
+import { logAuditEvent } from "@/lib/services/audit";
 
 const log = createLogger("ContactRoute");
 
@@ -127,7 +129,7 @@ export async function POST(request: NextRequest) {
     // Check account verification status
     const { data: accountProfile } = await admin
       .from("account_profiles")
-      .select("account_verification_status")
+      .select("account_verification_status, display_name")
       .eq("user_id", targetOwnerId)
       .maybeSingle();
 
@@ -184,6 +186,75 @@ export async function POST(request: NextRequest) {
       });
     } catch {
       // Non-fatal — contact was already created successfully
+    }
+
+    // Send non-blocking owner email alert for new leads.
+    try {
+      const authAdmin = (
+        admin as unknown as {
+          auth?: {
+            admin?: {
+              getUserById?: (id: string) => Promise<{
+                data?: { user?: { email?: string | null } | null };
+              }>;
+            };
+          };
+        }
+      ).auth?.admin;
+      const { data: ownerAuthData } = authAdmin?.getUserById
+        ? await authAdmin.getUserById(targetOwnerId)
+        : { data: { user: { email: null } } };
+
+      const ownerEmail = ownerAuthData?.user?.email;
+      if (ownerEmail) {
+        const ownerName =
+          (accountProfile as { display_name?: string | null } | null)?.display_name || "there";
+        const buyerName = user ? "Verified member" : "Interested buyer";
+        const buyerEmail = user?.email || "not-provided@verifymzansi.com";
+        const inquiryMessage = parsedBody.data.message || "A buyer has requested contact details.";
+        const listingTitle = normalizedTargetRecord.title || `your ${parsedBody.data.targetType}`;
+
+        void (async () => {
+          const result = await sendContactFormNotification(
+            ownerEmail,
+            ownerName,
+            buyerName,
+            buyerEmail,
+            inquiryMessage,
+            listingTitle
+          );
+
+          await logAuditEvent({
+            actorId: user?.id || "00000000-0000-0000-0000-000000000000",
+            actorRole: user ? "member" : "system",
+            action: result.success ? "communication_email_sent" : "communication_email_failed",
+            targetType: "account_profile",
+            targetId: targetOwnerId,
+            metadata: {
+              template: "lead_alert",
+              channel: "email",
+              target_type: parsedBody.data.targetType,
+              target_id: parsedBody.data.targetId,
+              error: result.error,
+              owner_user_id: targetOwnerId,
+            },
+          });
+        })().catch((emailErr) => {
+          log.warn("Failed to send contact owner email (non-fatal)", {
+            targetType: parsedBody.data.targetType,
+            targetId: parsedBody.data.targetId,
+            ownerId: targetOwnerId,
+            error: emailErr instanceof Error ? emailErr.message : "Unknown",
+          });
+        });
+      }
+    } catch (emailLookupErr) {
+      log.warn("Failed to resolve contact owner email (non-fatal)", {
+        targetType: parsedBody.data.targetType,
+        targetId: parsedBody.data.targetId,
+        ownerId: targetOwnerId,
+        error: emailLookupErr instanceof Error ? emailLookupErr.message : "Unknown",
+      });
     }
 
     return NextResponse.json({ success: true });

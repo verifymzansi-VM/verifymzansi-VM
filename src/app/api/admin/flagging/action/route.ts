@@ -10,6 +10,7 @@ import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compa
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { sendAccountEnforcementEmail } from "@/lib/services/email";
 
 const log = createLogger("AdminFlagging");
 
@@ -204,6 +205,81 @@ export async function POST(request: Request) {
       await admin.from("listings").update({ status: "hidden" }).eq(listingsOwnerCol, ownerId);
       await admin.from("businesses").update({ status: "hidden" }).eq(businessesOwnerCol, ownerId);
       await admin.from("promotions").update({ status: "hidden" }).eq(promotionsOwnerCol, ownerId);
+    }
+
+    // Send enforcement emails to affected account holders (non-blocking)
+    if ((action === "warn" || action === "suspend" || action === "ban") && ownerId) {
+      try {
+        const authAdmin = (
+          admin as unknown as {
+            auth?: {
+              admin?: {
+                getUserById?: (id: string) => Promise<{
+                  data?: {
+                    user?: {
+                      email?: string | null;
+                      user_metadata?: { full_name?: string | null; name?: string | null };
+                    } | null;
+                  };
+                }>;
+              };
+            };
+          }
+        ).auth?.admin;
+        const { data: ownerUserData } = authAdmin?.getUserById
+          ? await authAdmin.getUserById(ownerId)
+          : { data: { user: { email: null } } };
+
+        const ownerEmail = ownerUserData?.user?.email;
+        if (ownerEmail) {
+          const accountName =
+            ownerUserData.user?.user_metadata?.full_name ||
+            ownerUserData.user?.user_metadata?.name ||
+            "there";
+          const suspendedUntil =
+            action === "suspend" && durationDays
+              ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
+              : null;
+
+          void (async () => {
+            const result = await sendAccountEnforcementEmail({
+              email: ownerEmail,
+              accountName,
+              action,
+              reason,
+              suspendedUntil,
+            });
+
+            await logAuditEvent({
+              actorId: user.id,
+              actorRole: adminRole,
+              action: result.success ? "communication_email_sent" : "communication_email_failed",
+              targetType: "account_profile",
+              targetId: ownerId,
+              metadata: {
+                template: `account_${action}`,
+                channel: "email",
+                error: result.error,
+                owner_user_id: ownerId,
+              },
+            });
+          })().catch((emailErr) => {
+            log.warn("Failed to send enforcement email", {
+              action,
+              ownerId,
+              reportId,
+              error: emailErr instanceof Error ? emailErr.message : "Unknown",
+            });
+          });
+        }
+      } catch (emailLookupErr) {
+        log.warn("Failed to resolve enforcement email recipient", {
+          action,
+          ownerId,
+          reportId,
+          error: emailLookupErr instanceof Error ? emailLookupErr.message : "Unknown",
+        });
+      }
     }
 
     // Record moderation action

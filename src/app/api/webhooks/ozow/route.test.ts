@@ -4,6 +4,9 @@ import { NextRequest } from "next/server";
 const mockCreateAdminClient = vi.fn();
 const mockFulfillPayment = vi.fn();
 const mockRollbackPayment = vi.fn();
+const mockSendPaymentReceiptEmail = vi.fn();
+const mockSendPaymentFailedEmail = vi.fn();
+const mockGetUserById = vi.fn();
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => mockCreateAdminClient(),
@@ -36,6 +39,11 @@ vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: vi.fn(),
 }));
 
+vi.mock("@/lib/services/email", () => ({
+  sendPaymentReceiptEmail: (...args: unknown[]) => mockSendPaymentReceiptEmail(...args),
+  sendPaymentFailedEmail: (...args: unknown[]) => mockSendPaymentFailedEmail(...args),
+}));
+
 import { POST } from "./route";
 
 function createSignedRequest(body: Record<string, unknown>, signature = "bad-signature") {
@@ -54,6 +62,17 @@ describe("POST /api/webhooks/ozow", () => {
     vi.clearAllMocks();
     process.env.OZOW_WEBHOOK_SECRET = "webhook-secret";
     (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+    mockGetUserById.mockResolvedValue({
+      data: {
+        user: {
+          email: "payer@example.com",
+          user_metadata: { full_name: "Payer One" },
+        },
+      },
+      error: null,
+    });
+    mockSendPaymentReceiptEmail.mockResolvedValue({ success: true });
+    mockSendPaymentFailedEmail.mockResolvedValue({ success: true });
   });
 
   it("rejects webhooks when the secret is not configured", async () => {
@@ -150,6 +169,17 @@ describe("POST /api/webhooks/ozow", () => {
           provider_data: {
             ...paymentRecord.provider_data,
             processing_started_at: "2026-03-17T10:00:00.000Z",
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          ...paymentRecord,
+          status: "processing",
+          provider_payment_id: "ozow-tx-1",
+          provider_data: {
+            ...paymentRecord.provider_data,
+            processing_started_at: "2026-03-17T10:00:00.000Z",
             fulfillment_completed_at: "2026-03-17T10:00:05.000Z",
           },
         },
@@ -199,6 +229,7 @@ describe("POST /api/webhooks/ozow", () => {
         }
         throw new Error(`Unexpected table ${table}`);
       }),
+      auth: { admin: { getUserById: mockGetUserById } },
     });
     mockFulfillPayment.mockResolvedValue(undefined);
 
@@ -208,6 +239,12 @@ describe("POST /api/webhooks/ozow", () => {
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
     expect(mockFulfillPayment).toHaveBeenCalledTimes(1);
+    expect(mockSendPaymentReceiptEmail).toHaveBeenCalledWith(
+      "payer@example.com",
+      "Payer One",
+      25,
+      "Promotions & Events"
+    );
     expect(mockFulfillPayment).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -353,6 +390,7 @@ describe("POST /api/webhooks/ozow", () => {
 
         throw new Error(`Unexpected table ${table}`);
       }),
+      auth: { admin: { getUserById: mockGetUserById } },
     });
 
     const response = await POST(createSignedRequest(body, signature));
@@ -360,6 +398,12 @@ describe("POST /api/webhooks/ozow", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
     expect(mockFulfillPayment).not.toHaveBeenCalled();
+    expect(mockSendPaymentFailedEmail).toHaveBeenCalledWith(
+      "payer@example.com",
+      "Payer One",
+      25,
+      "Promotions & Events"
+    );
   });
 
   it("rolls back processing when fulfillment fails after claim", async () => {
@@ -392,7 +436,20 @@ describe("POST /api/webhooks/ozow", () => {
       user_id: "user-1",
     };
 
-    const maybeSingle = vi.fn().mockResolvedValueOnce({ data: paymentRecord });
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValueOnce({ data: paymentRecord })
+      .mockResolvedValueOnce({
+        data: {
+          ...paymentRecord,
+          status: "processing",
+          provider_payment_id: "ozow-tx-1",
+          provider_data: {
+            ...(paymentRecord.provider_data ?? {}),
+            processing_started_at: "2026-03-17T10:00:00.000Z",
+          },
+        },
+      });
     const paymentsSelect = {
       eq: vi.fn().mockReturnValue({ maybeSingle }),
     };
@@ -409,9 +466,20 @@ describe("POST /api/webhooks/ozow", () => {
       }),
     };
 
+    const rollbackUpdateChain = {
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    };
+
     const paymentsFrom = {
       select: vi.fn().mockReturnValue(paymentsSelect),
-      update: vi.fn().mockReturnValueOnce(claimUpdateChain),
+      update: vi
+        .fn()
+        .mockReturnValueOnce(claimUpdateChain)
+        .mockReturnValueOnce(rollbackUpdateChain),
     };
 
     mockCreateAdminClient.mockReturnValue({
@@ -421,6 +489,7 @@ describe("POST /api/webhooks/ozow", () => {
         }
         throw new Error(`Unexpected table ${table}`);
       }),
+      auth: { admin: { getUserById: mockGetUserById } },
     });
     mockFulfillPayment.mockRejectedValue(new Error("fulfillment blew up"));
     mockRollbackPayment.mockResolvedValue(undefined);

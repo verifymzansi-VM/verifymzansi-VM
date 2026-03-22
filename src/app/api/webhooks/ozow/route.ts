@@ -14,10 +14,100 @@ import {
   type PaymentStoreClient,
 } from "@/lib/payments/store";
 import { logAuditEvent } from "@/lib/services/audit";
+import { sendPaymentFailedEmail, sendPaymentReceiptEmail } from "@/lib/services/email";
 
 const log = createLogger("OzowWebhook");
 
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
+
+function getPlanNameFromArea(area?: string | null): string {
+  switch (area) {
+    case "MZANSI_MARKET":
+      return "Mzansi Market";
+    case "MZANSI_BUSINESS":
+      return "Mzansi Business";
+    case "PROMOTIONS_EVENTS":
+      return "Promotions & Events";
+    default:
+      return "VerifyMzansi Plan";
+  }
+}
+
+async function sendPaymentStatusEmail(params: {
+  admin: PaymentStoreClient;
+  userId: string;
+  amountCents: number;
+  area?: string | null;
+  status: "success" | "failed";
+  logContext: { paymentId: string; providerPaymentId?: string | null };
+}): Promise<void> {
+  const authAdmin = (
+    params.admin as unknown as {
+      auth?: {
+        admin?: {
+          getUserById?: (id: string) => Promise<{
+            data?: {
+              user?: {
+                email?: string | null;
+                user_metadata?: { full_name?: string | null; name?: string | null };
+              } | null;
+            };
+            error?: { message?: string };
+          }>;
+        };
+      };
+    }
+  ).auth?.admin;
+
+  if (!authAdmin?.getUserById) return;
+
+  const { data: userData, error: userLookupErr } = await authAdmin.getUserById(params.userId);
+  const recipient = userData?.user;
+  if (userLookupErr || !recipient?.email) {
+    log.warn("Skipping payment email: recipient lookup failed", {
+      ...params.logContext,
+      userId: params.userId,
+      error: userLookupErr?.message,
+    });
+    return;
+  }
+
+  const email = recipient.email;
+  const accountName =
+    recipient.user_metadata?.full_name || recipient.user_metadata?.name || "there";
+  const amount = params.amountCents / 100;
+  const planName = getPlanNameFromArea(params.area);
+
+  const result =
+    params.status === "success"
+      ? await sendPaymentReceiptEmail(email, accountName, amount, planName)
+      : await sendPaymentFailedEmail(email, accountName, amount, planName);
+
+  if (!result.success) {
+    log.warn("Payment email delivery failed", {
+      ...params.logContext,
+      userId: params.userId,
+      status: params.status,
+      error: result.error,
+    });
+  }
+
+  await logAuditEvent({
+    actorId: SYSTEM_ACTOR_ID,
+    actorRole: "system",
+    action: result.success ? "communication_email_sent" : "communication_email_failed",
+    targetType: "account_profile",
+    targetId: params.userId,
+    metadata: {
+      template: params.status === "success" ? "payment_receipt" : "payment_failed",
+      channel: "email",
+      error: result.error,
+      owner_user_id: params.userId,
+      payment_id: params.logContext.paymentId,
+      provider_payment_id: params.logContext.providerPaymentId,
+    },
+  });
+}
 
 /** Non-blocking audit log for completed payments. */
 async function auditPaymentCompleted(payment: {
@@ -159,7 +249,29 @@ export async function POST(request: NextRequest) {
     }
 
     if (eventType.includes("cancel") || eventType.includes("fail")) {
+      if (payment.status === "failed") {
+        return NextResponse.json({ success: true, duplicate: true });
+      }
+
       await markPaymentFailed(supabase, payment, payload.rawPayload);
+
+      sendPaymentStatusEmail({
+        admin: supabase,
+        userId: payment.user_id,
+        amountCents: payment.amount_cents,
+        area: payment.area,
+        status: "failed",
+        logContext: {
+          paymentId: payment.id,
+          providerPaymentId: payload.providerPaymentId,
+        },
+      }).catch((emailErr) => {
+        log.warn("Failed to queue payment failed email", {
+          paymentId: payment.id,
+          error: emailErr instanceof Error ? emailErr.message : "Unknown error",
+        });
+      });
+
       return NextResponse.json({ success: true });
     }
 
@@ -222,6 +334,23 @@ export async function POST(request: NextRequest) {
 
         await auditPaymentCompleted(currentPayment);
 
+        sendPaymentStatusEmail({
+          admin: supabase,
+          userId: currentPayment.user_id,
+          amountCents: currentPayment.amount_cents,
+          area: currentPayment.area,
+          status: "success",
+          logContext: {
+            paymentId: currentPayment.id,
+            providerPaymentId: payload.providerPaymentId,
+          },
+        }).catch((emailErr) => {
+          log.warn("Failed to queue payment receipt email", {
+            paymentId: currentPayment.id,
+            error: emailErr instanceof Error ? emailErr.message : "Unknown error",
+          });
+        });
+
         return NextResponse.json({ success: true, recovered: true });
       }
 
@@ -261,6 +390,23 @@ export async function POST(request: NextRequest) {
       }
 
       await auditPaymentCompleted(reloadedPayment);
+
+      sendPaymentStatusEmail({
+        admin: supabase,
+        userId: reloadedPayment.user_id,
+        amountCents: reloadedPayment.amount_cents,
+        area: reloadedPayment.area,
+        status: "success",
+        logContext: {
+          paymentId: reloadedPayment.id,
+          providerPaymentId: payload.providerPaymentId,
+        },
+      }).catch((emailErr) => {
+        log.warn("Failed to queue payment receipt email", {
+          paymentId: reloadedPayment.id,
+          error: emailErr instanceof Error ? emailErr.message : "Unknown error",
+        });
+      });
 
       return NextResponse.json({ success: true, recovered: true });
     }
@@ -307,6 +453,23 @@ export async function POST(request: NextRequest) {
     }
 
     await auditPaymentCompleted(finalPayment);
+
+    sendPaymentStatusEmail({
+      admin: supabase,
+      userId: finalPayment.user_id,
+      amountCents: finalPayment.amount_cents,
+      area: finalPayment.area,
+      status: "success",
+      logContext: {
+        paymentId: finalPayment.id,
+        providerPaymentId: payload.providerPaymentId,
+      },
+    }).catch((emailErr) => {
+      log.warn("Failed to queue payment receipt email", {
+        paymentId: finalPayment.id,
+        error: emailErr instanceof Error ? emailErr.message : "Unknown error",
+      });
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

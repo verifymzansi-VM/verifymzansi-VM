@@ -210,6 +210,58 @@ export async function sendVerificationRejectedEmail(
 }
 
 /**
+ * Send verification resubmission email
+ */
+export async function sendVerificationResubmissionEmail(
+  email: string,
+  accountName: string,
+  reason: string
+): Promise<SendEmailResult> {
+  const subject = "VerifyMzansi verification resubmission required";
+  const safeReason = escapeHtml(reason);
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #f59e0b; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
+          .button { display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">Verification resubmission needed</h1>
+          </div>
+          <div class="content">
+            <p>Hi ${escapeHtml(accountName)},</p>
+            <p>We reviewed your verification submission and need updated information before we can continue.</p>
+            <p><strong>What to fix:</strong> ${safeReason}</p>
+            <p style="text-align: center;">
+              <a href="${sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL)}/verification" class="button">Update verification</a>
+            </p>
+            <p>If you need help, reply to this email and our support team will assist you.</p>
+            <p>Best regards,<br>The VerifyMzansi Team</p>
+          </div>
+          <div class="footer">
+            <p>Questions? Email us at support@verifymzansi.com</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `Hi ${accountName},\n\nWe reviewed your verification submission and need updated information.\n\nWhat to fix: ${reason}\n\nUpdate verification: ${sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL)}/verification\n\nIf you need help, reply to this email.`;
+
+  return sendEmail({ to: email, subject, html, text });
+}
+
+/**
  * Send payment receipt email
  */
 export async function sendPaymentReceiptEmail(
@@ -284,6 +336,63 @@ export async function sendPaymentReceiptEmail(
   `;
 
   const text = `Hi ${accountName},\n\nThank you for your payment!\n\nPlan: ${planName}\nAmount: R ${amount.toFixed(2)}\nStatus: Active\n\nYour subscription will renew automatically in 30 days.\n\nBest regards,\nThe VerifyMzansi Team`;
+
+  return sendEmail({ to: email, subject, html, text });
+}
+
+/**
+ * Send payment failed email with retry instructions.
+ */
+export async function sendPaymentFailedEmail(
+  email: string,
+  accountName: string,
+  amount: number,
+  planName: string
+): Promise<SendEmailResult> {
+  const subject = `Payment failed - ${planName}`;
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #dc2626; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
+          .button { display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .summary { background: #f9fafb; padding: 16px; border-radius: 8px; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">Payment could not be completed</h1>
+          </div>
+          <div class="content">
+            <p>Hi ${escapeHtml(accountName)},</p>
+            <p>We could not process your payment. Your plan has not been activated yet.</p>
+            <div class="summary">
+              <p style="margin: 0 0 8px;"><strong>Plan:</strong> ${escapeHtml(planName)}</p>
+              <p style="margin: 0;"><strong>Amount:</strong> R ${amount.toFixed(2)}</p>
+            </div>
+            <p style="text-align: center;">
+              <a href="${appUrl}/billing" class="button">Retry payment</a>
+            </p>
+            <p>If you believe this is an error, contact support and include your account email.</p>
+            <p>Best regards,<br>The VerifyMzansi Team</p>
+          </div>
+          <div class="footer">
+            <p>Questions? Email us at support@verifymzansi.com</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `Hi ${accountName},\n\nWe could not process your payment for ${planName}.\nAmount: R ${amount.toFixed(2)}\n\nRetry payment: ${appUrl}/billing\n\nIf you believe this is an error, please contact support.`;
 
   return sendEmail({ to: email, subject, html, text });
 }
@@ -517,4 +626,82 @@ export async function sendContactFormNotification(
   const text = `Hi ${ownerName},\n\nYou have a new inquiry about: ${listingTitle}\n\nFrom: ${buyerName}\nEmail: ${buyerEmail}\n\nMessage:\n${message}\n\nReply to this email to respond.\n\nView all leads: ${sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL)}/dashboard/leads`;
 
   return sendEmail({ to: email, subject, html, text });
+}
+
+/**
+ * Send account enforcement action email.
+ */
+export async function sendAccountEnforcementEmail(params: {
+  email: string;
+  accountName: string;
+  action: "warn" | "suspend" | "ban";
+  reason?: string | null;
+  suspendedUntil?: string | null;
+}): Promise<SendEmailResult> {
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const actionTitle =
+    params.action === "warn"
+      ? "Account warning issued"
+      : params.action === "suspend"
+        ? "Account suspended"
+        : "Account banned";
+  const subject = `VerifyMzansi account update - ${actionTitle}`;
+
+  const statusCopy =
+    params.action === "warn"
+      ? "A warning has been issued on your account after a moderation review."
+      : params.action === "suspend"
+        ? "Your account has been temporarily suspended after a moderation review."
+        : "Your account has been permanently banned after a moderation review.";
+
+  const suspensionCopy =
+    params.action === "suspend" && params.suspendedUntil
+      ? `<p><strong>Suspension end:</strong> ${escapeHtml(new Date(params.suspendedUntil).toLocaleString("en-ZA"))}</p>`
+      : "";
+
+  const reasonCopy = params.reason
+    ? `<p><strong>Reason:</strong> ${escapeHtml(params.reason)}</p>`
+    : "";
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #111827; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
+          .button { display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">${actionTitle}</h1>
+          </div>
+          <div class="content">
+            <p>Hi ${escapeHtml(params.accountName)},</p>
+            <p>${statusCopy}</p>
+            ${reasonCopy}
+            ${suspensionCopy}
+            <p style="text-align: center;">
+              <a href="${appUrl}/dashboard/profile#account" class="button">Review account</a>
+            </p>
+            <p>If you need clarification, reply to this email and our team will assist you.</p>
+            <p>Best regards,<br>The VerifyMzansi Team</p>
+          </div>
+          <div class="footer">
+            <p>Questions? Email us at support@verifymzansi.com</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `Hi ${params.accountName},\n\n${statusCopy}${params.reason ? `\n\nReason: ${params.reason}` : ""}${params.action === "suspend" && params.suspendedUntil ? `\nSuspension end: ${new Date(params.suspendedUntil).toLocaleString("en-ZA")}` : ""}\n\nReview account: ${appUrl}/dashboard/profile#account\n\nIf you need clarification, please contact support.`;
+
+  return sendEmail({ to: params.email, subject, html, text });
 }

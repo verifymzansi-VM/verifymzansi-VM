@@ -56,6 +56,8 @@ export type AuditAction =
   | "kyc_provider_webhook_received"
   | "kyc_override_approved"
   | "kyc_purge_scheduled"
+  | "communication_email_sent"
+  | "communication_email_failed"
   | "feature_flag_toggled"
   | "kyc_session_started"
   | "kyc_gps_submitted"

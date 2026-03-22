@@ -11,6 +11,11 @@ import { createNotification } from "@/lib/notifications";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
+import {
+  sendVerificationApprovedEmail,
+  sendVerificationRejectedEmail,
+  sendVerificationResubmissionEmail,
+} from "@/lib/services/email";
 
 const log = createLogger("AdminVerification");
 
@@ -321,6 +326,122 @@ export async function POST(request: Request) {
     } catch (notifErr) {
       log.warn("Failed to send notification (non-fatal)", {
         error: notifErr instanceof Error ? notifErr.message : "Unknown",
+      });
+    }
+
+    // Send transactional email for verification decisions (best-effort, non-blocking)
+    try {
+      const authAdmin = (
+        admin as unknown as {
+          auth?: {
+            admin?: {
+              getUserById?: (id: string) => Promise<{
+                data?: {
+                  user?: {
+                    email?: string | null;
+                    user_metadata?: { full_name?: string | null; name?: string | null };
+                  } | null;
+                };
+                error?: { message?: string };
+              }>;
+            };
+          };
+        }
+      ).auth?.admin;
+
+      if (authAdmin?.getUserById) {
+        const { data: targetUser } = await authAdmin.getUserById(step.user_id);
+        const recipient = targetUser?.user;
+        const recipientEmail = recipient?.email;
+        if (recipientEmail) {
+          const accountName =
+            recipient?.user_metadata?.full_name || recipient?.user_metadata?.name || "there";
+
+          if (decision === "approved") {
+            void (async () => {
+              const result = await sendVerificationApprovedEmail(recipientEmail, accountName);
+              await logAuditEvent({
+                actorId: user.id,
+                actorRole: adminRole,
+                action: result.success ? "communication_email_sent" : "communication_email_failed",
+                targetType: "account_profile",
+                targetId: step.user_id,
+                metadata: {
+                  template: "verification_approved",
+                  channel: "email",
+                  error: result.error,
+                  owner_user_id: step.user_id,
+                },
+              });
+            })().catch((emailErr) => {
+              log.warn("Failed to send verification approved email", {
+                userId: step.user_id,
+                error: emailErr instanceof Error ? emailErr.message : "Unknown",
+              });
+            });
+          } else if (decision === "needs_resubmission") {
+            const reasonText =
+              reasonNote || reasonCode || "Please review and resubmit your details.";
+            void (async () => {
+              const result = await sendVerificationResubmissionEmail(
+                recipientEmail,
+                accountName,
+                reasonText
+              );
+              await logAuditEvent({
+                actorId: user.id,
+                actorRole: adminRole,
+                action: result.success ? "communication_email_sent" : "communication_email_failed",
+                targetType: "account_profile",
+                targetId: step.user_id,
+                metadata: {
+                  template: "verification_resubmission",
+                  channel: "email",
+                  error: result.error,
+                  owner_user_id: step.user_id,
+                },
+              });
+            })().catch((emailErr) => {
+              log.warn("Failed to send verification resubmission email", {
+                userId: step.user_id,
+                error: emailErr instanceof Error ? emailErr.message : "Unknown",
+              });
+            });
+          } else {
+            const reasonText =
+              reasonNote || reasonCode || "Your submission did not meet verification requirements.";
+            void (async () => {
+              const result = await sendVerificationRejectedEmail(
+                recipientEmail,
+                accountName,
+                reasonText
+              );
+              await logAuditEvent({
+                actorId: user.id,
+                actorRole: adminRole,
+                action: result.success ? "communication_email_sent" : "communication_email_failed",
+                targetType: "account_profile",
+                targetId: step.user_id,
+                metadata: {
+                  template: "verification_rejected",
+                  channel: "email",
+                  error: result.error,
+                  owner_user_id: step.user_id,
+                },
+              });
+            })().catch((emailErr) => {
+              log.warn("Failed to send verification rejected email", {
+                userId: step.user_id,
+                error: emailErr instanceof Error ? emailErr.message : "Unknown",
+              });
+            });
+          }
+        }
+      }
+    } catch (emailLookupErr) {
+      log.warn("Failed to resolve verification email recipient", {
+        userId: step.user_id,
+        error: emailLookupErr instanceof Error ? emailLookupErr.message : "Unknown",
       });
     }
 
