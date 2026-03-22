@@ -1,15 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { createLogger } from "@/lib/utils/logger";
 import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const log = createLogger("SignOut");
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const originBlock = enforceSameOriginMutation(request, log);
   if (originBlock) return originBlock;
+
+  const csrfBlock = enforceCsrfToken(request, log);
+  if (csrfBlock) return csrfBlock;
 
   const rl = checkLocalRateLimit(getClientIp(request), "auth:sign-out");
   if (rl.limited) {

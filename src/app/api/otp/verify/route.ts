@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { otpVerifySchema } from "@/lib/validations/auth";
@@ -219,18 +219,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-    const parsed = otpVerifySchema.safeParse(body);
+    const parsedBody = await parseAndValidateJsonRequest(request, otpVerifySchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
 
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
-    const { otp } = parsed.data;
-    const phone = normalizeSaPhone(parsed.data.phone);
+    const { otp } = parsedBody.data;
+    const phone = normalizeSaPhone(parsedBody.data.phone);
     const accountPhoneFields = buildAccountPhoneFields(phone);
     const supabase = await createClient();
     const {

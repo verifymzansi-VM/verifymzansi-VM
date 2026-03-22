@@ -22,6 +22,7 @@ import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import {
   BUSINESS_SLUG_CONFLICT_RESPONSE,
@@ -69,6 +70,8 @@ export async function POST(request: NextRequest) {
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const supabase = await createClient();
     const {

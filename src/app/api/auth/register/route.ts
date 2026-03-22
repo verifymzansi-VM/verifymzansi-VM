@@ -15,21 +15,33 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("Register");
 
+const ORPHANED_AUTH_USER_DELETE_RETRY_DELAYS_MS = [150, 400] as const;
+
 async function deleteOrphanedAuthUser(userId: string, admin: ReturnType<typeof createAdminClient>) {
-  try {
+  for (let attempt = 0; attempt <= ORPHANED_AUTH_USER_DELETE_RETRY_DELAYS_MS.length; attempt += 1) {
     const { error } = await admin.auth.admin.deleteUser(userId);
-    if (error) {
-      log.error("Failed to delete orphaned auth user after profile conflict", {
-        userId,
-        error: error.message,
-        code: error.code,
-        status: error.status,
-      });
+    if (!error) {
+      if (attempt > 0) {
+        log.info("Deleted orphaned auth user after retry", { userId, attempt: attempt + 1 });
+      }
+      return;
     }
-  } catch (cleanupError) {
-    log.error("Unexpected orphaned auth user cleanup failure", {
+
+    const isLastAttempt = attempt === ORPHANED_AUTH_USER_DELETE_RETRY_DELAYS_MS.length;
+    log.warn("Failed to delete orphaned auth user after profile conflict", {
       userId,
-      error: cleanupError instanceof Error ? cleanupError.message : "Unknown",
+      attempt: attempt + 1,
+      error: error.message,
+      code: error.code,
+      status: error.status,
+    });
+
+    if (isLastAttempt) {
+      return;
+    }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, ORPHANED_AUTH_USER_DELETE_RETRY_DELAYS_MS[attempt]);
     });
   }
 }
@@ -54,7 +66,7 @@ export async function POST(request: NextRequest) {
     const rateCheck = await checkRateLimit({
       key: ip,
       action: "auth:register",
-      degradedMode: "local",
+      degradedMode: "block",
     });
     if (rateCheck.limited) {
       if (rateCheck.degraded) {

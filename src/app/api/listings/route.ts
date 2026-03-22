@@ -8,6 +8,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { parseJsonRequest } from "@/lib/utils/api";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { isPostingLimitBypassEnabled } from "../../../lib/utils/posting-limit-bypass";
 import {
@@ -68,10 +69,9 @@ function applyBaseMarketFilters<T>(
     builder = builder.eq("condition", filters.condition) as T & MarketQueryOps;
   }
   if (filters.query) {
-    const safeSearch = filters.query
-      .replace(/[,.()\\/]/g, "")
-      .replace(/%/g, "\\%")
-      .replace(/_/g, "\\_");
+    // Strip all characters that are special in PostgREST filter syntax or
+    // Postgres LIKE patterns to prevent filter injection and query errors.
+    const safeSearch = filters.query.replace(/[^\p{L}\p{N}\s]/gu, "").trim();
     if (safeSearch) {
       builder = builder.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`) as T &
         MarketQueryOps;
@@ -221,6 +221,7 @@ export async function GET(request: NextRequest) {
 
     let listings: Record<string, unknown>[] = [];
     let total = 0;
+    const MAX_ATTRIBUTE_FILTER_ROWS = 10_000;
     if (hasAttributeFilters) {
       const batchSize = 500;
       let from = 0;
@@ -269,6 +270,15 @@ export async function GET(request: NextRequest) {
         }
 
         from += batchSize;
+
+        // Guard against unbounded memory growth on very large tables
+        if (from >= MAX_ATTRIBUTE_FILTER_ROWS) {
+          log.warn("Attribute filter batch cap reached", {
+            cap: MAX_ATTRIBUTE_FILTER_ROWS,
+            query: filters.query,
+          });
+          break;
+        }
       }
 
       listings = listings.filter(
@@ -386,6 +396,8 @@ export async function POST(request: NextRequest) {
     // ── CSRF protection ───────────────────────────────────────
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
@@ -614,7 +626,18 @@ export async function POST(request: NextRequest) {
       });
       // Release free post slot if listing insert failed
       if (!hasPaidPlan && !postingLimitBypassEnabled) {
-        await getAdmin().from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+        const { error: rollbackError } = await getAdmin()
+          .from("free_posts_used")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("area", AREA);
+        if (rollbackError) {
+          log.error("Failed to rollback free post claim after listing insert failure", {
+            userId: user.id,
+            error: rollbackError.message,
+            code: rollbackError.code,
+          });
+        }
       }
       return NextResponse.json(
         { error: "Failed to create listing", details: insertError.message },

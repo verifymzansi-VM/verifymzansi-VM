@@ -12,6 +12,7 @@ import { createLogger } from "@/lib/utils/logger";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 const log = createLogger("useAuth");
+const PROFILE_FETCH_RETRY_DELAYS_MS = [150, 400] as const;
 
 /**
  * Hook providing current auth user, profile, role, and loading state.
@@ -32,6 +33,37 @@ export function useAuth() {
 
     return normalizeUserRole(role) ?? role;
   }
+
+  const fetchAccountProfileWithRetry = useCallback(
+    async (userId: string) => {
+      let lastError: unknown = null;
+
+      for (let attempt = 0; attempt <= PROFILE_FETCH_RETRY_DELAYS_MS.length; attempt += 1) {
+        const { data, error } = await supabase
+          .from(ACCOUNT_PROFILE_WRITE_TABLE)
+          .select("*")
+          .eq("user_id", userId)
+          .single();
+
+        if (!error) {
+          return data;
+        }
+
+        lastError = error;
+        const isLastAttempt = attempt === PROFILE_FETCH_RETRY_DELAYS_MS.length;
+        if (isLastAttempt) {
+          break;
+        }
+
+        await new Promise((resolve) => {
+          setTimeout(resolve, PROFILE_FETCH_RETRY_DELAYS_MS[attempt]);
+        });
+      }
+
+      throw lastError;
+    },
+    [supabase]
+  );
 
   const fetchUser = useCallback(
     async (options?: { force?: boolean }) => {
@@ -62,15 +94,20 @@ export function useAuth() {
           role: readSessionRole(authUser.app_metadata?.role),
         });
 
-        // Fetch account profile
-        const { data: accountProfile } = await supabase
-          .from(ACCOUNT_PROFILE_WRITE_TABLE)
-          .select("*")
-          .eq("user_id", authUser.id)
-          .single();
+        try {
+          const accountProfile = await fetchAccountProfileWithRetry(authUser.id);
 
-        if (accountProfile) {
-          setProfile(accountProfile);
+          if (accountProfile) {
+            setProfile(accountProfile);
+          } else {
+            setProfile(null);
+          }
+        } catch (profileError) {
+          setProfile(null);
+          log.warn("Failed to fetch account profile after retries", {
+            userId: authUser.id,
+            error: profileError instanceof Error ? profileError.message : String(profileError),
+          });
         }
       } catch (err) {
         log.error("Failed to fetch user", {
@@ -81,7 +118,7 @@ export function useAuth() {
         setLoading(false);
       }
     },
-    [reset, setLoading, setProfile, setUser, supabase]
+    [fetchAccountProfileWithRetry, reset, setLoading, setProfile, setUser, supabase]
   );
 
   useEffect(() => {

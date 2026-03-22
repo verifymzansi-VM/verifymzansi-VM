@@ -198,22 +198,24 @@ export async function POST(request: NextRequest) {
         });
         uploadedUrls.push(result.url);
 
-        // Track upload for orphan detection — non-blocking
-        supabase
-          .from("media_uploads")
-          .insert({
-            user_id: user.id,
-            r2_key: key,
-            bucket,
-            url: result.url,
-            content_type: file.type,
-            file_size: file.size,
-            area,
-          })
-          .then(({ error: trackErr }) => {
-            if (trackErr)
-              log.warn("Failed to track media upload", { key, error: trackErr.message });
+        // Track upload for orphan detection — blocking to ensure R2/DB consistency
+        const { error: trackErr } = await supabase.from("media_uploads").insert({
+          user_id: user.id,
+          r2_key: key,
+          bucket,
+          url: result.url,
+          content_type: file.type,
+          file_size: file.size,
+          area,
+        });
+
+        if (trackErr) {
+          log.error("Failed to track media upload — file exists in R2 without DB record", {
+            key,
+            error: trackErr.message,
+            userId: user.id,
           });
+        }
       } catch (err) {
         log.error(`Failed to upload ${file.name}`, { error: err });
         errors.push(`"${file.name}": upload failed`);

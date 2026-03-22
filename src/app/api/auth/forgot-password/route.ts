@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { forgotPasswordSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
@@ -29,17 +29,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
+    const parsedBody = await parseAndValidateJsonRequest(request, forgotPasswordSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
 
-    const parsed = forgotPasswordSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? "Invalid request" },
-        { status: 400 }
-      );
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
     // Rate limit password resets by IP to prevent email spam (before Turnstile
@@ -69,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     if (turnstileStatus.configured) {
       const captcha = await verifyTurnstileToken({
-        token: parsed.data.turnstileToken,
+        token: parsedBody.data.turnstileToken,
         remoteIp: getClientIp(request),
       });
 
@@ -83,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     // Rate limit by email to prevent targeted email harassment from multiple IPs
     const emailRl = await checkRateLimit({
-      key: parsed.data.email.toLowerCase(),
+      key: parsedBody.data.email.toLowerCase(),
       action: "auth:forgot-password-email",
       degradedMode: "local",
     });
@@ -106,15 +103,13 @@ export async function POST(request: NextRequest) {
     const callbackUrl = buildAuthCallbackUrl(request, "/reset-password");
 
     // Always return a generic success response to reduce account enumeration.
-    await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+    await supabase.auth.resetPasswordForEmail(parsedBody.data.email, {
       redirectTo: callbackUrl,
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    log.error("Unexpected forgot-password error", {
-      error: error instanceof Error ? error.message : "unknown error",
-    });
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    logApiError(log, "Unexpected forgot-password error", error);
+    return internalApiError();
   }
 }

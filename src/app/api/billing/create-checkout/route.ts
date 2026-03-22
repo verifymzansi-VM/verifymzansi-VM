@@ -150,6 +150,28 @@ export async function POST(request: NextRequest) {
 
     const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
 
+    // Validate the app URL to prevent redirect manipulation if the env var is misconfigured
+    try {
+      const appHostname = new URL(appUrl).hostname;
+      const isAllowedHost =
+        appHostname === "localhost" ||
+        appHostname === "127.0.0.1" ||
+        appHostname.endsWith("verifymzansi.com");
+      if (!isAllowedHost && process.env.NODE_ENV === "production") {
+        log.error("NEXT_PUBLIC_APP_URL has unexpected hostname", { hostname: appHostname });
+        return NextResponse.json(
+          { error: "Billing is not yet configured. Please try again later." },
+          { status: 503 }
+        );
+      }
+    } catch {
+      log.error("NEXT_PUBLIC_APP_URL is not a valid URL", { appUrl });
+      return NextResponse.json(
+        { error: "Billing is not yet configured. Please try again later." },
+        { status: 503 }
+      );
+    }
+
     let paymentId: string;
     let checkoutUrl: string;
     try {

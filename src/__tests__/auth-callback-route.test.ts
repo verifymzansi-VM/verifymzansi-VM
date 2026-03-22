@@ -58,7 +58,7 @@ describe("GET /auth/callback", () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "https://verifymzansi.com/login?error=auth_callback_failed"
+      "https://verifymzansi.com/login?error=code_expired"
     );
   });
 

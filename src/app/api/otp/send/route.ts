@@ -174,6 +174,15 @@ export async function POST(request: NextRequest) {
     const otpHash = await hashOtp(otp);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS).toISOString();
 
+    // Invalidate any prior pending challenges for this user+phone to prevent
+    // an accumulation of valid OTPs (replay window).
+    await adminSupabase
+      .from("otp_challenges")
+      .update({ expires_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+      .eq("phone", phone)
+      .is("verified_at", null);
+
     // Store challenge state in user-bound challenge table
     const { error: challengeError } = await adminSupabase.from("otp_challenges").insert({
       user_id: user.id,

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { NextRequest } from "next/server";
 
 const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -13,7 +14,8 @@ function createRequest(url = "http://localhost:3000/api/auth/sign-out") {
     method: "POST",
     url,
     headers: new Headers(),
-  } as unknown as Request;
+    cookies: { get: () => undefined },
+  } as unknown as NextRequest;
 }
 
 function createCrossSiteRequest(url = "https://verifymzansi.com/api/auth/sign-out") {
@@ -21,7 +23,8 @@ function createCrossSiteRequest(url = "https://verifymzansi.com/api/auth/sign-ou
     method: "POST",
     url,
     headers: new Headers({ origin: "https://evil.example" }),
-  } as unknown as Request;
+    cookies: { get: () => undefined },
+  } as unknown as NextRequest;
 }
 
 describe("POST /api/auth/sign-out", () => {

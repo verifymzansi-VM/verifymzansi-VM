@@ -4,11 +4,13 @@ import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { createLogger } from "@/lib/utils/logger";
+import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
 
 const log = createLogger("AuthCallback");
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = resolveAppOrigin(request);
   const code = searchParams.get("code");
   const rawNext = searchParams.get("next");
   const next = sanitizeReturnUrl(rawNext);
@@ -46,26 +48,21 @@ export async function GET(request: Request) {
     if (user?.app_metadata?.provider && user.app_metadata.provider !== "email") {
       let isNewOAuthUser = false;
       try {
-        // Check existence first so we know whether ensureAccountProfile creates a new row.
         const { data: existingProfile } = await supabase
           .from("account_profiles")
           .select("user_id")
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (!existingProfile) {
-          const profile = await ensureAccountProfile(supabase, user);
-          if (!profile) {
-            log.error("Failed to create account profile for OAuth user", {
-              userId: user.id,
-              message: ACCOUNT_PROFILE_NOT_FOUND_ERROR,
-            });
-            // Redirect to login with error instead of continuing without a profile.
-            // Without a profile row the user would hit errors on every protected page.
-            return NextResponse.redirect(`${origin}/login?error=profile_creation_failed`);
-          } else {
-            isNewOAuthUser = true;
-          }
+        isNewOAuthUser = !existingProfile;
+
+        const profile = await ensureAccountProfile(supabase, user);
+        if (!profile) {
+          log.error("Failed to create account profile for OAuth user", {
+            userId: user.id,
+            message: ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+          });
+          return NextResponse.redirect(`${origin}/login?error=profile_creation_failed`);
         }
       } catch (err) {
         // Profile creation threw — redirect to login with error so the user

@@ -8,12 +8,22 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoiste
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { mockEnforceCsrfToken } = vi.hoisted(() => ({
+  mockEnforceCsrfToken: vi.fn(),
+}));
+
+const { mockHasPhoneNumber } = vi.hoisted(() => ({
+  mockHasPhoneNumber: vi.fn(),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
+vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: mockEnforceCsrfToken }));
+vi.mock("@/lib/account/require-phone", () => ({ hasPhoneNumber: mockHasPhoneNumber }));
 
 import { POST, GET } from "@/app/api/promotions/route";
 import { GET as GET_DETAIL, PUT, DELETE } from "@/app/api/promotions/[id]/route";
@@ -133,6 +143,24 @@ describe("POST /api/promotions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetOwnerColumnCacheForTesting();
+    mockEnforceCsrfToken.mockReturnValue(null);
+    mockHasPhoneNumber.mockResolvedValue(true);
+  });
+
+  it("rejects requests missing a CSRF token", async () => {
+    mockEnforceCsrfToken.mockReturnValue(
+      Response.json({ error: "Invalid CSRF token" }, { status: 403 })
+    );
+    mockAuth({ id: USER_ID });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ error: "Invalid CSRF token" });
   });
 
   it("rejects unauthenticated requests", async () => {

@@ -10,6 +10,14 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockCheckRat
     mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
   }));
 
+const { mockEnforceCsrfToken } = vi.hoisted(() => ({
+  mockEnforceCsrfToken: vi.fn(),
+}));
+
+const { mockHasPhoneNumber } = vi.hoisted(() => ({
+  mockHasPhoneNumber: vi.fn(),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
@@ -20,6 +28,8 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
+vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: mockEnforceCsrfToken }));
+vi.mock("@/lib/account/require-phone", () => ({ hasPhoneNumber: mockHasPhoneNumber }));
 
 import { GET, POST } from "@/app/api/businesses/route";
 import { GET as GET_DETAIL } from "@/app/api/businesses/[id]/route";
@@ -68,6 +78,8 @@ describe("POST /api/businesses", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetOwnerColumnCacheForTesting();
+    mockEnforceCsrfToken.mockReturnValue(null);
+    mockHasPhoneNumber.mockResolvedValue(true);
     mockCreateClient.mockResolvedValue({
       from: vi.fn((table: string) => {
         const adminClient = mockCreateAdminClient();
@@ -88,6 +100,17 @@ describe("POST /api/businesses", () => {
       }),
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
     });
+  });
+
+  it("rejects requests missing a CSRF token", async () => {
+    mockEnforceCsrfToken.mockReturnValue(
+      Response.json({ error: "Invalid CSRF token" }, { status: 403 })
+    );
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ error: "Invalid CSRF token" });
   });
 
   it("blocks a second free post when no paid plan exists", async () => {

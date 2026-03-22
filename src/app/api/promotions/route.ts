@@ -30,6 +30,7 @@ import { userOwnsBusiness } from "@/lib/account/owned-business";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { hasPhoneNumber } from "@/lib/account/require-phone";
 
@@ -115,6 +116,8 @@ export async function POST(request: NextRequest) {
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const supabase = await createClient();
     const {
