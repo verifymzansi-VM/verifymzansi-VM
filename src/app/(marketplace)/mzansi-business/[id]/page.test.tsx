@@ -6,6 +6,9 @@ import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
 }));
+const { promotionCardSpy } = vi.hoisted(() => ({
+  promotionCardSpy: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("next/image", () => ({
@@ -45,7 +48,10 @@ vi.mock("@/components/listings/business-promo-video", () => ({
   BusinessPromoVideo: () => <div>Video</div>,
 }));
 vi.mock("@/components/listings/promotion-card", () => ({
-  PromotionCard: () => <div>Promotion</div>,
+  PromotionCard: (props: unknown) => {
+    promotionCardSpy(props);
+    return <div>Promotion</div>;
+  },
 }));
 vi.mock("@/components/shared/share-button", () => ({
   ShareButton: () => <button>Share</button>,
@@ -311,7 +317,7 @@ describe("BusinessDetailPage", () => {
           business_type: "standalone_shop",
           category: "food_dining",
           cover_photo: null,
-          logo_url: null,
+          logo_url: "https://example.com/business-logo.jpg",
           cover_video: null,
           video_thumbnail: null,
           gallery_photos: [],
@@ -365,5 +371,10 @@ describe("BusinessDetailPage", () => {
 
     expect(screen.getByText("Promotions & Offers")).toBeInTheDocument();
     expect(screen.getByText("Promotion")).toBeInTheDocument();
+    expect(promotionCardSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logoUrl: "https://example.com/business-logo.jpg",
+      })
+    );
   });
 });

@@ -52,6 +52,7 @@ describe("HomeMzansiMarketShowcase", () => {
         videos: ["https://example.com/video.mp4"],
         video_thumbnail: "https://example.com/thumb.jpg",
         photos: ["https://example.com/photo.jpg"],
+        logo_url: "https://example.com/logo.jpg",
         location_city: "Pretoria",
         location_province: "Gauteng",
         boost_until: null,
@@ -66,9 +67,11 @@ describe("HomeMzansiMarketShowcase", () => {
     const props = marketCardSpy.mock.calls[0]?.[0] as {
       imageUrl: string;
       posterUrl: string;
+      logoUrl: string;
     };
     expect(props.imageUrl).toBe("https://example.com/video.mp4");
     expect(props.posterUrl).toBe("https://example.com/thumb.jpg");
+    expect(props.logoUrl).toBe("https://example.com/logo.jpg");
   });
 
   it("falls back to first photo when listing has no video", async () => {

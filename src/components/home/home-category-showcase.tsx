@@ -19,6 +19,7 @@ interface CategoryInfo {
 
 export async function HomeCategoryShowcase() {
   const supabase = await createClient();
+  const nowIso = new Date().toISOString();
 
   const [marketResult, businessResult, promoResult] = await Promise.all([
     supabase
@@ -37,8 +38,9 @@ export async function HomeCategoryShowcase() {
       .limit(5),
     supabase
       .from("promotions")
-      .select("id, title, photos", { count: "exact" })
+      .select("id, title, description, photos", { count: "exact" })
       .eq("status", "live")
+      .or(`end_date.is.null,end_date.gte.${nowIso}`)
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
@@ -51,8 +53,10 @@ export async function HomeCategoryShowcase() {
     (i) => !isPlaceholderMarketplaceContent(i.business_name, i.description)
   );
   const promoItems = (promoResult.data ?? []).filter(
-    (i) => !isPlaceholderMarketplaceContent(i.title)
+    (i) => !isPlaceholderMarketplaceContent(i.title, i.description)
   );
+  const promoRemovedCount = (promoResult.data ?? []).length - promoItems.length;
+  const promoCount = Math.max(0, (promoResult.count ?? promoItems.length) - promoRemovedCount);
 
   const marketThumb = marketItems[0]?.photos?.[0];
   const businessThumb = businessItems[0]?.cover_photo;
@@ -86,7 +90,7 @@ export async function HomeCategoryShowcase() {
       icon: Megaphone,
       accentColor: "text-red-500",
       accentBg: "bg-red-500/10",
-      count: promoResult.count ?? 0,
+      count: promoCount,
       thumbnailUrl: promoThumb ? normalizeMediaUrl(promoThumb) : undefined,
     },
   ];

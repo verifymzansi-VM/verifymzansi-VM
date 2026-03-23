@@ -17,7 +17,6 @@ interface PromotionFilterDrawerProps {
   filters: PromotionFilterState;
   cities: string[];
   businessMap: Map<string, string>;
-  onQueryChange: (value: string) => void;
   onTypeChange: (value: PromotionFilterType | undefined) => void;
   onCategoryChange: (value: BusinessCategory | undefined) => void;
   onProvinceChange: (value: string | undefined) => void;
@@ -42,7 +41,6 @@ export function PromotionFilterDrawer({
   filters,
   cities,
   businessMap,
-  onQueryChange,
   onTypeChange,
   onCategoryChange,
   onProvinceChange,
@@ -73,7 +71,7 @@ export function PromotionFilterDrawer({
               aria-label="Open promotion filters"
             >
               <SlidersHorizontal className="h-4 w-4 shrink-0" />
-              <span className="flex-1 text-left">Filter &amp; search promotions &amp; events</span>
+              <span className="flex-1 text-left">Filter promotions &amp; events</span>
               {activeFilterCount > 0 && (
                 <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
                   {activeFilterCount}
@@ -89,7 +87,7 @@ export function PromotionFilterDrawer({
             disabled
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
-            <span className="flex-1 text-left">Filter &amp; search promotions &amp; events</span>
+            <span className="flex-1 text-left">Filter promotions &amp; events</span>
             {activeFilterCount > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
                 {activeFilterCount}
@@ -127,7 +125,6 @@ export function PromotionFilterDrawer({
           filters={filters}
           cities={cities}
           businessMap={businessMap}
-          onQueryChange={onQueryChange}
           onTypeChange={onTypeChange}
           onCategoryChange={onCategoryChange}
           onProvinceChange={onProvinceChange}

@@ -44,17 +44,11 @@ function getListingStatus(
   createdAt?: string
 ) {
   if (featured) {
-    return {
-      label: "Featured",
-      className: "bg-brand-gold/95 text-amber-950 border border-amber-300/50",
-    };
+    // Featured badge text hidden – feature logic preserved
   }
 
   if (boosted) {
-    return {
-      label: "Boosted",
-      className: "bg-brand-blue/95 text-white border border-white/10",
-    };
+    // Boosted badge text hidden – boost logic preserved
   }
 
   if (urgent) {

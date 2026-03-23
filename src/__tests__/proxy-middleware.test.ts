@@ -116,6 +116,7 @@ describe("proxy security headers", () => {
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("connect-src 'self'");
     expect(csp).toContain("https://*.r2.cloudflarestorage.com");
+    expect(csp).toContain("https://images.unsplash.com");
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
     expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
@@ -141,6 +142,7 @@ describe("proxy security headers", () => {
     expect(nonce).toBeTruthy();
     expect(csp).toContain("script-src 'self' 'nonce-");
     expect(csp).toContain("style-src 'self' 'nonce-");
+    expect(csp).toContain("style-src-attr 'unsafe-inline'");
   });
 
   it("keeps basic security headers on redirects", async () => {

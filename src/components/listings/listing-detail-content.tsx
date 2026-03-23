@@ -29,6 +29,7 @@ export interface ListingDetailRecord {
   photos: string[] | null;
   videos: string[] | null;
   video_thumbnail: string | null;
+  logo_url?: string | null;
   location_province: string | null;
   location_city: string | null;
   location_suburb: string | null;
@@ -52,6 +53,7 @@ export interface SimilarListingRow {
   price_negotiable: boolean;
   condition: string | null;
   photos: string[];
+  logo_url?: string | null;
   location_province: string;
   location_city: string;
   category: string;
@@ -299,6 +301,7 @@ export function ListingDetailContent({
                   price={item.price_cents ?? 0}
                   negotiable={item.price_negotiable}
                   imageUrl={item.photos?.[0]}
+                  logoUrl={item.logo_url}
                   province={item.location_province}
                   city={item.location_city}
                   category={item.category}

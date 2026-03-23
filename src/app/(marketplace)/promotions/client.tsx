@@ -15,18 +15,24 @@ import { Badge } from "@/components/ui/badge";
 import { getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { parsePromotionFilterType, type PromotionFilterType } from "@/lib/promotions/type-taxonomy";
 import {
-  PROMOTION_TYPE_LABELS,
   type BusinessCategory,
   type PromotionEventState,
   type PromotionType,
   type TrustLevel,
 } from "@/types/enums";
+import {
+  ALL_PROMOTION_TYPE_PRESENTATION,
+  getPromotionFilterTypePresentation,
+  getStoredPromotionTypePresentation,
+  PROMOTION_FILTER_BAR_ORDER,
+} from "@/lib/promotions/type-presentation";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { formatZAR } from "@/lib/utils/format";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { VideoCardPlayer } from "@/components/ui/video-card-player";
+import { cn } from "@/lib/utils";
 
 interface PromotionRow {
   id: string;
@@ -328,12 +334,13 @@ export function PromotionsExplorer() {
         </Button>
       </PageHeader>
 
+      <PromotionTypeBar activeType={filters.type} onTypeChange={handleTypeChange} />
+
       {/* Mobile filter drawer (FAB visible < lg only) */}
       <PromotionFilterDrawer
         filters={filters}
         cities={cities}
         businessMap={businessMap}
-        onQueryChange={debouncedUpdateQuery}
         onTypeChange={handleTypeChange}
         onCategoryChange={(value) => updateFilters({ category: value })}
         onProvinceChange={handleProvinceChange}
@@ -350,7 +357,6 @@ export function PromotionsExplorer() {
               filters={filters}
               cities={cities}
               businessMap={businessMap}
-              onQueryChange={debouncedUpdateQuery}
               onTypeChange={handleTypeChange}
               onCategoryChange={(value) => updateFilters({ category: value })}
               onProvinceChange={handleProvinceChange}
@@ -423,7 +429,7 @@ export function PromotionsExplorer() {
                   No promotions match your filters
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Try broadening the search, changing the category, or clearing a location filter.
+                  Try changing the category, broadening the filters, or clearing a location filter.
                 </p>
                 <Button variant="outline" size="sm" onClick={clearAllFilters}>
                   Clear all filters
@@ -561,6 +567,7 @@ function FeaturedHeroCard({
 }) {
   const mediaUrl = promotion.videos?.[0] || promotion.photos?.[0];
   const posterUrl = promotion.video_thumbnail || promotion.photos?.[0] || undefined;
+  const typePresentation = getStoredPromotionTypePresentation(promotion.promotion_type);
 
   return (
     <Link href={`/promotion/${promotion.id}`} className="group block">
@@ -589,19 +596,8 @@ function FeaturedHeroCard({
         <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
           <div className="max-w-lg space-y-2 sm:space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge className="bg-brand-gold text-amber-950 text-xs shadow-sm">Featured</Badge>
-              <Badge
-                className={`text-xs ${
-                  promotion.promotion_type === "deal"
-                    ? "bg-red-100 text-red-800"
-                    : promotion.promotion_type === "event"
-                      ? "bg-purple-100 text-purple-800"
-                      : promotion.promotion_type === "service"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-emerald-100 text-emerald-800"
-                }`}
-              >
-                {PROMOTION_TYPE_LABELS[promotion.promotion_type]}
+              <Badge className={cn("text-xs shadow-sm", typePresentation.cardBadgeClassName)}>
+                {typePresentation.label}
               </Badge>
             </div>
             <h2 className="font-display text-xl sm:text-2xl md:text-3xl font-bold text-white line-clamp-2 drop-shadow-lg">
@@ -623,5 +619,61 @@ function FeaturedHeroCard({
         </div>
       </div>
     </Link>
+  );
+}
+
+function PromotionTypeBar({
+  activeType,
+  onTypeChange,
+}: {
+  activeType?: PromotionFilterType;
+  onTypeChange: (value: PromotionFilterType | undefined) => void;
+}) {
+  return (
+    <section className="space-y-2" aria-labelledby="promotion-types-heading">
+      <div className="flex items-center justify-between gap-3">
+        <div className="space-y-1">
+          <h2
+            id="promotion-types-heading"
+            className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+          >
+            Promotion Types
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Pick a lane fast, then refine by category, location, or event timing.
+          </p>
+        </div>
+      </div>
+
+      <div
+        role="toolbar"
+        aria-label="Promotion types"
+        className="flex flex-wrap items-center gap-1.5 rounded-[1.25rem] border border-border/70 bg-background/95 p-1.5 shadow-sm"
+      >
+        {PROMOTION_FILTER_BAR_ORDER.map((item) => {
+          const isAll = item === "all";
+          const value = isAll ? undefined : item;
+          const presentation = isAll
+            ? ALL_PROMOTION_TYPE_PRESENTATION
+            : getPromotionFilterTypePresentation(item);
+          const isActive = isAll ? !activeType : activeType === item;
+
+          return (
+            <button
+              key={item}
+              type="button"
+              aria-pressed={isActive}
+              className={cn(
+                "inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                isActive ? presentation.activeClassName : presentation.inactiveClassName
+              )}
+              onClick={() => onTypeChange(value)}
+            >
+              {presentation.label}
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }

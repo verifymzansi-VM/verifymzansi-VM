@@ -77,8 +77,16 @@ describe("BusinessCard", () => {
 
     expect(screen.getByText("Nomsa Fashion")).toBeTruthy();
     expect(screen.getByText(/Johannesburg/)).toBeTruthy();
-    expect(screen.getByText("Featured")).toBeTruthy();
-    expect(screen.queryByText(/Tailored clothing/i)).toBeNull();
+    expect(screen.getByText(/Tailored clothing/i)).toBeTruthy();
+  });
+
+  it("shows the business logo when provided", () => {
+    render(<BusinessCard {...defaultProps} logoUrl="https://example.com/logo.jpg" />);
+
+    expect(screen.getByAltText("Business logo")).toHaveAttribute(
+      "src",
+      "https://example.com/logo.jpg"
+    );
   });
 
   it("prefers cover video when available", () => {

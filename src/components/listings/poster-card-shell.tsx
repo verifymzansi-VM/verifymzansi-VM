@@ -21,6 +21,7 @@ interface PosterCardShellProps {
   eyebrow?: string | null;
   statusLabel?: string | null;
   statusClassName?: string;
+  statusVariant?: "pill" | "ribbon";
   accentClassName?: string;
   className?: string;
   contentClassName?: string;
@@ -44,6 +45,7 @@ export function PosterCardShell({
   eyebrow,
   statusLabel,
   statusClassName,
+  statusVariant = "pill",
   accentClassName,
   className,
   contentClassName,
@@ -100,18 +102,35 @@ export function PosterCardShell({
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
           <div className="absolute inset-0 ring-1 ring-inset ring-white/12" />
 
-          {/* Status badge — top-left */}
+          {/* Status badge / ribbon */}
           {statusLabel ? (
-            <div className="absolute left-3 top-3 z-10">
-              <span
-                className={cn(
-                  "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] shadow-sm backdrop-blur-md",
-                  statusClassName
-                )}
-              >
-                {statusLabel}
-              </span>
-            </div>
+            statusVariant === "ribbon" ? (
+              <div className="absolute right-0 top-0 z-10">
+                <span
+                  className={cn(
+                    "relative inline-flex min-h-[1.1rem] items-center rounded-bl-[0.8rem] pl-2.25 pr-1.5 text-[8px] font-black uppercase leading-none tracking-[0.12em] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.92)]",
+                    statusClassName
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="absolute -left-[0.32rem] top-0 h-full w-[0.36rem] bg-inherit [clip-path:polygon(100%_0,100%_100%,0_50%)]"
+                  />
+                  {statusLabel}
+                </span>
+              </div>
+            ) : (
+              <div className="absolute left-3 top-3 z-10">
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] shadow-sm backdrop-blur-md",
+                    statusClassName
+                  )}
+                >
+                  {statusLabel}
+                </span>
+              </div>
+            )
           ) : null}
 
           {/* Business logo — bottom-right */}

@@ -7,6 +7,9 @@ import { useToast } from "@/hooks/use-toast";
 const { mockMaybeSingle } = vi.hoisted(() => ({
   mockMaybeSingle: vi.fn(),
 }));
+const { listingCardSpy } = vi.hoisted(() => ({
+  listingCardSpy: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
@@ -50,11 +53,25 @@ vi.mock("@/components/listings/listing-detail-content", () => ({
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
-  MediaUpload: ({ label }: { label: string }) => <div>{label}</div>,
+  MediaUpload: ({ label, onChange }: { label: string; onChange?: (files: File[]) => void }) => (
+    <button
+      type="button"
+      onClick={() => onChange?.([new File(["mock"], "logo.png", { type: "image/png" })])}
+    >
+      {label}
+    </button>
+  ),
 }));
 
 vi.mock("@/components/listings/category-picker", () => ({
   CategoryPicker: () => <div>Category Picker</div>,
+}));
+
+vi.mock("@/components/listings/listing-card", () => ({
+  ListingCard: (props: unknown) => {
+    listingCardSpy(props);
+    return <div>Listing Card Preview</div>;
+  },
 }));
 
 vi.mock("@/lib/constants/sa-provinces", () => ({
@@ -103,6 +120,7 @@ describe("EditListingPage", () => {
         photos: ["https://example.com/photo.jpg"],
         videos: [],
         video_thumbnail: null,
+        logo_url: "https://media.verifymzansi.com/listings/existing-logo.jpg",
       },
       error: null,
     });
@@ -117,6 +135,8 @@ describe("EditListingPage", () => {
       ok: true,
       json: async () => ({ success: true }),
     }) as unknown as typeof fetch;
+    global.URL.createObjectURL = vi.fn(() => "blob:new-logo-preview");
+    global.URL.revokeObjectURL = vi.fn();
   });
 
   it("hydrates saved listing details and sends normalized payload on save", async () => {
@@ -132,6 +152,11 @@ describe("EditListingPage", () => {
     expect(screen.getByText("Listing preview")).toBeInTheDocument();
     expect(screen.getByText("Listing Detail Preview")).toBeInTheDocument();
     expect(screen.getByText("Brand Apple")).toBeInTheDocument();
+    expect(listingCardSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logoUrl: "https://media.verifymzansi.com/listings/existing-logo.jpg",
+      })
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
@@ -153,7 +178,80 @@ describe("EditListingPage", () => {
     expect(payload.negotiable).toBe(true);
     expect(payload.town).toBe("Sandton");
     expect(payload.contactMethods).toEqual(["call", "whatsapp"]);
+    expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/existing-logo.jpg");
     expect(payload.attributes).toMatchObject({ brand: "Apple", storage_gb: 256 });
+  });
+
+  it("allows removing the existing listing logo before save", async () => {
+    render(<EditListingPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Remove logo/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Remove logo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    const payload = JSON.parse(request[1].body as string);
+
+    expect(payload.logo_url).toBeNull();
+    expect(screen.getByText("No listing logo uploaded.")).toBeInTheDocument();
+  });
+
+  it("uploads and uses a replacement listing logo", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            json: async () => ({
+              urls: ["https://media.verifymzansi.com/listings/replaced-logo.jpg"],
+            }),
+          };
+        }
+
+        if (input === "/api/listings/listing-1") {
+          return {
+            ok: true,
+            json: async () => ({ success: true }),
+          };
+        }
+
+        throw new Error(`Unexpected fetch call: ${String(input)}`);
+      }
+    );
+
+    render(<EditListingPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Replace listing logo (optional)" })
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace listing logo (optional)" }));
+
+    expect(listingCardSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logoUrl: "blob:new-logo-preview",
+      })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1];
+    const payload = JSON.parse(request[1].body as string);
+
+    expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/replaced-logo.jpg");
   });
 
   it("shows a safe fallback when the listing fails to load", async () => {

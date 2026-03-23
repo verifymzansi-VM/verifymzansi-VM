@@ -204,6 +204,7 @@ export interface Listing {
   photos: string[];
   videos: string[];
   video_thumbnail: string | null;
+  logo_url: string | null;
   price_cents: number | null;
   price_negotiable: boolean;
   location_province: string;

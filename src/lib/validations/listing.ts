@@ -42,6 +42,7 @@ const listingBase = z.object({
     .max(10, "Maximum 10 images"),
   videos: z.array(trustedMediaUrl).max(9, "Maximum 9 videos").default([]),
   videoThumbnail: trustedMediaUrl.nullable().optional(),
+  logo_url: trustedMediaUrl.nullable().optional(),
   town: z.string().trim().max(120, "Town / suburb must be 120 characters or fewer").optional(),
   contactMethods: z
     .array(z.enum(CONTACT_METHODS))

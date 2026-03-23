@@ -23,6 +23,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClien
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
+  checkLocalRateLimit: vi.fn().mockReturnValue({ limited: false }),
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 vi.mock("@/lib/utils/logger", () => ({
@@ -236,6 +237,42 @@ describe("POST /api/listings", () => {
     });
   });
 
+  it("rejects listing logos hosted outside the platform", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        ...VALID_BODY,
+        logo_url: "https://evil.example.com/not-allowed-logo.jpg",
+      })
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Validation failed",
+    });
+  });
+
   it("returns verification_required for unverified accounts", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
@@ -422,6 +459,78 @@ describe("POST /api/listings", () => {
       })
     );
     expect(insertSpy).not.toHaveBeenCalledWith(expect.objectContaining({ owner_id: USER_ID }));
+  });
+
+  it("persists trusted listing logo urls on create", async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({
+        single: vi.fn().mockResolvedValue({ data: { id: "listing-1" }, error: null }),
+      }),
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: null }),
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            }),
+          };
+        }
+        if (table === "listings") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            insert: insertSpy,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        ...VALID_BODY,
+        logo_url: "https://media.verifymzansi.com/listings/logo.jpg",
+      })
+    );
+
+    expect(res.status).toBe(201);
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logo_url: "https://media.verifymzansi.com/listings/logo.jpg",
+      })
+    );
   });
 
   it("does not consume free post slot when media validation fails (regression)", async () => {
@@ -687,25 +796,33 @@ describe("GET /api/listings", () => {
       missingField: "featured_until",
       expectedNullField: "featured_until",
       initialSelect:
-        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
       fallbackSelect:
-        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured",
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured",
     },
     {
       missingField: "condition",
       expectedNullField: "condition",
       initialSelect:
-        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
       fallbackSelect:
-        "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+        "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
     },
     {
       missingField: "video_thumbnail",
       expectedNullField: "video_thumbnail",
       initialSelect:
-        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
       fallbackSelect:
-        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured_until, featured",
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+    },
+    {
+      missingField: "logo_url",
+      expectedNullField: "logo_url",
+      initialSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+      fallbackSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
     },
   ])(
     "returns 200 and normalizes %s when the column is missing",

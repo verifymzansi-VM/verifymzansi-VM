@@ -4,6 +4,7 @@ import { memo } from "react";
 import { Tag } from "lucide-react";
 import { formatZARShort } from "@/lib/utils/format";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
+import { getStoredPromotionTypePresentation } from "@/lib/promotions/type-presentation";
 import type { TrustLevel, PromotionType } from "@/types/enums";
 
 interface PromotionCardProps {
@@ -29,36 +30,17 @@ interface PromotionCardProps {
   logoUrl?: string | null;
 }
 
-function getPromotionStatus(featured?: boolean, boosted?: boolean, promotionType?: PromotionType) {
-  if (featured) {
-    return {
-      label: "Featured",
-      className: "bg-brand-gold/95 text-amber-950 border border-amber-300/50",
-    };
-  }
+function getPromotionStatus(
+  _featured: boolean | undefined,
+  _boosted: boolean | undefined,
+  promotionType: PromotionType
+) {
+  const typePresentation = getStoredPromotionTypePresentation(promotionType);
 
-  if (boosted) {
-    return {
-      label: "Boosted",
-      className: "bg-brand-blue/95 text-white border border-white/10",
-    };
-  }
-
-  if (promotionType === "deal") {
-    return {
-      label: "Deals",
-      className: "bg-red-500/95 text-white border border-white/10",
-    };
-  }
-
-  if (promotionType === "event") {
-    return {
-      label: "Events",
-      className: "bg-purple-500/95 text-white border border-white/10",
-    };
-  }
-
-  return null;
+  return {
+    label: typePresentation.cardTagLabel,
+    className: typePresentation.cardTagClassName,
+  };
 }
 
 function formatPromotionEyebrow(
@@ -97,6 +79,7 @@ export const PromotionCard = memo(function PromotionCard({
   startDate,
   logoUrl,
 }: PromotionCardProps) {
+  const typePresentation = getStoredPromotionTypePresentation(promotionType);
   const status = getPromotionStatus(featured, boosted, promotionType);
   const eyebrow = formatPromotionEyebrow(price, promotionType, startDate);
 
@@ -117,7 +100,8 @@ export const PromotionCard = memo(function PromotionCard({
       }
       statusLabel={status?.label}
       statusClassName={status?.className}
-      accentClassName="hover:border-red-500/55"
+      statusVariant="ribbon"
+      accentClassName={typePresentation.cardAccentClassName}
       trustLevel={ownerTrustLevel}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-white/35">

@@ -155,6 +155,7 @@ export type BuyerTokenStatus = "valid" | "expired" | "revoked";
 /* ── Media Upload Areas (R2 storage path prefixes) ──────── */
 export const UPLOAD_AREAS = [
   "listing",
+  "listing_logo",
   "listing_video",
   "business",
   "business_logo",

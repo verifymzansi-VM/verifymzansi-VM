@@ -41,7 +41,12 @@ import { z } from "zod";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
-const LISTING_SELECT_FALLBACK_FIELDS = ["featured_until", "condition", "video_thumbnail"] as const;
+const LISTING_SELECT_FALLBACK_FIELDS = [
+  "featured_until",
+  "condition",
+  "video_thumbnail",
+  "logo_url",
+] as const;
 const listingsQuerySchema = z.object({
   category: optionalTrimmedStringSchema,
   q: optionalTrimmedStringSchema,
@@ -169,6 +174,7 @@ function normalizeListingSelectShape(
     featured_until: listing.featured_until ?? null,
     condition: listing.condition ?? null,
     video_thumbnail: listing.video_thumbnail ?? null,
+    logo_url: listing.logo_url ?? null,
   }));
 }
 
@@ -225,38 +231,45 @@ export async function GET(request: NextRequest) {
     const selectAttempts = [
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
           ownerColumn
         ),
         omittedFields: [] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured",
           ownerColumn
         ),
         omittedFields: ["featured_until"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
           ownerColumn
         ),
         omittedFields: ["condition"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured_until, featured",
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
           ownerColumn
         ),
         omittedFields: ["video_thumbnail"] as const,
       },
       {
         select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+          ownerColumn
+        ),
+        omittedFields: ["logo_url"] as const,
+      },
+      {
+        select: withOwnerColumn(
           "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured",
           ownerColumn
         ),
-        omittedFields: ["featured_until", "condition", "video_thumbnail"] as const,
+        omittedFields: ["featured_until", "condition", "video_thumbnail", "logo_url"] as const,
       },
     ] as const;
     const hasAttributeFilters = Object.keys(filters.attributes).length > 0;
@@ -648,6 +661,7 @@ export async function POST(request: NextRequest) {
         photos: data.images,
         videos: data.videos,
         video_thumbnail: data.videoThumbnail || null,
+        logo_url: data.logo_url || null,
         contact_methods: data.contactMethods,
       },
       ownerColumn,

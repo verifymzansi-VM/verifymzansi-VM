@@ -13,6 +13,7 @@ interface PastEvent {
   negotiable?: boolean;
   imageUrl?: string;
   posterUrl?: string;
+  logoUrl?: string | null;
   province: string;
   city: string;
   createdAt: string;
@@ -55,6 +56,7 @@ export function PastEventsAccordion({ events }: { events: PastEvent[] }) {
                 negotiable={event.negotiable}
                 imageUrl={event.imageUrl}
                 posterUrl={event.posterUrl}
+                logoUrl={event.logoUrl}
                 province={event.province}
                 city={event.city}
                 promotionType="event"

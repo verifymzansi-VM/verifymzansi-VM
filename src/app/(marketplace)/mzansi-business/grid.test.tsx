@@ -5,6 +5,9 @@ import { MzansiBusinessGrid } from "./grid";
 const { useMarketplaceStoreMock } = vi.hoisted(() => ({
   useMarketplaceStoreMock: vi.fn(),
 }));
+const { businessCardSpy } = vi.hoisted(() => ({
+  businessCardSpy: vi.fn(),
+}));
 
 vi.mock("next/link", () => ({
   default: ({
@@ -31,7 +34,10 @@ vi.mock("@/components/listings/listing-skeleton", () => ({
 }));
 
 vi.mock("@/components/listings/business-card", () => ({
-  BusinessCard: ({ businessName }: { businessName: string }) => <div>{businessName}</div>,
+  BusinessCard: (props: { businessName: string }) => {
+    businessCardSpy(props);
+    return <div>{props.businessName}</div>;
+  },
 }));
 
 function mockFetchResponse(payload: Record<string, unknown>, ok = true, status = 200) {
@@ -111,8 +117,54 @@ describe("MzansiBusinessGrid", () => {
       "/api/businesses?page=2&limit=24&category=fashion_accessories",
       expect.objectContaining({ cache: "no-store" })
     );
+    expect(businessCardSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logoUrl: null,
+      })
+    );
     expect(screen.getByText(/26/)).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("1 filter active");
+  });
+
+  it("passes business logos through to business cards", async () => {
+    fetchMock.mockImplementation(() =>
+      mockFetchResponse({
+        businesses: [
+          {
+            id: "biz-logo",
+            business_type: "standalone_shop",
+            business_name: "Logo Tailors",
+            description: "Tailored fashion",
+            cover_photo: null,
+            cover_video: null,
+            video_thumbnail: null,
+            logo_url: "https://media.verifymzansi.com/business/logo.jpg",
+            gallery_photos: null,
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+            category: "fashion_accessories",
+            boost_until: null,
+            featured_until: null,
+            service_areas: null,
+          },
+        ],
+        total: 1,
+        page: 1,
+        limit: 24,
+      })
+    );
+
+    render(<MzansiBusinessGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Logo Tailors")).toBeInTheDocument();
+    });
+
+    expect(businessCardSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logoUrl: "https://media.verifymzansi.com/business/logo.jpg",
+      })
+    );
   });
 
   it("shows the unfiltered empty state with a business CTA", async () => {

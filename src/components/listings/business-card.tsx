@@ -23,26 +23,6 @@ interface BusinessCardProps {
   serviceAreas?: Record<string, unknown> | null;
 }
 
-function getBusinessStatus(featuredUntil?: string | null, boostUntil?: string | null) {
-  const now = new Date();
-
-  if (featuredUntil && new Date(featuredUntil) > now) {
-    return {
-      label: "Featured",
-      className: "bg-brand-gold/95 text-amber-950 border border-amber-300/50",
-    };
-  }
-
-  if (boostUntil && new Date(boostUntil) > now) {
-    return {
-      label: "Boosted",
-      className: "bg-brand-blue/95 text-white border border-white/10",
-    };
-  }
-
-  return null;
-}
-
 export function BusinessCard({
   id,
   businessName,
@@ -55,15 +35,14 @@ export function BusinessCard({
   province,
   city,
   trustLevel = 0,
-  boostUntil,
-  featuredUntil,
+  boostUntil: _boostUntil,
+  featuredUntil: _featuredUntil,
 }: BusinessCardProps) {
   const displayCover =
     coverVideo ||
     coverPhoto ||
     (galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos[0] : null);
   const posterUrl = videoThumbnail || coverPhoto || galleryPhotos?.[0] || undefined;
-  const status = getBusinessStatus(featuredUntil, boostUntil);
 
   return (
     <PosterCardShell
@@ -75,8 +54,8 @@ export function BusinessCard({
       posterUrl={posterUrl}
       mediaAlt={businessName}
       logoUrl={logoUrl}
-      statusLabel={status?.label}
-      statusClassName={status?.className}
+      statusLabel={null}
+      statusClassName={undefined}
       accentClassName="hover:border-brand-blue/55"
       trustLevel={trustLevel}
       fallback={

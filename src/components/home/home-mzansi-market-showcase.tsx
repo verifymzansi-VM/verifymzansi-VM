@@ -15,7 +15,7 @@ export async function HomeMzansiMarketShowcase() {
   const { data: listings } = await supabase
     .from("listings")
     .select(
-      "id, title, description, price_cents, photos, videos, video_thumbnail, location_province, location_city, boost_until"
+      "id, title, description, price_cents, photos, videos, video_thumbnail, logo_url, location_province, location_city, boost_until"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_MARKET")
@@ -64,6 +64,7 @@ export async function HomeMzansiMarketShowcase() {
                   href={`/listing/${l.id}`}
                   imageUrl={displayUrl}
                   posterUrl={poster}
+                  logoUrl={l.logo_url}
                   title={l.title}
                   price={l.price_cents ? l.price_cents / 100 : null}
                   city={l.location_city ?? "South Africa"}
