@@ -35,13 +35,17 @@ vi.mock("next/image", () => ({
 vi.mock("@/components/ui/card", () => ({
   Card: ({
     children,
-    trustLevel: _trustLevel,
+    trustLevel,
     ...props
   }: {
     children: React.ReactNode;
     trustLevel?: unknown;
   }) => (
-    <div data-testid="card" {...props}>
+    <div
+      data-testid="card"
+      data-trust-level={trustLevel === undefined ? undefined : String(trustLevel)}
+      {...props}
+    >
       {children}
     </div>
   ),
@@ -69,6 +73,7 @@ vi.mock("@/components/trust/trust-badge", () => ({
 
 vi.mock("@/lib/utils/format", () => ({
   formatZAR: (cents: number) => `R ${(cents / 100).toFixed(2)}`,
+  formatZARShort: (cents: number) => `R${Math.round(cents / 100)}`,
   formatRelativeTime: (_date: string) => "2d ago",
 }));
 
@@ -134,7 +139,7 @@ describe("ListingCard", () => {
 
   it("should render formatted price", () => {
     render(<ListingCard {...defaultProps} />);
-    expect(screen.getByText(/R\s*150\.00/)).toBeTruthy();
+    expect(screen.getByText("R150")).toBeTruthy();
   });
 
   it("should render location info", () => {
@@ -142,28 +147,17 @@ describe("ListingCard", () => {
     expect(screen.getByText(/Johannesburg/)).toBeTruthy();
   });
 
-  it("should accept category prop", () => {
+  it("shows only the simplified overlay metadata", () => {
     render(<ListingCard {...defaultProps} />);
-    expect(screen.getByText(/Electronics/i)).toBeTruthy();
+    expect(screen.queryByText(/Electronics/i)).toBeNull();
+    expect(screen.queryByText(/Brand: Apple/i)).toBeNull();
   });
 
-  it("should render attribute highlights when attributes are present", () => {
-    render(
-      <ListingCard
-        {...defaultProps}
-        category="electronics"
-        attributes={{ brand: "Apple", storage_gb: 256 }}
-      />
-    );
-
-    expect(screen.getByText(/Brand: Apple/i)).toBeTruthy();
-    expect(screen.getByText(/Storage Capacity: 256 GB/i)).toBeTruthy();
-  });
-
-  it("should render negotiable badge when applicable", () => {
-    render(<ListingCard {...defaultProps} negotiable />);
-    // The component renders "Neg." text for negotiable items
-    expect(screen.getByText("Neg.")).toBeTruthy();
+  it("renders the highest-priority status chip only", () => {
+    render(<ListingCard {...defaultProps} featured boosted urgent />);
+    expect(screen.getByText("Featured")).toBeTruthy();
+    expect(screen.queryByText("Boosted")).toBeNull();
+    expect(screen.queryByText("Urgent")).toBeNull();
   });
 
   it("should render link to listing detail page", () => {
@@ -173,9 +167,9 @@ describe("ListingCard", () => {
     expect(listingLink).toBeTruthy();
   });
 
-  it("should render trust badge when owner trust level provided", () => {
+  it("should preserve trust styling when owner trust level provided", () => {
     render(<ListingCard {...defaultProps} ownerTrustLevel={2 as never} />);
-    expect(screen.getByTestId("trust-badge")).toBeTruthy();
+    expect(screen.getByTestId("card")).toHaveAttribute("data-trust-level", "2");
   });
 
   it("should show boosted indicator when boosted", () => {

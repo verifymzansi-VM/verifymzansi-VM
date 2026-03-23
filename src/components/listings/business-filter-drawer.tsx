@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useSyncExternalStore, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SlidersHorizontal, Search } from "lucide-react";
 import {
   Sheet,
@@ -18,23 +18,16 @@ import { useMarketplaceStore } from "@/stores";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { triggerHaptic } from "@/lib/utils/haptics";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 const selectClassName =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
-
-function subscribeToHydrationState() {
-  return () => {};
-}
 
 export function BusinessFilterDrawer() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
   const [open, setOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const isInteractive = useSyncExternalStore(
-    subscribeToHydrationState,
-    () => true,
-    () => false
-  );
+  const isInteractive = useHydrated();
   const debouncedSetQuery = useDebouncedCallback(
     (value: string) => setFilter("query", value || undefined),
     300

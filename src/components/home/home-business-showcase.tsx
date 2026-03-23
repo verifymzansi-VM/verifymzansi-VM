@@ -16,7 +16,7 @@ export async function HomeBusinessShowcase() {
   const { data: businesses } = await supabase
     .from("businesses")
     .select(
-      "id, business_name, description, cover_photo, cover_video, video_thumbnail, logo_url, business_type, location_province, location_city, boost_until"
+      "id, business_name, description, cover_photo, cover_video, video_thumbnail, logo_url, business_type, location_province, location_city, boost_until, featured_until"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS")
@@ -55,7 +55,7 @@ export async function HomeBusinessShowcase() {
           {items.map((b) => (
             <div
               key={b.id}
-              className="min-w-[280px] max-w-[320px] sm:min-w-[320px] sm:max-w-[320px]"
+              className="min-w-[200px] max-w-[224px] sm:min-w-[224px] sm:max-w-[224px]"
             >
               <BusinessPreviewCard
                 href={`/mzansi-business/${b.id}`}
@@ -66,6 +66,8 @@ export async function HomeBusinessShowcase() {
                 businessType={(b.business_type || "general_store") as BusinessType}
                 city={b.location_city ?? "South Africa"}
                 provinceCode={provinceCode(b.location_province ?? "ZA")}
+                boosted={b.boost_until ? new Date(b.boost_until) > new Date() : false}
+                featured={b.featured_until ? new Date(b.featured_until) > new Date() : false}
               />
             </div>
           ))}

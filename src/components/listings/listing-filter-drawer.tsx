@@ -12,6 +12,7 @@ import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { cloneMarketplaceFilters, useMarketplaceStore, type MarketplaceFilters } from "@/stores";
 import { cn } from "@/lib/utils";
 import { triggerHaptic } from "@/lib/utils/haptics";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { ListingAttributeFilters } from "./listing-attribute-filters";
 
 function countActiveFilters(
@@ -44,6 +45,7 @@ function countActiveFilters(
 export function ListingFilterDrawer() {
   const { filters, replaceFilters } = useMarketplaceStore();
   const [open, setOpen] = useState(false);
+  const isHydrated = useHydrated();
   const [draftFilters, setDraftFilters] = useState<MarketplaceFilters>(() =>
     cloneMarketplaceFilters(filters)
   );
@@ -100,11 +102,28 @@ export function ListingFilterDrawer() {
       }}
     >
       <div className="lg:hidden">
-        <SheetTrigger asChild>
+        {isHydrated ? (
+          <SheetTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Open listing filters"
+            >
+              <SlidersHorizontal className="h-4 w-4 shrink-0" />
+              <span className="flex-1 text-left">Filter &amp; search listings</span>
+              {appliedFilterCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                  {appliedFilterCount}
+                </span>
+              )}
+            </button>
+          </SheetTrigger>
+        ) : (
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+            className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm"
             aria-label="Open listing filters"
+            disabled
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
             <span className="flex-1 text-left">Filter &amp; search listings</span>
@@ -114,7 +133,7 @@ export function ListingFilterDrawer() {
               </span>
             )}
           </button>
-        </SheetTrigger>
+        )}
       </div>
 
       <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">

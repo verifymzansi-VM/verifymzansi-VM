@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Eye, Megaphone } from "lucide-react";
+import { ArrowRight, Megaphone } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { PromotionFilterPanel } from "@/components/listings/promotion-filter-panel";
@@ -25,6 +25,7 @@ import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { formatZAR } from "@/lib/utils/format";
 import { triggerHaptic } from "@/lib/utils/haptics";
+import { VideoCardPlayer } from "@/components/ui/video-card-player";
 
 interface PromotionRow {
   id: string;
@@ -338,8 +339,14 @@ export function PromotionsExplorer() {
           {/* ── Results Count + CTA ── */}
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
-              <span className="font-medium text-foreground">{total}</span> promotion
-              {total === 1 ? "" : "s"} found
+              {loading ? (
+                "Loading promotions..."
+              ) : (
+                <>
+                  <span className="font-medium text-foreground">{total}</span> promotion
+                  {total === 1 ? "" : "s"} found
+                </>
+              )}
             </p>
             <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex gap-1">
               <Link href="/post/create-promotion">
@@ -351,9 +358,12 @@ export function PromotionsExplorer() {
 
           {/* ── Grid / Loading / Error / Empty ── */}
           {loading ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 8 }).map((_, index) => (
-                <div key={index} className="aspect-[4/5] rounded-xl bg-muted animate-pulse" />
+                <div
+                  key={index}
+                  className="aspect-[9/14] rounded-[1.75rem] bg-muted animate-pulse"
+                />
               ))}
             </div>
           ) : error ? (
@@ -381,7 +391,7 @@ export function PromotionsExplorer() {
             </Card>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
                 {gridPromotions.map((promotion, index) => {
                   const accountProfile = accountProfileMap.get(promotion.owner_id);
                   const businessName = promotion.business_id
@@ -504,24 +514,34 @@ function FeaturedHeroCard({
   promotion: PromotionRow;
   businessName?: string;
 }) {
-  const imageUrl = promotion.photos?.[0] || promotion.videos?.[0];
-  const normalizedImage = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
+  const mediaUrl = promotion.videos?.[0] || promotion.photos?.[0];
+  const posterUrl = promotion.video_thumbnail || promotion.photos?.[0] || undefined;
 
   return (
     <Link href={`/promotion/${promotion.id}`} className="group block">
-      <div className="relative rounded-2xl overflow-hidden bg-warm-100 dark:bg-warm-800 aspect-[21/9] sm:aspect-[3/1]">
-        {normalizedImage && (
+      <div className="relative overflow-hidden rounded-[1.75rem] bg-warm-100 dark:bg-warm-800 aspect-[9/12] sm:aspect-[16/7]">
+        {mediaUrl ? (
+          <VideoCardPlayer
+            src={mediaUrl}
+            posterUrl={posterUrl}
+            alt={promotion.title}
+            sizes="100vw"
+            mode="ambient"
+            priority
+            mediaClassName="transition-transform duration-700 group-hover:scale-[1.03]"
+          />
+        ) : (
           <Image
-            src={normalizedImage}
+            src={normalizeMediaUrl("/images/fallbacks/hero-shop.svg")}
             alt={promotion.title}
             fill
-            className="object-cover transition-transform duration-700 group-hover:scale-105"
+            className="object-cover"
             sizes="100vw"
             priority
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent" />
-        <div className="absolute inset-0 flex items-center p-6 sm:p-8">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/24 to-black/8" />
+        <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
           <div className="max-w-lg space-y-2 sm:space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
               <Badge className="bg-brand-gold text-amber-950 text-xs shadow-sm">Featured</Badge>
@@ -547,18 +567,12 @@ function FeaturedHeroCard({
                 {formatZAR(promotion.price_cents)}
               </p>
             )}
-            {businessName && <p className="text-sm text-white/80">by {businessName}</p>}
             <div className="flex items-center gap-3 text-sm text-white/70">
               <span className="flex items-center gap-1">
                 <Megaphone className="h-3.5 w-3.5" />
                 {promotion.location_city}, {promotion.location_province}
               </span>
-              {promotion.view_count > 0 && (
-                <span className="flex items-center gap-1">
-                  <Eye className="h-3.5 w-3.5" />
-                  {promotion.view_count} views
-                </span>
-              )}
+              {businessName ? <span>by {businessName}</span> : null}
             </div>
           </div>
         </div>

@@ -58,6 +58,7 @@ vi.mock("@/components/trust/trust-badge", () => ({
 
 vi.mock("@/lib/utils/format", () => ({
   formatZAR: (cents: number) => `R ${(cents / 100).toFixed(2)}`,
+  formatZARShort: (cents: number) => `R${Math.round(cents / 100)}`,
   formatRelativeTime: () => "1d ago",
 }));
 
@@ -90,36 +91,39 @@ describe("PromotionCard", () => {
     vi.clearAllMocks();
   });
 
-  it("renders event timing and state for event promotions", () => {
+  it("renders the event date when there is no price", () => {
     render(
       <PromotionCard
         {...defaultProps}
+        price={null}
         startDate="2099-03-10T00:00:00.000Z"
         endDate="2099-03-12T00:00:00.000Z"
       />
     );
 
-    expect(screen.getByText("Upcoming")).toBeTruthy();
-    expect(screen.getByText(/Ends/i)).toBeTruthy();
+    expect(screen.getByText("10 MAR")).toBeTruthy();
+    expect(screen.getByText("Event")).toBeTruthy();
   });
 
-  it("renders linked business context when provided", () => {
+  it("hides linked business context in the reduced card", () => {
     render(<PromotionCard {...defaultProps} businessName="Nomsa Foods" />);
 
-    expect(screen.getByText(/by Nomsa Foods/i)).toBeTruthy();
+    expect(screen.queryByText(/by Nomsa Foods/i)).toBeNull();
   });
 
-  it("renders category label for non-event promotions", () => {
+  it("shows the highest-priority chip and removes category text", () => {
     render(
       <PromotionCard
         {...defaultProps}
         promotionType="deal"
         categoryLabel="Food & Dining"
         endDate="2099-03-12T00:00:00.000Z"
+        featured
       />
     );
 
-    expect(screen.getByText(/Food & Dining/i)).toBeTruthy();
-    expect(screen.getByText(/Ends/i)).toBeTruthy();
+    expect(screen.getByText("Featured")).toBeTruthy();
+    expect(screen.queryByText("Deal")).toBeNull();
+    expect(screen.queryByText(/Food & Dining/i)).toBeNull();
   });
 });

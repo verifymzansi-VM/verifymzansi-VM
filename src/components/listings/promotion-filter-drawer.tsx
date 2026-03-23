@@ -10,6 +10,7 @@ import {
 } from "@/components/listings/promotion-filter-panel";
 import type { BusinessCategory, PromotionEventState, PromotionType } from "@/types/enums";
 import { triggerHaptic } from "@/lib/utils/haptics";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 interface PromotionFilterDrawerProps {
   filters: PromotionFilterState;
@@ -50,6 +51,7 @@ export function PromotionFilterDrawer({
   onClearAll,
 }: PromotionFilterDrawerProps) {
   const [open, setOpen] = useState(false);
+  const isHydrated = useHydrated();
   const activeFilterCount = countActivePromotionFilters(filters);
 
   return (
@@ -62,11 +64,28 @@ export function PromotionFilterDrawer({
     >
       {/* ── Inline filter bar (mobile only) ─────────── */}
       <div className="lg:hidden">
-        <SheetTrigger asChild>
+        {isHydrated ? (
+          <SheetTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Open promotion filters"
+            >
+              <SlidersHorizontal className="h-4 w-4 shrink-0" />
+              <span className="flex-1 text-left">Filter &amp; search promotions &amp; events</span>
+              {activeFilterCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          </SheetTrigger>
+        ) : (
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+            className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm"
             aria-label="Open promotion filters"
+            disabled
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
             <span className="flex-1 text-left">Filter &amp; search promotions &amp; events</span>
@@ -76,7 +95,7 @@ export function PromotionFilterDrawer({
               </span>
             )}
           </button>
-        </SheetTrigger>
+        )}
       </div>
 
       {/* ── Drawer Content ───────────────────────────── */}
