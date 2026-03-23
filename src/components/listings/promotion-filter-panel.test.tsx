@@ -30,10 +30,10 @@ describe("PromotionFilterPanel", () => {
   it("shows promotion type as a vertical filter and calls back when it changes", () => {
     const handlers = renderPanel();
 
-    fireEvent.change(screen.getByLabelText("Promotion type"), { target: { value: "event" } });
+    fireEvent.change(screen.getByLabelText("Promotion type"), { target: { value: "promotion" } });
 
-    expect(handlers.onTypeChange).toHaveBeenCalledWith("event");
-    expect(screen.getByRole("option", { name: "Event" })).toBeInTheDocument();
+    expect(handlers.onTypeChange).toHaveBeenCalledWith("promotion");
+    expect(screen.getByRole("option", { name: "Promotions" })).toBeInTheDocument();
   });
 
   it("reveals event-state filtering when the type is event", () => {
@@ -48,11 +48,12 @@ describe("PromotionFilterPanel", () => {
   it("renders active chips and clears all when filters are present", () => {
     const handlers = renderPanel({
       query: "sale",
-      type: "deal",
+      type: "ad",
       businessId: "business-1",
     });
 
     expect(screen.getByText("sale")).toBeInTheDocument();
+    expect(screen.getAllByText("Ads").length).toBeGreaterThan(0);
     expect(screen.getByText(/fix fast/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /clear all/i }));

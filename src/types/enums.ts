@@ -82,11 +82,11 @@ export type SocialAuthorizerRelationship =
 export type SocialAuthorizationStatus = "authorized" | "not_authorized" | "revoked";
 
 export const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
-  product: "Product",
-  service: "Service",
-  event: "Event",
-  deal: "Deal",
-  general: "General",
+  product: "Promotions",
+  service: "Promotions",
+  event: "Events",
+  deal: "Deals",
+  general: "Ads",
 };
 
 export const PROMOTION_EVENT_STATE_LABELS: Record<PromotionEventState, string> = {

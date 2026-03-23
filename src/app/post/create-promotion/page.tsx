@@ -16,7 +16,12 @@ import {
   usePlanVideoAllowed,
 } from "@/components/billing/plan-gate";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
-import { PROMOTION_TYPE_LABELS, type BusinessCategory, type PromotionType } from "@/types/enums";
+import {
+  getPromotionFilterTypeFromStoredType,
+  getStoredPromotionTypeForFilter,
+  PROMOTION_FILTER_TYPE_OPTIONS,
+} from "@/lib/promotions/type-taxonomy";
+import { type BusinessCategory, type PromotionType } from "@/types/enums";
 import { cn } from "@/lib/utils";
 import {
   PostFormFooter,
@@ -33,8 +38,6 @@ import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
 import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
-
-const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
 const SELECT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
@@ -110,6 +113,7 @@ function CreatePromotionContent() {
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
   const isEvent = promotionType === "event";
+  const selectedPromotionFilterType = getPromotionFilterTypeFromStoredType(promotionType);
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
@@ -433,10 +437,18 @@ function CreatePromotionContent() {
                         id="promotion_type"
                         aria-label="Promotion Type"
                         className={SELECT_CLASS}
-                        value={promotionType}
-                        onChange={(event) => setPromotionType(event.target.value as PromotionType)}
+                        value={selectedPromotionFilterType}
+                        onChange={(event) =>
+                          setPromotionType(
+                            getStoredPromotionTypeForFilter(
+                              event.target
+                                .value as (typeof PROMOTION_FILTER_TYPE_OPTIONS)[number]["value"],
+                              promotionType
+                            )
+                          )
+                        }
                       >
-                        {PROMOTION_TYPES.map(([value, label]) => (
+                        {PROMOTION_FILTER_TYPE_OPTIONS.map(({ value, label }) => (
                           <option key={value} value={value}>
                             {label}
                           </option>

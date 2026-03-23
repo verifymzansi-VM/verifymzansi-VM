@@ -152,7 +152,7 @@ export function PromotionDetailContent({
                 {isFeatured && <Badge className="bg-brand-gold text-amber-950">Featured</Badge>}
                 {isBoosted && <Badge className="bg-brand-blue text-white">Boosted</Badge>}
                 <Badge variant="secondary">
-                  {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] || "Ad"}
+                  {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] || "Ads"}
                 </Badge>
               </div>
             </div>

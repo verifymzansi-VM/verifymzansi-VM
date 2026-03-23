@@ -15,6 +15,10 @@ import {
   type PromotionType,
 } from "@/types/enums";
 import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
+import {
+  getStoredPromotionTypesForFilter,
+  parsePromotionFilterType,
+} from "@/lib/promotions/type-taxonomy";
 import { normalizeBusinessCategoryParam } from "@/lib/utils/marketplace-query";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { getPromotionSocialAuthorizationWriteResult } from "@/lib/promotions/social-authorization";
@@ -50,6 +54,7 @@ type PromotionQueryOps = {
   eq: (column: string, value: unknown) => PromotionQueryOps;
   gt: (column: string, value: string) => PromotionQueryOps;
   lt: (column: string, value: string) => PromotionQueryOps;
+  in: (column: string, values: unknown[]) => PromotionQueryOps;
   or: (filters: string) => PromotionQueryOps;
 };
 
@@ -487,11 +492,8 @@ export async function GET(request: NextRequest) {
     }
 
     const query = parsedQuery.data;
-    const promotionType = query.type;
-    if (
-      promotionType &&
-      !["product", "service", "event", "deal", "general"].includes(promotionType)
-    ) {
+    const promotionType = query.type ? parsePromotionFilterType(query.type) : null;
+    if (query.type && !promotionType) {
       return NextResponse.json({ error: "Invalid promotion type" }, { status: 400 });
     }
 
@@ -521,7 +523,11 @@ export async function GET(request: NextRequest) {
         .or(`end_date.is.null,end_date.gte.${nowIso}`);
 
       if (promotionType) {
-        query = query.eq("promotion_type", promotionType);
+        const storedTypes = getStoredPromotionTypesForFilter(promotionType);
+        query =
+          storedTypes.length === 1
+            ? query.eq("promotion_type", storedTypes[0])
+            : query.in("promotion_type", storedTypes);
       }
       if (businessId) {
         query = query.eq("business_id", businessId);

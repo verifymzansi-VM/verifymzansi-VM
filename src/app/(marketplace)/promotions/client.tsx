@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { parsePromotionFilterType, type PromotionFilterType } from "@/lib/promotions/type-taxonomy";
 import {
   PROMOTION_TYPE_LABELS,
   type BusinessCategory,
@@ -99,7 +100,7 @@ export function PromotionsExplorer() {
   const filters = useMemo(
     () => ({
       query: normalizeValue(currentSearchParams.get("q")),
-      type: normalizeValue(currentSearchParams.get("type")) as PromotionType | undefined,
+      type: parsePromotionFilterType(currentSearchParams.get("type")) ?? undefined,
       category: normalizeValue(currentSearchParams.get("category")) as BusinessCategory | undefined,
       province: normalizeValue(currentSearchParams.get("province")),
       city: normalizeValue(currentSearchParams.get("city")),
@@ -114,14 +115,24 @@ export function PromotionsExplorer() {
 
   const updateFilters = useCallback(
     (updates: Record<string, string | undefined>, options?: { preservePage?: boolean }) => {
-      const next = new URLSearchParams(searchParamKey);
+      const next = new URLSearchParams();
+      const nextFilters = {
+        q: filters.query,
+        type: filters.type,
+        category: filters.category,
+        province: filters.province,
+        city: filters.city,
+        business_id: filters.businessId,
+        event_state: filters.eventState,
+        page: options?.preservePage ? String(filters.page) : undefined,
+        ...updates,
+      };
 
-      for (const [key, value] of Object.entries(updates)) {
+      for (const [key, value] of Object.entries(nextFilters)) {
         if (value === undefined || value === "") {
-          next.delete(key);
-        } else {
-          next.set(key, value);
+          continue;
         }
+        next.set(key, value);
       }
 
       if (!options?.preservePage) {
@@ -131,7 +142,18 @@ export function PromotionsExplorer() {
       const nextKey = next.toString();
       router.replace(nextKey ? `${pathname}?${nextKey}` : pathname, { scroll: false });
     },
-    [pathname, router, searchParamKey]
+    [
+      filters.businessId,
+      filters.category,
+      filters.city,
+      filters.eventState,
+      filters.page,
+      filters.province,
+      filters.query,
+      filters.type,
+      pathname,
+      router,
+    ]
   );
 
   const cities = filters.province ? getCitiesForProvince(filters.province) : [];
@@ -150,7 +172,7 @@ export function PromotionsExplorer() {
   };
 
   const handleTypeChange = useCallback(
-    (value: PromotionType | undefined) => {
+    (value: PromotionFilterType | undefined) => {
       updateFilters({
         type: value,
         event_state: value === "event" ? filters.eventState : undefined,
@@ -187,7 +209,15 @@ export function PromotionsExplorer() {
       setError(null);
 
       try {
-        const params = new URLSearchParams(searchParamKey);
+        const params = new URLSearchParams();
+        if (filters.query) params.set("q", filters.query);
+        if (filters.type) params.set("type", filters.type);
+        if (filters.category) params.set("category", filters.category);
+        if (filters.province) params.set("province", filters.province);
+        if (filters.city) params.set("city", filters.city);
+        if (filters.businessId) params.set("business_id", filters.businessId);
+        if (filters.eventState) params.set("event_state", filters.eventState);
+        params.set("page", String(filters.page));
         params.set("limit", "24");
 
         const res = await fetch(`/api/promotions?${params.toString()}`, {
@@ -236,7 +266,7 @@ export function PromotionsExplorer() {
     return () => {
       active = false;
     };
-  }, [searchParamKey]);
+  }, [filters]);
 
   const accountProfileMap = useMemo(
     () =>

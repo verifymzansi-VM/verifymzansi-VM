@@ -102,7 +102,7 @@ describe("PromotionCard", () => {
     );
 
     expect(screen.getByText("10 MAR")).toBeTruthy();
-    expect(screen.getByText("Event")).toBeTruthy();
+    expect(screen.getByText("Events")).toBeTruthy();
   });
 
   it("hides linked business context in the reduced card", () => {

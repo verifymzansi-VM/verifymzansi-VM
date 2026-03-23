@@ -8,7 +8,8 @@ import {
   PromotionFilterPanel,
   type PromotionFilterState,
 } from "@/components/listings/promotion-filter-panel";
-import type { BusinessCategory, PromotionEventState, PromotionType } from "@/types/enums";
+import type { PromotionFilterType } from "@/lib/promotions/type-taxonomy";
+import type { BusinessCategory, PromotionEventState } from "@/types/enums";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { useHydrated } from "@/hooks/use-hydrated";
 
@@ -17,7 +18,7 @@ interface PromotionFilterDrawerProps {
   cities: string[];
   businessMap: Map<string, string>;
   onQueryChange: (value: string) => void;
-  onTypeChange: (value: PromotionType | undefined) => void;
+  onTypeChange: (value: PromotionFilterType | undefined) => void;
   onCategoryChange: (value: BusinessCategory | undefined) => void;
   onProvinceChange: (value: string | undefined) => void;
   onCityChange: (value: string | undefined) => void;

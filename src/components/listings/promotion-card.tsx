@@ -46,14 +46,14 @@ function getPromotionStatus(featured?: boolean, boosted?: boolean, promotionType
 
   if (promotionType === "deal") {
     return {
-      label: "Deal",
+      label: "Deals",
       className: "bg-red-500/95 text-white border border-white/10",
     };
   }
 
   if (promotionType === "event") {
     return {
-      label: "Event",
+      label: "Events",
       className: "bg-purple-500/95 text-white border border-white/10",
     };
   }

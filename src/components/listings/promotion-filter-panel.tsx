@@ -8,24 +8,20 @@ import { Badge } from "@/components/ui/badge";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { getProvinceNames } from "@/lib/constants/sa-provinces";
 import {
+  getPromotionFilterTypeLabel,
+  PROMOTION_FILTER_TYPE_OPTIONS,
+  type PromotionFilterType,
+} from "@/lib/promotions/type-taxonomy";
+import {
   PROMOTION_EVENT_STATE_LABELS,
   type BusinessCategory,
   type PromotionEventState,
-  type PromotionType,
 } from "@/types/enums";
 import { cn } from "@/lib/utils";
 
-const PROMOTION_TYPE_OPTIONS: Array<{ value: PromotionType; label: string }> = [
-  { value: "deal", label: "Deal" },
-  { value: "product", label: "Product" },
-  { value: "service", label: "Service" },
-  { value: "event", label: "Event" },
-  { value: "general", label: "Ad" },
-];
-
 export interface PromotionFilterState {
   query?: string;
-  type?: PromotionType;
+  type?: PromotionFilterType;
   category?: BusinessCategory;
   province?: string;
   city?: string;
@@ -38,7 +34,7 @@ interface PromotionFilterPanelProps {
   cities: string[];
   businessMap: Map<string, string>;
   onQueryChange: (value: string) => void;
-  onTypeChange: (value: PromotionType | undefined) => void;
+  onTypeChange: (value: PromotionFilterType | undefined) => void;
   onCategoryChange: (value: BusinessCategory | undefined) => void;
   onProvinceChange: (value: string | undefined) => void;
   onCityChange: (value: string | undefined) => void;
@@ -120,11 +116,11 @@ export function PromotionFilterPanel({
             className={selectClassName}
             value={filters.type || ""}
             onChange={(event) =>
-              onTypeChange((event.target.value || undefined) as PromotionType | undefined)
+              onTypeChange((event.target.value || undefined) as PromotionFilterType | undefined)
             }
           >
             <option value="">All types</option>
-            {PROMOTION_TYPE_OPTIONS.map((option) => (
+            {PROMOTION_FILTER_TYPE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -244,7 +240,7 @@ export function PromotionFilterPanel({
 
           {filters.type && (
             <Badge variant="secondary" className="gap-1">
-              {PROMOTION_TYPE_OPTIONS.find((option) => option.value === filters.type)?.label}
+              {getPromotionFilterTypeLabel(filters.type)}
               <button
                 type="button"
                 className="rounded-full p-0.5 transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
