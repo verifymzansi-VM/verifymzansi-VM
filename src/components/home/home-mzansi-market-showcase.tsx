@@ -4,7 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { MarketPreviewCard } from "./market-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
+import { createLogger } from "@/lib/utils/logger";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
+
+const log = createLogger("HomeMzansiMarketShowcase");
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
@@ -12,10 +15,10 @@ function provinceCode(name: string): string {
 
 export async function HomeMzansiMarketShowcase() {
   const supabase = await createClient();
-  const { data: listings } = await supabase
+  const { data: listings, error } = await supabase
     .from("listings")
     .select(
-      "id, title, description, price_cents, photos, videos, video_thumbnail, logo_url, location_province, location_city, boost_until"
+      "id, title, description, price_cents, photos, videos, video_thumbnail, location_province, location_city, boost_until"
     )
     .eq("status", "live")
     .eq("area", "MZANSI_MARKET")
@@ -23,6 +26,11 @@ export async function HomeMzansiMarketShowcase() {
     .order("featured", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(16);
+
+  if (error) {
+    log.warn("Failed to load home Mzansi Market showcase", { error: error.message });
+    return null;
+  }
 
   const items = (listings ?? [])
     .filter((listing) => !isPlaceholderMarketplaceContent(listing.title, listing.description))
@@ -64,7 +72,6 @@ export async function HomeMzansiMarketShowcase() {
                   href={`/listing/${l.id}`}
                   imageUrl={displayUrl}
                   posterUrl={poster}
-                  logoUrl={l.logo_url}
                   title={l.title}
                   price={l.price_cents ? l.price_cents / 100 : null}
                   city={l.location_city ?? "South Africa"}
