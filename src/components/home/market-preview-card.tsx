@@ -11,6 +11,7 @@ interface MarketPreviewCardProps {
   city: string;
   provinceCode: string;
   boosted?: boolean;
+  logoUrl?: string | null;
 }
 
 const formatPrice = (price: number) =>
@@ -29,6 +30,7 @@ export function MarketPreviewCard({
   city,
   provinceCode,
   boosted,
+  logoUrl,
 }: MarketPreviewCardProps) {
   return (
     <PosterCardShell
@@ -39,10 +41,11 @@ export function MarketPreviewCard({
       posterUrl={posterUrl}
       mediaAlt={title}
       eyebrow={price != null && price > 0 ? formatPrice(price) : null}
-      eyebrowClassName="font-display text-lg font-bold tracking-[0.01em] text-white sm:text-xl"
+      eyebrowClassName="font-display text-sm font-bold tracking-[0.01em] text-white sm:text-base"
       statusLabel={boosted ? "Boosted" : null}
       statusClassName="bg-brand-blue/95 text-white border border-white/10"
       accentClassName="hover:border-brand-green/55"
+      logoUrl={logoUrl}
     />
   );
 }

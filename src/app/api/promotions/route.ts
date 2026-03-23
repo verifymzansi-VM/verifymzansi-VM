@@ -637,7 +637,7 @@ export async function GET(request: NextRequest) {
     const { data: businesses } = businessIds.length
       ? await admin
           .from("businesses")
-          .select("id, business_name")
+          .select("id, business_name, logo_url")
           .eq("status", "live")
           .in("id", businessIds)
       : { data: [] };

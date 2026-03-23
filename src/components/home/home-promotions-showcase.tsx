@@ -27,6 +27,7 @@ interface PromotionRow {
   start_date: string | null;
   end_date: string | null;
   created_at: string;
+  business_id: string | null;
 }
 
 export async function HomePromotionsShowcase() {
@@ -36,7 +37,7 @@ export async function HomePromotionsShowcase() {
   const { data } = await supabase
     .from("promotions")
     .select(
-      "id, title, price_cents, price_negotiable, category, category_key, photos, videos, video_thumbnail, location_province, location_city, promotion_type, view_count, boost_until, featured_until, start_date, end_date, created_at"
+      "id, title, price_cents, price_negotiable, category, category_key, photos, videos, video_thumbnail, location_province, location_city, promotion_type, view_count, boost_until, featured_until, start_date, end_date, created_at, business_id"
     )
     .eq("status", "live")
     .order("boost_until", { ascending: false, nullsFirst: false })
@@ -47,6 +48,15 @@ export async function HomePromotionsShowcase() {
   const promotions = ((data || []) as PromotionRow[])
     .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
     .slice(0, 6);
+
+  // Fetch business logos for promotions linked to a business
+  const businessIds = [
+    ...new Set(promotions.map((p) => p.business_id).filter(Boolean)),
+  ] as string[];
+  const { data: businesses } = businessIds.length
+    ? await supabase.from("businesses").select("id, logo_url").in("id", businessIds)
+    : { data: [] };
+  const logoMap = new Map((businesses ?? []).map((b) => [b.id, b.logo_url as string | null]));
 
   if (promotions.length === 0) {
     return (
@@ -104,7 +114,7 @@ export async function HomePromotionsShowcase() {
           {promotions.map((promo) => (
             <div
               key={promo.id}
-              className="min-w-[200px] max-w-[224px] sm:min-w-[224px] sm:max-w-[224px]"
+              className="min-w-[240px] max-w-[264px] sm:min-w-[264px] sm:max-w-[264px]"
             >
               <PromotionCard
                 id={promo.id}
@@ -125,6 +135,7 @@ export async function HomePromotionsShowcase() {
                 }
                 startDate={promo.start_date}
                 endDate={promo.end_date}
+                logoUrl={promo.business_id ? logoMap.get(promo.business_id) : undefined}
               />
             </div>
           ))}

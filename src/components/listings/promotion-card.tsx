@@ -26,6 +26,7 @@ interface PromotionCardProps {
   startDate?: string | null;
   endDate?: string | null;
   businessName?: string;
+  logoUrl?: string | null;
 }
 
 function getPromotionStatus(featured?: boolean, boosted?: boolean, promotionType?: PromotionType) {
@@ -94,6 +95,7 @@ export const PromotionCard = memo(function PromotionCard({
   boosted,
   featured,
   startDate,
+  logoUrl,
 }: PromotionCardProps) {
   const status = getPromotionStatus(featured, boosted, promotionType);
   const eyebrow = formatPromotionEyebrow(price, promotionType, startDate);
@@ -107,10 +109,11 @@ export const PromotionCard = memo(function PromotionCard({
       posterUrl={posterUrl}
       mediaAlt={title}
       eyebrow={eyebrow}
+      logoUrl={logoUrl}
       eyebrowClassName={
         price != null && price > 0
-          ? "font-display text-lg font-bold tracking-[0.01em] text-white sm:text-xl"
-          : "text-xs font-semibold uppercase tracking-[0.18em] text-white/84"
+          ? "font-display text-sm font-bold tracking-[0.01em] text-white sm:text-base"
+          : "text-[10px] font-semibold uppercase tracking-[0.18em] text-white/84"
       }
       statusLabel={status?.label}
       statusClassName={status?.className}

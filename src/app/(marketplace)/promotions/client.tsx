@@ -59,6 +59,7 @@ interface AccountProfileSummary {
 interface BusinessSummary {
   id: string;
   business_name: string;
+  logo_url: string | null;
 }
 
 interface PromotionsResponse {
@@ -252,6 +253,16 @@ export function PromotionsExplorer() {
       new Map((response.businesses ?? []).map((business) => [business.id, business.business_name])),
     [response.businesses]
   );
+  const businessLogoMap = useMemo(
+    () =>
+      new Map(
+        (response.businesses ?? []).map((business) => [
+          business.id,
+          business.logo_url as string | null,
+        ])
+      ),
+    [response.businesses]
+  );
   const promotions = response.promotions ?? [];
   const total = response.total ?? 0;
   const page = response.page ?? filters.page;
@@ -397,6 +408,9 @@ export function PromotionsExplorer() {
                   const businessName = promotion.business_id
                     ? businessMap.get(promotion.business_id)
                     : undefined;
+                  const businessLogo = promotion.business_id
+                    ? businessLogoMap.get(promotion.business_id)
+                    : undefined;
                   const isBoosted = promotion.boost_until
                     ? new Date(promotion.boost_until) > now
                     : false;
@@ -432,6 +446,7 @@ export function PromotionsExplorer() {
                         startDate={promotion.start_date}
                         endDate={promotion.end_date}
                         businessName={businessName}
+                        logoUrl={businessLogo}
                       />
                     </div>
                   );

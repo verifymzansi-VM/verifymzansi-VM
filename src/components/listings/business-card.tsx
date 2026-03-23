@@ -46,9 +46,11 @@ function getBusinessStatus(featuredUntil?: string | null, boostUntil?: string | 
 export function BusinessCard({
   id,
   businessName,
+  description,
   coverPhoto,
   coverVideo,
   videoThumbnail,
+  logoUrl,
   galleryPhotos,
   province,
   city,
@@ -67,10 +69,12 @@ export function BusinessCard({
     <PosterCardShell
       href={`/mzansi-business/${id}`}
       title={businessName}
+      description={description}
       location={`${city}, ${province}`}
       mediaUrl={displayCover}
       posterUrl={posterUrl}
       mediaAlt={businessName}
+      logoUrl={logoUrl}
       statusLabel={status?.label}
       statusClassName={status?.className}
       accentClassName="hover:border-brand-blue/55"

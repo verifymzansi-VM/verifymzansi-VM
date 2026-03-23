@@ -17,6 +17,7 @@ interface PosterCardShellProps {
   mediaUrl?: string | null;
   posterUrl?: string | null;
   mediaAlt?: string;
+  /** Small text above title (price, date, etc.) */
   eyebrow?: string | null;
   statusLabel?: string | null;
   statusClassName?: string;
@@ -27,6 +28,10 @@ interface PosterCardShellProps {
   mediaSizes?: string;
   trustLevel?: TrustLevel;
   fallback?: ReactNode;
+  /** Business logo URL — rendered as circular overlay bottom-right */
+  logoUrl?: string | null;
+  /** Short description — 1-line clamp below title */
+  description?: string | null;
 }
 
 export function PosterCardShell({
@@ -46,9 +51,12 @@ export function PosterCardShell({
   mediaSizes = "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw",
   trustLevel = 0,
   fallback,
+  logoUrl,
+  description,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
+  const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
   const hasVideo = isVideoUrl(mediaUrl);
 
   return (
@@ -60,7 +68,7 @@ export function PosterCardShell({
         )}
         trustLevel={trustLevel}
       >
-        <div className="relative aspect-[9/14] h-full w-full overflow-hidden">
+        <div className="relative aspect-[3/5] h-full w-full overflow-hidden">
           {normalizedMediaUrl ? (
             hasVideo ? (
               <VideoCardPlayer
@@ -68,7 +76,7 @@ export function PosterCardShell({
                 posterUrl={normalizedPosterUrl}
                 alt={mediaAlt || title}
                 sizes={mediaSizes}
-                mode="ambient"
+                mode="hover"
                 mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
               />
             ) : (
@@ -88,9 +96,11 @@ export function PosterCardShell({
             <div className="absolute inset-0 bg-gradient-to-br from-warm-300 via-warm-200 to-warm-100 dark:from-warm-800 dark:via-warm-700 dark:to-warm-900" />
           )}
 
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/28 to-black/8" />
+          {/* Lighter gradient — lets media breathe */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
           <div className="absolute inset-0 ring-1 ring-inset ring-white/12" />
 
+          {/* Status badge — top-left */}
           {statusLabel ? (
             <div className="absolute left-3 top-3 z-10">
               <span
@@ -104,27 +114,48 @@ export function PosterCardShell({
             </div>
           ) : null}
 
+          {/* Business logo — bottom-right */}
+          {normalizedLogoUrl ? (
+            <div className="absolute bottom-[72px] right-3 z-20 sm:bottom-[80px]">
+              <div className="h-9 w-9 overflow-hidden rounded-full ring-2 ring-white/80 shadow-lg">
+                <Image
+                  src={normalizedLogoUrl}
+                  alt="Business logo"
+                  width={36}
+                  height={36}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {/* Bottom content overlay */}
           <div
             className={cn(
-              "absolute inset-x-0 bottom-0 z-10 space-y-1.5 p-3 sm:p-4",
+              "absolute inset-x-0 bottom-0 z-10 space-y-1 p-3 sm:p-4",
               contentClassName
             )}
           >
             {eyebrow ? (
               <p
                 className={cn(
-                  "text-sm font-semibold tracking-[0.01em] text-white/92 sm:text-base",
+                  "text-xs font-semibold tracking-[0.01em] text-white/90 sm:text-sm",
                   eyebrowClassName
                 )}
               >
                 {eyebrow}
               </p>
             ) : null}
-            <h3 className="font-display text-base font-semibold leading-tight text-white drop-shadow-sm line-clamp-1 sm:text-lg">
+            <h3 className="font-display text-sm font-semibold leading-tight text-white drop-shadow-sm line-clamp-1 sm:text-base">
               {title}
             </h3>
-            <p className="flex items-center gap-1.5 text-xs font-medium text-white/78 line-clamp-1 sm:text-[13px]">
-              <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+            {description ? (
+              <p className="text-[11px] leading-snug text-white/60 line-clamp-1 sm:text-xs">
+                {description}
+              </p>
+            ) : null}
+            <p className="flex items-center gap-1.5 text-[11px] font-medium text-white/70 line-clamp-1 sm:text-xs">
+              <MapPin className="h-3 w-3 flex-shrink-0" />
               <span className="truncate">{location}</span>
             </p>
           </div>

@@ -21,6 +21,7 @@ export function BusinessPreviewCard({
   href,
   imageUrl,
   posterUrl,
+  logoUrl,
   title,
   city,
   provinceCode,
@@ -47,6 +48,7 @@ export function BusinessPreviewCard({
       mediaUrl={imageUrl}
       posterUrl={posterUrl}
       mediaAlt={title}
+      logoUrl={logoUrl}
       statusLabel={status?.label}
       statusClassName={status?.className}
       accentClassName="hover:border-brand-blue/55"

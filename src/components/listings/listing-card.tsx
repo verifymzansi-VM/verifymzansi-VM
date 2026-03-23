@@ -24,6 +24,7 @@ interface ListingCardProps {
   boosted?: boolean;
   featured?: boolean;
   urgent?: boolean;
+  logoUrl?: string | null;
 }
 
 function isNew(createdAt: string): boolean {
@@ -80,6 +81,7 @@ export const ListingCard = memo(function ListingCard({
   boosted,
   featured,
   urgent,
+  logoUrl,
 }: ListingCardProps) {
   const status = getListingStatus(featured, boosted, urgent, createdAt);
 
@@ -92,11 +94,12 @@ export const ListingCard = memo(function ListingCard({
       posterUrl={posterUrl}
       mediaAlt={title}
       eyebrow={price > 0 ? formatZARShort(price) : null}
-      eyebrowClassName="font-display text-lg font-bold tracking-[0.01em] text-white sm:text-xl"
+      eyebrowClassName="font-display text-sm font-bold tracking-[0.01em] text-white sm:text-base"
       statusLabel={status?.label}
       statusClassName={status?.className}
       accentClassName="hover:border-brand-green/55"
       trustLevel={ownerTrustLevel}
+      logoUrl={logoUrl}
     />
   );
 });

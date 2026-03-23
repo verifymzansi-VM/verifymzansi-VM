@@ -30,6 +30,7 @@ interface ListingCardListProps {
   boosted?: boolean;
   featured?: boolean;
   urgent?: boolean;
+  logoUrl?: string | null;
 }
 
 function isNew(createdAt: string): boolean {
@@ -86,9 +87,11 @@ export const ListingCardList = memo(function ListingCardList({
   boosted,
   featured,
   urgent,
+  logoUrl,
 }: ListingCardListProps) {
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
+  const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
   const status = getListingStatus(featured, boosted, urgent, createdAt);
 
   return (
@@ -106,7 +109,7 @@ export const ListingCardList = memo(function ListingCardList({
                   posterUrl={posterUrl}
                   alt={title}
                   sizes="160px"
-                  mode="ambient"
+                  mode="hover"
                   mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
                 />
               ) : (
@@ -139,21 +142,34 @@ export const ListingCardList = memo(function ListingCardList({
             ) : null}
 
             {price > 0 ? (
-              <p className="font-display text-lg font-bold tracking-[0.01em] text-foreground sm:text-xl">
+              <p className="font-display text-base font-bold tracking-[0.01em] text-foreground">
                 {formatZARShort(price)}
               </p>
             ) : null}
 
-            <h3 className="font-display text-lg font-semibold leading-tight line-clamp-2 group-hover:text-brand-green transition-colors">
+            <h3 className="font-display text-base font-semibold leading-tight line-clamp-2 group-hover:text-brand-green transition-colors">
               {title}
             </h3>
 
-            <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-              <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-              <span className="truncate">
-                {city}, {province}
-              </span>
-            </p>
+            <div className="flex items-center gap-2">
+              {normalizedLogoUrl ? (
+                <div className="h-5 w-5 shrink-0 overflow-hidden rounded-full ring-1 ring-border">
+                  <Image
+                    src={normalizedLogoUrl}
+                    alt="Business logo"
+                    width={20}
+                    height={20}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : null}
+              <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <MapPin className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">
+                  {city}, {province}
+                </span>
+              </p>
+            </div>
           </div>
         </div>
       </Card>
