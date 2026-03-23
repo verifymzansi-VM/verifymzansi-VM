@@ -68,39 +68,46 @@ describe("HomePage", () => {
     expect(screen.getByTestId("business-showcase")).toBeInTheDocument();
     expect(screen.getByTestId("category-showcase")).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { level: 2, name: "Start here on VerifyMzansi" })
+      screen.getByRole("heading", {
+        level: 2,
+        name: "Promote, discover, and build trust on VerifyMzansi",
+      })
     ).toBeInTheDocument();
     expect(screen.getByText("New to VerifyMzansi?")).toBeInTheDocument();
-    expect(screen.getByText("Create an account")).toBeInTheDocument();
+    expect(screen.getByText("Create your profile")).toBeInTheDocument();
     expect(screen.getByText("Complete verification")).toBeInTheDocument();
-    expect(screen.getByText("Browse or post in the area that fits your goal")).toBeInTheDocument();
+    expect(screen.getByText("Choose the surface that fits your goal")).toBeInTheDocument();
   });
 
   it("uses canonical category href values", async () => {
     const ui = await HomePage();
     render(ui);
 
-    expect(screen.getByRole("link", { name: /Create your account/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Start advertising/i })).toHaveAttribute(
+      "href",
+      "/advertise"
+    );
+    expect(screen.getByRole("link", { name: /^Create your account$/i })).toHaveAttribute(
       "href",
       "/register"
     );
-    expect(screen.getByRole("link", { name: /See pricing and plans/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /See pricing and growth plans/i })).toHaveAttribute(
       "href",
       "/pricing"
     );
     expect(
       screen.getByRole("link", {
-        name: /Mzansi Market Browse or post verified listings for everyday buying and selling\./i,
+        name: /Mzansi Market Showcase products, listings, and everyday offers with trusted visibility\./i,
       })
     ).toHaveAttribute("href", "/mzansi-market");
     expect(
       screen.getByRole("link", {
-        name: /Mzansi Business Find trusted businesses or create a profile for your services\./i,
+        name: /Mzansi Business Build a business presence that helps customers discover and trust your brand\./i,
       })
     ).toHaveAttribute("href", "/mzansi-business");
     expect(
       screen.getByRole("link", {
-        name: /Promotions & Events Discover current offers and events or create a time-sensitive promotion\./i,
+        name: /Promotions & Events Promote products, services, launches, and campaigns that need immediate reach\./i,
       })
     ).toHaveAttribute("href", "/promotions");
   });
@@ -109,17 +116,24 @@ describe("HomePage", () => {
     const ui = await HomePage();
     render(ui);
 
-    expect(screen.getByRole("link", { name: /Create your account/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Start advertising/i })).toHaveAttribute(
+      "href",
+      "/advertise"
+    );
+    expect(screen.getByRole("link", { name: /^Create your account$/i })).toHaveAttribute(
       "href",
       "/register"
     );
-    expect(screen.getByRole("link", { name: /See pricing and plans/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /See pricing and growth plans/i })).toHaveAttribute(
       "href",
       "/pricing"
     );
-    expect(screen.queryByRole("link", { name: /Advertise a promotion/i })).not.toBeInTheDocument();
-    expect(screen.getByText("Create an account")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Explore advertiser solutions/i })).toHaveAttribute(
+      "href",
+      "/advertise"
+    );
+    expect(screen.getByText("Create your profile")).toBeInTheDocument();
     expect(screen.getByText("Complete verification")).toBeInTheDocument();
-    expect(screen.getByText("Browse or post in the area that fits your goal")).toBeInTheDocument();
+    expect(screen.getByText("Choose the surface that fits your goal")).toBeInTheDocument();
   });
 });

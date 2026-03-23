@@ -117,7 +117,7 @@ export default function OpenGraphImage() {
           <img src={shieldSrc} width="128" height="128" alt="VerifyMzansi shield" />
 
           <div style={brandTextStyle}>
-            <div style={eyebrowStyle}>Trusted Marketplace</div>
+            <div style={eyebrowStyle}>Promote With Trust</div>
             <div style={wordmarkStyle}>
               <span style={{ color: "#fffaf5" }}>Verify</span>
               <span style={{ color: "#b4e2c0" }}>Mzansi</span>
@@ -127,9 +127,10 @@ export default function OpenGraphImage() {
         </div>
 
         <div style={copyWrapStyle}>
-          <div style={headlineStyle}>South Africa&apos;s verification-first marketplace.</div>
+          <div style={headlineStyle}>Business promotion powered by trusted visibility.</div>
           <div style={subheadStyle}>
-            Buy, sell, and discover trusted businesses, deals, and events with more confidence.
+            Promote products, services, and events while helping customers discover brands with
+            confidence.
           </div>
         </div>
       </div>

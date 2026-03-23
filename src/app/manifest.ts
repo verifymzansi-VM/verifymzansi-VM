@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "VerifyMzansi",
     short_name: "VerifyMzansi",
     description:
-      "South Africa's verification-first marketplace. Buy & sell with people you can trust.",
+      "Promote products, services, and events with verification-first visibility across South Africa.",
     start_url: "/",
     display: "standalone",
     background_color: "#faf8f5",

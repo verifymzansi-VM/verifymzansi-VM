@@ -14,7 +14,9 @@ export function Footer() {
             <Link href="/" className="flex items-center gap-1.5">
               <BrandLogo size="sm" />
             </Link>
-            <p className="text-xs text-muted-foreground max-w-xs">SA&apos;s trusted marketplace.</p>
+            <p className="text-xs text-muted-foreground max-w-xs">
+              Promote products, services, and trusted brands with verification-first visibility.
+            </p>
           </div>
 
           {/* Marketplace */}
@@ -38,6 +40,12 @@ export function Footer() {
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Promotions & Events
+              </Link>
+              <Link
+                href="/advertise"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Advertise
               </Link>
             </nav>
           </div>

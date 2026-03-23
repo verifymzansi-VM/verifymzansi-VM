@@ -408,7 +408,8 @@ export function HeroBanner({
           type: "business" as const,
           id: b.id,
           title: b.business_name,
-          description: b.description || "Trusted local business.",
+          description:
+            b.description || "Promote your trusted business to more South African customers.",
           location: extractLocation(b.location_city),
           mediaUrl: normalizeMediaUrl(
             b.cover_video || b.cover_photo || "/images/fallbacks/hero-business.svg"
@@ -428,7 +429,7 @@ export function HeroBanner({
           type: "listing" as const,
           id: l.id,
           title: l.title,
-          description: l.description || "Exclusive verified listing.",
+          description: l.description || "Highlight products and services with trusted visibility.",
           location: l.location_city || "South Africa",
           mediaUrl: normalizeMediaUrl(
             usesVideo
@@ -471,8 +472,9 @@ export function HeroBanner({
       combined.push({
         type: "promo" as const,
         id: "promo-default",
-        title: "Welcome to VerifyMzansi",
-        description: "South Africa's trusted verification-first marketplace",
+        title: "Promote your business with trust",
+        description:
+          "South Africa's platform for business visibility, brand promotion, and verification-first confidence.",
         location: "South Africa",
         mediaUrl: "__promo__",
         promotions: [],

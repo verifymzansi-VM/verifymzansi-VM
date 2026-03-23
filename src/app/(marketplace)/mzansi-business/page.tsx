@@ -17,7 +17,7 @@ import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content
 export const metadata = {
   title: "Mzansi Business",
   description:
-    "Discover verified South African businesses — shops, services, mobile providers, and more on VerifyMzansi.",
+    "Build trusted business visibility and discover verified South African brands, shops, and services on VerifyMzansi.",
   alternates: {
     canonical: "/mzansi-business",
   },
@@ -97,7 +97,7 @@ export default async function MzansiBusinessPage() {
       <div className="container-page py-4 sm:py-6 space-y-4">
         <PageHeader
           title="Mzansi Business"
-          description="Browse verified South African businesses, and discover trusted shops near you."
+          description="Browse verified South African businesses, build visibility for your brand, and help customers discover trusted services."
           breadcrumbs={[{ label: "Mzansi Business" }]}
           className="hidden lg:block"
         >

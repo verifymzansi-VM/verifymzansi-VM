@@ -17,7 +17,7 @@ import {
 export const metadata = {
   title: "Pricing",
   description:
-    "Choose the plan that fits your selling needs on VerifyMzansi. Free and premium options for Mzansi Market, Mzansi Business, and Promotions & Events.",
+    "Choose the plan that fits your promotion, visibility, and growth goals on VerifyMzansi. Free and premium options for products, businesses, and campaigns.",
 };
 
 function featureList(plan: PlanDefinition): string[] {
@@ -142,7 +142,7 @@ export default function PricingPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Pricing"
-            description={`1 free post per area every 30 days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} ${FREE_POST_CONFIG.maxVideos === 1 ? "video" : "videos"}. All plans include verification and trust badges.`}
+            description={`1 free post per area every 30 days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} ${FREE_POST_CONFIG.maxVideos === 1 ? "video" : "videos"}. All plans are designed to help you grow visibility, promote with confidence, and build trust through verification badges.`}
             breadcrumbs={[{ label: "Pricing" }]}
           />
 

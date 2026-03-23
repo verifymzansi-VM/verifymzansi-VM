@@ -14,13 +14,13 @@ import { HomeBusinessShowcase } from "@/components/home/home-business-showcase";
 import { HomeCategoryShowcase } from "@/components/home/home-category-showcase";
 
 export const metadata: Metadata = {
-  title: "VerifyMzansi — SA's Trusted Marketplace",
+  title: "VerifyMzansi — Business Promotion With Trust",
   description:
-    "Buy, sell, and discover trusted businesses, deals, and events with verified accounts. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
+    "Promote your business, showcase products and services, and build customer confidence through verification-first visibility across South Africa.",
   openGraph: {
-    title: "VerifyMzansi — SA's Trusted Marketplace",
+    title: "VerifyMzansi — Business Promotion With Trust",
     description:
-      "Buy, sell, and discover trusted businesses, deals, and events with verified accounts. South Africa's verification-first marketplace for classifieds, businesses, and promotions.",
+      "Promote your business, showcase products and services, and build customer confidence through verification-first visibility across South Africa.",
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "VerifyMzansi" }],
   },
 };
@@ -33,7 +33,7 @@ export default async function HomePage() {
   const onboardingDestinations = [
     {
       title: "Mzansi Market",
-      description: "Browse or post verified listings for everyday buying and selling.",
+      description: "Showcase products, listings, and everyday offers with trusted visibility.",
       href: "/mzansi-market",
       icon: ShoppingBag,
       accentClass: "text-brand-green",
@@ -41,7 +41,7 @@ export default async function HomePage() {
     },
     {
       title: "Mzansi Business",
-      description: "Find trusted businesses or create a profile for your services.",
+      description: "Build a business presence that helps customers discover and trust your brand.",
       href: "/mzansi-business",
       icon: Building2,
       accentClass: "text-brand-blue",
@@ -49,7 +49,7 @@ export default async function HomePage() {
     },
     {
       title: "Promotions & Events",
-      description: "Discover current offers and events or create a time-sensitive promotion.",
+      description: "Promote products, services, launches, and campaigns that need immediate reach.",
       href: "/promotions",
       icon: Megaphone,
       accentClass: "text-red-400",
@@ -65,7 +65,7 @@ export default async function HomePage() {
         name: "VerifyMzansi",
         url,
         description:
-          "South Africa's verification-first marketplace for classifieds, shops, and business services.",
+          "South African platform for business promotion, trusted visibility, and verification-first discovery.",
         potentialAction: {
           "@type": "SearchAction",
           target: {
@@ -130,13 +130,14 @@ export default async function HomePage() {
 
                   <div className="space-y-3">
                     <h2 className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-white leading-[1.1]">
-                      Start here on <span className="text-white">VerifyMzansi</span>
+                      Promote, discover, and build trust on{" "}
+                      <span className="text-white">VerifyMzansi</span>
                     </h2>
 
                     <p className="text-warm-100 text-base sm:text-lg max-w-2xl">
-                      VerifyMzansi is for South Africans who want to buy, sell, find trusted
-                      businesses, or discover promotions and events with more confidence through
-                      verified accounts.
+                      VerifyMzansi helps businesses market products and services, showcase trusted
+                      brands, and reach more customers while giving audiences more confidence
+                      through verification-first visibility.
                     </p>
                   </div>
 
@@ -147,18 +148,18 @@ export default async function HomePage() {
                     <ol className="mt-4 space-y-3">
                       {[
                         {
-                          title: "Create an account",
-                          detail: "Sign up with your phone number or email.",
+                          title: "Create your profile",
+                          detail: "Set up an account for your business, brand, or selling goals.",
                         },
                         {
                           title: "Complete verification",
                           detail:
-                            "Verify your identity with a quick phone, ID, and location check — it only takes a few minutes.",
+                            "Strengthen your credibility with phone, ID, and location checks that help customers trust what they see.",
                         },
                         {
-                          title: "Browse or post in the area that fits your goal",
+                          title: "Choose the surface that fits your goal",
                           detail:
-                            "List items for sale, register your business, or discover verified sellers and services.",
+                            "Promote a product, build your business presence, or launch a time-sensitive campaign with stronger visibility.",
                         },
                       ].map((step, index) => (
                         <li key={step.title} className="flex items-start gap-3 text-warm-100">
@@ -180,19 +181,34 @@ export default async function HomePage() {
                       size="lg"
                       className="w-full sm:w-auto h-12 px-8 text-base bg-brand-green hover:bg-brand-green-600 text-white transition-all gap-2 rounded-full font-semibold"
                     >
-                      <Link href="/register">
-                        Create your account
+                      <Link href="/advertise">
+                        Start advertising
                         <ArrowRight className="h-5 w-5" />
                       </Link>
+                    </Button>
+                    <Button
+                      asChild
+                      size="lg"
+                      variant="outline"
+                      className="w-full sm:w-auto h-12 px-8 text-base rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10"
+                    >
+                      <Link href="/register">Create your account</Link>
                     </Button>
                   </div>
 
                   <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                     <Link
+                      href="/advertise"
+                      className="inline-flex items-center gap-2 text-sm font-medium text-brand-green-300 transition-colors hover:text-brand-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-warm-950 rounded-full"
+                    >
+                      Explore advertiser solutions
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                    <Link
                       href="/pricing"
                       className="inline-flex items-center gap-2 text-sm font-medium text-warm-100 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-warm-950 rounded-full"
                     >
-                      See pricing and plans
+                      See pricing and growth plans
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </div>

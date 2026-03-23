@@ -154,6 +154,9 @@ function HeaderInner({
               {(trustLevelProp || auth.trustLevel) > 0 && (
                 <TrustBadge level={trustLevelProp || auth.trustLevel} size="sm" />
               )}
+              <Button asChild variant="outline" size="sm">
+                <Link href="/advertise">Advertise</Link>
+              </Button>
               <Button asChild variant="trust-verified" size="sm">
                 <Link href="/post/create">+ Post</Link>
               </Button>
@@ -227,6 +230,9 @@ function HeaderInner({
             </>
           ) : (
             <>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/advertise">Advertise</Link>
+              </Button>
               <Button
                 asChild
                 variant="outline"
@@ -248,7 +254,7 @@ function HeaderInner({
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
           aria-controls="mobile-nav-menu"
-          aria-expanded={mobileOpen ? "true" : "false"}
+          aria-expanded={mobileOpen}
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
@@ -318,6 +324,11 @@ function HeaderInner({
                       + Post
                     </Link>
                   </Button>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/advertise" onClick={() => setMobileOpen(false)}>
+                      Advertise
+                    </Link>
+                  </Button>
                   <button
                     className="flex items-center gap-2 py-2 text-sm font-medium text-destructive disabled:opacity-50"
                     disabled={signingOut}
@@ -336,6 +347,11 @@ function HeaderInner({
                 </>
               ) : (
                 <>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/advertise" onClick={() => setMobileOpen(false)}>
+                      Advertise
+                    </Link>
+                  </Button>
                   <Button asChild variant="outline" className="w-full">
                     <Link href="/login" onClick={() => setMobileOpen(false)}>
                       Sign In

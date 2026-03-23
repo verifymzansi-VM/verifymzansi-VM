@@ -21,7 +21,7 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   0: {
     level: 0,
     label: "Unregistered",
-    description: "No verified account profile",
+    description: "No trusted profile or verification signals yet",
     badgeClass: "trust-badge-0",
     cardClass: "trust-card-0",
     borderColor: "border-warm-200",
@@ -31,7 +31,7 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   1: {
     level: 1,
     label: "Incomplete",
-    description: "Verification not started",
+    description: "Verification started but trust details are incomplete",
     badgeClass: "trust-badge-1",
     cardClass: "trust-card-1",
     borderColor: "border-warm-300",
@@ -41,7 +41,7 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   2: {
     level: 2,
     label: "Pending Review",
-    description: "Verification submitted, awaiting review",
+    description: "Verification submitted and credibility checks are in review",
     badgeClass: "trust-badge-2",
     cardClass: "trust-card-2",
     borderColor: "border-brand-gold-300",
@@ -51,7 +51,7 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   3: {
     level: 3,
     label: "Verified",
-    description: "Identity verified by VerifyMzansi",
+    description: "Identity verified to help customers trust this profile",
     badgeClass: "trust-badge-3",
     cardClass: "trust-card-3",
     borderColor: "border-brand-green-400",
@@ -61,7 +61,7 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   4: {
     level: 4,
     label: "Verified Pro",
-    description: "Verified account with Pro subscription",
+    description: "Verified profile with Pro visibility and stronger brand presence",
     badgeClass: "trust-badge-4",
     cardClass: "trust-card-4",
     borderColor: "border-brand-green-400",

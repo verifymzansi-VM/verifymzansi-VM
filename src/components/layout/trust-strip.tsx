@@ -17,17 +17,17 @@ export function TrustStrip({ variant = "green" }: TrustStripProps) {
         <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs sm:text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <ShieldCheck className={`h-4 w-4 ${iconClass}`} />
-            Identity-verified accounts
+            Verification-backed visibility
           </span>
           <span className="hidden sm:inline text-border">|</span>
           <span className="flex items-center gap-1.5">
             <BadgeCheck className={`h-4 w-4 ${iconClass}`} />
-            Trust-scored profiles
+            Credibility signals for brands
           </span>
           <span className="hidden sm:inline text-border">|</span>
           <span className="flex items-center gap-1.5">
             <Search className={`h-4 w-4 ${iconClass}`} />
-            Moderated listings
+            Safer discovery for customers
           </span>
         </div>
       </div>

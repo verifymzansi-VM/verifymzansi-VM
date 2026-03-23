@@ -46,19 +46,20 @@ if (typeof window !== "undefined" && "serviceWorker" in navigator) {
 
 export const metadata: Metadata = {
   title: {
-    default: "VerifyMzansi — SA's Trusted Marketplace",
+    default: "VerifyMzansi — Promote With Trust",
     template: "%s | VerifyMzansi",
   },
   description:
-    "Buy & sell with people you can trust. South Africa's verification-first marketplace for classifieds, shops, and business services.",
+    "Promote your products, services, and events across South Africa with verification-first visibility that helps customers discover brands with more confidence.",
   keywords: [
     "South Africa",
-    "marketplace",
-    "classifieds",
-    "verified accounts",
-    "buy and sell",
+    "business promotion",
+    "brand visibility",
+    "verified businesses",
+    "digital marketing",
+    "advertise your business",
     "Mzansi",
-    "trusted marketplace",
+    "trusted visibility",
   ],
   authors: [{ name: "VerifyMzansi" }],
   creator: "VerifyMzansi",
@@ -68,23 +69,23 @@ export const metadata: Metadata = {
     locale: "en_ZA",
     url: process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com",
     siteName: "VerifyMzansi",
-    title: "VerifyMzansi — SA's Trusted Marketplace",
+    title: "VerifyMzansi — Promote With Trust",
     description:
-      "Buy & sell with people you can trust. South Africa's verification-first marketplace.",
+      "Promote your products, services, and events across South Africa with verification-first visibility.",
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "VerifyMzansi — SA's Trusted Marketplace",
+        alt: "VerifyMzansi — Promote With Trust",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "VerifyMzansi — SA's Trusted Marketplace",
+    title: "VerifyMzansi — Promote With Trust",
     description:
-      "Buy & sell with people you can trust. South Africa's verification-first marketplace.",
+      "Promote your products, services, and events across South Africa with verification-first visibility.",
     images: ["/twitter-image"],
   },
   robots: {
