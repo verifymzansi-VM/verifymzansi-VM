@@ -91,6 +91,23 @@ export function isDeterministicFixtureMatch({
   return FIXTURE_MARKERS.some((marker) => normalizedLine.includes(marker));
 }
 
+export function isAllowedComputedHashMatch({
+  filePath,
+  line,
+  ruleName,
+}: SecretScanMatchContext): boolean {
+  if (ruleName !== "64-char hex string (potential encryption key)") {
+    return false;
+  }
+
+  const normalizedPath = normalizeFilePath(filePath);
+  return normalizedPath === "skills-lock.json" && line.includes('"computedHash"');
+}
+
 export function shouldIgnoreSecretFinding(context: SecretScanMatchContext): boolean {
-  return isAllowedLine(context.line) || isDeterministicFixtureMatch(context);
+  return (
+    isAllowedLine(context.line) ||
+    isDeterministicFixtureMatch(context) ||
+    isAllowedComputedHashMatch(context)
+  );
 }
