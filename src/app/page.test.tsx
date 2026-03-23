@@ -50,8 +50,8 @@ vi.mock("@/components/home/home-business-showcase", () => ({
   HomeBusinessShowcase: () => <div data-testid="business-showcase" />,
 }));
 
-vi.mock("@/components/home/home-category-showcase", () => ({
-  HomeCategoryShowcase: () => <div data-testid="category-showcase" />,
+vi.mock("@/components/home/home-promotions-showcase", () => ({
+  HomePromotionsShowcase: () => <div data-testid="promotions-showcase" />,
 }));
 
 describe("HomePage", () => {
@@ -66,7 +66,7 @@ describe("HomePage", () => {
     expect(screen.getByTestId("hero-banner-with-data")).toBeInTheDocument();
     expect(screen.getByTestId("market-showcase")).toBeInTheDocument();
     expect(screen.getByTestId("business-showcase")).toBeInTheDocument();
-    expect(screen.getByTestId("category-showcase")).toBeInTheDocument();
+    expect(screen.getByTestId("promotions-showcase")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", {
         level: 2,

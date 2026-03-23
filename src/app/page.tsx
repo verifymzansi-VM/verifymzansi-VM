@@ -11,7 +11,7 @@ import { HeroBannerWithData } from "@/components/home/hero-banner-with-data";
 import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
 import { HomeMzansiMarketShowcase } from "@/components/home/home-mzansi-market-showcase";
 import { HomeBusinessShowcase } from "@/components/home/home-business-showcase";
-import { HomeCategoryShowcase } from "@/components/home/home-category-showcase";
+import { HomePromotionsShowcase } from "@/components/home/home-promotions-showcase";
 import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { getOfficialSocialSameAs } from "@/lib/official-social-links";
 
@@ -118,7 +118,7 @@ export default async function HomePage() {
         </Suspense>
 
         <Suspense fallback={<MarketplacePreviewsSkeleton />}>
-          <HomeCategoryShowcase />
+          <HomePromotionsShowcase />
         </Suspense>
 
         {/* ═══ Onboarding Guide Section ═══ */}
