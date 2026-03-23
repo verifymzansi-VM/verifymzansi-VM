@@ -6,7 +6,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
 import { businessSchema } from "@/lib/validations/business-unified";
 import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { checkLocalRateLimit, checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
 import {
@@ -394,13 +394,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid business category" }, { status: 400 });
     }
 
-    // Rate limit public reads by IP to prevent scraping
+    // Rate limit public reads by IP (local-only — external worker has wrong
+    // limits for read actions; 120 req/min is generous for normal browsing).
     const ip = getClientIp(request) || "unknown";
-    const rl = await checkRateLimit({
-      key: ip,
-      action: "businesses:read",
-      degradedMode: "local",
-    });
+    const rl = checkLocalRateLimit(ip, "businesses:read", 120);
     if (rl.limited) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },

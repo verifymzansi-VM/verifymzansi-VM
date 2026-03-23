@@ -47,7 +47,8 @@ function cleanupExpiredBuckets(): void {
  */
 export function checkLocalRateLimit(
   key: string,
-  action: string
+  action: string,
+  maxRequests: number = LOCAL_MAX_REQUESTS
 ): { limited: boolean; retryAfter?: number } {
   cleanupExpiredBuckets();
 
@@ -60,7 +61,7 @@ export function checkLocalRateLimit(
     // LRU: move to end of Map insertion order by re-inserting
     LOCAL_BUCKETS.delete(bucketKey);
     LOCAL_BUCKETS.set(bucketKey, existing);
-    if (existing.count > LOCAL_MAX_REQUESTS) {
+    if (existing.count > maxRequests) {
       const retryAfter = Math.ceil((existing.expiresAt - now) / 1000);
       return { limited: true, retryAfter };
     }

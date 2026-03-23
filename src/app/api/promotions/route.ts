@@ -5,7 +5,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { promotionSchema } from "@/lib/validations/promotion";
 import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { checkLocalRateLimit, checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
 import {
@@ -462,13 +462,10 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    // Rate limit public reads by IP to prevent scraping
+    // Rate limit public reads by IP (local-only — external worker has wrong
+    // limits for read actions; 120 req/min is generous for normal browsing).
     const ip = getClientIp(request) || "unknown";
-    const rl = await checkRateLimit({
-      key: ip,
-      action: "promotions:read",
-      degradedMode: "local",
-    });
+    const rl = checkLocalRateLimit(ip, "promotions:read", 120);
     if (rl.limited) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },

@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { listingSchema } from "@/lib/validations/listing";
 import { logAuditEvent } from "@/lib/services/audit";
 import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { checkLocalRateLimit, checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { parseJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
   try {
     // Rate limit public marketplace queries to prevent scraping/DoS
     const ip = getClientIp(request);
-    const rl = await checkRateLimit({ key: ip, action: "listings:read" });
+    const rl = checkLocalRateLimit(ip, "listings:read", 120);
     if (rl.limited) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },
