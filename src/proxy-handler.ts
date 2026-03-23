@@ -53,7 +53,11 @@ function buildCsp(
     "object-src 'none'",
     scriptSrc,
     styleSrc,
-    "img-src 'self' blob: https://tnygdgormnofpgjknlhr.supabase.co https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com",
+    // React/Next components such as next/image emit inline style attributes
+    // for layout-critical positioning. Keep style tags nonce-bound, but allow
+    // style attributes so media and responsive UI render under the production CSP.
+    ...(nonce ? ["style-src-attr 'unsafe-inline'"] : []),
+    "img-src 'self' blob: https://tnygdgormnofpgjknlhr.supabase.co https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://images.unsplash.com https://storage.googleapis.com",
     "media-src 'self' blob: https://media.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com",
     "font-src 'self'",
     connectSrc,
