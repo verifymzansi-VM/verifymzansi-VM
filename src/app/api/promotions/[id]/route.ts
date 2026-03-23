@@ -26,6 +26,10 @@ import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
+import {
+  derivePromotionSocialAuthorizationStatus,
+  getPromotionSocialAuthorizationWriteResult,
+} from "@/lib/promotions/social-authorization";
 
 const log = createLogger("PromotionDetail");
 const promotionIdParamsSchema = z.object({
@@ -41,6 +45,18 @@ type PromotionOwnerRow = {
   videos?: string[] | null;
   video_thumbnail?: string | null;
   view_count?: number | null;
+  social_distribution_authorized?: boolean;
+  social_distribution_authorized_at?: string | null;
+  social_distribution_revoked_at?: string | null;
+  social_authorizer_name?: string | null;
+  social_authorizer_role?: string | null;
+  social_authorizer_relationship?:
+    | "owner"
+    | "business_representative"
+    | "agency_or_marketing_partner"
+    | null;
+  social_authorization_version?: string | null;
+  social_monetization_acknowledged?: boolean | null;
 };
 
 /**
@@ -64,7 +80,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { data: promotion, error } = await supabase
       .from("promotions")
       .select(
-        "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
+        "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
       )
       .eq("id", id)
       .maybeSingle();
@@ -74,14 +90,14 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     const normalizedPromotion = normalizeOwnerRecord(promotion as PromotionOwnerRow);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const isOwnerViewer = Boolean(user && user.id === readOwnerId(normalizedPromotion));
 
     // Only allow public access to live promotions
     if (normalizedPromotion.status !== "live") {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user || user.id !== readOwnerId(normalizedPromotion)) {
+      if (!isOwnerViewer) {
         return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
       }
     }
@@ -90,7 +106,39 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const admin = createAdminClient();
     admin.rpc("increment_promotion_view_count", { promotion_id: id }).then(() => {});
 
-    return NextResponse.json({ promotion: normalizedPromotion });
+    const {
+      social_authorizer_name: _socialAuthorizerName,
+      social_authorizer_role: _socialAuthorizerRole,
+      social_authorizer_relationship: _socialAuthorizerRelationship,
+      social_authorization_version: _socialAuthorizationVersion,
+      social_monetization_acknowledged: _socialMonetizationAcknowledged,
+      social_distribution_authorized: _socialDistributionAuthorized,
+      social_distribution_authorized_at: _socialDistributionAuthorizedAt,
+      social_distribution_revoked_at: _socialDistributionRevokedAt,
+      ...promotionResponse
+    } = normalizedPromotion as typeof normalizedPromotion & PromotionOwnerRow;
+
+    const socialAuthorizationStatus = derivePromotionSocialAuthorizationStatus(normalizedPromotion);
+
+    return NextResponse.json({
+      promotion: {
+        ...promotionResponse,
+        socialAuthorizationStatus,
+        ...(isOwnerViewer
+          ? {
+              socialAuthorization: {
+                granted: normalizedPromotion.social_distribution_authorized === true,
+                authorizerName: normalizedPromotion.social_authorizer_name ?? "",
+                authorizerRole: normalizedPromotion.social_authorizer_role ?? "",
+                relationship: normalizedPromotion.social_authorizer_relationship ?? "owner",
+                monetizationAcknowledged:
+                  normalizedPromotion.social_monetization_acknowledged === true,
+                acceptedVersion: normalizedPromotion.social_authorization_version ?? "",
+              },
+            }
+          : {}),
+      },
+    });
   } catch (err) {
     log.error("Unexpected error", {
       error: err instanceof Error ? err.message : "Unknown error",
@@ -143,7 +191,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       supabase
         .from("promotions")
         .select(
-          withOwnerColumn("id, owner_id, status, photos, videos, video_thumbnail", ownerColumn)
+          withOwnerColumn(
+            "id, owner_id, status, photos, videos, video_thumbnail, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged",
+            ownerColumn
+          )
         )
         .eq("id", id),
       ownerColumn,
@@ -166,6 +217,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const data = parsedBody.data;
     const categoryKey =
       data.category_key ?? inferPromotionCategoryKey(data.category, data.promotion_type);
+    const socialAuthorizationWriteResult = getPromotionSocialAuthorizationWriteResult(
+      data.socialAuthorization,
+      existing
+    );
 
     if (data.business_id) {
       const ownsBusiness = await userOwnsBusiness(supabase, user.id, data.business_id);
@@ -244,6 +299,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           contact_methods: data.contact_methods,
           start_date: data.start_date || null,
           end_date: data.end_date || null,
+          social_distribution_authorized:
+            socialAuthorizationWriteResult.social_distribution_authorized,
+          social_distribution_authorized_at:
+            socialAuthorizationWriteResult.social_distribution_authorized_at ?? null,
+          social_distribution_revoked_at:
+            socialAuthorizationWriteResult.social_distribution_revoked_at ?? null,
+          social_authorizer_name: socialAuthorizationWriteResult.social_authorizer_name,
+          social_authorizer_role: socialAuthorizationWriteResult.social_authorizer_role,
+          social_authorizer_relationship:
+            socialAuthorizationWriteResult.social_authorizer_relationship,
+          social_authorization_version: socialAuthorizationWriteResult.social_authorization_version,
+          social_monetization_acknowledged:
+            socialAuthorizationWriteResult.social_monetization_acknowledged,
           // Re-trigger moderation on edit so changed content is reviewed
           status: "pending_moderation",
         })
@@ -280,6 +348,47 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         targetId: id,
         metadata: { title: data.title },
       });
+
+      if (socialAuthorizationWriteResult.event === "granted") {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "promotion_social_authorization_granted",
+          targetType: "promotion",
+          targetId: id,
+          area: "PROMOTIONS_EVENTS",
+          metadata: {
+            relationship: socialAuthorizationWriteResult.social_authorizer_relationship,
+            version: socialAuthorizationWriteResult.social_authorization_version,
+          },
+        });
+      }
+
+      if (socialAuthorizationWriteResult.event === "updated") {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "promotion_social_authorization_updated",
+          targetType: "promotion",
+          targetId: id,
+          area: "PROMOTIONS_EVENTS",
+          metadata: {
+            relationship: socialAuthorizationWriteResult.social_authorizer_relationship,
+            version: socialAuthorizationWriteResult.social_authorization_version,
+          },
+        });
+      }
+
+      if (socialAuthorizationWriteResult.event === "revoked") {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "promotion_social_authorization_revoked",
+          targetType: "promotion",
+          targetId: id,
+          area: "PROMOTIONS_EVENTS",
+        });
+      }
     } catch {
       // non-fatal
     }

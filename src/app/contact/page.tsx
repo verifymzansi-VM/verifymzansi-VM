@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { useToast } from "@/hooks/use-toast";
+import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
+import { OfficialSocialLinks } from "@/components/shared/official-social-links";
 
 export default function ContactPage() {
   const [name, setName] = useState("");
@@ -22,6 +24,7 @@ export default function ContactPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
+  const runtimeConfig = getPublicRuntimeConfig();
 
   const handleTurnstileSuccess = useCallback((token: string) => {
     setTurnstileToken(token);
@@ -84,6 +87,12 @@ export default function ContactPage() {
           <PageHeader title="Contact Us" breadcrumbs={[{ label: "Contact" }]} />
 
           <div className="mx-auto max-w-lg">
+            <OfficialSocialLinks
+              links={runtimeConfig.officialSocialLinks}
+              className="mb-4 rounded-xl border bg-card p-4"
+              linkClassName="inline-flex items-center rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            />
+
             {isSubmitted ? (
               <Card>
                 <CardContent className="p-6 text-center space-y-3">

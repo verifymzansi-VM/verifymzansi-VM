@@ -1,8 +1,15 @@
+import {
+  SOCIAL_AUTHORIZATION_VERSION,
+  type PromotionSocialAuthorizationInput,
+} from "@/lib/promotions/social-authorization";
+import { SOCIAL_AUTHORIZER_RELATIONSHIP_LABELS } from "@/types/enums";
+
 export interface PromotionFormValues {
   priceZar: string;
   startDate: string;
   endDate: string;
   contactMethods: string[];
+  socialAuthorization?: PromotionSocialAuthorizationInput;
 }
 
 function hasValidMoneyPrecision(value: number): boolean {
@@ -38,6 +45,33 @@ export function validatePromotionForm(values: PromotionFormValues): Record<strin
     const end = new Date(values.endDate);
     if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end < start) {
       errors.end_date = "End date must be on or after the start date.";
+    }
+  }
+
+  if (values.socialAuthorization?.granted) {
+    if (!values.socialAuthorization.authorizerName?.trim()) {
+      errors["socialAuthorization.authorizerName"] = "Enter the authorizer's full name.";
+    }
+
+    if (!values.socialAuthorization.authorizerRole?.trim()) {
+      errors["socialAuthorization.authorizerRole"] = "Enter the authorizer's role or title.";
+    }
+
+    if (
+      !values.socialAuthorization.relationship ||
+      !(values.socialAuthorization.relationship in SOCIAL_AUTHORIZER_RELATIONSHIP_LABELS)
+    ) {
+      errors["socialAuthorization.relationship"] = "Select the authorizer relationship.";
+    }
+
+    if (!values.socialAuthorization.monetizationAcknowledged) {
+      errors["socialAuthorization.monetizationAcknowledged"] =
+        "You must acknowledge the monetization policy.";
+    }
+
+    if (values.socialAuthorization.acceptedVersion !== SOCIAL_AUTHORIZATION_VERSION) {
+      errors["socialAuthorization.acceptedVersion"] =
+        "You must accept the current authorization terms.";
     }
   }
 

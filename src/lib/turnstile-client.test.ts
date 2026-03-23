@@ -14,6 +14,7 @@ describe("turnstile client state", () => {
         supabaseAnonKey: "",
         turnstileSiteKey: "dummy_site_key",
         cfImageResizing: false,
+        officialSocialLinks: {},
       })
     ).toEqual({
       mode: "bypass",
@@ -29,6 +30,7 @@ describe("turnstile client state", () => {
         supabaseAnonKey: "",
         turnstileSiteKey: "0x4AAAA-real",
         cfImageResizing: false,
+        officialSocialLinks: {},
       })
     ).toEqual({
       mode: "configured",
@@ -46,6 +48,7 @@ describe("turnstile client state", () => {
         supabaseAnonKey: "",
         turnstileSiteKey: "",
         cfImageResizing: false,
+        officialSocialLinks: {},
       })
     ).toEqual({
       mode: "unavailable",

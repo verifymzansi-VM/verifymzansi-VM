@@ -17,8 +17,13 @@ import {
   canFeatured as checkCanFeatured,
 } from "@/lib/services/entitlements";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
-import { PROMOTION_TYPE_LABELS, type PromotionType } from "@/types/enums";
+import {
+  PROMOTION_TYPE_LABELS,
+  type PromotionType,
+  type SocialAuthorizationStatus,
+} from "@/types/enums";
 import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
+import { derivePromotionSocialAuthorizationStatus } from "@/lib/promotions/social-authorization";
 
 interface DashboardListing {
   id: string;
@@ -39,6 +44,8 @@ interface DashboardPromotion {
   boost_until: string | null;
   featured_until: string | null;
   created_at: string;
+  social_distribution_authorized: boolean;
+  social_distribution_revoked_at: string | null;
 }
 
 export const metadata = {
@@ -108,7 +115,7 @@ export default async function MyPromotionsPage({
       supabase
         .from("promotions")
         .select(
-          "id, title, promotion_type, business_id, status, status_reason, boost_until, featured_until, created_at"
+          "id, title, promotion_type, business_id, status, status_reason, boost_until, featured_until, created_at, social_distribution_authorized, social_distribution_revoked_at"
         )
         .in("status", ["live", "pending_moderation", "draft", "rejected"])
         .order("created_at", { ascending: false })
@@ -122,6 +129,10 @@ export default async function MyPromotionsPage({
   const featured = (featuredRes.data ?? []) as unknown as DashboardListing[];
   const urgent = (urgentRes.data ?? []) as unknown as DashboardListing[];
   const myPromotions = (myPromotionsRes.data ?? []) as unknown as DashboardPromotion[];
+  const promotionsWithSocialStatus = myPromotions.map((promotion) => ({
+    ...promotion,
+    socialAuthorizationStatus: derivePromotionSocialAuthorizationStatus(promotion),
+  }));
   const successState = params.updated
     ? {
         title: "Promotion updated",
@@ -150,7 +161,8 @@ export default async function MyPromotionsPage({
 
   const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
 
-  const totalItems = boosted.length + featured.length + urgent.length + myPromotions.length;
+  const totalItems =
+    boosted.length + featured.length + urgent.length + promotionsWithSocialStatus.length;
 
   return (
     <div className="space-y-6">
@@ -287,17 +299,18 @@ export default async function MyPromotionsPage({
           )}
 
           {/* ── My Promotions ─────────────────────────────── */}
-          {myPromotions.length > 0 && (
+          {promotionsWithSocialStatus.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-lg font-display font-semibold flex items-center gap-2">
                 <Tag className="h-5 w-5 text-brand-green" />
-                My Promotions ({myPromotions.length})
+                My Promotions ({promotionsWithSocialStatus.length})
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {myPromotions.map((p) => {
+                {promotionsWithSocialStatus.map((p) => {
                   const businessName = p.business_id ? businessMap.get(p.business_id) : undefined;
                   const isBoosted = p.boost_until && new Date(p.boost_until) > new Date();
                   const isFeatured = p.featured_until && new Date(p.featured_until) > new Date();
+                  const socialBadge = getSocialAuthorizationBadge(p.socialAuthorizationStatus);
 
                   return (
                     <Card key={p.id}>
@@ -333,6 +346,7 @@ export default async function MyPromotionsPage({
                           )}
                           {p.status === "draft" && <Badge variant="outline">Draft</Badge>}
                           {p.status === "rejected" && <Badge variant="destructive">Rejected</Badge>}
+                          <Badge className={socialBadge.className}>{socialBadge.label}</Badge>
                           {isBoosted && (
                             <Badge variant="outline" className="text-orange-600">
                               Boosted
@@ -404,4 +418,27 @@ export default async function MyPromotionsPage({
       )}
     </div>
   );
+}
+
+function getSocialAuthorizationBadge(status: SocialAuthorizationStatus) {
+  switch (status) {
+    case "authorized":
+      return {
+        label: "Social Authorized",
+        className:
+          "border-transparent bg-brand-green-100 text-brand-green-800 dark:bg-brand-green-900/40 dark:text-brand-green-300",
+      };
+    case "revoked":
+      return {
+        label: "Social Revoked",
+        className:
+          "border-transparent bg-brand-red-100 text-brand-red-800 dark:bg-brand-red-900/40 dark:text-brand-red-300",
+      };
+    default:
+      return {
+        label: "Social Not Authorized",
+        className:
+          "border-transparent bg-warm-100 text-warm-700 dark:bg-warm-800 dark:text-warm-200",
+      };
+  }
 }

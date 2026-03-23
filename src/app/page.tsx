@@ -12,6 +12,8 @@ import { HeroBannerSkeleton } from "@/components/home/hero-banner-skeleton";
 import { HomeMzansiMarketShowcase } from "@/components/home/home-mzansi-market-showcase";
 import { HomeBusinessShowcase } from "@/components/home/home-business-showcase";
 import { HomeCategoryShowcase } from "@/components/home/home-category-showcase";
+import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
+import { getOfficialSocialSameAs } from "@/lib/official-social-links";
 
 export const metadata: Metadata = {
   title: "VerifyMzansi — Business Promotion With Trust",
@@ -29,7 +31,9 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const url = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
+  const runtimeConfig = getServerPublicRuntimeConfig();
+  const url = runtimeConfig.appUrl || "https://verifymzansi.com";
+  const sameAs = getOfficialSocialSameAs(runtimeConfig.officialSocialLinks);
   const onboardingDestinations = [
     {
       title: "Mzansi Market",
@@ -80,7 +84,7 @@ export default async function HomePage() {
         name: "VerifyMzansi",
         url,
         logo: `${url}/icons/icon-1024.png?v=10`,
-        sameAs: [],
+        sameAs,
         contactPoint: {
           "@type": "ContactPoint",
           email: "hello@verifymzansi.com",

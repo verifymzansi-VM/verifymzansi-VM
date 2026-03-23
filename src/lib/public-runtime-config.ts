@@ -4,6 +4,13 @@ export interface PublicRuntimeConfig {
   supabaseAnonKey: string;
   turnstileSiteKey: string;
   cfImageResizing: boolean;
+  officialSocialLinks: {
+    facebook?: string;
+    youtube?: string;
+    x?: string;
+    tiktok?: string;
+    linkedin?: string;
+  };
 }
 
 export const PUBLIC_RUNTIME_CONFIG_ELEMENT_ID = "vmz-public-config";
@@ -40,6 +47,13 @@ function readEnvConfig(): Partial<PublicRuntimeConfig> {
     supabaseAnonKey: normalizeString(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     turnstileSiteKey: normalizeString(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY),
     cfImageResizing: normalizeBoolean(process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING),
+    officialSocialLinks: {
+      facebook: normalizeString(process.env.NEXT_PUBLIC_VERIFYMZANSI_FACEBOOK_URL),
+      youtube: normalizeString(process.env.NEXT_PUBLIC_VERIFYMZANSI_YOUTUBE_URL),
+      x: normalizeString(process.env.NEXT_PUBLIC_VERIFYMZANSI_X_URL),
+      tiktok: normalizeString(process.env.NEXT_PUBLIC_VERIFYMZANSI_TIKTOK_URL),
+      linkedin: normalizeString(process.env.NEXT_PUBLIC_VERIFYMZANSI_LINKEDIN_URL),
+    },
   };
 }
 
@@ -59,6 +73,13 @@ function readDomConfig(): Partial<PublicRuntimeConfig> {
     supabaseAnonKey: normalizeString(element.dataset.supabaseAnonKey),
     turnstileSiteKey: normalizeString(element.dataset.turnstileSiteKey),
     cfImageResizing: normalizeBoolean(element.dataset.cfImageResizing),
+    officialSocialLinks: {
+      facebook: normalizeString(element.dataset.socialFacebookUrl),
+      youtube: normalizeString(element.dataset.socialYoutubeUrl),
+      x: normalizeString(element.dataset.socialXUrl),
+      tiktok: normalizeString(element.dataset.socialTiktokUrl),
+      linkedin: normalizeString(element.dataset.socialLinkedinUrl),
+    },
   };
 }
 
@@ -72,6 +93,13 @@ function mergeConfig(
     supabaseAnonKey: envConfig.supabaseAnonKey ?? domConfig.supabaseAnonKey ?? "",
     turnstileSiteKey: envConfig.turnstileSiteKey ?? domConfig.turnstileSiteKey ?? "",
     cfImageResizing: envConfig.cfImageResizing ?? domConfig.cfImageResizing ?? false,
+    officialSocialLinks: {
+      facebook: envConfig.officialSocialLinks?.facebook ?? domConfig.officialSocialLinks?.facebook,
+      youtube: envConfig.officialSocialLinks?.youtube ?? domConfig.officialSocialLinks?.youtube,
+      x: envConfig.officialSocialLinks?.x ?? domConfig.officialSocialLinks?.x,
+      tiktok: envConfig.officialSocialLinks?.tiktok ?? domConfig.officialSocialLinks?.tiktok,
+      linkedin: envConfig.officialSocialLinks?.linkedin ?? domConfig.officialSocialLinks?.linkedin,
+    },
   };
 }
 

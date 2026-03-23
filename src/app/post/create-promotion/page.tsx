@@ -31,6 +31,8 @@ import { useToast } from "@/hooks/use-toast";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
+import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
+import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
 
 const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
 const SELECT_CLASS =
@@ -53,6 +55,11 @@ const FIELD_IDS: Record<string, string> = {
   end_date: "end_date",
   images: "promotion-images",
   videos: "promotion-videos",
+  "socialAuthorization.authorizerName": "social-authorizer-name",
+  "socialAuthorization.authorizerRole": "social-authorizer-role",
+  "socialAuthorization.relationship": "social-authorizer-relationship",
+  "socialAuthorization.monetizationAcknowledged": "social-monetization-acknowledged",
+  "socialAuthorization.acceptedVersion": "social-authorization-version",
 };
 
 export default function CreatePromotionPage() {
@@ -93,6 +100,11 @@ function CreatePromotionContent() {
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
+  const [socialAuthorization, setSocialAuthorization] = useState<PromotionSocialAuthorizationInput>(
+    {
+      granted: false,
+    }
+  );
   const [businessId, setBusinessId] = useState(searchParams.get("business_id") || "");
   const [myBusinesses, setMyBusinesses] = useState<{ id: string; business_name: string }[]>([]);
   const provinces = getProvinceNames();
@@ -184,6 +196,17 @@ function CreatePromotionContent() {
     clearErrors("contact_methods");
   }
 
+  function handleSocialAuthorizationChange(nextValue: PromotionSocialAuthorizationInput) {
+    setSocialAuthorization(nextValue);
+    clearErrors(
+      "socialAuthorization.authorizerName",
+      "socialAuthorization.authorizerRole",
+      "socialAuthorization.relationship",
+      "socialAuthorization.monetizationAcknowledged",
+      "socialAuthorization.acceptedVersion"
+    );
+  }
+
   function validateStep(targetStep: number) {
     const errors: Record<string, string> = {};
     const promotionValidationErrors = validatePromotionForm({
@@ -191,6 +214,7 @@ function CreatePromotionContent() {
       startDate,
       endDate,
       contactMethods,
+      socialAuthorization: targetStep === 2 ? socialAuthorization : { granted: false },
     });
     if (targetStep === 0) {
       if (!title.trim()) errors.title = isEvent ? "Enter an event title." : "Enter a title.";
@@ -320,6 +344,7 @@ function CreatePromotionContent() {
         start_date: startDate ? new Date(startDate).toISOString() : undefined,
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
         business_id: businessId || undefined,
+        socialAuthorization,
       };
 
       const res = await fetch("/api/promotions", {
@@ -742,6 +767,12 @@ function CreatePromotionContent() {
                         accept="image/*"
                       />
                     )}
+
+                    <SocialAuthorizationFields
+                      value={socialAuthorization}
+                      onChange={handleSocialAuthorizationChange}
+                      errors={fieldErrors}
+                    />
 
                     <div className="rounded-xl border border-dashed border-amber-600/30 bg-amber-50/70 p-4 text-sm dark:bg-amber-950/20">
                       <div className="mb-3 flex items-center gap-2 font-medium text-muted-foreground">

@@ -27,6 +27,7 @@ vi.mock("@/lib/account/require-phone", () => ({ hasPhoneNumber: mockHasPhoneNumb
 
 import { POST, GET } from "@/app/api/promotions/route";
 import { GET as GET_DETAIL, PUT, DELETE } from "@/app/api/promotions/[id]/route";
+import { SOCIAL_AUTHORIZATION_VERSION } from "@/lib/promotions/social-authorization";
 
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "user-0001";
@@ -221,6 +222,39 @@ describe("POST /api/promotions", () => {
     expect(res.status).toBe(400);
     const json = await res.json();
     expect(json.error).toBe("Validation failed");
+  });
+
+  it("rejects incomplete granted social authorization payloads", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
+        }),
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: {
+        ...VALID_BODY,
+        socialAuthorization: {
+          granted: true,
+          authorizerName: "Nomsa Dlamini",
+        },
+      },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Validation failed",
+      details: {
+        "socialAuthorization.authorizerRole": expect.any(String),
+      },
+    });
   });
 
   it("returns verification_required for unverified accounts", async () => {
@@ -475,6 +509,46 @@ describe("POST /api/promotions", () => {
     expect(mockLogAuditEvent.mock.calls[0][0].targetType).toBe("promotion");
   });
 
+  it("logs a dedicated audit event when social authorization is granted on create", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
+        }),
+      },
+      promotions: {
+        single: vi.fn().mockResolvedValue({ data: { id: VALID_UUID }, error: null }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: {
+        ...VALID_BODY,
+        socialAuthorization: {
+          granted: true,
+          authorizerName: "Nomsa Dlamini",
+          authorizerRole: "Owner",
+          relationship: "owner",
+          monetizationAcknowledged: true,
+          acceptedVersion: SOCIAL_AUTHORIZATION_VERSION,
+        },
+      },
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(201);
+    expect(mockLogAuditEvent).toHaveBeenCalledTimes(2);
+    expect(mockLogAuditEvent.mock.calls[1][0]).toMatchObject({
+      action: "promotion_social_authorization_granted",
+      targetId: VALID_UUID,
+    });
+  });
+
   it("rejects video uploads when the active plan disallows them", async () => {
     mockAuth({ id: USER_ID });
     mockCreateAdminClient.mockReturnValue({
@@ -547,7 +621,7 @@ describe("POST /api/promotions", () => {
     await expect(res.json()).resolves.toMatchObject({
       error: "Validation failed",
       details: {
-        videos: expect.arrayContaining(["Videos must be hosted on the VerifyMzansi platform"]),
+        "videos.0": "Videos must be hosted on the VerifyMzansi platform",
       },
     });
   });
@@ -838,7 +912,14 @@ describe("GET /api/promotions/[id]", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: VALID_UUID, status: "live", view_count: 5 },
+          data: {
+            id: VALID_UUID,
+            status: "live",
+            view_count: 5,
+            social_distribution_authorized: true,
+            social_authorizer_name: "Nomsa Dlamini",
+            social_authorizer_role: "Owner",
+          },
           error: null,
         }),
       }),
@@ -852,6 +933,8 @@ describe("GET /api/promotions/[id]", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.promotion.id).toBe(VALID_UUID);
+    expect(json.promotion.socialAuthorizationStatus).toBe("authorized");
+    expect(json.promotion.socialAuthorization).toBeUndefined();
   });
 
   it("returns 404 for non-live promotions when the viewer is not the owner", async () => {
@@ -989,6 +1072,73 @@ describe("PUT /api/promotions/[id]", () => {
     const json = await res.json();
     expect(json.success).toBe(true);
     expect(updateEq).toHaveBeenCalledWith("id", VALID_UUID);
+  });
+
+  it("logs a revocation audit event when social authorization is removed", async () => {
+    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn((table: string) => {
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }
+      if (table === "promotions") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: VALID_UUID,
+              owner_id: USER_ID,
+              status: "live",
+              social_distribution_authorized: true,
+              social_distribution_authorized_at: "2026-03-23T09:00:00.000Z",
+              social_authorizer_name: "Nomsa Dlamini",
+              social_authorizer_role: "Owner",
+              social_authorizer_relationship: "owner",
+              social_authorization_version: SOCIAL_AUTHORIZATION_VERSION,
+              social_monetization_acknowledged: true,
+            },
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: updateEq,
+          }),
+        };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      };
+    });
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
+      },
+    });
+
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "PUT",
+      body: {
+        ...VALID_BODY,
+        socialAuthorization: { granted: false },
+      },
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
+
+    expect(res.status).toBe(200);
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "promotion_social_authorization_revoked",
+        targetId: VALID_UUID,
+      })
+    );
   });
 
   it("returns 404 when updating to a linked business the caller does not own", async () => {

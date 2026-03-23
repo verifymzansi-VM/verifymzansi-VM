@@ -25,6 +25,8 @@ import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-err
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
+import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
+import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
 
 const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
 const selectClass =
@@ -39,6 +41,7 @@ export default function EditPromotionPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Form state
   const [promotionType, setPromotionType] = useState<PromotionType>("general");
@@ -60,6 +63,11 @@ export default function EditPromotionPage() {
   // New files to upload
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
+  const [socialAuthorization, setSocialAuthorization] = useState<PromotionSocialAuthorizationInput>(
+    {
+      granted: false,
+    }
+  );
 
   // Link to Business
   const [businessId, setBusinessId] = useState("");
@@ -107,6 +115,11 @@ export default function EditPromotionPage() {
         setExistingVideos(p.videos || []);
         setVideoThumbnail(p.video_thumbnail || "");
         setBusinessId(p.business_id || "");
+        setSocialAuthorization(
+          p.socialAuthorization ?? {
+            granted: false,
+          }
+        );
       } catch {
         setError("Failed to load promotion");
       } finally {
@@ -154,10 +167,24 @@ export default function EditPromotionPage() {
     setExistingImages((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function handleSocialAuthorizationChange(nextValue: PromotionSocialAuthorizationInput) {
+    setSocialAuthorization(nextValue);
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next["socialAuthorization.authorizerName"];
+      delete next["socialAuthorization.authorizerRole"];
+      delete next["socialAuthorization.relationship"];
+      delete next["socialAuthorization.monetizationAcknowledged"];
+      delete next["socialAuthorization.acceptedVersion"];
+      return next;
+    });
+  }
+
   async function handleSubmit() {
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
     setError(null);
+    setFieldErrors({});
 
     try {
       const validationErrors = validatePromotionForm({
@@ -165,6 +192,7 @@ export default function EditPromotionPage() {
         startDate,
         endDate,
         contactMethods,
+        socialAuthorization,
       });
       const totalVideoCount = existingVideos.length + newVideoFiles.length;
       if (existingImages.length + newPhotoFiles.length > maxPhotos) {
@@ -176,6 +204,7 @@ export default function EditPromotionPage() {
         validationErrors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
       }
       if (Object.keys(validationErrors).length > 0) {
+        setFieldErrors(validationErrors);
         setError(Object.values(validationErrors)[0]);
         setIsSubmitting(false);
         setSubmitProgress(null);
@@ -250,6 +279,7 @@ export default function EditPromotionPage() {
         start_date: startDate ? new Date(startDate).toISOString() : undefined,
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
         business_id: businessId || undefined,
+        socialAuthorization,
       };
 
       const res = await fetch(`/api/promotions/${promotionId}`, {
@@ -262,6 +292,9 @@ export default function EditPromotionPage() {
 
       if (!res.ok) {
         setError(data.error || "Failed to update promotion");
+        if (data?.details && typeof data.details === "object") {
+          setFieldErrors(data.details as Record<string, string>);
+        }
         return;
       }
 
@@ -565,6 +598,12 @@ export default function EditPromotionPage() {
                 onChange={setNewVideoFiles}
                 accept="video/*"
                 disabled={!videoAllowed}
+              />
+
+              <SocialAuthorizationFields
+                value={socialAuthorization}
+                onChange={handleSocialAuthorizationChange}
+                errors={fieldErrors}
               />
 
               <div className="space-y-3 rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">

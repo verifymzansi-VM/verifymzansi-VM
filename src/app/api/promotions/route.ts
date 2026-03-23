@@ -17,6 +17,7 @@ import {
 import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
 import { normalizeBusinessCategoryParam } from "@/lib/utils/marketplace-query";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { getPromotionSocialAuthorizationWriteResult } from "@/lib/promotions/social-authorization";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
   applyOwnerFilter,
@@ -39,6 +40,7 @@ import {
   optionalTrimmedStringSchema,
   optionalUuidSchema,
 } from "@/lib/validations/shared";
+import { toFieldErrorMap } from "@/lib/validations/zod-errors";
 import { z } from "zod";
 
 const log = createLogger("PromotionsCRUD");
@@ -71,6 +73,8 @@ type PromotionResultRow = {
   contact_methods?: string[] | null;
   start_date?: string | null;
   end_date?: string | null;
+  social_distribution_authorized?: boolean;
+  social_distribution_revoked_at?: string | null;
   boost_until?: string | null;
   featured_until?: string | null;
   view_count?: number | null;
@@ -244,7 +248,7 @@ export async function POST(request: NextRequest) {
     const parsed = promotionSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
+        { error: "Validation failed", details: toFieldErrorMap(parsed.error) },
         { status: 400 }
       );
     }
@@ -322,6 +326,10 @@ export async function POST(request: NextRequest) {
 
     // Build the promotion row
     const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
+    const socialAuthorizationWriteResult = getPromotionSocialAuthorizationWriteResult(
+      data.socialAuthorization,
+      null
+    );
 
     const { data: promotion, error: insertError } = await supabase
       .from("promotions")
@@ -343,6 +351,20 @@ export async function POST(request: NextRequest) {
             contact_methods: data.contact_methods,
             start_date: data.start_date || null,
             end_date: data.end_date || null,
+            social_distribution_authorized:
+              socialAuthorizationWriteResult.social_distribution_authorized,
+            social_distribution_authorized_at:
+              socialAuthorizationWriteResult.social_distribution_authorized_at ?? null,
+            social_distribution_revoked_at:
+              socialAuthorizationWriteResult.social_distribution_revoked_at ?? null,
+            social_authorizer_name: socialAuthorizationWriteResult.social_authorizer_name,
+            social_authorizer_role: socialAuthorizationWriteResult.social_authorizer_role,
+            social_authorizer_relationship:
+              socialAuthorizationWriteResult.social_authorizer_relationship,
+            social_authorization_version:
+              socialAuthorizationWriteResult.social_authorization_version,
+            social_monetization_acknowledged:
+              socialAuthorizationWriteResult.social_monetization_acknowledged,
             business_id: data.business_id || null,
             status: "pending_moderation",
           },
@@ -404,6 +426,21 @@ export async function POST(request: NextRequest) {
           tier,
         },
       });
+
+      if (socialAuthorizationWriteResult.event === "granted") {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "promotion_social_authorization_granted",
+          targetType: "promotion",
+          targetId: promotion.id,
+          area: AREA,
+          metadata: {
+            relationship: socialAuthorizationWriteResult.social_authorizer_relationship,
+            version: socialAuthorizationWriteResult.social_authorization_version,
+          },
+        });
+      }
     } catch (auditErr) {
       log.error("Audit log failed (non-fatal)", {
         error: auditErr instanceof Error ? auditErr.message : "Unknown",

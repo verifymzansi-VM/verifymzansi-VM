@@ -17,6 +17,8 @@ describe("public runtime config", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key");
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    vi.stubEnv("NEXT_PUBLIC_VERIFYMZANSI_FACEBOOK_URL", "https://facebook.com/verifymzansi");
+    vi.stubEnv("NEXT_PUBLIC_VERIFYMZANSI_X_URL", "https://x.com/verifymzansi");
 
     expect(getServerPublicRuntimeConfig()).toEqual({
       appUrl: "https://example.com",
@@ -24,6 +26,13 @@ describe("public runtime config", () => {
       supabaseAnonKey: "anon-key",
       turnstileSiteKey: "site-key",
       cfImageResizing: true,
+      officialSocialLinks: {
+        facebook: "https://facebook.com/verifymzansi",
+        youtube: undefined,
+        x: "https://x.com/verifymzansi",
+        tiktok: undefined,
+        linkedin: undefined,
+      },
     });
   });
 
@@ -35,6 +44,11 @@ describe("public runtime config", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "");
+    vi.stubEnv("NEXT_PUBLIC_VERIFYMZANSI_FACEBOOK_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_VERIFYMZANSI_YOUTUBE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_VERIFYMZANSI_X_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_VERIFYMZANSI_TIKTOK_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_VERIFYMZANSI_LINKEDIN_URL", "");
 
     document.body.innerHTML = `
       <div
@@ -44,6 +58,8 @@ describe("public runtime config", () => {
         data-supabase-anon-key="runtime-anon"
         data-turnstile-site-key="runtime-site-key"
         data-cf-image-resizing="false"
+        data-social-facebook-url="https://facebook.com/runtime"
+        data-social-linkedin-url="https://linkedin.com/company/runtime"
       ></div>
     `;
 
@@ -53,6 +69,13 @@ describe("public runtime config", () => {
       supabaseAnonKey: "runtime-anon",
       turnstileSiteKey: "runtime-site-key",
       cfImageResizing: false,
+      officialSocialLinks: {
+        facebook: "https://facebook.com/runtime",
+        youtube: undefined,
+        x: undefined,
+        tiktok: undefined,
+        linkedin: "https://linkedin.com/company/runtime",
+      },
     });
   });
 

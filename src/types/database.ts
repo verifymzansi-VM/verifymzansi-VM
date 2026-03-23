@@ -35,6 +35,7 @@ import type {
   BusinessType,
   BusinessCategory,
   PromotionType,
+  SocialAuthorizerRelationship,
 } from "./enums";
 import type { BusinessDetails } from "./business-details";
 
@@ -285,6 +286,14 @@ export interface Promotion {
   contact_methods: ContactMethod[];
   start_date: string | null;
   end_date: string | null;
+  social_distribution_authorized: boolean;
+  social_distribution_authorized_at: string | null;
+  social_distribution_revoked_at: string | null;
+  social_authorizer_name: string | null;
+  social_authorizer_role: string | null;
+  social_authorizer_relationship: SocialAuthorizerRelationship;
+  social_authorization_version: string | null;
+  social_monetization_acknowledged: boolean;
   status: ListingStatus;
   status_reason: string | null;
   boost_until: string | null;

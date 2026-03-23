@@ -100,6 +100,30 @@ export default function AdvertisePage() {
         <TrustStrip variant="green" />
 
         <section className="container-page py-8 space-y-6 sm:py-10">
+          <Card className="border-brand-green/20 bg-brand-green-50/60">
+            <CardHeader className="space-y-2">
+              <CardTitle className="text-base sm:text-lg">
+                External social distribution authorization
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                You can create promotions on VerifyMzansi without authorizing external social
+                distribution.
+              </p>
+              <p>
+                If you choose to authorize VerifyMzansi social posting, you must confirm that you
+                own the promotion or are authorized to market it, and that VerifyMzansi may publish,
+                adapt, and distribute it on VerifyMzansi-owned social channels.
+              </p>
+              <p>
+                Monetization from VerifyMzansi-owned social channels or posts belongs to
+                VerifyMzansi unless a separate written agreement says otherwise. No revenue share is
+                implied by default.
+              </p>
+            </CardContent>
+          </Card>
+
           <div className="max-w-2xl space-y-2">
             <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
               Why advertise here

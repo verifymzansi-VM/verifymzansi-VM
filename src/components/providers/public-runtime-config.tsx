@@ -16,6 +16,11 @@ export function PublicRuntimeConfigBridge() {
       data-supabase-anon-key={config.supabaseAnonKey}
       data-turnstile-site-key={config.turnstileSiteKey}
       data-cf-image-resizing={String(config.cfImageResizing)}
+      data-social-facebook-url={config.officialSocialLinks.facebook}
+      data-social-youtube-url={config.officialSocialLinks.youtube}
+      data-social-x-url={config.officialSocialLinks.x}
+      data-social-tiktok-url={config.officialSocialLinks.tiktok}
+      data-social-linkedin-url={config.officialSocialLinks.linkedin}
     />
   );
 }
