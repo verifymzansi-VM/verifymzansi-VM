@@ -62,9 +62,63 @@ interface RateCheck {
 /**
  * Action-specific rate limit configurations.
  * Used for generic (non-OTP) rate limiting via the same DO infrastructure.
+ *
+ * Every action sent by the app MUST be listed here. Unknown actions that
+ * fall through to the OTP path will be treated as OTP sends (1 per 60 s)
+ * which is catastrophically wrong for read endpoints.
  */
 const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
+  // ── Auth ─────────────────────────────────────────────
   "auth:lockout": [{ limit: 5, ttl: 3600 }], // 5 failed logins per email per hour
+  "auth:login": [
+    { limit: 10, ttl: 60 }, // 10 per minute
+    { limit: 30, ttl: 3600 }, // 30 per hour
+  ],
+  "auth:register": [
+    { limit: 5, ttl: 60 }, // 5 per minute
+    { limit: 15, ttl: 3600 }, // 15 per hour
+  ],
+
+  // ── Public reads (generous — browsing with filters/pagination) ──
+  "businesses:read": [{ limit: 120, ttl: 60 }], // 120 per minute
+  "promotions:read": [{ limit: 120, ttl: 60 }], // 120 per minute
+  "listings:read": [{ limit: 120, ttl: 60 }], // 120 per minute
+
+  // ── Profile ──────────────────────────────────────────
+  "profile:update": [{ limit: 10, ttl: 60 }],
+  "profile:avatar": [{ limit: 5, ttl: 60 }],
+
+  // ── Verification ─────────────────────────────────────
+  "verification:upload": [{ limit: 10, ttl: 60 }],
+  "verification:status": [{ limit: 30, ttl: 60 }], // polling-friendly
+  "verification:gps": [{ limit: 10, ttl: 60 }],
+
+  // ── Billing / webhooks ───────────────────────────────
+  "billing:checkout": [{ limit: 10, ttl: 60 }],
+  "webhook:ozow": [{ limit: 100, ttl: 60 }], // webhooks can be bursty
+
+  // ── Media ────────────────────────────────────────────
+  "media:upload": [{ limit: 20, ttl: 60 }],
+
+  // ── Contact ──────────────────────────────────────────
+  "contact:send": [
+    { limit: 5, ttl: 60 },
+    { limit: 15, ttl: 3600 },
+  ],
+  "contact:general": [
+    { limit: 5, ttl: 60 },
+    { limit: 15, ttl: 3600 },
+  ],
+
+  // ── Reports ──────────────────────────────────────────
+  "report:submit": [
+    { limit: 5, ttl: 60 },
+    { limit: 15, ttl: 3600 },
+  ],
+
+  // ── Promotions management ────────────────────────────
+  "promotion:featured": [{ limit: 10, ttl: 60 }],
+  "promotion:boost": [{ limit: 10, ttl: 60 }],
 };
 
 interface CounterEntry {
@@ -254,8 +308,11 @@ const worker = {
     const { key: rawKey, phone: legacyPhone, deviceId, action, readOnly } = parsedPayload.data;
     const rawPhone = rawKey || legacyPhone;
 
-    // Generic action-based rate limiting (e.g. auth:lockout)
-    if (action && ACTION_LIMITS[action]) {
+    // Generic action-based rate limiting
+    if (action) {
+      // Use configured limits, or a safe default for unknown actions
+      // (prevents unknown actions from falling through to OTP limits)
+      const limits = ACTION_LIMITS[action] ?? [{ limit: 30, ttl: 60 }];
       const rateKey = rawPhone || "";
       if (!rateKey) {
         return Response.json({ error: "key is required" }, { status: 400 });
@@ -265,7 +322,7 @@ const worker = {
         try {
           const doId = env.RATE_LIMITER_DO.idFromName(`${action}:${rateKey}`);
           const stub = env.RATE_LIMITER_DO.get(doId);
-          const checks: RateCheck[] = ACTION_LIMITS[action].map((c) => ({
+          const checks: RateCheck[] = limits.map((c) => ({
             key: `${action}:${rateKey}`,
             limit: c.limit,
             ttl: c.ttl,
@@ -282,8 +339,7 @@ const worker = {
       }
 
       // KV fallback for generic actions
-      const actionConfig = ACTION_LIMITS[action];
-      for (const c of actionConfig) {
+      for (const c of limits) {
         const k = `${action}:${rateKey}`;
         const current = parseInt((await env.OTP_RATE_LIMITS.get(k)) || "0", 10);
         if (current >= c.limit) {
