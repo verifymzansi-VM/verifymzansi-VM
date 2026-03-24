@@ -16,6 +16,7 @@ vi.mock("@supabase/ssr", () => ({
 
 import { middleware } from "@/middleware";
 import { routeRequest } from "@/proxy-handler";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -339,6 +340,8 @@ describe("middleware — authenticated routing", () => {
 
     const res = await routeRequest(createMockRequest("/post/create"));
     expect(res.status).toBe(200);
+    expect(mockFrom).toHaveBeenCalledWith(ACCOUNT_PROFILE_WRITE_TABLE);
+    expect(ACCOUNT_PROFILE_WRITE_TABLE).toBe("account_profiles");
   });
 
   it("does not trust a stale x-phone-ok cookie when the profile no longer has a phone", async () => {

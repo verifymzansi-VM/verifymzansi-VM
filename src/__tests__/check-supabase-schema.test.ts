@@ -49,6 +49,7 @@ describe("check-supabase-schema", () => {
 
     const result = await verifySupabaseSchema({
       tables: OWNER_COMPAT_TABLES,
+      legacyTables: [],
     });
 
     expect(result.ok).toBe(true);
@@ -81,6 +82,7 @@ describe("check-supabase-schema", () => {
 
     const result = await verifySupabaseSchema({
       tables: OWNER_COMPAT_TABLES,
+      legacyTables: [],
     });
 
     expect(result.ok).toBe(false);
@@ -90,5 +92,55 @@ describe("check-supabase-schema", () => {
     printSchemaVerificationResult(result);
     expect(consoleSpy).toHaveBeenCalledWith("Ownership compatibility missing on: promotions");
     consoleSpy.mockRestore();
+  });
+
+  it("fails verification when legacy seller_profiles is still queryable", async () => {
+    mockCreateClient.mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          limit: vi.fn().mockResolvedValue({ error: null }),
+        })),
+      })),
+    });
+
+    const result = await verifySupabaseSchema({
+      tables: ["account_profiles"],
+      legacyTables: ["seller_profiles"],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.unexpectedLegacyTables).toEqual(["seller_profiles"]);
+  });
+
+  it("fails verification when account_profiles is missing required columns", async () => {
+    mockCreateClient.mockReturnValue({
+      from: vi.fn((table: string) => ({
+        select: vi.fn((fields: string) => ({
+          limit: vi.fn().mockResolvedValue(
+            table === "account_profiles" && fields.includes("account_verification_status")
+              ? {
+                  error: {
+                    code: "42703",
+                    message: "column account_profiles.account_verification_status does not exist",
+                  },
+                }
+              : { error: { code: "PGRST205", message: "table not found" } }
+          ),
+        })),
+      })),
+    });
+
+    const result = await verifySupabaseSchema({
+      tables: ["account_profiles"],
+      legacyTables: [],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.accountProfileColumnCheck).toEqual(
+      expect.objectContaining({
+        ok: false,
+        errorCode: "42703",
+      })
+    );
   });
 });
