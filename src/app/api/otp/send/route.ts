@@ -131,20 +131,9 @@ export async function POST(request: NextRequest) {
     const externalLimit = await checkRateLimit({
       key: phone,
       action: "otp:send",
-      degradedMode: "block",
+      degradedMode: "local",
     });
     if (externalLimit.limited) {
-      if (externalLimit.degraded) {
-        return otpSendError(
-          "OTP protection is temporarily unavailable. Please try again shortly.",
-          503,
-          {
-            code: "rate_limited",
-            retryAfter: externalLimit.retryAfter ?? 60,
-          }
-        );
-      }
-
       return otpSendError("Too many OTP requests. Please wait before trying again.", 429, {
         code: "rate_limited",
         retryAfter: externalLimit.retryAfter ?? 60,
@@ -152,12 +141,14 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Pre-send Rate Limit Check ──
+    // Count only provider-accepted sends so failed delivery attempts do not
+    // consume the member's hourly allowance.
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { count: recentAttempts } = await adminSupabase
-      .from("otp_challenges")
+      .from("otp_logs")
       .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id)
       .eq("phone", phone)
+      .eq("delivery_status", "sent")
       .gte("created_at", oneHourAgo);
 
     if (recentAttempts !== null && recentAttempts >= MAX_SENDS_PER_HOUR) {

@@ -142,7 +142,7 @@ describe("POST /api/auth/login", () => {
     });
   });
 
-  it("returns generic error for email-not-confirmed to prevent enumeration", async () => {
+  it("returns a confirmation-specific error when credentials are correct but email is unconfirmed", async () => {
     mockAuth({
       data: { user: null, session: null },
       error: { message: "Email not confirmed", status: 400 },
@@ -156,10 +156,12 @@ describe("POST /api/auth/login", () => {
       })
     );
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body.error).toBe("Invalid email or password");
-    expect(body).not.toHaveProperty("code");
+    expect(body).toEqual({
+      error: "Please confirm your email address before signing in.",
+      code: "email_not_confirmed",
+    });
   });
 
   it("validates Turnstile when configured", async () => {

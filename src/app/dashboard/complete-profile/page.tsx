@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { saPhoneSchema } from "@/lib/validations/shared";
-import { ACCOUNT_PHONE_IN_USE_ERROR } from "@/lib/utils/phone";
+import { ACCOUNT_PHONE_IN_USE_ERROR, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 
@@ -152,7 +152,7 @@ export default function CompleteProfilePage() {
                 type="tel"
                 inputMode="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(sanitizeSaPhoneInput(e.target.value))}
                 placeholder="071 234 5678"
                 autoComplete="tel"
                 pattern="^(\+27|0)[6-8][0-9]{8}$"

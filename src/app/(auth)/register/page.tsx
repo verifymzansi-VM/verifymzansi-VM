@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Eye, EyeOff, Check, RefreshCw } from "lucide-react";
+import { type z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +36,7 @@ export default function RegisterPage() {
     formState: { errors, isSubmitting },
     control,
     setValue,
-  } = useForm<RegisterInput>({
+  } = useForm<z.input<typeof registerSchema>, unknown, RegisterInput>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
       displayName: "",

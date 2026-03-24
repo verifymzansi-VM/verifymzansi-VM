@@ -207,7 +207,7 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
       target: { value: "0712345678" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Send OTP/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Send code/i }));
 
     await waitFor(() => {
       expect(screen.getByLabelText(/6-digit OTP/i)).toBeInTheDocument();
@@ -226,10 +226,10 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
       target: { value: "0712345678" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Send OTP/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Send code/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Resend OTP/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /Resend code/i })).toBeDisabled();
     });
     expect(screen.getByText(/You can resend a new code in 30s/i)).toBeInTheDocument();
     expect(screen.getByText(/SMS delivery can take up to 60 seconds/i)).toBeInTheDocument();
@@ -253,12 +253,12 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
       target: { value: "0712345678" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Send OTP/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Send code/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/Wait 45s before resending/i)).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: /Send OTP/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Send code/i })).toBeDisabled();
     expect(screen.queryByLabelText(/6-digit OTP/i)).not.toBeInTheDocument();
   });
 

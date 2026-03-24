@@ -42,6 +42,7 @@ import type {
 } from "@/types/enums";
 import { GPS_REQUEST_TIMEOUT_MS, GPS_MAX_AGE_MS } from "@/lib/constants/verification";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { isValidSaPhone, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 
 type WizardStep = "phone" | "id_doc" | "selfie" | "location" | "complete";
 type UploadReceipt = { name: string; sizeBytes: number; uploadedAtIso: string };
@@ -58,7 +59,6 @@ type StepStatusEntry = {
 const STEP_ORDER: Exclude<WizardStep, "complete">[] = ["phone", "id_doc", "selfie", "location"];
 const REVIEWABLE_STEP_ORDER: VerificationStepType[] = ["phone", "id_doc", "selfie", "location"];
 
-const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"];
@@ -340,7 +340,7 @@ export default function VerificationPage() {
 
   const idFileError = validateFile(idFile, true);
   const selfieFileError = validateFile(selfieFile);
-  const isPhoneValid = SA_PHONE_REGEX.test(phone);
+  const isPhoneValid = isValidSaPhone(phone);
   const isOtpValid = otp.length === 6;
   const isIdReady = /^\d{13}$/.test(idNumber) && !idFileError && idChecksumValid !== false;
   const isSelfieReady = !selfieFileError;
@@ -665,7 +665,7 @@ export default function VerificationPage() {
   }
 
   function handlePhoneChange(value: string) {
-    setPhone(value);
+    setPhone(sanitizeSaPhoneInput(value));
     setOtp("");
     setOtpSent(false);
     setOtpRetryAfterSeconds(0);
@@ -1136,9 +1136,14 @@ export default function VerificationPage() {
                     <Label htmlFor="phone">SA mobile number</Label>
                     <Input
                       id="phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
                       placeholder="071 234 5678"
                       value={phone}
                       onChange={(e) => handlePhoneChange(e.target.value)}
+                      pattern="^(\\+27|0)[6-8][0-9]{8}$"
+                      title="Enter a valid SA mobile number (e.g. 071 234 5678)"
                       disabled={phoneVerified}
                     />
                   </div>

@@ -138,13 +138,22 @@ export async function POST(request: NextRequest) {
       password: parsedBody.data.password,
     });
 
+    const isEmailNotConfirmed = error?.message?.toLowerCase().includes("email not confirmed");
+
     if (!error) {
       clearLockout(parsedBody.data.email);
     }
 
     if (error) {
-      if (error.message?.toLowerCase().includes("email not confirmed")) {
+      if (isEmailNotConfirmed) {
         log.info("Login failed: email not confirmed", { email: parsedBody.data.email });
+        return NextResponse.json(
+          {
+            error: "Please confirm your email address before signing in.",
+            code: "email_not_confirmed",
+          },
+          { status: 403 }
+        );
       }
 
       // Return the same generic error for all auth failures to avoid leaking

@@ -231,6 +231,10 @@ export default function LoginPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        if (result.code === "email_not_confirmed") {
+          setJustRegistered(true);
+        }
+
         toast({
           title: typeof result.error === "string" ? result.error : "Sign in failed",
           description:
