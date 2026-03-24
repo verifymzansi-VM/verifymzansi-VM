@@ -67,25 +67,38 @@ function mockOtpDbSuccess() {
   // Mock based on table name for challenge state + audit logs.
   mockAdminFrom.mockImplementation((table: string) => {
     if (table === "otp_challenges") {
+      const challengeQuery = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        gte: vi.fn(),
+        update: vi.fn(),
+        insert: vi.fn(),
+      };
+      challengeQuery.select.mockReturnValue(challengeQuery);
+      challengeQuery.eq.mockReturnValue(challengeQuery);
+      challengeQuery.gte.mockResolvedValue({ count: 0 });
+
       const invalidateQuery = {
-        eq: vi.fn().mockReturnThis(),
+        eq: vi.fn(),
         is: vi.fn().mockResolvedValue({ error: null }),
       };
-      const challengeQuery = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        gte: vi.fn().mockResolvedValue({ count: 0 }),
-        update: vi.fn().mockReturnValue(invalidateQuery),
-        insert: vi.fn().mockResolvedValue({ error: null }),
-      };
-      return {
-        ...challengeQuery,
-      };
+      invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      challengeQuery.update.mockReturnValue(invalidateQuery);
+      challengeQuery.insert.mockResolvedValue({ error: null });
+
+      return challengeQuery;
     }
     if (table === "otp_logs") {
-      return {
+      const otpLogsQuery = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        gte: vi.fn(),
         insert: vi.fn().mockResolvedValue({ error: null }),
       };
+      otpLogsQuery.select.mockReturnValue(otpLogsQuery);
+      otpLogsQuery.eq.mockReturnValue(otpLogsQuery);
+      otpLogsQuery.gte.mockResolvedValue({ count: 0 });
+      return otpLogsQuery;
     }
     return {};
   });

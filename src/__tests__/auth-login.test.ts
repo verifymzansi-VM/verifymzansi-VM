@@ -62,9 +62,9 @@ function createRequest(body: unknown, method = "POST") {
   return {
     method,
     json: async () => body,
-    url: "http://localhost:3000/api/auth/login",
+    url: "https://verifymzansi.com/api/auth/login",
     headers: { get: vi.fn().mockReturnValue(null) },
-    nextUrl: new URL("http://localhost:3000/api/auth/login"),
+    nextUrl: new URL("https://verifymzansi.com/api/auth/login"),
   } as unknown as NextRequest;
 }
 

@@ -233,6 +233,12 @@ describe("POST /api/verification/session/start", () => {
     expect(data.completedSteps).toEqual([]);
     expect(data.pendingSteps).toEqual([]);
     expect(data.rejectedSteps).toEqual([]);
+    expect(mockCheckRateLimit).toHaveBeenCalledWith({
+      key: "user-1",
+      action: "verification:session-start",
+      degradedMode: "block",
+    });
+    expect(mockGetClientIp).not.toHaveBeenCalled();
     expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "kyc_session_started",
@@ -283,6 +289,11 @@ describe("POST /api/verification/session/start", () => {
     expect(data.completedSteps).toEqual(["phone"]);
     expect(data.pendingSteps).toEqual(["id_doc"]);
     expect(data.phoneVerifiedAt).toBeDefined();
+    expect(mockCheckRateLimit).toHaveBeenCalledWith({
+      key: "user-1",
+      action: "verification:session-start",
+      degradedMode: "block",
+    });
     // Should NOT log session started for existing sessions
     expect(mockLogAuditEvent).not.toHaveBeenCalled();
   });

@@ -12,3 +12,10 @@ ENVIRONMENT = "production"
 [[kv_namespaces]]
 binding = "OTP_RATE_LIMITS"
 id = "247144b6d9b1406093351378a57c62fa"
+
+[durable_objects]
+bindings = [{ name = "RATE_LIMITER_DO", class_name = "RateLimiterDO" }]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RateLimiterDO"]

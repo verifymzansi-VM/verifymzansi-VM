@@ -71,7 +71,7 @@ describe("ozow payments", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls[0][0]).toContain("/oauth/token");
+    expect(fetchMock.mock.calls[0][0]).toContain("/v1/token");
     expect(fetchMock.mock.calls[1][0]).toContain("/payments");
     expect(fetchMock.mock.calls[2][0]).toContain("/payments");
   });
@@ -112,7 +112,7 @@ describe("ozow payments", () => {
     expect(body.siteCode).toBe("site-code");
     expect(body.amount).toBe("25.00");
     expect(body.currencyCode).toBe("ZAR");
-    expect(body.merchantReference).toBe("payment-1");
+    expect(body.merchantReference).toBe("payment1");
   });
 
   it("verifies webhook signatures using the shared secret", async () => {

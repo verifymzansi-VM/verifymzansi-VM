@@ -18,7 +18,7 @@ function getOzowBaseUrl(): string {
     return configuredBaseUrl.replace(/\/$/, "");
   }
 
-  return env("OZOW_ENV") === "production" ? "https://api.ozow.com" : "https://api.staging.ozow.com";
+  return env("OZOW_ENV") === "production" ? "https://one.ozow.com" : "https://stagingone.ozow.com";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -61,7 +61,7 @@ async function getOzowAccessToken(forceRefresh = false): Promise<string> {
     throw new Error("Ozow credentials are not configured");
   }
 
-  const response = await fetch(`${getOzowBaseUrl()}/oauth/token`, {
+  const response = await fetch(`${getOzowBaseUrl()}/v1/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -160,7 +160,7 @@ export async function createOzowHostedPayment(
     siteCode,
     amount,
     currencyCode: "ZAR",
-    merchantReference: input.paymentId,
+    merchantReference: input.paymentId.replace(/-/g, ""),
     expireAt,
     returnUrl: input.returnUrl,
     cancelUrl: input.cancelUrl,
@@ -168,7 +168,7 @@ export async function createOzowHostedPayment(
     itemName: input.itemName,
   };
 
-  const response = await fetch(`${getOzowBaseUrl()}/payments`, {
+  const response = await fetch(`${getOzowBaseUrl()}/v1/payments`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,

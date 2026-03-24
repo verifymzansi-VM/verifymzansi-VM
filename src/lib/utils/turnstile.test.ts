@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { verifyTurnstileToken, requireValidTurnstile } from "./turnstile";
+import { getTurnstileConfigStatus, requireValidTurnstile, verifyTurnstileToken } from "./turnstile";
 
 describe("turnstile verification", () => {
   beforeEach(() => {
@@ -105,6 +105,18 @@ describe("turnstile verification", () => {
           body: expect.stringContaining("1.2.3.4"),
         })
       );
+    });
+  });
+
+  describe("getTurnstileConfigStatus", () => {
+    it("bypasses Turnstile on localhost in non-production", () => {
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+
+      expect(getTurnstileConfigStatus({ requestHost: "localhost" })).toEqual({
+        configured: false,
+        reason: "dev-host-bypass",
+      });
     });
   });
 

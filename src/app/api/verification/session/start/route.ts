@@ -10,7 +10,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { REQUIRED_VERIFICATION_STEPS } from "@/lib/constants/verification";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("SessionStart");
@@ -48,7 +48,7 @@ export async function POST(_request: NextRequest) {
     }
 
     const rateCheck = await checkRateLimit({
-      key: getClientIp(request),
+      key: user.id,
       action: "verification:session-start",
       degradedMode: "block",
     });

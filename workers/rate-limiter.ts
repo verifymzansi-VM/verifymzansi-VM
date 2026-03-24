@@ -59,6 +59,10 @@ interface RateCheck {
   ttl: number;
 }
 
+function buildTieredCounterKey(baseKey: string, ttl: number): string {
+  return `${baseKey}:${ttl}`;
+}
+
 /**
  * Action-specific rate limit configurations.
  * Used for generic (non-OTP) rate limiting via the same DO infrastructure.
@@ -75,8 +79,8 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 30, ttl: 3600 }, // 30 per hour
   ],
   "auth:register": [
-    { limit: 5, ttl: 60 }, // 5 per minute
-    { limit: 15, ttl: 3600 }, // 15 per hour
+    { limit: 10, ttl: 600 }, // 10 per 10 minutes
+    { limit: 30, ttl: 3600 }, // 30 per hour
   ],
 
   // ── Public reads (generous — browsing with filters/pagination) ──
@@ -90,6 +94,10 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
 
   // ── Verification ─────────────────────────────────────
   "verification:upload": [{ limit: 10, ttl: 60 }],
+  "verification:session-start": [
+    { limit: 20, ttl: 600 }, // 20 per 10 minutes
+    { limit: 60, ttl: 3600 }, // 60 per hour
+  ],
   "verification:status": [{ limit: 30, ttl: 60 }], // polling-friendly
   "verification:gps": [{ limit: 10, ttl: 60 }],
 
@@ -323,7 +331,7 @@ const worker = {
           const doId = env.RATE_LIMITER_DO.idFromName(`${action}:${rateKey}`);
           const stub = env.RATE_LIMITER_DO.get(doId);
           const checks: RateCheck[] = limits.map((c) => ({
-            key: `${action}:${rateKey}`,
+            key: buildTieredCounterKey(`${action}:${rateKey}`, c.ttl),
             limit: c.limit,
             ttl: c.ttl,
           }));
@@ -340,7 +348,7 @@ const worker = {
 
       // KV fallback for generic actions
       for (const c of limits) {
-        const k = `${action}:${rateKey}`;
+        const k = buildTieredCounterKey(`${action}:${rateKey}`, c.ttl);
         const current = parseInt((await env.OTP_RATE_LIMITS.get(k)) || "0", 10);
         if (current >= c.limit) {
           return Response.json({ error: "rate_limited", retryAfter: c.ttl }, { status: 429 });

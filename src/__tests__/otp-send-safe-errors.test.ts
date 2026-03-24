@@ -65,29 +65,40 @@ describe("POST /api/otp/send safe error envelopes", () => {
 
   it("does not leak database details when challenge creation fails", async () => {
     mockAdminFrom.mockImplementation((table: string) => {
-      if (table === "otp_challenges") {
-        const invalidateQuery = {
-          eq: vi.fn().mockReturnThis(),
-          is: vi.fn().mockResolvedValue({ error: null }),
+      if (table === "otp_logs") {
+        const otpLogsQuery = {
+          select: vi.fn(),
+          eq: vi.fn(),
+          gte: vi.fn(),
+          insert: vi.fn().mockResolvedValue({ error: null }),
         };
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          gte: vi.fn().mockResolvedValue({ count: 0 }),
-          update: vi.fn().mockReturnValue(invalidateQuery),
-          insert: vi.fn().mockResolvedValue({
-            error: {
-              message: "duplicate key value violates unique constraint",
-              code: "23505",
-              details: "otp_challenges_user_id_phone_key",
-              hint: null,
-            },
-          }),
-        };
+        otpLogsQuery.select.mockReturnValue(otpLogsQuery);
+        otpLogsQuery.eq.mockReturnValue(otpLogsQuery);
+        otpLogsQuery.gte.mockResolvedValue({ count: 0 });
+        return otpLogsQuery;
       }
 
-      if (table === "otp_logs") {
-        return { insert: vi.fn().mockResolvedValue({ error: null }) };
+      if (table === "otp_challenges") {
+        const challengeQuery = {
+          update: vi.fn(),
+          insert: vi.fn(),
+        };
+
+        const invalidateQuery = {
+          eq: vi.fn(),
+          is: vi.fn().mockResolvedValue({ error: null }),
+        };
+        invalidateQuery.eq.mockReturnValue(invalidateQuery);
+        challengeQuery.update.mockReturnValue(invalidateQuery);
+        challengeQuery.insert.mockResolvedValue({
+          error: {
+            message: "duplicate key value violates unique constraint",
+            code: "23505",
+            details: "otp_challenges_user_id_phone_key",
+            hint: null,
+          },
+        });
+        return challengeQuery;
       }
 
       return {};

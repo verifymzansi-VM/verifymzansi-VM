@@ -71,9 +71,9 @@ function createRequest(body: unknown): NextRequest {
   return {
     method: "POST",
     json: async () => body,
-    url: "http://localhost:3000/api/auth/register",
+    url: "https://verifymzansi.com/api/auth/register",
     headers: { get: vi.fn().mockReturnValue(null) },
-    nextUrl: new URL("http://localhost:3000/api/auth/register"),
+    nextUrl: new URL("https://verifymzansi.com/api/auth/register"),
   } as unknown as NextRequest;
 }
 
@@ -134,6 +134,18 @@ describe("POST /api/auth/register", () => {
   it("returns 400 for missing required fields", async () => {
     const res = await POST(createRequest({}));
     expect(res.status).toBe(400);
+  });
+
+  it("returns 429 when registration attempts are rate limited", async () => {
+    mockCheckRateLimit.mockResolvedValue({ limited: true, retryAfter: 120 });
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("120");
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Too many registration attempts. Please try again later.",
+    });
   });
 
   it("succeeds with valid data (no Turnstile configured)", async () => {
