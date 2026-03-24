@@ -28,6 +28,7 @@ describe("instrumentation register", () => {
       value: originalNodeEnv,
       writable: true,
       configurable: true,
+      enumerable: true,
     });
     process.env.STRICT_ENV_STARTUP_BLOCK = originalStrictStartupBlock;
   });
@@ -62,6 +63,7 @@ describe("instrumentation register", () => {
       value: "production",
       writable: true,
       configurable: true,
+      enumerable: true,
     });
     delete process.env.STRICT_ENV_STARTUP_BLOCK;
 
