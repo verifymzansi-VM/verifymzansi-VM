@@ -28,15 +28,19 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { summarizeVerification } from "@/lib/account/verification-summary";
 import { profileUpdateSchema } from "@/lib/validations/profile";
-import { ACCOUNT_PHONE_IN_USE_ERROR } from "@/lib/utils/phone";
-import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import { ACCOUNT_PHONE_IN_USE_ERROR, sanitizeSaPhoneInput } from "@/lib/utils/phone";
+import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
+import type { AccountVerificationStatus } from "@/types/enums";
 
 type TabValue = "profile" | "security" | "account";
 
 export default function ProfilePage() {
   const [email, setEmail] = useState("");
-  const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState<AccountVerificationStatus | null>(
+    null
+  );
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [province, setProvince] = useState("");
@@ -103,23 +107,35 @@ export default function ProfilePage() {
 
       setEmail(user.email ?? "");
 
-      const { data: profile } = await supabase
-        .from(ACCOUNT_PROFILE_TABLE)
-        .select(
-          "display_name, bio, location_province, location_city, phone, account_verification_status, avatar_url"
-        )
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const [{ data: profile }, { data: verificationSteps }] = await Promise.all([
+        supabase
+          .from(ACCOUNT_PROFILE_TABLE)
+          .select(
+            "display_name, bio, location_province, location_city, phone, account_verification_status, avatar_url"
+          )
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("verification_steps")
+          .select("step_type, status")
+          .eq("user_id", user.id)
+          .in("status", ["approved", "pending", "rejected", "needs_resubmission"]),
+      ]);
+
+      const verificationSummary = summarizeVerification(
+        profile?.account_verification_status,
+        verificationSteps
+      );
 
       if (profile) {
         setDisplayName(profile.display_name || "");
         setBio(profile.bio || "");
         setProvince(profile.location_province || "");
         setCity(profile.location_city || "");
-        setPhone(profile.phone || "");
-        setVerificationStatus(readAccountVerificationStatus(profile));
+        setPhone(sanitizeSaPhoneInput(profile.phone || ""));
         setAvatarUrl(profile.avatar_url || null);
       }
+      setVerificationStatus(verificationSummary.accountVerificationStatus);
       setIsLoading(false);
     }
 
@@ -226,7 +242,7 @@ export default function ProfilePage() {
       }
 
       if (data.profile?.phone) {
-        setPhone(data.profile.phone);
+        setPhone(sanitizeSaPhoneInput(data.profile.phone));
       }
 
       toast({ title: "Profile updated!", variant: "success" });
@@ -413,7 +429,7 @@ export default function ProfilePage() {
                     id="displayName"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value.slice(0, 50))}
-                    placeholder="How people see your name"
+                    placeholder="Your public display name"
                     maxLength={50}
                     required
                   />
@@ -440,7 +456,7 @@ export default function ProfilePage() {
                     type="tel"
                     inputMode="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(sanitizeSaPhoneInput(e.target.value))}
                     placeholder="082 000 0000"
                     autoComplete="tel"
                     pattern="^(\+27|0)[6-8][0-9]{8}$"
@@ -640,7 +656,7 @@ export default function ProfilePage() {
                   </p>
                 </div>
                 <Button asChild variant="outline" size="sm">
-                  <Link href="/forgot-password">Reset</Link>
+                  <Link href="/forgot-password">Reset Password</Link>
                 </Button>
               </div>
             </CardContent>
@@ -703,7 +719,7 @@ export default function ProfilePage() {
                 <div>
                   <p className="text-sm font-medium text-destructive">Delete account</p>
                   <p className="text-xs text-muted-foreground">
-                    Permanently delete your data under POPIA.
+                    Permanently delete your account and all personal data. This cannot be undone.
                   </p>
                 </div>
                 <Button variant="destructive" size="sm" asChild className="gap-1.5">

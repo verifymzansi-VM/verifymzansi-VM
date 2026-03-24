@@ -1,18 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCreateAdminClient, mockIsModeratorOrAdmin, mockLogAuditEvent } =
-  vi.hoisted(() => ({
-    mockCreateClient: vi.fn(),
-    mockCreateAdminClient: vi.fn(),
-    mockIsModeratorOrAdmin: vi.fn(),
-    mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
-  }));
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockLogAuditEvent,
+  mockSendAccountEnforcementEmail,
+  mockVerifyStaffActorRoleFromDb,
+  mockGetUserById,
+  mockEnforceSameOriginMutation,
+  mockEnforceCsrfToken,
+} = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
+  mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
+  mockSendAccountEnforcementEmail: vi.fn().mockResolvedValue({ success: true }),
+  mockVerifyStaffActorRoleFromDb: vi.fn(),
+  mockGetUserById: vi.fn(),
+  mockEnforceSameOriginMutation: vi.fn(),
+  mockEnforceCsrfToken: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
-vi.mock("@/lib/auth/roles", () => ({ isModeratorOrAdmin: mockIsModeratorOrAdmin }));
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyStaffActorRoleFromDb: mockVerifyStaffActorRoleFromDb,
+}));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
+vi.mock("@/lib/services/email", () => ({
+  sendAccountEnforcementEmail: mockSendAccountEnforcementEmail,
+}));
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: mockEnforceSameOriginMutation,
+}));
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: mockEnforceCsrfToken,
+}));
 
 import { POST } from "@/app/api/admin/flagging/action/route";
 
@@ -32,9 +55,28 @@ function createRequest(body: unknown, headers: Record<string, string> = {}) {
 describe("POST /api/admin/flagging/action", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue("moderator");
+    mockEnforceSameOriginMutation.mockReturnValue(null);
+    mockEnforceCsrfToken.mockReturnValue(null);
+    mockGetUserById.mockResolvedValue({
+      data: {
+        user: {
+          email: "owner@example.com",
+          user_metadata: { full_name: "Owner Person" },
+        },
+      },
+      error: null,
+    });
   });
 
   it("rejects cross-site moderation requests", async () => {
+    mockEnforceSameOriginMutation.mockReturnValue(
+      new Response(JSON.stringify({ error: "Cross-origin request blocked" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
     const res = await POST(
       createRequest(
         {
@@ -54,7 +96,7 @@ describe("POST /api/admin/flagging/action", () => {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
       },
     });
-    mockIsModeratorOrAdmin.mockReturnValue(false);
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue(null);
 
     const res = await POST(
       createRequest({
@@ -98,7 +140,6 @@ describe("POST /api/admin/flagging/action", () => {
         }),
       },
     });
-    mockIsModeratorOrAdmin.mockReturnValue(true);
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
         if (table === "reports") {
@@ -131,6 +172,7 @@ describe("POST /api/admin/flagging/action", () => {
 
         throw new Error(`Unexpected table ${table}`);
       }),
+      auth: { admin: { getUserById: mockGetUserById } },
       rpc: vi.fn().mockResolvedValue({ error: null }),
     });
 
@@ -149,5 +191,81 @@ describe("POST /api/admin/flagging/action", () => {
       reportStatus: "resolved",
     });
     expect(mockLogAuditEvent).toHaveBeenCalled();
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: "mod-1",
+        actorRole: "moderator",
+      })
+    );
+  });
+
+  it("sends account enforcement email for warning actions", async () => {
+    const reportsEq = vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: {
+          id: "report-1",
+          area: "MZANSI_MARKET",
+          target_type: "account_profile",
+          target_id: "owner-1",
+        },
+        error: null,
+      }),
+    });
+
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "mod-1", app_metadata: { role: "moderator" } } },
+        }),
+      },
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "reports") {
+          return {
+            select: vi.fn().mockReturnValue({ eq: reportsEq }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+
+        if (table === "account_profiles") {
+          return {
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+
+        if (table === "moderation_actions") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    });
+
+    const res = await POST(
+      createRequest({
+        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        action: "warn",
+        reason: "Policy warning",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockSendAccountEnforcementEmail).toHaveBeenCalledWith({
+      email: "owner@example.com",
+      accountName: "Owner Person",
+      action: "warn",
+      reason: "Policy warning",
+      suspendedUntil: null,
+    });
   });
 });

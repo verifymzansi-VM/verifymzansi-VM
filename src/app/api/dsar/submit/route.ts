@@ -2,10 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
+import { sendDsarSubmissionEmail } from "@/lib/services/email";
 import { dsarRequestSchema } from "@/lib/validations/verification";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { createLogger } from "@/lib/utils/logger";
-import { getClientIp } from "@/lib/utils/rate-limit";
+import { getClientIp, checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("DSAR");
@@ -21,6 +22,15 @@ const dsarSubmitSchema = dsarRequestSchema.extend({
  */
 export async function POST(request: NextRequest) {
   try {
+    const clientIp = getClientIp(request) || "unknown";
+    const rl = checkLocalRateLimit(clientIp, "dsar:submit");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     const parsedBody = await parseAndValidateJsonRequest(request, dsarSubmitSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
@@ -32,6 +42,15 @@ export async function POST(request: NextRequest) {
     }
 
     const { type, name, email, idNumber, details, turnstileToken } = parsedBody.data;
+
+    // Per-email rate limit to prevent mass DSAR submissions with different addresses
+    const emailRl = checkLocalRateLimit(email.toLowerCase(), "dsar:submit:email");
+    if (emailRl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(emailRl.retryAfter ?? 60) } }
+      );
+    }
 
     // Validate ID number format if provided (must be 13 digits for SA ID)
     if (idNumber && !/^\d{13}$/.test(idNumber)) {
@@ -89,7 +108,7 @@ export async function POST(request: NextRequest) {
     // ── Audit log ────────────────────────────────────────────
     await logAuditEvent({
       actorId: "00000000-0000-0000-0000-000000000000",
-      actorRole: "admin",
+      actorRole: "system",
       action: "dsar_requested",
       targetType: "dsar_case",
       targetId: dsarRecord.id,
@@ -102,6 +121,13 @@ export async function POST(request: NextRequest) {
 
     // Generate a human-readable reference
     const reference = `DSAR-${dsarRecord.id.slice(0, 8).toUpperCase()}`;
+
+    sendDsarSubmissionEmail(email, reference, dueBy.toISOString()).catch((emailError) => {
+      log.warn("Failed to send DSAR submission confirmation email", {
+        requestId: dsarRecord.id,
+        error: emailError instanceof Error ? emailError.message : "unknown error",
+      });
+    });
 
     return NextResponse.json({
       success: true,

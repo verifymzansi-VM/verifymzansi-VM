@@ -106,6 +106,10 @@
     }
   }
 
+  html[data-playwright="1"] {
+    scroll-behavior: auto;
+  }
+
   body {
     @apply bg-background text-foreground font-body;
   }
@@ -327,6 +331,10 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -386,5 +394,11 @@
   img {
     max-width: 100% !important;
     page-break-inside: avoid;
+  }
+
+  /* Hide sensitive KYC evidence when printing (POPIA compliance) */
+  .evidence-protected,
+  [data-evidence-thumb] {
+    display: none !important;
   }
 }

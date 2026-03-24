@@ -9,9 +9,17 @@ interface FeaturedButtonProps {
   listingId: string;
   isFeatured: boolean;
   canFeature: boolean;
+  itemTypeLabel?: string;
+  featuredApiPath?: string;
 }
 
-export function FeaturedButton({ listingId, isFeatured, canFeature }: FeaturedButtonProps) {
+export function FeaturedButton({
+  listingId,
+  isFeatured,
+  canFeature,
+  itemTypeLabel = "listing",
+  featuredApiPath,
+}: FeaturedButtonProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -37,8 +45,8 @@ export function FeaturedButton({ listingId, isFeatured, canFeature }: FeaturedBu
         size="icon"
         className="h-8 w-8"
         disabled
-        title="Upgrade to Pro to feature listings"
-        aria-label="Upgrade to Pro to feature listings"
+        title={`Upgrade to Pro to feature this ${itemTypeLabel}`}
+        aria-label={`Upgrade to Pro to feature this ${itemTypeLabel}`}
       >
         <Star className="h-3.5 w-3.5 text-muted-foreground" />
       </Button>
@@ -48,7 +56,8 @@ export function FeaturedButton({ listingId, isFeatured, canFeature }: FeaturedBu
   async function handleFeatured() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/listings/${listingId}/featured`, {
+      const apiPath = featuredApiPath || `/api/listings/${listingId}/featured`;
+      const res = await fetch(apiPath, {
         method: "POST",
       });
       const data = await res.json();
@@ -83,8 +92,8 @@ export function FeaturedButton({ listingId, isFeatured, canFeature }: FeaturedBu
       className="h-8 w-8 transition-colors hover:text-brand-gold"
       onClick={handleFeatured}
       disabled={loading}
-      title="Feature this listing (R25 for 7 days)"
-      aria-label="Feature this listing"
+      title={`Feature this ${itemTypeLabel} (R25 for 7 days)`}
+      aria-label={`Feature this ${itemTypeLabel}`}
     >
       <Star className={`h-3.5 w-3.5 ${loading ? "animate-pulse" : ""}`} />
     </Button>

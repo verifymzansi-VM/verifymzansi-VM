@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { adminDsarDecideSchema } from "@/lib/validations/admin";
-import { isAdmin } from "@/lib/auth/roles";
+import { verifyAdminActorRoleFromDb } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const log = createLogger("DSARDecide");
 
@@ -17,12 +19,22 @@ const log = createLogger("DSARDecide");
  */
 export async function POST(req: Request) {
   try {
+    const originBlock = enforceSameOriginMutation(req, log);
+    if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(req, log);
+    if (csrfBlock) return csrfBlock;
+
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user || !isAdmin(user)) {
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const actorRole = await verifyAdminActorRoleFromDb(user);
+    if (!actorRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -34,17 +46,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await parseJsonRequest(req);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    const bodyResult = await parseAndValidateJsonRequest(req, adminDsarDecideSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
+    if (!bodyResult.success) {
+      return bodyResult.response;
     }
-    const parsed = adminDsarDecideSchema.safeParse(body);
 
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
-    }
-
-    const { requestId, decision, notes } = parsed.data;
+    const { requestId, decision, notes } = bodyResult.data;
 
     const admin = createAdminClient();
 
@@ -76,7 +87,7 @@ export async function POST(req: Request) {
     await logAuditEvent({
       action: decision === "approve" ? "dsar_started" : "dsar_rejected",
       actorId: user.id,
-      actorRole: "admin",
+      actorRole,
       targetId: requestId,
       targetType: "dsar_case",
       metadata: { decision, notes },
@@ -84,7 +95,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ status: newStatus });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

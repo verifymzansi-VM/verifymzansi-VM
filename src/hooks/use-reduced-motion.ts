@@ -1,22 +1,8 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 
 const QUERY = "(prefers-reduced-motion: reduce)";
-
-function subscribe(callback: () => void) {
-  const mql = window.matchMedia(QUERY);
-  mql.addEventListener("change", callback);
-  return () => mql.removeEventListener("change", callback);
-}
-
-function getSnapshot() {
-  return window.matchMedia(QUERY).matches;
-}
-
-function getServerSnapshot() {
-  return false;
-}
 
 /**
  * Returns true when the user prefers reduced motion.
@@ -24,5 +10,18 @@ function getServerSnapshot() {
  * lets framer-motion animations respect the same preference.
  */
 export function useReducedMotion(): boolean {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  // Hydration-safe: keep the first render deterministic across server and client,
+  // then update after mount based on the real media query value.
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia(QUERY);
+    const update = () => setPrefersReducedMotion(mql.matches);
+    update();
+
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, []);
+
+  return prefersReducedMotion;
 }

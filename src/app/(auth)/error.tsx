@@ -30,7 +30,9 @@ export default function AuthError({
             Something went wrong with the authentication service. Please try again.
           </p>
           {error.digest && (
-            <p className="text-xs text-muted-foreground/60 font-mono">Ref: {error.digest}</p>
+            <p className="text-xs text-muted-foreground/60 font-mono">
+              Error reference: {error.digest}
+            </p>
           )}
         </div>
         <div className="flex flex-col gap-3">

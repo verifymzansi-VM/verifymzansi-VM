@@ -15,6 +15,7 @@ export interface HealthCheckStatus {
   failedChecks?: string[];
   warningChecks?: string[];
   failureCount?: number;
+  failedDetails?: string[];
 }
 
 export interface LaunchHealthSnapshot {
@@ -93,6 +94,7 @@ export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
     warningCount: configSummary.warnings.length,
     failedChecks: configSummary.errors.map((check) => check.name),
     warningChecks: configSummary.warnings.map((check) => check.name),
+    failedDetails: configSummary.errors.map((check) => `${check.name}: ${check.detail}`),
   };
 
   const degraded =

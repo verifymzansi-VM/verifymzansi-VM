@@ -39,6 +39,10 @@ self.addEventListener("activate", (event) => {
 });
 
 // ── Fetch: route requests to the right strategy ─────────
+// Protected route prefixes — never cache their HTML to avoid serving
+// stale auth-dependent content (common cause of post-login errors on mobile).
+const PROTECTED_PREFIXES = ["/dashboard", "/post", "/billing", "/verification", "/admin"];
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -60,6 +64,13 @@ self.addEventListener("fetch", (event) => {
 
   // HTML pages — network-first with offline fallback
   if (request.headers.get("accept")?.includes("text/html")) {
+    // Never cache protected (auth-dependent) pages — serve network-only
+    // with an offline fallback so stale cached HTML can't cause errors.
+    const isProtected = PROTECTED_PREFIXES.some((p) => url.pathname.startsWith(p));
+    if (isProtected) {
+      event.respondWith(networkOnlyWithOffline(request));
+      return;
+    }
     event.respondWith(networkFirstWithOffline(request));
     return;
   }
@@ -107,6 +118,21 @@ async function networkFirstWithOffline(request) {
     if (cached) return cached;
 
     // Fallback to offline page
+    const offlinePage = await caches.match(OFFLINE_URL);
+    return (
+      offlinePage ??
+      new Response(
+        "<html><body><h1>You are offline</h1><p>Please check your connection.</p></body></html>",
+        { headers: { "Content-Type": "text/html" } }
+      )
+    );
+  }
+}
+
+async function networkOnlyWithOffline(request) {
+  try {
+    return await fetch(request);
+  } catch {
     const offlinePage = await caches.match(OFFLINE_URL);
     return (
       offlinePage ??

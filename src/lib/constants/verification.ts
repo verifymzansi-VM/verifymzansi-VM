@@ -17,6 +17,11 @@ export const GPS_ACCURACY_REJECT_METERS = 5000;
 export const GPS_REQUEST_TIMEOUT_MS = 15_000;
 export const GPS_MAX_AGE_MS = 60_000;
 
+/* ── Manual Location Risk Scoring ─────────────────────────── */
+export const MANUAL_ONLY_BASELINE_RISK = 20;
+export const GPS_PROVINCE_MISMATCH_RISK = 50;
+export const GPS_CITY_MISMATCH_RISK = 25;
+
 /* ── File Upload Limits ──────────────────────────────────── */
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;

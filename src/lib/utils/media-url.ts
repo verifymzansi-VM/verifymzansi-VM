@@ -26,10 +26,16 @@ const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "mov"]);
 export function isTrustedPlatformMediaUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const appHostname = appUrl ? new URL(appUrl).hostname : null;
     return (
       parsed.hostname === "media.verifymzansi.com" ||
       parsed.hostname.endsWith(".r2.cloudflarestorage.com") ||
-      parsed.hostname.endsWith(".supabase.co")
+      parsed.hostname.endsWith(".supabase.co") ||
+      ((process.env.PLAYWRIGHT_TEST_MODE === "1" ||
+        process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE === "1") &&
+        appHostname !== null &&
+        parsed.hostname === appHostname)
     );
   } catch {
     return false;

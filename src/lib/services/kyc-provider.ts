@@ -45,9 +45,7 @@ async function simulateKycVerification(
   }
 
   if (idNumber && idNumber.length !== 13) {
-    log.warn("KYC simulation failed: invalid SA ID number format", {
-      idNumberLength: idNumber.length,
-    });
+    log.warn("KYC simulation failed: invalid SA ID number format");
     return {
       status: "rejected",
       reason: "ID number must be exactly 13 digits",

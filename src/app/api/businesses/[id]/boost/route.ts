@@ -1,23 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildPayFastCheckoutUrl } from "@/lib/services/payfast";
 import { canBoost } from "@/lib/services/entitlements";
 import { logAuditEvent } from "@/lib/services/audit";
 import { ADDON_PRICES, BOOST_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
+import { createHostedCheckout } from "@/lib/payments/checkout";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
   ACCOUNT_PROFILE_WRITE_TABLE,
+  applyOwnerFilter,
   getOwnerColumn,
-  readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { parseAndValidateRouteParams } from "@/lib/utils/api";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("BoostBusiness");
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const businessBoostParamsSchema = z.object({
+  id: uuidSchema,
+});
 type BusinessCheckoutRow = {
   id: string;
   business_name: string;
@@ -30,15 +37,21 @@ type BusinessCheckoutRow = {
 /**
  * POST /api/businesses/[id]/boost
  *
- * Create a PayFast checkout session to boost a business.
+ * Create an Ozow checkout session to boost a business.
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: businessId } = await params;
+    const originBlock = enforceSameOriginMutation(_request, log);
+    if (originBlock) return originBlock;
 
-    if (!UUID_RE.test(businessId)) {
-      return NextResponse.json({ error: "Invalid business ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, businessBoostParamsSchema, {
+      validationErrorMessage: "Invalid business ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id: businessId } = parsedParams.data;
 
     const supabase = await createClient();
     const {
@@ -49,8 +62,16 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rl = checkLocalRateLimit(user.id, "business:boost");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "businesses");
+    const ownerColumn = await getOwnerColumn(supabase, "businesses");
 
     const { data: accountProfile } = await admin
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
@@ -62,19 +83,18 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    const { data: rawBusiness } = await admin
-      .from("businesses")
-      .select(withOwnerColumn("id, business_name, status, owner_id, boost_until", ownerColumn))
-      .eq("id", businessId)
-      .maybeSingle();
+    const { data: rawBusiness } = await applyOwnerFilter(
+      supabase
+        .from("businesses")
+        .select(withOwnerColumn("id, business_name, status, owner_id, boost_until", ownerColumn))
+        .eq("id", businessId),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const business = rawBusiness as BusinessCheckoutRow | null;
 
     if (!business) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
-    }
-
-    if (readOwnerId(business) !== user.id) {
-      return NextResponse.json({ error: "You don't own this business" }, { status: 403 });
     }
 
     if (business.status !== "live") {
@@ -85,6 +105,21 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "This business is already boosted" }, { status: 400 });
     }
 
+    // ── Prevent duplicate in-flight payments ─────────────────
+    const { data: pendingPmt } = await admin
+      .from("payments")
+      .select("id")
+      .eq("user_id", user.id)
+      .in("status", ["pending", "processing"])
+      .contains("provider_data", { type: "boost_business", business_id: businessId })
+      .maybeSingle();
+    if (pendingPmt) {
+      return NextResponse.json(
+        { error: "A boost payment is already in progress for this business" },
+        { status: 409 }
+      );
+    }
+
     const tier = await getActivePlanTierForArea(user.id, "MZANSI_BUSINESS");
     const boostCheck = canBoost(tier, "MZANSI_BUSINESS");
 
@@ -92,52 +127,21 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: boostCheck.reason }, { status: 403 });
     }
 
-    const amountRands = ADDON_PRICES.boost / 100;
-
-    const { data: payment, error: paymentError } = await admin
-      .from("payments")
-      .insert({
-        user_id: user.id,
-        area: "MZANSI_BUSINESS",
-        amount_cents: ADDON_PRICES.boost,
-        status: "pending",
-        payfast_data: {
-          type: "boost_business",
-          business_id: businessId,
-          boost_days: BOOST_DURATION_DAYS,
-        },
-      })
-      .select("id")
-      .single();
-
-    if (paymentError || !payment) {
-      log.error("Failed to create payment", { error: paymentError });
-      return NextResponse.json({ error: "Failed to create payment" }, { status: 500 });
-    }
-
     const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
-    const notifyUrl = env("PAYFAST_NOTIFY_URL") || `${appUrl}/api/webhooks/payfast`;
-
-    const merchantId = env("PAYFAST_MERCHANT_ID");
-    const merchantKey = env("PAYFAST_MERCHANT_KEY");
-    if (!merchantId || !merchantKey) {
-      return NextResponse.json(
-        { error: "Billing is not yet configured. Please try again later." },
-        { status: 503 }
-      );
-    }
-
-    const checkoutUrl = buildPayFastCheckoutUrl({
-      merchantId,
-      merchantKey,
-      returnUrl: `${appUrl}/dashboard/businesses?boosted=${businessId}`,
-      cancelUrl: `${appUrl}/dashboard/businesses`,
-      notifyUrl,
-      paymentId: payment.id,
-      amount: amountRands,
+    const { paymentId, checkoutUrl } = await createHostedCheckout({
+      admin: admin as never,
+      userId: user.id,
+      area: "MZANSI_BUSINESS",
+      amountCents: ADDON_PRICES.boost,
       itemName: `Boost: ${business.business_name}`.slice(0, 100),
       itemDescription: `${BOOST_DURATION_DAYS}-day business boost`,
-      emailAddress: user.email || undefined,
+      returnUrl: `${appUrl}/billing/success?payment=__PAYMENT_ID__`,
+      cancelUrl: `${appUrl}/billing/cancel?payment=__PAYMENT_ID__`,
+      providerData: {
+        type: "boost_business",
+        business_id: businessId,
+        boost_days: BOOST_DURATION_DAYS,
+      },
     });
 
     try {
@@ -149,8 +153,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         targetId: businessId,
         area: "MZANSI_BUSINESS",
         metadata: {
-          paymentId: payment.id,
-          amount: amountRands,
+          paymentId,
+          amount: ADDON_PRICES.boost / 100,
           boostDays: BOOST_DURATION_DAYS,
           status: "checkout_initiated",
         },
@@ -158,13 +162,16 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     } catch (auditErr) {
       log.error("Audit log failed (non-fatal)", {
         error: auditErr instanceof Error ? auditErr.message : "Unknown",
-        paymentId: payment.id,
+        paymentId,
       });
     }
 
-    return NextResponse.json({ success: true, checkoutUrl, paymentId: payment.id });
+    return NextResponse.json({ success: true, checkoutUrl, paymentId });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "Unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Failed to create boost checkout" }, { status: 500 });
   }
 }

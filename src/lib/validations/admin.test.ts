@@ -4,6 +4,7 @@ import {
   adminVerificationDecideSchema,
   adminFlaggingActionSchema,
   adminDsarDecideSchema,
+  adminDsarCompleteSchema,
 } from "./admin";
 
 describe("adminContentDecideSchema", () => {
@@ -77,6 +78,7 @@ describe("adminVerificationDecideSchema", () => {
     const result = adminVerificationDecideSchema.safeParse({
       stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       decision: "rejected",
+      reasonNote: "Some explanation",
     });
     expect(result.success).toBe(false);
   });
@@ -85,6 +87,7 @@ describe("adminVerificationDecideSchema", () => {
     const result = adminVerificationDecideSchema.safeParse({
       stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       decision: "needs_resubmission",
+      reasonNote: "Some explanation",
     });
     expect(result.success).toBe(false);
   });
@@ -94,6 +97,7 @@ describe("adminVerificationDecideSchema", () => {
       stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       decision: "resubmit",
       reasonCode: "blurry_image",
+      reasonNote: "ID photo is unreadable",
     });
     expect(result.success).toBe(true);
     if (result.success) {
@@ -105,8 +109,45 @@ describe("adminVerificationDecideSchema", () => {
     const result = adminVerificationDecideSchema.safeParse({
       stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       decision: "resubmit",
+      reasonNote: "Some explanation",
     });
     expect(result.success).toBe(false);
+  });
+
+  it("rejects rejected without reasonNote", () => {
+    const result = adminVerificationDecideSchema.safeParse({
+      stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      decision: "rejected",
+      reasonCode: "blurry_image",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects rejected with empty reasonNote", () => {
+    const result = adminVerificationDecideSchema.safeParse({
+      stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      decision: "rejected",
+      reasonCode: "blurry_image",
+      reasonNote: "   ",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects needs_resubmission without reasonNote", () => {
+    const result = adminVerificationDecideSchema.safeParse({
+      stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      decision: "needs_resubmission",
+      reasonCode: "blurry_image",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts approved without reasonNote", () => {
+    const result = adminVerificationDecideSchema.safeParse({
+      stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      decision: "approved",
+    });
+    expect(result.success).toBe(true);
   });
 });
 
@@ -192,6 +233,30 @@ describe("adminDsarDecideSchema", () => {
     const result = adminDsarDecideSchema.safeParse({
       requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       decision: "ignore",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("adminDsarCompleteSchema", () => {
+  it("accepts valid completion payload", () => {
+    const result = adminDsarCompleteSchema.safeParse({
+      requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      notes: "Export prepared and securely delivered",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts completion without notes", () => {
+    const result = adminDsarCompleteSchema.safeParse({
+      requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing requestId", () => {
+    const result = adminDsarCompleteSchema.safeParse({
+      notes: "done",
     });
     expect(result.success).toBe(false);
   });

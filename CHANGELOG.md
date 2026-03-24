@@ -1,5 +1,57 @@
 # VerifyMzansi — Recent Development Log
 
+## Next.js 16.2.0 Rollback to 16.1.5 (2026-03-20)
+
+- **Reason for rollback:** Production started returning Cloudflare 1101
+  `Worker threw exception` responses after upgrading to Next.js `16.2.0`, so the
+  app was rolled back to the closest supported pre-16.2 release to reduce
+  regression risk before considering a deeper runtime-entrypoint migration.
+- **Dependency rollback:** Pinned `next`, `@next/env`, and `eslint-config-next`
+  from `16.2.0` to `16.1.5` in `package.json` and regenerated `pnpm-lock.yaml`.
+  `@opennextjs/cloudflare@1.17.1` remained in place and resolved cleanly against
+  `next@16.1.5`.
+- **Code-path decision:** Kept the existing `src/middleware.ts` +
+  `src/proxy-handler.ts` request path unchanged because the smaller downgrade
+  validated successfully without restoring the older `src/proxy.ts` convention.
+- **Validation:** `pnpm install`, `pnpm run build`, and
+  `pnpm exec vitest run src/__tests__/proxy-middleware.test.ts` passed on
+  Windows. A full `pnpm run build:cloudflare` also passed from the Ubuntu WSL
+  ext4 workspace with Next.js `16.1.5` and OpenNext generating
+  `.open-next/worker.js` successfully.
+- **Deploy follow-up:** The first production deploy still returned HTTP 500
+  because `.env.local` contained `ENABLE_TEST_POSTING_BYPASS` and
+  `NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS`, and
+  `scripts/preflight-cloudflare.js` was not yet blanking those variables for
+  production builds. Adding both vars to `blockedProductionVars`, rebuilding,
+  and redeploying fixed startup and restored HTTP 200 responses for `/`,
+  `/login`, and `/api/health` on worker version
+  `d569f782-6774-41ba-ab29-9bd8d98a5049`.
+- **Residual warning:** The Cloudflare build still reports the expected Next.js
+  deprecation warning for the `src/middleware.ts` convention, but it does not
+  block the OpenNext bundle on `16.1.5`.
+
+## RLS Access-Boundary Hardening Follow-up (2026-03-19)
+
+- **Owner and self-service cleanup:** Removed the remaining low-risk admin reads
+  from `src/app/dashboard/businesses/page.tsx`,
+  `src/app/billing/success/page.tsx`, and `src/app/billing/cancel/page.tsx` so
+  those pages now use the authenticated Supabase client for caller-owned data.
+- **OAuth callback cleanup:** `src/app/(auth)/auth/callback/route.ts` now uses
+  the authenticated client created by `exchangeCodeForSession()` to check or
+  create the current user's `account_profiles` row instead of using an admin
+  client for that self bootstrap path.
+- **Audit artifact:** Added `docs/rls-access-boundary-hardening-2026-03-19.md`
+  to document the completed route hardening pass, residual intentional elevated
+  access, and regression evidence.
+- **Anonymous intake tightening:** `src/app/api/contact/route.ts` still uses
+  service access for lead and contact-event writes, but now rejects non-live
+  targets and supports legacy `seller_id` ownership when resolving listing or
+  promotion owners.
+- **Validation:** Focused callback regression passed with
+  `pnpm vitest run src/__tests__/auth-callback-route.test.ts`. Focused
+  contact-route regression passed with
+  `pnpm vitest run src/__tests__/contact-route.test.ts`.
+
 ## Cloudflare Warning Cleanup Without Runtime Migration (2026-03-12)
 
 - **Toolchain upgrades:** Bumped `@opennextjs/cloudflare` from `1.16.5` to
@@ -28,18 +80,19 @@
   this Cloudflare stack.
 - **Post-deploy follow-up:** Public routing and auth-gated redirects still
   worked, but `/api/health` returned `status: "degraded"` after deploy because
-  launch validation now reports `PayFast` and `Dev-only flags` failures in
-  production. That needs environment cleanup in Cloudflare, not code changes in
+  launch validation reported payment-provider and dev-only flag failures in
+  production. That needed environment cleanup in Cloudflare, not code changes in
   this warning-cleanup pass.
 
-## Cloudflare Middleware Compatibility Fix (2026-03-12)
+## Cloudflare Middleware Compatibility Fix (2026-03-20)
 
-- **Root cause fixed:** Next.js 16 `src/proxy.ts` runs on the Node.js runtime,
-  which OpenNext Cloudflare rejects with
+- **Root cause fixed:** Next.js 16 `src/proxy.ts` resolves to the Node.js
+  runtime, which OpenNext Cloudflare rejects with
   `Node.js middleware is not currently supported`.
-- **Implementation:** Replaced the active request gate with Edge
-  `src/middleware.ts`, removed `src/proxy.ts`, and kept the existing auth, CSP,
-  and route-protection logic intact.
+- **Implementation:** Restored Edge `src/middleware.ts` as the active request
+  gate, removed `src/proxy.ts`, kept the existing auth/CSP/route-protection
+  logic in `src/proxy-handler.ts`, and updated the Cloudflare preflight cleanup
+  so build-cache restores cannot reintroduce the stale proxy entry.
 - **Tests updated:** Middleware routing tests now import from
   `src/middleware.ts` and use the current naming.
 - **Validation:** `pnpm run build` passes and
@@ -191,8 +244,5 @@ Five-phase programme to raise the platform foundation score from 15/20 to 20/20.
 
 ## Database Operations
 
-- **Unseeding Test Data**
-  - Created and executed a new script (`scripts/unseed-development.ts`) to
-    programmatically delete the initial dummy seller accounts
-    (`dev_seller1@test.com`, etc.) alongside all of their automatically
-    generated marketplace listings, mall storefronts, and business profiles.
+- Removed legacy dummy development accounts and their generated marketplace
+  content during environment cleanup.

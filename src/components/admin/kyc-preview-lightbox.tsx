@@ -140,7 +140,11 @@ export function KycPreviewLightbox({
 
     async function loadBlob() {
       try {
-        const res = await fetch(`/api/admin/verification/evidence?artifactId=${artifact.id}`);
+        const res = await fetch(`/api/admin/verification/evidence`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ artifactId: artifact.id }),
+        });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           throw new Error(data.error || `HTTP ${res.status}`);
@@ -531,13 +535,7 @@ export function KycPreviewLightbox({
         <p className="text-[10px] text-muted-foreground">
           Decrypted server-side, displayed in-memory only. Do not screenshot or download.
         </p>
-        <style>{`
-          @media print {
-            .evidence-protected {
-              display: none !important;
-            }
-          }
-        `}</style>
+        {/* Print protection — moved to globals.css for CSP nonce compliance */}
       </DialogContent>
     </Dialog>
   );

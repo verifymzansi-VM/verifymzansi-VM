@@ -1,5 +1,43 @@
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
+export const ACTIVE_MARKETPLACE_AREAS = [
+  "MZANSI_MARKET",
+  "MZANSI_BUSINESS",
+  "PROMOTIONS_EVENTS",
+] as const satisfies readonly MarketplaceArea[];
+
+/**
+ * Legacy marketplace areas that have been replaced by MZANSI_BUSINESS.
+ * These are kept for backward compatibility with existing database records
+ * but should not be used for new subscriptions.
+ */
+export const LEGACY_MARKETPLACE_AREAS: readonly MarketplaceArea[] = [
+  "MALL_SHOPS",
+  "BUSINESS_ADS",
+] as const;
+
+/**
+ * Returns the canonical replacement for a legacy marketplace area.
+ * Returns the original area if it is not deprecated.
+ */
+export function getCanonicalArea(area: MarketplaceArea): MarketplaceArea {
+  if (area === "MALL_SHOPS" || area === "BUSINESS_ADS") {
+    return "MZANSI_BUSINESS";
+  }
+  return area;
+}
+
+/**
+ * Returns true if the area is a legacy (deprecated) marketplace area.
+ */
+export function isLegacyArea(area: MarketplaceArea): boolean {
+  return (LEGACY_MARKETPLACE_AREAS as readonly string[]).includes(area);
+}
+
+export function isActiveMarketplaceArea(area: MarketplaceArea): boolean {
+  return (ACTIVE_MARKETPLACE_AREAS as readonly MarketplaceArea[]).includes(area);
+}
+
 /* ── Plan Definitions ────────────────────────────────────── */
 export interface PlanDefinition {
   area: MarketplaceArea;
@@ -224,8 +262,11 @@ export const PLANS: PlanDefinition[] = [
       coverVideoAllowed: false,
     },
   },
-  /** @deprecated Use MZANSI_BUSINESS plans instead */
-  // Mall Shops (legacy)
+  /**
+   * @deprecated Use MZANSI_BUSINESS plans instead.
+   * Kept for backward compatibility with existing database subscriptions.
+   * Do NOT create new subscriptions with MALL_SHOPS — use MZANSI_BUSINESS.
+   */
   {
     area: "MALL_SHOPS",
     tier: "starter",
@@ -280,8 +321,11 @@ export const PLANS: PlanDefinition[] = [
       coverVideoAllowed: true,
     },
   },
-  /** @deprecated Use MZANSI_BUSINESS plans instead */
-  // Business Ads (legacy)
+  /**
+   * @deprecated Use MZANSI_BUSINESS plans instead.
+   * Kept for backward compatibility with existing database subscriptions.
+   * Do NOT create new subscriptions with BUSINESS_ADS — use MZANSI_BUSINESS.
+   */
   {
     area: "BUSINESS_ADS",
     tier: "starter",
@@ -360,7 +404,11 @@ export const PAY_PER_POST = {
   "30_days": 3000,
 } as const;
 
-/* ── Trial Config (deprecated — use FREE_POST_CONFIG) ───── */
+/**
+ * @deprecated Use FREE_POST_CONFIG instead.
+ * Kept for backward compatibility — existing code that references
+ * TRIAL_CONFIG.tier or TRIAL_CONFIG.durationDays still works.
+ */
 export const TRIAL_CONFIG = {
   durationDays: 30,
   tier: "starter" as PlanTier,

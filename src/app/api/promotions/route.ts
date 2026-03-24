@@ -5,7 +5,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { promotionSchema } from "@/lib/validations/promotion";
 import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { checkLocalRateLimit, checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { isPostingLimitBypassEnabled } from "@/lib/utils/posting-limit-bypass";
 import {
@@ -15,8 +15,13 @@ import {
   type PromotionType,
 } from "@/types/enums";
 import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
+import {
+  getStoredPromotionTypesForFilter,
+  parsePromotionFilterType,
+} from "@/lib/promotions/type-taxonomy";
 import { normalizeBusinessCategoryParam } from "@/lib/utils/marketplace-query";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { getPromotionSocialAuthorizationWriteResult } from "@/lib/promotions/social-authorization";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
   applyOwnerFilter,
@@ -26,8 +31,21 @@ import {
   withOwnerColumn,
   withOwnerField,
 } from "@/lib/account/compat";
+import { userOwnsBusiness } from "@/lib/account/owned-business";
+import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { hasPhoneNumber } from "@/lib/account/require-phone";
+import { parseAndValidateSearchParams, parseJsonRequest } from "@/lib/utils/api";
+import {
+  createBoundedIntegerSchema,
+  optionalTrimmedStringSchema,
+  optionalUuidSchema,
+} from "@/lib/validations/shared";
+import { toFieldErrorMap } from "@/lib/validations/zod-errors";
+import { z } from "zod";
 
 const log = createLogger("PromotionsCRUD");
 const AREA: MarketplaceArea = "PROMOTIONS_EVENTS";
@@ -36,6 +54,7 @@ type PromotionQueryOps = {
   eq: (column: string, value: unknown) => PromotionQueryOps;
   gt: (column: string, value: string) => PromotionQueryOps;
   lt: (column: string, value: string) => PromotionQueryOps;
+  in: (column: string, values: unknown[]) => PromotionQueryOps;
   or: (filters: string) => PromotionQueryOps;
 };
 
@@ -59,6 +78,8 @@ type PromotionResultRow = {
   contact_methods?: string[] | null;
   start_date?: string | null;
   end_date?: string | null;
+  social_distribution_authorized?: boolean;
+  social_distribution_revoked_at?: string | null;
   boost_until?: string | null;
   featured_until?: string | null;
   view_count?: number | null;
@@ -72,6 +93,28 @@ function normalizeEventStateParam(value: string | null): PromotionEventState | n
   }
   return null;
 }
+
+const promotionsQuerySchema = z.object({
+  type: optionalTrimmedStringSchema,
+  category: optionalTrimmedStringSchema,
+  province: optionalTrimmedStringSchema,
+  city: optionalTrimmedStringSchema,
+  q: optionalTrimmedStringSchema,
+  business_id: optionalUuidSchema,
+  event_state: optionalTrimmedStringSchema,
+  page: createBoundedIntegerSchema({
+    defaultValue: 1,
+    min: 1,
+    max: 10_000,
+    fieldName: "page",
+  }),
+  limit: createBoundedIntegerSchema({
+    defaultValue: 24,
+    min: 1,
+    max: 50,
+    fieldName: "limit",
+  }),
+});
 
 function applyEventStateFilter<T>(query: T, eventState: PromotionEventState, nowIso: string): T {
   const builder = query as T & PromotionQueryOps;
@@ -109,6 +152,11 @@ function isPlaceholderPromotion(promotion: { title: string | null; description?:
  */
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -118,8 +166,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "promotions");
+    let admin: ReturnType<typeof createAdminClient> | null = null;
+    const getAdmin = () => {
+      admin ??= createAdminClient();
+      return admin;
+    };
+    const ownerColumn = await getOwnerColumn(supabase, "promotions");
     const ip = getClientIp(request);
     const rl = await checkRateLimit({
       key: user.id,
@@ -134,22 +186,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Check account profile exists
-    const { data: profile } = await admin
-      .from("account_profiles")
-      .select("id, account_verification_status")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const verification = await resolveAccountVerification(supabase, user.id);
+    const profile = verification.profile;
 
     if (!profile) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
     }
 
-    if (!isVerifiedMember(readAccountVerificationStatus(profile))) {
+    if (!isVerifiedMember(verification.accountVerificationStatus)) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
     }
 
+    // Phone gate: prevent content creation without a verified phone number
+    if (!(await hasPhoneNumber(supabase, user.id))) {
+      return NextResponse.json(
+        { error: "Phone number required", redirectUrl: "/dashboard/complete-profile" },
+        { status: 403 }
+      );
+    }
+
     // ── Check entitlement / plan limits ──────────────────────
-    const { data: activeEntitlement } = await admin
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -164,31 +221,10 @@ export async function POST(request: NextRequest) {
     const tier = (activeEntitlement?.tier as string) || null;
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
-    // Check free post availability for unpaid users
-    if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { data: freePostRow } = await admin
-        .from("free_posts_used")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("area", AREA)
-        .maybeSingle();
-
-      if (freePostRow) {
-        return NextResponse.json(
-          {
-            error: "Free post already used",
-            reason:
-              "You have already used your free post for Promotions & Events. Subscribe to a plan to post more.",
-          },
-          { status: 403 }
-        );
-      }
-    }
-
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       // Paid plan — check promotion count against plan limits
       const countQuery = applyOwnerFilter(
-        admin
+        supabase
           .from("promotions")
           .select("id", { count: "exact", head: true })
           .neq("status", "rejected"),
@@ -209,18 +245,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Parse and validate body
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
+    const body = await parseJsonRequest(request);
+    if (body === null) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
     const parsed = promotionSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
+        { error: "Validation failed", details: toFieldErrorMap(parsed.error) },
         { status: 400 }
       );
     }
@@ -228,6 +261,13 @@ export async function POST(request: NextRequest) {
     const data = parsed.data;
     const categoryKey =
       data.category_key ?? inferPromotionCategoryKey(data.category, data.promotion_type);
+
+    if (data.business_id) {
+      const ownsBusiness = await userOwnsBusiness(supabase, user.id, data.business_id);
+      if (!ownsBusiness) {
+        return NextResponse.json({ error: "Linked business not found" }, { status: 404 });
+      }
+    }
 
     // ── Enforce photo/video limits based on plan ─────────────
     const ent =
@@ -262,10 +302,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!hasPaidPlan && !postingLimitBypassEnabled) {
+      const { error: claimError } = await supabase
+        .from("free_posts_used")
+        .insert({ user_id: user.id, area: AREA });
+
+      if (claimError) {
+        if (claimError.code === "23505") {
+          return NextResponse.json(
+            {
+              error: "Free post already used",
+              reason:
+                "You have already used your free post for Promotions & Events. Subscribe to a plan to post more.",
+              upgradeUrl: "/billing",
+            },
+            { status: 403 }
+          );
+        }
+
+        log.error("Failed to claim free post slot", {
+          error: claimError.message,
+          code: claimError.code,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
+      }
+    }
+
     // Build the promotion row
     const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
+    const socialAuthorizationWriteResult = getPromotionSocialAuthorizationWriteResult(
+      data.socialAuthorization,
+      null
+    );
 
-    const { data: promotion, error: insertError } = await admin
+    const { data: promotion, error: insertError } = await supabase
       .from("promotions")
       .insert(
         withOwnerField(
@@ -285,6 +356,20 @@ export async function POST(request: NextRequest) {
             contact_methods: data.contact_methods,
             start_date: data.start_date || null,
             end_date: data.end_date || null,
+            social_distribution_authorized:
+              socialAuthorizationWriteResult.social_distribution_authorized,
+            social_distribution_authorized_at:
+              socialAuthorizationWriteResult.social_distribution_authorized_at ?? null,
+            social_distribution_revoked_at:
+              socialAuthorizationWriteResult.social_distribution_revoked_at ?? null,
+            social_authorizer_name: socialAuthorizationWriteResult.social_authorizer_name,
+            social_authorizer_role: socialAuthorizationWriteResult.social_authorizer_role,
+            social_authorizer_relationship:
+              socialAuthorizationWriteResult.social_authorizer_relationship,
+            social_authorization_version:
+              socialAuthorizationWriteResult.social_authorization_version,
+            social_monetization_acknowledged:
+              socialAuthorizationWriteResult.social_monetization_acknowledged,
             business_id: data.business_id || null,
             status: "pending_moderation",
           },
@@ -297,20 +382,36 @@ export async function POST(request: NextRequest) {
 
     if (insertError || !promotion) {
       log.error("Failed to create promotion", { error: insertError?.message });
+      if (!hasPaidPlan && !postingLimitBypassEnabled) {
+        await getAdmin().from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+      }
       return NextResponse.json({ error: "Failed to create promotion" }, { status: 500 });
     }
 
-    // ── Mark free post as used if no paid entitlement ────────
-    if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: freePostError } = await admin
-        .from("free_posts_used")
-        .upsert({ user_id: user.id, area: AREA }, { onConflict: "user_id,area" });
+    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
+      const postCountQuery = applyOwnerFilter(
+        supabase
+          .from("promotions")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "rejected"),
+        ownerColumn,
+        user.id
+      );
 
-      if (freePostError) {
-        log.error("Failed to mark free post as used", {
-          error: freePostError.message,
+      const { count: postInsertCount } = await postCountQuery;
+      const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
+
+      if (!postCheck.allowed) {
+        await getAdmin().from("promotions").delete().eq("id", promotion.id);
+        log.warn("Rolled back promotion due to concurrent limit breach", {
+          promotionId: promotion.id,
           userId: user.id,
+          count: postInsertCount,
         });
+        return NextResponse.json(
+          { error: "Promotion limit reached", reason: postCheck.reason },
+          { status: 403 }
+        );
       }
     }
 
@@ -330,6 +431,21 @@ export async function POST(request: NextRequest) {
           tier,
         },
       });
+
+      if (socialAuthorizationWriteResult.event === "granted") {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "promotion_social_authorization_granted",
+          targetType: "promotion",
+          targetId: promotion.id,
+          area: AREA,
+          metadata: {
+            relationship: socialAuthorizationWriteResult.social_authorizer_relationship,
+            version: socialAuthorizationWriteResult.social_authorization_version,
+          },
+        });
+      }
     } catch (auditErr) {
       log.error("Audit log failed (non-fatal)", {
         error: auditErr instanceof Error ? auditErr.message : "Unknown",
@@ -351,19 +467,51 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    // Rate limit public reads by IP (local-only — external worker has wrong
+    // limits for read actions; 120 req/min is generous for normal browsing).
+    const ip = getClientIp(request) || "unknown";
+    const rl = checkLocalRateLimit(ip, "promotions:read", 120);
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     const admin = createAdminClient();
     const ownerColumn = await getOwnerColumn(admin, "promotions");
-    const { searchParams } = request.nextUrl;
+    const parsedQuery = parseAndValidateSearchParams(
+      request.nextUrl.searchParams,
+      promotionsQuerySchema,
+      {
+        validationErrorMessage: "Invalid promotions query",
+      }
+    );
+    if (!parsedQuery.success) {
+      return parsedQuery.response;
+    }
 
-    const promotionType = searchParams.get("type");
-    const categoryKey = normalizeBusinessCategoryParam(searchParams.get("category"));
-    const province = searchParams.get("province");
-    const city = searchParams.get("city");
-    const search = searchParams.get("q");
-    const businessId = searchParams.get("business_id");
-    const eventState = normalizeEventStateParam(searchParams.get("event_state"));
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
+    const query = parsedQuery.data;
+    const promotionType = query.type ? parsePromotionFilterType(query.type) : null;
+    if (query.type && !promotionType) {
+      return NextResponse.json({ error: "Invalid promotion type" }, { status: 400 });
+    }
+
+    const categoryKey = query.category ? normalizeBusinessCategoryParam(query.category) : undefined;
+    if (query.category && !categoryKey) {
+      return NextResponse.json({ error: "Invalid promotion category" }, { status: 400 });
+    }
+
+    const province = query.province;
+    const city = query.city;
+    const search = query.q;
+    const businessId = query.business_id;
+    const eventState = normalizeEventStateParam(query.event_state ?? null);
+    if (query.event_state && !eventState) {
+      return NextResponse.json({ error: "Invalid event_state" }, { status: 400 });
+    }
+    const page = query.page;
+    const limit = query.limit;
     const offset = (page - 1) * limit;
     const nowIso = new Date().toISOString();
 
@@ -372,13 +520,14 @@ export async function GET(request: NextRequest) {
         .from("promotions")
         .select(selectClause, { count: "exact" })
         .eq("status", "live")
-        .not("title", "ilike", "%seed%")
-        .not("title", "ilike", "%[seed]%")
-        .not("title", "ilike", "%demo%")
-        .not("title", "ilike", "%sample%");
+        .or(`end_date.is.null,end_date.gte.${nowIso}`);
 
       if (promotionType) {
-        query = query.eq("promotion_type", promotionType);
+        const storedTypes = getStoredPromotionTypesForFilter(promotionType);
+        query =
+          storedTypes.length === 1
+            ? query.eq("promotion_type", storedTypes[0])
+            : query.in("promotion_type", storedTypes);
       }
       if (businessId) {
         query = query.eq("business_id", businessId);
@@ -393,7 +542,10 @@ export async function GET(request: NextRequest) {
         query = query.eq("location_city", city);
       }
       if (search) {
-        const safeSearch = search.replace(/[,.()\\/]/g, "");
+        const safeSearch = search
+          .replace(/[,.()\\/]/g, "")
+          .replace(/%/g, "\\%")
+          .replace(/_/g, "\\_");
         if (safeSearch) {
           query = query.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
         }
@@ -486,7 +638,11 @@ export async function GET(request: NextRequest) {
           .in("user_id", accountIds)
       : { data: [] };
     const { data: businesses } = businessIds.length
-      ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
+      ? await admin
+          .from("businesses")
+          .select("id, business_name, logo_url")
+          .eq("status", "live")
+          .in("id", businessIds)
       : { data: [] };
 
     const serializedAccountProfiles =

@@ -4,15 +4,26 @@
  * Logs access to kyc_evidence_access_logs.
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { downloadKycDocument } from "@/lib/services/storage";
 import crypto from "crypto";
-import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
+import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
+import { getLinkedEvidenceArtifactIds } from "@/lib/services/kyc-evidence-access";
 import { createLogger } from "@/lib/utils/logger";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("EvidenceProxy");
+const evidenceQuerySchema = z.object({
+  artifactId: uuidSchema,
+});
+const evidenceBodySchema = z.object({
+  artifactId: uuidSchema,
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,25 +38,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const role = getRoleFromUser(user);
-    if (!isModeratorOrAdmin(user) || !role) {
+    const role = await verifyStaffActorRoleFromDb(user);
+    if (!role) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Get artifact ID from query params
-    const artifactId = request.nextUrl.searchParams.get("artifactId");
-    if (!artifactId) {
+    const rl = checkLocalRateLimit(user.id, "admin:evidence:view");
+    if (rl.limited) {
       return NextResponse.json(
-        { error: "artifactId query parameter is required" },
-        { status: 400 }
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
       );
     }
 
-    // Validate UUID format to prevent data enumeration
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_RE.test(artifactId)) {
-      return NextResponse.json({ error: "Invalid artifact ID format" }, { status: 400 });
+    // Get artifact ID from query params
+    const parsedQuery = parseAndValidateSearchParams(
+      request.nextUrl.searchParams,
+      evidenceQuerySchema,
+      {
+        validationErrorMessage: "artifactId query parameter is required",
+        includeValidationDetails: false,
+      }
+    );
+    if (!parsedQuery.success) {
+      return parsedQuery.response;
     }
+    const { artifactId } = parsedQuery.data;
 
     const adminClient = createAdminClient();
 
@@ -58,6 +76,48 @@ export async function GET(request: NextRequest) {
 
     if (artifactErr || !artifact) {
       return NextResponse.json({ error: "Artifact not found" }, { status: 404 });
+    }
+
+    const REVIEWABLE_STATES = [
+      "submitted",
+      "pending_review",
+      "pending_auto",
+      "auto_approved",
+      "auto_rejected",
+    ];
+    const { count: activeStepCount } = await adminClient
+      .from("verification_steps")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", artifact.user_id)
+      .in("status", REVIEWABLE_STATES);
+
+    if (!activeStepCount || activeStepCount === 0) {
+      log.warn("Evidence access denied: no active review case for user", {
+        actorId: user.id,
+        targetUserId: artifact.user_id,
+        artifactId,
+      });
+      return NextResponse.json(
+        { error: "No active verification case for this user" },
+        { status: 403 }
+      );
+    }
+
+    const allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, artifact.user_id);
+
+    if (!allowedArtifactIds.includes(artifact.id)) {
+      log.warn(
+        "Evidence access denied: artifact is not linked to the current verification session",
+        {
+          actorId: user.id,
+          targetUserId: artifact.user_id,
+          artifactId,
+        }
+      );
+      return NextResponse.json(
+        { error: "Artifact is not linked to the current verification session" },
+        { status: 403 }
+      );
     }
 
     // Validate IP hashing secret — required in production for privacy-compliant logging
@@ -122,7 +182,10 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -139,4 +202,37 @@ function hashIp(ip: string, secret: string | undefined): string {
   }
   const key = secret || "dev-only-local-not-for-production";
   return crypto.createHmac("sha256", key).update(ip).digest("hex").slice(0, 16);
+}
+
+/**
+ * POST /api/admin/verification/evidence
+ * Same as GET but reads artifactId from the JSON body instead of query params
+ * to prevent sensitive IDs from leaking into server logs and browser history.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const parsedBody = await parseAndValidateJsonRequest(request, evidenceBodySchema, {
+      invalidJsonMessage: "Invalid JSON body",
+      validationErrorMessage: "artifactId is required in request body",
+      includeValidationDetails: false,
+    });
+    if (!parsedBody.success) {
+      return parsedBody.response;
+    }
+    const { artifactId } = parsedBody.data;
+
+    // Rewrite into the query-string so the GET handler logic can be reused
+    const url = new URL(request.url);
+    url.searchParams.set("artifactId", artifactId);
+    const syntheticRequest = new NextRequest(url, {
+      method: "GET",
+      headers: request.headers,
+    });
+    return GET(syntheticRequest);
+  } catch (err) {
+    log.error("POST wrapper error", {
+      error: err instanceof Error ? err.message : "unknown error",
+    });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

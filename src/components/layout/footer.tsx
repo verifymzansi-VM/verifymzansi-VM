@@ -1,20 +1,25 @@
 import Link from "next/link";
 import { BrandLogo } from "../shared/brand-logo";
 import { Separator } from "@/components/ui/separator";
+import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
+import { OfficialSocialLinks } from "@/components/shared/official-social-links";
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
+  const runtimeConfig = getServerPublicRuntimeConfig();
 
   return (
     <footer className="border-t bg-warm-50 dark:bg-warm-950">
-      <div className="container-page py-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="container-page py-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-5">
           {/* Brand */}
           <div className="space-y-2">
             <Link href="/" className="flex items-center gap-1.5">
               <BrandLogo size="sm" />
             </Link>
-            <p className="text-xs text-muted-foreground max-w-xs">SA&apos;s trusted marketplace.</p>
+            <p className="text-xs text-muted-foreground max-w-xs">
+              Promote products, services, and trusted brands with verification-first visibility.
+            </p>
           </div>
 
           {/* Marketplace */}
@@ -38,6 +43,12 @@ export function Footer() {
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Promotions & Events
+              </Link>
+              <Link
+                href="/advertise"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Advertise
               </Link>
             </nav>
           </div>
@@ -91,6 +102,12 @@ export function Footer() {
               </Link>
             </nav>
           </div>
+
+          <OfficialSocialLinks
+            links={runtimeConfig.officialSocialLinks}
+            className="space-y-2"
+            linkClassName="inline-flex items-center rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          />
         </div>
 
         <Separator className="my-3 sm:my-4" />

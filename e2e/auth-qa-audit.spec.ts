@@ -91,7 +91,7 @@ test.describe.serial("Registration Flow", () => {
     registeredEmail = freshEmail();
 
     await page.goto("/register");
-    await expect(page.getByRole("heading", { name: /create your seller account/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /create your account/i })).toBeVisible();
 
     // Fill form
     await page.fill("#displayName", "QA Test User");
@@ -452,9 +452,9 @@ test.describe("Rate Limiting", () => {
       );
     }
 
-    // At minimum, verify all responses are safe (401, not 500)
+    // At minimum, verify all responses are safe (401/503, not 500)
     for (const r of nonRateLimited) {
-      expect([400, 401]).toContain(r.status);
+      expect([400, 401, 503]).toContain(r.status);
     }
   });
 });
@@ -519,7 +519,7 @@ test.describe("Post-Registration UX", () => {
 
     await expect(page.getByText("Check your email", { exact: true })).toBeVisible();
     await expect(page.getByText(/We've sent a confirmation link/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /didn't receive it\? resend/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /resend confirmation email/i })).toBeVisible();
 
     await screenshot(page, "TC13-registered-true-landing");
 

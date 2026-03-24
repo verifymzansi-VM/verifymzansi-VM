@@ -1,21 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 import Page from "./page";
 
-const { notFoundMock } = vi.hoisted(() => ({
-  notFoundMock: vi.fn(() => {
-    throw new Error("notFound");
+const { redirectMock } = vi.hoisted(() => ({
+  redirectMock: vi.fn((url: string) => {
+    throw new Error(`redirect:${url}`);
   }),
 }));
 
 vi.mock("next/navigation", () => ({
-  notFound: notFoundMock,
+  redirect: redirectMock,
 }));
 
 describe("mall-shops/[mallId] page", () => {
-  it("returns notFound for legacy mall landing pages", async () => {
+  it("redirects to mzansi-business detail page", async () => {
     await expect(Page({ params: Promise.resolve({ mallId: "mall-1" }) })).rejects.toThrow(
-      "notFound"
+      "redirect:/mzansi-business/mall-1"
     );
-    expect(notFoundMock).toHaveBeenCalled();
+    expect(redirectMock).toHaveBeenCalledWith("/mzansi-business/mall-1");
   });
 });

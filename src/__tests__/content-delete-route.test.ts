@@ -47,16 +47,14 @@ describe("POST /api/content/delete", () => {
 
   it("returns 404 when the item cannot be found", async () => {
     mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
-      },
-    });
-    mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: "not found" } }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: "not found" } }),
       }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
     });
 
     const res = await POST(
@@ -71,19 +69,17 @@ describe("POST /api/content/delete", () => {
 
   it("returns 403 when the item belongs to a different owner", async () => {
     mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
-      },
-    });
-    mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
+        maybeSingle: vi.fn().mockResolvedValue({
           data: { id: "listing-1", status: "live", owner_id: "user-2" },
           error: null,
         }),
       }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
     });
 
     const res = await POST(
@@ -103,7 +99,7 @@ describe("POST /api/content/delete", () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
+          maybeSingle: vi.fn().mockResolvedValue({
             data: { id: "listing-1", status: "live", owner_id: "user-1" },
             error: null,
           }),
@@ -117,11 +113,11 @@ describe("POST /api/content/delete", () => {
     });
 
     mockCreateClient.mockResolvedValue({
+      from,
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
       },
     });
-    mockCreateAdminClient.mockReturnValue({ from });
 
     const res = await POST(
       createRequest({
@@ -133,5 +129,66 @@ describe("POST /api/content/delete", () => {
     expect(res.status).toBe(200);
     expect(deleteEq).toHaveBeenCalledWith("id", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11");
     expect(mockLogAuditEvent).toHaveBeenCalled();
+  });
+
+  it("deletes MZANSI_BUSINESS items using owner-column compatibility", async () => {
+    const deleteEq = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn((table: string) => {
+      if (table === "businesses") {
+        return {
+          select: vi.fn((fields?: string) => {
+            if (fields === "id, owner_id") {
+              return {
+                limit: vi.fn().mockResolvedValue({
+                  error: { code: "42703", message: "column businesses.owner_id does not exist" },
+                }),
+              };
+            }
+
+            if (fields === "id, seller_id") {
+              return {
+                limit: vi.fn().mockResolvedValue({ error: null }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "business-1", status: "rejected", seller_id: "user-1" },
+                error: null,
+              }),
+            };
+          }),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "business-1", status: "rejected", seller_id: "user-1" },
+            error: null,
+          }),
+          delete: vi.fn().mockReturnValue({
+            eq: deleteEq,
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({ from });
+
+    const res = await POST(
+      createRequest({
+        itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        area: "MZANSI_BUSINESS",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(deleteEq).toHaveBeenCalledWith("id", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11");
   });
 });

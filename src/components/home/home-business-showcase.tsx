@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { BusinessPreviewCard } from "./business-preview-card";
@@ -6,27 +7,33 @@ import { AutoScrollRail } from "./auto-scroll-rail";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import type { BusinessType } from "@/types/enums";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
+import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
+import {
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+  shouldHidePlaywrightFixtures,
+} from "@/lib/supabase/playwright-visual-fixtures";
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
 }
 
 export async function HomeBusinessShowcase() {
+  const cookieStore = await cookies();
+  const hideFixtures = shouldHidePlaywrightFixtures(
+    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+  );
   const supabase = await createClient();
   const { data: businesses } = await supabase
     .from("businesses")
-    .select(
-      "id, business_name, description, cover_photo, cover_video, video_thumbnail, logo_url, business_type, location_province, location_city, boost_until"
-    )
+    .select("*")
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS")
-    .not("business_name", "ilike", "%seed%")
-    .not("business_name", "ilike", "%[seed]%")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(16);
 
   const items = (businesses ?? [])
+    .filter((business) => !shouldHidePlaywrightFixtureRowWhenEnabled(business, hideFixtures))
     .filter(
       (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
     )
@@ -57,7 +64,7 @@ export async function HomeBusinessShowcase() {
           {items.map((b) => (
             <div
               key={b.id}
-              className="min-w-[280px] max-w-[320px] sm:min-w-[320px] sm:max-w-[320px]"
+              className="min-w-[240px] max-w-[264px] sm:min-w-[264px] sm:max-w-[264px]"
             >
               <BusinessPreviewCard
                 href={`/mzansi-business/${b.id}`}
@@ -68,6 +75,8 @@ export async function HomeBusinessShowcase() {
                 businessType={(b.business_type || "general_store") as BusinessType}
                 city={b.location_city ?? "South Africa"}
                 provinceCode={provinceCode(b.location_province ?? "ZA")}
+                boosted={b.boost_until ? new Date(b.boost_until) > new Date() : false}
+                featured={b.featured_until ? new Date(b.featured_until) > new Date() : false}
               />
             </div>
           ))}

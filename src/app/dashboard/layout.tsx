@@ -4,12 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import {
-  ACCOUNT_PROFILE_TABLE,
-  applyOwnerFilter,
-  getOwnerColumn,
-  readAccountVerificationStatus,
-} from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_TABLE, applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
+import { summarizeVerification } from "@/lib/account/verification-summary";
 import {
   DashboardSidebar,
   type DashboardSidebarBadges,
@@ -37,6 +33,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         const [
           unreadLeads,
+          unreadNotifications,
           rejectedListings,
           pendingModeration,
           verificationSteps,
@@ -47,6 +44,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             leadOwnerColumn,
             user.id
           ),
+          supabase
+            .from("notifications")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", user.id)
+            .eq("read", false),
           applyOwnerFilter(
             supabase
               .from("listings")
@@ -65,9 +67,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           ),
           supabase
             .from("verification_steps")
-            .select("status")
+            .select("step_type, status")
             .eq("user_id", user.id)
-            .in("status", ["approved", "pending"]),
+            .in("status", ["approved", "pending", "rejected", "needs_resubmission"]),
           supabase
             .from(ACCOUNT_PROFILE_TABLE)
             .select("account_verification_status")
@@ -75,17 +77,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             .single(),
         ]);
 
-        const verificationStatus = readAccountVerificationStatus(accountProfile.data);
-        const allStepsSubmitted = (verificationSteps.data?.length ?? 0) >= 4;
+        const verificationSummary = summarizeVerification(
+          accountProfile.data?.account_verification_status,
+          verificationSteps.data
+        );
 
         setBadges({
           unreadLeads: unreadLeads.count || 0,
+          unreadNotifications: unreadNotifications.count || 0,
           rejectedListings: rejectedListings.count || 0,
           pendingModeration: pendingModeration.count || 0,
-          incompleteVerification: !allStepsSubmitted && verificationStatus !== "verified",
-          pendingReview:
-            verificationStatus === "pending_review" ||
-            (allStepsSubmitted && verificationStatus !== "verified"),
+          incompleteVerification:
+            verificationSummary.accountVerificationStatus === "incomplete" ||
+            verificationSummary.accountVerificationStatus === "rejected",
+          pendingReview: verificationSummary.accountVerificationStatus === "pending_review",
         });
       } catch {
         // Non-critical — sidebar works fine without badges

@@ -3,8 +3,7 @@
 import { useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Header } from "@/components/layout/header";
-import { Footer } from "@/components/layout/footer";
+import Link from "next/link";
 
 export default function DashboardError({
   error,
@@ -19,13 +18,20 @@ export default function DashboardError({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header isAuthenticated />
+      <header className="sticky top-0 z-50 w-full border-b bg-background">
+        <div className="container-page flex h-16 items-center">
+          <Link href="/" className="text-lg font-bold">
+            VerifyMzansi
+          </Link>
+        </div>
+      </header>
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-4 text-center">
         <AlertTriangle className="h-8 w-8 text-destructive" />
         <div className="space-y-2">
           <h1 className="text-xl font-display font-bold">Dashboard Error</h1>
           <p className="text-muted-foreground max-w-md">
-            Something went wrong loading your dashboard. Please try again.
+            We couldn&apos;t load your dashboard summary. Retry the page or reload the dashboard
+            shell.
           </p>
         </div>
         <div className="flex gap-3">
@@ -35,7 +41,6 @@ export default function DashboardError({
           <Button onClick={() => reset()}>Retry</Button>
         </div>
       </main>
-      <Footer />
     </div>
   );
 }

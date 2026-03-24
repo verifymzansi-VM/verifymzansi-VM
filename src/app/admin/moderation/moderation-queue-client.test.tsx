@@ -1,0 +1,139 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ModerationQueueClient } from "./moderation-queue-client";
+import type { ModerationItem } from "./moderation-preview-panel";
+
+const mockRefresh = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: mockRefresh }),
+}));
+
+vi.mock("@/lib/utils/media-url", () => ({
+  normalizeMediaUrl: (value: string) => value,
+}));
+
+vi.mock("./moderation-preview-panel", () => ({
+  ModerationPreviewPanel: ({ item }: { item: { title?: string } }) => (
+    <div>preview:{item.title}</div>
+  ),
+}));
+
+const items: ModerationItem[] = [
+  {
+    id: "listing-1",
+    title: "Used iPhone 15",
+    status: "pending_moderation",
+    created_at: "2026-03-20T08:00:00.000Z",
+    category: "electronics",
+    owner_id: "user-1",
+    area: "MZANSI_MARKET",
+    areaLabel: "Mzansi Market",
+    itemType: "Listing",
+    photos: ["https://example.com/listing.jpg"],
+  },
+  {
+    id: "business-1",
+    title: "Nomsa Beauty Studio",
+    status: "pending_moderation",
+    created_at: "2026-03-20T09:00:00.000Z",
+    owner_id: "user-2",
+    area: "MZANSI_BUSINESS",
+    areaLabel: "Mzansi Business",
+    itemType: "Business",
+  },
+  {
+    id: "promotion-1",
+    title: "Weekend Sale",
+    status: "pending_moderation",
+    created_at: "2026-03-20T10:00:00.000Z",
+    owner_id: "user-3",
+    area: "PROMOTIONS_EVENTS",
+    areaLabel: "Promotions & Events",
+    itemType: "Promotion",
+  },
+];
+
+describe("ModerationQueueClient", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      })
+    );
+  });
+
+  it("filters moderation items by area", () => {
+    render(<ModerationQueueClient items={items} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Mzansi Business \(1\)/i }));
+
+    expect(screen.getByText("Nomsa Beauty Studio")).toBeInTheDocument();
+    expect(screen.queryByText("Used iPhone 15")).not.toBeInTheDocument();
+    expect(screen.queryByText("Weekend Sale")).not.toBeInTheDocument();
+  });
+
+  it("requires a rejection reason before submitting", async () => {
+    render(<ModerationQueueClient items={items} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /reject/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /^Reject$/i }));
+
+    expect(await screen.findByText(/please provide a rejection reason/i)).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("submits approve and reject decisions with the exact moderation payload", async () => {
+    render(<ModerationQueueClient items={items} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /approve/i })[2]);
+    fireEvent.click(screen.getByRole("button", { name: /^Publish$/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        1,
+        "/api/admin/content/decide",
+        expect.objectContaining({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itemId: "promotion-1",
+            area: "PROMOTIONS_EVENTS",
+            decision: "approve",
+            reason: undefined,
+          }),
+        })
+      );
+    });
+
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /reject/i })[1]);
+    fireEvent.change(screen.getByLabelText(/rejection reason/i), {
+      target: { value: "Missing operating hours" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Reject$/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        2,
+        "/api/admin/content/decide",
+        expect.objectContaining({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itemId: "business-1",
+            area: "MZANSI_BUSINESS",
+            decision: "reject",
+            reason: "Missing operating hours",
+          }),
+        })
+      );
+    });
+
+    expect(mockRefresh).toHaveBeenCalledTimes(2);
+  });
+});

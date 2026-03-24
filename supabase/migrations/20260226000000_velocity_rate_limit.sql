@@ -33,7 +33,6 @@ BEGIN
   RETURN recent_count < p_max_per_24h;
 END;
 $$;
-
 -- Grant execute to authenticated users (called via service role client in practice)
 GRANT EXECUTE ON FUNCTION public.check_kyc_velocity(UUID, TEXT, INTEGER) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.check_kyc_velocity(UUID, TEXT, INTEGER) TO service_role;

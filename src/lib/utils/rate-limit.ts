@@ -47,7 +47,8 @@ function cleanupExpiredBuckets(): void {
  */
 export function checkLocalRateLimit(
   key: string,
-  action: string
+  action: string,
+  maxRequests: number = LOCAL_MAX_REQUESTS
 ): { limited: boolean; retryAfter?: number } {
   cleanupExpiredBuckets();
 
@@ -60,7 +61,7 @@ export function checkLocalRateLimit(
     // LRU: move to end of Map insertion order by re-inserting
     LOCAL_BUCKETS.delete(bucketKey);
     LOCAL_BUCKETS.set(bucketKey, existing);
-    if (existing.count > LOCAL_MAX_REQUESTS) {
+    if (existing.count > maxRequests) {
       const retryAfter = Math.ceil((existing.expiresAt - now) / 1000);
       return { limited: true, retryAfter };
     }
@@ -84,11 +85,97 @@ interface RateLimitOptions {
   action: string;
   /** Optional device/session identifier */
   deviceId?: string;
+  /**
+   * How to behave when the shared rate-limiter worker is unavailable.
+   * `local` preserves availability with a per-instance fallback.
+   * `block` fails closed for sensitive flows that should not continue without shared abuse controls.
+   */
+  degradedMode?: "local" | "block";
+  /** When true, check the counter without incrementing (read-only). */
+  readOnly?: boolean;
 }
 
 interface RateLimitResult {
   limited: boolean;
   retryAfter?: number;
+  degraded?: boolean;
+}
+
+export interface ClientRateLimitIdentity {
+  key: string;
+  source: "cf-connecting-ip" | "x-forwarded-for" | "x-real-ip" | "fingerprint" | "unknown";
+  ip?: string;
+}
+
+function degradedBlockResult(retryAfter = 60): RateLimitResult {
+  return { limited: true, retryAfter, degraded: true };
+}
+
+function readHeaderValue(request: Request, headerName: string): string | null {
+  const value = request.headers.get(headerName);
+  if (!value) {
+    return null;
+  }
+
+  const normalizedValue =
+    headerName === "x-forwarded-for" ? value.split(",")[0]?.trim() : value.trim();
+
+  return normalizedValue && normalizedValue.length > 0 ? normalizedValue : null;
+}
+
+function hashFingerprint(value: string): string {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function buildClientFingerprint(request: Request): string | null {
+  const fingerprintParts = [
+    readHeaderValue(request, "user-agent"),
+    readHeaderValue(request, "accept-language"),
+    readHeaderValue(request, "sec-ch-ua"),
+    readHeaderValue(request, "sec-ch-ua-platform"),
+    readHeaderValue(request, "host"),
+  ].filter((value): value is string => Boolean(value));
+
+  if (fingerprintParts.length === 0) {
+    return null;
+  }
+
+  return `fp:${hashFingerprint(fingerprintParts.join("|"))}`;
+}
+
+export function getClientRateLimitIdentity(request: Request): ClientRateLimitIdentity {
+  const cfConnectingIp = readHeaderValue(request, "cf-connecting-ip");
+  if (cfConnectingIp) {
+    return { key: cfConnectingIp, source: "cf-connecting-ip", ip: cfConnectingIp };
+  }
+
+  const forwardedIp = readHeaderValue(request, "x-forwarded-for");
+  if (forwardedIp) {
+    return { key: forwardedIp, source: "x-forwarded-for", ip: forwardedIp };
+  }
+
+  const realIp = readHeaderValue(request, "x-real-ip");
+  if (realIp) {
+    return { key: realIp, source: "x-real-ip", ip: realIp };
+  }
+
+  const fingerprint = buildClientFingerprint(request);
+  if (fingerprint) {
+    return { key: fingerprint, source: "fingerprint" };
+  }
+
+  return { key: "unknown", source: "unknown" };
+}
+
+export function getClientRateLimitKey(request: Request): string {
+  return getClientRateLimitIdentity(request).key;
 }
 
 /**
@@ -102,9 +189,21 @@ interface RateLimitResult {
 export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitResult> {
   const url = process.env.OTP_RATE_LIMITER_URL;
   if (!url) {
+    if (opts.degradedMode === "block") {
+      // In e2e test mode, fall back to local rate limiter instead of blocking
+      // every request — the external worker is intentionally absent.
+      if (process.env.VERIFYMZANSI_RUNTIME_MODE === "e2e") {
+        return { ...checkLocalRateLimit(opts.key, opts.action), degraded: true };
+      }
+      logger.error("Shared rate limiter is not configured for a fail-closed action", {
+        action: opts.action,
+      });
+      return degradedBlockResult();
+    }
+
     // No external rate-limiter configured — fall back to in-memory limiter
     // instead of failing open with no protection.
-    return checkLocalRateLimit(opts.key, opts.action);
+    return { ...checkLocalRateLimit(opts.key, opts.action), degraded: true };
   }
 
   const timeout = Number(process.env.OTP_RATE_LIMITER_TIMEOUT_MS) || 2500;
@@ -113,43 +212,53 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (apiKey) {
-      headers["Authorization"] = `Bearer ${apiKey}`;
-    }
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        phone: opts.key, // worker uses `phone` as the key field
-        action: opts.action,
-        deviceId: opts.deviceId,
-      }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timer);
-
-    if (res.status === 429) {
-      const data = (await res.json().catch(() => ({}))) as {
-        retryAfter?: number;
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
       };
-      logger.warn("Rate limited", { action: opts.action, key: opts.key });
-      return { limited: true, retryAfter: data.retryAfter ?? 60 };
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          key: opts.key,
+          action: opts.action,
+          deviceId: opts.deviceId,
+          readOnly: opts.readOnly,
+        }),
+        signal: controller.signal,
+      });
+
+      if (res.status === 429) {
+        const data = (await res.json().catch(() => ({}))) as {
+          retryAfter?: number;
+        };
+        logger.warn("Rate limited", { action: opts.action, key: opts.key });
+        return { limited: true, retryAfter: data.retryAfter ?? 60 };
+      }
+
+      return { limited: false };
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err) {
+    if (opts.degradedMode === "block") {
+      logger.error("Rate limiter worker unreachable for fail-closed action", {
+        action: opts.action,
+        error: err instanceof Error ? err.message : "unknown",
+      });
+      return degradedBlockResult();
     }
 
-    return { limited: false };
-  } catch (err) {
     // Fail degraded — use local in-memory rate limiter as fallback
     logger.error("Rate limiter worker unreachable, using local fallback", {
       action: opts.action,
       error: err instanceof Error ? err.message : "unknown",
     });
-    return checkLocalRateLimit(opts.key, opts.action);
+    return { ...checkLocalRateLimit(opts.key, opts.action), degraded: true };
   }
 }
 
@@ -158,10 +267,5 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
  * Prefers cf-connecting-ip, falls back to x-forwarded-for, then x-real-ip.
  */
 export function getClientIp(request: Request): string {
-  return (
-    request.headers.get("cf-connecting-ip") ??
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "unknown"
-  );
+  return getClientRateLimitIdentity(request).ip ?? "unknown";
 }

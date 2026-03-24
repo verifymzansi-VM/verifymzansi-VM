@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { ACCOUNT_PROFILE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import { buildVerificationRedirectUrl, isVerifiedMember } from "@/app/post/_lib/post-access";
 
 export async function requireVerifiedPostAccess(returnUrl: string) {
@@ -13,13 +13,9 @@ export async function requireVerifiedPostAccess(returnUrl: string) {
     return;
   }
 
-  const { data: profile } = await supabase
-    .from(ACCOUNT_PROFILE_TABLE)
-    .select("account_verification_status")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const verification = await resolveAccountVerification(supabase, user.id);
 
-  if (!isVerifiedMember(readAccountVerificationStatus(profile))) {
+  if (!isVerifiedMember(verification.accountVerificationStatus)) {
     redirect(buildVerificationRedirectUrl(returnUrl));
   }
 }

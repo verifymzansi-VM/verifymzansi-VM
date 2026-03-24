@@ -6,7 +6,6 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { encryptFile, decryptFile } from "@/lib/utils/encryption";
-import crypto from "crypto";
 
 /**
  * R2-compatible object storage helpers for listing images
@@ -32,7 +31,11 @@ interface UploadResult {
  */
 function assertSafeStorageKey(key: string): void {
   const decoded = decodeURIComponent(key);
-  // All checks applied consistently to the decoded key.
+  // Reject keys that still contain percent-encoded sequences after decoding
+  // to prevent double-encoding attacks (e.g. %252e%252e → %2e%2e → ..).
+  if (decoded.includes("%")) {
+    throw new Error("Invalid storage key");
+  }
   // The regex whitelist [\w\-/.] is the primary defense — it rejects
   // backslashes, null bytes, and any non-alphanumeric/punctuation chars.
   if (
@@ -85,6 +88,24 @@ function getR2Client(): S3Client {
  * This properly signs requests using AWS Sigv4.
  */
 export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
+  if (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const arrayBuffer = await params.file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const publicRoot = path.join(process.cwd(), "public", "e2e-media");
+    const destination = path.join(publicRoot, params.key);
+
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.writeFile(destination, buffer);
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "") ?? "";
+    const normalizedKey = params.key.replace(/\\/g, "/");
+    const url = appUrl ? `${appUrl}/e2e-media/${normalizedKey}` : `/e2e-media/${normalizedKey}`;
+
+    return { url, key: normalizedKey };
+  }
+
   const client = getR2Client();
   const arrayBuffer = await params.file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
@@ -122,7 +143,7 @@ export function generateStorageKey(prefix: string, ownerId: string, filename: st
   }
   const ext = (filename.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "");
   const timestamp = Date.now();
-  const random = crypto.randomUUID().slice(0, 8);
+  const random = globalThis.crypto.randomUUID().slice(0, 8);
   return `${safePrefix}/${safeOwnerId}/${timestamp}-${random}.${ext}`;
 }
 

@@ -42,7 +42,10 @@ import {
   PostFormScaffold,
   type PostFormStep,
 } from "@/components/post/post-form-scaffold";
-import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
+import {
+  normalizeCreatePostError,
+  normalizeCreatePostRuntimeError,
+} from "@/app/post/_lib/create-post-errors";
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
 import {
   coerceBusinessDetails,
@@ -114,6 +117,35 @@ function getFieldId(key: string): string | undefined {
   return undefined;
 }
 
+function getStepForFieldKey(key: string): number {
+  if (
+    key === "gallery_photos" ||
+    key === "cover_video" ||
+    STEP_SOCIAL_FIELDS.includes(key as (typeof STEP_SOCIAL_FIELDS)[number])
+  ) {
+    return 2;
+  }
+
+  if (
+    key === "location_province" ||
+    key === "location_city" ||
+    STEP_CONTACT_FIELDS.includes(key as (typeof STEP_CONTACT_FIELDS)[number])
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function getStepForServerErrors(errors: Record<string, string>): number {
+  const keys = Object.keys(errors);
+  if (keys.length === 0) {
+    return 0;
+  }
+
+  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 2);
+}
+
 function generateSlug(name: string): string {
   return name
     .toLowerCase()
@@ -178,6 +210,7 @@ function CreateBusinessContent() {
   const [promoVideoFile, setPromoVideoFile] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -398,13 +431,44 @@ function CreateBusinessContent() {
       if (!uploadRes.ok) throw new Error("Upload failed");
       const uploadJson = await uploadRes.json();
       return uploadJson.urls || [];
-    } catch {
+    } catch (error: unknown) {
       toast({
         title: "Some media was skipped",
-        description: "You can add the failed files later after your business is created.",
+        description: `${normalizeCreatePostRuntimeError(error, "One or more files could not be uploaded.")} You can add the failed files later after your business is created.`,
         variant: "destructive",
       });
       return [];
+    }
+  }
+
+  async function uploadVideoPresigned(file: File, area: string): Promise<string | null> {
+    try {
+      const urlRes = await fetch("/api/media/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+          size: file.size,
+          area,
+        }),
+      });
+      if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+      const { uploadUrl, publicUrl } = await urlRes.json();
+      const putRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!putRes.ok) throw new Error("Failed to upload video");
+      return publicUrl;
+    } catch (error: unknown) {
+      toast({
+        title: "Video upload was skipped",
+        description: `${normalizeCreatePostRuntimeError(error, "Video upload could not be completed.")} You can add the video later after your business is created.`,
+        variant: "destructive",
+      });
+      return null;
     }
   }
 
@@ -412,7 +476,9 @@ function CreateBusinessContent() {
     const errors = validateStep(step);
     if (Object.keys(errors).length > 0) {
       setFieldErrors((current) => ({ ...current, ...errors }));
-      setFormError("Please fix the highlighted fields before continuing.");
+      setFormError(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      );
       focusFirstError(errors);
       return;
     }
@@ -432,27 +498,35 @@ function CreateBusinessContent() {
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
       setFieldErrors(stepErrors[firstInvalidStep]);
-      setFormError("Please fix the highlighted fields before submitting.");
+      setFormError(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      );
       focusFirstError(stepErrors[firstInvalidStep], firstInvalidStep);
       return;
     }
     clearErrors();
     setIsSubmitting(true);
+    setSubmitProgress("Uploading media...");
     try {
-      const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrls] = await Promise.all([
+      const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrl] = await Promise.all([
         uploadMedia(logoFile, "business_logo"),
         uploadMedia(coverFile, "business_cover"),
         uploadMedia(galleryFiles, "business_gallery"),
         uploadMedia(mallPhotoFiles, "business_gallery"),
-        uploadMedia(promoVideoFile, "business_cover"),
+        promoVideoFile.length > 0
+          ? uploadVideoPresigned(promoVideoFile[0], "business_cover")
+          : Promise.resolve(null),
       ]);
       const finalCoverPhoto = coverUrls[0] || null;
-      const finalCoverVideo = videoUrls[0] || null;
+      const finalCoverVideo = videoUrl;
       let finalVideoThumbnail: string | null = null;
       if (finalCoverVideo && videoThumbnailFile.length > 0) {
         const thumbUrls = await uploadMedia(videoThumbnailFile, "business_cover");
         finalVideoThumbnail = thumbUrls[0] || null;
       }
+
+      setSubmitProgress("Saving business...");
+
       const socialLinks: Record<string, string> = {};
       if (socialFacebook) socialLinks.facebook = socialFacebook;
       if (socialInstagram) socialLinks.instagram = socialInstagram;
@@ -510,17 +584,20 @@ function CreateBusinessContent() {
       const payload = await res.json().catch(() => null);
       if (!res.ok) {
         const normalized = normalizeCreatePostError(payload, "Failed to create business.");
+        const targetStep = getStepForServerErrors(normalized.fieldErrors);
+        setStep(targetStep);
         setFieldErrors(normalized.fieldErrors);
         setFormError(normalized.formError);
-        focusFirstError(normalized.fieldErrors);
+        focusFirstError(normalized.fieldErrors, targetStep);
         return;
       }
       toast({ title: "Business submitted for review.", variant: "success" });
-      router.push("/dashboard/businesses");
+      router.push("/dashboard/businesses?created=true");
     } catch (error: unknown) {
-      setFormError(error instanceof Error ? error.message : "Something went wrong.");
+      setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -622,7 +699,7 @@ function CreateBusinessContent() {
                     onNext={goNext}
                     submitDisabled={isSubmitting}
                     isSubmitting={isSubmitting}
-                    submittingLabel="Submitting..."
+                    submittingLabel={submitProgress || "Submitting..."}
                   />
                 }
               >
@@ -639,46 +716,50 @@ function CreateBusinessContent() {
                           const Icon = option.icon;
                           const isSelected = businessType === option.value;
                           return (
-                            <button
+                            <label
                               key={option.value}
-                              type="button"
-                              role="radio"
-                              aria-checked={isSelected}
-                              onClick={() => {
-                                setBusinessType(option.value);
-                                setBusinessDetails(getDefaultBusinessDetails(option.value));
-                                if (option.value !== "mall_store") {
-                                  setStoreNumber("");
-                                  setMallPhotoFiles([]);
-                                }
-                                if (option.value !== "mobile_service") {
-                                  setServiceAreasInput("");
-                                }
-                                if (
-                                  ![
-                                    "mall_store",
-                                    "standalone_shop",
-                                    "home_business",
-                                    "market_stall",
-                                  ].includes(option.value)
-                                ) {
-                                  setMapDirections("");
-                                }
-                                clearErrors(
-                                  "business_type",
-                                  "store_number",
-                                  "service_areas",
-                                  "map_directions"
-                                );
-                                clearErrorPrefix("business_details.");
-                              }}
                               className={cn(
-                                "rounded-xl border-2 p-4 text-left transition-all",
+                                "cursor-pointer rounded-xl border-2 p-4 text-left transition-all",
                                 isSelected
                                   ? "border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20"
                                   : "border-border hover:border-brand-blue/30"
                               )}
                             >
+                              <input
+                                type="radio"
+                                name="business-type"
+                                value={option.value}
+                                checked={isSelected}
+                                onChange={() => {
+                                  setBusinessType(option.value);
+                                  setBusinessDetails(getDefaultBusinessDetails(option.value));
+                                  if (option.value !== "mall_store") {
+                                    setStoreNumber("");
+                                    setMallPhotoFiles([]);
+                                  }
+                                  if (option.value !== "mobile_service") {
+                                    setServiceAreasInput("");
+                                  }
+                                  if (
+                                    ![
+                                      "mall_store",
+                                      "standalone_shop",
+                                      "home_business",
+                                      "market_stall",
+                                    ].includes(option.value)
+                                  ) {
+                                    setMapDirections("");
+                                  }
+                                  clearErrors(
+                                    "business_type",
+                                    "store_number",
+                                    "service_areas",
+                                    "map_directions"
+                                  );
+                                  clearErrorPrefix("business_details.");
+                                }}
+                                className="sr-only"
+                              />
                               <Icon
                                 className={cn(
                                   "mb-2 h-6 w-6",
@@ -689,7 +770,7 @@ function CreateBusinessContent() {
                               <p className="mt-1 text-xs text-muted-foreground">
                                 {option.description}
                               </p>
-                            </button>
+                            </label>
                           );
                         })}
                       </div>

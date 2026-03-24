@@ -17,6 +17,7 @@ import {
   Camera,
   MapPin,
   Phone,
+  Columns2,
 } from "lucide-react";
 import { EvidenceViewer } from "./evidence-viewer";
 import { EvidenceMetadataPanel } from "./evidence-metadata-panel";
@@ -33,6 +34,12 @@ interface EvidenceStep {
   risk_level: string | null;
   risk_score: number | null;
   auto_status: string | null;
+  location_method: string | null;
+  location_province: string | null;
+  location_city: string | null;
+  location_address_line: string | null;
+  gps_lat: number | null;
+  gps_lon: number | null;
   reason_code: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -135,6 +142,7 @@ export function EvidenceDeskClient({
   const [metadata, setMetadata] = useState<EvidenceMetadata | null>(null);
   const [selectedStep, setSelectedStep] = useState<EvidenceStep | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
+  const [comparisonMode, setComparisonMode] = useState(false);
   const accountProfile = metadata?.accountProfile ?? metadata?.sellerProfile ?? null;
   const verificationStatus =
     accountProfile?.account_verification_status ?? accountProfile?.account_verification_status;
@@ -147,11 +155,14 @@ export function EvidenceDeskClient({
 
       setLoading(true);
       try {
-        const params = new URLSearchParams();
-        if (queryStepId) params.set("stepId", queryStepId);
-        if (queryUserId) params.set("userId", queryUserId);
-
-        const res = await fetch(`/api/admin/verification/evidence/metadata?${params}`);
+        const res = await fetch(`/api/admin/verification/evidence/metadata`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...(queryStepId ? { stepId: queryStepId } : {}),
+            ...(queryUserId ? { userId: queryUserId } : {}),
+          }),
+        });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           throw new Error(data.error || "Failed to fetch evidence");
@@ -374,38 +385,75 @@ export function EvidenceDeskClient({
           {/* Right: Evidence viewer + metadata */}
           <div className="space-y-4 xl:col-span-2">
             {/* Artifact selector */}
-            {metadata.artifacts.length > 1 && (
-              <Card className="border-warm-200/70 dark:border-warm-700/70">
-                <CardContent className="flex flex-wrap gap-2 pt-4">
-                  {metadata.artifacts.map((a) => (
-                    <Button
-                      key={a.id}
-                      variant={selectedArtifact?.id === a.id ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSelectedArtifact(a)}
-                      className="gap-1 text-xs"
-                    >
-                      <FileText className="h-3 w-3" />
-                      {a.step_type.replace("_", " ")} — {a.artifact_kind}
-                    </Button>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
+            {metadata.artifacts.length > 1 &&
+              (() => {
+                const idArtifact = metadata.artifacts.find((a) => a.step_type === "id_doc");
+                const selfieArtifact = metadata.artifacts.find((a) => a.step_type === "selfie");
+                const canCompare = !!(idArtifact && selfieArtifact);
+
+                return (
+                  <Card className="border-warm-200/70 dark:border-warm-700/70">
+                    <CardContent className="flex flex-wrap items-center gap-2 pt-4">
+                      {metadata.artifacts.map((a) => (
+                        <Button
+                          key={a.id}
+                          variant={
+                            !comparisonMode && selectedArtifact?.id === a.id ? "default" : "outline"
+                          }
+                          size="sm"
+                          onClick={() => {
+                            setComparisonMode(false);
+                            setSelectedArtifact(a);
+                          }}
+                          className="gap-1 text-xs"
+                        >
+                          <FileText className="h-3 w-3" />
+                          {a.step_type.replace("_", " ")} — {a.artifact_kind}
+                        </Button>
+                      ))}
+                      {canCompare && (
+                        <Button
+                          variant={comparisonMode ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setComparisonMode(!comparisonMode)}
+                          className="gap-1 text-xs"
+                        >
+                          <Columns2 className="h-3 w-3" />
+                          Compare ID & Selfie
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
             {/* Evidence viewer */}
-            {selectedArtifact ? (
-              <EvidenceViewer artifact={selectedArtifact} />
-            ) : (
-              <Card className="border-warm-200/70 dark:border-warm-700/70">
-                <CardContent className="flex flex-col items-center justify-center py-6 text-center">
-                  <Eye className="h-8 w-8 text-muted-foreground/30" />
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    No artifact selected. Select a step or artifact to view evidence.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
+            {comparisonMode &&
+              (() => {
+                const idArtifact = metadata.artifacts.find((a) => a.step_type === "id_doc");
+                const selfieArtifact = metadata.artifacts.find((a) => a.step_type === "selfie");
+
+                return idArtifact && selfieArtifact ? (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <EvidenceViewer artifact={idArtifact} />
+                    <EvidenceViewer artifact={selfieArtifact} />
+                  </div>
+                ) : null;
+              })()}
+
+            {!comparisonMode &&
+              (selectedArtifact ? (
+                <EvidenceViewer artifact={selectedArtifact} />
+              ) : (
+                <Card className="border-warm-200/70 dark:border-warm-700/70">
+                  <CardContent className="flex flex-col items-center justify-center py-6 text-center">
+                    <Eye className="h-8 w-8 text-muted-foreground/30" />
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      No artifact selected. Select a step or artifact to view evidence.
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
 
             {/* Metadata panel */}
             <EvidenceMetadataPanel

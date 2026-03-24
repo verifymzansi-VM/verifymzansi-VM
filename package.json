@@ -14,7 +14,7 @@
     "brand:assets": "node scripts/generate-brand-assets.js && node scripts/generate-final-icons.js",
     "build:cloudflare": "node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build",
     "preview:cloudflare": "node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build && pnpm exec wrangler dev",
-    "deploy": "node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build && pnpm exec opennextjs-cloudflare deploy",
+    "deploy": "pnpm validate:launch-env && node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build && pnpm exec opennextjs-cloudflare deploy",
     "start": "next start",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
@@ -37,9 +37,11 @@
     "test:perf": "tsx scripts/test-perf.ts",
     "test:mutation": "tsx scripts/test-mutation.ts",
     "test:e2e": "playwright test",
-    "seed:dev": "tsx scripts/seed-development.ts",
-    "seed:prod": "tsx scripts/seed-production.ts",
+    "test:public-verify": "tsx scripts/verify-public-pages.ts",
+    "bootstrap:operator": "tsx scripts/bootstrap-operator.ts",
+    "reset:launch-data": "tsx scripts/reset-launch-data.ts",
     "db:verify-schema": "tsx scripts/check-supabase-schema.ts",
+    "db:check-invariants": "tsx scripts/check-db-invariants.ts",
     "preflight": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts",
     "preflight:prod": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts --mode=production",
     "validate:launch-env": "tsx scripts/validate-launch-env.ts --mode=production",
@@ -67,7 +69,7 @@
     "framer-motion": "^12.34.2",
     "lucide-react": "^0.574.0",
     "md5": "^2.3.0",
-    "next": "16.1.6",
+    "next": "16.1.7",
     "next-themes": "^0.4.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -82,7 +84,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",
     "@eslint/eslintrc": "^3.3.3",
-    "@next/env": "^16.1.6",
+    "@next/env": "16.1.7",
     "@opennextjs/cloudflare": "^1.17.1",
     "@playwright/test": "^1.58.2",
     "@storybook/react": "^10.2.11",
@@ -90,13 +92,13 @@
     "@testing-library/react": "^16.3.2",
     "@types/md5": "^2.3.6",
     "@types/node": "^25.3.0",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
     "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.24",
     "eslint": "^9.39.3",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "16.1.7",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "jimp": "0.22.10",
@@ -121,13 +123,15 @@
     ],
     "overrides": {
       "tailwindcss": "3.4.19",
-      "fast-xml-parser": ">=5.3.8"
+      "fast-xml-parser": ">=5.5.7",
+      "@types/react": "19.2.14",
+      "@types/react-dom": "19.2.3"
     }
   },
   "overrides": {
     "tailwindcss": "3.4.19",
     "@aws-sdk/xml-builder": "^3.972.5",
-    "fast-xml-parser": ">=5.3.8"
+    "fast-xml-parser": ">=5.5.7"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

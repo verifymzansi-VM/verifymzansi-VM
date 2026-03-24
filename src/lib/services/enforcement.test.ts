@@ -4,6 +4,7 @@ const mockUpdate = vi.fn().mockReturnValue({
   eq: vi.fn().mockReturnValue({
     eq: vi.fn().mockResolvedValue({ error: null }),
     in: vi.fn().mockResolvedValue({ error: null }),
+    gte: vi.fn().mockResolvedValue({ error: null }),
   }),
 });
 
@@ -20,7 +21,7 @@ const mockFrom = vi.fn().mockImplementation((table: string) => {
   if (table === "moderation_actions") {
     return { insert: mockInsert };
   }
-  if (table === "listings" || table === "businesses") {
+  if (table === "listings" || table === "businesses" || table === "promotions") {
     return {
       update: mockUpdate,
     };
@@ -41,6 +42,14 @@ vi.mock("@/lib/supabase/admin", () => ({
     from: mockFrom,
   }),
 }));
+
+vi.mock("@/lib/account/compat", async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    getOwnerColumn: vi.fn().mockResolvedValue("owner_id"),
+  };
+});
 
 vi.mock("./audit", () => ({
   logAuditEvent: vi.fn().mockResolvedValue(undefined),
@@ -142,6 +151,9 @@ describe("enforcement service", () => {
             eq: vi.fn().mockResolvedValue({ error: null }),
           }),
         };
+      }
+      if (table === "listings" || table === "businesses" || table === "promotions") {
+        return { update: mockUpdate };
       }
       return { insert: vi.fn().mockResolvedValue({ error: null }) };
     });

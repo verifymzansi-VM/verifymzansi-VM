@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
+import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
 import { forgotPasswordSchema, type ForgotPasswordInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -17,7 +18,10 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [turnstileError, setTurnstileError] = useState(false);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
+  const [turnstileRetryToken, setTurnstileRetryToken] = useState(0);
+  const [captchaUnavailable, setCaptchaUnavailable] = useState(
+    getTurnstileClientState().mode === "unavailable"
+  );
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
 
@@ -35,10 +39,8 @@ export default function ForgotPasswordPage() {
   });
 
   // Turnstile widget load timeout
-  const isTurnstileDev =
-    !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY === "dummy_site_key";
-  const skipTurnstileTimeout = isTurnstileDev || process.env.NODE_ENV !== "production";
+  const turnstileState = getTurnstileClientState();
+  const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;
 
   useEffect(() => {
     if (skipTurnstileTimeout || turnstileLoaded) return;
@@ -49,10 +51,11 @@ export default function ForgotPasswordPage() {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [skipTurnstileTimeout, turnstileLoaded, retryKey, setValue]);
+  }, [skipTurnstileTimeout, turnstileLoaded, turnstileRetryToken, setValue]);
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
+      setCaptchaUnavailable(false);
       setTurnstileError(false);
       setTurnstileLoaded(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -62,23 +65,33 @@ export default function ForgotPasswordPage() {
   );
 
   const handleTurnstileLoad = useCallback(() => {
+    setCaptchaUnavailable(false);
     setTurnstileLoaded(true);
     setTurnstileError(false);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
   }, []);
 
   const handleTurnstileError = useCallback(() => {
+    setCaptchaUnavailable(false);
     setTurnstileError(true);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
   }, [setValue]);
 
+  const handleTurnstileUnavailable = useCallback(() => {
+    setCaptchaUnavailable(true);
+    setTurnstileLoaded(false);
+    setTurnstileError(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
+  }, [setValue]);
+
   const handleRetry = useCallback(() => {
+    setCaptchaUnavailable(false);
     setTurnstileError(false);
     setTurnstileLoaded(false);
     setValue("turnstileToken", "", { shouldValidate: false });
     TurnstileWidget.retry();
-    setRetryKey((k) => k + 1);
+    setTurnstileRetryToken((value) => value + 1);
   }, [setValue]);
 
   async function onSubmit(data: ForgotPasswordInput) {
@@ -93,7 +106,7 @@ export default function ForgotPasswordPage() {
 
       if (!response.ok) {
         toast({
-          title: "Error",
+          title: "Reset request failed",
           description:
             typeof result.error === "string" ? result.error : "Unable to submit request.",
           variant: "destructive",
@@ -127,6 +140,13 @@ export default function ForgotPasswordPage() {
         <p className="text-sm text-muted-foreground max-w-sm mx-auto">
           We&apos;ve sent a password reset link to your email. It may take a few minutes to arrive.
         </p>
+        <button
+          type="button"
+          onClick={() => setSent(false)}
+          className="text-sm text-brand-green hover:underline"
+        >
+          Didn&apos;t receive it? Try again
+        </button>
         <Button asChild variant="outline" className="gap-2">
           <Link href="/login">
             <ArrowLeft className="h-4 w-4" />
@@ -168,17 +188,19 @@ export default function ForgotPasswordPage() {
         </div>
 
         <TurnstileWidget
-          key={retryKey}
+          retryToken={turnstileRetryToken}
           onSuccess={handleTurnstileSuccess}
           onError={handleTurnstileError}
           onLoad={handleTurnstileLoad}
+          onUnavailable={handleTurnstileUnavailable}
         />
         {errors.turnstileToken && !turnstileError && (
           <p className="inline-form-error">{errors.turnstileToken.message}</p>
         )}
+        {captchaUnavailable && <p className="inline-form-error">{TURNSTILE_UNAVAILABLE_MESSAGE}</p>}
         {turnstileError && (
           <div className="flex items-center gap-2">
-            <p className="inline-form-error">Security verification failed to load.</p>
+            <p className="inline-form-error">Security check failed to load. Please try again.</p>
             <button
               type="button"
               onClick={handleRetry}
@@ -190,7 +212,12 @@ export default function ForgotPasswordPage() {
           </div>
         )}
 
-        <Button type="submit" className="w-full" variant="trust-verified" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          className="w-full"
+          variant="trust-verified"
+          disabled={isSubmitting || captchaUnavailable}
+        >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Send Reset Link
         </Button>

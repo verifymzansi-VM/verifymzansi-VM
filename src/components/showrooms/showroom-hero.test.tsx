@@ -18,6 +18,10 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("@/components/ui/video-card-player", () => ({
+  VideoCardPlayer: ({ alt }: { alt?: string }) => <div data-testid="showroom-media">{alt}</div>,
+}));
+
 describe("ShowroomHero", () => {
   it("uses /listing/:id for listing CTA links", async () => {
     render(

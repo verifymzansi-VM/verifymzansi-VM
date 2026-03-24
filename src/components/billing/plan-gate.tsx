@@ -2,6 +2,7 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ShieldCheck,
   AlertTriangle,
@@ -18,7 +19,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
+import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { toast } from "@/hooks/use-toast";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { isPostingLimitBypassEnabled } from "../../lib/utils/posting-limit-bypass";
 
@@ -217,12 +220,31 @@ function InlinePlanGrid({
    PlanGate — main component
    ───────────────────────────────────────────────────────────── */
 export function PlanGate({ area, children }: PlanGateProps) {
+  const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (isPlaywrightTestMode()) {
+      setPlanInfo({
+        tier: "free",
+        isTrial: true,
+        trialDaysLeft: FREE_POST_CONFIG.durationDays,
+        freePostAvailable: true,
+        postingLimitBypassEnabled: true,
+        currentCount: 0,
+        maxAllowed: -1,
+        maxPhotos: FREE_POST_CONFIG.maxPhotos,
+        maxVideos: FREE_POST_CONFIG.maxVideos,
+        videoAllowed: FREE_POST_CONFIG.videoAllowed,
+      });
+      setLoading(false);
+      return;
+    }
+
     async function checkEntitlements() {
       try {
         const supabase = createClient();
@@ -341,12 +363,23 @@ export function PlanGate({ area, children }: PlanGateProps) {
     }
 
     checkEntitlements();
+
+    // Re-check when tab becomes visible (handles cross-tab free post consumption)
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        _entitlementCache.clear();
+        checkEntitlements();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [area]);
 
   // Handle subscribe — redirect to checkout
   async function handleSubscribe(plan: PlanDefinition) {
     const key = `${plan.area}-${plan.tier}`;
     setSubscribing(key);
+    setCheckoutError(null);
     try {
       // First fetch the plan ID from the plans table
       const supabase = createClient();
@@ -365,7 +398,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
       // Use the checkout API
       const res = await fetch("/api/billing/create-checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ planId: dbPlan.id, area: plan.area }),
       });
       const data = await res.json();
@@ -379,7 +412,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
       logger.error("Checkout error", { error: err instanceof Error ? err.message : String(err) });
       // Show user-facing error feedback
       const errorMessage = err instanceof Error ? err.message : "Could not start checkout";
-      setError("failed");
+      setCheckoutError(`${errorMessage}. Please try again.`);
       toast({
         title: "Checkout failed",
         description: `${errorMessage}. Please try again.`,
@@ -396,7 +429,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
       <div className="flex items-center justify-center py-8">
         <div className="text-center space-y-3">
           <Loader2 className="h-8 w-8 animate-spin text-brand-green mx-auto" />
-          <p className="text-sm text-muted-foreground">Checking your plan...</p>
+          <p className="text-sm text-muted-foreground">Checking your plan</p>
         </div>
       </div>
     );
@@ -408,13 +441,13 @@ export function PlanGate({ area, children }: PlanGateProps) {
       <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
         <CardContent className="p-6 text-center space-y-3">
           <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto" />
-          <h2 className="font-display text-xl font-bold">Sign In Required</h2>
+          <h2 className="font-display text-xl font-bold">Sign in required</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            You need to be signed in and have an account profile to post on VerifyMzansi.
+            Sign in to choose a plan or use your free post on VerifyMzansi.
           </p>
           <div className="flex gap-3 justify-center">
             <Button asChild variant="outline">
-              <Link href="/login">Sign In</Link>
+              <Link href="/login">Sign in</Link>
             </Button>
             <Button asChild className="gap-2">
               <Link href="/register">
@@ -433,14 +466,14 @@ export function PlanGate({ area, children }: PlanGateProps) {
       <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
         <CardContent className="p-6 text-center space-y-3">
           <ShieldCheck className="h-8 w-8 text-amber-500 mx-auto" />
-          <h2 className="font-display text-xl font-bold">Complete Your Profile</h2>
+          <h2 className="font-display text-xl font-bold">Add Your Phone Number</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            Set up your account profile to start posting on VerifyMzansi. It takes less than 5
-            minutes.
+            Add your phone number before posting so buyers can trust your account and receive your
+            updates.
           </p>
           <Button asChild className="gap-2">
-            <Link href="/register">
-              Set Up Profile <ArrowRight className="h-4 w-4" />
+            <Link href={`/dashboard/complete-profile?returnUrl=${encodeURIComponent(pathname)}`}>
+              Add Phone Number <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
         </CardContent>
@@ -454,10 +487,8 @@ export function PlanGate({ area, children }: PlanGateProps) {
       <Card className="border-destructive/50">
         <CardContent className="p-6 text-center space-y-3">
           <AlertTriangle className="h-8 w-8 text-destructive mx-auto" />
-          <h2 className="font-display text-xl font-bold">Something Went Wrong</h2>
-          <p className="text-muted-foreground">
-            We couldn&apos;t check your plan. Please try again.
-          </p>
+          <h2 className="font-display text-xl font-bold">We couldn't load your plan</h2>
+          <p className="text-muted-foreground">Try again in a moment.</p>
         </CardContent>
       </Card>
     );
@@ -519,7 +550,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
                   <Badge variant="outline" className="capitalize mx-1 text-xs">
                     {planInfo.isTrial ? "Free Post" : planInfo.tier}
                   </Badge>{" "}
-                  plan. Upgrade to post more and unlock premium features.
+                  plan. Upgrade to continue posting in this category.
                 </p>
               </div>
             </div>
@@ -546,6 +577,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
         areaPlans={areaPlans}
         onSubscribe={handleSubscribe}
         subscribing={subscribing}
+        checkoutError={checkoutError}
       >
         {children}
       </PlanPickerWithTrial>
@@ -599,6 +631,7 @@ function PlanPickerWithTrial({
   areaPlans,
   onSubscribe,
   subscribing,
+  checkoutError,
   children,
 }: {
   area: MarketplaceArea;
@@ -606,6 +639,7 @@ function PlanPickerWithTrial({
   areaPlans: PlanDefinition[];
   onSubscribe: (plan: PlanDefinition) => void;
   subscribing: string | null;
+  checkoutError: string | null;
   children: ReactNode;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -649,6 +683,14 @@ function PlanPickerWithTrial({
 
   return (
     <div className="space-y-3">
+      {checkoutError && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="p-4 text-sm">
+            <p className="font-medium text-destructive">Checkout unavailable</p>
+            <p className="mt-1 text-muted-foreground">{checkoutError}</p>
+          </CardContent>
+        </Card>
+      )}
       {/* Header + Free Post Combined */}
       {planInfo.isTrial ? (
         <div className="bg-gradient-to-r from-brand-green to-emerald-600 rounded-lg p-4 text-white shadow-md">
@@ -721,200 +763,135 @@ function PlanPickerWithTrial({
 }
 
 /* ─────────────────────────────────────────────────────────────
+   Shared entitlement fetch — deduplicates getUser() + DB calls
+   when multiple hooks are used in the same component / page.
+   ───────────────────────────────────────────────────────────── */
+interface PlanEntitlementInfo {
+  maxPhotos: number;
+  maxVideos: number;
+  videoAllowed: boolean;
+  coverVideoAllowed: boolean;
+}
+
+const ENTITLEMENT_CACHE_TTL = 30_000; // 30 s
+const _entitlementCache = new Map<string, { promise: Promise<PlanEntitlementInfo>; ts: number }>();
+
+function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlementInfo> {
+  const now = Date.now();
+  const cached = _entitlementCache.get(area);
+  if (cached && now - cached.ts < ENTITLEMENT_CACHE_TTL) return cached.promise;
+
+  const promise = (async (): Promise<PlanEntitlementInfo> => {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return {
+        maxPhotos: FREE_POST_CONFIG.maxPhotos,
+        maxVideos: FREE_POST_CONFIG.maxVideos,
+        videoAllowed: false,
+        coverVideoAllowed: false,
+      };
+    }
+
+    const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
+
+    const { data: entitlement } = await supabase
+      .from("entitlements")
+      .select("tier, expires_at")
+      .eq("user_id", user.id)
+      .eq("area", area)
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const tier = (entitlement?.tier as PlanTier) || null;
+
+    if (tier) {
+      const ent = getEntitlements(tier, area);
+      return {
+        maxPhotos: ent.maxPhotos,
+        maxVideos: ent.maxVideos,
+        videoAllowed: ent.videoAllowed,
+        coverVideoAllowed: ent.coverVideoAllowed,
+      };
+    }
+
+    if (postingLimitBypassEnabled) {
+      return {
+        maxPhotos: FREE_POST_CONFIG.maxPhotos,
+        maxVideos: FREE_POST_CONFIG.maxVideos,
+        videoAllowed: FREE_POST_CONFIG.videoAllowed,
+        coverVideoAllowed: false,
+      };
+    }
+
+    // No plan, no bypass — check if free post is still available
+    const { data: freePostRow } = await supabase
+      .from("free_posts_used")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("area", area)
+      .maybeSingle();
+
+    return {
+      maxPhotos: FREE_POST_CONFIG.maxPhotos,
+      maxVideos: freePostRow ? 0 : FREE_POST_CONFIG.maxVideos,
+      videoAllowed: !freePostRow,
+      coverVideoAllowed: false,
+    };
+  })();
+
+  _entitlementCache.set(area, { promise, ts: now });
+  return promise;
+}
+
+function usePlanEntitlements(area: MarketplaceArea): PlanEntitlementInfo {
+  const [info, setInfo] = useState<PlanEntitlementInfo>(() => ({
+    maxPhotos: FREE_POST_CONFIG.maxPhotos,
+    maxVideos: isPlaywrightTestMode() ? FREE_POST_CONFIG.maxVideos : FREE_POST_CONFIG.maxVideos,
+    videoAllowed: isPlaywrightTestMode() ? FREE_POST_CONFIG.videoAllowed : false,
+    coverVideoAllowed: false,
+  }));
+
+  useEffect(() => {
+    if (isPlaywrightTestMode()) return;
+    let cancelled = false;
+    fetchSharedEntitlements(area).then((result) => {
+      if (!cancelled) setInfo(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [area]);
+
+  return info;
+}
+
+/* ─────────────────────────────────────────────────────────────
    Hook: usePlanMaxPhotos
    ───────────────────────────────────────────────────────────── */
 export function usePlanMaxPhotos(area: MarketplaceArea): number {
-  const [maxPhotos, setMaxPhotos] = useState<number>(FREE_POST_CONFIG.maxPhotos); // default free tier (5)
-
-  useEffect(() => {
-    async function fetchMaxPhotos() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Check for active entitlement for this area
-        const { data: entitlement } = await supabase
-          .from("entitlements")
-          .select("tier, expires_at")
-          .eq("user_id", user.id)
-          .eq("area", area)
-          .eq("status", "active")
-          .gt("expires_at", new Date().toISOString())
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const tier = (entitlement?.tier as PlanTier) || null;
-        if (tier) {
-          const ent = getEntitlements(tier, area);
-          setMaxPhotos(ent.maxPhotos);
-        } else {
-          // No active paid plan — use free post photo limit
-          setMaxPhotos(FREE_POST_CONFIG.maxPhotos);
-        }
-      } catch {
-        // Keep default
-      }
-    }
-
-    fetchMaxPhotos();
-  }, [area]);
-
-  return maxPhotos;
+  return usePlanEntitlements(area).maxPhotos;
 }
 
 /* ─────────────────────────────────────────────────────────────
    Hook: usePlanVideoAllowed
    ───────────────────────────────────────────────────────────── */
 export function usePlanVideoAllowed(area: MarketplaceArea): boolean {
-  const [videoAllowed, setVideoAllowed] = useState(false); // default free tier
-
-  useEffect(() => {
-    async function fetchVideoAllowed() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-        const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
-
-        // Check for active entitlement for this area
-        const { data: entitlement } = await supabase
-          .from("entitlements")
-          .select("tier, expires_at")
-          .eq("user_id", user.id)
-          .eq("area", area)
-          .eq("status", "active")
-          .gt("expires_at", new Date().toISOString())
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const tier = (entitlement?.tier as PlanTier) || null;
-        if (tier) {
-          const ent = getEntitlements(tier, area);
-          setVideoAllowed(ent.videoAllowed);
-        } else if (postingLimitBypassEnabled) {
-          setVideoAllowed(FREE_POST_CONFIG.videoAllowed);
-        } else {
-          // Check if free post is still available (not yet used)
-          const { data: freePostRow } = await supabase
-            .from("free_posts_used")
-            .select("id")
-            .eq("user_id", user.id)
-            .eq("area", area)
-            .maybeSingle();
-
-          // Free post includes video; if already used → no video without a plan
-          setVideoAllowed(!freePostRow);
-        }
-      } catch {
-        // Keep default
-      }
-    }
-
-    fetchVideoAllowed();
-  }, [area]);
-
-  return videoAllowed;
+  return usePlanEntitlements(area).videoAllowed;
 }
 
 /* ─────────────────────────────────────────────────────────────
    Hook: usePlanMaxVideos
    ───────────────────────────────────────────────────────────── */
 export function usePlanMaxVideos(area: MarketplaceArea): number {
-  const [maxVideos, setMaxVideos] = useState<number>(FREE_POST_CONFIG.maxVideos);
-
-  useEffect(() => {
-    async function fetchMaxVideos() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-        const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
-
-        const { data: entitlement } = await supabase
-          .from("entitlements")
-          .select("tier, expires_at")
-          .eq("user_id", user.id)
-          .eq("area", area)
-          .eq("status", "active")
-          .gt("expires_at", new Date().toISOString())
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const tier = (entitlement?.tier as PlanTier) || null;
-        if (tier) {
-          const ent = getEntitlements(tier, area);
-          setMaxVideos(ent.maxVideos);
-        } else if (postingLimitBypassEnabled) {
-          setMaxVideos(FREE_POST_CONFIG.maxVideos);
-        } else {
-          const { data: freePostRow } = await supabase
-            .from("free_posts_used")
-            .select("id")
-            .eq("user_id", user.id)
-            .eq("area", area)
-            .maybeSingle();
-
-          setMaxVideos(freePostRow ? 0 : FREE_POST_CONFIG.maxVideos);
-        }
-      } catch {
-        // Keep default
-      }
-    }
-
-    fetchMaxVideos();
-  }, [area]);
-
-  return maxVideos;
+  return usePlanEntitlements(area).maxVideos;
 }
 
 export function usePlanCoverVideoAllowed(area: MarketplaceArea): boolean {
-  const [coverVideoAllowed, setCoverVideoAllowed] = useState(false);
-
-  useEffect(() => {
-    async function fetchCoverVideoAllowed() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data: entitlement } = await supabase
-          .from("entitlements")
-          .select("tier, expires_at")
-          .eq("user_id", user.id)
-          .eq("area", area)
-          .eq("status", "active")
-          .gt("expires_at", new Date().toISOString())
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const tier = (entitlement?.tier as PlanTier) || null;
-        if (tier) {
-          const ent = getEntitlements(tier, area);
-          setCoverVideoAllowed(ent.coverVideoAllowed);
-          return;
-        }
-
-        setCoverVideoAllowed(false);
-      } catch {
-        // Keep default
-      }
-    }
-
-    fetchCoverVideoAllowed();
-  }, [area]);
-
-  return coverVideoAllowed;
+  return usePlanEntitlements(area).coverVideoAllowed;
 }

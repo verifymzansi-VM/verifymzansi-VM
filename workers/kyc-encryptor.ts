@@ -1,11 +1,32 @@
 /**
- * Background Cloudflare Worker for asynchronously encrypting KYC documents.
+ * @deprecated — This worker is NO LONGER TRIGGERED by the application.
  *
- * 1. User uploads document to a temporary R2 bucket using presigned URL.
- * 2. Upload triggers this worker via R2 Event Notification or HTTP trigger.
- * 3. Worker streams file from temp bucket, encrypts using AES-256-GCM, and pipes to private bucket.
- * 4. Worker updates Supabase kyc_artifacts status from 'pending' to 'encrypted'.
+ * The canonical encryption path is now the inline `uploadKycDocument()` flow
+ * in `src/lib/services/storage.ts`, which uses v2 HMAC-SHA256 key derivation
+ * from `src/lib/utils/encryption.ts`.
+ *
+ * This worker remains deployed ONLY to support decryption of files it
+ * previously encrypted (using 100k PBKDF2 iteration format). Legacy
+ * decryption is handled by `decryptLegacy()` in `src/lib/utils/encryption.ts`.
+ *
+ * Known bug: the hardcoded `id_document` path (line ~227) is incorrect but
+ * will NOT be fixed since no new files are routed through this worker.
+ *
+ * This worker can be safely undeployed once all v1/worker-encrypted files
+ * have been decrypted or purged by the retention-cleanup cron.
  */
+
+/**
+ * Legacy Cloudflare Worker that previously handled asynchronous KYC document encryption.
+ *
+ * Original flow (no longer active):
+ * 1. User uploaded document to a temporary R2 bucket using presigned URL.
+ * 2. Upload triggered this worker via R2 Event Notification or HTTP trigger.
+ * 3. Worker streamed file from temp bucket, encrypted using AES-256-GCM, and piped to private bucket.
+ * 4. Worker updated Supabase kyc_artifacts status from 'pending' to 'encrypted'.
+ */
+
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // Cloudflare Worker type stubs (avoids needing @cloudflare/workers-types in
@@ -42,10 +63,24 @@ export interface Env {
   TEMP_BUCKET: R2Bucket;
   PRIVATE_BUCKET: R2Bucket;
   KYC_ENCRYPTION_KEY: string; // 64-char hex string (32 bytes)
+  /** Previous encryption key kept during rotation so old blobs stay readable. */
+  KYC_ENCRYPTION_KEY_PREVIOUS?: string;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   WORKER_API_KEY: string; // Shared secret for authenticating callers
 }
+
+const legacyEncryptPayloadSchema = z.object({
+  tempKey: z
+    .string()
+    .trim()
+    .min(1, "tempKey is required")
+    .max(512, "tempKey is too long")
+    .regex(/^temp\/kyc\/[A-Za-z0-9/_.,-]+$/, "Invalid tempKey")
+    .refine((value) => !value.includes(".."), "Invalid tempKey"),
+  sellerId: z.string().trim().min(1, "sellerId is required").max(128, "sellerId is too long"),
+  artifactId: z.string().trim().min(1, "artifactId is required").max(128, "artifactId is too long"),
+});
 
 /**
  * Parse a hex string into a Uint8Array.
@@ -58,7 +93,7 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     // Health check endpoint
     if (request.method === "GET") {
@@ -85,23 +120,21 @@ export default {
     }
 
     try {
-      const payload = (await request.json()) as {
-        tempKey?: string;
-        sellerId?: string;
-        artifactId?: string;
-      };
-      const objectKey = payload.tempKey;
-      const sellerId = payload.sellerId;
-      const artifactId = payload.artifactId;
-
-      if (!objectKey || !sellerId || !artifactId) {
-        return new Response("Missing required fields", { status: 400 });
+      let payload: unknown;
+      try {
+        payload = await request.json();
+      } catch {
+        return new Response("Invalid JSON body", { status: 400 });
       }
 
-      // Validate tempKey prefix to prevent arbitrary R2 file access
-      if (!objectKey.startsWith("temp/kyc/") || objectKey.includes("..")) {
-        return new Response("Invalid tempKey", { status: 400 });
+      const parsedPayload = legacyEncryptPayloadSchema.safeParse(payload);
+      if (!parsedPayload.success) {
+        return new Response(parsedPayload.error.issues[0]?.message ?? "Invalid request body", {
+          status: 400,
+        });
       }
+
+      const { tempKey: objectKey, sellerId, artifactId } = parsedPayload.data;
 
       // Defer the heavy encryption process to run after returning 202 to the Next.js API
       ctx.waitUntil(
@@ -139,7 +172,7 @@ export default {
   },
 
   async processEncryption(tempKey: string, sellerId: string, artifactId: string, env: Env) {
-    console.log(`[KYC Worker] Starting encryption for artifact ${artifactId}`);
+    console.warn(`[KYC Worker] Starting encryption for artifact ${artifactId}`);
 
     // ── Constants matching src/lib/utils/encryption.ts ──────────
     const SALT_LENGTH = 64;
@@ -224,10 +257,10 @@ export default {
 
     const finalKey = `kyc/id_document/${sellerId}/${Date.now()}-encrypted.bin`;
 
-    // Save to private bucket
+    // Save to private bucket with key version for future rotation support
     await env.PRIVATE_BUCKET.put(finalKey, encryptedData, {
       httpMetadata: fileObj.httpMetadata,
-      customMetadata: { encrypted: "true", sellerId },
+      customMetadata: { encrypted: "true", sellerId, key_version: "1" },
     });
 
     // Delete temp file to avoid storage bloat
@@ -248,6 +281,8 @@ export default {
       }
     );
 
-    console.log(`[KYC Worker] Processing complete for ${artifactId}`);
+    console.warn(`[KYC Worker] Processing complete for ${artifactId}`);
   },
 };
+
+export default worker;

@@ -23,10 +23,11 @@ const validProductionEnv: Record<string, string> = {
   AFRICASTALKING_API_KEY: "africas-talking-api-key",
   AFRICASTALKING_USERNAME: "verifymzansi",
   AFRICASTALKING_SENDER_ID: "VERIFYMZ",
-  PAYFAST_MERCHANT_ID: "merchant-id",
-  PAYFAST_MERCHANT_KEY: "merchant-key",
-  PAYFAST_PASSPHRASE: "merchant-passphrase", // secret-scan: allow deterministic fixture
-  PAYFAST_SANDBOX: "false",
+  OZOW_ENV: "production",
+  OZOW_CLIENT_ID: "client-id",
+  OZOW_CLIENT_SECRET: "client-secret", // secret-scan: allow deterministic fixture
+  OZOW_SITE_CODE: "site-code",
+  OZOW_WEBHOOK_SECRET: "webhook-secret", // secret-scan: allow deterministic fixture
   RESEND_API_KEY: "re_live_123456789",
   R2_ACCOUNT_ID: "account-12345678",
   R2_ACCESS_KEY_ID: "access-key-12345678",
@@ -65,6 +66,40 @@ describe("launch env validation", () => {
 
     expect(summary.isValid).toBe(false);
     expect(summary.errors.some((error) => error.name === "Production secrets")).toBe(true);
+  });
+
+  it("fails launch validation when Ozow production credentials are missing", () => {
+    const summary = validateLaunchConfiguration({
+      ...validProductionEnv,
+      OZOW_CLIENT_SECRET: undefined,
+    });
+
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "Launch env",
+      })
+    );
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "Ozow",
+      })
+    );
+  });
+
+  it("fails launch validation when Ozow is still pointed at staging", () => {
+    const summary = validateLaunchConfiguration({
+      ...validProductionEnv,
+      OZOW_ENV: "staging",
+    });
+
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "Ozow",
+        detail: "OZOW_ENV must be set to production for live checkout",
+      })
+    );
   });
 
   it("accepts a valid strict production env", () => {

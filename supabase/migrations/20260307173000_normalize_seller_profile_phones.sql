@@ -26,7 +26,6 @@ BEGIN
   RETURN trimmed;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
-
 CREATE OR REPLACE FUNCTION public.mask_phone_public(phone_input TEXT)
 RETURNS TEXT AS $$
 DECLARE
@@ -54,7 +53,6 @@ BEGIN
   RETURN '••••• •••' || last_two;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
-
 CREATE OR REPLACE FUNCTION public.sync_seller_profile_phone_fields()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -63,14 +61,11 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 DROP TRIGGER IF EXISTS sync_seller_profile_phone_fields ON public.seller_profiles;
-
 CREATE TRIGGER sync_seller_profile_phone_fields
   BEFORE INSERT OR UPDATE OF phone ON public.seller_profiles
   FOR EACH ROW
   EXECUTE FUNCTION public.sync_seller_profile_phone_fields();
-
 UPDATE public.seller_profiles
 SET
   phone = public.normalize_sa_phone(phone),

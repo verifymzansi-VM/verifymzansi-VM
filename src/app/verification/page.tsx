@@ -16,7 +16,6 @@ import {
   ShieldCheck,
   Navigation,
   AlertTriangle,
-  Upload,
 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { PageHeader } from "@/components/layout/page-header";
@@ -27,13 +26,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { getCitiesForProvince, getProvinceNames } from "@/lib/constants/sa-provinces";
 import {
   validateSaIdChecksum,
   extractDobFromSaId,
   extractGenderFromSaId,
 } from "@/lib/utils/sa-id-validation";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
+import { formatPhone } from "@/lib/utils/format";
 import type {
   VerificationStepType,
   LocationConfidence,
@@ -41,6 +41,13 @@ import type {
   AccountVerificationStatus,
 } from "@/types/enums";
 import { GPS_REQUEST_TIMEOUT_MS, GPS_MAX_AGE_MS } from "@/lib/constants/verification";
+import {
+  VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE,
+  VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE,
+  isVerificationEmailConfirmationRequired,
+} from "@/lib/constants/verification-email-confirmation";
+import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { isValidSaPhone, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 
 type WizardStep = "phone" | "id_doc" | "selfie" | "location" | "complete";
 type UploadReceipt = { name: string; sizeBytes: number; uploadedAtIso: string };
@@ -57,10 +64,21 @@ type StepStatusEntry = {
 const STEP_ORDER: Exclude<WizardStep, "complete">[] = ["phone", "id_doc", "selfie", "location"];
 const REVIEWABLE_STEP_ORDER: VerificationStepType[] = ["phone", "id_doc", "selfie", "location"];
 
-const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"];
+const OTP_RESEND_COOLDOWN_SECONDS = 30;
+const EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION =
+  "Check your inbox for the confirmation link, then return here to continue with document and location verification.";
+
+type VerificationApiResponse = {
+  error?: string;
+  code?: string;
+  detail?: string;
+  retryAfter?: number;
+};
+
+type OtpSendResponse = VerificationApiResponse;
 
 const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
   phone: "Use your real South African mobile number. We will send a one-time password by SMS.",
@@ -68,8 +86,46 @@ const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
     "Enter your 13-digit SA ID number and add a clear photo or PDF of your ID document. Accepted: JPG, PNG, WebP, PDF up to 5 MB.",
   selfie: "Upload a clear selfie with your full face visible. Accepted: JPG, PNG, WebP up to 5 MB.",
   location:
-    "Choose your province and city, then verify location by GPS or upload proof of address if GPS is unavailable.",
+    "Select your province and city below. You can optionally confirm with GPS for faster approval.",
 };
+
+class SubmissionError extends Error {
+  code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "SubmissionError";
+    this.code = code;
+  }
+}
+
+function mapUploadFailureMessage(label: string, error: unknown, code?: string): string {
+  const normalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+
+  switch (code) {
+    case "storage_unavailable":
+    case "storage_failed":
+      return `${normalizedLabel} upload is temporarily unavailable. Please try again in a moment.`;
+    case "config_missing":
+      return `${normalizedLabel} upload is unavailable because secure verification storage is not configured.`;
+    case "encryption_failed":
+      return `${normalizedLabel} could not be encrypted securely. Please contact support.`;
+    case "artifact_record_failed":
+      return `${normalizedLabel} upload reached the server but could not be recorded. Please retry.`;
+    case VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE:
+      return VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE;
+    default: {
+      const message = error instanceof Error ? error.message : String(error ?? "").trim();
+      if (!message) {
+        return `Failed to upload ${label}.`;
+      }
+      if (/failed to upload document/i.test(message)) {
+        return `Failed to upload ${label}. Please try again.`;
+      }
+      return message;
+    }
+  }
+}
 
 function formatReasonCode(reasonCode: string | null | undefined): string | null {
   if (!reasonCode) return null;
@@ -194,12 +250,52 @@ function getCompletionCtaLabel(completionHref: string): string {
   return "Continue";
 }
 
+function formatCountdown(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes === 0) {
+    return `${seconds}s`;
+  }
+
+  if (seconds === 0) {
+    return `${minutes}m`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
+function buildOtpSupportMessage(
+  payload: VerificationApiResponse,
+  retryAfterSeconds: number,
+  formattedPhone: string
+): string {
+  if (payload.code === "hourly_limit_reached" || payload.code === "rate_limited") {
+    return retryAfterSeconds > 0
+      ? `Too many OTP requests were made for this number. Wait ${formatCountdown(retryAfterSeconds)} before resending.`
+      : "Too many OTP requests were made for this number. Please wait before resending.";
+  }
+
+  if (payload.code === "sms_delivery_failed") {
+    return `We could not hand your code to the SMS provider. Confirm ${formattedPhone} is correct, wait a minute, then resend.`;
+  }
+
+  if (payload.code === "unauthorized") {
+    return "Your session expired before the OTP request completed. Sign in again, then retry.";
+  }
+
+  return `SMS delivery can take up to 60 seconds. If nothing arrives, confirm ${formattedPhone} and resend once the timer ends.`;
+}
+
 export default function VerificationPage() {
   const [step, setStep] = useState<WizardStep>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
+  const [otpRetryAfterSeconds, setOtpRetryAfterSeconds] = useState(0);
+  const [otpSupportMessage, setOtpSupportMessage] = useState<string | null>(null);
+  const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
 
   const [idNumber, setIdNumber] = useState("");
   const [idFile, setIdFile] = useState<File | null>(null);
@@ -210,7 +306,7 @@ export default function VerificationPage() {
   // Session-driven state
   const [_sessionId, setSessionId] = useState<string | null>(null);
   const [_sessionLoading, setSessionLoading] = useState(true);
-  const [useV2Flow, setUseV2Flow] = useState(false);
+  const [_useV2Flow, setUseV2Flow] = useState(false);
   const [serverSteps, setServerSteps] = useState<StepStatusEntry[]>([]);
   const [accountVerificationStatus, setAccountVerificationStatus] =
     useState<AccountVerificationStatus | null>(null);
@@ -224,12 +320,12 @@ export default function VerificationPage() {
   );
   const [gpsConfidence, setGpsConfidence] = useState<LocationConfidence | null>(null);
   const [gpsProvince, setGpsProvince] = useState<string | null>(null);
-  const [locationMode, setLocationMode] = useState<"gps" | "proof" | null>(null);
   const [gpsFeatureAvailable, setGpsFeatureAvailable] = useState(true);
 
-  // Proof of address state
-  const [proofFile, setProofFile] = useState<File | null>(null);
-  const [proofUploaded, setProofUploaded] = useState(false);
+  // Manual location state
+  const [manualSubmitted, setManualSubmitted] = useState(false);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [gpsMismatch, setGpsMismatch] = useState<{ province: boolean; city: boolean } | null>(null);
 
   // SA ID validation feedback
   const [idDob, setIdDob] = useState<string | null>(null);
@@ -238,6 +334,8 @@ export default function VerificationPage() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [isUploadingId, setIsUploadingId] = useState(false);
+  const [isUploadingSelfie, setIsUploadingSelfie] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<VerificationStepType[]>([]);
   const [uploadReceipts, setUploadReceipts] = useState<{
     id_doc?: UploadReceipt;
@@ -246,8 +344,7 @@ export default function VerificationPage() {
 
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const provinces = getProvinceNames();
-  const cities = province ? getCitiesForProvince(province) : [];
+  const formattedPhone = useMemo(() => formatPhone(phone), [phone]);
   const completionHref = useMemo(
     () => sanitizeReturnUrl(searchParams.get("returnUrl")),
     [searchParams]
@@ -255,18 +352,24 @@ export default function VerificationPage() {
 
   const idFileError = validateFile(idFile, true);
   const selfieFileError = validateFile(selfieFile);
-  const isPhoneValid = SA_PHONE_REGEX.test(phone);
+  const isPhoneValid = isValidSaPhone(phone);
   const isOtpValid = otp.length === 6;
   const isIdReady = /^\d{13}$/.test(idNumber) && !idFileError && idChecksumValid !== false;
   const isSelfieReady = !selfieFileError;
-  const isLocationReady = useV2Flow
-    ? Boolean(province && city) &&
-      (locationMode === "gps" || locationMode === "proof" || !gpsFeatureAvailable)
-    : Boolean(province && city);
   const serverStepMap = useMemo(
     () => new Map(serverSteps.map((entry) => [entry.step_type, entry] as const)),
     [serverSteps]
   );
+  const persistedIdUploaded = ["approved", "pending"].includes(
+    serverStepMap.get("id_doc")?.status ?? ""
+  );
+  const persistedSelfieUploaded = ["approved", "pending"].includes(
+    serverStepMap.get("selfie")?.status ?? ""
+  );
+  const persistedLocationSubmitted = ["approved", "pending"].includes(
+    serverStepMap.get("location")?.status ?? ""
+  );
+  const isLocationReady = persistedLocationSubmitted || manualSubmitted;
   const allStepsResolved = useMemo(
     () =>
       REVIEWABLE_STEP_ORDER.every((stepType) => {
@@ -275,6 +378,16 @@ export default function VerificationPage() {
       }),
     [serverStepMap]
   );
+  const verificationSubmissionBlocked = emailConfirmationRequired;
+
+  const applyEmailConfirmationBlocker = useCallback((payload?: VerificationApiResponse | null) => {
+    if (!isVerificationEmailConfirmationRequired(payload)) {
+      return false;
+    }
+
+    setEmailConfirmationRequired(true);
+    return true;
+  }, []);
 
   const syncVerificationStatus = useCallback(async () => {
     try {
@@ -303,11 +416,15 @@ export default function VerificationPage() {
       );
 
       const approvedSteps = nextSteps
-        .filter((entry) => entry.status === "approved")
+        .filter((entry) => entry.status === "approved" || entry.status === "pending")
         .map((entry) => entry.step_type);
       setCompletedSteps(approvedSteps);
       setPhoneVerified(
-        nextSteps.some((entry) => entry.step_type === "phone" && entry.status === "approved")
+        nextSteps.some(
+          (entry) =>
+            entry.step_type === "phone" &&
+            (entry.status === "approved" || entry.status === "pending")
+        )
       );
 
       return {
@@ -336,6 +453,7 @@ export default function VerificationPage() {
       try {
         const res = await fetch("/api/verification/session/start", {
           method: "POST",
+          headers: withCsrfHeaders(),
         });
         if (res.ok) {
           const data = await res.json();
@@ -347,9 +465,18 @@ export default function VerificationPage() {
             if (data.completedSteps?.length > 0) {
               setCompletedSteps(data.completedSteps);
             }
-            if (data.phoneVerifiedAt) {
+            if (
+              data.phoneVerifiedAt ||
+              data.completedSteps?.includes("phone") ||
+              data.pendingSteps?.includes("phone")
+            ) {
               setPhoneVerified(true);
             }
+          }
+        } else if (res.status === 403) {
+          const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
+          if (!cancelled) {
+            applyEmailConfirmationBlocker(data);
           }
         } else if (res.status === 410) {
           // Session expired — toast and fall back to legacy
@@ -370,9 +497,13 @@ export default function VerificationPage() {
         if (!cancelled) {
           const phoneDone =
             Boolean(sessionData?.phoneVerifiedAt) ||
+            sessionData?.completedSteps?.includes("phone") ||
+            sessionData?.pendingSteps?.includes("phone") ||
             Boolean(
               statusSnapshot?.steps.some(
-                (entry) => entry.step_type === "phone" && entry.status === "approved"
+                (entry) =>
+                  entry.step_type === "phone" &&
+                  (entry.status === "approved" || entry.status === "pending")
               )
             );
           const allSubmitted =
@@ -395,7 +526,7 @@ export default function VerificationPage() {
     return () => {
       cancelled = true;
     };
-  }, [syncVerificationStatus, toast]);
+  }, [applyEmailConfirmationBlocker, syncVerificationStatus, toast]);
 
   // SA ID number validation effect
   useEffect(() => {
@@ -428,13 +559,17 @@ export default function VerificationPage() {
 
   // GPS capture handler
   const handleRequestGps = useCallback(async () => {
+    if (gpsStatus === "requesting") return;
+
     if (!navigator.geolocation) {
+      setGpsFeatureAvailable(false);
       setGpsStatus("error");
       toast({ title: "GPS not supported in this browser", variant: "destructive" });
       return;
     }
 
     setGpsStatus("requesting");
+    clearStepCompletion("location");
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -442,60 +577,75 @@ export default function VerificationPage() {
         setGpsCoords({ lat: latitude, lon: longitude, accuracy });
         setGpsStatus("success");
 
-        // Submit GPS to server
-        if (province && city) {
-          try {
-            const res = await fetch("/api/verification/location/gps", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                latitude,
-                longitude,
-                accuracy,
-                timestamp: position.timestamp,
-                province,
-                city,
-              }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              setGpsConfidence(data.confidence);
-              setGpsProvince(data.gpsProvince);
-              setLocationMode("gps");
-              markStepComplete("location");
-              toast({ title: "GPS location captured", variant: "success" });
-            } else if (res.status === 404) {
-              // GPS feature not enabled — fall back to legacy location
-              setGpsFeatureAvailable(false);
-              setGpsStatus("idle");
-            } else {
-              const data = await res.json().catch(() => ({}));
-              if (res.status === 422) {
-                // Accuracy too poor
-                setGpsStatus("error");
-                toast({
-                  title: "GPS accuracy too low",
-                  description: "Please upload proof of address instead.",
-                  variant: "destructive",
-                });
-              } else {
-                throw new Error(data.error || "Failed to verify GPS");
-              }
+        try {
+          const gpsBody: Record<string, unknown> = {
+            latitude,
+            longitude,
+            accuracy,
+            timestamp: position.timestamp,
+          };
+          // Pass declared values for GPS confirmation mode
+          if (manualSubmitted && province) {
+            gpsBody.declaredProvince = province;
+            if (city) gpsBody.declaredCity = city;
+          }
+          const res = await fetch("/api/verification/location/gps", {
+            method: "POST",
+            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify(gpsBody),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (!manualSubmitted) {
+              setProvince(data.resolvedProvince ?? "");
+              setCity(data.resolvedCity ?? "");
             }
-          } catch (err) {
+            setGpsConfidence(data.confidence);
+            setGpsProvince(data.resolvedProvince ?? null);
+            if (data.mismatch) {
+              setGpsMismatch(data.mismatch);
+            }
+            markStepComplete("location");
+            toast({ title: "GPS confirmation captured", variant: "success" });
+          } else if (res.status === 404) {
+            setGpsFeatureAvailable(false);
+            setGpsStatus("idle");
             toast({
-              title: "GPS verification failed",
-              description: err instanceof Error ? err.message : "Please try proof of address.",
+              title: "GPS verification unavailable",
+              description: "GPS verification is temporarily unavailable. Please try again later.",
+              variant: "destructive",
+            });
+          } else {
+            const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
+            if (applyEmailConfirmationBlocker(data)) {
+              setGpsStatus("idle");
+              toast({
+                title: "Confirm your email first",
+                description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+                variant: "destructive",
+              });
+              return;
+            }
+            setGpsStatus("error");
+            toast({
+              title: "GPS could not verify this location",
+              description: data.error || "Please enable location permissions and try again.",
               variant: "destructive",
             });
           }
+        } catch (err) {
+          toast({
+            title: "GPS verification failed",
+            description: err instanceof Error ? err.message : "Please try again.",
+            variant: "destructive",
+          });
         }
       },
       (err) => {
         setGpsStatus(err.code === err.PERMISSION_DENIED ? "denied" : "error");
         toast({
           title: err.code === err.PERMISSION_DENIED ? "GPS permission denied" : "GPS error",
-          description: "You can upload proof of address instead.",
+          description: "GPS confirmation is optional. You can proceed without it.",
           variant: "destructive",
         });
       },
@@ -505,44 +655,9 @@ export default function VerificationPage() {
         maximumAge: GPS_MAX_AGE_MS,
       }
     );
-  }, [province, city, toast]);
+  }, [applyEmailConfirmationBlocker, gpsStatus, toast, manualSubmitted, province, city]);
 
-  // Proof of address upload handler
-  const handleProofUpload = useCallback(async () => {
-    if (!proofFile || !province || !city) return;
-
-    setIsLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", proofFile);
-      formData.append("province", province);
-      formData.append("city", city);
-
-      const res = await fetch("/api/verification/location/proof", {
-        method: "POST",
-        body: formData,
-      });
-      if (res.status === 404) {
-        // Proof feature not enabled — fall back to legacy location
-        setGpsFeatureAvailable(false);
-        return;
-      }
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Failed to upload proof");
-      setProofUploaded(true);
-      setLocationMode("proof");
-      markStepComplete("location");
-      toast({ title: "Proof of address uploaded", variant: "success" });
-    } catch (err) {
-      toast({
-        title: "Upload failed",
-        description: err instanceof Error ? err.message : "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [proofFile, province, city, toast]);
+  // GPS is no longer auto-triggered — it's optional confirmation after manual selection
 
   const idPreviewUrl = useMemo(
     () => (idFile && idFile.type.startsWith("image/") ? URL.createObjectURL(idFile) : null),
@@ -567,6 +682,16 @@ export default function VerificationPage() {
     };
   }, [selfiePreviewUrl]);
 
+  useEffect(() => {
+    if (otpRetryAfterSeconds <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setOtpRetryAfterSeconds((current) => (current <= 1 ? 0 : current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [otpRetryAfterSeconds]);
+
   function markStepComplete(stepType: VerificationStepType) {
     setCompletedSteps((prev) => (prev.includes(stepType) ? prev : [...prev, stepType]));
   }
@@ -575,9 +700,21 @@ export default function VerificationPage() {
     setCompletedSteps((prev) => prev.filter((entry) => entry !== stepType));
   }
 
+  function handlePhoneChange(value: string) {
+    setPhone(sanitizeSaPhoneInput(value));
+    setOtp("");
+    setOtpSent(false);
+    setOtpRetryAfterSeconds(0);
+    setOtpSupportMessage(null);
+  }
+
   async function handleSendOtp() {
     if (!isPhoneValid) {
-      toast({ title: "Enter a valid SA mobile number", variant: "destructive" });
+      toast({
+        title: "Enter a valid SA mobile number",
+        description: "Use a South African mobile number such as 071 234 5678.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -586,19 +723,29 @@ export default function VerificationPage() {
     try {
       const res = await fetch("/api/otp/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ phone }),
       });
-      const payload = await res.json().catch(() => ({}));
+      const payload = (await res.json().catch(() => ({}))) as OtpSendResponse;
+      const retryAfterSeconds = Number(res.headers.get("Retry-After") ?? payload.retryAfter ?? 0);
+
       if (!res.ok) {
-        const detail = payload.detail ? ` (${payload.detail})` : "";
-        throw new Error((payload.error || "Failed to send OTP") + detail);
+        if (retryAfterSeconds > 0) {
+          setOtpRetryAfterSeconds(retryAfterSeconds);
+        }
+
+        const supportMessage = buildOtpSupportMessage(payload, retryAfterSeconds, formattedPhone);
+        setOtpSupportMessage(supportMessage);
+        throw new Error(payload.error || supportMessage);
       }
 
       setOtpSent(true);
+      setOtp("");
+      setOtpRetryAfterSeconds(OTP_RESEND_COOLDOWN_SECONDS);
+      setOtpSupportMessage(buildOtpSupportMessage({}, OTP_RESEND_COOLDOWN_SECONDS, formattedPhone));
       toast({
-        title: "OTP sent",
-        description: "Check your SMS inbox for the 6-digit code.",
+        title: otpSent ? "OTP resent" : "OTP sent",
+        description: `Check ${formattedPhone} for the 6-digit code. Delivery can take up to 60 seconds.`,
         variant: "success",
       });
     } catch (err) {
@@ -614,7 +761,11 @@ export default function VerificationPage() {
 
   async function handleVerifyOtp() {
     if (!isOtpValid) {
-      toast({ title: "Enter the 6-digit OTP", variant: "destructive" });
+      toast({
+        title: "Enter the 6-digit code",
+        description: "Use the code sent to your phone, then try again.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -622,17 +773,23 @@ export default function VerificationPage() {
     try {
       const res = await fetch("/api/otp/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ phone, otp }),
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.error || "Invalid OTP");
 
       setPhoneVerified(true);
+      setOtpSupportMessage(null);
+      setOtpRetryAfterSeconds(0);
       markStepComplete("phone");
       await syncVerificationStatus();
       setStep("id_doc");
-      toast({ title: "Phone verified", variant: "success" });
+      toast({
+        title: "Phone number verified",
+        description: `${formattedPhone} is now linked to your verification profile.`,
+        variant: "success",
+      });
     } catch (err) {
       toast({
         title: "Invalid OTP",
@@ -644,7 +801,16 @@ export default function VerificationPage() {
     }
   }
 
-  function goToSelfieStep() {
+  async function goToSelfieStep() {
+    if (verificationSubmissionBlocked) {
+      toast({
+        title: "Confirm your email first",
+        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!/^\d{13}$/.test(idNumber)) {
       toast({ title: "Enter a valid 13-digit SA ID number", variant: "destructive" });
       return;
@@ -653,15 +819,56 @@ export default function VerificationPage() {
       toast({ title: idFileError, variant: "destructive" });
       return;
     }
-    setStep("selfie");
+    setIsUploadingId(true);
+    try {
+      await uploadIdIfNeeded();
+      await syncVerificationStatus();
+      setStep("selfie");
+    } catch (err) {
+      const isEmailBlocker =
+        err instanceof SubmissionError &&
+        err.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE;
+      toast({
+        title: isEmailBlocker ? "Confirm your email first" : "ID document upload failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingId(false);
+    }
   }
 
-  function goToLocationStep() {
+  async function goToLocationStep() {
+    if (verificationSubmissionBlocked) {
+      toast({
+        title: "Confirm your email first",
+        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (selfieFileError) {
       toast({ title: selfieFileError, variant: "destructive" });
       return;
     }
-    setStep("location");
+    setIsUploadingSelfie(true);
+    try {
+      await uploadSelfieIfNeeded();
+      await syncVerificationStatus();
+      setStep("location");
+    } catch (err) {
+      const isEmailBlocker =
+        err instanceof SubmissionError &&
+        err.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE;
+      toast({
+        title: isEmailBlocker ? "Confirm your email first" : "Selfie upload failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingSelfie(false);
+    }
   }
 
   /** Upload helper with 1 automatic retry after a 2-second delay. */
@@ -672,16 +879,39 @@ export default function VerificationPage() {
     const attempt = async () => {
       const res = await fetch("/api/verification/upload", {
         method: "POST",
+        headers: withCsrfHeaders(),
         body: buildFormData(),
       });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload.error || `Failed to upload ${label}`);
+      const payload = (await res.json().catch(() => ({}))) as VerificationApiResponse;
+      if (!res.ok) {
+        if (applyEmailConfirmationBlocker(payload)) {
+          throw new SubmissionError(
+            VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE,
+            VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE
+          );
+        }
+        throw new SubmissionError(
+          mapUploadFailureMessage(
+            label,
+            payload.error || `Failed to upload ${label}`,
+            payload.code
+          ),
+          payload.code
+        );
+      }
       return payload;
     };
 
     try {
       return await attempt();
-    } catch {
+    } catch (error) {
+      if (
+        error instanceof SubmissionError &&
+        error.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE
+      ) {
+        throw error;
+      }
+
       // One automatic retry after 2 s for transient failures
       await new Promise((r) => setTimeout(r, 2000));
       return await attempt();
@@ -689,7 +919,7 @@ export default function VerificationPage() {
   }
 
   async function uploadIdIfNeeded() {
-    if (uploadReceipts.id_doc) return;
+    if (uploadReceipts.id_doc || persistedIdUploaded) return;
     if (!idFile) throw new Error("Please add your ID document.");
 
     await uploadWithRetry(() => {
@@ -713,7 +943,7 @@ export default function VerificationPage() {
   }
 
   async function uploadSelfieIfNeeded() {
-    if (uploadReceipts.selfie) return;
+    if (uploadReceipts.selfie || persistedSelfieUploaded) return;
     if (!selfieFile) throw new Error("Please add your selfie.");
 
     await uploadWithRetry(() => {
@@ -735,25 +965,78 @@ export default function VerificationPage() {
   }
 
   async function submitLocation() {
-    // If v2 flow with GPS or proof, location was already submitted via those handlers
-    if (useV2Flow && (locationMode === "gps" || locationMode === "proof")) {
+    if (persistedLocationSubmitted || manualSubmitted) {
       if (!completedSteps.includes("location")) {
         markStepComplete("location");
       }
       return;
     }
-    // Legacy flow (or v2 with GPS feature unavailable): submit province/city directly
-    const res = await fetch("/api/verification/location", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ province, city }),
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(payload.error || "Failed to save location");
-    markStepComplete("location");
+
+    throw new Error("Please select your province and city.");
+  }
+
+  async function handleManualLocationSubmit() {
+    if (verificationSubmissionBlocked) {
+      toast({
+        title: "Confirm your email first",
+        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!province || !city) {
+      toast({ title: "Please select both province and city", variant: "destructive" });
+      return;
+    }
+    setManualSubmitting(true);
+    try {
+      const res = await fetch("/api/verification/location/manual", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ province, city }),
+      });
+      if (res.ok) {
+        setManualSubmitted(true);
+        markStepComplete("location");
+        toast({ title: "Location saved", variant: "success" });
+      } else {
+        const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
+        if (applyEmailConfirmationBlocker(data)) {
+          toast({
+            title: "Confirm your email first",
+            description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+            variant: "destructive",
+          });
+          return;
+        }
+        toast({
+          title: "Failed to save location",
+          description: data.detail || data.error || "Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Location submission failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setManualSubmitting(false);
+    }
   }
 
   async function handleFinalize() {
+    if (verificationSubmissionBlocked) {
+      toast({
+        title: "Confirm your email first",
+        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!phoneVerified) {
       setStep("phone");
       toast({ title: "Verify your phone first", variant: "destructive" });
@@ -770,7 +1053,11 @@ export default function VerificationPage() {
       return;
     }
     if (!isLocationReady) {
-      toast({ title: "Select province and city", variant: "destructive" });
+      toast({
+        title: "Complete your location verification",
+        description: "Please allow GPS access to capture your location.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -788,8 +1075,11 @@ export default function VerificationPage() {
       });
       setStep("complete");
     } catch (err) {
+      const isEmailBlocker =
+        err instanceof SubmissionError &&
+        err.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE;
       toast({
-        title: "Submission failed",
+        title: isEmailBlocker ? "Confirm your email first" : "Submission failed",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
@@ -799,8 +1089,32 @@ export default function VerificationPage() {
   }
 
   const progressSteps = useMemo(() => {
-    const entries = REVIEWABLE_STEP_ORDER.flatMap((stepType) => {
+    // Find the first step that is incomplete, rejected, or needs resubmission
+    // Steps after this one should not appear "approved" even if the server says so,
+    // because the earlier step blocks the flow.
+    let firstIncompleteIdx = REVIEWABLE_STEP_ORDER.length;
+    for (let i = 0; i < REVIEWABLE_STEP_ORDER.length; i++) {
+      const s = serverStepMap.get(REVIEWABLE_STEP_ORDER[i]);
+      if (!s || s.status === "rejected" || s.status === "needs_resubmission") {
+        firstIncompleteIdx = i;
+        break;
+      }
+    }
+
+    const entries = REVIEWABLE_STEP_ORDER.flatMap((stepType, idx) => {
       const persisted = serverStepMap.get(stepType);
+
+      // If this step is after an incomplete earlier step, cap its display
+      if (idx > firstIncompleteIdx) {
+        if (!persisted) return [];
+        // Show persisted status but don't let it appear as "approved"
+        // when an earlier step still blocks the flow
+        if (persisted.status === "approved" || persisted.status === "pending") {
+          return [{ type: stepType, status: "pending" as const }];
+        }
+        return [{ type: stepType, status: persisted.status }];
+      }
+
       if (persisted) {
         return [{ type: stepType, status: persisted.status }];
       }
@@ -846,7 +1160,7 @@ export default function VerificationPage() {
             <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
               <CardContent className="space-y-3 p-4 sm:p-5">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">Wizard 2.0 progress</p>
+                  <p className="text-sm font-medium">Verification progress</p>
                   {step !== "complete" && (
                     <Badge variant="secondary">Step {currentStepNumber} of 4</Badge>
                   )}
@@ -859,30 +1173,54 @@ export default function VerificationPage() {
               </CardContent>
             </Card>
 
-            {(accountVerificationStatus || reviewAttentionStep) && (
+            {reviewAttentionStep && (
               <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
                 <CardContent className="space-y-2 p-4 text-sm">
-                  {reviewAttentionStep ? (
-                    <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive">
-                      <p className="font-medium">
-                        Action needed on {reviewAttentionStep.replace("_", " ")}.
-                      </p>
-                      <p className="mt-1 text-xs">
-                        Review the notes on that step, replace the document if needed, and submit
-                        again.
-                      </p>
-                    </div>
-                  ) : accountVerificationStatus === "verified" ? (
-                    <div className="rounded-md border border-brand-green/30 bg-brand-green-50 p-3 text-brand-green-900">
-                      Your verification is approved. You can still review the submitted details
-                      below.
-                    </div>
-                  ) : accountVerificationStatus === "pending_review" && allStepsResolved ? (
+                  <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive">
+                    <p className="font-medium">
+                      Action needed on {reviewAttentionStep.replace("_", " ")}.
+                    </p>
+                    <p className="mt-1 text-xs">
+                      Review the notes on that step, replace the document if needed, and submit
+                      again.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {!reviewAttentionStep && accountVerificationStatus === "verified" && (
+              <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
+                <CardContent className="space-y-2 p-4 text-sm">
+                  <div className="rounded-md border border-brand-green/30 bg-brand-green-50 p-3 text-brand-green-900">
+                    Your verification is approved. You can still review the submitted details below.
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {!reviewAttentionStep &&
+              accountVerificationStatus === "pending_review" &&
+              allStepsResolved && (
+                <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
+                  <CardContent className="space-y-2 p-4 text-sm">
                     <div className="rounded-md border border-brand-gold/30 bg-brand-gold-50 p-3 text-brand-gold-900">
                       Your verification is in admin review. We will notify you if anything needs to
                       be resubmitted.
                     </div>
-                  ) : null}
+                  </CardContent>
+                </Card>
+              )}
+
+            {verificationSubmissionBlocked && (
+              <Card className="border-amber-300/70 bg-amber-50/80 dark:border-amber-700/70 dark:bg-amber-950/20">
+                <CardContent className="space-y-2 p-4 text-sm">
+                  <div className="rounded-md border border-amber-400/40 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+                    <p className="font-medium">
+                      Confirm your email before submitting documents and location.
+                    </p>
+                    <p className="mt-1 text-xs">{EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION}</p>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -913,34 +1251,57 @@ export default function VerificationPage() {
                     <Label htmlFor="phone">SA mobile number</Label>
                     <Input
                       id="phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
                       placeholder="071 234 5678"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => handlePhoneChange(e.target.value)}
+                      pattern="^(\\+27|0)[6-8][0-9]{8}$"
+                      title="Enter a valid SA mobile number (e.g. 071 234 5678)"
                       disabled={phoneVerified}
                     />
                   </div>
 
                   {!phoneVerified && (
-                    <Button
-                      onClick={handleSendOtp}
-                      disabled={isLoading || !isPhoneValid}
-                      variant="trust-verified"
-                      className="gap-2"
-                    >
-                      {isLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ArrowRight className="h-4 w-4" />
+                    <div className="space-y-2">
+                      <Button
+                        onClick={handleSendOtp}
+                        disabled={isLoading || !isPhoneValid || otpRetryAfterSeconds > 0}
+                        variant="trust-verified"
+                        className="gap-2"
+                      >
+                        {isLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ArrowRight className="h-4 w-4" />
+                        )}
+                        {isLoading ? "Sending code..." : otpSent ? "Resend code" : "Send code"}
+                      </Button>
+                      {otpRetryAfterSeconds > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          You can resend a new code in {formatCountdown(otpRetryAfterSeconds)}.
+                        </p>
                       )}
-                      Send OTP
-                    </Button>
+                      {otpSupportMessage && !otpSent && (
+                        <div className="rounded-md border border-warm-200/70 bg-warm-50/80 p-3 text-xs text-muted-foreground dark:border-warm-700/70 dark:bg-warm-950/20">
+                          {otpSupportMessage}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {otpSent && !phoneVerified && (
                     <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
                       <p className="text-xs text-muted-foreground">
-                        Enter the 6-digit code sent to your phone. Codes expire after 5 minutes.
+                        Enter the 6-digit code sent to {formattedPhone}. Codes expire after 5
+                        minutes.
                       </p>
+                      {otpSupportMessage && (
+                        <div className="rounded-md border border-warm-200/70 bg-warm-50/80 p-3 text-xs text-muted-foreground dark:border-warm-700/70 dark:bg-warm-950/20">
+                          {otpSupportMessage}
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <Label htmlFor="otp">6-digit OTP</Label>
                         <Input
@@ -954,15 +1315,17 @@ export default function VerificationPage() {
                         onClick={handleVerifyOtp}
                         disabled={isLoading || !isOtpValid}
                         variant="trust-verified"
+                        className="gap-2"
                       >
-                        Verify OTP
+                        {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {isLoading ? "Verifying code..." : "Verify code"}
                       </Button>
                     </div>
                   )}
 
                   {phoneVerified && (
                     <div className="rounded-md border border-brand-green/30 bg-brand-green-50 p-3 text-sm text-brand-green-900">
-                      Phone verified: {phone}
+                      Phone number verified: {formattedPhone}
                     </div>
                   )}
                 </CardContent>
@@ -1002,6 +1365,7 @@ export default function VerificationPage() {
                       id="idNumber"
                       maxLength={13}
                       value={idNumber}
+                      disabled={verificationSubmissionBlocked}
                       onChange={(e) => {
                         setIdNumber(e.target.value.replace(/\D/g, ""));
                         clearStepCompletion("id_doc");
@@ -1039,6 +1403,7 @@ export default function VerificationPage() {
                       id="idFile"
                       type="file"
                       accept="image/jpeg,image/png,image/webp,.pdf,application/pdf"
+                      disabled={verificationSubmissionBlocked}
                       onChange={(e) => {
                         setIdFile(e.target.files?.[0] ?? null);
                         setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
@@ -1070,12 +1435,21 @@ export default function VerificationPage() {
                     </Button>
                     <Button
                       onClick={goToSelfieStep}
-                      disabled={!isIdReady}
+                      disabled={!isIdReady || isUploadingId || verificationSubmissionBlocked}
                       variant="trust-verified"
                       className="gap-1"
                     >
-                      Continue
-                      <ArrowRight className="h-4 w-4" />
+                      {isUploadingId ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading…
+                        </>
+                      ) : (
+                        <>
+                          Continue
+                          <ArrowRight className="h-4 w-4" />
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent>
@@ -1116,6 +1490,7 @@ export default function VerificationPage() {
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
                       capture="user"
+                      disabled={verificationSubmissionBlocked}
                       onChange={(e) => {
                         setSelfieFile(e.target.files?.[0] ?? null);
                         setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
@@ -1149,12 +1524,23 @@ export default function VerificationPage() {
                     </Button>
                     <Button
                       onClick={goToLocationStep}
-                      disabled={!isSelfieReady}
+                      disabled={
+                        !isSelfieReady || isUploadingSelfie || verificationSubmissionBlocked
+                      }
                       variant="trust-verified"
                       className="gap-1"
                     >
-                      Continue
-                      <ArrowRight className="h-4 w-4" />
+                      {isUploadingSelfie ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading…
+                        </>
+                      ) : (
+                        <>
+                          Continue
+                          <ArrowRight className="h-4 w-4" />
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent>
@@ -1189,81 +1575,110 @@ export default function VerificationPage() {
                       </div>
                     )}
 
-                    {/* Province & City selectors */}
-                    <div className="space-y-2">
-                      <Label htmlFor="province">Province</Label>
-                      <select
-                        id="province"
-                        title="Select province"
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        value={province}
-                        onChange={(e) => {
-                          setProvince(e.target.value);
-                          setCity("");
-                          setLocationMode(null);
-                          setGpsStatus("idle");
-                          setGpsCoords(null);
-                          setGpsConfidence(null);
-                          setProofUploaded(false);
-                          clearStepCompletion("location");
-                        }}
-                      >
-                        <option value="">Select province</option>
-                        {provinces.map((value) => (
-                          <option key={value} value={value}>
-                            {value}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {/* Manual Province + City Selection */}
+                    <div className="space-y-3 rounded-md border border-warm-200/70 p-4 dark:border-warm-700/70">
+                      <h4 className="flex items-center gap-2 text-sm font-medium">
+                        <MapPin className="h-4 w-4 text-brand-red" />
+                        Select Your Location
+                      </h4>
 
-                    {province && (
                       <div className="space-y-2">
-                        <Label htmlFor="city">City</Label>
+                        <Label htmlFor="province-select" className="text-xs">
+                          Province
+                        </Label>
                         <select
-                          id="city"
-                          title="Select city"
+                          id="province-select"
+                          title="Province"
+                          aria-label="Province"
                           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          value={city}
+                          value={province}
+                          disabled={manualSubmitted || verificationSubmissionBlocked}
                           onChange={(e) => {
-                            setCity(e.target.value);
-                            setLocationMode(null);
-                            setGpsStatus("idle");
-                            setProofUploaded(false);
-                            clearStepCompletion("location");
+                            setProvince(e.target.value);
+                            setCity("");
                           }}
                         >
-                          <option value="">Select city</option>
-                          {cities.map((value) => (
-                            <option key={value} value={value}>
-                              {value}
+                          <option value="">Select province…</option>
+                          {getProvinceNames().map((p) => (
+                            <option key={p} value={p}>
+                              {p}
                             </option>
                           ))}
                         </select>
                       </div>
-                    )}
 
-                    {/* GPS location capture (v2 flow) */}
-                    {useV2Flow && gpsFeatureAvailable && province && city && (
-                      <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="city-select" className="text-xs">
+                          City / Town
+                        </Label>
+                        <select
+                          id="city-select"
+                          title="City"
+                          aria-label="City"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={city}
+                          disabled={!province || manualSubmitted || verificationSubmissionBlocked}
+                          onChange={(e) => setCity(e.target.value)}
+                        >
+                          <option value="">Select city…</option>
+                          {province &&
+                            getCitiesForProvince(province).map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      {!manualSubmitted && (
+                        <Button
+                          onClick={handleManualLocationSubmit}
+                          disabled={
+                            !province || !city || manualSubmitting || verificationSubmissionBlocked
+                          }
+                          variant="default"
+                          size="sm"
+                          className="gap-2"
+                        >
+                          {manualSubmitting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4" />
+                          )}
+                          Submit Location
+                        </Button>
+                      )}
+
+                      {manualSubmitted && (
+                        <div className="flex items-center gap-2 text-sm text-brand-green">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Location saved: {city}, {province}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Optional GPS Confirmation */}
+                    {manualSubmitted && gpsStatus !== "success" && (
+                      <div className="space-y-3 rounded-md border border-dashed border-brand-blue/40 p-4 bg-brand-blue/5">
                         <h4 className="flex items-center gap-2 text-sm font-medium">
                           <Navigation className="h-4 w-4 text-brand-blue" />
-                          GPS Location Verification
+                          Confirm with GPS (Optional)
                         </h4>
                         <p className="text-xs text-muted-foreground">
-                          Allow GPS to verify your province. If it fails or permission is denied,
-                          you can upload proof of address instead.
+                          GPS confirmation speeds up approval. Your selected location will still be
+                          used as your address.
                         </p>
 
-                        {gpsStatus === "idle" && (
+                        {gpsFeatureAvailable && gpsStatus === "idle" && (
                           <Button
                             onClick={handleRequestGps}
                             variant="outline"
                             className="gap-2"
                             size="sm"
+                            disabled={verificationSubmissionBlocked}
                           >
                             <Navigation className="h-4 w-4" />
-                            Capture GPS Location
+                            Confirm with GPS
                           </Button>
                         )}
 
@@ -1274,99 +1689,69 @@ export default function VerificationPage() {
                           </div>
                         )}
 
-                        {gpsStatus === "success" && gpsCoords && (
+                        {(gpsStatus === "denied" || gpsStatus === "error") && (
                           <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-brand-green">
-                              <CheckCircle2 className="h-4 w-4" />
-                              GPS captured (accuracy: {Math.round(gpsCoords.accuracy)}m)
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              {gpsStatus === "denied"
+                                ? "GPS permission denied — you can still proceed without it."
+                                : "GPS unavailable — you can still proceed without it."}
                             </div>
-                            {gpsConfidence && (
-                              <div
-                                className={`rounded-md border px-3 py-2 text-xs ${
-                                  gpsConfidence === "high"
-                                    ? "border-brand-green/30 bg-brand-green-50 text-brand-green-900"
-                                    : gpsConfidence === "medium"
-                                      ? "border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-950 text-yellow-900 dark:text-yellow-100"
-                                      : "border-destructive/30 bg-destructive/5 text-destructive"
-                                }`}
-                              >
-                                Location confidence:{" "}
-                                <span className="font-medium capitalize">{gpsConfidence}</span>
-                                {gpsProvince && gpsProvince !== province && (
-                                  <span className="ml-1">(GPS detected: {gpsProvince})</span>
-                                )}
-                              </div>
-                            )}
+                            <Button
+                              onClick={() => {
+                                setGpsStatus("idle");
+                                setGpsCoords(null);
+                                setGpsConfidence(null);
+                              }}
+                              variant="ghost"
+                              size="sm"
+                              className="gap-2 text-xs"
+                            >
+                              <Navigation className="h-3.5 w-3.5" />
+                              Try Again
+                            </Button>
                           </div>
                         )}
 
-                        {(gpsStatus === "denied" || gpsStatus === "error") && (
-                          <div className="flex items-center gap-2 text-sm text-destructive">
-                            <AlertTriangle className="h-4 w-4" />
-                            {gpsStatus === "denied"
-                              ? "GPS permission was denied."
-                              : "Could not get GPS position."}
-                          </div>
+                        {!gpsFeatureAvailable && (
+                          <p className="text-xs text-muted-foreground">
+                            GPS is not available on this device. You can proceed without it.
+                          </p>
                         )}
                       </div>
                     )}
 
-                    {/* Proof of address fallback (v2 flow) */}
-                    {useV2Flow &&
-                      gpsFeatureAvailable &&
-                      province &&
-                      city &&
-                      (gpsStatus === "denied" ||
-                        gpsStatus === "error" ||
-                        locationMode === "proof") && (
-                        <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-4">
-                          <h4 className="flex items-center gap-2 text-sm font-medium">
-                            <Upload className="h-4 w-4 text-brand-gold" />
-                            Proof of Address (Alternative)
-                          </h4>
-                          <p className="text-xs text-muted-foreground">
-                            Upload a utility bill, bank statement, or government letter with your
-                            address. Accepted: JPG, PNG, WebP, PDF up to 5 MB.
-                          </p>
-                          <Input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,.pdf,application/pdf"
-                            onChange={(e) => {
-                              setProofFile(e.target.files?.[0] ?? null);
-                              setProofUploaded(false);
-                              setLocationMode(null);
-                              clearStepCompletion("location");
-                            }}
-                          />
-                          {proofFile && !proofUploaded && (
-                            <div className="space-y-2">
-                              <p className="text-xs text-muted-foreground">
-                                {proofFile.name} ({formatFileSize(proofFile.size)})
-                              </p>
-                              <Button
-                                onClick={handleProofUpload}
-                                variant="outline"
-                                size="sm"
-                                disabled={isLoading}
-                                className="gap-2"
-                              >
-                                {isLoading ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Upload className="h-4 w-4" />
-                                )}
-                                Upload Proof
-                              </Button>
-                            </div>
-                          )}
-                          {proofUploaded && (
-                            <div className="flex items-center gap-2 text-sm text-brand-green">
-                              <CheckCircle2 className="h-4 w-4" />
-                              Proof of address uploaded and ready for admin review
-                            </div>
-                          )}
+                    {/* GPS Confirmation Result */}
+                    {manualSubmitted && gpsStatus === "success" && gpsCoords && (
+                      <div className="space-y-2 rounded-md border border-brand-green/30 bg-brand-green-50/30 p-4 dark:bg-brand-green-950/20">
+                        <div className="flex items-center gap-2 text-sm text-brand-green">
+                          <Navigation className="h-4 w-4" />
+                          GPS confirmed (accuracy: {Math.round(gpsCoords.accuracy)}m)
                         </div>
-                      )}
+                        {gpsMismatch?.province && (
+                          <div className="rounded-md border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
+                            GPS detected a different province ({gpsProvince}). Your selected
+                            location will be reviewed by an admin.
+                          </div>
+                        )}
+                        {gpsMismatch && !gpsMismatch.province && gpsMismatch.city && (
+                          <div className="rounded-md border border-yellow-300/50 bg-yellow-50 px-3 py-2 text-xs text-yellow-700 dark:bg-yellow-950/20 dark:text-yellow-400">
+                            GPS detected a different city. Your selected city will be used.
+                          </div>
+                        )}
+                        {gpsMismatch && !gpsMismatch.province && !gpsMismatch.city && (
+                          <div className="text-xs text-brand-green">
+                            GPS matches your selected location.
+                          </div>
+                        )}
+                        {gpsConfidence && (
+                          <div className="text-xs text-muted-foreground">
+                            Confidence:{" "}
+                            <span className="font-medium capitalize">{gpsConfidence}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="flex gap-2">
                       <Button
@@ -1380,7 +1765,7 @@ export default function VerificationPage() {
                       </Button>
                       <Button
                         onClick={handleFinalize}
-                        disabled={!isLocationReady || isFinalizing}
+                        disabled={!isLocationReady || isFinalizing || verificationSubmissionBlocked}
                         variant="trust-verified"
                         className="gap-2"
                       >
@@ -1422,7 +1807,7 @@ export default function VerificationPage() {
                           Uploaded at {formatUploadedTime(uploadReceipts.id_doc.uploadedAtIso)}
                         </p>
                       ) : (
-                        <p className="mt-1 text-muted-foreground">Uploads on final submit</p>
+                        <p className="mt-1 text-muted-foreground">Not yet uploaded</p>
                       )}
                       {idChecksumValid && idDob && (
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -1439,26 +1824,28 @@ export default function VerificationPage() {
                           Uploaded at {formatUploadedTime(uploadReceipts.selfie.uploadedAtIso)}
                         </p>
                       ) : (
-                        <p className="mt-1 text-muted-foreground">Uploads on final submit</p>
+                        <p className="mt-1 text-muted-foreground">Not yet uploaded</p>
                       )}
                     </div>
 
                     <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
                       <p className="font-medium">Location</p>
-                      {locationMode === "gps" ? (
-                        <div className="mt-1 flex items-center gap-1 text-brand-green">
-                          <Navigation className="h-4 w-4" />
-                          <span>GPS verified{gpsConfidence ? ` (${gpsConfidence})` : ""}</span>
+                      {(manualSubmitted || persistedLocationSubmitted) && province ? (
+                        <div className="mt-1 space-y-1">
+                          <p className="text-muted-foreground">
+                            {city ? `${city}, ${province}` : province}
+                          </p>
+                          <div className="flex items-center gap-1 text-xs">
+                            {gpsStatus === "success" ? (
+                              <span className="text-brand-green flex items-center gap-1">
+                                <Navigation className="h-3 w-3" />
+                                GPS confirmed{gpsConfidence ? ` (${gpsConfidence})` : ""}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">Manual selection</span>
+                            )}
+                          </div>
                         </div>
-                      ) : locationMode === "proof" ? (
-                        <div className="mt-1 flex items-center gap-1 text-brand-gold">
-                          <Upload className="h-4 w-4" />
-                          <span>Proof uploaded — pending review</span>
-                        </div>
-                      ) : province && city ? (
-                        <p className="mt-1 text-muted-foreground">
-                          {city}, {province}
-                        </p>
                       ) : (
                         <div className="mt-1 flex items-center gap-1 text-muted-foreground">
                           <Clock3 className="h-4 w-4" />

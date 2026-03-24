@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { promisify } from "util";
 import { env } from "@/lib/config/env";
 
 /**
@@ -34,7 +33,30 @@ const V2_MAGIC = 0x02;
 const LEGACY_ITERATIONS_V1 = 600000;
 const LEGACY_ITERATIONS_WORKER = 100000;
 
-const pbkdf2Async = promisify(crypto.pbkdf2);
+/** Lazy-initialised promisify(crypto.pbkdf2) — avoids importing `util` at
+ *  module load which can crash Cloudflare Workers with nodejs_compat v1. */
+let _pbkdf2Async:
+  | ((
+      password: crypto.BinaryLike,
+      salt: crypto.BinaryLike,
+      iterations: number,
+      keylen: number,
+      digest: string
+    ) => Promise<Buffer>)
+  | null = null;
+function pbkdf2Async(
+  password: crypto.BinaryLike,
+  salt: crypto.BinaryLike,
+  iterations: number,
+  keylen: number,
+  digest: string
+): Promise<Buffer> {
+  if (!_pbkdf2Async) {
+    const util = require("util");
+    _pbkdf2Async = util.promisify(crypto.pbkdf2);
+  }
+  return _pbkdf2Async!(password, salt, iterations, keylen, digest);
+}
 
 /**
  * Get or generate encryption key from environment

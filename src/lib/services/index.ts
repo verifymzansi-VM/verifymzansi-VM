@@ -1,4 +1,3 @@
-export { buildPayFastCheckoutUrl, verifyPayFastSignature, isPayFastIp } from "./payfast";
 export { getPlan, getEntitlements, canCreateListing, canBoost } from "./entitlements";
 export type { Entitlements } from "./entitlements";
 export { logAuditEvent } from "./audit";

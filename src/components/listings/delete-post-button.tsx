@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { MarketplaceArea } from "@/types/enums";
 
 interface DeletePostButtonProps {
   itemId: string;
-  area: "MZANSI_MARKET" | "BUSINESS_ADS" | "MALL_SHOPS" | "PROMOTIONS_EVENTS";
+  area: MarketplaceArea;
   /** Optional label override (default: "Delete") */
   label?: string;
 }

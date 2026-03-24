@@ -1,7 +1,25 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CreatePostPage from "./page";
-import { useAuth } from "@/hooks/use-auth";
+
+const { mockCreateClient, mockResolveAccountVerification, mockFetch, mockRedirect } = vi.hoisted(
+  () => {
+    class RedirectError extends Error {
+      digest = "NEXT_REDIRECT";
+      constructor(public url: string) {
+        super(`NEXT_REDIRECT;${url}`);
+      }
+    }
+    return {
+      mockCreateClient: vi.fn(),
+      mockResolveAccountVerification: vi.fn(),
+      mockFetch: vi.fn(),
+      mockRedirect: vi.fn((url: string) => {
+        throw new RedirectError(url);
+      }),
+    };
+  }
+);
 
 vi.mock("next/link", () => ({
   default: ({
@@ -19,8 +37,16 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("@/hooks/use-auth", () => ({
-  useAuth: vi.fn(),
+vi.mock("next/navigation", () => ({
+  redirect: mockRedirect,
+}));
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: mockCreateClient,
+}));
+
+vi.mock("@/lib/account/resolved-verification", () => ({
+  resolveAccountVerification: mockResolveAccountVerification,
 }));
 
 vi.mock("@/components/layout/header", () => ({
@@ -41,68 +67,134 @@ vi.mock("@/components/layout/page-header", () => ({
 }));
 
 describe("CreatePostPage", () => {
-  it("renders exactly three category cards with the updated guide copy", () => {
-    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      isLoading: false,
-      isVerified: true,
-      profile: { account_verification_status: "verified" },
+  beforeEach(() => {
+    vi.stubGlobal("fetch", mockFetch);
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: vi.fn().mockResolvedValue({ error: "Unauthorized" }),
     });
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+    });
+    mockResolveAccountVerification.mockResolvedValue({
+      accountVerificationStatus: "verified",
+    });
+  });
 
-    render(<CreatePostPage />);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("renders exactly three category cards with the current category selection UI", async () => {
+    render(await CreatePostPage());
 
     expect(screen.getAllByText("Mzansi Market").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mzansi Business").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Promotions & Events").length).toBeGreaterThan(0);
-    expect(screen.getByText("How to choose the right category")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Mzansi Market is for a single listing. Mzansi Business is for your business profile. Promotions & Events is for temporary offers, campaigns, and events."
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByText("Pick a category to start posting.")).toBeInTheDocument();
+    expect(screen.getByText("Sell, buy, or rent a single item.")).toBeInTheDocument();
+    expect(screen.getByText("Create your full business profile.")).toBeInTheDocument();
+    expect(screen.getByText("Promote something time-sensitive.")).toBeInTheDocument();
     expect(screen.getAllByRole("link")).toHaveLength(3);
   });
 
-  it("sends verified users directly to the create forms", () => {
-    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      isLoading: false,
-      isVerified: true,
-      profile: { account_verification_status: "verified" },
+  it("sends verified users directly to the create forms", async () => {
+    render(await CreatePostPage());
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
+        "href",
+        "/post/create-listing"
+      );
+      expect(screen.getByRole("link", { name: /Mzansi Business/i })).toHaveAttribute(
+        "href",
+        "/post/create-business"
+      );
+      expect(screen.getByRole("link", { name: /Promotions & Events/i })).toHaveAttribute(
+        "href",
+        "/post/create-promotion"
+      );
+    });
+  });
+
+  it("sends unverified users to verification with a returnUrl", async () => {
+    mockResolveAccountVerification.mockResolvedValue({
+      accountVerificationStatus: "incomplete",
     });
 
-    render(<CreatePostPage />);
+    render(await CreatePostPage());
 
+    await waitFor(() => {
+      expect(screen.getByText("Verification required before posting")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /Mzansi Market/i }).getAttribute("href")).toContain(
+        "/verification?returnUrl=%2Fpost%2Fcreate-listing"
+      );
+      expect(screen.getByRole("link", { name: /Mzansi Business/i }).getAttribute("href")).toContain(
+        "/verification?returnUrl=%2Fpost%2Fcreate-business"
+      );
+      expect(
+        screen.getByRole("link", { name: /Promotions & Events/i }).getAttribute("href")
+      ).toContain("/verification?returnUrl=%2Fpost%2Fcreate-promotion");
+    });
+  });
+
+  it("trusts the server-resolved verification status on first render", async () => {
+    mockResolveAccountVerification.mockResolvedValue({
+      accountVerificationStatus: "verified",
+    });
+
+    render(await CreatePostPage());
+
+    await waitFor(() => {
+      expect(screen.queryByText("Verification required before posting")).not.toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
+        "href",
+        "/post/create-listing"
+      );
+    });
+  });
+
+  it("does not render a checking-access placeholder while awaiting client hydration", async () => {
+    render(await CreatePostPage());
+
+    expect(screen.queryByText("Checking access")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
       "href",
       "/post/create-listing"
     );
-    expect(screen.getByRole("link", { name: /Mzansi Business/i })).toHaveAttribute(
-      "href",
-      "/post/create-business"
-    );
-    expect(screen.getByRole("link", { name: /Promotions & Events/i })).toHaveAttribute(
-      "href",
-      "/post/create-promotion"
-    );
   });
 
-  it("sends unverified users to verification with a returnUrl", () => {
-    (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      isLoading: false,
-      isVerified: false,
-      profile: { account_verification_status: "incomplete" },
+  it("redirects unauthenticated users to login with returnUrl", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
     });
 
-    render(<CreatePostPage />);
+    await expect(CreatePostPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(mockRedirect).toHaveBeenCalledWith("/login?returnUrl=%2Fpost%2Fcreate");
+  });
 
-    expect(screen.getByText("Verification required before posting")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Mzansi Market/i }).getAttribute("href")).toContain(
-      "/verification?returnUrl=%2Fpost%2Fcreate-listing"
-    );
-    expect(screen.getByRole("link", { name: /Mzansi Business/i }).getAttribute("href")).toContain(
-      "/verification?returnUrl=%2Fpost%2Fcreate-business"
-    );
-    expect(
-      screen.getByRole("link", { name: /Promotions & Events/i }).getAttribute("href")
-    ).toContain("/verification?returnUrl=%2Fpost%2Fcreate-promotion");
+  it("redirects unauthenticated users even when verification API would report verified", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
+    });
+    mockResolveAccountVerification.mockResolvedValue({
+      accountVerificationStatus: null,
+    });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ accountVerificationStatus: "verified" }),
+    });
+
+    await expect(CreatePostPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(mockRedirect).toHaveBeenCalledWith("/login?returnUrl=%2Fpost%2Fcreate");
   });
 });

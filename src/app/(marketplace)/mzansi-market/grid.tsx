@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { createLogger } from "@/lib/utils/logger";
+import { triggerHaptic } from "@/lib/utils/haptics";
 import { serializeMarketplaceFiltersToSearchParams } from "@/lib/utils/marketplace-query";
 
 const PAGE_SIZE = 24;
@@ -33,6 +34,7 @@ interface ListingRow {
   photos: string[];
   videos: string[];
   video_thumbnail: string | null;
+  logo_url: string | null;
   boost_until: string | null;
   featured: boolean;
   owner_id: string;
@@ -62,6 +64,22 @@ interface GridFetchError {
 }
 
 type ViewMode = "grid" | "list";
+
+const STAGGER_DELAY_CLASSES = [
+  "[animation-delay:0ms]",
+  "[animation-delay:50ms]",
+  "[animation-delay:100ms]",
+  "[animation-delay:150ms]",
+  "[animation-delay:200ms]",
+  "[animation-delay:250ms]",
+  "[animation-delay:300ms]",
+  "[animation-delay:350ms]",
+  "[animation-delay:400ms]",
+] as const;
+
+function getStaggerDelayClass(index: number) {
+  return STAGGER_DELAY_CLASSES[Math.min(index, STAGGER_DELAY_CLASSES.length - 1)];
+}
 
 export function MzansiMarketGrid() {
   const { filters, page, setPage, setFilter, resetFilters } = useMarketplaceStore();
@@ -338,7 +356,7 @@ export function MzansiMarketGrid() {
       </div>
 
       {viewMode === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {listings.map((listing, index) => {
             const videoUrl = listing.videos?.[0];
             const displayUrl = videoUrl || listing.photos?.[0];
@@ -354,8 +372,7 @@ export function MzansiMarketGrid() {
             return (
               <div
                 key={listing.id}
-                className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms]"
-                style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
+                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] ${getStaggerDelayClass(index)}`}
               >
                 <ListingCard
                   id={listing.id}
@@ -364,6 +381,7 @@ export function MzansiMarketGrid() {
                   negotiable={listing.price_negotiable}
                   imageUrl={displayUrl}
                   posterUrl={posterSrc}
+                  logoUrl={listing.logo_url}
                   province={listing.location_province}
                   city={listing.location_city}
                   category={listing.category}
@@ -396,8 +414,7 @@ export function MzansiMarketGrid() {
             return (
               <div
                 key={listing.id}
-                className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms]"
-                style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
+                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] ${getStaggerDelayClass(index)}`}
               >
                 <ListingCardList
                   id={listing.id}
@@ -406,6 +423,7 @@ export function MzansiMarketGrid() {
                   negotiable={listing.price_negotiable}
                   imageUrl={displayUrl}
                   posterUrl={posterSrc}
+                  logoUrl={listing.logo_url}
                   province={listing.location_province}
                   city={listing.location_city}
                   category={listing.category}
@@ -425,12 +443,14 @@ export function MzansiMarketGrid() {
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 pt-4">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-4">
           <Button
             variant="outline"
             size="sm"
+            className="w-full sm:w-auto"
             disabled={page <= 1}
             onClick={() => {
+              triggerHaptic("light");
               setPage(page - 1);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
@@ -438,7 +458,7 @@ export function MzansiMarketGrid() {
             Previous
           </Button>
 
-          <div className="flex items-center gap-1">
+          <div className="hidden sm:flex items-center gap-1">
             {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
               const pageNum =
                 totalPages <= 5
@@ -456,6 +476,7 @@ export function MzansiMarketGrid() {
                   size="sm"
                   className={`w-8 h-8 p-0 ${pageNum === page ? "pointer-events-none" : ""}`}
                   onClick={() => {
+                    triggerHaptic("light");
                     setPage(pageNum);
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
@@ -469,8 +490,10 @@ export function MzansiMarketGrid() {
           <Button
             variant="outline"
             size="sm"
+            className="w-full sm:w-auto"
             disabled={page >= totalPages}
             onClick={() => {
+              triggerHaptic("light");
               setPage(page + 1);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}

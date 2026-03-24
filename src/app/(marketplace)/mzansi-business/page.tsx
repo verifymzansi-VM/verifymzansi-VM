@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
 import { Suspense } from "react";
-import { PageHeader } from "@/components/layout/page-header";
+import { cookies } from "next/headers";
+import { PageHeader } from "@/components/layout";
 import { TrustStrip } from "@/components/layout/trust-strip";
-import { BusinessCategoryStrip } from "@/components/listings/business-category-strip";
 import { MzansiBusinessGrid } from "./grid";
 import { MzansiBusinessFilterSync } from "./filter-sync";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
@@ -14,11 +14,16 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
+import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
+import {
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+  shouldHidePlaywrightFixtures,
+} from "@/lib/supabase/playwright-visual-fixtures";
 
 export const metadata = {
   title: "Mzansi Business",
   description:
-    "Discover verified South African businesses — shops, services, mobile providers, and more on VerifyMzansi.",
+    "Build trusted business visibility and discover verified South African brands, shops, and services on VerifyMzansi.",
   alternates: {
     canonical: "/mzansi-business",
   },
@@ -28,32 +33,24 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function MzansiBusinessPage() {
+  const cookieStore = await cookies();
+  const hideFixtures = shouldHidePlaywrightFixtures(
+    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+  );
   const supabase = await createClient();
 
   // Fetch top businesses for showroom hero
-  const [{ data: topBusinesses }, { data: allLive }] = await Promise.all([
-    supabase
-      .from("businesses")
-      .select(
-        "id, business_name, description, cover_photo, cover_video, video_thumbnail, location_province, location_city, boost_until"
-      )
-      .eq("status", "live")
-      .eq("area", "MZANSI_BUSINESS")
-      .not("business_name", "ilike", "%seed%")
-      .not("business_name", "ilike", "%[seed]%")
-      .order("boost_until", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(10),
-    supabase
-      .from("businesses")
-      .select("category, business_name, description")
-      .eq("status", "live")
-      .eq("area", "MZANSI_BUSINESS")
-      .not("business_name", "ilike", "%seed%")
-      .not("business_name", "ilike", "%[seed]%"),
-  ]);
+  const { data: topBusinesses } = await supabase
+    .from("businesses")
+    .select("*")
+    .eq("status", "live")
+    .eq("area", "MZANSI_BUSINESS")
+    .order("boost_until", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(10);
 
   const visibleTopBusinesses = (topBusinesses ?? [])
+    .filter((business) => !shouldHidePlaywrightFixtureRowWhenEnabled(business, hideFixtures))
     .filter(
       (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
     )
@@ -90,39 +87,28 @@ export default async function MzansiBusinessPage() {
           },
         ];
 
-  const categoryCounts: Record<string, number> = {};
-  for (const b of allLive ?? []) {
-    if (isPlaceholderMarketplaceContent(b.business_name, b.description)) {
-      continue;
-    }
-    categoryCounts[b.category] = (categoryCounts[b.category] || 0) + 1;
-  }
-
   return (
     <div className="space-y-0">
-      <Suspense fallback={null}>
+      <Suspense fallback={<div className="h-10" />}>
         <MzansiBusinessFilterSync />
       </Suspense>
 
       {/* ── Dynamic Showroom Hero ──────────────────────────────────── */}
-      <div className="hidden sm:block">
-        <ShowroomHero
-          slides={slides}
-          fallbackTitle="Mzansi Business"
-          fallbackDescription="Discover verified South African businesses and services."
-        />
-      </div>
+      <ShowroomHero
+        slides={slides}
+        fallbackTitle="Mzansi Business"
+        fallbackDescription="Discover verified South African businesses and services."
+      />
 
-      <div className="hidden sm:block">
-        <TrustStrip variant="blue" />
-      </div>
+      <TrustStrip variant="blue" />
 
       {/* ── Main Content ─────────────────────────────────── */}
       <div className="container-page py-4 sm:py-6 space-y-4">
         <PageHeader
           title="Mzansi Business"
-          description="Browse verified South African businesses, compare service providers, and discover trusted shops near you."
+          description="Browse verified South African businesses, build visibility for your brand, and help customers discover trusted services."
           breadcrumbs={[{ label: "Mzansi Business" }]}
+          className="hidden lg:block"
         >
           <Button asChild size="sm" className="gap-2">
             <Link href="/post/create-business">
@@ -132,22 +118,23 @@ export default async function MzansiBusinessPage() {
           </Button>
         </PageHeader>
 
-        {/* Desktop discovery bar (hidden on mobile — mobile uses the filter drawer) */}
-        <div className="hidden lg:block">
-          <BusinessDiscoveryBar />
+        {/* Mobile filter drawer (FAB visible < lg only) */}
+        <BusinessFilterDrawer />
+
+        <div className="flex gap-6">
+          <aside className="hidden w-72 shrink-0 lg:block">
+            <div className="sticky top-24">
+              <BusinessDiscoveryBar />
+            </div>
+          </aside>
+
+          <section className="min-w-0 flex-1 space-y-6">
+            <Suspense fallback={<ListingGridSkeleton count={6} />}>
+              <MzansiBusinessGrid />
+            </Suspense>
+          </section>
         </div>
-
-        <BusinessCategoryStrip categoryCounts={categoryCounts} />
-
-        <section className="space-y-6">
-          <Suspense fallback={<ListingGridSkeleton count={6} />}>
-            <MzansiBusinessGrid />
-          </Suspense>
-        </section>
       </div>
-
-      {/* Mobile filter FAB + drawer */}
-      <BusinessFilterDrawer />
     </div>
   );
 }

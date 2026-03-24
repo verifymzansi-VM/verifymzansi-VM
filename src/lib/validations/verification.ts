@@ -45,6 +45,12 @@ export const verificationLocationSubmitSchema = z.object({
   gpsAccuracyMeters: z.number().positive().optional(),
 });
 
+export const proofOfAddressLineSchema = z
+  .string()
+  .trim()
+  .min(5, "Enter the residential address shown on your proof of residence")
+  .max(240, "Address line cannot exceed 240 characters");
+
 // ── V2M Buyer verification ──────────────────────────────────
 
 /** Zod schema for buyer-initiated verification of an account profile. */
@@ -59,6 +65,13 @@ export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as 
 
 /** Allowed MIME types for document uploads (images + PDF). */
 export const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"] as const;
+
+const EXTENSIONS_BY_TYPE: Record<string, readonly string[]> = {
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/png": ["png"],
+  "image/webp": ["webp"],
+  "application/pdf": ["pdf"],
+};
 
 /** Maximum file upload size in bytes (5 MB). */
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -102,6 +115,15 @@ export function validateUploadedFile(
     };
   }
 
+  const extension = file.name.split(".").pop()?.trim().toLowerCase();
+  const allowedExtensions = EXTENSIONS_BY_TYPE[file.type] ?? [];
+  if (!extension || !allowedExtensions.includes(extension)) {
+    return {
+      valid: false,
+      error: `File extension does not match "${file.type}". Accepted extensions: ${allowedExtensions.join(", ")}`,
+    };
+  }
+
   return { valid: true };
 }
 
@@ -132,6 +154,8 @@ export type VerificationSelfieInput = z.infer<typeof verificationSelfieSchema>;
 export type VerificationLocationInput = z.infer<typeof verificationLocationSchema>;
 /** Inferred input type for {@link verificationLocationSubmitSchema}. */
 export type VerificationLocationSubmitInput = z.infer<typeof verificationLocationSubmitSchema>;
+/** Inferred input type for {@link proofOfAddressLineSchema}. */
+export type ProofOfAddressLineInput = z.infer<typeof proofOfAddressLineSchema>;
 /** Inferred input type for {@link buyerVerifySchema}. */
 export type BuyerVerifyInput = z.infer<typeof buyerVerifySchema>;
 /** Inferred input type for {@link fileUploadSchema}. */

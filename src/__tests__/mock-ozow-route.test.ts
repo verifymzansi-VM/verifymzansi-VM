@@ -1,0 +1,55 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn() }),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(),
+}));
+
+import { GET } from "@/app/api/mock-ozow/route";
+
+describe("GET /api/mock-ozow", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ENABLE_MOCK_OZOW", "true");
+  });
+
+  it("rejects invalid payment ids before hitting the database", async () => {
+    const res = await GET(new Request("http://localhost/api/mock-ozow?paymentId=not-a-uuid"));
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "Invalid mock payment query",
+      details: { paymentId: "Enter a valid ID" },
+    });
+  });
+
+  it("rejects unsafe return urls", async () => {
+    const res = await GET(
+      new Request("http://localhost/api/mock-ozow?returnUrl=https://evil.example/phish")
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "Invalid mock payment query",
+      details: { returnUrl: "returnUrl is invalid" },
+    });
+  });
+
+  it("accepts localhost and loopback return urls for e2e flows", async () => {
+    const localhostRes = await GET(
+      new Request("http://localhost/api/mock-ozow?returnUrl=http://localhost:3100/billing/success")
+    );
+    const loopbackRes = await GET(
+      new Request("http://localhost/api/mock-ozow?returnUrl=http://127.0.0.1:3100/billing/success")
+    );
+
+    expect(localhostRes.status).toBe(307);
+    expect(loopbackRes.status).toBe(307);
+    expect(localhostRes.headers.get("location")).toBe("http://localhost:3100/billing/success");
+    expect(loopbackRes.headers.get("location")).toBe("http://127.0.0.1:3100/billing/success");
+  });
+});

@@ -1,10 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatRelativeTime } from "@/lib/utils/format";
-import { FileText } from "lucide-react";
+import { maskEmail } from "@/lib/utils/mask";
+import { Download, FileText } from "lucide-react";
 import { DsarActionButtons } from "./dsar-action-buttons";
 import { isAdmin } from "@/lib/auth/roles";
 import type { DsarCase } from "@/types/database";
@@ -23,8 +26,10 @@ export default async function AdminDSARPage() {
     redirect("/dashboard");
   }
 
+  const admin = createAdminClient();
+
   // Read from dsar_cases table
-  const { data: requests } = await supabase
+  const { data: requests } = await admin
     .from("dsar_cases")
     .select("*")
     .order("created_at", { ascending: false })
@@ -68,7 +73,7 @@ export default async function AdminDSARPage() {
                         {req.status}
                       </Badge>
                     </div>
-                    <p className="text-sm">{req.requester_email}</p>
+                    <p className="text-sm">{maskEmail(req.requester_email)}</p>
                     {req.description && (
                       <p className="text-xs text-muted-foreground line-clamp-2">
                         {req.description}
@@ -78,7 +83,15 @@ export default async function AdminDSARPage() {
                       {formatRelativeTime(req.created_at)}
                     </p>
                   </div>
-                  {req.status === "submitted" && <DsarActionButtons requestId={req.id} />}
+                  {(req.status === "submitted" || req.status === "in_progress") && (
+                    <DsarActionButtons requestId={req.id} status={req.status} />
+                  )}
+                  <Button asChild variant="outline" size="sm" className="gap-2">
+                    <a href={`/api/admin/dsar/export?requestId=${req.id}`}>
+                      <Download className="h-4 w-4" />
+                      <span>Export JSON</span>
+                    </a>
+                  </Button>
                 </div>
               </CardContent>
             </Card>

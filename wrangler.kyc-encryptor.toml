@@ -1,12 +1,23 @@
+# ════════════════════════════════════════════════════════════════════════════
+# DEPRECATED — This worker is no longer triggered by the application.
+#
+# The canonical encryption path is the inline uploadKycDocument() flow in
+# src/lib/services/storage.ts using v2 HMAC-SHA256 key derivation in
+# src/lib/utils/encryption.ts.
+#
+# This worker remains deployed only for legacy decryption compatibility.
+# It can be removed once all v1/worker-encrypted files have been purged
+# by the retention-cleanup cron.
+# ════════════════════════════════════════════════════════════════════════════
+
 # ────────────────────────────────────────────────────────────────────────────
-# Cloudflare Worker: KYC Document Encryptor
+# Cloudflare Worker: KYC Document Encryptor (LEGACY)
 #
-# Asynchronous encryption worker triggered via HTTP POST from
-# the Next.js /api/verification/* routes. Streams files from
-# a temporary R2 bucket, encrypts with AES-256-GCM, stores in
-# the private bucket, and updates Supabase kyc_artifacts status.
+# This worker was previously triggered via HTTP POST from the
+# Next.js /api/verification/* routes. It is no longer invoked;
+# see the deprecation notice above for the canonical flow.
 #
-# Deploy:
+# Deploy (legacy decryption support only):
 #   pnpm wrangler deploy -c wrangler.kyc-encryptor.toml
 #
 # Set secrets (once per environment):

@@ -34,13 +34,13 @@ describe("logger", () => {
 
   it("outputs structured JSON in production", () => {
     vi.stubEnv("NODE_ENV", "production");
-    const log = createLogger("PayFast");
+    const log = createLogger("Payments");
     log.error("Payment failed", { amount: 100 });
 
     const output = vi.mocked(console.error).mock.calls[0][0] as string;
     const parsed = JSON.parse(output);
     expect(parsed.level).toBe("error");
-    expect(parsed.context).toBe("PayFast");
+    expect(parsed.context).toBe("Payments");
     expect(parsed.message).toBe("Payment failed");
     expect(parsed.meta.amount).toBe(100);
   });

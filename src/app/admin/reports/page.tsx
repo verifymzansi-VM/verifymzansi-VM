@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +23,9 @@ export default async function AdminReportsPage() {
     redirect("/dashboard");
   }
 
-  const { data: reports } = await supabase
+  const admin = createAdminClient();
+
+  const { data: reports } = await admin
     .from("reports")
     .select("*")
     .order("created_at", { ascending: false })

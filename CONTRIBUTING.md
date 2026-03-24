@@ -47,12 +47,11 @@ provides guidelines and conventions for contributing to the project.
 > pnpm build:cloudflare   # works
 > ```
 
-> **Cloudflare warning triage**: The deploy pipeline currently accepts three
+> **Cloudflare warning triage**: The deploy pipeline currently accepts two
 > warning classes as known noise on the supported stack: OpenNext Durable Object
-> startup warnings from `wrangler.toml`, the Next.js 16 `middleware` deprecation
-> for `src/middleware.ts`, and generated `duplicate-object-key` warnings from
-> `.open-next/server-functions`. Treat new warning patterns as actionable until
-> proven otherwise.
+> startup warnings from `wrangler.toml` and generated `duplicate-object-key`
+> warnings from `.open-next/server-functions`. Treat new warning patterns as
+> actionable until proven otherwise.
 
 ## Branch Naming
 

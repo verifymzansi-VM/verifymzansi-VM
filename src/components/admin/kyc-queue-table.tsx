@@ -49,6 +49,7 @@ interface VerificationStep {
   step_type: string;
   status: string;
   created_at: string;
+  reviewed_at?: string | null;
   account_display_name?: string | null;
   account_verification_status?: string | null;
 }
@@ -223,6 +224,14 @@ export function KycQueueTable({
                       >
                         {step.status}
                       </Badge>
+                      {step.reviewed_at && step.status === "pending" && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-amber-500 text-amber-600"
+                        >
+                          Resubmission
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Submitted {formatRelativeTime(step.created_at)}
@@ -311,10 +320,18 @@ export function KycQueueTable({
           </DialogHeader>
 
           {decision === "approved" ? (
-            <p className="text-sm text-muted-foreground">
-              This will mark the step as approved. If all 4 verification steps are now approved, the
-              account will be marked as verified.
-            </p>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                This will mark the step as approved. If all 4 verification steps are now approved,
+                the account will be marked as verified.
+              </p>
+              {selectedStep?.reviewed_at && selectedStep?.status === "pending" && (
+                <div className="rounded-md border border-amber-500/30 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-700 dark:text-amber-400">
+                  <strong>Note:</strong> This is a resubmission — the step was previously reviewed.
+                  Ensure the user has corrected the flagged issue before approving.
+                </div>
+              )}
+            </div>
           ) : (
             <div className="space-y-4">
               <div>

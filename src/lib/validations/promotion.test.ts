@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { promotionSchema } from "./promotion";
+import { SOCIAL_AUTHORIZATION_VERSION } from "@/lib/promotions/social-authorization";
 
 const VALID_IMAGE = "https://media.verifymzansi.com/promotions/photo.jpg";
 const VALID_VIDEO = "https://media.verifymzansi.com/promotions/video.mp4";
@@ -215,5 +216,42 @@ describe("promotionSchema", () => {
       video_thumbnail: "https://example.com/thumb.jpg",
     });
     expect(result.success).toBe(false);
+  });
+
+  it("accepts valid social distribution authorization", () => {
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      socialAuthorization: {
+        granted: true,
+        authorizerName: "Nomsa Dlamini",
+        authorizerRole: "Owner",
+        relationship: "owner",
+        monetizationAcknowledged: true,
+        acceptedVersion: SOCIAL_AUTHORIZATION_VERSION,
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects incomplete social distribution authorization", () => {
+    const result = promotionSchema.safeParse({
+      ...VALID_INPUT,
+      socialAuthorization: {
+        granted: true,
+        authorizerName: "Nomsa Dlamini",
+      },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((issue) => issue.path.join("."));
+      expect(paths).toEqual(
+        expect.arrayContaining([
+          "socialAuthorization.authorizerRole",
+          "socialAuthorization.relationship",
+          "socialAuthorization.monetizationAcknowledged",
+          "socialAuthorization.acceptedVersion",
+        ])
+      );
+    }
   });
 });

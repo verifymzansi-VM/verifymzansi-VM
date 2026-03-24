@@ -31,6 +31,12 @@ export type AuditAction =
   | "storefront_deleted"
   | "storefront_boosted"
   | "storefront_post_created"
+  | "promotion_created"
+  | "promotion_boosted"
+  | "promotion_featured"
+  | "promotion_social_authorization_granted"
+  | "promotion_social_authorization_updated"
+  | "promotion_social_authorization_revoked"
   | "report_created"
   | "report_resolved"
   | "payment_completed"
@@ -44,6 +50,7 @@ export type AuditAction =
   | "dsar_requested"
   | "dsar_started"
   | "dsar_completed"
+  | "dsar_exported"
   | "dsar_rejected"
   | "consent_updated"
   | "moderation_action"
@@ -52,10 +59,13 @@ export type AuditAction =
   | "kyc_provider_webhook_received"
   | "kyc_override_approved"
   | "kyc_purge_scheduled"
+  | "communication_email_sent"
+  | "communication_email_failed"
   | "feature_flag_toggled"
   | "kyc_session_started"
   | "kyc_gps_submitted"
-  | "kyc_proof_uploaded";
+  | "kyc_proof_uploaded"
+  | "kyc_manual_location_submitted";
 
 interface AuditLogEntry {
   actorId: string;
@@ -69,7 +79,7 @@ interface AuditLogEntry {
 
 /** Counter for monitoring audit write failures (POPIA compliance). */
 let auditFailureCount = 0;
-const AUDIT_FAILURE_ALERT_THRESHOLD = 5;
+const _AUDIT_FAILURE_ALERT_THRESHOLD = 5;
 
 /** Return the current count of audit write failures for monitoring. */
 export function getAuditFailureCount(): number {
@@ -106,38 +116,22 @@ export async function logAuditEvent(entry: AuditLogEntry): Promise<void> {
 
     if (error) {
       auditFailureCount++;
-      log.error("Audit log write failed (POPIA compliance risk)", {
+      log.error("CRITICAL: Audit log write failed (POPIA compliance risk)", {
+        severity: "critical",
         action: entry.action,
         targetType: entry.targetType,
         targetId: entry.targetId,
         dbError: error.message,
         failureCount: auditFailureCount,
       });
-      if (auditFailureCount >= AUDIT_FAILURE_ALERT_THRESHOLD) {
-        log.error(
-          "CRITICAL: Audit failure threshold exceeded — POPIA compliance at risk. Investigate immediately.",
-          {
-            failureCount: auditFailureCount,
-            threshold: AUDIT_FAILURE_ALERT_THRESHOLD,
-          }
-        );
-      }
     }
   } catch (err) {
     auditFailureCount++;
-    log.error("Audit log exception (POPIA compliance risk)", {
+    log.error("CRITICAL: Audit log exception (POPIA compliance risk)", {
+      severity: "critical",
       action: entry.action,
       error: err instanceof Error ? err.message : "Unknown error",
       failureCount: auditFailureCount,
     });
-    if (auditFailureCount >= AUDIT_FAILURE_ALERT_THRESHOLD) {
-      log.error(
-        "CRITICAL: Audit failure threshold exceeded — POPIA compliance at risk. Investigate immediately.",
-        {
-          failureCount: auditFailureCount,
-          threshold: AUDIT_FAILURE_ALERT_THRESHOLD,
-        }
-      );
-    }
   }
 }

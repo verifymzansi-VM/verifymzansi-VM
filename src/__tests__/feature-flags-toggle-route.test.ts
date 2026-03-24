@@ -1,15 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type * as ApiModule from "@/lib/utils/api";
 
-const { mockGetUser, mockToggle, mockUpdateConfig, mockAudit, mockIsAdmin, mockParseJson } =
-  vi.hoisted(() => ({
-    mockGetUser: vi.fn(),
-    mockToggle: vi.fn(),
-    mockUpdateConfig: vi.fn(),
-    mockAudit: vi.fn(),
-    mockIsAdmin: vi.fn(),
-    mockParseJson: vi.fn(),
-  }));
+const {
+  mockGetUser,
+  mockToggle,
+  mockUpdateConfig,
+  mockAudit,
+  mockVerifyAdminActorRoleFromDb,
+  mockParseJson,
+} = vi.hoisted(() => ({
+  mockGetUser: vi.fn(),
+  mockToggle: vi.fn(),
+  mockUpdateConfig: vi.fn(),
+  mockAudit: vi.fn(),
+  mockVerifyAdminActorRoleFromDb: vi.fn(),
+  mockParseJson: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
@@ -26,8 +32,12 @@ vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: mockAudit,
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  isAdmin: mockIsAdmin,
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyAdminActorRoleFromDb: mockVerifyAdminActorRoleFromDb,
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/utils/api", async () => {
@@ -63,6 +73,7 @@ function makeRequest(body: Record<string, unknown>) {
 describe("POST /api/admin/feature-flags/toggle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockVerifyAdminActorRoleFromDb.mockResolvedValue("admin");
   });
 
   it("should return 401 when not authenticated", async () => {
@@ -87,7 +98,7 @@ describe("POST /api/admin/feature-flags/toggle", () => {
       data: { user: { id: "u1" } },
       error: null,
     });
-    mockIsAdmin.mockReturnValue(false);
+    mockVerifyAdminActorRoleFromDb.mockResolvedValue(null);
 
     const res = await POST(makeRequest({ key: "test", enabled: true }));
     expect(res.status).toBe(403);
@@ -98,7 +109,7 @@ describe("POST /api/admin/feature-flags/toggle", () => {
       data: { user: { id: "u1", email: "admin@example.com" } },
       error: null,
     });
-    mockIsAdmin.mockReturnValue(true);
+    mockVerifyAdminActorRoleFromDb.mockResolvedValue("admin");
     mockParseJson.mockResolvedValue({ key: "dark_mode", enabled: true });
     mockToggle.mockResolvedValue({ success: true });
     mockAudit.mockResolvedValue(undefined);
@@ -106,6 +117,9 @@ describe("POST /api/admin/feature-flags/toggle", () => {
     const res = await POST(makeRequest({ key: "dark_mode", enabled: true }));
     expect(res.status).toBe(200);
     expect(mockToggle).toHaveBeenCalled();
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ actorRole: "admin", targetId: "dark_mode" })
+    );
   });
 
   it("should handle canary mode update for admin", async () => {
@@ -113,7 +127,7 @@ describe("POST /api/admin/feature-flags/toggle", () => {
       data: { user: { id: "u1", email: "admin@example.com" } },
       error: null,
     });
-    mockIsAdmin.mockReturnValue(true);
+    mockVerifyAdminActorRoleFromDb.mockResolvedValue("admin");
     mockParseJson.mockResolvedValue({
       key: "new_feature",
       mode: "percent",
@@ -133,5 +147,8 @@ describe("POST /api/admin/feature-flags/toggle", () => {
     );
     expect(res.status).toBe(200);
     expect(mockUpdateConfig).toHaveBeenCalled();
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ actorRole: "admin", targetId: "new_feature" })
+    );
   });
 });

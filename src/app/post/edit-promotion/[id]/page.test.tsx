@@ -140,4 +140,20 @@ describe("EditPromotionPage", () => {
     expect(payload.start_date).toBe("2099-03-10T00:00:00.000Z");
     expect(payload.end_date).toBe("2099-03-12T00:00:00.000Z");
   });
+
+  it("shows the four visible promotion categories on the edit form", async () => {
+    render(<EditPromotionPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Promotion Type")).toBeInTheDocument();
+    });
+
+    const typeSelect = screen.getByLabelText("Promotion Type");
+
+    expect(screen.getByRole("option", { name: "Deals" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Events" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Promotions" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Ads" })).toBeInTheDocument();
+    expect(typeSelect).toHaveValue("event");
+  });
 });

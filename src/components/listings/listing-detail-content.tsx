@@ -29,6 +29,7 @@ export interface ListingDetailRecord {
   photos: string[] | null;
   videos: string[] | null;
   video_thumbnail: string | null;
+  logo_url?: string | null;
   location_province: string | null;
   location_city: string | null;
   location_suburb: string | null;
@@ -52,6 +53,7 @@ export interface SimilarListingRow {
   price_negotiable: boolean;
   condition: string | null;
   photos: string[];
+  logo_url?: string | null;
   location_province: string;
   location_city: string;
   category: string;
@@ -75,6 +77,7 @@ export function ListingDetailContent({
   showSimilarListings = true,
   similarItems = [],
   similarSellers = new Map<string, SimilarSellerRow>(),
+  photoCount,
 }: {
   listing: ListingDetailRecord;
   seller: ListingSellerRecord | null;
@@ -82,6 +85,8 @@ export function ListingDetailContent({
   showSimilarListings?: boolean;
   similarItems?: SimilarListingRow[];
   similarSellers?: Map<string, SimilarSellerRow>;
+  /** When set, passed to the carousel so blob preview URLs can be identified as video by position. */
+  photoCount?: number;
 }) {
   const trustLevel = seller ? computeTrustLevel(seller.account_verification_status ?? null) : null;
   const createdAt = new Date(listing.created_at).toLocaleDateString("en-ZA", {
@@ -101,6 +106,7 @@ export function ListingDetailContent({
             title={listing.title}
             listingId={listing.id}
             videoThumbnail={listing.video_thumbnail}
+            photoCount={photoCount}
           />
 
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -295,6 +301,7 @@ export function ListingDetailContent({
                   price={item.price_cents ?? 0}
                   negotiable={item.price_negotiable}
                   imageUrl={item.photos?.[0]}
+                  logoUrl={item.logo_url}
                   province={item.location_province}
                   city={item.location_city}
                   category={item.category}

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import type { ScanResult } from "@/lib/utils/malware-scan";
+
+const CSRF_TOKEN = "a".repeat(64);
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
@@ -12,6 +15,13 @@ const {
   mockDeleteFromR2,
   mockLogAuditEvent,
   mockProcessKycArtifact,
+  mockCheckRateLimit,
+  mockGetClientIp,
+  mockValidateBufferIntegrity,
+  mockScanForMalware,
+  mockStripExifFromJpeg,
+  mockStripMetadataFromPng,
+  mockIsFeatureEnabled,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -20,6 +30,19 @@ const {
   mockDeleteFromR2: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockProcessKycArtifact: vi.fn(),
+  mockCheckRateLimit: vi.fn(),
+  mockGetClientIp: vi.fn(),
+  mockIsFeatureEnabled: vi.fn(),
+  mockValidateBufferIntegrity: vi.fn(() => ({
+    valid: true,
+    detectedMime: "image/jpeg",
+    mismatch: false,
+  })),
+  mockScanForMalware: vi.fn<(buffer: Uint8Array, declaredMime: string) => ScanResult>(() => ({
+    safe: true,
+  })),
+  mockStripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
+  mockStripMetadataFromPng: vi.fn((buf: Uint8Array) => buf),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -51,6 +74,28 @@ vi.mock("@/lib/utils/logger", () => ({
   }),
 }));
 
+vi.mock("@/lib/utils/file-validation", () => ({
+  validateBufferIntegrity: mockValidateBufferIntegrity,
+}));
+
+vi.mock("@/lib/utils/malware-scan", () => ({
+  scanForMalware: mockScanForMalware,
+}));
+
+vi.mock("@/lib/utils/exif-strip", () => ({
+  stripExifFromJpeg: mockStripExifFromJpeg,
+  stripMetadataFromPng: mockStripMetadataFromPng,
+}));
+
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
+  getClientIp: (...args: unknown[]) => mockGetClientIp(...args),
+}));
+
+vi.mock("@/lib/services/feature-flags", () => ({
+  isFeatureEnabled: (...args: unknown[]) => mockIsFeatureEnabled(...args),
+}));
+
 import { POST } from "./route";
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -63,11 +108,16 @@ function createFormDataRequest(fields: Record<string, string | Blob>) {
   // NextRequest.formData() can hang in jsdom, so we mock it directly
   const req = {
     formData: async () => formData,
+    url: "http://localhost/api/verification/upload",
     nextUrl: new URL("http://localhost/api/verification/upload"),
     headers: {
-      get: vi.fn((name: string) =>
-        name.toLowerCase() === "origin" ? "http://localhost:3000" : null
-      ),
+      get: vi.fn((name: string) => {
+        const normalizedName = name.toLowerCase();
+        if (normalizedName === "origin") return "http://localhost";
+        if (normalizedName === "cookie") return `vm_csrf=${CSRF_TOKEN}`;
+        if (normalizedName === "x-csrf-token") return CSRF_TOKEN;
+        return null;
+      }),
     },
   } as unknown as NextRequest;
   return req;
@@ -78,13 +128,26 @@ function createTestFile(content = "fake-image-content", type = "image/jpeg", nam
 }
 
 function mockAuth(
-  user: { id: string; email?: string; user_metadata?: Record<string, unknown> } | null
+  user: {
+    id: string;
+    email?: string;
+    email_confirmed_at?: string | null;
+    user_metadata?: Record<string, unknown>;
+  } | null
 ) {
+  const normalizedUser = user
+    ? {
+        email_confirmed_at: "2026-03-21T00:00:00.000Z",
+        ...user,
+      }
+    : null;
+
   mockCreateClient.mockResolvedValue({
+    from: mockFrom,
     auth: {
       getUser: vi.fn().mockResolvedValue({
-        data: { user },
-        error: user ? null : { message: "Not authenticated" },
+        data: { user: normalizedUser },
+        error: normalizedUser ? null : { message: "Not authenticated" },
       }),
     },
   });
@@ -96,7 +159,9 @@ function setupDefaultAdminMocks() {
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+            maybeSingle: vi
+              .fn()
+              .mockResolvedValue({ data: { id: "profile-1", phone: "+27123456789" }, error: null }),
           }),
         }),
         update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
@@ -144,7 +209,34 @@ function setupDefaultAdminMocks() {
     }
     if (table === "verification_steps") {
       return {
-        upsert: vi.fn().mockResolvedValue({ error: null }),
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
+            }),
+          }),
+        }),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              neq: vi.fn().mockReturnValue({
+                select: vi.fn().mockReturnValue({
+                  maybeSingle: vi
+                    .fn()
+                    .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+                }),
+              }),
+            }),
+          }),
+        }),
+        insert: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi
+              .fn()
+              .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+          }),
+        }),
       };
     }
     if (table === "verification_sessions") {
@@ -186,6 +278,17 @@ describe("POST /api/verification/upload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
+    mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientIp.mockReturnValue("127.0.0.1");
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockValidateBufferIntegrity.mockReturnValue({
+      valid: true,
+      detectedMime: "image/jpeg",
+      mismatch: false,
+    });
+    mockScanForMalware.mockReturnValue({ safe: true });
+    mockStripExifFromJpeg.mockImplementation((buf: Uint8Array) => buf);
+    mockStripMetadataFromPng.mockImplementation((buf: Uint8Array) => buf);
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv(
       "ID_ENCRYPTION_KEY",
@@ -227,6 +330,38 @@ describe("POST /api/verification/upload", () => {
     expect(response.status).toBe(400);
   });
 
+  it("returns a coded email-confirmation blocker when the account email is unconfirmed", async () => {
+    mockAuth({ id: "user-1", email_confirmed_at: null });
+
+    const req = createFormDataRequest({
+      file: createTestFile(),
+      docType: "id_document",
+    });
+
+    const response = await POST(req);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("confirm your email"),
+        code: "email_confirmation_required",
+      })
+    );
+  });
+
+  it("returns 503 when shared upload protection is unavailable", async () => {
+    mockAuth({ id: "user-1" });
+    mockCheckRateLimit.mockResolvedValue({ limited: true, degraded: true, retryAfter: 45 });
+
+    const req = createFormDataRequest({
+      file: createTestFile(),
+      docType: "id_document",
+    });
+
+    const response = await POST(req);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("45");
+  });
+
   it("returns success for valid id_document upload", async () => {
     mockAuth({ id: "user-1", email: "test@example.com" });
     setupDefaultAdminMocks();
@@ -257,6 +392,94 @@ describe("POST /api/verification/upload", () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.stepType).toBe("selfie");
+  });
+
+  it("rejects uploads when the declared MIME type does not match the file bytes", async () => {
+    mockAuth({ id: "user-1" });
+    setupDefaultAdminMocks();
+    mockValidateBufferIntegrity.mockReturnValue({
+      valid: false,
+      detectedMime: "application/pdf",
+      mismatch: true,
+    });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("File type does not match its content"),
+      })
+    );
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects uploads flagged by malware scanning", async () => {
+    mockAuth({ id: "user-1" });
+    setupDefaultAdminMocks();
+    mockScanForMalware.mockReturnValue({ safe: false, threat: "eicar" });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("suspicious content"),
+      })
+    );
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
+  });
+
+  it("strips JPEG metadata before upload", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+    setupDefaultAdminMocks();
+    mockValidateBufferIntegrity.mockReturnValue({
+      valid: true,
+      detectedMime: "image/jpeg",
+      mismatch: false,
+    });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockStripExifFromJpeg).toHaveBeenCalledTimes(1);
+    expect(mockStripMetadataFromPng).not.toHaveBeenCalled();
+  });
+
+  it("strips PNG metadata before upload", async () => {
+    mockAuth({ id: "user-1" });
+    setupDefaultAdminMocks();
+    mockValidateBufferIntegrity.mockReturnValue({
+      valid: true,
+      detectedMime: "image/png",
+      mismatch: false,
+    });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile("selfie-data", "image/png", "selfie.png"),
+        docType: "selfie",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockStripMetadataFromPng).toHaveBeenCalledTimes(1);
+    expect(mockStripExifFromJpeg).not.toHaveBeenCalled();
   });
 
   it("calls processKycArtifact with correct params", async () => {
@@ -304,7 +527,9 @@ describe("POST /api/verification/upload", () => {
 
     const upsertMock = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { id: "new-profile" }, error: null }),
+        single: vi
+          .fn()
+          .mockResolvedValue({ data: { id: "new-profile", phone: "+27123456789" }, error: null }),
       }),
     });
 
@@ -361,7 +586,36 @@ describe("POST /api/verification/upload", () => {
         };
       }
       if (table === "verification_steps") {
-        return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockReturnValue({
+                    maybeSingle: vi
+                      .fn()
+                      .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi
+                .fn()
+                .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+            }),
+          }),
+        };
       }
       if (table === "verification_sessions") {
         return {
@@ -407,7 +661,10 @@ describe("POST /api/verification/upload", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", phone: "+27123456789" },
+                error: null,
+              }),
             }),
           }),
         };
@@ -419,6 +676,18 @@ describe("POST /api/verification/upload", () => {
               single: vi.fn().mockResolvedValue({
                 data: null,
                 error: { message: "Insert failed" },
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
               }),
             }),
           }),
@@ -453,7 +722,10 @@ describe("POST /api/verification/upload", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", phone: "+27123456789" },
+                error: null,
+              }),
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
@@ -501,7 +773,34 @@ describe("POST /api/verification/upload", () => {
       }
       if (table === "verification_steps") {
         return {
-          upsert: vi.fn().mockResolvedValue({ error: null }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockReturnValue({
+                    maybeSingle: vi
+                      .fn()
+                      .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi
+                .fn()
+                .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+            }),
+          }),
         };
       }
       if (table === "verification_sessions") {
@@ -561,7 +860,19 @@ describe("POST /api/verification/upload", () => {
   it("clears prior review metadata and reopens the verification session on resubmission", async () => {
     mockAuth({ id: "user-1", email: "test@example.com" });
 
-    const stepUpsert = vi.fn().mockResolvedValue({ error: null });
+    const stepUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          neq: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+            }),
+          }),
+        }),
+      }),
+    });
     const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
 
     mockFrom.mockImplementation((table: string) => {
@@ -569,7 +880,10 @@ describe("POST /api/verification/upload", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", phone: "+27123456789" },
+                error: null,
+              }),
             }),
           }),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
@@ -609,7 +923,22 @@ describe("POST /api/verification/upload", () => {
       }
       if (table === "verification_steps") {
         return {
-          upsert: stepUpsert,
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
+              }),
+            }),
+          }),
+          update: stepUpdate,
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi
+                .fn()
+                .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+            }),
+          }),
         };
       }
       if (table === "verification_sessions") {
@@ -654,7 +983,7 @@ describe("POST /api/verification/upload", () => {
 
     const response = await POST(req);
     expect(response.status).toBe(200);
-    expect(stepUpsert).toHaveBeenCalledWith(
+    expect(stepUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "pending",
         reviewed_by: null,
@@ -662,8 +991,7 @@ describe("POST /api/verification/upload", () => {
         reason_code: null,
         reason_note: null,
         override_reason_code: null,
-      }),
-      { onConflict: "user_id,step_type" }
+      })
     );
     expect(sessionUpsert).toHaveBeenCalledWith(
       expect.objectContaining({

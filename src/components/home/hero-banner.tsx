@@ -408,7 +408,8 @@ export function HeroBanner({
           type: "business" as const,
           id: b.id,
           title: b.business_name,
-          description: b.description || "Trusted local business.",
+          description:
+            b.description || "Promote your trusted business to more South African customers.",
           location: extractLocation(b.location_city),
           mediaUrl: normalizeMediaUrl(
             b.cover_video || b.cover_photo || "/images/fallbacks/hero-business.svg"
@@ -428,7 +429,7 @@ export function HeroBanner({
           type: "listing" as const,
           id: l.id,
           title: l.title,
-          description: l.description || "Exclusive verified listing.",
+          description: l.description || "Highlight products and services with trusted visibility.",
           location: l.location_city || "South Africa",
           mediaUrl: normalizeMediaUrl(
             usesVideo
@@ -471,8 +472,9 @@ export function HeroBanner({
       combined.push({
         type: "promo" as const,
         id: "promo-default",
-        title: "Welcome to VerifyMzansi",
-        description: "South Africa's trusted verification-first marketplace",
+        title: "Promote your business with trust",
+        description:
+          "South Africa's platform for business visibility, brand promotion, and verification-first confidence.",
         location: "South Africa",
         mediaUrl: "__promo__",
         promotions: [],
@@ -483,8 +485,27 @@ export function HeroBanner({
     return combined;
   }, [topBusinesses, latestListings, latestPromotions]);
 
-  const next = () => goTo((current + 1) % Math.max(1, slides.length));
-  const prev = () => goTo((current - 1 + slides.length) % Math.max(1, slides.length));
+  const next = useCallback(
+    () => goTo((current + 1) % Math.max(1, slides.length)),
+    [current, goTo, slides.length]
+  );
+  const prev = useCallback(
+    () => goTo((current - 1 + slides.length) % Math.max(1, slides.length)),
+    [current, goTo, slides.length]
+  );
+
+  const touchStartX = useRef(0);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.changedTouches[0].clientX;
+  }, []);
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const delta = e.changedTouches[0].clientX - touchStartX.current;
+      if (delta > 50) prev();
+      else if (delta < -50) next();
+    },
+    [prev, next]
+  );
 
   const nextRef = useRef(next);
   useEffect(() => {
@@ -514,7 +535,11 @@ export function HeroBanner({
       {/* ── Hero Showroom ── */}
       <div className="relative border-b border-warm-200 dark:border-warm-800 overflow-hidden">
         {/* === Image area — clean, no overlay on mobile === */}
-        <div className="relative bg-warm-100 dark:bg-warm-900 aspect-[2/1] sm:aspect-[3/1] overflow-hidden">
+        <div
+          className="relative bg-warm-100 dark:bg-warm-900 aspect-[2/1] sm:aspect-[3/1] overflow-hidden"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           {activeSlide && (
             <>
               <div
@@ -616,7 +641,7 @@ export function HeroBanner({
                   />
                 ))}
               </div>
-              <div className="flex gap-1 sm:gap-1.5 pointer-events-auto">
+              <div className="hidden sm:flex gap-1 sm:gap-1.5 pointer-events-auto">
                 <button
                   type="button"
                   onClick={prev}

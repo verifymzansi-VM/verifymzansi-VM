@@ -43,11 +43,8 @@ BEGIN
   )
   WHERE b.business_type = 'mall_store'::business_type;
 END $$;
-
 DROP INDEX IF EXISTS public.idx_businesses_mall;
 ALTER TABLE public.businesses DROP COLUMN IF EXISTS mall_id;
-
 DROP INDEX IF EXISTS public.idx_storefronts_mall_id;
 ALTER TABLE public.storefronts DROP COLUMN IF EXISTS mall_id;
-
 DROP TABLE IF EXISTS public.malls;

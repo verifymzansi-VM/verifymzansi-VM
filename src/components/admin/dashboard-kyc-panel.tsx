@@ -58,6 +58,8 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 const LOCATION_METHOD_LABELS: Record<string, string> = {
   gps: "GPS coordinates",
   proof_of_address: "Proof of address document",
+  manual: "Manual selection (no GPS)",
+  manual_with_gps: "Manual selection + GPS confirmed",
 };
 
 const REASON_CODES = [
@@ -359,6 +361,12 @@ export function DashboardKycPanel({
                                 {LOCATION_METHOD_LABELS[item.location_method] ||
                                   item.location_method}
                               </span>
+                            </span>
+                          )}
+                          {item.location_address_line && (
+                            <span className="col-span-2">
+                              <span className="text-muted-foreground">Address: </span>
+                              <span className="font-medium">{item.location_address_line}</span>
                             </span>
                           )}
                           {(item.location_province || item.location_city) && (

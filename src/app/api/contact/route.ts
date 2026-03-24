@@ -1,5 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { readAccountVerificationStatus } from "@/lib/account/compat";
+import {
+  getOwnerColumn,
+  normalizeOwnerRecord,
+  readAccountVerificationStatus,
+  readOwnerId,
+  withOwnerColumn,
+} from "@/lib/account/compat";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { contactAccountHolderSchema } from "@/lib/validations/contact";
@@ -9,11 +15,36 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { sendContactFormNotification } from "@/lib/services/email";
+import { logAuditEvent } from "@/lib/services/audit";
 
 const log = createLogger("ContactRoute");
 
+type ContactTargetRow = {
+  id: string;
+  status: string;
+  title?: string | null;
+  owner_id?: string | null;
+  seller_id?: string | null;
+};
+
+function isContactTargetRow(record: unknown): record is ContactTargetRow {
+  if (!record || typeof record !== "object") {
+    return false;
+  }
+
+  const candidate = record as Record<string, unknown>;
+
+  return typeof candidate.id === "string" && typeof candidate.status === "string";
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
     const parsedBody = await parseAndValidateJsonRequest(request, contactAccountHolderSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
@@ -61,21 +92,45 @@ export async function POST(request: NextRequest) {
     const notFoundLabel = parsedBody.data.targetType === "promotion" ? "Promotion" : "Listing";
 
     // Get the content owner (use admin client so unauthenticated users can still contact)
-    const { data: targetRecord } = await admin
+    const ownerColumn = await getOwnerColumn(admin, targetTable);
+    const { data: targetRecord, error: targetError } = await admin
       .from(targetTable)
-      .select("owner_id, title")
+      .select(withOwnerColumn("owner_id, title, status", ownerColumn))
       .eq("id", parsedBody.data.targetId)
-      .single();
+      .maybeSingle();
 
-    if (!targetRecord) {
+    if (targetError || !targetRecord) {
       return NextResponse.json({ error: `${notFoundLabel} not found` }, { status: 404 });
+    }
+
+    if (!isContactTargetRow(targetRecord)) {
+      log.error("Target record shape was invalid", {
+        targetType: parsedBody.data.targetType,
+        targetId: parsedBody.data.targetId,
+      });
+      return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+    }
+
+    const normalizedTargetRecord = normalizeOwnerRecord(targetRecord);
+
+    if (normalizedTargetRecord.status !== "live") {
+      return NextResponse.json({ error: `${notFoundLabel} not found` }, { status: 404 });
+    }
+
+    const targetOwnerId = readOwnerId(normalizedTargetRecord);
+    if (!targetOwnerId) {
+      log.error("Target record missing owner identifier", {
+        targetType: parsedBody.data.targetType,
+        targetId: parsedBody.data.targetId,
+      });
+      return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
     }
 
     // Check account verification status
     const { data: accountProfile } = await admin
       .from("account_profiles")
-      .select("account_verification_status")
-      .eq("user_id", targetRecord.owner_id)
+      .select("account_verification_status, display_name")
+      .eq("user_id", targetOwnerId)
       .maybeSingle();
 
     const ownerVerified = readAccountVerificationStatus(accountProfile) === "verified";
@@ -87,7 +142,7 @@ export async function POST(request: NextRequest) {
     const { error: contactError } = await admin.from("contact_events").insert({
       target_id: parsedBody.data.targetId,
       target_type: parsedBody.data.targetType,
-      owner_id: targetRecord.owner_id,
+      owner_id: targetOwnerId,
       member_verified: ownerVerified,
       contact_type: contactType,
     });
@@ -99,12 +154,12 @@ export async function POST(request: NextRequest) {
 
     // Create leads row for buyer message content
     if (parsedBody.data.message) {
-      // Sanitize message: strip HTML tags to prevent stored XSS
-      const sanitizedMessage = parsedBody.data.message.replace(/<[^>]*>/g, "").trim();
+      // Sanitize message: escape HTML entities + strip tags to prevent stored XSS
+      const sanitizedMessage = sanitizeUserMessage(parsedBody.data.message);
       const { error: leadsError } = await admin.from("leads").insert({
         target_id: parsedBody.data.targetId,
         target_type: parsedBody.data.targetType,
-        owner_id: targetRecord.owner_id,
+        owner_id: targetOwnerId,
         buyer_name: null,
         buyer_email: user?.email || null,
         buyer_phone: null,
@@ -119,10 +174,11 @@ export async function POST(request: NextRequest) {
 
     // Notify the account holder about the new lead/contact
     try {
-      const itemTitle = targetRecord.title?.slice(0, 40) || `your ${parsedBody.data.targetType}`;
+      const itemTitle =
+        normalizedTargetRecord.title?.slice(0, 40) || `your ${parsedBody.data.targetType}`;
 
       await createNotification({
-        userId: targetRecord.owner_id,
+        userId: targetOwnerId,
         type: "info",
         title: "New lead received!",
         message: `Someone is interested in "${itemTitle}".`,
@@ -130,6 +186,75 @@ export async function POST(request: NextRequest) {
       });
     } catch {
       // Non-fatal — contact was already created successfully
+    }
+
+    // Send non-blocking owner email alert for new leads.
+    try {
+      const authAdmin = (
+        admin as unknown as {
+          auth?: {
+            admin?: {
+              getUserById?: (id: string) => Promise<{
+                data?: { user?: { email?: string | null } | null };
+              }>;
+            };
+          };
+        }
+      ).auth?.admin;
+      const { data: ownerAuthData } = authAdmin?.getUserById
+        ? await authAdmin.getUserById(targetOwnerId)
+        : { data: { user: { email: null } } };
+
+      const ownerEmail = ownerAuthData?.user?.email;
+      if (ownerEmail) {
+        const ownerName =
+          (accountProfile as { display_name?: string | null } | null)?.display_name || "there";
+        const buyerName = user ? "Verified member" : "Interested buyer";
+        const buyerEmail = user?.email || "not-provided@verifymzansi.com";
+        const inquiryMessage = parsedBody.data.message || "A buyer has requested contact details.";
+        const listingTitle = normalizedTargetRecord.title || `your ${parsedBody.data.targetType}`;
+
+        void (async () => {
+          const result = await sendContactFormNotification(
+            ownerEmail,
+            ownerName,
+            buyerName,
+            buyerEmail,
+            inquiryMessage,
+            listingTitle
+          );
+
+          await logAuditEvent({
+            actorId: user?.id || "00000000-0000-0000-0000-000000000000",
+            actorRole: user ? "member" : "system",
+            action: result.success ? "communication_email_sent" : "communication_email_failed",
+            targetType: "account_profile",
+            targetId: targetOwnerId,
+            metadata: {
+              template: "lead_alert",
+              channel: "email",
+              target_type: parsedBody.data.targetType,
+              target_id: parsedBody.data.targetId,
+              error: result.error,
+              owner_user_id: targetOwnerId,
+            },
+          });
+        })().catch((emailErr) => {
+          log.warn("Failed to send contact owner email (non-fatal)", {
+            targetType: parsedBody.data.targetType,
+            targetId: parsedBody.data.targetId,
+            ownerId: targetOwnerId,
+            error: emailErr instanceof Error ? emailErr.message : "Unknown",
+          });
+        });
+      }
+    } catch (emailLookupErr) {
+      log.warn("Failed to resolve contact owner email (non-fatal)", {
+        targetType: parsedBody.data.targetType,
+        targetId: parsedBody.data.targetId,
+        ownerId: targetOwnerId,
+        error: emailLookupErr instanceof Error ? emailLookupErr.message : "Unknown",
+      });
     }
 
     return NextResponse.json({ success: true });

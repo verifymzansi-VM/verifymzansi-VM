@@ -18,7 +18,7 @@ export default function PrivacyPolicyPage() {
         "• Account information (name, email, phone number)",
         "• Verification documents (ID number, selfie, location)",
         "• Listing content (titles, descriptions, images, pricing)",
-        "• Communication records and payment information (via PayFast)",
+        "• Communication records and payment information (via Ozow and our payment providers)",
         "We also collect device/browser info, IP address, and usage data automatically.",
       ],
     },
@@ -67,7 +67,7 @@ export default function PrivacyPolicyPage() {
               Privacy Policy
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Last updated: February 2026 · POPIA compliant
+              Last updated: March 2026 · POPIA compliant
             </p>
           </div>
         </div>

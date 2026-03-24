@@ -4,11 +4,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { adminFlaggingActionSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
-import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { sendAccountEnforcementEmail } from "@/lib/services/email";
 
 const log = createLogger("AdminFlagging");
 
@@ -22,6 +24,8 @@ export async function POST(request: Request) {
     if (sameOriginFailure) {
       return sameOriginFailure;
     }
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const supabase = await createClient();
     const {
@@ -32,7 +36,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!isModeratorOrAdmin(user)) {
+    const adminRole = await verifyStaffActorRoleFromDb(user);
+    if (!adminRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -69,13 +74,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
+    // Resolve owner columns via compat layer
+    const [listingsOwnerCol, businessesOwnerCol, promotionsOwnerCol] = await Promise.all([
+      getOwnerColumn(admin as never, "listings").catch(() => "owner_id" as const),
+      getOwnerColumn(admin as never, "businesses").catch(() => "owner_id" as const),
+      getOwnerColumn(admin as never, "promotions").catch(() => "owner_id" as const),
+    ]);
+
     // Get the account holder for this target
     let ownerId: string | null = null;
 
     if (report.target_type === "listing") {
       const { data: listing, error: listingErr } = await admin
         .from("listings")
-        .select("owner_id")
+        .select(listingsOwnerCol)
         .eq("id", report.target_id)
         .single();
       if (listingErr) {
@@ -84,7 +96,7 @@ export async function POST(request: Request) {
           error: listingErr.message,
         });
       }
-      ownerId = listing?.owner_id || null;
+      ownerId = ((listing as Record<string, unknown> | null)?.[listingsOwnerCol] as string) || null;
     } else if (report.target_type === "account_profile") {
       ownerId = report.target_id;
     } else if (
@@ -94,7 +106,7 @@ export async function POST(request: Request) {
     ) {
       const { data: biz, error: bizErr } = await admin
         .from("businesses")
-        .select("owner_id")
+        .select(businessesOwnerCol)
         .eq("id", report.target_id)
         .single();
       if (bizErr) {
@@ -103,11 +115,11 @@ export async function POST(request: Request) {
           error: bizErr.message,
         });
       }
-      ownerId = biz?.owner_id || null;
+      ownerId = ((biz as Record<string, unknown> | null)?.[businessesOwnerCol] as string) || null;
     } else if (report.target_type === "promotion") {
       const { data: promotion, error: promotionErr } = await admin
         .from("promotions")
-        .select("owner_id")
+        .select(promotionsOwnerCol)
         .eq("id", report.target_id)
         .single();
       if (promotionErr) {
@@ -116,7 +128,8 @@ export async function POST(request: Request) {
           error: promotionErr.message,
         });
       }
-      ownerId = promotion?.owner_id || null;
+      ownerId =
+        ((promotion as Record<string, unknown> | null)?.[promotionsOwnerCol] as string) || null;
     }
 
     // Actions that target an account holder require a valid owner reference
@@ -166,17 +179,17 @@ export async function POST(request: Request) {
       await admin
         .from("listings")
         .update({ status: "hidden" })
-        .eq("owner_id", ownerId)
+        .eq(listingsOwnerCol, ownerId)
         .eq("status", "live");
       await admin
         .from("businesses")
         .update({ status: "hidden" })
-        .eq("owner_id", ownerId)
+        .eq(businessesOwnerCol, ownerId)
         .eq("status", "live");
       await admin
         .from("promotions")
         .update({ status: "hidden" })
-        .eq("owner_id", ownerId)
+        .eq(promotionsOwnerCol, ownerId)
         .eq("status", "live");
     } else if (action === "ban" && ownerId) {
       await admin
@@ -189,9 +202,84 @@ export async function POST(request: Request) {
         .eq("user_id", ownerId);
 
       // Hide all content
-      await admin.from("listings").update({ status: "hidden" }).eq("owner_id", ownerId);
-      await admin.from("businesses").update({ status: "hidden" }).eq("owner_id", ownerId);
-      await admin.from("promotions").update({ status: "hidden" }).eq("owner_id", ownerId);
+      await admin.from("listings").update({ status: "hidden" }).eq(listingsOwnerCol, ownerId);
+      await admin.from("businesses").update({ status: "hidden" }).eq(businessesOwnerCol, ownerId);
+      await admin.from("promotions").update({ status: "hidden" }).eq(promotionsOwnerCol, ownerId);
+    }
+
+    // Send enforcement emails to affected account holders (non-blocking)
+    if ((action === "warn" || action === "suspend" || action === "ban") && ownerId) {
+      try {
+        const authAdmin = (
+          admin as unknown as {
+            auth?: {
+              admin?: {
+                getUserById?: (id: string) => Promise<{
+                  data?: {
+                    user?: {
+                      email?: string | null;
+                      user_metadata?: { full_name?: string | null; name?: string | null };
+                    } | null;
+                  };
+                }>;
+              };
+            };
+          }
+        ).auth?.admin;
+        const { data: ownerUserData } = authAdmin?.getUserById
+          ? await authAdmin.getUserById(ownerId)
+          : { data: { user: { email: null } } };
+
+        const ownerEmail = ownerUserData?.user?.email;
+        if (ownerEmail) {
+          const accountName =
+            ownerUserData.user?.user_metadata?.full_name ||
+            ownerUserData.user?.user_metadata?.name ||
+            "there";
+          const suspendedUntil =
+            action === "suspend" && durationDays
+              ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
+              : null;
+
+          void (async () => {
+            const result = await sendAccountEnforcementEmail({
+              email: ownerEmail,
+              accountName,
+              action,
+              reason,
+              suspendedUntil,
+            });
+
+            await logAuditEvent({
+              actorId: user.id,
+              actorRole: adminRole,
+              action: result.success ? "communication_email_sent" : "communication_email_failed",
+              targetType: "account_profile",
+              targetId: ownerId,
+              metadata: {
+                template: `account_${action}`,
+                channel: "email",
+                error: result.error,
+                owner_user_id: ownerId,
+              },
+            });
+          })().catch((emailErr) => {
+            log.warn("Failed to send enforcement email", {
+              action,
+              ownerId,
+              reportId,
+              error: emailErr instanceof Error ? emailErr.message : "Unknown",
+            });
+          });
+        }
+      } catch (emailLookupErr) {
+        log.warn("Failed to resolve enforcement email recipient", {
+          action,
+          ownerId,
+          reportId,
+          error: emailLookupErr instanceof Error ? emailLookupErr.message : "Unknown",
+        });
+      }
     }
 
     // Record moderation action
@@ -226,7 +314,7 @@ export async function POST(request: Request) {
 
     await logAuditEvent({
       actorId: user.id,
-      actorRole: (user.app_metadata?.role as "admin" | "moderator") || "admin",
+      actorRole: adminRole,
       action: (auditActionMap[action] || "moderation_action") as
         | "moderation_action"
         | "account_suspended"

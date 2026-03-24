@@ -1,7 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
-import { DEV_SEED_BUSINESS_CATEGORY_COUNTS } from "@/lib/testing/dev-seed-fixtures";
 import { BusinessCategoryStrip } from "./business-category-strip";
 
 const { useMarketplaceStoreMock } = vi.hoisted(() => ({
@@ -11,6 +10,10 @@ const { useMarketplaceStoreMock } = vi.hoisted(() => ({
 vi.mock("@/stores", () => ({
   useMarketplaceStore: useMarketplaceStoreMock,
 }));
+
+const categoryCounts = Object.fromEntries(
+  BUSINESS_CATEGORIES.map((category) => [category.value, 1] as const)
+);
 
 describe("BusinessCategoryStrip", () => {
   beforeEach(() => {
@@ -29,8 +32,8 @@ describe("BusinessCategoryStrip", () => {
     });
   });
 
-  it("renders every business category when seed counts include all categories", () => {
-    render(<BusinessCategoryStrip categoryCounts={DEV_SEED_BUSINESS_CATEGORY_COUNTS} />);
+  it("renders every business category when category counts include all categories", () => {
+    render(<BusinessCategoryStrip categoryCounts={categoryCounts} />);
 
     const buttonTexts = screen.getAllByRole("button").map((button) => button.textContent ?? "");
 

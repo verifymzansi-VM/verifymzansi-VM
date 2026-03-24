@@ -30,6 +30,7 @@ import { TrustBadge } from "@/components/trust/trust-badge";
 import { NotificationBell } from "@/components/notification-bell";
 import { MarketplaceSwitcher } from "./marketplace-switcher";
 import { useAuth } from "@/hooks/use-auth";
+import { ErrorBoundary } from "@/components/shared/error-boundary";
 import type { TrustLevel } from "@/types/enums";
 
 interface HeaderProps {
@@ -39,7 +40,26 @@ interface HeaderProps {
   trustLevel?: TrustLevel;
 }
 
-export function Header({
+export function Header(props: HeaderProps) {
+  return (
+    <ErrorBoundary
+      label="Header"
+      fallback={
+        <header className="sticky top-0 z-50 w-full border-b bg-background">
+          <div className="container-page flex h-16 items-center">
+            <Link href="/" className="text-lg font-bold">
+              VerifyMzansi
+            </Link>
+          </div>
+        </header>
+      }
+    >
+      <HeaderInner {...props} />
+    </ErrorBoundary>
+  );
+}
+
+function HeaderInner({
   isAuthenticated: isAuthProp,
   displayName: displayNameProp,
   trustLevel: trustLevelProp = 0,
@@ -95,27 +115,28 @@ export function Header({
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background md:bg-background/95 md:backdrop-blur md:supports-[backdrop-filter]:bg-background/60">
-      <div className="container-page flex h-16 items-center justify-between">
+    <header className="sticky top-0 z-50 w-full border-b bg-background lg:bg-background/95 lg:backdrop-blur lg:supports-[backdrop-filter]:bg-background/60">
+      <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
         <Link
           href="/"
           aria-label="VerifyMzansi — Home"
-          className="flex items-center gap-2 sm:gap-3 flex-shrink-0 group"
+          className="group flex items-center gap-2 sm:gap-3 lg:justify-self-start"
         >
           <BrandLogo
             size="md"
+            variant="transparent"
             priority
-            imageClassName="transition-transform duration-200 group-hover:scale-105"
+            imageClassName="drop-shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-transform duration-200 group-hover:scale-105"
           />
         </Link>
 
-        {/* Marketplace Switcher — hidden on mobile, shown md+ */}
-        <div className="hidden md:flex items-center">
+        {/* Marketplace Switcher — hidden on mobile, shown lg+ */}
+        <div className="hidden lg:flex lg:justify-self-center">
           <MarketplaceSwitcher />
         </div>
 
         {/* Desktop Right — Auth */}
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden items-center gap-2 lg:flex lg:justify-self-end">
           {/* Theme toggle */}
           <Button
             variant="ghost"
@@ -133,6 +154,9 @@ export function Header({
               {(trustLevelProp || auth.trustLevel) > 0 && (
                 <TrustBadge level={trustLevelProp || auth.trustLevel} size="sm" />
               )}
+              <Button asChild variant="outline" size="sm">
+                <Link href="/advertise">Advertise</Link>
+              </Button>
               <Button asChild variant="trust-verified" size="sm">
                 <Link href="/post/create">+ Post</Link>
               </Button>
@@ -206,13 +230,16 @@ export function Header({
             </>
           ) : (
             <>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/advertise">Advertise</Link>
+              </Button>
               <Button
                 asChild
                 variant="outline"
                 className="border-brand-green border-2 hover:bg-brand-green/10"
                 size="sm"
               >
-                <Link href="/login">Sign In</Link>
+                <Link href="/login">Sign in</Link>
               </Button>
               <Button asChild variant="trust-verified" size="sm">
                 <Link href="/register">Register</Link>
@@ -223,18 +250,19 @@ export function Header({
 
         {/* Mobile Hamburger */}
         <button
-          className="md:hidden p-2"
+          className="justify-self-end p-2 lg:hidden"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
           aria-controls="mobile-nav-menu"
+          aria-expanded={mobileOpen}
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
       {/* Mobile Marketplace Tabs — always visible on mobile */}
-      <div className="md:hidden w-full border-t bg-background/95">
-        <div className="container-page flex items-center justify-around py-1.5">
+      <div className="lg:hidden w-full border-t bg-background/95">
+        <div className="px-3 py-1.5">
           <MarketplaceSwitcher />
         </div>
       </div>
@@ -244,7 +272,7 @@ export function Header({
         <nav
           id="mobile-nav-menu"
           aria-label="Mobile navigation"
-          className="md:hidden border-t bg-background animate-fade-in-up"
+          className="lg:hidden border-t bg-background animate-fade-in-up"
         >
           <div className="container-page py-4 space-y-4">
             <div className="flex flex-col gap-2">
@@ -296,6 +324,11 @@ export function Header({
                       + Post
                     </Link>
                   </Button>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/advertise" onClick={() => setMobileOpen(false)}>
+                      Advertise
+                    </Link>
+                  </Button>
                   <button
                     className="flex items-center gap-2 py-2 text-sm font-medium text-destructive disabled:opacity-50"
                     disabled={signingOut}
@@ -314,6 +347,11 @@ export function Header({
                 </>
               ) : (
                 <>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/advertise" onClick={() => setMobileOpen(false)}>
+                      Advertise
+                    </Link>
+                  </Button>
                   <Button asChild variant="outline" className="w-full">
                     <Link href="/login" onClick={() => setMobileOpen(false)}>
                       Sign In

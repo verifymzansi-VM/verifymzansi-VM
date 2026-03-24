@@ -7,34 +7,26 @@ import { fileUploadSchema, validateUploadedFile } from "@/lib/validations/verifi
 import { processKycArtifact } from "@/lib/services/kyc-engine";
 import { createLogger } from "@/lib/utils/logger";
 import { isStrictLocalDevelopmentRequest } from "@/lib/utils/local-dev";
+import { stripExifFromJpeg, stripMetadataFromPng } from "@/lib/utils/exif-strip";
+import { scanForMalware } from "@/lib/utils/malware-scan";
+import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
 import crypto from "crypto";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { isFeatureEnabled } from "@/lib/services/feature-flags";
+import { parseAndValidateFormData } from "@/lib/utils/api";
+import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 
 const log = createLogger("VerificationUpload");
 
-function getDefaultDisplayName(user: { email?: string | null; user_metadata?: unknown }): string {
-  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
-  const displayName = metadata.display_name;
-  const fullName = metadata.full_name;
-
-  if (typeof displayName === "string" && displayName.trim().length > 0) {
-    return displayName.trim();
-  }
-
-  if (typeof fullName === "string" && fullName.trim().length > 0) {
-    return fullName.trim();
-  }
-
-  if (user.email) {
-    return user.email.split("@")[0] || "New Member";
-  }
-
-  return "New Member";
-}
+// Re-exported from shared module
+import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
 
 /**
  * POST /api/verification/upload
@@ -56,7 +48,12 @@ export async function POST(request: NextRequest) {
     );
 
     if (process.env.NODE_ENV === "production" && !hasStorageSecrets) {
-      log.error("R2 storage secrets are missing in production");
+      log.error("R2 storage secrets are missing in production", {
+        hasAccountId: Boolean(process.env.R2_ACCOUNT_ID),
+        hasAccessKey: Boolean(process.env.R2_ACCESS_KEY_ID),
+        hasSecretKey: Boolean(process.env.R2_SECRET_ACCESS_KEY),
+        nodeEnv: process.env.NODE_ENV,
+      });
       return NextResponse.json(
         { error: "Document upload temporarily unavailable", code: "storage_unavailable" },
         { status: 503 }
@@ -80,6 +77,17 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) {
+      return originBlock;
+    }
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) {
+      return csrfBlock;
+    }
+
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
     const {
@@ -88,6 +96,38 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Email confirmation gate — users must confirm their email before uploading
+    if (!user.email_confirmed_at) {
+      return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
+        status: 403,
+      });
+    }
+
+    // Feature flag check — must match session start route
+    const v2Enabled = await isFeatureEnabled("kyc_v2_flow");
+    if (!v2Enabled) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const rateCheck = await checkRateLimit({
+      key: getClientIp(request),
+      action: "verification:upload",
+      degradedMode: "block",
+    });
+    if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          { error: "Verification upload protection is temporarily unavailable. Please try again." },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
+      return NextResponse.json(
+        { error: "Too many verification upload attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+      );
     }
 
     // ── Parse multipart form ─────────────────────────────────
@@ -107,14 +147,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Validate metadata fields ─────────────────────────────
-    const metaParsed = fileUploadSchema.safeParse({
-      docType: formData.get("docType"),
-      idNumber: formData.get("idNumber") || undefined,
-      idDocumentType: formData.get("idDocumentType") || undefined,
+    const metaParsed = parseAndValidateFormData(formData, fileUploadSchema, {
+      validationErrorMessage: "Invalid upload metadata",
+      includeValidationDetails: false,
     });
 
     if (!metaParsed.success) {
-      return NextResponse.json({ error: metaParsed.error.issues[0].message }, { status: 400 });
+      return metaParsed.response;
     }
 
     const { docType, idNumber } = metaParsed.data;
@@ -132,9 +171,9 @@ export async function POST(request: NextRequest) {
 
     // ── Get account profile ──────────────────────────────────
     const admin = createAdminClient();
-    let { data: profile } = await admin
+    let { data: profile } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("id")
+      .select("id, phone")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -148,7 +187,7 @@ export async function POST(request: NextRequest) {
           },
           { onConflict: "user_id" }
         )
-        .select("id")
+        .select("id, phone")
         .single();
 
       if (createProfileError || !createdProfile) {
@@ -162,6 +201,19 @@ export async function POST(request: NextRequest) {
       }
 
       profile = createdProfile;
+    }
+
+    // Phone gate for API routes: the middleware phone gate only covers
+    // page routes (not API routes), so we check here to prevent uploads
+    // from accounts without a phone number.
+    if (!profile.phone) {
+      return NextResponse.json(
+        {
+          error: "Please complete your profile with a phone number before starting verification.",
+          code: "phone_required",
+        },
+        { status: 403 }
+      );
     }
 
     // ── Map docType → verification step_type / artifact_kind ─
@@ -178,8 +230,64 @@ export async function POST(request: NextRequest) {
     const stepType = stepTypeMap[docType];
     const artifactKind = artifactKindMap[docType];
 
+    // ── Guard: prevent re-uploading over already-approved steps ──
+    const { data: existingStep } = await admin
+      .from("verification_steps")
+      .select("status, risk_score, risk_level, auto_status")
+      .eq("user_id", user.id)
+      .eq("step_type", stepType)
+      .maybeSingle();
+
+    if (existingStep?.status === "approved") {
+      return NextResponse.json(
+        {
+          error: "This verification step has already been approved.",
+          code: "step_already_approved",
+        },
+        { status: 409 }
+      );
+    }
+
     // ── Read file bytes once for SHA-256 and upload ───────────
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    let fileBuffer = Buffer.from(await file.arrayBuffer());
+
+    // ── Server-side magic-byte MIME validation ────────────────
+    const integrity = validateBufferIntegrity(fileBuffer, file.type);
+    if (!integrity.valid) {
+      log.warn("File MIME mismatch detected", {
+        declared: file.type,
+        detected: integrity.detectedMime,
+        userId: user.id,
+      });
+      return NextResponse.json(
+        { error: "File type does not match its content. Please upload a valid image or document." },
+        { status: 400 }
+      );
+    }
+
+    // ── Malware scan ──────────────────────────────────────────
+    const scanResult = scanForMalware(fileBuffer, file.type);
+    if (!scanResult.safe) {
+      log.warn("Malware detected in KYC upload", {
+        threat: scanResult.threat,
+        userId: user.id,
+        fileName: file.name,
+      });
+      return NextResponse.json(
+        {
+          error:
+            "This file was rejected because it contains suspicious content. Please upload a clean photo.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ── Strip EXIF metadata from JPEG files (POPIA data minimization) ──
+    if (file.type === "image/jpeg" || integrity.detectedMime === "image/jpeg") {
+      fileBuffer = Buffer.from(stripExifFromJpeg(fileBuffer));
+    } else if (file.type === "image/png" || integrity.detectedMime === "image/png") {
+      fileBuffer = Buffer.from(stripMetadataFromPng(fileBuffer));
+    }
 
     // ── Upload encrypted file to R2 (or local dev fallback) ──
     let uploadResult: { url: string; key: string };
@@ -251,7 +359,10 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({ error: "Failed to record upload" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to record upload", code: "artifact_record_failed" },
+        { status: 500 }
+      );
     }
 
     const { error: supersedeError } = await admin
@@ -263,7 +374,7 @@ export async function POST(request: NextRequest) {
       .in("status", ["pending", "needs_resubmission"]);
 
     if (supersedeError) {
-      log.warn("Failed to supersede prior KYC artifacts", {
+      log.error("Failed to supersede prior KYC artifacts — duplicates may confuse review", {
         error: supersedeError.message,
         userId: user.id,
         stepType,
@@ -305,7 +416,10 @@ export async function POST(request: NextRequest) {
       const encKey = process.env.ID_ENCRYPTION_KEY; // 32-byte hex key
       if (!encKey) {
         log.error("ID_ENCRYPTION_KEY not set");
-        return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+        return NextResponse.json(
+          { error: "Server configuration error", code: "config_missing" },
+          { status: 500 }
+        );
       }
       const iv = crypto.randomBytes(12);
       const cipher = crypto.createCipheriv("aes-256-gcm", Buffer.from(encKey, "hex"), iv);
@@ -323,13 +437,119 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { error: stepError } = await admin
+    // CAS guard: only overwrite an existing step if it is still in a
+    // "safe-to-overwrite" state. This prevents a concurrent upload from
+    // overwriting a step that was approved between our earlier check and now.
+    // Use conditional update + insert instead of upsert to avoid TOCTOU.
+    let stepUpsertError: { message: string; code?: string; details?: string } | null = null;
+    const { data: updatedStep, error: updateError } = await admin
       .from("verification_steps")
-      .upsert(stepData, { onConflict: "user_id,step_type" });
+      .update(stepData)
+      .eq("user_id", user.id)
+      .eq("step_type", stepType)
+      .neq("status", "approved")
+      .select("id, risk_score")
+      .maybeSingle();
+
+    if (updateError) {
+      stepUpsertError = updateError;
+    } else if (!updatedStep) {
+      // No row was updated — either no row exists yet, or it's approved.
+      // Try inserting; if the row exists and is approved, the unique
+      // constraint will cause a conflict and we return 409.
+      const { data: _insertedStep, error: insertError } = await admin
+        .from("verification_steps")
+        .insert(stepData)
+        .select("id, risk_score")
+        .single();
+
+      if (insertError) {
+        // Unique constraint violation means the step was approved concurrently
+        if (insertError.code === "23505") {
+          return NextResponse.json(
+            {
+              error: "This verification step has already been approved.",
+              code: "step_already_approved",
+            },
+            { status: 409 }
+          );
+        }
+        stepUpsertError = insertError;
+      }
+    }
+    const stepError = stepUpsertError;
 
     if (stepError) {
       log.error("Failed to update verification step", { error: stepError });
-      // Don't return error — artifact was saved, step can be retried
+
+      // Clean up the orphaned artifact row and R2 file so they don't
+      // accumulate without a matching verification_step record.
+      try {
+        await admin.from("kyc_artifacts").delete().eq("id", artifact.id);
+      } catch (artifactCleanupErr) {
+        log.error("CRITICAL: Failed to clean up orphaned kyc_artifact", {
+          artifactId: artifact.id,
+          error: artifactCleanupErr,
+        });
+      }
+      if (uploadedToR2) {
+        try {
+          const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+          await deleteFromR2(privateBucket, uploadResult.key);
+        } catch (r2CleanupErr) {
+          log.error("CRITICAL: Failed to clean up orphaned R2 file after step upsert failure", {
+            r2Key: uploadResult.key,
+            error: r2CleanupErr,
+          });
+        }
+      }
+
+      return NextResponse.json(
+        {
+          error: "Failed to save verification step. Please retry the upload.",
+          code: "step_upsert_failed",
+        },
+        { status: 500 }
+      );
+    }
+
+    // If the pre-existing step had a higher (worse) risk score than the new
+    // upload, restore the original risk posture. This prevents a benign
+    // re-upload from silently erasing a previously flagged risk signal.
+    // The new artifact is still saved so admins can review both.
+    //
+    // Re-read the step after upsert to avoid TOCTOU — a concurrent upload
+    // may have written a higher score between our pre-read and now.
+    const { data: currentStep } = await admin
+      .from("verification_steps")
+      .select("risk_score, risk_level, auto_status")
+      .eq("user_id", user.id)
+      .eq("step_type", stepType)
+      .single();
+
+    if (
+      existingStep &&
+      typeof existingStep.risk_score === "number" &&
+      currentStep &&
+      typeof currentStep.risk_score === "number" &&
+      currentStep.risk_score < existingStep.risk_score
+    ) {
+      log.warn("Step upsert lowered risk score — restoring higher-risk record", {
+        userId: user.id,
+        stepType,
+        existingScore: existingStep.risk_score,
+        currentScore: currentStep.risk_score,
+        newScore: engineResult.riskScore,
+      });
+      await admin
+        .from("verification_steps")
+        .update({
+          risk_score: existingStep.risk_score,
+          risk_level: existingStep.risk_level,
+          auto_status: existingStep.auto_status,
+        })
+        .eq("user_id", user.id)
+        .eq("step_type", stepType);
     }
 
     // ── Update verification_sessions ──────────────────────────
@@ -340,11 +560,19 @@ export async function POST(request: NextRequest) {
       sessionPatch.selfie_artifact_id = artifact.id;
     }
 
-    await admin
+    const { error: sessionUpsertError } = await admin
       .from("verification_sessions")
       .upsert(buildVerificationSessionResumePatch(user.id, sessionPatch), {
         onConflict: "user_id",
       });
+
+    if (sessionUpsertError) {
+      log.error("Failed to update verification session — artifact saved, session out of sync", {
+        error: sessionUpsertError.message,
+        userId: user.id,
+        artifactId: artifact.id,
+      });
+    }
 
     // ── Finalize session when all artifacts are present ───────
     const { data: currentSession } = await admin
@@ -353,12 +581,21 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user.id)
       .single();
 
+    // Check phone verification status from verification_steps
+    const { data: phoneStep } = await admin
+      .from("verification_steps")
+      .select("phone_verified_at")
+      .eq("user_id", user.id)
+      .eq("step_type", "phone")
+      .maybeSingle();
+
     if (
       currentSession &&
       !currentSession.finalized_at &&
       currentSession.id_artifact_id &&
       currentSession.selfie_artifact_id &&
-      currentSession.location_submitted_at
+      currentSession.location_submitted_at &&
+      phoneStep?.phone_verified_at
     ) {
       await admin
         .from("verification_sessions")
@@ -367,19 +604,31 @@ export async function POST(request: NextRequest) {
         .is("finalized_at", null); // CAS guard: prevent double finalization
     }
 
-    // ── Update account verification status to pending_review ─
-    const { data: statusUpdated } = await admin
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .update({
-        account_verification_status: "pending_review",
-      })
-      .eq("id", profile.id)
-      .in("account_verification_status", ["incomplete", "rejected"])
-      .select("id");
+    // ── Update account verification status based on risk engine result ─
+    // Only promote to pending_review if the artifact was NOT hard-rejected
+    // by the risk engine. This prevents the account from showing
+    // "pending_review" when all steps have actually been rejected.
+    const isHardReject = engineResult.autoStatus === "rejected";
+    if (!isHardReject) {
+      const { data: statusUpdated } = await admin
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .update({
+          account_verification_status: "pending_review",
+        })
+        .eq("id", profile.id)
+        .in("account_verification_status", ["incomplete", "rejected"])
+        .select("id");
 
-    if (statusUpdated?.length) {
-      log.info("Account verification status promoted to pending_review", {
+      if (statusUpdated?.length) {
+        log.info("Account verification status promoted to pending_review", {
+          profileId: profile.id,
+        });
+      }
+    } else {
+      log.info("Risk engine hard-rejected artifact — account status not promoted", {
         profileId: profile.id,
+        autoStatus: engineResult.autoStatus,
+        riskScore: engineResult.riskScore,
       });
     }
 
@@ -408,14 +657,52 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const stack = err instanceof Error ? err.stack : undefined;
-    log.error("Unexpected error in verification upload", { error: message, stack });
+
+    // Categorize the error for structured logging and client error codes
+    const isR2Error =
+      message.includes("R2") ||
+      message.includes("S3") ||
+      message.includes("PutObject") ||
+      message.includes("AccessDenied") ||
+      message.includes("InvalidAccessKeyId") ||
+      message.includes("SignatureDoesNotMatch");
+    const isEncryptionError =
+      message.includes("encryption") || message.includes("KYC_ENCRYPTION_KEY");
+    const isConfigError =
+      message.includes("not configured") ||
+      message.includes("HMAC_SECRET") ||
+      message.includes("ID_ENCRYPTION_KEY");
+
+    const errorCategory = isR2Error
+      ? "r2_storage"
+      : isEncryptionError
+        ? "encryption"
+        : isConfigError
+          ? "config"
+          : "unknown";
+
+    log.error("Unexpected error in verification upload", {
+      error: message,
+      stack,
+      category: errorCategory,
+    });
+
+    // Return a category-specific code so the client can show a targeted message
+    const errorCode = isR2Error
+      ? "storage_failed"
+      : isEncryptionError
+        ? "encryption_failed"
+        : isConfigError
+          ? "config_missing"
+          : "unexpected_error";
+
     return NextResponse.json(
       {
         error:
           process.env.NODE_ENV === "development"
             ? message
             : "Failed to upload document. Please try again.",
-        code: "unexpected_error",
+        code: errorCode,
       },
       { status: 500 }
     );

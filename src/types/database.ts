@@ -20,6 +20,7 @@ import type {
   EntitlementType,
   EntitlementStatus,
   PaymentStatus,
+  PaymentProvider,
   LeadStatus,
   ContactEventType,
   ReportCategory,
@@ -34,6 +35,7 @@ import type {
   BusinessType,
   BusinessCategory,
   PromotionType,
+  SocialAuthorizerRelationship,
 } from "./enums";
 import type { BusinessDetails } from "./business-details";
 
@@ -78,6 +80,7 @@ export interface VerificationStep {
   gps_lon: number | null;
   location_province: string | null;
   location_city: string | null;
+  location_address_line: string | null;
   location_town: string | null;
   phone_verified_at: string | null;
   reviewed_by: string | null;
@@ -182,7 +185,6 @@ export interface Entitlement {
   tier: PlanTier;
   type: EntitlementType;
   status: EntitlementStatus;
-  payfast_subscription_id: string | null;
   started_at: string;
   expires_at: string | null;
   cancelled_at: string | null;
@@ -202,6 +204,7 @@ export interface Listing {
   photos: string[];
   videos: string[];
   video_thumbnail: string | null;
+  logo_url: string | null;
   price_cents: number | null;
   price_negotiable: boolean;
   location_province: string;
@@ -284,6 +287,14 @@ export interface Promotion {
   contact_methods: ContactMethod[];
   start_date: string | null;
   end_date: string | null;
+  social_distribution_authorized: boolean;
+  social_distribution_authorized_at: string | null;
+  social_distribution_revoked_at: string | null;
+  social_authorizer_name: string | null;
+  social_authorizer_role: string | null;
+  social_authorizer_relationship: SocialAuthorizerRelationship;
+  social_authorization_version: string | null;
+  social_monetization_acknowledged: boolean;
   status: ListingStatus;
   status_reason: string | null;
   boost_until: string | null;
@@ -304,8 +315,10 @@ export interface Payment {
   area: MarketplaceArea;
   amount_cents: number;
   status: PaymentStatus;
-  payfast_payment_id: string | null;
-  payfast_data: Record<string, unknown> | null;
+  provider: PaymentProvider;
+  provider_payment_id: string | null;
+  provider_reference: string | null;
+  provider_data: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }

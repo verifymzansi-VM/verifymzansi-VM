@@ -3,10 +3,8 @@ import "server-only";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
-import {
-  createPlaywrightStubSupabaseClient,
-  isPlaywrightSupabaseStubMode,
-} from "@/lib/supabase/playwright-stub";
+import { createPlaywrightStubSupabaseClient } from "@/lib/supabase/playwright-stub";
+import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger("Supabase");
@@ -16,11 +14,27 @@ const logger = createLogger("Supabase");
  * Reads/writes auth cookies via the Next.js `cookies()` API.
  */
 export async function createClient(): Promise<SupabaseClient> {
-  if (isPlaywrightSupabaseStubMode()) {
-    return createPlaywrightStubSupabaseClient() as unknown as SupabaseClient;
-  }
-
   const cookieStore = await cookies();
+
+  if (isPlaywrightSupabaseStubMode()) {
+    return createPlaywrightStubSupabaseClient({
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options?: CookieOptions) {
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch {}
+        },
+        remove(name: string, options?: CookieOptions) {
+          try {
+            cookieStore.set({ name, value: "", ...options });
+          } catch {}
+        },
+      },
+    }) as unknown as SupabaseClient;
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

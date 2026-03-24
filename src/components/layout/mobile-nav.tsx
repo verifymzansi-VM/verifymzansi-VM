@@ -6,6 +6,7 @@ import { Home, Search, PlusCircle, MessageSquare, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotificationStore } from "@/stores/notification-store";
 import { useAuth } from "@/hooks/use-auth";
+import { triggerHaptic } from "@/lib/utils/haptics";
 
 interface TabDef {
   href: string;
@@ -26,7 +27,13 @@ const TABS: TabDef[] = [
     dotSource: "leads",
     requiresAuth: true,
   },
-  { href: "/dashboard", icon: User, label: "Profile", dotSource: "profile" },
+  {
+    href: "/dashboard",
+    icon: User,
+    label: "Dashboard",
+    dotSource: "profile",
+    requiresAuth: true,
+  },
 ];
 
 /** Marketplace prefixes the Browse tab should match */
@@ -44,12 +51,15 @@ export function MobileNav() {
   return (
     <nav
       aria-label="Main"
-      className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t bg-background safe-area-inset-bottom"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/98 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden safe-area-inset-bottom"
     >
       <div className="flex items-center justify-around h-16 px-2">
         {TABS.map((tab) => {
           const href = tab.label === "Browse" ? browseHref : tab.href;
-          const resolvedHref = tab.requiresAuth && !isAuthenticated ? "/login" : href;
+          const resolvedHref =
+            tab.requiresAuth && !isAuthenticated
+              ? `/login?returnUrl=${encodeURIComponent(href)}`
+              : href;
           const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
           const Icon = tab.icon;
           const showRedDot = tab.dotSource === "leads" && unreadCount > 0;
@@ -58,6 +68,7 @@ export function MobileNav() {
             <Link
               key={tab.label}
               href={resolvedHref}
+              onClick={() => triggerHaptic("light")}
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-0.5 flex-1 py-1 transition-colors",

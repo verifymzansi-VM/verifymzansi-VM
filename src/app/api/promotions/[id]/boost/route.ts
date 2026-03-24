@@ -1,19 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildPayFastCheckoutUrl } from "@/lib/services/payfast";
+import { canBoost } from "@/lib/services/entitlements";
 import { logAuditEvent } from "@/lib/services/audit";
 import { ADDON_PRICES, BOOST_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
+import { createHostedCheckout } from "@/lib/payments/checkout";
+import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  applyOwnerFilter,
   getOwnerColumn,
-  readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
+import type { MarketplaceArea } from "@/types/enums";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { parseAndValidateRouteParams } from "@/lib/utils/api";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("PromotionBoostCheckout");
+const promotionBoostParamsSchema = z.object({
+  id: uuidSchema,
+});
 type PromotionCheckoutRow = {
   id: string;
   title: string;
@@ -26,17 +37,23 @@ type PromotionCheckoutRow = {
 /**
  * POST /api/promotions/[id]/boost
  *
- * Create a PayFast checkout session to boost a standalone promotion.
+ * Create an Ozow checkout session to boost a standalone promotion.
  * Requires authenticated user who owns the promotion.
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: promotionId } = await params;
+    const request = _request;
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
 
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_RE.test(promotionId)) {
-      return NextResponse.json({ error: "Invalid promotion ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, promotionBoostParamsSchema, {
+      validationErrorMessage: "Invalid promotion ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id: promotionId } = parsedParams.data;
 
     // Authenticate
     const supabase = await createClient();
@@ -48,8 +65,27 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rateCheck = await checkRateLimit({
+      key: getClientIp(request),
+      action: "promotion:boost",
+      degradedMode: "block",
+    });
+    if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          { error: "Promotion checkout protection is temporarily unavailable. Please try again." },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
+      return NextResponse.json(
+        { error: "Too many promotion boost attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+      );
+    }
+
     const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "promotions");
+    const ownerColumn = await getOwnerColumn(supabase, "promotions");
 
     // Check account profile
     const { data: profile } = await admin
@@ -63,19 +99,18 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     // Check promotion exists and belongs to user
-    const { data: rawPromotion } = await admin
-      .from("promotions")
-      .select(withOwnerColumn("id, title, status, owner_id, boost_until", ownerColumn))
-      .eq("id", promotionId)
-      .maybeSingle();
+    const { data: rawPromotion } = await applyOwnerFilter(
+      supabase
+        .from("promotions")
+        .select(withOwnerColumn("id, title, status, owner_id, boost_until", ownerColumn))
+        .eq("id", promotionId),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const promotion = rawPromotion as PromotionCheckoutRow | null;
 
     if (!promotion) {
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
-    }
-
-    if (readOwnerId(promotion) !== user.id) {
-      return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
     if (promotion.status !== "live") {
@@ -87,54 +122,45 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "This promotion is already boosted" }, { status: 400 });
     }
 
-    // Create pending payment record
-    const amountRands = ADDON_PRICES.boost / 100;
-
-    const { data: payment, error: paymentError } = await admin
+    // ── Prevent duplicate in-flight payments ─────────────────
+    const { data: pendingPmt } = await admin
       .from("payments")
-      .insert({
-        user_id: user.id,
-        area: "MZANSI_MARKET",
-        amount_cents: ADDON_PRICES.boost,
-        status: "pending",
-        payfast_data: {
-          type: "boost_promotion",
-          promotion_id: promotionId,
-          boost_days: BOOST_DURATION_DAYS,
-        },
-      })
       .select("id")
-      .single();
-
-    if (paymentError || !payment) {
-      log.error("Failed to create payment", { error: paymentError });
-      return NextResponse.json({ error: "Failed to create payment" }, { status: 500 });
-    }
-
-    // Build PayFast checkout URL
-    const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
-    const notifyUrl = env("PAYFAST_NOTIFY_URL") || `${appUrl}/api/webhooks/payfast`;
-
-    const merchantId = env("PAYFAST_MERCHANT_ID");
-    const merchantKey = env("PAYFAST_MERCHANT_KEY");
-    if (!merchantId || !merchantKey) {
+      .eq("user_id", user.id)
+      .in("status", ["pending", "processing"])
+      .contains("provider_data", { type: "boost_promotion", promotion_id: promotionId })
+      .maybeSingle();
+    if (pendingPmt) {
       return NextResponse.json(
-        { error: "Billing is not yet configured. Please try again later." },
-        { status: 503 }
+        { error: "A boost payment is already in progress for this promotion" },
+        { status: 409 }
       );
     }
 
-    const checkoutUrl = buildPayFastCheckoutUrl({
-      merchantId,
-      merchantKey,
-      returnUrl: `${appUrl}/dashboard/promotions?boosted=${promotionId}`,
-      cancelUrl: `${appUrl}/dashboard/promotions`,
-      notifyUrl,
-      paymentId: payment.id,
-      amount: amountRands,
+    // Check entitlement — requires Growth or Pro plan
+    const area = "PROMOTIONS_EVENTS" as MarketplaceArea;
+    const tier = await getActivePlanTierForArea(user.id, area);
+    const boostCheck = canBoost(tier, area);
+
+    if (!boostCheck.allowed) {
+      return NextResponse.json({ error: boostCheck.reason }, { status: 403 });
+    }
+
+    const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
+    const { paymentId, checkoutUrl } = await createHostedCheckout({
+      admin: admin as never,
+      userId: user.id,
+      area,
+      amountCents: ADDON_PRICES.boost,
       itemName: `Boost: ${promotion.title}`.slice(0, 100),
       itemDescription: `${BOOST_DURATION_DAYS}-day promotion boost`,
-      emailAddress: user.email || undefined,
+      returnUrl: `${appUrl}/billing/success?payment=__PAYMENT_ID__`,
+      cancelUrl: `${appUrl}/billing/cancel?payment=__PAYMENT_ID__`,
+      providerData: {
+        type: "boost_promotion",
+        promotion_id: promotionId,
+        boost_days: BOOST_DURATION_DAYS,
+      },
     });
 
     // Audit (best-effort)
@@ -142,12 +168,12 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       await logAuditEvent({
         actorId: user.id,
         actorRole: "member",
-        action: "listing_boosted",
+        action: "promotion_boosted",
         targetType: "promotion",
         targetId: promotionId,
         metadata: {
-          paymentId: payment.id,
-          amount: amountRands,
+          paymentId,
+          amount: ADDON_PRICES.boost / 100,
           boostDays: BOOST_DURATION_DAYS,
           status: "checkout_initiated",
         },
@@ -155,14 +181,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     } catch (auditErr) {
       log.error("Audit log failed (non-fatal)", {
         error: auditErr instanceof Error ? auditErr.message : "Unknown",
-        paymentId: payment.id,
+        paymentId,
       });
     }
 
     return NextResponse.json({
       success: true,
       checkoutUrl,
-      paymentId: payment.id,
+      paymentId,
     });
   } catch (err) {
     log.error("Unexpected error", {

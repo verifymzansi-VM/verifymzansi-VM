@@ -123,6 +123,10 @@ describe("EvidenceDecisionControls", () => {
     const select = screen.getByTitle("Reason code");
     fireEvent.change(select, { target: { value: "blurry_image" } });
 
+    // Fill in required reason note
+    const textarea = screen.getByPlaceholderText("Explain the issue to the user…");
+    fireEvent.change(textarea, { target: { value: "Image is too blurry to verify" } });
+
     // Submit
     fireEvent.click(screen.getByText(/Confirm Resubmission Request/));
 

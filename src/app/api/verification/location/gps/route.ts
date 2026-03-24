@@ -11,28 +11,79 @@ import { reverseGeocode, computeLocationConfidence } from "@/lib/services/geocod
 import { logAuditEvent } from "@/lib/services/audit";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { createLogger } from "@/lib/utils/logger";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { optionalTrimmedStringSchema } from "@/lib/validations/shared";
 
 const log = createLogger("GpsVerification");
-import { parseJsonRequest } from "@/lib/utils/api";
-import { GPS_ACCURACY_WARN_METERS, GPS_ACCURACY_REJECT_METERS } from "@/lib/constants/verification";
-import { getProvinceNames } from "@/lib/constants/sa-provinces";
+import {
+  GPS_ACCURACY_WARN_METERS,
+  GPS_ACCURACY_REJECT_METERS,
+  GPS_PROVINCE_MISMATCH_RISK,
+  GPS_CITY_MISMATCH_RISK,
+} from "@/lib/constants/verification";
 import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
+import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
+
+/**
+ * Canonical province name mapping for South African provinces.
+ * Handles common abbreviations and alternate spellings from geocoding APIs.
+ */
+const SA_PROVINCE_ALIASES: Record<string, string> = {
+  "eastern cape": "Eastern Cape",
+  ec: "Eastern Cape",
+  "free state": "Free State",
+  fs: "Free State",
+  gauteng: "Gauteng",
+  gp: "Gauteng",
+  gt: "Gauteng",
+  "kwazulu-natal": "KwaZulu-Natal",
+  "kwazulu natal": "KwaZulu-Natal",
+  kzn: "KwaZulu-Natal",
+  limpopo: "Limpopo",
+  lp: "Limpopo",
+  mpumalanga: "Mpumalanga",
+  mp: "Mpumalanga",
+  "north west": "North West",
+  nw: "North West",
+  "northern cape": "Northern Cape",
+  nc: "Northern Cape",
+  "western cape": "Western Cape",
+  wc: "Western Cape",
+};
+
+function normalizeProvinceName(province: string): string {
+  const lower = province.trim().toLowerCase();
+  return SA_PROVINCE_ALIASES[lower] ?? province.trim();
+}
 
 const gpsLocationSchema = z.object({
   latitude: z.number().min(-35).max(-22),
   longitude: z.number().min(16).max(33),
   accuracy: z.number().positive(),
   timestamp: z.number().positive(),
-  province: z.string().min(1),
-  city: z.string().min(1),
+  declaredProvince: optionalTrimmedStringSchema,
+  declaredCity: optionalTrimmedStringSchema,
 });
 
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) {
+      return originBlock;
+    }
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) {
+      return csrfBlock;
+    }
+
     // Auth check
     const supabase = await createClient();
     const {
@@ -42,6 +93,32 @@ export async function POST(request: NextRequest) {
 
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Email confirmation gate — users must confirm their email before GPS location
+    if (!user.email_confirmed_at) {
+      return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
+        status: 403,
+      });
+    }
+
+    const rateCheck = await checkRateLimit({
+      key: getClientIp(request),
+      action: "verification:gps",
+      degradedMode: "block",
+    });
+    if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          { error: "GPS verification protection is temporarily unavailable. Please try again." },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
+      return NextResponse.json(
+        { error: "Too many GPS verification attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+      );
     }
 
     // Feature flag check
@@ -54,32 +131,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse and validate body
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-    const parsed = gpsLocationSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: "Invalid input",
-          details: parsed.error.issues.map((i) => i.message),
-        },
-        { status: 400 }
-      );
+    const bodyResult = await parseAndValidateJsonRequest(request, gpsLocationSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid input",
+    });
+    if (!bodyResult.success) {
+      return bodyResult.response;
     }
 
-    const { latitude, longitude, accuracy, timestamp: _timestamp, province, city } = parsed.data;
-
-    // Validate province is a valid SA province
-    const validProvinces = getProvinceNames();
-    if (!validProvinces.includes(province)) {
-      return NextResponse.json(
-        { error: `Invalid province. Must be one of: ${validProvinces.join(", ")}` },
-        { status: 400 }
-      );
-    }
+    const {
+      latitude,
+      longitude,
+      accuracy,
+      timestamp: _timestamp,
+      declaredProvince,
+      declaredCity,
+    } = bodyResult.data;
+    const isConfirmationMode = !!declaredProvince;
 
     // Reject extremely poor accuracy
     if (accuracy > GPS_ACCURACY_REJECT_METERS) {
@@ -96,12 +164,25 @@ export async function POST(request: NextRequest) {
 
     const adminClient = createAdminClient();
 
+    // Reject if verification session is already finalized
+    const { data: existingSession } = await adminClient
+      .from("verification_sessions")
+      .select("finalized_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (existingSession?.finalized_at) {
+      return NextResponse.json(
+        { error: "Verification session is already finalized" },
+        { status: 409 }
+      );
+    }
+
     // Check account profile exists
-    const { data: profile } = await adminClient
-      .from("account_profiles")
+    const { data: profile } = await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (!profile) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
@@ -109,11 +190,24 @@ export async function POST(request: NextRequest) {
 
     // Reverse geocode
     const geoResult = await reverseGeocode(latitude, longitude);
+    if (!geoResult.province) {
+      return NextResponse.json(
+        {
+          error:
+            "We could not resolve your province from GPS. Please upload proof of residence instead.",
+          code: "gps_unresolved",
+        },
+        { status: 422 }
+      );
+    }
+
+    const resolvedProvince = geoResult.province;
+    const resolvedCity = geoResult.city;
     const confidence = computeLocationConfidence(
-      geoResult.province,
-      province,
-      geoResult.city,
-      city,
+      resolvedProvince,
+      isConfirmationMode ? declaredProvince! : resolvedProvince,
+      resolvedCity,
+      isConfirmationMode ? (declaredCity ?? resolvedCity ?? "") : (resolvedCity ?? ""),
       accuracy
     );
 
@@ -124,14 +218,48 @@ export async function POST(request: NextRequest) {
       value_json: Record<string, unknown>;
     }> = [];
 
-    // Province mismatch
-    if (geoResult.province && geoResult.province.toLowerCase() !== province.toLowerCase()) {
+    // Mismatch detection in confirmation mode
+    const mismatch = { province: false, city: false };
+    if (isConfirmationMode) {
+      const provinceMatch =
+        normalizeProvinceName(resolvedProvince) === normalizeProvinceName(declaredProvince!);
+      const cityMatch = resolvedCity
+        ? resolvedCity.toLowerCase() === (declaredCity ?? "").toLowerCase()
+        : false;
+
+      mismatch.province = !provinceMatch;
+      mismatch.city = !cityMatch;
+
+      if (!provinceMatch) {
+        signals.push({
+          signal_code: "gps_province_mismatch",
+          severity: "block",
+          value_json: {
+            declared_province: declaredProvince,
+            gps_province: resolvedProvince,
+          },
+        });
+      }
+      if (provinceMatch && !cityMatch) {
+        signals.push({
+          signal_code: "gps_city_mismatch",
+          severity: "warn",
+          value_json: {
+            declared_city: declaredCity,
+            gps_city: resolvedCity,
+          },
+        });
+      }
+    }
+
+    if (geoResult.source !== "nominatim" || !resolvedCity) {
       signals.push({
-        signal_code: "gps_province_mismatch",
+        signal_code: "gps_low_resolution",
         severity: "warn",
         value_json: {
-          gps_province: geoResult.province,
-          declared_province: province,
+          gps_province: resolvedProvince,
+          gps_city: resolvedCity,
+          source: geoResult.source,
           confidence,
         },
       });
@@ -151,9 +279,21 @@ export async function POST(request: NextRequest) {
 
     // Calculate risk score from signals
     let riskScore = 0;
-    for (const sig of signals) {
-      if (sig.severity === "block") riskScore += 40;
-      else if (sig.severity === "warn") riskScore += 15;
+    if (isConfirmationMode) {
+      if (mismatch.province) riskScore += GPS_PROVINCE_MISMATCH_RISK;
+      else if (mismatch.city) riskScore += GPS_CITY_MISMATCH_RISK;
+      // Add standard signal-based risk on top
+      for (const sig of signals) {
+        if (sig.signal_code.startsWith("gps_province") || sig.signal_code.startsWith("gps_city"))
+          continue;
+        if (sig.severity === "block") riskScore += 40;
+        else if (sig.severity === "warn") riskScore += 15;
+      }
+    } else {
+      for (const sig of signals) {
+        if (sig.severity === "block") riskScore += 40;
+        else if (sig.severity === "warn") riskScore += 15;
+      }
     }
     riskScore = Math.min(riskScore, 100);
 
@@ -161,24 +301,34 @@ export async function POST(request: NextRequest) {
       riskScore <= 25 ? "low" : riskScore <= 50 ? "medium" : riskScore <= 75 ? "high" : "critical";
 
     // Upsert verification step
+    const stepData = buildPendingVerificationStep({
+      user_id: user.id,
+      step_type: "location",
+      location_method: isConfirmationMode ? "manual_with_gps" : "gps",
+      gps_lat: latitude,
+      gps_lon: longitude,
+      location_province: isConfirmationMode ? declaredProvince! : resolvedProvince,
+      location_city: isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity,
+      risk_score: riskScore,
+      risk_level: riskLevel,
+      auto_status: riskScore <= 25 ? "approved" : "needs_manual_review",
+      submitted_at: new Date().toISOString(),
+      ...(isConfirmationMode
+        ? {
+            metadata: {
+              declared_province: declaredProvince,
+              declared_city: declaredCity,
+              gps_province: resolvedProvince,
+              gps_city: resolvedCity,
+              mismatch,
+            },
+          }
+        : {}),
+    });
+
     const { data: step, error: stepError } = await adminClient
       .from("verification_steps")
-      .upsert(
-        buildPendingVerificationStep({
-          user_id: user.id,
-          step_type: "location",
-          location_method: "gps",
-          gps_lat: latitude,
-          gps_lon: longitude,
-          location_province: province,
-          location_city: city,
-          risk_score: riskScore,
-          risk_level: riskLevel,
-          auto_status: riskScore > 50 ? "needs_manual_review" : "approved",
-          submitted_at: new Date().toISOString(),
-        }),
-        { onConflict: "user_id,step_type" }
-      )
+      .upsert(stepData, { onConflict: "user_id,step_type" })
       .select("id")
       .single();
 
@@ -208,18 +358,18 @@ export async function POST(request: NextRequest) {
       { onConflict: "user_id" }
     );
 
-    // Update account profile
-    await adminClient
-      .from("account_profiles")
+    // Update account profile — use declared values in confirmation mode
+    await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
-        location_province: province,
-        location_city: city,
+        location_province: isConfirmationMode ? declaredProvince! : resolvedProvince,
+        location_city: isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity,
       })
       .eq("user_id", user.id);
 
     // Set pending_review if currently incomplete
-    await adminClient
-      .from("account_profiles")
+    await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({
         account_verification_status: "pending_review",
       })
@@ -235,8 +385,9 @@ export async function POST(request: NextRequest) {
       targetId: step.id,
       metadata: {
         confidence,
-        gps_province: geoResult.province,
-        declared_province: province,
+        gps_province: resolvedProvince,
+        gps_city: resolvedCity,
+        source: geoResult.source,
         accuracy_meters: accuracy,
         risk_score: riskScore,
         risk_level: riskLevel,
@@ -247,11 +398,12 @@ export async function POST(request: NextRequest) {
       success: true,
       stepId: step.id,
       confidence,
-      gpsProvince: geoResult.province,
-      gpsCity: geoResult.city,
-      gpsDeclaredMatch: geoResult.province?.toLowerCase() === province.toLowerCase(),
+      resolvedProvince,
+      resolvedCity,
+      source: geoResult.source,
       riskScore,
       riskLevel,
+      ...(isConfirmationMode ? { mismatch } : {}),
     });
   } catch (err) {
     log.error("Unexpected error", { error: err instanceof Error ? err.message : "unknown error" });

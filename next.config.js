@@ -13,6 +13,9 @@ const clientEnv = Object.fromEntries(
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Disable the Next.js devtools indicator so localhost matches production
+  // without the floating `N` badge and bottom drawer dimming the page.
+  devIndicators: false,
   // Explicitly inline NEXT_PUBLIC_* vars into the client bundle.
   // Turbopack on Cloudflare may not replace process.env.NEXT_PUBLIC_*
   // at build time; the `env` field forces inlining without masking missing config.
@@ -49,10 +52,9 @@ const nextConfig = {
     ],
     formats: ["image/avif", "image/webp"],
   },
-  serverExternalPackages: ["@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner", "resend"],
   experimental: {
     serverActions: {
-      bodySizeLimit: "2mb",
+      bodySizeLimit: "50mb",
     },
     optimizePackageImports: [
       "lucide-react",
@@ -65,7 +67,8 @@ const nextConfig = {
   },
   async headers() {
     // Security headers (CSP, X-Frame-Options, etc.) are set per-request
-    // in src/proxy.ts with a nonce-based CSP. Only cache headers remain here.
+    // in src/middleware.ts via the shared proxy-handler nonce/CSP logic.
+    // Only cache headers remain here.
     return [
       {
         source: "/api/:path*",

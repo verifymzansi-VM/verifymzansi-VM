@@ -5,6 +5,7 @@ import { useMarketplaceStore } from "@/stores";
 import { Badge } from "@/components/ui/badge";
 import { CATEGORIES, BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
+import { useHydrated } from "@/hooks/use-hydrated";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +15,7 @@ import {
 
 export function ListingGridHeader() {
   const { filters, setFilter, setAttribute, resetFilters } = useMarketplaceStore();
+  const isHydrated = useHydrated();
 
   const sortOptions = [
     { value: "newest", label: "Recently posted" },
@@ -39,28 +41,41 @@ export function ListingGridHeader() {
       {/* Toolbar row */}
       <div className="flex items-center justify-end gap-2">
         <div className="flex items-center gap-1.5 text-muted-foreground">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-1.5 text-xs font-medium text-foreground outline-none border-none hover:text-brand-green bg-transparent transition-colors">
+          {isHydrated ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-1.5 border-none bg-transparent text-xs font-medium text-foreground outline-none transition-colors hover:text-brand-green">
+                <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="hidden sm:inline">{currentSortLabel}</span>
+                <span className="sm:hidden">Sort</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[160px]">
+                {sortOptions.map((option) => (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onSelect={() =>
+                      setFilter(
+                        "sort",
+                        option.value as "newest" | "price_asc" | "price_desc" | "popular"
+                      )
+                    }
+                    className={filters.sort === option.value ? "bg-accent font-medium" : ""}
+                  >
+                    {option.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <button
+              type="button"
+              className="flex items-center gap-1.5 border-none bg-transparent text-xs font-medium text-foreground"
+              disabled
+            >
               <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
-              {currentSortLabel}
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[160px]">
-              {sortOptions.map((option) => (
-                <DropdownMenuItem
-                  key={option.value}
-                  onSelect={() =>
-                    setFilter(
-                      "sort",
-                      option.value as "newest" | "price_asc" | "price_desc" | "popular"
-                    )
-                  }
-                  className={filters.sort === option.value ? "bg-accent font-medium" : ""}
-                >
-                  {option.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <span className="hidden sm:inline">{currentSortLabel}</span>
+              <span className="sm:hidden">Sort</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -1,8 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreateListingPage from "./page";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+
+const { listingCardSpy } = vi.hoisted(() => ({
+  listingCardSpy: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
@@ -66,6 +70,7 @@ vi.mock("@/components/listings/category-picker", () => ({
         type="button"
         onClick={() => {
           onChange("electronics");
+          onAttributeChange("device_type", "Smartphone");
           onAttributeChange("brand", "Apple");
         }}
       >
@@ -76,7 +81,27 @@ vi.mock("@/components/listings/category-picker", () => ({
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
-  MediaUpload: ({ label }: { label: string }) => <div>{label}</div>,
+  MediaUpload: ({ label, onChange }: { label: string; onChange?: (files: File[]) => void }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onChange?.([
+          new File(["mock"], label.toLowerCase().includes("video") ? "clip.mp4" : "logo.png", {
+            type: label.toLowerCase().includes("video") ? "video/mp4" : "image/png",
+          }),
+        ])
+      }
+    >
+      {label}
+    </button>
+  ),
+}));
+
+vi.mock("@/components/listings/listing-card", () => ({
+  ListingCard: (props: unknown) => {
+    listingCardSpy(props);
+    return <div>Listing Card Preview</div>;
+  },
 }));
 
 vi.mock("@/lib/constants/sa-provinces", () => ({
@@ -97,6 +122,12 @@ describe("CreateListingPage", () => {
     vi.clearAllMocks();
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
+    global.URL.createObjectURL = vi.fn(() => "blob:logo-preview");
+    global.URL.revokeObjectURL = vi.fn();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    }) as unknown as typeof fetch;
   });
 
   it("renders the shared guide and step labels", () => {
@@ -154,5 +185,67 @@ describe("CreateListingPage", () => {
     expect(screen.getByText("Brand")).toBeInTheDocument();
     expect(screen.getByText("Apple")).toBeInTheDocument();
     expect(screen.getByText(/Electronics/i)).toBeInTheDocument();
+  });
+
+  it("previews and submits an uploaded listing logo", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload") {
+          const callIndex = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.length;
+          return {
+            ok: true,
+            json: async () =>
+              callIndex === 1
+                ? { urls: ["https://media.verifymzansi.com/listings/logo.jpg"] }
+                : { urls: ["https://media.verifymzansi.com/listings/photo.jpg"], errors: [] },
+          };
+        }
+
+        if (input === "/api/listings") {
+          return {
+            ok: true,
+            json: async () => ({ id: "listing-1" }),
+          };
+        }
+
+        throw new Error(`Unexpected fetch call: ${String(input)}`);
+      }
+    );
+
+    render(<CreateListingPage />);
+
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
+    fireEvent.change(screen.getByLabelText("Description *"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Price (ZAR) *"), { target: { value: "1500" } });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Listing logo (optional)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+
+    expect(listingCardSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logoUrl: "blob:logo-preview",
+      })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2];
+    const payload = JSON.parse(request[1].body as string);
+
+    expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/logo.jpg");
+    expect(payload.images).toEqual(["https://media.verifymzansi.com/listings/photo.jpg"]);
+    expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
   });
 });

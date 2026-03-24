@@ -108,6 +108,19 @@ describe("CreatePromotionPage", () => {
     expect(screen.getAllByText("Promotions & Events").length).toBeGreaterThan(0);
   });
 
+  it("shows the four visible promotion categories", async () => {
+    render(<CreatePromotionPage />);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+
+    const typeSelect = screen.getByLabelText("Promotion Type");
+
+    expect(screen.getByRole("option", { name: "Deals" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Events" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Promotions" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Ads" })).toBeInTheDocument();
+    expect(typeSelect).toHaveValue("ad");
+  });
+
   it("switches the guide text when the type is event", async () => {
     render(<CreatePromotionPage />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());

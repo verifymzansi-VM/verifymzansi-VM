@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { useToast } from "@/hooks/use-toast";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
@@ -47,7 +48,7 @@ export function SubscribeButton({ area, tier, priceCents, isPopular }: Subscribe
 
       const res = await fetch("/api/billing/create-checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ planId: dbPlan.id, area }),
       });
 
@@ -83,14 +84,23 @@ export function SubscribeButton({ area, tier, priceCents, isPopular }: Subscribe
     }
   }
 
-  const label = priceCents === 0 ? "Current Plan" : `Choose ${tier}`;
+  const tierLabel = `${tier.charAt(0).toUpperCase()}${tier.slice(1)}`;
+  const label = priceCents === 0 ? "Current Plan" : `Choose ${tierLabel}`;
+
+  if (priceCents === 0) {
+    return (
+      <div className="flex h-11 w-full items-center justify-center rounded-md border border-border bg-muted/40 px-4 text-sm font-medium text-muted-foreground">
+        Included with your free plan
+      </div>
+    );
+  }
 
   return (
     <Button
       size="lg"
       variant={isPopular ? "trust-verified" : "outline"}
       className={`w-full font-semibold ${isPopular ? "shadow-md" : ""}`}
-      disabled={loading || priceCents === 0}
+      disabled={loading}
       onClick={handleClick}
     >
       {loading ? (

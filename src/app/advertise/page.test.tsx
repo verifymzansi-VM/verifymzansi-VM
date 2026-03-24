@@ -1,10 +1,33 @@
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdvertisePage from "./page";
 
-const permanentRedirect = vi.fn();
+vi.mock("next/link", () => ({
+  default: ({
+    children,
+    href,
+    ...props
+  }: {
+    children: React.ReactNode;
+    href: string;
+    [key: string]: unknown;
+  }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
 
-vi.mock("next/navigation", () => ({
-  permanentRedirect: (url: string) => permanentRedirect(url),
+vi.mock("@/components/layout/header", () => ({
+  Header: () => <header data-testid="header" />,
+}));
+
+vi.mock("@/components/layout/footer", () => ({
+  Footer: () => <footer data-testid="footer" />,
+}));
+
+vi.mock("@/components/layout/trust-strip", () => ({
+  TrustStrip: () => <div data-testid="trust-strip" />,
 }));
 
 describe("AdvertisePage", () => {
@@ -12,9 +35,24 @@ describe("AdvertisePage", () => {
     vi.clearAllMocks();
   });
 
-  it("permanently redirects to promotions", () => {
-    AdvertisePage();
+  it("renders advertiser landing content and key routes", () => {
+    render(<AdvertisePage />);
 
-    expect(permanentRedirect).toHaveBeenCalledWith("/promotions");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Advertise on VerifyMzansi" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /View pricing/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: /Create your account/i })).toHaveAttribute(
+      "href",
+      "/register"
+    );
+    expect(screen.getByRole("link", { name: /Explore promotions/i })).toHaveAttribute(
+      "href",
+      "/promotions"
+    );
+    expect(screen.getByRole("link", { name: /Open Mzansi Business/i })).toHaveAttribute(
+      "href",
+      "/mzansi-business"
+    );
   });
 });

@@ -125,7 +125,13 @@ describe("EvidenceDeskClient", () => {
     render(<EvidenceDeskClient initialStepId="step-1" />);
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith(expect.stringContaining("stepId=step-1"));
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/admin/verification/evidence/metadata",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ stepId: "step-1" }),
+        })
+      );
     });
 
     await waitFor(() => {
@@ -181,7 +187,13 @@ describe("EvidenceDeskClient", () => {
     fireEvent.click(btn);
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith(expect.stringContaining("userId=seller-1"));
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/admin/verification/evidence/metadata",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ userId: "seller-1" }),
+        })
+      );
     });
   });
 

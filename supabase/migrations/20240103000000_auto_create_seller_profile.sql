@@ -20,7 +20,6 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
 -- Trigger on auth.users insert
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users

@@ -1,25 +1,65 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { PublicRuntimeConfigBridge } from "@/components/providers/public-runtime-config";
 import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import "@/styles/globals.css";
+
+const TURBOPACK_NAME_POLYFILL =
+  'if(typeof globalThis.__name!=="function"){globalThis.__name=function(fn,name){Object.defineProperty(fn,"name",{value:name,configurable:true});return fn;};}var __name=globalThis.__name;';
+
+const DEV_SW_CACHE_RESET = `
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  const cleanupKey = "vm-dev-inline-sw-reset-v1";
+  const cleanupAttempted = window.sessionStorage.getItem(cleanupKey) === "1";
+  Promise.all([
+    navigator.serviceWorker.getRegistrations().catch(() => []),
+    typeof caches !== "undefined" ? caches.keys().catch(() => []) : Promise.resolve([]),
+  ])
+    .then(async ([registrations, cacheKeys]) => {
+      const relevantCacheKeys = cacheKeys.filter((key) => key.startsWith("verifymzansi-"));
+      const hadStaleState =
+        registrations.length > 0 || relevantCacheKeys.length > 0 || navigator.serviceWorker.controller;
+
+      await Promise.allSettled(registrations.map((registration) => registration.unregister()));
+
+      if (typeof caches !== "undefined") {
+        await Promise.allSettled(relevantCacheKeys.map((key) => caches.delete(key)));
+      }
+
+      if (hadStaleState && !cleanupAttempted) {
+        window.sessionStorage.setItem(cleanupKey, "1");
+        window.location.reload();
+        return;
+      }
+
+      if (cleanupAttempted) {
+        window.sessionStorage.removeItem(cleanupKey);
+      }
+    })
+    .catch(() => {});
+}
+`;
 
 export const metadata: Metadata = {
   title: {
-    default: "VerifyMzansi — SA's Trusted Marketplace",
+    default: "VerifyMzansi — Promote With Trust",
     template: "%s | VerifyMzansi",
   },
   description:
-    "Buy & sell with people you can trust. South Africa's verification-first marketplace for classifieds, shops, and business services.",
+    "Promote your products, services, and events across South Africa with verification-first visibility that helps customers discover brands with more confidence.",
   keywords: [
     "South Africa",
-    "marketplace",
-    "classifieds",
-    "verified accounts",
-    "buy and sell",
+    "business promotion",
+    "brand visibility",
+    "verified businesses",
+    "digital marketing",
+    "advertise your business",
     "Mzansi",
-    "trusted marketplace",
+    "trusted visibility",
   ],
   authors: [{ name: "VerifyMzansi" }],
   creator: "VerifyMzansi",
@@ -29,23 +69,23 @@ export const metadata: Metadata = {
     locale: "en_ZA",
     url: process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com",
     siteName: "VerifyMzansi",
-    title: "VerifyMzansi — SA's Trusted Marketplace",
+    title: "VerifyMzansi — Promote With Trust",
     description:
-      "Buy & sell with people you can trust. South Africa's verification-first marketplace.",
+      "Promote your products, services, and events across South Africa with verification-first visibility.",
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "VerifyMzansi — SA's Trusted Marketplace",
+        alt: "VerifyMzansi — Promote With Trust",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "VerifyMzansi — SA's Trusted Marketplace",
+    title: "VerifyMzansi — Promote With Trust",
     description:
-      "Buy & sell with people you can trust. South Africa's verification-first marketplace.",
+      "Promote your products, services, and events across South Africa with verification-first visibility.",
     images: ["/twitter-image"],
   },
   robots: {
@@ -54,13 +94,14 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon.ico?v=9", sizes: "32x32", type: "image/x-icon" },
-      { url: "/icons/icon-16.png?v=9", sizes: "16x16", type: "image/png" },
-      { url: "/icons/icon-192.png?v=9", sizes: "192x192", type: "image/png" },
+      { url: "/favicon.ico?v=10", sizes: "32x32", type: "image/x-icon" },
+      { url: "/icons/icon-16.png?v=10", sizes: "16x16", type: "image/png" },
+      { url: "/icons/icon-192.png?v=10", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png?v=10", sizes: "512x512", type: "image/png" },
     ],
-    apple: "/icons/icon-192.png?v=9",
+    apple: "/apple-icon.png?v=10",
   },
-  manifest: "/manifest.json?v=9",
+  manifest: "/manifest.json?v=10",
 };
 
 export const viewport: Viewport = {
@@ -73,20 +114,30 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
-  const turbopackNamePolyfill =
-    'if(typeof globalThis.__name!=="function"){globalThis.__name=function(fn,name){Object.defineProperty(fn,"name",{value:name,configurable:true});return fn;};}var __name=globalThis.__name;';
+  const hdrs = await headers();
+  const nonce = hdrs.get("x-nonce") ?? undefined;
+  const csrfToken = hdrs.get(CSRF_HEADER_NAME) ?? undefined;
+  const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
 
   return (
-    <html lang="en-ZA" suppressHydrationWarning>
+    <html
+      lang="en-ZA"
+      suppressHydrationWarning
+      data-playwright={isPlaywrightTestMode ? "1" : undefined}
+    >
+      <head>{csrfToken ? <meta name="csrf-token" content={csrfToken} /> : null}</head>
       <body className="min-h-screen antialiased">
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: turbopackNamePolyfill }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: TURBOPACK_NAME_POLYFILL }} />
+        {process.env.NODE_ENV === "development" ? (
+          <script nonce={nonce} dangerouslySetInnerHTML={{ __html: DEV_SW_CACHE_RESET }} />
+        ) : null}
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"
         >
           Skip to main content
         </a>
+        <PublicRuntimeConfigBridge />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -94,8 +145,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           disableTransitionOnChange
           nonce={nonce}
         >
-          <main id="main-content">{children}</main>
+          <div id="main-content">{children}</div>
           <Toaster />
+          <PwaInstallPrompt />
           <ServiceWorkerRegistrar />
         </ThemeProvider>
         <noscript>

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ACCOUNT_PROFILE_TABLE,
+  ACCOUNT_PROFILE_WRITE_TABLE,
   applyOwnerFilter,
   getOwnerColumn,
   normalizeOwnerRecord,
@@ -34,6 +36,11 @@ describe("account compat helpers", () => {
 
     await expect(getOwnerColumn(client as never, "listings")).resolves.toBe("owner_id");
     expect(client.from).toHaveBeenCalledTimes(1);
+  });
+
+  it("pins account profile table constants to account_profiles", () => {
+    expect(ACCOUNT_PROFILE_TABLE).toBe("account_profiles");
+    expect(ACCOUNT_PROFILE_WRITE_TABLE).toBe("account_profiles");
   });
 
   it("falls back to seller_id when owner_id is unavailable", async () => {

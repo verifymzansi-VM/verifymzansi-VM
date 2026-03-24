@@ -1,22 +1,31 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildPayFastCheckoutUrl } from "@/lib/services/payfast";
 import { canUrgent } from "@/lib/services/entitlements";
 import { logAuditEvent } from "@/lib/services/audit";
 import { ADDON_PRICES, URGENT_DURATION_DAYS } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
+import { createHostedCheckout } from "@/lib/payments/checkout";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
+  applyOwnerFilter,
   getOwnerColumn,
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { parseAndValidateRouteParams } from "@/lib/utils/api";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("UrgentCheckout");
+const listingUrgentParamsSchema = z.object({
+  id: uuidSchema,
+});
 type ListingCheckoutRow = {
   id: string;
   title: string;
@@ -30,17 +39,22 @@ type ListingCheckoutRow = {
 /**
  * POST /api/listings/[id]/urgent
  *
- * Create a PayFast checkout session to mark a listing as urgent.
+ * Create an Ozow checkout session to mark a listing as urgent.
  * Requires authenticated user who owns the listing, on Pro plan.
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: listingId } = await params;
+    const originBlock = enforceSameOriginMutation(_request, log);
+    if (originBlock) return originBlock;
 
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_RE.test(listingId)) {
-      return NextResponse.json({ error: "Invalid listing ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, listingUrgentParamsSchema, {
+      validationErrorMessage: "Invalid listing ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id: listingId } = parsedParams.data;
 
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
@@ -52,8 +66,16 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rl = checkLocalRateLimit(user.id, "listing:urgent");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "listings");
+    const ownerColumn = await getOwnerColumn(supabase, "listings");
 
     // ── Get account profile ──────────────────────────────────
     const { data: profile } = await admin
@@ -67,11 +89,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     // ── Check listing exists and belongs to user ─────────────
-    const { data: rawListing } = await admin
-      .from("listings")
-      .select(withOwnerColumn("id, title, status, area, owner_id, urgent_until", ownerColumn))
-      .eq("id", listingId)
-      .maybeSingle();
+    const { data: rawListing } = await applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select(withOwnerColumn("id, title, status, area, owner_id, urgent_until", ownerColumn))
+        .eq("id", listingId),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const listing = rawListing as ListingCheckoutRow | null;
 
     if (!listing) {
@@ -79,7 +104,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     if (readOwnerId(listing) !== user.id) {
-      return NextResponse.json({ error: "You don't own this listing" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Forbidden — you do not own this listing" },
+        { status: 403 }
+      );
     }
 
     if (listing.status !== "live") {
@@ -94,6 +122,21 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "This listing is already marked urgent" }, { status: 400 });
     }
 
+    // ── Prevent duplicate in-flight payments ─────────────────
+    const { data: pendingPmt } = await admin
+      .from("payments")
+      .select("id")
+      .eq("user_id", user.id)
+      .in("status", ["pending", "processing"])
+      .contains("provider_data", { type: "urgent", listing_id: listingId })
+      .maybeSingle();
+    if (pendingPmt) {
+      return NextResponse.json(
+        { error: "An urgent payment is already in progress for this listing" },
+        { status: 409 }
+      );
+    }
+
     // ── Check entitlement ────────────────────────────────────
     const area = (listing.area || "MZANSI_MARKET") as MarketplaceArea;
     const tier = await getActivePlanTierForArea(user.id, area);
@@ -103,55 +146,22 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: urgentCheck.reason }, { status: 403 });
     }
 
-    // ── Create pending payment record ────────────────────────
     const urgentDays = URGENT_DURATION_DAYS;
-    const amountRands = ADDON_PRICES.urgent / 100;
-
-    const { data: payment, error: paymentError } = await admin
-      .from("payments")
-      .insert({
-        user_id: user.id,
-        area: area,
-        amount_cents: ADDON_PRICES.urgent,
-        status: "pending",
-        payfast_data: {
-          type: "urgent",
-          listing_id: listingId,
-          urgent_days: urgentDays,
-        },
-      })
-      .select("id")
-      .single();
-
-    if (paymentError || !payment) {
-      log.error("Failed to create payment", { error: paymentError });
-      return NextResponse.json({ error: "Failed to create payment" }, { status: 500 });
-    }
-
-    // ── Build PayFast checkout URL ───────────────────────────
     const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
-    const notifyUrl = env("PAYFAST_NOTIFY_URL") || `${appUrl}/api/webhooks/payfast`;
-
-    const merchantId = env("PAYFAST_MERCHANT_ID");
-    const merchantKey = env("PAYFAST_MERCHANT_KEY");
-    if (!merchantId || !merchantKey) {
-      return NextResponse.json(
-        { error: "Billing is not yet configured. Please try again later." },
-        { status: 503 }
-      );
-    }
-
-    const checkoutUrl = buildPayFastCheckoutUrl({
-      merchantId,
-      merchantKey,
-      returnUrl: `${appUrl}/dashboard/listings?urgent=${listingId}`,
-      cancelUrl: `${appUrl}/dashboard/listings`,
-      notifyUrl,
-      paymentId: payment.id,
-      amount: amountRands,
+    const { paymentId, checkoutUrl } = await createHostedCheckout({
+      admin: admin as never,
+      userId: user.id,
+      area,
+      amountCents: ADDON_PRICES.urgent,
       itemName: `Urgent: ${listing.title}`.slice(0, 100),
       itemDescription: `${urgentDays}-day urgent listing`,
-      emailAddress: user.email || undefined,
+      returnUrl: `${appUrl}/billing/success?payment=__PAYMENT_ID__`,
+      cancelUrl: `${appUrl}/billing/cancel?payment=__PAYMENT_ID__`,
+      providerData: {
+        type: "urgent",
+        listing_id: listingId,
+        urgent_days: urgentDays,
+      },
     });
 
     // Audit is best-effort — never block checkout on audit failure
@@ -164,8 +174,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         targetId: listingId,
         area: area as "MZANSI_MARKET" | "MALL_SHOPS" | "BUSINESS_ADS" | "PROMOTIONS_EVENTS",
         metadata: {
-          paymentId: payment.id,
-          amount: amountRands,
+          paymentId,
+          amount: ADDON_PRICES.urgent / 100,
           urgentDays,
           status: "checkout_initiated",
         },
@@ -173,14 +183,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     } catch (auditErr) {
       log.error("Audit log failed (non-fatal)", {
         error: auditErr instanceof Error ? auditErr.message : "Unknown",
-        paymentId: payment.id,
+        paymentId,
       });
     }
 
     return NextResponse.json({
       success: true,
       checkoutUrl,
-      paymentId: payment.id,
+      paymentId,
     });
   } catch (err) {
     log.error("Unexpected error", {

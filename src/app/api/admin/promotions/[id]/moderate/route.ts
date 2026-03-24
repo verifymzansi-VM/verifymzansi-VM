@@ -1,14 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { z } from "zod";
-import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import {
+  internalApiError,
+  logApiError,
+  parseAndValidateJsonRequest,
+  parseAndValidateRouteParams,
+} from "@/lib/utils/api";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { uuidSchema } from "@/lib/validations/shared";
 
 const log = createLogger("PromotionModeration");
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const promotionModerationParamsSchema = z.object({
+  id: uuidSchema,
+});
 
 const moderateSchema = z.object({
   decision: z.enum(["approve", "reject", "hide"]),
@@ -23,11 +34,24 @@ const moderateSchema = z.object({
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: promotionId } = await params;
+    // ── CSRF protection ───────────────────────────────────────
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
-    if (!UUID_RE.test(promotionId)) {
-      return NextResponse.json({ error: "Invalid promotion ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(
+      await params,
+      promotionModerationParamsSchema,
+      {
+        validationErrorMessage: "Invalid promotion ID",
+        includeValidationDetails: false,
+      }
+    );
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id: promotionId } = parsedParams.data;
 
     // Auth + role check
     const supabase = await createClient();
@@ -35,8 +59,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user || !isModeratorOrAdmin(user)) {
+    const adminRole = await verifyStaffActorRoleFromDb(user);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!adminRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const rl = checkLocalRateLimit(user.id, "admin:promotions:moderate");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, moderateSchema, {
@@ -81,7 +117,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { error: updateError } = await admin
       .from("promotions")
       .update(updateData)
-      .eq("id", promotionId);
+      .eq("id", promotionId)
+      .in("status", ["pending_moderation", "live", "hidden", "rejected"]);
 
     if (updateError) {
       log.error("Failed to moderate promotion", { error: updateError.message });
@@ -92,7 +129,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
       await logAuditEvent({
         actorId: user.id,
-        actorRole: "admin",
+        actorRole: adminRole,
         action: "moderation_action",
         targetType: "promotion",
         targetId: promotionId,

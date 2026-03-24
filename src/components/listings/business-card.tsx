@@ -1,20 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
-import { Store, MapPin, Wrench, Camera, Truck, Globe, Home as HomeIcon } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { TrustBadge } from "@/components/trust/trust-badge";
-import { Badge } from "@/components/ui/badge";
-import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
-import {
-  BUSINESS_TYPE_LABELS,
-  type TrustLevel,
-  type BusinessType,
-  type BusinessCategory,
-} from "@/types/enums";
-import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
-import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { Store } from "lucide-react";
+import { PosterCardShell } from "@/components/listings/poster-card-shell";
+import type { TrustLevel, BusinessType, BusinessCategory } from "@/types/enums";
 
 interface BusinessCardProps {
   id: string;
@@ -38,7 +26,6 @@ interface BusinessCardProps {
 export function BusinessCard({
   id,
   businessName,
-  businessType,
   description,
   coverPhoto,
   coverVideo,
@@ -48,193 +35,34 @@ export function BusinessCard({
   province,
   city,
   trustLevel = 0,
-  category,
-  boostUntil,
-  featuredUntil,
-  serviceAreas: _serviceAreas,
+  boostUntil: _boostUntil,
+  featuredUntil: _featuredUntil,
 }: BusinessCardProps) {
-  const categoryData = BUSINESS_CATEGORIES.find((c) => c.value === category);
-  const isBoosted = boostUntil && new Date(boostUntil) > new Date();
-  const isFeatured = featuredUntil && new Date(featuredUntil) > new Date();
-
   const displayCover =
     coverVideo ||
     coverPhoto ||
     (galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos[0] : null);
-  const isVideo = isVideoUrl(displayCover);
-  const normalizedCoverPhoto = displayCover ? normalizeMediaUrl(displayCover) : undefined;
-  const normalizedPosterUrl = videoThumbnail
-    ? normalizeMediaUrl(videoThumbnail)
-    : coverPhoto
-      ? normalizeMediaUrl(coverPhoto)
-      : galleryPhotos && galleryPhotos.length > 0
-        ? normalizeMediaUrl(galleryPhotos[0])
-        : undefined;
-  const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
-  const photoCount = galleryPhotos?.length ?? 0;
+  const posterUrl = videoThumbnail || coverPhoto || galleryPhotos?.[0] || undefined;
 
   return (
-    <Link href={`/mzansi-business/${id}`} className="group block h-full">
-      <Card
-        className="h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-brand-blue/20 hover:border-brand-blue/60 flex flex-col"
-        trustLevel={trustLevel}
-      >
-        {/* Banner Image / Video */}
-        <div className="relative h-32 sm:h-40 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 overflow-hidden shrink-0">
-          {normalizedCoverPhoto ? (
-            isVideo ? (
-              <VideoCardPlayer
-                src={displayCover}
-                posterUrl={normalizedPosterUrl}
-                alt={businessName}
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                hoverScale={false}
-                mediaFitClassName="object-contain sm:object-cover"
-                mediaClassName="transition-transform duration-500 group-hover:scale-105"
-              />
-            ) : (
-              <Image
-                src={normalizedCoverPhoto}
-                alt={businessName}
-                fill
-                className="object-contain sm:object-cover transition-transform duration-500 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-              />
-            )
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center opacity-10">
-              <Store className="w-12 h-12" />
-            </div>
-          )}
-
-          {/* Trust Badge overlay */}
-          {trustLevel > 0 && (
-            <div className="absolute top-2 right-2">
-              <TrustBadge level={trustLevel} size="sm" />
-            </div>
-          )}
-
-          {/* Badges overlay */}
-          <div className="absolute top-2 left-2 flex flex-col gap-1">
-            {categoryData && (
-              <Badge className="bg-background/90 backdrop-blur-sm text-foreground hover:bg-background/90 shadow-sm font-medium border-brand-blue/20">
-                <categoryData.icon className="w-3 h-3 mr-1 text-brand-blue" />
-                {categoryData.label}
-              </Badge>
-            )}
-            {isBoosted && (
-              <Badge className="bg-brand-blue text-white hover:bg-brand-blue shadow-sm font-medium text-[10px]">
-                Boosted
-              </Badge>
-            )}
-            {isFeatured && (
-              <Badge className="bg-amber-500 text-white hover:bg-amber-500 shadow-sm font-medium text-[10px]">
-                Featured
-              </Badge>
-            )}
-          </div>
-
-          {/* Business type badge */}
-          <div className="absolute bottom-2 left-2">
-            <Badge
-              variant="outline"
-              className="bg-background/80 backdrop-blur-sm text-[10px] font-medium"
-            >
-              {businessType === "mobile_service" && <Wrench className="w-2.5 h-2.5 mr-1" />}
-              {BUSINESS_TYPE_LABELS[businessType]}
-            </Badge>
-          </div>
-
-          {/* Gallery preview thumbnails + count */}
-          {photoCount > 0 && (
-            <div className="absolute bottom-2 right-2 flex items-center gap-1">
-              {galleryPhotos && galleryPhotos.length >= 3 && (
-                <div className="flex -space-x-1.5">
-                  {galleryPhotos.slice(0, 3).map((photo) => (
-                    <div
-                      key={photo}
-                      className="w-5 h-5 rounded-full border-2 border-background overflow-hidden bg-warm-200 dark:bg-warm-700"
-                    >
-                      <Image
-                        src={normalizeMediaUrl(photo)}
-                        alt=""
-                        width={20}
-                        height={20}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-              <Badge
-                variant="outline"
-                className="bg-background/80 backdrop-blur-sm text-[10px] font-medium gap-1"
-              >
-                <Camera className="w-2.5 h-2.5" />
-                {photoCount}
-              </Badge>
-            </div>
-          )}
+    <PosterCardShell
+      href={`/mzansi-business/${id}`}
+      title={businessName}
+      description={description}
+      location={`${city}, ${province}`}
+      mediaUrl={displayCover}
+      posterUrl={posterUrl}
+      mediaAlt={businessName}
+      logoUrl={logoUrl}
+      statusLabel={null}
+      statusClassName={undefined}
+      accentClassName="hover:border-brand-blue/55"
+      trustLevel={trustLevel}
+      fallback={
+        <div className="flex h-full w-full items-center justify-center text-brand-blue/35">
+          <Store className="h-16 w-16" />
         </div>
-
-        <CardContent className="flex-1 p-5 pt-0 relative flex flex-col">
-          {/* Floating Logo/Icon */}
-          <div className="relative -mt-7 mb-3">
-            <div className="w-14 h-14 rounded-xl border-4 border-background bg-background shadow-sm flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105">
-              {normalizedLogoUrl ? (
-                <Image
-                  src={normalizedLogoUrl}
-                  alt={`${businessName} logo`}
-                  fill
-                  className="object-cover"
-                />
-              ) : (
-                <Store className="h-6 w-6 text-brand-blue" />
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-2 flex-1 flex flex-col">
-            {/* Title */}
-            <h3 className="font-display font-semibold text-lg text-foreground group-hover:text-brand-blue dark:group-hover:text-blue-400 transition-colors line-clamp-1">
-              {businessName}
-            </h3>
-
-            {/* Description */}
-            {description && (
-              <p className="text-sm text-muted-foreground line-clamp-2 flex-1">{description}</p>
-            )}
-
-            {/* Business type-specific badge */}
-            {businessType === "mobile_service" && (
-              <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-brand-blue/10 text-brand-blue text-xs font-medium">
-                <Truck className="h-3 w-3" />
-                We come to you
-              </div>
-            )}
-            {businessType === "online_only" && (
-              <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs font-medium">
-                <Globe className="h-3 w-3" />
-                Shop Online
-              </div>
-            )}
-            {businessType === "home_business" && (
-              <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-xs font-medium">
-                <HomeIcon className="h-3 w-3" />
-                Home Business
-              </div>
-            )}
-
-            {/* Location */}
-            <div className="pt-3 mt-auto flex items-center gap-1.5 text-xs font-medium text-foreground/80">
-              <MapPin className="h-3.5 w-3.5 text-brand-blue" />
-              <span className="truncate">
-                {city}, {province}
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
+      }
+    />
   );
 }

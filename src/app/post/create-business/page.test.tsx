@@ -259,7 +259,9 @@ describe("CreateBusinessPage", () => {
 
     expect(screen.getByText("Enter a valid Facebook URL.")).toBeInTheDocument();
     expect(
-      screen.getByText("Please fix the highlighted fields before submitting.")
+      screen.getByText(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      )
     ).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
     expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
@@ -273,5 +275,48 @@ describe("CreateBusinessPage", () => {
 
     const details = screen.getByText("Optional extras").closest("details");
     expect(details).not.toHaveAttribute("open");
+  });
+
+  it("shows an inline slug error when the API rejects a duplicate slug", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      json: async () => ({
+        error: "Business slug already in use",
+        reason: "Choose a different URL slug for this business.",
+        details: { slug: "This URL slug is already taken." },
+      }),
+    });
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    expect(await screen.findByText("This URL slug is already taken.")).toBeInTheDocument();
+    expect(screen.getByText("Choose a different URL slug for this business.")).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("keeps the submitted-for-review state after redirecting to the dashboard", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    });
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Business submitted for review.", variant: "success" })
+      );
+    });
+    expect(mockPush).toHaveBeenCalledWith("/dashboard/businesses?created=true");
   });
 });

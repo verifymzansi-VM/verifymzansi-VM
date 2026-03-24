@@ -1,14 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildPayFastCheckoutUrl } from "@/lib/services/payfast";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { createHostedCheckout } from "@/lib/payments/checkout";
 import { z } from "zod";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("Checkout");
 
@@ -22,11 +24,17 @@ const checkoutSchema = z.object({
 /**
  * POST /api/billing/create-checkout
  *
- * Create a PayFast checkout session and return the redirect URL.
+ * Create a payment checkout session and return the redirect URL.
  * Requires an authenticated user with an account profile.
  */
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
+
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
     const {
@@ -39,8 +47,19 @@ export async function POST(request: NextRequest) {
 
     // ── Rate limit ──────────────────────────────────────────
     const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({ key: ip, action: "billing:checkout" });
+    const rateCheck = await checkRateLimit({
+      key: ip,
+      action: "billing:checkout",
+      degradedMode: "block",
+    });
     if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          { error: "Checkout protection is temporarily unavailable. Please try again shortly." },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
         { error: "Too many checkout attempts. Please try again later." },
         { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
@@ -48,21 +67,25 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Validate input ───────────────────────────────────────
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-    const parsed = checkoutSchema.safeParse(body);
-
+    const parsed = await parseAndValidateJsonRequest(request, checkoutSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid checkout request",
+      includeValidationDetails: false,
+    });
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+      return parsed.response;
     }
 
     const { planId } = parsed.data;
 
+    let admin: ReturnType<typeof createAdminClient> | null = null;
+    const getAdmin = () => {
+      admin ??= createAdminClient();
+      return admin;
+    };
+
     // ── Get account profile ──────────────────────────────────
-    const admin = createAdminClient();
-    const { data: profile } = await admin
+    const { data: profile } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id, display_name")
       .eq("user_id", user.id)
@@ -73,7 +96,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Fetch plan ───────────────────────────────────────────
-    const { data: plan } = await admin
+    const { data: plan } = await supabase
       .from("plans")
       .select("*")
       .eq("id", planId)
@@ -85,13 +108,14 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Prevent Duplicate Active Entitlements ─────────────
-    const { data: activeEntitlement } = await admin
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("id")
       .eq("user_id", user.id)
       .eq("area", plan.area)
       .eq("type", "subscription")
       .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
       .maybeSingle();
 
     if (activeEntitlement) {
@@ -104,56 +128,81 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Create pending payment record ────────────────────────
-    const { data: payment, error: paymentError } = await admin
+    // ── Prevent duplicate in-flight payments ─────────────
+    const { data: pendingPayment } = await supabase
       .from("payments")
-      .insert({
-        user_id: user.id,
-        area: plan.area,
-        amount_cents: plan.price_cents,
-        status: "pending",
-        payfast_data: {
-          type: "subscription",
-          plan_id: plan.id,
-          plan_tier: plan.tier,
-          area: plan.area,
-        },
-      })
       .select("id")
-      .single();
+      .eq("user_id", user.id)
+      .eq("area", plan.area)
+      .in("status", ["pending", "processing"])
+      .maybeSingle();
 
-    if (paymentError || !payment) {
-      log.error("Failed to create payment", { error: paymentError });
-      return NextResponse.json({ error: "Failed to create payment" }, { status: 500 });
+    if (pendingPayment) {
+      return NextResponse.json(
+        {
+          error:
+            "You already have a pending payment for this area. Please wait for it to complete or cancel it.",
+        },
+        { status: 409 }
+      );
     }
 
-    // ── Build PayFast checkout URL ───────────────────────────
-    const merchantId = env("PAYFAST_MERCHANT_ID");
-    const merchantKey = env("PAYFAST_MERCHANT_KEY");
-    if (!merchantId || !merchantKey) {
-      log.error("PayFast credentials not configured");
+    const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
+
+    // Validate the app URL to prevent redirect manipulation if the env var is misconfigured
+    try {
+      const appHostname = new URL(appUrl).hostname;
+      const isAllowedHost =
+        appHostname === "localhost" ||
+        appHostname === "127.0.0.1" ||
+        appHostname.endsWith("verifymzansi.com");
+      if (!isAllowedHost && process.env.NODE_ENV === "production") {
+        log.error("NEXT_PUBLIC_APP_URL has unexpected hostname", { hostname: appHostname });
+        return NextResponse.json(
+          { error: "Billing is not yet configured. Please try again later." },
+          { status: 503 }
+        );
+      }
+    } catch {
+      log.error("NEXT_PUBLIC_APP_URL is not a valid URL", { appUrl });
       return NextResponse.json(
         { error: "Billing is not yet configured. Please try again later." },
         { status: 503 }
       );
     }
 
-    const amountRands = plan.price_cents / 100;
-    const appUrl = env("NEXT_PUBLIC_APP_URL") || "https://verifymzansi.com";
-    const notifyUrl = env("PAYFAST_NOTIFY_URL") || `${appUrl}/api/webhooks/payfast`;
-
-    const checkoutUrl = buildPayFastCheckoutUrl({
-      merchantId,
-      merchantKey,
-      returnUrl: `${appUrl}/billing/success?payment=${payment.id}`,
-      cancelUrl: `${appUrl}/billing/cancel`,
-      notifyUrl,
-      paymentId: payment.id,
-      amount: amountRands,
-      itemName: plan.name,
-      itemDescription: `${plan.name} — 30-day subscription`,
-      emailAddress: user.email || undefined,
-    });
+    let paymentId: string;
+    let checkoutUrl: string;
+    try {
+      const checkout = await createHostedCheckout({
+        admin: getAdmin() as never,
+        userId: user.id,
+        area: plan.area,
+        amountCents: plan.price_cents,
+        itemName: plan.name,
+        itemDescription: `${plan.name} - 30-day subscription`,
+        returnUrl: `${appUrl}/billing/success?payment=__PAYMENT_ID__`,
+        cancelUrl: `${appUrl}/billing/cancel?payment=__PAYMENT_ID__`,
+        providerData: {
+          type: "subscription",
+          plan_id: plan.id,
+          plan_tier: plan.tier,
+          area: plan.area,
+        },
+      });
+      paymentId = checkout.paymentId;
+      checkoutUrl = checkout.checkoutUrl;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create checkout session";
+      log.error("Failed to create hosted checkout", { error: message });
+      if (/configured|authenticate/i.test(message)) {
+        return NextResponse.json(
+          { error: "Billing is not yet configured. Please try again later." },
+          { status: 503 }
+        );
+      }
+      return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });
+    }
 
     // ── Audit log ────────────────────────────────────────────
     await logAuditEvent({
@@ -161,11 +210,11 @@ export async function POST(request: NextRequest) {
       actorRole: "member",
       action: "checkout_initiated",
       targetType: "payment",
-      targetId: payment.id,
+      targetId: paymentId,
       metadata: {
         planId: plan.id,
         planName: plan.name,
-        amount: amountRands,
+        amount: plan.price_cents / 100,
         status: "checkout_initiated",
       },
     });
@@ -173,10 +222,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       checkoutUrl,
-      paymentId: payment.id,
+      paymentId,
     });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "Unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });
   }
 }

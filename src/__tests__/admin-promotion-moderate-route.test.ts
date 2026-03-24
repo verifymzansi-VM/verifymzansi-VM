@@ -1,20 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockLoggerError } = vi.hoisted(
-  () => ({
-    mockCreateClient: vi.fn(),
-    mockCreateAdminClient: vi.fn(),
-    mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
-    mockLoggerError: vi.fn(),
-  })
-);
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockLogAuditEvent,
+  mockLoggerError,
+  mockEnforceSameOriginMutation,
+  mockVerifyStaffActorRoleFromDb,
+  mockCheckLocalRateLimit,
+} = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
+  mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
+  mockLoggerError: vi.fn(),
+  mockEnforceSameOriginMutation: vi.fn<(request: NextRequest) => Response | null>(() => null),
+  mockVerifyStaffActorRoleFromDb: vi.fn(),
+  mockCheckLocalRateLimit: vi.fn(() => ({ limited: false })),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ error: mockLoggerError, info: vi.fn(), warn: vi.fn() }),
+}));
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: mockEnforceSameOriginMutation,
+}));
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyStaffActorRoleFromDb: mockVerifyStaffActorRoleFromDb,
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: mockCheckLocalRateLimit,
 }));
 
 import { POST } from "@/app/api/admin/promotions/[id]/moderate/route";
@@ -37,6 +58,11 @@ function createParams(id = VALID_UUID) {
 describe("POST /api/admin/promotions/[id]/moderate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockEnforceSameOriginMutation.mockReturnValue(null);
+    mockVerifyStaffActorRoleFromDb.mockImplementation(async (user) => {
+      const role = user?.app_metadata?.role;
+      return role === "admin" || role === "moderator" ? role : null;
+    });
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -50,6 +76,21 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
         }),
       },
     });
+  });
+
+  it("rejects cross-origin moderation requests before auth or validation", async () => {
+    mockEnforceSameOriginMutation.mockReturnValue(
+      new Response(JSON.stringify({ error: "Cross-origin request blocked" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const response = await POST(createRequest({ decision: "approve" }), createParams());
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "Cross-origin request blocked" });
+    expect(mockCreateClient).not.toHaveBeenCalled();
   });
 
   it("rejects invalid promotion ids", async () => {
@@ -108,7 +149,22 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
   });
 
   it("approves unpublished promotions and stamps published_at", async () => {
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: "mod-1",
+              app_metadata: { role: "moderator" },
+              is_anonymous: false,
+            },
+          },
+        }),
+      },
+    });
+
+    const updateIn = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = vi.fn().mockReturnValue({ in: updateIn });
     const update = vi.fn().mockReturnValue({ eq: updateEq });
     const from = vi.fn((table: string) => {
       if (table === "promotions") {
@@ -149,7 +205,8 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
     );
     expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        actorId: "admin-1",
+        actorId: "mod-1",
+        actorRole: "moderator",
         targetType: "promotion",
         targetId: VALID_UUID,
         metadata: expect.objectContaining({
@@ -163,8 +220,10 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
 
   it("returns a safe error when the status update fails", async () => {
     const update = vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({
-        error: { message: "raw db failure" },
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({
+          error: { message: "raw db failure" },
+        }),
       }),
     });
 

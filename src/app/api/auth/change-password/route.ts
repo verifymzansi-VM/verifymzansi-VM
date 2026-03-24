@@ -5,6 +5,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const log = createLogger("ChangePassword");
 
@@ -15,9 +16,26 @@ export async function POST(request: NextRequest) {
       return sameOriginFailure;
     }
 
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
+
     const ip = getClientIp(request);
-    const rateCheck = await checkRateLimit({ key: ip, action: "auth:change-password" });
+    const rateCheck = await checkRateLimit({
+      key: ip,
+      action: "auth:change-password",
+      degradedMode: "local",
+    });
     if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          {
+            error:
+              "Password change protection is temporarily unavailable. Please try again shortly.",
+          },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       return NextResponse.json(
         { error: "Too many attempts. Please try again later." },
         { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }

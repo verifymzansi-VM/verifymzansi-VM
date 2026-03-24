@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
-import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_WRITE_TABLE, resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
 const {
   mockCreateClient,
@@ -8,12 +8,16 @@ const {
   mockCreateNotification,
   mockCheckRateLimit,
   mockFrom,
+  mockGetUserById,
+  mockSendContactFormNotification,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockCreateNotification: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockFrom: vi.fn(),
+  mockGetUserById: vi.fn(),
+  mockSendContactFormNotification: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -26,6 +30,10 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/notifications", () => ({
   createNotification: mockCreateNotification,
+}));
+
+vi.mock("@/lib/services/email", () => ({
+  sendContactFormNotification: mockSendContactFormNotification,
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -41,6 +49,10 @@ vi.mock("@/lib/utils/logger", () => ({
   }),
 }));
 
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: vi.fn().mockReturnValue(null),
+}));
+
 import { POST } from "./route";
 
 function createMockRequest(body: Record<string, unknown>) {
@@ -54,6 +66,7 @@ function createMockRequest(body: Record<string, unknown>) {
 describe("POST /api/contact", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
 
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -62,9 +75,19 @@ describe("POST /api/contact", () => {
     });
     mockCreateAdminClient.mockReturnValue({
       from: mockFrom,
+      auth: {
+        admin: {
+          getUserById: mockGetUserById,
+        },
+      },
     });
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockCreateNotification.mockResolvedValue(true);
+    mockGetUserById.mockResolvedValue({
+      data: { user: { email: "owner@example.com" } },
+      error: null,
+    });
+    mockSendContactFormNotification.mockResolvedValue({ success: true });
   });
 
   it("creates an account holder notification for anonymous contact requests", async () => {
@@ -75,11 +98,20 @@ describe("POST /api/contact", () => {
       if (table === "listings") {
         return {
           select: vi.fn().mockImplementation((fields: string) => {
-            if (fields === "owner_id, title") {
+            if (
+              fields.includes("owner_id") &&
+              fields.includes("title") &&
+              fields.includes("status")
+            ) {
               return {
                 eq: vi.fn().mockReturnValue({
-                  single: vi.fn().mockResolvedValue({
-                    data: { owner_id: ownerId, title: "Vintage Couch" },
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      id: listingId,
+                      owner_id: ownerId,
+                      title: "Vintage Couch",
+                      status: "live",
+                    },
                     error: null,
                   }),
                 }),
@@ -138,6 +170,14 @@ describe("POST /api/contact", () => {
       message: 'Someone is interested in "Vintage Couch".',
       href: "/dashboard/leads",
     });
+    expect(mockSendContactFormNotification).toHaveBeenCalledWith(
+      "owner@example.com",
+      "there",
+      "Interested buyer",
+      "not-provided@verifymzansi.com",
+      "Hi there, I want to buy this today.",
+      "Vintage Couch"
+    );
   });
 
   it("records the canonical member verification flag on contact events", async () => {
@@ -149,11 +189,20 @@ describe("POST /api/contact", () => {
       if (table === "listings") {
         return {
           select: vi.fn().mockImplementation((fields: string) => {
-            if (fields === "owner_id, title") {
+            if (
+              fields.includes("owner_id") &&
+              fields.includes("title") &&
+              fields.includes("status")
+            ) {
               return {
                 eq: vi.fn().mockReturnValue({
-                  single: vi.fn().mockResolvedValue({
-                    data: { owner_id: ownerId, title: "Vintage Couch" },
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      id: listingId,
+                      owner_id: ownerId,
+                      title: "Vintage Couch",
+                      status: "live",
+                    },
                     error: null,
                   }),
                 }),
@@ -223,8 +272,13 @@ describe("POST /api/contact", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: { owner_id: ownerId, title: "Launch Week Promo" },
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: promotionId,
+                  owner_id: ownerId,
+                  title: "Launch Week Promo",
+                  status: "live",
+                },
                 error: null,
               }),
             }),
@@ -290,6 +344,14 @@ describe("POST /api/contact", () => {
         userId: ownerId,
         message: 'Someone is interested in "Launch Week Promo".',
       })
+    );
+    expect(mockSendContactFormNotification).toHaveBeenCalledWith(
+      "owner@example.com",
+      "there",
+      "Interested buyer",
+      "not-provided@verifymzansi.com",
+      "Hi, I want details about this promo.",
+      "Launch Week Promo"
     );
   });
 });

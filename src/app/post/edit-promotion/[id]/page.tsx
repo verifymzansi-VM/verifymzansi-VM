@@ -14,18 +14,24 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
-import { PROMOTION_TYPE_LABELS, type BusinessCategory, type PromotionType } from "@/types/enums";
+import {
+  getPromotionFilterTypeFromStoredType,
+  getStoredPromotionTypeForFilter,
+  PROMOTION_FILTER_TYPE_OPTIONS,
+} from "@/lib/promotions/type-taxonomy";
+import { type BusinessCategory, type PromotionType } from "@/types/enums";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import {
   usePlanMaxPhotos,
   usePlanMaxVideos,
   usePlanVideoAllowed,
 } from "@/components/billing/plan-gate";
+import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
-
-const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
+import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
+import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
 const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow";
 
@@ -36,7 +42,9 @@ export default function EditPromotionPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Form state
   const [promotionType, setPromotionType] = useState<PromotionType>("general");
@@ -58,6 +66,11 @@ export default function EditPromotionPage() {
   // New files to upload
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
+  const [socialAuthorization, setSocialAuthorization] = useState<PromotionSocialAuthorizationInput>(
+    {
+      granted: false,
+    }
+  );
 
   // Link to Business
   const [businessId, setBusinessId] = useState("");
@@ -65,6 +78,7 @@ export default function EditPromotionPage() {
 
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
+  const selectedPromotionFilterType = getPromotionFilterTypeFromStoredType(promotionType);
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
@@ -105,6 +119,11 @@ export default function EditPromotionPage() {
         setExistingVideos(p.videos || []);
         setVideoThumbnail(p.video_thumbnail || "");
         setBusinessId(p.business_id || "");
+        setSocialAuthorization(
+          p.socialAuthorization ?? {
+            granted: false,
+          }
+        );
       } catch {
         setError("Failed to load promotion");
       } finally {
@@ -152,9 +171,24 @@ export default function EditPromotionPage() {
     setExistingImages((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function handleSocialAuthorizationChange(nextValue: PromotionSocialAuthorizationInput) {
+    setSocialAuthorization(nextValue);
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next["socialAuthorization.authorizerName"];
+      delete next["socialAuthorization.authorizerRole"];
+      delete next["socialAuthorization.relationship"];
+      delete next["socialAuthorization.monetizationAcknowledged"];
+      delete next["socialAuthorization.acceptedVersion"];
+      return next;
+    });
+  }
+
   async function handleSubmit() {
     setIsSubmitting(true);
+    setSubmitProgress("Uploading media...");
     setError(null);
+    setFieldErrors({});
 
     try {
       const validationErrors = validatePromotionForm({
@@ -162,6 +196,7 @@ export default function EditPromotionPage() {
         startDate,
         endDate,
         contactMethods,
+        socialAuthorization,
       });
       const totalVideoCount = existingVideos.length + newVideoFiles.length;
       if (existingImages.length + newPhotoFiles.length > maxPhotos) {
@@ -173,37 +208,63 @@ export default function EditPromotionPage() {
         validationErrors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
       }
       if (Object.keys(validationErrors).length > 0) {
+        setFieldErrors(validationErrors);
         setError(Object.values(validationErrors)[0]);
         setIsSubmitting(false);
+        setSubmitProgress(null);
         return;
       }
 
-      // Upload new photos if any
-      let newImageUrls: string[] = [];
-      if (newPhotoFiles.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "promotion");
-        for (const f of newPhotoFiles) uploadData.append("files", f);
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload photos");
-        const uploadJson = await uploadRes.json();
-        if (uploadJson.urls) newImageUrls = uploadJson.urls;
-      }
+      // Upload new photos and videos in parallel
+      const [newImageUrls, newVideoUrls] = await Promise.all([
+        // Photos via server proxy
+        newPhotoFiles.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "promotion");
+              for (const f of newPhotoFiles) uploadData.append("files", f);
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) throw new Error("Failed to upload photos");
+              const uploadJson = await uploadRes.json();
+              return (uploadJson.urls || []) as string[];
+            })()
+          : Promise.resolve([] as string[]),
 
-      // Upload new videos if any
-      let newVideoUrls: string[] = [];
-      if (newVideoFiles.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "promotion");
-        for (const f of newVideoFiles) uploadData.append("files", f);
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload video");
-        const uploadJson = await uploadRes.json();
-        if (uploadJson.urls) newVideoUrls = uploadJson.urls;
-      }
+        // Videos via presigned URL (direct to R2)
+        newVideoFiles.length > 0
+          ? Promise.all(
+              newVideoFiles.map(async (file) => {
+                const urlRes = await fetch("/api/media/upload-url", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    filename: file.name,
+                    contentType: file.type,
+                    size: file.size,
+                    area: "promotion",
+                  }),
+                });
+                if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+                const { uploadUrl, publicUrl } = await urlRes.json();
+                const putRes = await fetch(uploadUrl, {
+                  method: "PUT",
+                  headers: { "Content-Type": file.type },
+                  body: file,
+                });
+                if (!putRes.ok) throw new Error("Failed to upload video");
+                return publicUrl as string;
+              })
+            )
+          : Promise.resolve([] as string[]),
+      ]);
 
       const allImages = [...existingImages, ...newImageUrls];
       const allVideos = [...existingVideos, ...newVideoUrls];
+
+      setSubmitProgress("Saving promotion...");
 
       const body = {
         title,
@@ -222,6 +283,7 @@ export default function EditPromotionPage() {
         start_date: startDate ? new Date(startDate).toISOString() : undefined,
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
         business_id: businessId || undefined,
+        socialAuthorization,
       };
 
       const res = await fetch(`/api/promotions/${promotionId}`, {
@@ -234,14 +296,18 @@ export default function EditPromotionPage() {
 
       if (!res.ok) {
         setError(data.error || "Failed to update promotion");
+        if (data?.details && typeof data.details === "object") {
+          setFieldErrors(data.details as Record<string, string>);
+        }
         return;
       }
 
       router.push("/dashboard/promotions?updated=true");
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (error: unknown) {
+      setError(normalizeCreatePostRuntimeError(error, "Something went wrong. Please try again."));
     } finally {
       setIsSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -274,7 +340,7 @@ export default function EditPromotionPage() {
             title="Edit Promotion"
             breadcrumbs={[
               { label: "Dashboard", href: "/dashboard" },
-              { label: "Promotions", href: "/dashboard/promotions" },
+              { label: "Promotions & Events", href: "/dashboard/promotions" },
               { label: "Edit" },
             ]}
           />
@@ -293,10 +359,18 @@ export default function EditPromotionPage() {
                   id="promotion_type"
                   aria-label="Promotion Type"
                   className={selectClass}
-                  value={promotionType}
-                  onChange={(e) => setPromotionType(e.target.value as PromotionType)}
+                  value={selectedPromotionFilterType}
+                  onChange={(event) =>
+                    setPromotionType(
+                      getStoredPromotionTypeForFilter(
+                        event.target
+                          .value as (typeof PROMOTION_FILTER_TYPE_OPTIONS)[number]["value"],
+                        promotionType
+                      )
+                    )
+                  }
                 >
-                  {PROMOTION_TYPES.map(([value, label]) => (
+                  {PROMOTION_FILTER_TYPE_OPTIONS.map(({ value, label }) => (
                     <option key={value} value={value}>
                       {label}
                     </option>
@@ -538,6 +612,12 @@ export default function EditPromotionPage() {
                 disabled={!videoAllowed}
               />
 
+              <SocialAuthorizationFields
+                value={socialAuthorization}
+                onChange={handleSocialAuthorizationChange}
+                errors={fieldErrors}
+              />
+
               <div className="space-y-3 rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
                 <div className="text-sm font-medium text-muted-foreground">Promotion preview</div>
                 <PromotionDetailContent
@@ -607,7 +687,7 @@ export default function EditPromotionPage() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Saving...
+                      {submitProgress || "Saving..."}
                     </>
                   ) : (
                     <>

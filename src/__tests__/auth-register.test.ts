@@ -8,10 +8,22 @@ const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
   mockVerifyTurnstile: vi.fn(),
 }));
 
-const { mockCreateAdminClient, mockProfileUpsert, mockCheckRateLimit } = vi.hoisted(() => ({
+const {
+  mockCreateAdminClient,
+  mockProfileUpsert,
+  mockDeleteUser,
+  mockCheckRateLimit,
+  mockGetClientRateLimitIdentity,
+} = vi.hoisted(() => ({
   mockCreateAdminClient: vi.fn(),
   mockProfileUpsert: vi.fn().mockResolvedValue({ error: null }),
+  mockDeleteUser: vi.fn().mockResolvedValue({ error: null }),
   mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+  mockGetClientRateLimitIdentity: vi.fn().mockReturnValue({
+    key: "127.0.0.1",
+    source: "x-forwarded-for",
+    ip: "127.0.0.1",
+  }),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
@@ -25,7 +37,7 @@ vi.mock("@/lib/utils/turnstile", async () => {
 });
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
-  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+  getClientRateLimitIdentity: mockGetClientRateLimitIdentity,
 }));
 vi.mock("@/lib/utils/api", async () => {
   const actual = await vi.importActual<typeof ApiModule>("@/lib/utils/api");
@@ -68,9 +80,9 @@ function createRequest(body: unknown): NextRequest {
   return {
     method: "POST",
     json: async () => body,
-    url: "http://localhost:3000/api/auth/register",
+    url: "https://verifymzansi.com/api/auth/register",
     headers: { get: vi.fn().mockReturnValue(null) },
-    nextUrl: new URL("http://localhost:3000/api/auth/register"),
+    nextUrl: new URL("https://verifymzansi.com/api/auth/register"),
   } as unknown as NextRequest;
 }
 
@@ -84,12 +96,14 @@ const validBody = {
   turnstileToken: "tok-valid",
 };
 
-function createAdminMock(existingPhoneProfile: { id: string } | null = null) {
+function createAdminMock() {
   return {
+    auth: {
+      admin: {
+        deleteUser: mockDeleteUser,
+      },
+    },
     from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: existingPhoneProfile, error: null }),
       upsert: mockProfileUpsert,
     }),
   };
@@ -102,7 +116,13 @@ describe("POST /api/auth/register", () => {
     delete process.env.TURNSTILE_SECRET_KEY;
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
     mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientRateLimitIdentity.mockReturnValue({
+      key: "127.0.0.1",
+      source: "x-forwarded-for",
+      ip: "127.0.0.1",
+    });
     mockCreateAdminClient.mockReturnValue(createAdminMock() as never);
+    mockDeleteUser.mockResolvedValue({ error: null });
   });
 
   afterEach(() => {
@@ -130,6 +150,18 @@ describe("POST /api/auth/register", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 429 when registration attempts are rate limited", async () => {
+    mockCheckRateLimit.mockResolvedValue({ limited: true, retryAfter: 120 });
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("120");
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Too many registration attempts. Please try again later.",
+    });
+  });
+
   it("succeeds with valid data (no Turnstile configured)", async () => {
     const mockSignUp = vi.fn().mockResolvedValue({
       data: { user: { id: "u1", identities: [{ id: "identity-1" }] } },
@@ -145,7 +177,7 @@ describe("POST /api/auth/register", () => {
       email: "user@example.com",
       password: "StrongP@ss1",
       options: {
-        emailRedirectTo: "https://verifymzansi.com/auth/callback?next=%2F%3Fconfirmed%3Dtrue",
+        emailRedirectTo: "https://verifymzansi.com/auth/callback?next=%2Flogin%3Fconfirmed%3Dtrue",
         data: {
           display_name: "Test User",
           phone: "+27821234567",
@@ -221,6 +253,24 @@ describe("POST /api/auth/register", () => {
     expect(body.error).toContain("Bot detected");
   });
 
+  it("returns 503 when the client reports Turnstile is temporarily unavailable", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key");
+
+    const res = await POST(
+      createRequest({
+        ...validBody,
+        turnstileToken: "turnstile-unavailable",
+      })
+    );
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      error: expect.stringMatching(/temporarily unavailable/i),
+    });
+    expect(mockVerifyTurnstile).not.toHaveBeenCalled();
+  });
+
   it("fails closed in production when the Turnstile site key is missing", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
@@ -264,14 +314,35 @@ describe("POST /api/auth/register", () => {
     expect(body.error).toContain("rate-limited");
   });
 
-  it("returns 409 when the phone number is already linked to another account", async () => {
-    mockCreateAdminClient.mockReturnValue(createAdminMock({ id: "sp-1" }) as never);
+  it("returns generic success when the phone number is already linked to another account", async () => {
+    const profileConflict = Object.assign(new Error("duplicate key"), { code: "23505" });
+    mockProfileUpsert.mockResolvedValueOnce({ error: profileConflict });
+    const mockSignUp = vi.fn().mockResolvedValue({
+      data: { user: { id: "u-conflict", identities: [{ id: "identity-1" }] } },
+      error: null,
+    });
+    mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
 
     const res = await POST(createRequest(validBody));
 
-    expect(res.status).toBe(409);
-    await expect(res.json()).resolves.toMatchObject({
-      error: "This phone number is already linked to another account.",
+    expect(res.status).toBe(200);
+    expect(mockDeleteUser).toHaveBeenCalledWith("u-conflict");
+    await expect(res.json()).resolves.toMatchObject({ success: true });
+  });
+
+  it("returns generic success when the profile insert loses a phone uniqueness race", async () => {
+    const profileConflict = Object.assign(new Error("duplicate key"), { code: "23505" });
+    mockProfileUpsert.mockResolvedValueOnce({ error: profileConflict });
+    const mockSignUp = vi.fn().mockResolvedValue({
+      data: { user: { id: "u-race", identities: [{ id: "identity-1" }] } },
+      error: null,
     });
+    mockCreateClient.mockResolvedValue({ auth: { signUp: mockSignUp } });
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(200);
+    expect(mockDeleteUser).toHaveBeenCalledWith("u-race");
+    await expect(res.json()).resolves.toMatchObject({ success: true });
   });
 });

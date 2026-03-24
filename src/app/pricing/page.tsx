@@ -7,12 +7,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
-import { PLANS, type PlanDefinition } from "@/lib/constants/pricing";
+import {
+  FREE_POST_CONFIG,
+  isActiveMarketplaceArea,
+  PLANS,
+  type PlanDefinition,
+} from "@/lib/constants/pricing";
 
 export const metadata = {
   title: "Pricing",
   description:
-    "Choose the plan that fits your selling needs on VerifyMzansi. Free and premium options for Mzansi Market, Mall Shops, and Business Ads.",
+    "Choose the plan that fits your promotion, visibility, and growth goals on VerifyMzansi. Free and premium options for products, businesses, and campaigns.",
 };
 
 function featureList(plan: PlanDefinition): string[] {
@@ -43,13 +48,13 @@ function PlanGrid({ plans }: { plans: PlanDefinition[] }) {
       {plans.map((plan) => (
         <Card
           key={`${plan.area}-${plan.tier}`}
-          className={plan.tier === "pro" ? "border-brand-green shadow-lg relative" : ""}
+          className={plan.tier === "growth" ? "border-brand-green shadow-lg relative" : ""}
         >
-          {plan.tier === "pro" && (
+          {plan.tier === "growth" && (
             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
               <Badge className="bg-brand-green text-white gap-1">
                 <Sparkles className="h-3 w-3" />
-                Best Value
+                Most Popular
               </Badge>
             </div>
           )}
@@ -81,10 +86,10 @@ function PlanGrid({ plans }: { plans: PlanDefinition[] }) {
               <Button
                 asChild
                 className="w-full gap-2"
-                variant={plan.tier === "pro" ? "default" : "outline"}
+                variant={plan.tier === "growth" ? "default" : "outline"}
               >
-                <Link href="/register">
-                  {plan.priceCents === 0 ? "Get Started Free" : "Choose Plan"}
+                <Link href={plan.priceCents === 0 ? "/post/create" : "/billing"}>
+                  {plan.priceCents === 0 ? "Create Free Post" : "Choose Plan"}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
@@ -97,9 +102,10 @@ function PlanGrid({ plans }: { plans: PlanDefinition[] }) {
 }
 
 export default function PricingPage() {
-  const marketPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_MARKET");
-  const businessPlans = PLANS.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
-  const promotionPlans = PLANS.filter((p: PlanDefinition) => p.area === "PROMOTIONS_EVENTS");
+  const activePlans = PLANS.filter((plan: PlanDefinition) => isActiveMarketplaceArea(plan.area));
+  const marketPlans = activePlans.filter((p: PlanDefinition) => p.area === "MZANSI_MARKET");
+  const businessPlans = activePlans.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
+  const promotionPlans = activePlans.filter((p: PlanDefinition) => p.area === "PROMOTIONS_EVENTS");
 
   const allPlans = [...marketPlans, ...businessPlans, ...promotionPlans];
   const jsonLd = {
@@ -129,14 +135,14 @@ export default function PricingPage() {
       <Header />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
       />
 
       <main className="flex-1">
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Pricing"
-            description={`1 free post per area. All plans include verification and trust badges.`}
+            description={`1 free post per area every 30 days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} ${FREE_POST_CONFIG.maxVideos === 1 ? "video" : "videos"}. All plans are designed to help you grow visibility, promote with confidence, and build trust through verification badges.`}
             breadcrumbs={[{ label: "Pricing" }]}
           />
 

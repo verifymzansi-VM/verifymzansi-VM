@@ -13,9 +13,14 @@ vi.mock("resend", () => {
 });
 
 import {
+  sendAccountEnforcementEmail,
+  sendPaymentFailedEmail,
   sendVerificationApprovedEmail,
   sendVerificationRejectedEmail,
+  sendVerificationResubmissionEmail,
   sendPaymentReceiptEmail,
+  sendDsarCompletedEmail,
+  sendDsarSubmissionEmail,
   sendContactFormNotification,
 } from "./email";
 
@@ -68,6 +73,21 @@ describe("email service", () => {
     });
   });
 
+  describe("sendVerificationResubmissionEmail", () => {
+    it("sends resubmission email with reason", async () => {
+      const result = await sendVerificationResubmissionEmail(
+        "user@example.com",
+        "Sipho",
+        "Please upload a clearer selfie"
+      );
+
+      expect(result.success).toBe(true);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.subject).toContain("resubmission");
+      expect(call.html).toContain("Please upload a clearer selfie");
+    });
+  });
+
   describe("sendPaymentReceiptEmail", () => {
     it("sends receipt with amount and plan name", async () => {
       const result = await sendPaymentReceiptEmail(
@@ -97,6 +117,39 @@ describe("email service", () => {
     });
   });
 
+  describe("sendPaymentFailedEmail", () => {
+    it("sends failed payment template with billing retry link", async () => {
+      const result = await sendPaymentFailedEmail(
+        "user@example.com",
+        "Nomsa",
+        149,
+        "Mzansi Business"
+      );
+
+      expect(result.success).toBe(true);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.subject).toContain("Payment failed");
+      expect(call.html).toContain("Retry payment");
+    });
+  });
+
+  describe("sendAccountEnforcementEmail", () => {
+    it("sends suspension account update with reason", async () => {
+      const result = await sendAccountEnforcementEmail({
+        email: "user@example.com",
+        accountName: "Lebo",
+        action: "suspend",
+        reason: "Repeated policy violations",
+        suspendedUntil: "2026-04-01T10:00:00.000Z",
+      });
+
+      expect(result.success).toBe(true);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.subject).toContain("Account suspended");
+      expect(call.html).toContain("Repeated policy violations");
+    });
+  });
+
   describe("sendContactFormNotification", () => {
     it("sends contact notification with all details", async () => {
       const result = await sendContactFormNotification(
@@ -114,6 +167,38 @@ describe("email service", () => {
       expect(call.html).toContain("Buyer Guy");
       expect(call.html).toContain("Is this still available?");
       expect(call.subject).toContain("Toyota Hilux 2022");
+    });
+  });
+
+  describe("sendDsarSubmissionEmail", () => {
+    it("sends DSAR confirmation with reference and due date", async () => {
+      const result = await sendDsarSubmissionEmail(
+        "user@example.com",
+        "DSAR-1234ABCD",
+        "2026-04-16T00:00:00.000Z"
+      );
+
+      expect(result.success).toBe(true);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.subject).toContain("DSAR-1234ABCD");
+      expect(call.html).toContain("DSAR-1234ABCD");
+      expect(call.text).toContain("DSAR-1234ABCD");
+    });
+  });
+
+  describe("sendDsarCompletedEmail", () => {
+    it("sends DSAR completion with summary when provided", async () => {
+      const result = await sendDsarCompletedEmail(
+        "user@example.com",
+        "DSAR-1234ABCD",
+        "Your account export was delivered securely"
+      );
+
+      expect(result.success).toBe(true);
+      const call = mockSend.mock.calls[0][0];
+      expect(call.subject).toContain("DSAR-1234ABCD");
+      expect(call.html).toContain("Your account export was delivered securely");
+      expect(call.text).toContain("Your account export was delivered securely");
     });
   });
 

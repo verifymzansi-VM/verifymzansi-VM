@@ -2,104 +2,149 @@
 
 import { useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-  SheetClose,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
-import { useMarketplaceStore } from "@/stores";
+import { cloneMarketplaceFilters, useMarketplaceStore, type MarketplaceFilters } from "@/stores";
 import { cn } from "@/lib/utils";
+import { triggerHaptic } from "@/lib/utils/haptics";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { ListingAttributeFilters } from "./listing-attribute-filters";
 
-/* ─── Helpers ──────────────────────────────────────────────── */
-
-function countActiveFilters(filters: {
-  query?: string;
-  category?: string;
-  province?: string;
-  city?: string;
-  priceMin?: number;
-  priceMax?: number;
-  condition?: string;
-}): number {
+function countActiveFilters(
+  filters: Pick<
+    MarketplaceFilters,
+    | "query"
+    | "category"
+    | "province"
+    | "city"
+    | "priceMin"
+    | "priceMax"
+    | "condition"
+    | "attributes"
+  >
+) {
   let count = 0;
   if (filters.query) count++;
   if (filters.category) count++;
   if (filters.province) count++;
   if (filters.city) count++;
-  if (filters.priceMin) count++;
-  if (filters.priceMax) count++;
+  if (filters.priceMin !== undefined) count++;
+  if (filters.priceMax !== undefined) count++;
   if (filters.condition) count++;
+  count += Object.values(filters.attributes).filter(
+    (value) => value !== undefined && value !== ""
+  ).length;
   return count;
 }
 
-/* ─── Main Component ───────────────────────────────────────── */
-
 export function ListingFilterDrawer() {
-  const { filters, setFilter, resetFilters } = useMarketplaceStore();
+  const { filters, replaceFilters } = useMarketplaceStore();
   const [open, setOpen] = useState(false);
-
-  // Debounced search: instant keystroke feedback, deferred store update
-  const [localQuery, setLocalQuery] = useState(filters.query || "");
-  const debouncedSetQuery = useDebouncedCallback(
-    (value: string) => setFilter("query", value || undefined),
-    300
+  const isHydrated = useHydrated();
+  const [draftFilters, setDraftFilters] = useState<MarketplaceFilters>(() =>
+    cloneMarketplaceFilters(filters)
   );
-  const [prevStoreQuery, setPrevStoreQuery] = useState(filters.query);
-  if (filters.query !== prevStoreQuery) {
-    debouncedSetQuery.cancel();
-    setPrevStoreQuery(filters.query);
-    setLocalQuery(filters.query || "");
-  }
 
-  const activeFilterCount = countActiveFilters(filters);
+  const appliedFilterCount = countActiveFilters(filters);
+  const draftFilterCount = countActiveFilters(draftFilters);
 
   const selectClass =
     "w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
+  function updateDraftFilter<K extends keyof MarketplaceFilters>(
+    key: K,
+    value: MarketplaceFilters[K]
+  ) {
+    setDraftFilters((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "category") {
+        next.attributes = {};
+      }
+      if (key === "province") {
+        next.city = undefined;
+      }
+      return next;
+    });
+  }
+
+  function updateDraftAttribute(name: string, value: string | boolean | undefined) {
+    setDraftFilters((current) => ({
+      ...current,
+      attributes: { ...current.attributes, [name]: value },
+    }));
+  }
+
+  function clearDraftFilters() {
+    triggerHaptic("light");
+    setDraftFilters(cloneMarketplaceFilters());
+  }
+
+  function handleApply() {
+    triggerHaptic("success");
+    replaceFilters(draftFilters);
+    setOpen(false);
+  }
+
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      {/* ── FAB Trigger ──────────────────────────────── */}
-      <div className="fixed bottom-20 right-4 z-40 lg:hidden">
-        <SheetTrigger asChild>
-          <Button
-            size="lg"
-            className="rounded-full shadow-lg h-14 w-14"
+    <Sheet
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) {
+          triggerHaptic("medium");
+          setDraftFilters(cloneMarketplaceFilters(filters));
+        }
+        setOpen(nextOpen);
+      }}
+    >
+      <div className="lg:hidden">
+        {isHydrated ? (
+          <SheetTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Open listing filters"
+            >
+              <SlidersHorizontal className="h-4 w-4 shrink-0" />
+              <span className="flex-1 text-left">Filter &amp; search listings</span>
+              {appliedFilterCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                  {appliedFilterCount}
+                </span>
+              )}
+            </button>
+          </SheetTrigger>
+        ) : (
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm"
             aria-label="Open listing filters"
+            disabled
           >
-            <SlidersHorizontal className="h-5 w-5" />
-            {activeFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-                {activeFilterCount}
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
+            <span className="flex-1 text-left">Filter &amp; search listings</span>
+            {appliedFilterCount > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                {appliedFilterCount}
               </span>
             )}
-          </Button>
-        </SheetTrigger>
+          </button>
+        )}
       </div>
 
-      {/* ── Drawer Content ───────────────────────────── */}
       <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
         <SheetHeader className="flex flex-row items-center justify-between pb-4">
           <SheetTitle>Filters</SheetTitle>
-          {activeFilterCount > 0 && (
+          {draftFilterCount > 0 && (
             <Button
               variant="ghost"
               size="sm"
               className="text-destructive hover:text-destructive"
-              onClick={() => {
-                debouncedSetQuery.cancel();
-                setLocalQuery("");
-                resetFilters();
-              }}
+              onClick={clearDraftFilters}
             >
               <X className="mr-1 h-3 w-3" />
               Clear all
@@ -108,7 +153,6 @@ export function ListingFilterDrawer() {
         </SheetHeader>
 
         <div className="space-y-5 pb-20">
-          {/* ── Search ────────────────────────────────── */}
           <div className="space-y-2">
             <Label className="text-sm font-semibold">Search</Label>
             <div className="relative" role="search">
@@ -119,23 +163,19 @@ export function ListingFilterDrawer() {
                 aria-label="Search listings"
                 enterKeyHint="search"
                 className="pl-9"
-                value={localQuery}
-                onChange={(e) => {
-                  setLocalQuery(e.target.value);
-                  debouncedSetQuery(e.target.value);
-                }}
+                value={draftFilters.query || ""}
+                onChange={(event) => updateDraftFilter("query", event.target.value || undefined)}
               />
             </div>
           </div>
 
-          {/* ── Category ──────────────────────────────── */}
           <div className="space-y-2">
             <Label className="text-sm font-semibold">Category</Label>
             <select
               aria-label="Category"
               className={selectClass}
-              value={filters.category || ""}
-              onChange={(e) => setFilter("category", e.target.value || undefined)}
+              value={draftFilters.category || ""}
+              onChange={(event) => updateDraftFilter("category", event.target.value || undefined)}
             >
               <option value="">All Categories</option>
               {CATEGORIES.map((cat) => (
@@ -146,43 +186,47 @@ export function ListingFilterDrawer() {
             </select>
           </div>
 
-          {/* ── Location ──────────────────────────────── */}
+          <ListingAttributeFilters
+            category={draftFilters.category}
+            attributes={draftFilters.attributes}
+            density="drawer"
+            onAttributeChange={updateDraftAttribute}
+          />
+
           <div className="space-y-2">
             <Label className="text-sm font-semibold">Location</Label>
             <select
               aria-label="Province"
               className={selectClass}
-              value={filters.province || ""}
-              onChange={(e) => {
-                setFilter("province", e.target.value || undefined);
-                setFilter("city", undefined);
-              }}
+              value={draftFilters.province || ""}
+              onChange={(event) => updateDraftFilter("province", event.target.value || undefined)}
             >
               <option value="">All provinces</option>
-              {getProvinceNames().map((p) => (
-                <option key={p} value={p}>
-                  {p}
+              {getProvinceNames().map((province) => (
+                <option key={province} value={province}>
+                  {province}
                 </option>
               ))}
             </select>
             <select
               aria-label="City"
-              className={cn(selectClass, !filters.province && "opacity-50")}
-              value={filters.city || ""}
-              onChange={(e) => setFilter("city", e.target.value || undefined)}
-              disabled={!filters.province}
+              className={cn(selectClass, !draftFilters.province && "opacity-50")}
+              value={draftFilters.city || ""}
+              onChange={(event) => updateDraftFilter("city", event.target.value || undefined)}
+              disabled={!draftFilters.province}
             >
-              <option value="">{filters.province ? "All cities" : "Select province first"}</option>
-              {filters.province &&
-                getCitiesForProvince(filters.province).map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+              <option value="">
+                {draftFilters.province ? "All cities" : "Select province first"}
+              </option>
+              {draftFilters.province &&
+                getCitiesForProvince(draftFilters.province).map((city) => (
+                  <option key={city} value={city}>
+                    {city}
                   </option>
                 ))}
             </select>
           </div>
 
-          {/* ── Price range ────────────────────────────── */}
           <div className="space-y-2">
             <Label className="text-sm font-semibold">Price range (ZAR)</Label>
             <div className="flex items-center gap-2">
@@ -193,9 +237,12 @@ export function ListingFilterDrawer() {
                 placeholder="Min"
                 aria-label="Minimum price"
                 className="text-sm"
-                value={filters.priceMin || ""}
-                onChange={(e) =>
-                  setFilter("priceMin", e.target.value ? Number(e.target.value) : undefined)
+                value={draftFilters.priceMin ?? ""}
+                onChange={(event) =>
+                  updateDraftFilter(
+                    "priceMin",
+                    event.target.value ? Number(event.target.value) : undefined
+                  )
                 }
               />
               <span className="text-muted-foreground text-xs shrink-0">&ndash;</span>
@@ -206,49 +253,48 @@ export function ListingFilterDrawer() {
                 placeholder="Max"
                 aria-label="Maximum price"
                 className="text-sm"
-                value={filters.priceMax || ""}
-                onChange={(e) =>
-                  setFilter("priceMax", e.target.value ? Number(e.target.value) : undefined)
+                value={draftFilters.priceMax ?? ""}
+                onChange={(event) =>
+                  updateDraftFilter(
+                    "priceMax",
+                    event.target.value ? Number(event.target.value) : undefined
+                  )
                 }
               />
             </div>
           </div>
 
-          {/* ── Condition ──────────────────────────────── */}
           <div className="space-y-2">
             <Label className="text-sm font-semibold">Condition</Label>
             <div className="flex flex-wrap gap-2">
-              {LISTING_CONDITIONS.map((cond) => (
+              {LISTING_CONDITIONS.map((condition) => (
                 <button
-                  key={cond.value}
+                  key={condition.value}
                   type="button"
                   onClick={() =>
-                    setFilter(
+                    updateDraftFilter(
                       "condition",
-                      filters.condition === cond.value ? undefined : cond.value
+                      draftFilters.condition === condition.value ? undefined : condition.value
                     )
                   }
                   className={cn(
                     "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-                    filters.condition === cond.value
+                    draftFilters.condition === condition.value
                       ? "border-brand-green bg-brand-green/10 text-brand-green"
                       : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
                   )}
                 >
-                  {cond.label}
+                  {condition.label}
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* ── Apply (Close) Button ─────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 border-t bg-background p-4">
-          <SheetClose asChild>
-            <Button className="w-full" size="lg">
-              Show results
-            </Button>
-          </SheetClose>
+          <Button className="w-full" size="lg" onClick={handleApply}>
+            Show results
+          </Button>
         </div>
       </SheetContent>
     </Sheet>

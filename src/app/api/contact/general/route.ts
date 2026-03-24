@@ -1,24 +1,31 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { emailSchema, trimmedStringSchema, turnstileTokenSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 
 const log = createLogger("ContactGeneral");
 
 const contactFormSchema = z.object({
-  name: z
-    .string()
-    .min(2, "Name must be at least 2 characters")
-    .max(100, "Name cannot exceed 100 characters"),
-  email: z.string().email("Enter a valid email address").max(254, "Email is too long"),
-  message: z
-    .string()
-    .min(10, "Message must be at least 10 characters")
-    .max(2000, "Message cannot exceed 2000 characters"),
-  turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
+  name: trimmedStringSchema.pipe(
+    z
+      .string()
+      .min(2, "Name must be at least 2 characters")
+      .max(100, "Name cannot exceed 100 characters")
+  ),
+  email: trimmedStringSchema.pipe(emailSchema),
+  message: trimmedStringSchema.pipe(
+    z
+      .string()
+      .min(10, "Message must be at least 10 characters")
+      .max(2000, "Message cannot exceed 2000 characters")
+  ),
+  turnstileToken: trimmedStringSchema.pipe(turnstileTokenSchema),
 });
 
 /**
@@ -29,18 +36,19 @@ const contactFormSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+
+    const bodyResult = await parseAndValidateJsonRequest(request, contactFormSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid input",
+      includeValidationDetails: false,
+    });
+    if (!bodyResult.success) {
+      return bodyResult.response;
     }
 
-    // ── Validate input ───────────────────────────────────────
-    const parsed = contactFormSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
-    }
-
-    const { name, email, message, turnstileToken } = parsed.data;
+    const { name, email, message, turnstileToken } = bodyResult.data;
 
     // ── CAPTCHA verification ─────────────────────────────────
     if (process.env.TURNSTILE_SECRET_KEY) {
@@ -65,8 +73,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Sanitize message: strip HTML tags to prevent stored XSS ──
-    const sanitizedMessage = message.replace(/<[^>]*>/g, "");
+    // ── Sanitize message: escape HTML entities + strip tags to prevent stored XSS ──
+    const sanitizedMessage = sanitizeUserMessage(message);
 
     // ── Store inquiry ────────────────────────────────────────
     const admin = createAdminClient();
@@ -86,7 +94,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "unknown" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "unknown",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Failed to submit message" }, { status: 500 });
   }
 }

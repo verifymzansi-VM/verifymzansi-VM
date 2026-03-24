@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
-import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest, parseAndValidateRouteParams } from "@/lib/utils/api";
 import { promotionSchema } from "@/lib/validations/promotion";
 import { getEntitlements } from "@/lib/services/entitlements";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
@@ -21,9 +21,20 @@ import {
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
+import { userOwnsBusiness } from "@/lib/account/owned-business";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
+import {
+  derivePromotionSocialAuthorizationStatus,
+  getPromotionSocialAuthorizationWriteResult,
+} from "@/lib/promotions/social-authorization";
 
 const log = createLogger("PromotionDetail");
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const promotionIdParamsSchema = z.object({
+  id: uuidSchema,
+});
 type PromotionOwnerRow = {
   id: string;
   status: string;
@@ -34,6 +45,18 @@ type PromotionOwnerRow = {
   videos?: string[] | null;
   video_thumbnail?: string | null;
   view_count?: number | null;
+  social_distribution_authorized?: boolean;
+  social_distribution_authorized_at?: string | null;
+  social_distribution_revoked_at?: string | null;
+  social_authorizer_name?: string | null;
+  social_authorizer_role?: string | null;
+  social_authorizer_relationship?:
+    | "owner"
+    | "business_representative"
+    | "agency_or_marketing_partner"
+    | null;
+  social_authorization_version?: string | null;
+  social_monetization_acknowledged?: boolean | null;
 };
 
 /**
@@ -44,17 +67,21 @@ type PromotionOwnerRow = {
  */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await params;
-
-    if (!UUID_RE.test(id)) {
-      return NextResponse.json({ error: "Invalid promotion ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, promotionIdParamsSchema, {
+      validationErrorMessage: "Invalid promotion ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id } = parsedParams.data;
 
-    const admin = createAdminClient();
-
-    const { data: promotion, error } = await admin
+    const supabase = await createClient();
+    const { data: promotion, error } = await supabase
       .from("promotions")
-      .select("*")
+      .select(
+        "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
+      )
       .eq("id", id)
       .maybeSingle();
 
@@ -63,31 +90,60 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     const normalizedPromotion = normalizeOwnerRecord(promotion as PromotionOwnerRow);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const isOwnerViewer = Boolean(user && user.id === readOwnerId(normalizedPromotion));
 
     // Only allow public access to live promotions
     if (normalizedPromotion.status !== "live") {
-      // Check if the current user is the owner
-      const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user || user.id !== readOwnerId(normalizedPromotion)) {
+      if (!isOwnerViewer) {
         return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
       }
     }
 
     // Increment view count atomically (best-effort, non-blocking).
-    // Uses raw SQL to avoid read-modify-write race condition.
-    admin
-      .from("promotions")
-      .update({ view_count: (normalizedPromotion.view_count ?? 0) + 1 } as Record<string, unknown>)
-      .eq("id", id)
-      .then(() => {});
+    const admin = createAdminClient();
+    admin.rpc("increment_promotion_view_count", { promotion_id: id }).then(() => {});
 
-    return NextResponse.json({ promotion: normalizedPromotion });
+    const {
+      social_authorizer_name: _socialAuthorizerName,
+      social_authorizer_role: _socialAuthorizerRole,
+      social_authorizer_relationship: _socialAuthorizerRelationship,
+      social_authorization_version: _socialAuthorizationVersion,
+      social_monetization_acknowledged: _socialMonetizationAcknowledged,
+      social_distribution_authorized: _socialDistributionAuthorized,
+      social_distribution_authorized_at: _socialDistributionAuthorizedAt,
+      social_distribution_revoked_at: _socialDistributionRevokedAt,
+      ...promotionResponse
+    } = normalizedPromotion as typeof normalizedPromotion & PromotionOwnerRow;
+
+    const socialAuthorizationStatus = derivePromotionSocialAuthorizationStatus(normalizedPromotion);
+
+    return NextResponse.json({
+      promotion: {
+        ...promotionResponse,
+        socialAuthorizationStatus,
+        ...(isOwnerViewer
+          ? {
+              socialAuthorization: {
+                granted: normalizedPromotion.social_distribution_authorized === true,
+                authorizerName: normalizedPromotion.social_authorizer_name ?? "",
+                authorizerRole: normalizedPromotion.social_authorizer_role ?? "",
+                relationship: normalizedPromotion.social_authorizer_relationship ?? "owner",
+                monetizationAcknowledged:
+                  normalizedPromotion.social_monetization_acknowledged === true,
+                acceptedVersion: normalizedPromotion.social_authorization_version ?? "",
+              },
+            }
+          : {}),
+      },
+    });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "Unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Failed to fetch promotion" }, { status: 500 });
   }
 }
@@ -99,11 +155,17 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await params;
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
 
-    if (!UUID_RE.test(id)) {
-      return NextResponse.json({ error: "Invalid promotion ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, promotionIdParamsSchema, {
+      validationErrorMessage: "Invalid promotion ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id } = parsedParams.data;
 
     const supabase = await createClient();
     const {
@@ -114,23 +176,34 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "promotions");
+    const rl = checkLocalRateLimit(user.id, "promotion:update");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
+    const ownerColumn = await getOwnerColumn(supabase, "promotions");
 
     // Check ownership
-    const { data: rawExisting } = await admin
-      .from("promotions")
-      .select(withOwnerColumn("id, owner_id, status, photos, videos, video_thumbnail", ownerColumn))
-      .eq("id", id)
-      .maybeSingle();
+    const { data: rawExisting } = await applyOwnerFilter(
+      supabase
+        .from("promotions")
+        .select(
+          withOwnerColumn(
+            "id, owner_id, status, photos, videos, video_thumbnail, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged",
+            ownerColumn
+          )
+        )
+        .eq("id", id),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const existing = rawExisting as PromotionOwnerRow | null;
 
     if (!existing) {
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
-    }
-
-    if (readOwnerId(existing) !== user.id) {
-      return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, promotionSchema, {
@@ -144,7 +217,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const data = parsedBody.data;
     const categoryKey =
       data.category_key ?? inferPromotionCategoryKey(data.category, data.promotion_type);
-    const { data: activeEntitlement } = await admin
+    const socialAuthorizationWriteResult = getPromotionSocialAuthorizationWriteResult(
+      data.socialAuthorization,
+      existing
+    );
+
+    if (data.business_id) {
+      const ownsBusiness = await userOwnsBusiness(supabase, user.id, data.business_id);
+      if (!ownsBusiness) {
+        return NextResponse.json({ error: "Linked business not found" }, { status: 404 });
+      }
+    }
+
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -195,7 +280,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
 
     const updateQuery = applyOwnerFilter(
-      admin
+      supabase
         .from("promotions")
         .update({
           title: data.title,
@@ -214,6 +299,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           contact_methods: data.contact_methods,
           start_date: data.start_date || null,
           end_date: data.end_date || null,
+          social_distribution_authorized:
+            socialAuthorizationWriteResult.social_distribution_authorized,
+          social_distribution_authorized_at:
+            socialAuthorizationWriteResult.social_distribution_authorized_at ?? null,
+          social_distribution_revoked_at:
+            socialAuthorizationWriteResult.social_distribution_revoked_at ?? null,
+          social_authorizer_name: socialAuthorizationWriteResult.social_authorizer_name,
+          social_authorizer_role: socialAuthorizationWriteResult.social_authorizer_role,
+          social_authorizer_relationship:
+            socialAuthorizationWriteResult.social_authorizer_relationship,
+          social_authorization_version: socialAuthorizationWriteResult.social_authorization_version,
+          social_monetization_acknowledged:
+            socialAuthorizationWriteResult.social_monetization_acknowledged,
           // Re-trigger moderation on edit so changed content is reviewed
           status: "pending_moderation",
         })
@@ -231,6 +329,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (removedMediaUrls.length > 0) {
       try {
+        const admin = createAdminClient();
         await queuePublicMediaCleanup(admin, removedMediaUrls, "promotion_media_replaced");
       } catch (cleanupError) {
         log.error("Failed to queue replaced promotion media for cleanup", {
@@ -249,13 +348,57 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         targetId: id,
         metadata: { title: data.title },
       });
+
+      if (socialAuthorizationWriteResult.event === "granted") {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "promotion_social_authorization_granted",
+          targetType: "promotion",
+          targetId: id,
+          area: "PROMOTIONS_EVENTS",
+          metadata: {
+            relationship: socialAuthorizationWriteResult.social_authorizer_relationship,
+            version: socialAuthorizationWriteResult.social_authorization_version,
+          },
+        });
+      }
+
+      if (socialAuthorizationWriteResult.event === "updated") {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "promotion_social_authorization_updated",
+          targetType: "promotion",
+          targetId: id,
+          area: "PROMOTIONS_EVENTS",
+          metadata: {
+            relationship: socialAuthorizationWriteResult.social_authorizer_relationship,
+            version: socialAuthorizationWriteResult.social_authorization_version,
+          },
+        });
+      }
+
+      if (socialAuthorizationWriteResult.event === "revoked") {
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: "member",
+          action: "promotion_social_authorization_revoked",
+          targetType: "promotion",
+          targetId: id,
+          area: "PROMOTIONS_EVENTS",
+        });
+      }
     } catch {
       // non-fatal
     }
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "Unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Failed to update promotion" }, { status: 500 });
   }
 }
@@ -270,11 +413,18 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const originBlock = enforceSameOriginMutation(_request, log);
+    if (originBlock) return originBlock;
 
-    if (!UUID_RE.test(id)) {
-      return NextResponse.json({ error: "Invalid promotion ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, promotionIdParamsSchema, {
+      validationErrorMessage: "Invalid promotion ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+
+    const { id } = parsedParams.data;
 
     const supabase = await createClient();
     const {
@@ -285,22 +435,30 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "promotions");
+    const rl = checkLocalRateLimit(user.id, "promotion:delete");
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
 
-    const { data: rawExisting } = await admin
-      .from("promotions")
-      .select(withOwnerColumn("id, owner_id, status, photos, videos, video_thumbnail", ownerColumn))
-      .eq("id", id)
-      .maybeSingle();
+    const ownerColumn = await getOwnerColumn(supabase, "promotions");
+
+    const { data: rawExisting } = await applyOwnerFilter(
+      supabase
+        .from("promotions")
+        .select(
+          withOwnerColumn("id, owner_id, status, photos, videos, video_thumbnail", ownerColumn)
+        )
+        .eq("id", id),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const existing = rawExisting as PromotionOwnerRow | null;
 
     if (!existing) {
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });
-    }
-
-    if (readOwnerId(existing) !== user.id) {
-      return NextResponse.json({ error: "You don't own this promotion" }, { status: 403 });
     }
 
     if (!["draft", "rejected"].includes(existing.status)) {
@@ -311,7 +469,7 @@ export async function DELETE(
     }
 
     const deleteQuery = applyOwnerFilter(
-      admin.from("promotions").delete().eq("id", id),
+      supabase.from("promotions").delete().eq("id", id),
       ownerColumn,
       user.id
     );
@@ -331,6 +489,7 @@ export async function DELETE(
 
     if (deletedMediaUrls.length > 0) {
       try {
+        const admin = createAdminClient();
         await queuePublicMediaCleanup(admin, deletedMediaUrls, "promotion_deleted");
       } catch (cleanupError) {
         log.error("Failed to queue deleted promotion media for cleanup", {
@@ -354,7 +513,10 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "Unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Failed to delete promotion" }, { status: 500 });
   }
 }

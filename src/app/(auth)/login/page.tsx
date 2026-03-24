@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, RefreshCw, MailCheck, Send } from "lucide-react";
+import { Loader2, Eye, EyeOff, RefreshCw, MailCheck, Mail, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,21 +14,32 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
+import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
+
+function subscribeToHydrationState() {
+  return () => {};
+}
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [turnstileError, setTurnstileError] = useState(false);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
+  const [turnstileRetryToken, setTurnstileRetryToken] = useState(0);
+  const [captchaUnavailable, setCaptchaUnavailable] = useState(
+    getTurnstileClientState().mode === "unavailable"
+  );
   const [justRegistered, setJustRegistered] = useState(false);
-  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
   const [emailConfirmed, setEmailConfirmed] = useState(false);
-  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isInteractive = useSyncExternalStore(
+    subscribeToHydrationState,
+    () => true,
+    () => false
+  );
   const router = useRouter();
   const { toast } = useToast();
 
@@ -56,12 +67,8 @@ export default function LoginPage() {
     }
     if (params.get("confirmed") === "true") {
       setEmailConfirmed(true);
-    }
-    // Pre-fill email from query param (e.g. after registration redirect)
-    const emailParam = params.get("email");
-    if (emailParam) {
-      setValue("email", emailParam);
-      setRegisteredEmail(emailParam);
+      // Clean URL to prevent re-flash on refresh/back navigation
+      window.history.replaceState({}, "", window.location.pathname);
     }
     const error = params.get("error");
     if (error === "auth_callback_failed") {
@@ -82,24 +89,37 @@ export default function LoginPage() {
   // Turnstile widget load timeout — show error if it doesn't load in 15s.
   // Skip in dev/test environments where the widget may be slow or unavailable,
   // and in dev mode (dummy keys) since the widget auto-bypasses.
-  const isTurnstileDev =
-    !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY === "dummy_site_key";
+  const turnstileState = getTurnstileClientState();
+  const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;
 
-  const skipTurnstileTimeout = isTurnstileDev || process.env.NODE_ENV !== "production";
+  const resetTurnstileChallenge = useCallback(() => {
+    if (turnstileState.mode !== "configured") {
+      return;
+    }
+
+    setTurnstileLoaded(false);
+    setTurnstileError(false);
+    setCaptchaUnavailable(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
+    TurnstileWidget.retry();
+    setTurnstileRetryToken((value) => value + 1);
+  }, [setValue, turnstileState.mode]);
 
   useEffect(() => {
     if (skipTurnstileTimeout || turnstileLoaded) return;
     timeoutRef.current = setTimeout(() => {
+      setTurnstileLoaded(false);
       setTurnstileError(true);
+      setValue("turnstileToken", "", { shouldValidate: true });
     }, 15000);
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [skipTurnstileTimeout, turnstileLoaded, retryKey]);
+  }, [setValue, skipTurnstileTimeout, turnstileLoaded, turnstileRetryToken]);
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
+      setCaptchaUnavailable(false);
       setTurnstileError(false);
       setTurnstileLoaded(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -109,26 +129,32 @@ export default function LoginPage() {
   );
 
   const handleTurnstileLoad = useCallback(() => {
-    setTurnstileLoaded(true);
+    setCaptchaUnavailable(false);
     setTurnstileError(false);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    // Don't set turnstileLoaded or clear the timeout here — only
+    // handleTurnstileSuccess should do that once a real token arrives.
+    // This ensures the 15 s safety timeout still fires when the script
+    // loads but the challenge iframe never renders (e.g. headless CI).
   }, []);
 
   const handleTurnstileError = useCallback(() => {
+    setCaptchaUnavailable(false);
+    setTurnstileLoaded(false);
     setTurnstileError(true);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    // When Turnstile widget errors, set a bypass token so the server
-    // can decide whether to allow the request without CAPTCHA.
-    setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
+    setValue("turnstileToken", "", { shouldValidate: true });
+  }, [setValue]);
+
+  const handleTurnstileUnavailable = useCallback(() => {
+    setCaptchaUnavailable(true);
+    setTurnstileLoaded(false);
+    setTurnstileError(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
   }, [setValue]);
 
   const handleRetry = useCallback(() => {
-    setTurnstileError(false);
-    setTurnstileLoaded(false);
-    setValue("turnstileToken", "", { shouldValidate: false });
-    TurnstileWidget.retry();
-    setRetryKey((k) => k + 1);
-  }, [setValue]);
+    resetTurnstileChallenge();
+  }, [resetTurnstileChallenge]);
 
   // Clean up cooldown interval on unmount to prevent memory leaks
   useEffect(() => {
@@ -154,11 +180,20 @@ export default function LoginPage() {
   async function handleResendConfirmation() {
     if (resendCooldown > 0) return;
 
-    const email = getValues("email") || registeredEmail;
+    const email = getValues("email");
+    const turnstileToken = getValues("turnstileToken");
     if (!email) {
       toast({
         title: "Enter your email",
         description: "Please enter your email address in the field above, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!turnstileToken) {
+      toast({
+        title: "Complete the security check",
+        description: "Please complete the CAPTCHA before resending the confirmation email.",
         variant: "destructive",
       });
       return;
@@ -168,7 +203,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/resend-confirmation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, turnstileToken }),
       });
       const data = await res.json().catch(() => ({}));
 
@@ -202,7 +237,6 @@ export default function LoginPage() {
   }
 
   async function onSubmit(data: LoginInput) {
-    setEmailNotConfirmed(false);
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -213,18 +247,17 @@ export default function LoginPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        if (
-          response.status === 403 &&
-          typeof result.error === "string" &&
-          /confirm|verif/i.test(result.error)
-        ) {
-          setEmailNotConfirmed(true);
+        resetTurnstileChallenge();
+
+        if (result.code === "email_not_confirmed") {
+          setJustRegistered(true);
         }
+
         toast({
-          title: "Sign in failed",
+          title: typeof result.error === "string" ? result.error : "Sign in failed",
           description:
             typeof result.error === "string"
-              ? result.error
+              ? undefined
               : "Please check your credentials and try again.",
           variant: "destructive",
         });
@@ -233,8 +266,10 @@ export default function LoginPage() {
 
       toast({ title: "Welcome back!", variant: "success" });
       router.refresh();
-      const returnUrl = new URLSearchParams(window.location.search).get("returnUrl") || "/";
-      router.push(sanitizeReturnUrl(returnUrl));
+      const returnUrl = sanitizeReturnUrl(
+        new URLSearchParams(window.location.search).get("returnUrl")
+      );
+      router.push(returnUrl);
     } catch {
       toast({
         title: "Something went wrong",
@@ -264,16 +299,8 @@ export default function LoginPage() {
           <div className="space-y-2">
             <p className="text-sm font-medium text-foreground">Check your email</p>
             <p className="text-sm text-muted-foreground">
-              We&apos;ve sent a confirmation link
-              {registeredEmail ? (
-                <>
-                  {" "}
-                  to <strong className="text-foreground">{registeredEmail}</strong>
-                </>
-              ) : (
-                <> to your email address</>
-              )}
-              . Please click the link to verify your account before signing in.
+              We&apos;ve sent a confirmation link to your email address. Please click the link to
+              verify your account before signing in.
             </p>
             <button
               type="button"
@@ -287,35 +314,7 @@ export default function LoginPage() {
                 <Send className="h-3.5 w-3.5" />
               )}
               {resendCooldown > 0
-                ? `Resend available in ${resendCooldown}s`
-                : "Didn't receive it? Resend"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {emailNotConfirmed && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
-          <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Email not confirmed</p>
-            <p className="text-sm text-muted-foreground">
-              Your email address hasn&apos;t been confirmed yet. Check your inbox for the
-              confirmation link, or request a new one.
-            </p>
-            <button
-              type="button"
-              onClick={handleResendConfirmation}
-              disabled={resendingEmail || resendCooldown > 0}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green underline hover:text-brand-green/80 disabled:opacity-50 disabled:no-underline"
-            >
-              {resendingEmail ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Send className="h-3.5 w-3.5" />
-              )}
-              {resendCooldown > 0
-                ? `Resend available in ${resendCooldown}s`
+                ? `Resend confirmation email in ${resendCooldown}s`
                 : "Resend confirmation email"}
             </button>
           </div>
@@ -347,6 +346,7 @@ export default function LoginPage() {
             autoComplete="email"
             spellCheck={false}
             autoCapitalize="none"
+            disabled={!isInteractive}
             aria-invalid={!!errors.email}
             aria-describedby={errors.email ? "email-error" : undefined}
             {...register("email")}
@@ -373,6 +373,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               spellCheck={false}
               autoCapitalize="none"
+              disabled={!isInteractive}
               aria-invalid={!!errors.password}
               aria-describedby={errors.password ? "password-error" : undefined}
               {...register("password")}
@@ -381,6 +382,7 @@ export default function LoginPage() {
               type="button"
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => setShowPassword(!showPassword)}
+              disabled={!isInteractive}
               tabIndex={-1}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
@@ -395,17 +397,19 @@ export default function LoginPage() {
         </div>
 
         <TurnstileWidget
-          key={retryKey}
+          retryToken={turnstileRetryToken}
           onSuccess={handleTurnstileSuccess}
           onError={handleTurnstileError}
           onLoad={handleTurnstileLoad}
+          onUnavailable={handleTurnstileUnavailable}
         />
         {errors.turnstileToken && !turnstileError && (
           <p className="inline-form-error">{errors.turnstileToken.message}</p>
         )}
+        {captchaUnavailable && <p className="inline-form-error">{TURNSTILE_UNAVAILABLE_MESSAGE}</p>}
         {turnstileError && (
           <div className="flex items-center gap-2">
-            <p className="inline-form-error">Security verification failed to load.</p>
+            <p className="inline-form-error">Security check failed to load. Please try again.</p>
             <button
               type="button"
               onClick={handleRetry}
@@ -417,11 +421,46 @@ export default function LoginPage() {
           </div>
         )}
 
-        <Button type="submit" className="w-full" variant="trust-verified" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          className="w-full"
+          variant="trust-verified"
+          disabled={!isInteractive || isSubmitting || captchaUnavailable || turnstileError}
+        >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Sign In
+          Sign in
         </Button>
       </form>
+
+      {!emailConfirmed && !justRegistered && (
+        <div className="rounded-lg border border-border bg-muted/30 p-4">
+          <div className="flex items-start gap-3">
+            <Mail className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">Need a new confirmation email?</p>
+              <p className="text-sm text-muted-foreground">
+                If your account is still waiting for email confirmation, enter your email above and
+                request a fresh confirmation link.
+              </p>
+              <button
+                type="button"
+                onClick={handleResendConfirmation}
+                disabled={resendingEmail || resendCooldown > 0}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green underline hover:text-brand-green/80 disabled:opacity-50 disabled:no-underline"
+              >
+                {resendingEmail ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                {resendCooldown > 0
+                  ? `Resend confirmation email in ${resendCooldown}s`
+                  : "Resend confirmation email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <p className="text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}

@@ -11,8 +11,9 @@ import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { saPhoneSchema } from "@/lib/validations/shared";
-import { ACCOUNT_PHONE_IN_USE_ERROR } from "@/lib/utils/phone";
+import { ACCOUNT_PHONE_IN_USE_ERROR, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
+import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 
 export default function CompleteProfilePage() {
   const [phone, setPhone] = useState("");
@@ -24,6 +25,9 @@ export default function CompleteProfilePage() {
 
   useEffect(() => {
     async function load() {
+      const returnUrl = sanitizeReturnUrl(
+        new URLSearchParams(window.location.search).get("returnUrl")
+      );
       const supabase = createClient();
       const {
         data: { user },
@@ -40,8 +44,8 @@ export default function CompleteProfilePage() {
         .maybeSingle();
 
       if (profile?.phone) {
-        // Phone already set — redirect to dashboard
-        router.push("/dashboard");
+        // Phone already set — continue to the requested destination
+        router.push(returnUrl);
         return;
       }
 
@@ -71,7 +75,7 @@ export default function CompleteProfilePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          displayName: displayName || "User",
+          displayName: displayName || "Member",
           phone,
         }),
       });
@@ -96,9 +100,16 @@ export default function CompleteProfilePage() {
       }
 
       toast({ title: "Phone number saved!", variant: "success" });
-      router.push("/dashboard/profile");
+      const returnUrl = sanitizeReturnUrl(
+        new URLSearchParams(window.location.search).get("returnUrl")
+      );
+      router.push(returnUrl);
     } catch {
-      toast({ title: "Something went wrong", variant: "destructive" });
+      toast({
+        title: "Couldn’t save phone number",
+        description: "Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -106,8 +117,9 @@ export default function CompleteProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Loading your profile...</p>
       </div>
     );
   }
@@ -115,9 +127,9 @@ export default function CompleteProfilePage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Complete Your Profile"
-        description="Add your phone number to access all features."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Complete Profile" }]}
+        title="Add Your Phone Number"
+        description="Add your phone number before you continue."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Add Phone Number" }]}
       />
 
       <Card className="max-w-xl">
@@ -140,7 +152,7 @@ export default function CompleteProfilePage() {
                 type="tel"
                 inputMode="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(sanitizeSaPhoneInput(e.target.value))}
                 placeholder="071 234 5678"
                 autoComplete="tel"
                 pattern="^(\+27|0)[6-8][0-9]{8}$"

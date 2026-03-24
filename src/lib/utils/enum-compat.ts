@@ -125,10 +125,12 @@ export function mapDbCategoryToUi(dbCategory: string): string {
 
 const PAYMENT_STATUS_CANONICAL: Record<string, string> = {
   pending: "pending",
+  processing: "processing",
   complete: "complete",
   completed: "complete",
   failed: "failed",
   cancelled: "failed",
+  expired: "expired",
   refunded: "refunded",
 };
 

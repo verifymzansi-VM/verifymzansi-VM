@@ -1,54 +1,14 @@
-import { createHash } from "node:crypto";
 import { getRoleFromUser, isModeratorOrAdmin } from "../src/lib/auth/roles";
 import {
   detectMimeFromMagicBytes,
   validateBufferIntegrity,
 } from "../src/lib/utils/file-validation";
 import { sanitizeReturnUrl } from "../src/lib/utils/navigation";
-import { verifyPayFastSignature } from "../src/lib/services/payfast";
 
 type Canary = {
   name: string;
   run: () => boolean;
 };
-
-function signPayFastPayload(data: Record<string, string>, passphrase: string): string {
-  // Must match the PF_ITN_ORDER used by verifyPayFastSignature
-  const PF_ITN_ORDER = [
-    "m_payment_id",
-    "pf_payment_id",
-    "payment_status",
-    "item_name",
-    "item_description",
-    "amount_gross",
-    "amount_fee",
-    "amount_net",
-    "custom_str1",
-    "custom_str2",
-    "custom_str3",
-    "custom_str4",
-    "custom_str5",
-    "custom_int1",
-    "custom_int2",
-    "custom_int3",
-    "custom_int4",
-    "custom_int5",
-    "name_first",
-    "name_last",
-    "email_address",
-    "merchant_id",
-  ];
-  const knownKeys = PF_ITN_ORDER.filter((key) => key in data);
-  const extraKeys = Object.keys(data).filter((key) => !PF_ITN_ORDER.includes(key));
-  const orderedKeys = [...knownKeys, ...extraKeys];
-
-  const signatureString = orderedKeys
-    .map((key) => `${key}=${encodeURIComponent(data[key].trim())}`)
-    .join("&");
-  return createHash("md5")
-    .update(`${signatureString}&passphrase=${encodeURIComponent(passphrase)}`)
-    .digest("hex");
-}
 
 const canaries: Canary[] = [
   {
@@ -77,24 +37,6 @@ const canaries: Canary[] = [
       getRoleFromUser({ app_metadata: { role: "admin" } } as never) === "admin" &&
       isModeratorOrAdmin({ app_metadata: { role: "moderator" } } as never) &&
       !isModeratorOrAdmin({ app_metadata: { role: "member" } } as never),
-  },
-  {
-    name: "PayFast signature verifier fails on tampered amount",
-    run: () => {
-      const passphrase = "mutation-test-passphrase";
-      const payload: Record<string, string> = {
-        m_payment_id: "pay-canary-1",
-        payment_status: "COMPLETE",
-        amount_gross: "100.00",
-      };
-      const signature = signPayFastPayload(payload, passphrase);
-      const valid = verifyPayFastSignature({ ...payload, signature }, passphrase);
-      const tampered = verifyPayFastSignature(
-        { ...payload, amount_gross: "999.99", signature },
-        passphrase
-      );
-      return valid && !tampered;
-    },
   },
 ];
 

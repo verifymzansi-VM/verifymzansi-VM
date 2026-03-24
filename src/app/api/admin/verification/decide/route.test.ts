@@ -3,11 +3,30 @@ import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
-const { mockCreateClient, mockCreateAdminClient, mockFrom, mockLogAuditEvent } = vi.hoisted(() => ({
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockCreateNotification,
+  mockFrom,
+  mockGetUserById,
+  mockLogAuditEvent,
+  mockEnforceSameOriginMutation,
+  mockEnforceCsrfToken,
+  mockSendVerificationApprovedEmail,
+  mockSendVerificationRejectedEmail,
+  mockSendVerificationResubmissionEmail,
+} = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
+  mockCreateNotification: vi.fn(),
   mockFrom: vi.fn(),
+  mockGetUserById: vi.fn(),
   mockLogAuditEvent: vi.fn(),
+  mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
+  mockEnforceCsrfToken: vi.fn<(request: Request) => Response | null>(() => null),
+  mockSendVerificationApprovedEmail: vi.fn(),
+  mockSendVerificationRejectedEmail: vi.fn(),
+  mockSendVerificationResubmissionEmail: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -22,12 +41,39 @@ vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: mockLogAuditEvent,
 }));
 
+vi.mock("@/lib/notifications", () => ({
+  createNotification: mockCreateNotification,
+}));
+
+vi.mock("@/lib/services/email", () => ({
+  sendVerificationApprovedEmail: mockSendVerificationApprovedEmail,
+  sendVerificationRejectedEmail: mockSendVerificationRejectedEmail,
+  sendVerificationResubmissionEmail: mockSendVerificationResubmissionEmail,
+}));
+
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyStaffActorRoleFromDb: vi.fn(
+    async (user: { app_metadata?: Record<string, unknown> } | null | undefined) => {
+      const role = user?.app_metadata?.role;
+      return role === "admin" || role === "moderator" ? role : null;
+    }
+  ),
+}));
+
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
   }),
+}));
+
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: mockEnforceSameOriginMutation,
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: mockEnforceCsrfToken,
 }));
 
 import { POST } from "./route";
@@ -38,6 +84,17 @@ function createMockRequest(body: Record<string, unknown>) {
   const json = JSON.stringify(body);
   return {
     text: async () => json,
+    headers: new Headers(),
+    url: "https://verifymzansi.com/api/admin/verification/decide",
+  } as unknown as Request;
+}
+
+function createCrossSiteMockRequest(body: Record<string, unknown>) {
+  const json = JSON.stringify(body);
+  return {
+    text: async () => json,
+    headers: new Headers({ origin: "https://evil.example" }),
+    url: "https://verifymzansi.com/api/admin/verification/decide",
   } as unknown as Request;
 }
 
@@ -50,6 +107,53 @@ function mockAuth(user: { id: string; app_metadata?: Record<string, unknown> } |
       }),
     },
   });
+}
+
+/** Build a chainable mock for the latest-artifact lookup:
+ *  .select().eq().eq().in().order().limit().maybeSingle()
+ */
+function artifactLookupChain(latestArtifactId = "artifact-1") {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { id: latestArtifactId } }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    }),
+  };
+}
+
+/** Build a chainable mock for the artifact status sync update:
+ *  .update().eq()
+ */
+function artifactStatusUpdateChain(resolvedValue = { error: null }) {
+  return {
+    update: vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue(resolvedValue),
+    }),
+  };
+}
+
+/** Build a chainable mock for the purge update:
+ *  .update().eq().is()
+ */
+function artifactPurgeChain(
+  resolvedValue: { error: null | { message: string } } = { error: null }
+) {
+  return {
+    update: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        is: vi.fn().mockResolvedValue(resolvedValue),
+      }),
+    }),
+  };
 }
 
 const STEP_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
@@ -73,14 +177,50 @@ const baseStep = {
 describe("POST /api/admin/verification/decide", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateAdminClient.mockReturnValue({ from: mockFrom });
+    mockCreateAdminClient.mockReturnValue({
+      from: mockFrom,
+      auth: {
+        admin: {
+          getUserById: mockGetUserById,
+        },
+      },
+    });
+    mockCreateNotification.mockResolvedValue(undefined);
+    mockGetUserById.mockResolvedValue({
+      data: {
+        user: {
+          email: "member@example.com",
+          user_metadata: { full_name: "Test Member" },
+        },
+      },
+      error: null,
+    });
+    mockSendVerificationApprovedEmail.mockResolvedValue({ success: true });
+    mockSendVerificationRejectedEmail.mockResolvedValue({ success: true });
+    mockSendVerificationResubmissionEmail.mockResolvedValue({ success: true });
     mockLogAuditEvent.mockResolvedValue(undefined);
+    mockEnforceSameOriginMutation.mockReturnValue(null);
+    mockEnforceCsrfToken.mockReturnValue(null);
   });
 
   it("returns 401 when user is not authenticated", async () => {
     mockAuth(null);
     const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
     expect(response.status).toBe(401);
+  });
+
+  it("returns 403 for cross-site verification decisions", async () => {
+    mockEnforceSameOriginMutation.mockReturnValue(
+      new Response(JSON.stringify({ error: "Cross-origin request blocked" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    const response = await POST(
+      createCrossSiteMockRequest({ stepId: STEP_UUID, decision: "approved" })
+    );
+
+    expect(response.status).toBe(403);
   });
 
   it("returns 403 when user is not admin or moderator", async () => {
@@ -165,6 +305,7 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactLookupReturned = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -193,13 +334,12 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        return {
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockResolvedValue({ error: null }),
-            }),
-          }),
-        };
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
       }
       return {};
     });
@@ -228,6 +368,8 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactLookupReturned = false;
+    let artifactStatusUpdated = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -264,13 +406,18 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        return {
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockResolvedValue({ error: null }),
-            }),
-          }),
-        };
+        // First call: artifact lookup; second call: status sync; third call: purge scheduling
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        if (!artifactStatusUpdated) {
+          artifactStatusUpdated = true;
+          return artifactStatusUpdateChain();
+        }
+
+        return artifactPurgeChain();
       }
       return {};
     });
@@ -302,6 +449,7 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactLookupReturned = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -317,6 +465,14 @@ describe("POST /api/admin/verification/decide", () => {
         return {
           update: profileUpdate,
         };
+      }
+      if (table === "kyc_artifacts") {
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
       }
       return {};
     });
@@ -335,6 +491,11 @@ describe("POST /api/admin/verification/decide", () => {
     expect(profileUpdate).toHaveBeenCalledWith({
       account_verification_status: "rejected",
     });
+    expect(mockSendVerificationRejectedEmail).toHaveBeenCalledWith(
+      "member@example.com",
+      "Test Member",
+      "The photo is very blurry"
+    );
   });
 
   it("moderator can also make decisions", async () => {
@@ -353,6 +514,7 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactLookupReturned = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -380,6 +542,14 @@ describe("POST /api/admin/verification/decide", () => {
           update: profileUpdate,
         };
       }
+      if (table === "kyc_artifacts") {
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
+      }
       return {};
     });
 
@@ -404,6 +574,8 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactLookupReturned = false;
+    let artifactStatusUpdated = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -438,14 +610,18 @@ describe("POST /api/admin/verification/decide", () => {
         };
       }
       if (table === "kyc_artifacts") {
-        // Purge update FAILS
-        return {
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockResolvedValue({ error: { message: "DB error" } }),
-            }),
-          }),
-        };
+        // First call: artifact lookup; second call: status sync; third call: purge update (fails)
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        if (!artifactStatusUpdated) {
+          artifactStatusUpdated = true;
+          return artifactStatusUpdateChain();
+        }
+
+        return artifactPurgeChain({ error: { message: "DB error" } });
       }
       return {};
     });
@@ -476,6 +652,7 @@ describe("POST /api/admin/verification/decide", () => {
       }),
     });
 
+    let artifactLookupReturned = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
@@ -503,6 +680,14 @@ describe("POST /api/admin/verification/decide", () => {
           update: profileUpdate,
         };
       }
+      if (table === "kyc_artifacts") {
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
+      }
       return {};
     });
 
@@ -511,10 +696,149 @@ describe("POST /api/admin/verification/decide", () => {
         stepId: STEP_UUID,
         decision: "resubmit",
         reasonCode: "blurry_image",
+        reasonNote: "Image is too blurry to verify identity",
       })
     );
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.decision).toBe("needs_resubmission");
+    // needs_resubmission should set account status to pending_review, not rejected
+    expect(profileUpdate).toHaveBeenCalledWith({
+      account_verification_status: "pending_review",
+    });
+  });
+
+  it("sets account status to pending_review (not rejected) for needs_resubmission", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+    const profileUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+        }),
+      }),
+    });
+
+    let artifactLookupReturned = false;
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
+            }),
+          }),
+          update: updateMock,
+        };
+      }
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          update: profileUpdate,
+        };
+      }
+      if (table === "kyc_artifacts") {
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+
+        return artifactStatusUpdateChain();
+      }
+      return {};
+    });
+
+    const response = await POST(
+      createMockRequest({
+        stepId: STEP_UUID,
+        decision: "needs_resubmission",
+        reasonCode: "blurry_image",
+        reasonNote: "Please retake with better lighting",
+      })
+    );
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.decision).toBe("needs_resubmission");
+    expect(profileUpdate).toHaveBeenCalledWith({
+      account_verification_status: "pending_review",
+    });
+    expect(mockSendVerificationResubmissionEmail).toHaveBeenCalledWith(
+      "member@example.com",
+      "Test Member",
+      "Please retake with better lighting"
+    );
+  });
+
+  it("sends verification approved email when an account becomes fully approved", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        in: vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+        }),
+      }),
+    });
+
+    let artifactLookupReturned = false;
+    let artifactStatusUpdated = false;
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockImplementation((...args: unknown[]) => {
+            if (args[0] === "*") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockResolvedValue({
+                data: [
+                  { step_type: "phone", status: "approved" },
+                  { step_type: "id_doc", status: "approved" },
+                  { step_type: "selfie", status: "approved" },
+                  { step_type: "location", status: "approved" },
+                ],
+                error: null,
+              }),
+            };
+          }),
+          update: updateMock,
+        };
+      }
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        if (!artifactLookupReturned) {
+          artifactLookupReturned = true;
+          return artifactLookupChain();
+        }
+        if (!artifactStatusUpdated) {
+          artifactStatusUpdated = true;
+          return artifactStatusUpdateChain();
+        }
+        return artifactPurgeChain();
+      }
+      return {};
+    });
+
+    const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
+    expect(response.status).toBe(200);
+    expect(mockSendVerificationApprovedEmail).toHaveBeenCalledWith(
+      "member@example.com",
+      "Test Member"
+    );
   });
 });

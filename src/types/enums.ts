@@ -17,7 +17,7 @@ export type AccountVerificationStatus = "incomplete" | "pending_review" | "verif
 
 export type DocumentType = "sa_id_card" | "sa_id_book" | "sa_passport" | "sa_drivers_license";
 
-export type LocationMethod = "gps" | "proof_of_address";
+export type LocationMethod = "gps" | "proof_of_address" | "manual" | "manual_with_gps";
 
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 
@@ -75,19 +75,30 @@ export type BusinessCategory =
 /* ── Promotion Enums ────────────────────────────────────── */
 export type PromotionType = "product" | "service" | "event" | "deal" | "general";
 export type PromotionEventState = "upcoming" | "ongoing" | "ended";
+export type SocialAuthorizerRelationship =
+  | "owner"
+  | "business_representative"
+  | "agency_or_marketing_partner";
+export type SocialAuthorizationStatus = "authorized" | "not_authorized" | "revoked";
 
 export const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
-  product: "Product",
-  service: "Service",
-  event: "Event",
-  deal: "Deal",
-  general: "General",
+  product: "Promotions",
+  service: "Promotions",
+  event: "Events",
+  deal: "Deals",
+  general: "Ads",
 };
 
 export const PROMOTION_EVENT_STATE_LABELS: Record<PromotionEventState, string> = {
   upcoming: "Upcoming",
   ongoing: "Ongoing",
   ended: "Ended",
+};
+
+export const SOCIAL_AUTHORIZER_RELATIONSHIP_LABELS: Record<SocialAuthorizerRelationship, string> = {
+  owner: "Owner",
+  business_representative: "Business Representative",
+  agency_or_marketing_partner: "Agency or Marketing Partner",
 };
 
 export type ContactMethod = "call" | "whatsapp" | "form" | "in_app";
@@ -98,7 +109,15 @@ export type EntitlementType = "subscription" | "trial" | "pay_per_post";
 
 export type EntitlementStatus = "active" | "expired" | "cancelled";
 
-export type PaymentStatus = "pending" | "complete" | "failed" | "refunded";
+export type PaymentStatus =
+  | "pending"
+  | "processing"
+  | "complete"
+  | "failed"
+  | "expired"
+  | "refunded";
+
+export type PaymentProvider = "ozow";
 
 export type LeadStatus = "new" | "read" | "contacted" | "closed";
 
@@ -136,6 +155,7 @@ export type BuyerTokenStatus = "valid" | "expired" | "revoked";
 /* ── Media Upload Areas (R2 storage path prefixes) ──────── */
 export const UPLOAD_AREAS = [
   "listing",
+  "listing_logo",
   "listing_video",
   "business",
   "business_logo",

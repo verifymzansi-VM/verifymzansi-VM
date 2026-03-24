@@ -6,6 +6,7 @@ import { Volume2, VolumeX, Maximize2, Play, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useVideoVisibility } from "@/hooks/use-video-visibility";
+import { useVideoHover } from "@/hooks/use-video-hover";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -43,6 +44,14 @@ export interface VideoCardPlayerProps {
   hoverScale?: boolean;
   /** Object-fit classes for poster/image/video media */
   mediaFitClassName?: string;
+  /** Presentation mode for cards versus interactive previews.
+   *  - `"ambient"`: auto-plays muted when visible in viewport
+   *  - `"hover"`: lazy-loads on viewport visibility, plays on mouse hover
+   *  - `"interactive"`: click-to-play with fullscreen + mute controls
+   */
+  mode?: "interactive" | "ambient" | "hover";
+  /** Marks the fallback image as priority */
+  priority?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -74,11 +83,76 @@ export function VideoCardPlayer({
   mediaClassName,
   hoverScale = true,
   mediaFitClassName = "object-cover",
+  mode = "interactive",
+  priority = false,
 }: VideoCardPlayerProps) {
   const isVideo = isVideoUrl(src);
   const normalizedSrc = src ? normalizeMediaUrl(src) : undefined;
   const normalizedPoster = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
+  const mediaKey = `${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}|${mode}`;
 
+  if (mode === "hover") {
+    return (
+      <HoverVideoPlayer
+        key={mediaKey}
+        normalizedSrc={isVideo ? normalizedSrc : undefined}
+        normalizedPoster={normalizedPoster}
+        alt={alt}
+        sizes={sizes}
+        className={className}
+        mediaClassName={mediaClassName}
+        hoverScale={hoverScale}
+        mediaFitClassName={mediaFitClassName}
+        priority={priority}
+      />
+    );
+  }
+
+  return (
+    <VideoCardPlayerInner
+      key={mediaKey}
+      isVideo={isVideo}
+      normalizedSrc={normalizedSrc}
+      normalizedPoster={normalizedPoster}
+      alt={alt}
+      sizes={sizes}
+      className={className}
+      mediaClassName={mediaClassName}
+      hoverScale={hoverScale}
+      mediaFitClassName={mediaFitClassName}
+      mode={mode}
+      priority={priority}
+    />
+  );
+}
+
+interface VideoCardPlayerInnerProps {
+  isVideo: boolean;
+  normalizedSrc?: string;
+  normalizedPoster?: string;
+  alt: string;
+  sizes: string;
+  className?: string;
+  mediaClassName?: string;
+  hoverScale: boolean;
+  mediaFitClassName: string;
+  mode: "interactive" | "ambient";
+  priority: boolean;
+}
+
+function VideoCardPlayerInner({
+  isVideo,
+  normalizedSrc,
+  normalizedPoster,
+  alt,
+  sizes,
+  className,
+  mediaClassName,
+  hoverScale,
+  mediaFitClassName,
+  mode,
+  priority,
+}: VideoCardPlayerInnerProps) {
   const { videoRef, reducedMotion } = useVideoVisibility(isVideo ? normalizedSrc : undefined);
 
   const [isMuted, setIsMuted] = useState(true);
@@ -92,7 +166,7 @@ export function VideoCardPlayer({
     const onPlaying = () => setVideoReady(true);
     el.addEventListener("playing", onPlaying);
     return () => el.removeEventListener("playing", onPlaying);
-  });
+  }, [videoRef]);
 
   /* ── Callbacks ──────────────────────────────────────────── */
 
@@ -181,6 +255,7 @@ export function VideoCardPlayer({
           mediaClassName
         )}
         sizes={sizes}
+        priority={priority}
       />
     );
   }
@@ -190,6 +265,46 @@ export function VideoCardPlayer({
   const scaleClass = hoverScale
     ? "transition-all duration-500 group-hover:scale-110"
     : "transition-all duration-500";
+
+  if (mode === "ambient") {
+    return (
+      <div className={cn("relative h-full w-full", className)}>
+        {normalizedPoster ? (
+          <Image
+            src={normalizedPoster}
+            alt={alt || "Video cover"}
+            fill
+            className={cn(
+              "absolute inset-0 z-[1] transition-opacity duration-300",
+              mediaFitClassName,
+              videoReady && !hasError && !reducedMotion ? "opacity-0" : "opacity-100"
+            )}
+            sizes={sizes}
+            priority={priority}
+          />
+        ) : !videoReady || hasError || reducedMotion ? (
+          <div className="absolute inset-0 z-[1] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
+        ) : null}
+
+        <video
+          ref={videoRef}
+          preload="none"
+          loop
+          muted
+          playsInline
+          aria-label={alt ? `${alt} video` : "Video preview"}
+          onError={handleError}
+          className={cn(
+            "relative z-[2] h-full w-full",
+            mediaFitClassName,
+            scaleClass,
+            mediaClassName,
+            hasError || reducedMotion || !videoReady ? "opacity-0" : "opacity-100"
+          )}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={cn("relative h-full w-full group/video", className)}>
@@ -205,6 +320,7 @@ export function VideoCardPlayer({
             videoReady && !hasError ? "opacity-0" : "opacity-100"
           )}
           sizes={sizes}
+          priority={priority}
         />
       ) : !videoReady || hasError ? (
         <div className="absolute inset-0 z-[1] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800 flex items-center justify-center">
@@ -331,6 +447,119 @@ export function VideoCardPlayer({
             </div>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Hover Video Player (separated to isolate useVideoHover refs)      */
+/* ------------------------------------------------------------------ */
+
+interface HoverVideoPlayerProps {
+  normalizedSrc?: string;
+  normalizedPoster?: string;
+  alt: string;
+  sizes: string;
+  className?: string;
+  mediaClassName?: string;
+  hoverScale: boolean;
+  mediaFitClassName: string;
+  priority: boolean;
+}
+
+function HoverVideoPlayer({
+  normalizedSrc,
+  normalizedPoster,
+  alt,
+  sizes,
+  className,
+  mediaClassName,
+  hoverScale,
+  mediaFitClassName,
+  priority,
+}: HoverVideoPlayerProps) {
+  const { videoRef, containerRef, reducedMotion, isHovering } = useVideoHover(normalizedSrc);
+  const [videoReady, setVideoReady] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const onPlaying = () => setVideoReady(true);
+    el.addEventListener("playing", onPlaying);
+    return () => el.removeEventListener("playing", onPlaying);
+  }, [videoRef]);
+
+  const handleError = useCallback(() => {
+    setHasError(true);
+  }, []);
+
+  const scaleClass = hoverScale
+    ? "transition-all duration-500 group-hover:scale-110"
+    : "transition-all duration-500";
+
+  if (!normalizedSrc) {
+    if (!normalizedPoster) return null;
+    return (
+      <Image
+        src={normalizedPoster}
+        alt={alt}
+        fill
+        className={cn(
+          mediaFitClassName,
+          hoverScale && "transition-transform duration-500 group-hover:scale-110",
+          mediaClassName
+        )}
+        sizes={sizes}
+        priority={priority}
+      />
+    );
+  }
+
+  return (
+    <div ref={containerRef} className={cn("relative h-full w-full", className)}>
+      {normalizedPoster ? (
+        <Image
+          src={normalizedPoster}
+          alt={alt || "Video cover"}
+          fill
+          className={cn(
+            "absolute inset-0 z-[1] transition-opacity duration-300",
+            mediaFitClassName,
+            isHovering && videoReady && !hasError && !reducedMotion ? "opacity-0" : "opacity-100"
+          )}
+          sizes={sizes}
+          priority={priority}
+        />
+      ) : !(isHovering && videoReady) || hasError || reducedMotion ? (
+        <div className="absolute inset-0 z-[1] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
+      ) : null}
+
+      <video
+        ref={videoRef}
+        preload="none"
+        loop
+        muted
+        playsInline
+        aria-label={alt ? `${alt} video` : "Video preview"}
+        onError={handleError}
+        className={cn(
+          "relative z-[2] h-full w-full",
+          mediaFitClassName,
+          scaleClass,
+          mediaClassName,
+          hasError || reducedMotion || !videoReady || !isHovering ? "opacity-0" : "opacity-100"
+        )}
+      />
+
+      {/* Small play icon hint — visible when NOT hovering */}
+      {!isHovering && !hasError && (
+        <div className="absolute inset-0 z-[3] flex items-center justify-center pointer-events-none">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white/80 backdrop-blur-sm">
+            <Play className="h-4 w-4 fill-white" />
+          </div>
+        </div>
       )}
     </div>
   );

@@ -3,7 +3,7 @@
 
 # Auth & security — require review for any auth changes
 /src/app/api/auth/ @verifymzansi-a11y
-/src/middleware.ts @verifymzansi-a11y
+/src/proxy.ts @verifymzansi-a11y
 /src/hooks/use-auth.ts @verifymzansi-a11y
 
 # KYC verification pipeline — sensitive, POPIA-regulated
@@ -12,8 +12,8 @@
 /supabase/migrations/ @verifymzansi-a11y
 
 # Payments — financial transactions
-/src/app/api/webhooks/payfast/ @verifymzansi-a11y
-/src/lib/services/payment*.ts @verifymzansi-a11y
+/src/app/api/webhooks/ozow/ @verifymzansi-a11y
+/src/lib/payments/ @verifymzansi-a11y
 
 # Infrastructure — deployment & CI
 /.github/ @verifymzansi-a11y

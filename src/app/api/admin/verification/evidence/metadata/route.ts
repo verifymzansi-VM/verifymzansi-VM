@@ -4,15 +4,37 @@
  * artifacts, provider results, risk signals, step details.
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
-import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
+import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
+import { getLinkedEvidenceArtifactIds } from "@/lib/services/kyc-evidence-access";
 import { createLogger } from "@/lib/utils/logger";
+import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
+import { optionalUuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("EvidenceMetadata");
+const evidenceMetadataQuerySchema = z
+  .object({
+    stepId: optionalUuidSchema,
+    userId: optionalUuidSchema,
+  })
+  .refine(({ stepId, userId }) => Boolean(stepId || userId), {
+    message: "stepId or userId query parameter is required",
+  });
+
+const evidenceMetadataBodySchema = z
+  .object({
+    stepId: optionalUuidSchema,
+    userId: optionalUuidSchema,
+  })
+  .refine(({ stepId, userId }) => Boolean(stepId || userId), {
+    message: "stepId or userId is required in request body",
+  });
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,34 +49,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const role = getRoleFromUser(user);
-    if (!isModeratorOrAdmin(user) || !role) {
+    const role = await verifyStaffActorRoleFromDb(user);
+    if (!role) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const stepId = request.nextUrl.searchParams.get("stepId");
-    const userId = request.nextUrl.searchParams.get("userId");
-
-    if (!stepId && !userId) {
+    const rl = checkLocalRateLimit(user.id, "admin:evidence:metadata");
+    if (rl.limited) {
       return NextResponse.json(
-        { error: "stepId or userId query parameter is required" },
-        { status: 400 }
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
       );
     }
 
-    // Validate UUID format to prevent data enumeration
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (stepId && !UUID_RE.test(stepId)) {
-      return NextResponse.json({ error: "Invalid step ID format" }, { status: 400 });
+    const parsedQuery = parseAndValidateSearchParams(
+      request.nextUrl.searchParams,
+      evidenceMetadataQuerySchema,
+      {
+        validationErrorMessage: "Invalid evidence metadata query",
+      }
+    );
+    if (!parsedQuery.success) {
+      return parsedQuery.response;
     }
-    if (userId && !UUID_RE.test(userId)) {
-      return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 });
-    }
+    const { stepId, userId } = parsedQuery.data;
 
     const adminClient = createAdminClient();
 
     // Fetch step(s)
-    let stepsQuery = adminClient.from("verification_steps").select("*");
+    let stepsQuery = adminClient
+      .from("verification_steps")
+      .select(
+        "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at"
+      );
 
     if (stepId) {
       stepsQuery = stepsQuery.eq("id", stepId);
@@ -69,15 +96,42 @@ export async function GET(request: NextRequest) {
     }
 
     const targetUserId = steps[0].user_id;
+    const REVIEWABLE_STATES = [
+      "submitted",
+      "pending_review",
+      "pending_auto",
+      "auto_approved",
+      "auto_rejected",
+    ];
+    const hasActiveCase = steps.some((s: { status: string }) =>
+      REVIEWABLE_STATES.includes(s.status)
+    );
+    if (!hasActiveCase) {
+      log.warn("Evidence metadata access denied: no active review case", {
+        actorId: user.id,
+        targetStepId: stepId,
+        targetUserId: userId,
+      });
+      return NextResponse.json(
+        { error: "No active verification case for this user" },
+        { status: 403 }
+      );
+    }
 
-    // Fetch all artifacts for this user
-    const { data: artifacts } = await adminClient
-      .from("kyc_artifacts")
-      .select(
-        "id, user_id, step_type, artifact_kind, r2_key, content_type, file_size_bytes, sha256, provider_ref, purge_after, status, created_at"
-      )
-      .eq("user_id", targetUserId)
-      .order("created_at", { ascending: false });
+    const allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, targetUserId);
+
+    // Fetch only artifacts linked to the current verification session.
+    let artifacts: Array<Record<string, unknown>> = [];
+    if (allowedArtifactIds.length > 0) {
+      const { data } = await adminClient
+        .from("kyc_artifacts")
+        .select(
+          "id, user_id, step_type, artifact_kind, r2_key, content_type, file_size_bytes, sha256, provider_ref, purge_after, status, created_at"
+        )
+        .in("id", allowedArtifactIds)
+        .order("created_at", { ascending: false });
+      artifacts = data || [];
+    }
 
     // Fetch provider results for all artifacts
     const artifactIds = (artifacts || []).map((a) => a.id);
@@ -85,7 +139,9 @@ export async function GET(request: NextRequest) {
     if (artifactIds.length > 0) {
       const { data } = await adminClient
         .from("kyc_provider_results")
-        .select("*")
+        .select(
+          "id, artifact_id, provider_status, face_match_score, liveness_score, doc_auth_score, provider_ref, created_at"
+        )
         .in("artifact_id", artifactIds);
       providerResults = data || [];
     }
@@ -93,7 +149,7 @@ export async function GET(request: NextRequest) {
     // Fetch risk signals
     const { data: riskSignals } = await adminClient
       .from("kyc_risk_signals")
-      .select("*")
+      .select("id, user_id, artifact_id, signal_type, signal_key, score, detail, created_at")
       .eq("user_id", targetUserId)
       .order("created_at", { ascending: false });
 
@@ -124,7 +180,7 @@ export async function GET(request: NextRequest) {
     // Log this evidence view
     await logAuditEvent({
       actorId: user.id,
-      actorRole: (["admin", "moderator"].includes(role) ? role : "admin") as "admin" | "moderator",
+      actorRole: role,
       action: "kyc_evidence_viewed",
       targetType: "verification_step",
       targetId: stepId || targetUserId,
@@ -145,7 +201,44 @@ export async function GET(request: NextRequest) {
       accessLog: accessLog || [],
     });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/admin/verification/evidence/metadata
+ * Same as GET but reads stepId/userId from the JSON body instead of query params
+ * to prevent sensitive IDs from leaking into server logs and browser history.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const parsedBody = await parseAndValidateJsonRequest(request, evidenceMetadataBodySchema, {
+      invalidJsonMessage: "Invalid JSON body",
+      validationErrorMessage: "Invalid evidence metadata body",
+    });
+    if (!parsedBody.success) {
+      return parsedBody.response;
+    }
+
+    const { stepId, userId } = parsedBody.data;
+
+    // Rewrite into the query-string so the GET handler logic can be reused
+    const url = new URL(request.url);
+    if (stepId) url.searchParams.set("stepId", stepId);
+    if (userId) url.searchParams.set("userId", userId);
+    const syntheticRequest = new NextRequest(url, {
+      method: "GET",
+      headers: request.headers,
+    });
+    return GET(syntheticRequest);
+  } catch (err) {
+    log.error("POST wrapper error", {
+      error: err instanceof Error ? err.message : "unknown error",
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

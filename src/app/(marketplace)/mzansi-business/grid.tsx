@@ -8,6 +8,7 @@ import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
 import { Button } from "@/components/ui/button";
 import { useMarketplaceStore } from "@/stores";
 import { createLogger } from "@/lib/utils/logger";
+import { triggerHaptic } from "@/lib/utils/haptics";
 import type { BusinessCategory, BusinessType } from "@/types/enums";
 
 const PAGE_SIZE = 24;
@@ -235,7 +236,7 @@ export function MzansiBusinessGrid() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
         {businesses.map((business, index) => (
           <div
             key={business.id}
@@ -264,12 +265,14 @@ export function MzansiBusinessGrid() {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 pt-4">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-4">
           <Button
             variant="outline"
             size="sm"
+            className="w-full sm:w-auto"
             disabled={page <= 1}
             onClick={() => {
+              triggerHaptic("light");
               setPage(page - 1);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
@@ -277,7 +280,7 @@ export function MzansiBusinessGrid() {
             Previous
           </Button>
 
-          <div className="flex items-center gap-1">
+          <div className="hidden sm:flex items-center gap-1">
             {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
               const pageNum =
                 totalPages <= 5
@@ -295,6 +298,7 @@ export function MzansiBusinessGrid() {
                   size="sm"
                   className={`w-8 h-8 p-0 ${pageNum === page ? "pointer-events-none" : ""}`}
                   onClick={() => {
+                    triggerHaptic("light");
                     setPage(pageNum);
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
@@ -308,8 +312,10 @@ export function MzansiBusinessGrid() {
           <Button
             variant="outline"
             size="sm"
+            className="w-full sm:w-auto"
             disabled={page >= totalPages}
             onClick={() => {
+              triggerHaptic("light");
               setPage(page + 1);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}

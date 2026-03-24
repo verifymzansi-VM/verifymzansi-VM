@@ -1,6 +1,6 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { Calendar } from "lucide-react";
-import { PageHeader } from "@/components/layout/page-header";
+import { PageHeader } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,7 +77,7 @@ function isPlaceholderEvent(event: { title: string | null; description?: string 
 }
 
 export default async function EventsPage() {
-  const admin = createAdminClient();
+  const admin = await createClient();
   const promotionOwnerColumn = await getOwnerColumn(admin, "promotions");
   const now = new Date().toISOString();
 
@@ -94,10 +94,6 @@ export default async function EventsPage() {
     )
     .eq("status", "live")
     .eq("promotion_type", "event")
-    .not("title", "ilike", "%seed%")
-    .not("title", "ilike", "%[seed]%")
-    .not("title", "ilike", "%demo%")
-    .not("title", "ilike", "%sample%")
     .or(`end_date.is.null,end_date.gte.${now}`)
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
@@ -118,10 +114,6 @@ export default async function EventsPage() {
     )
     .eq("status", "live")
     .eq("promotion_type", "event")
-    .not("title", "ilike", "%seed%")
-    .not("title", "ilike", "%[seed]%")
-    .not("title", "ilike", "%demo%")
-    .not("title", "ilike", "%sample%")
     .lt("end_date", now)
     .order("end_date", { ascending: false })
     .limit(24);
@@ -155,10 +147,15 @@ export default async function EventsPage() {
   // Gather unique business IDs for linked business names
   const businessIds = [...new Set(allEvents.map((e) => e.business_id).filter(Boolean))] as string[];
   const { data: businesses } = businessIds.length
-    ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
+    ? await admin
+        .from("businesses")
+        .select("id, business_name, logo_url")
+        .eq("status", "live")
+        .in("id", businessIds)
     : { data: [] };
 
   const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
+  const businessLogoMap = new Map((businesses ?? []).map((b) => [b.id, b.logo_url]));
 
   // Group upcoming events by month
   const monthGroups = groupByMonth(upcoming);
@@ -175,7 +172,7 @@ export default async function EventsPage() {
         ]}
       >
         <Button asChild size="sm" className="gap-1">
-          <Link href="/post/create">Create a Post</Link>
+          <Link href="/post/create-promotion?type=event">Create Event</Link>
         </Button>
       </PageHeader>
 
@@ -192,11 +189,14 @@ export default async function EventsPage() {
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
                 {group.events.map((event, index) => {
                   const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
                   const businessName = event.business_id
                     ? businessMap.get(event.business_id as string)
+                    : undefined;
+                  const businessLogo = event.business_id
+                    ? businessLogoMap.get(event.business_id as string)
                     : undefined;
                   const nowDate = new Date();
                   const isBoosted = event.boost_until
@@ -232,6 +232,7 @@ export default async function EventsPage() {
                         startDate={event.start_date as string | null}
                         endDate={event.end_date as string | null}
                         businessName={businessName}
+                        logoUrl={businessLogo}
                       />
                     </div>
                   );
@@ -242,12 +243,15 @@ export default async function EventsPage() {
         </>
       ) : (
         <Card>
-          <CardContent className="p-6 text-center space-y-3">
-            <Calendar className="h-8 w-8 text-muted-foreground mx-auto" />
+          <CardContent className="space-y-3 p-6 text-center">
+            <Calendar className="mx-auto h-8 w-8 text-muted-foreground" />
             <h3 className="font-display text-lg font-semibold">No upcoming events</h3>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Check back soon for events from verified businesses!
+            <p className="mx-auto max-w-md text-sm text-muted-foreground">
+              Check back soon for events from verified businesses! Past events may appear below.
             </p>
+            <Button asChild size="sm" className="mx-auto w-fit gap-1">
+              <Link href="/post/create-promotion?type=event">Create Event</Link>
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -275,6 +279,9 @@ export default async function EventsPage() {
               ownerName: accountProfile?.name,
               startDate: event.start_date,
               endDate: event.end_date,
+              logoUrl: event.business_id
+                ? (businessLogoMap.get(event.business_id as string) ?? null)
+                : null,
             };
           })}
         />

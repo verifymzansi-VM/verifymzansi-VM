@@ -8,15 +8,26 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoiste
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { mockEnforceCsrfToken } = vi.hoisted(() => ({
+  mockEnforceCsrfToken: vi.fn(),
+}));
+
+const { mockHasPhoneNumber } = vi.hoisted(() => ({
+  mockHasPhoneNumber: vi.fn(),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
+vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: mockEnforceCsrfToken }));
+vi.mock("@/lib/account/require-phone", () => ({ hasPhoneNumber: mockHasPhoneNumber }));
 
 import { POST, GET } from "@/app/api/promotions/route";
 import { GET as GET_DETAIL, PUT, DELETE } from "@/app/api/promotions/[id]/route";
+import { SOCIAL_AUTHORIZATION_VERSION } from "@/lib/promotions/social-authorization";
 
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "user-0001";
@@ -42,13 +53,51 @@ function createRequest(url: string, opts: { method?: string; body?: unknown } = 
         : async () => {
             throw new Error("No body");
           },
-    headers: { get: vi.fn().mockReturnValue(null) },
+    headers: new Headers(),
     nextUrl: new URL(url, "http://localhost:3000"),
+    url: new URL(url, "http://localhost:3000").toString(),
+  } as unknown as NextRequest;
+}
+
+function createCrossSiteRequest(
+  url: string,
+  opts: { method?: string; body?: unknown } = {}
+): NextRequest {
+  return {
+    method: opts.method || "GET",
+    json:
+      opts.body !== undefined
+        ? async () => opts.body
+        : async () => {
+            throw new Error("No body");
+          },
+    headers: new Headers({ origin: "https://evil.example" }),
+    nextUrl: new URL(url, "https://verifymzansi.com"),
+    url: new URL(url, "https://verifymzansi.com").toString(),
   } as unknown as NextRequest;
 }
 
 function mockAuth(user: { id: string; email?: string } | null) {
+  const fallbackFrom = (table: string) => {
+    const adminClient = mockCreateAdminClient();
+    if (adminClient && typeof adminClient.from === "function") {
+      return adminClient.from(table);
+    }
+
+    return {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gt: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      neq: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockResolvedValue({ error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    };
+  };
+
   mockCreateClient.mockResolvedValue({
+    from: vi.fn(fallbackFrom),
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: { user },
@@ -87,6 +136,7 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
   });
   mockCreateAdminClient.mockReturnValue({
     from: vi.fn((table: string) => makeChain(table)),
+    rpc: vi.fn().mockResolvedValue({ error: null }),
   });
 }
 
@@ -94,6 +144,24 @@ describe("POST /api/promotions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetOwnerColumnCacheForTesting();
+    mockEnforceCsrfToken.mockReturnValue(null);
+    mockHasPhoneNumber.mockResolvedValue(true);
+  });
+
+  it("rejects requests missing a CSRF token", async () => {
+    mockEnforceCsrfToken.mockReturnValue(
+      Response.json({ error: "Invalid CSRF token" }, { status: 403 })
+    );
+    mockAuth({ id: USER_ID });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ error: "Invalid CSRF token" });
   });
 
   it("rejects unauthenticated requests", async () => {
@@ -104,6 +172,16 @@ describe("POST /api/promotions", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(401);
+  });
+
+  it("rejects cross-site promotion creation requests", async () => {
+    const req = createCrossSiteRequest("/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
   });
 
   it("returns 404 when account profile not found", async () => {
@@ -146,6 +224,39 @@ describe("POST /api/promotions", () => {
     expect(json.error).toBe("Validation failed");
   });
 
+  it("rejects incomplete granted social authorization payloads", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
+        }),
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: {
+        ...VALID_BODY,
+        socialAuthorization: {
+          granted: true,
+          authorizerName: "Nomsa Dlamini",
+        },
+      },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Validation failed",
+      details: {
+        "socialAuthorization.authorizerRole": expect.any(String),
+      },
+    });
+  });
+
   it("returns verification_required for unverified accounts", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
@@ -155,6 +266,11 @@ describe("POST /api/promotions", () => {
             id: "sp-1",
             account_verification_status: "pending_review",
           },
+        }),
+      },
+      verification_steps: {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: [] }),
         }),
       },
     });
@@ -168,6 +284,153 @@ describe("POST /api/promotions", () => {
       error: "Verification required",
       code: "verification_required",
     });
+  });
+
+  it("blocks a second free promotion post when no paid plan exists", async () => {
+    mockAuth({ id: USER_ID });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "sp-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            insert: vi.fn().mockResolvedValue({
+              error: { code: "23505", message: "duplicate key value violates unique constraint" },
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Free post already used",
+    });
+  });
+
+  it("does not claim a free post before validation passes", async () => {
+    const freePostInsert = vi.fn().mockResolvedValue({ error: null });
+
+    mockAuth({ id: USER_ID });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "sp-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            insert: freePostInsert,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: { title: "AB" },
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    expect(freePostInsert).not.toHaveBeenCalled();
+  });
+
+  it("allows promotion creation when the profile is stale but all verification steps are approved", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "sp-1",
+            account_verification_status: "incomplete",
+          },
+        }),
+      },
+      verification_steps: {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({
+            data: [
+              { step_type: "phone", status: "approved" },
+              { step_type: "id_doc", status: "approved" },
+              { step_type: "selfie", status: "approved" },
+              { step_type: "location", status: "approved" },
+            ],
+          }),
+        }),
+      },
+      promotions: {
+        single: vi.fn().mockResolvedValue({ data: { id: VALID_UUID }, error: null }),
+      },
+      entitlements: {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "basic" } }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: VALID_BODY,
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(201);
   });
 
   it("creates promotion successfully (201)", async () => {
@@ -196,6 +459,32 @@ describe("POST /api/promotions", () => {
     expect(json.promotion.id).toBe(VALID_UUID);
   });
 
+  it("returns 404 when linked business is not owned by the caller", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
+        }),
+      },
+      businesses: {
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: { ...VALID_BODY, business_id: "123e4567-e89b-42d3-a456-426614174000" },
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ error: "Linked business not found" });
+  });
+
   it("logs audit event on successful creation", async () => {
     mockAuth({ id: USER_ID });
     mockAdmin({
@@ -218,6 +507,46 @@ describe("POST /api/promotions", () => {
     await POST(req);
     expect(mockLogAuditEvent).toHaveBeenCalledTimes(1);
     expect(mockLogAuditEvent.mock.calls[0][0].targetType).toBe("promotion");
+  });
+
+  it("logs a dedicated audit event when social authorization is granted on create", async () => {
+    mockAuth({ id: USER_ID });
+    mockAdmin({
+      account_profiles: {
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "sp-1",
+            account_verification_status: "verified",
+          },
+        }),
+      },
+      promotions: {
+        single: vi.fn().mockResolvedValue({ data: { id: VALID_UUID }, error: null }),
+      },
+    });
+    const req = createRequest("http://localhost:3000/api/promotions", {
+      method: "POST",
+      body: {
+        ...VALID_BODY,
+        socialAuthorization: {
+          granted: true,
+          authorizerName: "Nomsa Dlamini",
+          authorizerRole: "Owner",
+          relationship: "owner",
+          monetizationAcknowledged: true,
+          acceptedVersion: SOCIAL_AUTHORIZATION_VERSION,
+        },
+      },
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(201);
+    expect(mockLogAuditEvent).toHaveBeenCalledTimes(2);
+    expect(mockLogAuditEvent.mock.calls[1][0]).toMatchObject({
+      action: "promotion_social_authorization_granted",
+      targetId: VALID_UUID,
+    });
   });
 
   it("rejects video uploads when the active plan disallows them", async () => {
@@ -292,7 +621,7 @@ describe("POST /api/promotions", () => {
     await expect(res.json()).resolves.toMatchObject({
       error: "Validation failed",
       details: {
-        videos: expect.arrayContaining(["Videos must be hosted on the VerifyMzansi platform"]),
+        "videos.0": "Videos must be hosted on the VerifyMzansi platform",
       },
     });
   });
@@ -392,6 +721,45 @@ describe("GET /api/promotions", () => {
     ]);
     expect(json.sellers).toEqual(json.accountProfiles);
     expect(json.total).toBe(1);
+  });
+
+  it("only returns live linked businesses in public promotion results", async () => {
+    mockAdmin({
+      promotions: {
+        range: vi.fn().mockResolvedValue({
+          data: [
+            { id: VALID_UUID, title: "Test", owner_id: USER_ID, business_id: "business-live" },
+          ],
+          count: 1,
+          error: null,
+        }),
+      },
+      account_profiles: {
+        in: vi.fn().mockResolvedValue({
+          data: [
+            {
+              user_id: USER_ID,
+              display_name: "Nomsa",
+              account_verification_status: "verified",
+            },
+          ],
+        }),
+      },
+      businesses: {
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({
+            data: [{ id: "business-live", business_name: "Visible Business" }],
+          }),
+        }),
+      },
+    });
+
+    const req = createRequest("http://localhost:3000/api/promotions");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.businesses).toEqual([{ id: "business-live", business_name: "Visible Business" }]);
   });
 
   it("handles pagination params", async () => {
@@ -522,34 +890,73 @@ describe("GET /api/promotions/[id]", () => {
   });
 
   it("returns 404 for missing promotion", async () => {
-    mockAdmin({
-      promotions: {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
       },
     });
+    mockCreateAdminClient.mockReturnValue({ rpc: vi.fn().mockResolvedValue({ error: null }) });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`);
     const res = await GET_DETAIL(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(404);
   });
 
   it("returns live promotion publicly", async () => {
-    mockAdmin({
-      promotions: {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: VALID_UUID, status: "live", view_count: 5 },
+          data: {
+            id: VALID_UUID,
+            status: "live",
+            view_count: 5,
+            social_distribution_authorized: true,
+            social_authorizer_name: "Nomsa Dlamini",
+            social_authorizer_role: "Owner",
+          },
           error: null,
         }),
-        then: vi.fn().mockImplementation((cb: (v: unknown) => void) => {
-          cb({});
-          return Promise.resolve();
-        }),
+      }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
       },
     });
+    mockCreateAdminClient.mockReturnValue({ rpc: vi.fn().mockResolvedValue({ error: null }) });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`);
     const res = await GET_DETAIL(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.promotion.id).toBe(VALID_UUID);
+    expect(json.promotion.socialAuthorizationStatus).toBe("authorized");
+    expect(json.promotion.socialAuthorization).toBeUndefined();
+  });
+
+  it("returns 404 for non-live promotions when the viewer is not the owner", async () => {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: VALID_UUID, status: "draft", owner_id: "owner-2" },
+          error: null,
+        }),
+      }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({ rpc: vi.fn().mockResolvedValue({ error: null }) });
+
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`);
+    const res = await GET_DETAIL(req, { params: Promise.resolve({ id: VALID_UUID }) });
+
+    expect(res.status).toBe(404);
   });
 });
 
@@ -570,10 +977,14 @@ describe("PUT /api/promotions/[id]", () => {
   });
 
   it("returns 404 for missing promotion", async () => {
-    mockAuth({ id: USER_ID });
-    mockAdmin({
-      promotions: {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
       },
     });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
@@ -584,13 +995,15 @@ describe("PUT /api/promotions/[id]", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 403 when user does not own the promotion", async () => {
-    mockAuth({ id: USER_ID });
-    mockAdmin({
-      promotions: {
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: VALID_UUID, owner_id: "different-user", status: "live" },
-        }),
+  it("returns 404 when user does not own the promotion", async () => {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
       },
     });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
@@ -598,60 +1011,57 @@ describe("PUT /api/promotions/[id]", () => {
       body: VALID_BODY,
     });
     const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
   it("updates promotion successfully", async () => {
-    mockAuth({ id: USER_ID });
-    const updateSpy = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      }),
-    });
-    // PUT calls from("promotions") three times: probe, select, update
-    let callCount = 0;
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "entitlements") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            gt: vi.fn().mockReturnThis(),
-            order: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-          };
-        }
-        if (table === "promotions") {
-          callCount++;
-          if (callCount === 1) {
-            return {
-              select: vi.fn(() => ({
-                limit: vi.fn().mockResolvedValue({ error: null }),
-              })),
-            };
-          }
-          if (callCount === 2) {
-            // First call: ownership check
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: VALID_UUID, owner_id: USER_ID, status: "live" },
-              }),
-            };
-          }
-          // Third call: update
-          return {
-            update: updateSpy,
-          };
-        }
+    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn((table: string) => {
+      if (table === "businesses") {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "123e4567-e89b-42d3-a456-426614174000", owner_id: USER_ID },
+          }),
+        };
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         };
-      }),
+      }
+      if (table === "promotions") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: VALID_UUID, owner_id: USER_ID, status: "live" },
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: updateEq,
+          }),
+        };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      };
+    });
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) }),
     });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
       method: "PUT",
@@ -661,11 +1071,129 @@ describe("PUT /api/promotions/[id]", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.success).toBe(true);
-    expect(updateSpy).toHaveBeenCalledWith(
+    expect(updateEq).toHaveBeenCalledWith("id", VALID_UUID);
+  });
+
+  it("logs a revocation audit event when social authorization is removed", async () => {
+    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn((table: string) => {
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }
+      if (table === "promotions") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: VALID_UUID,
+              owner_id: USER_ID,
+              status: "live",
+              social_distribution_authorized: true,
+              social_distribution_authorized_at: "2026-03-23T09:00:00.000Z",
+              social_authorizer_name: "Nomsa Dlamini",
+              social_authorizer_role: "Owner",
+              social_authorizer_relationship: "owner",
+              social_authorization_version: SOCIAL_AUTHORIZATION_VERSION,
+              social_monetization_acknowledged: true,
+            },
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: updateEq,
+          }),
+        };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      };
+    });
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
+      },
+    });
+
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "PUT",
+      body: {
+        ...VALID_BODY,
+        socialAuthorization: { granted: false },
+      },
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
+
+    expect(res.status).toBe(200);
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        business_id: "123e4567-e89b-42d3-a456-426614174000",
+        action: "promotion_social_authorization_revoked",
+        targetId: VALID_UUID,
       })
     );
+  });
+
+  it("returns 404 when updating to a linked business the caller does not own", async () => {
+    const from = vi.fn((table: string) => {
+      if (table === "businesses") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }
+      if (table === "promotions") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: VALID_UUID, owner_id: USER_ID, status: "live" },
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      };
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
+      },
+    });
+
+    const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
+      method: "PUT",
+      body: { ...VALID_BODY, business_id: "123e4567-e89b-42d3-a456-426614174000" },
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: VALID_UUID }) });
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ error: "Linked business not found" });
   });
 });
 
@@ -685,10 +1213,14 @@ describe("DELETE /api/promotions/[id]", () => {
   });
 
   it("returns 404 for missing promotion", async () => {
-    mockAuth({ id: USER_ID });
-    mockAdmin({
-      promotions: {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
       },
     });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
@@ -699,12 +1231,16 @@ describe("DELETE /api/promotions/[id]", () => {
   });
 
   it("returns 400 when promotion is not draft or rejected", async () => {
-    mockAuth({ id: USER_ID });
-    mockAdmin({
-      promotions: {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({
           data: { id: VALID_UUID, owner_id: USER_ID, status: "live" },
         }),
+      }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
       },
     });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
@@ -717,35 +1253,17 @@ describe("DELETE /api/promotions/[id]", () => {
   });
 
   it("deletes draft promotion successfully", async () => {
-    mockAuth({ id: USER_ID });
-    // DELETE calls from("promotions") three times: probe, select, delete
-    let callCount = 0;
-    mockCreateAdminClient.mockReturnValue({
+    const deleteEq = vi.fn().mockResolvedValue({ error: null });
+    mockCreateClient.mockResolvedValue({
       from: vi.fn((table: string) => {
         if (table === "promotions") {
-          callCount++;
-          if (callCount === 1) {
-            return {
-              select: vi.fn(() => ({
-                limit: vi.fn().mockResolvedValue({ error: null }),
-              })),
-            };
-          }
-          if (callCount === 2) {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: VALID_UUID, owner_id: USER_ID, status: "draft" },
-              }),
-            };
-          }
           return {
-            delete: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({ error: null }),
-              }),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: VALID_UUID, owner_id: USER_ID, status: "draft" },
             }),
+            delete: vi.fn().mockReturnValue({ eq: deleteEq }),
           };
         }
         return {
@@ -754,6 +1272,12 @@ describe("DELETE /api/promotions/[id]", () => {
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         };
       }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) }),
     });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
       method: "DELETE",
@@ -762,37 +1286,21 @@ describe("DELETE /api/promotions/[id]", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.success).toBe(true);
+    expect(deleteEq).toHaveBeenCalledWith("id", VALID_UUID);
   });
 
   it("deletes rejected promotion successfully", async () => {
-    mockAuth({ id: USER_ID });
-    let callCount = 0;
-    mockCreateAdminClient.mockReturnValue({
+    const deleteEq = vi.fn().mockResolvedValue({ error: null });
+    mockCreateClient.mockResolvedValue({
       from: vi.fn((table: string) => {
         if (table === "promotions") {
-          callCount++;
-          if (callCount === 1) {
-            return {
-              select: vi.fn(() => ({
-                limit: vi.fn().mockResolvedValue({ error: null }),
-              })),
-            };
-          }
-          if (callCount === 2) {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: VALID_UUID, owner_id: USER_ID, status: "rejected" },
-              }),
-            };
-          }
           return {
-            delete: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({ error: null }),
-              }),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: VALID_UUID, owner_id: USER_ID, status: "rejected" },
             }),
+            delete: vi.fn().mockReturnValue({ eq: deleteEq }),
           };
         }
         return {
@@ -801,11 +1309,18 @@ describe("DELETE /api/promotions/[id]", () => {
           maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         };
       }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) }),
     });
     const req = createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, {
       method: "DELETE",
     });
     const res = await DELETE(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(200);
+    expect(deleteEq).toHaveBeenCalledWith("id", VALID_UUID);
   });
 });

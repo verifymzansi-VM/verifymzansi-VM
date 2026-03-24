@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -22,7 +23,11 @@ export default function BillingError({
         <h1 className="text-xl font-display font-bold">Billing Error</h1>
         <p className="text-muted-foreground max-w-md">
           Something went wrong with billing. Your payment has not been processed. Please try again
-          or contact support.
+          or contact support at{" "}
+          <Link href="mailto:support@verifymzansi.com" className="text-brand-green underline">
+            support@verifymzansi.com
+          </Link>
+          .
         </p>
         {error.digest && (
           <p className="text-xs text-muted-foreground">Error reference: {error.digest}</p>

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
-import { PageHeader } from "@/components/layout/page-header";
+import { PageHeader } from "@/components/layout";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
 import { ListingFilterDrawer } from "@/components/listings/listing-filter-drawer";
@@ -14,6 +15,11 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
+import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
+import {
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+  shouldHidePlaywrightFixtures,
+} from "@/lib/supabase/playwright-visual-fixtures";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 
@@ -30,25 +36,24 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function MzansiMarketPage() {
+  const cookieStore = await cookies();
+  const hideFixtures = shouldHidePlaywrightFixtures(
+    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+  );
   const supabase = await createClient();
 
   const { data: listings } = await supabase
     .from("listings")
-    .select(
-      "id, title, description, price_cents, photos, videos, video_thumbnail, location_province, location_city, boost_until"
-    )
+    .select("*")
     .eq("status", "live")
     .eq("area", "MZANSI_MARKET")
-    .not("title", "ilike", "%seed%")
-    .not("title", "ilike", "%[seed]%")
-    .not("title", "ilike", "%demo%")
-    .not("title", "ilike", "%sample%")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(10);
 
   const slides: ShowroomSlide[] = (listings ?? [])
+    .filter((listing) => !shouldHidePlaywrightFixtureRowWhenEnabled(listing, hideFixtures))
     .filter((listing) => !isPlaceholderMarketplaceContent(listing.title, listing.description))
     .slice(0, 5)
     .map((l) => ({
@@ -94,20 +99,26 @@ export default async function MzansiMarketPage() {
           title="Browse Listings"
           description="Verified classifieds from South African sellers, with filters for price, condition, and location."
           breadcrumbs={[{ label: "Mzansi Market" }]}
+          className="hidden lg:block"
         >
           <Button asChild size="sm" className="gap-1">
-            <Link href="/post/create">
-              Post an ad
+            <Link href="/post/create-listing">
+              Create a listing
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
         </PageHeader>
 
+        {/* Mobile filter drawer (FAB visible < lg only) */}
+        <ListingFilterDrawer />
+
         {/* Two-column layout */}
         <div className="flex gap-6">
           {/* Desktop sidebar */}
-          <aside className="hidden lg:block w-64 shrink-0">
-            <ListingFilterSidebar />
+          <aside className="hidden w-72 shrink-0 lg:block">
+            <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 scrollbar-thin">
+              <ListingFilterSidebar />
+            </div>
           </aside>
 
           {/* Main content area */}
@@ -120,9 +131,6 @@ export default async function MzansiMarketPage() {
           </div>
         </div>
       </div>
-
-      {/* Mobile filter FAB + drawer */}
-      <ListingFilterDrawer />
     </div>
   );
 }

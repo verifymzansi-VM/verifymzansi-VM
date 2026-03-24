@@ -16,12 +16,16 @@ import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provi
 import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { cn } from "@/lib/utils";
+import { ListingCard } from "@/components/listings/listing-card";
 import {
   PostFormFooter,
   PostFormScaffold,
   type PostFormStep,
 } from "@/components/post/post-form-scaffold";
-import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
+import {
+  normalizeCreatePostError,
+  normalizeCreatePostRuntimeError,
+} from "@/app/post/_lib/create-post-errors";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
@@ -62,6 +66,7 @@ const FIELD_IDS: Record<string, string> = {
   "attributes.compatible_make": "listing-attribute-compatible_make",
   "attributes.compatible_model": "listing-attribute-compatible_model",
   "attributes.oem_or_aftermarket": "listing-attribute-oem_or_aftermarket",
+  "attributes.device_type": "listing-attribute-device_type",
   "attributes.brand": "listing-attribute-brand",
   "attributes.model_name": "listing-attribute-model_name",
   "attributes.storage_gb": "listing-attribute-storage_gb",
@@ -97,11 +102,12 @@ export default function CreateListingPage() {
   const [city, setCity] = useState("");
   const [town, setTown] = useState("");
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
+  const [logoFile, setLogoFile] = useState<File[]>([]);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [videoFile, setVideoFile] = useState<File[]>([]);
   const [videoCoverFile, setVideoCoverFile] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -111,6 +117,14 @@ export default function CreateListingPage() {
   const cities = province ? getCitiesForProvince(province) : [];
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
   const videoAllowed = usePlanVideoAllowed("MZANSI_MARKET");
+  const logoPreviewUrl = useMemo(
+    () => (logoFile.length > 0 ? URL.createObjectURL(logoFile[0]) : null),
+    [logoFile]
+  );
+  const photoPreviewUrls = useMemo(
+    () => photoFiles.map((file) => URL.createObjectURL(file)),
+    [photoFiles]
+  );
   const videoPreviewUrl = useMemo(
     () => (videoFile.length > 0 ? URL.createObjectURL(videoFile[0]) : null),
     [videoFile]
@@ -120,15 +134,19 @@ export default function CreateListingPage() {
     [videoCoverFile]
   );
 
-  useEffect(() => {
-    if (photoFiles.length > 0) {
-      const url = URL.createObjectURL(photoFiles[0]);
-      setPreviewUrl(url);
-      return () => URL.revokeObjectURL(url);
-    }
+  useEffect(
+    () => () => {
+      if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+    },
+    [logoPreviewUrl]
+  );
 
-    setPreviewUrl(null);
-  }, [photoFiles]);
+  useEffect(
+    () => () => {
+      photoPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [photoPreviewUrls]
+  );
 
   useEffect(
     () => () => {
@@ -241,7 +259,9 @@ export default function CreateListingPage() {
     const errors = validateStep(step);
     if (Object.keys(errors).length > 0) {
       setFieldErrors((current) => ({ ...current, ...errors }));
-      setFormError("Please fix the highlighted fields before continuing.");
+      setFormError(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      );
       focusFirstError(errors);
       return;
     }
@@ -264,53 +284,109 @@ export default function CreateListingPage() {
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
       setFieldErrors(stepErrors[firstInvalidStep]);
-      setFormError("Please fix the highlighted fields before submitting.");
+      setFormError(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      );
       requestAnimationFrame(() => focusFirstError(stepErrors[firstInvalidStep]));
       return;
     }
 
     clearErrors();
     setIsSubmitting(true);
+    setSubmitProgress("Uploading media...");
 
     try {
       const normalizedAttributes = category
         ? coerceListingAttributes(category, categoryAttributes)
         : {};
-      let photoUrls: string[] = [];
-      if (photoFiles.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "listing");
-        photoFiles.forEach((file) => uploadData.append("files", file));
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload photos");
-        const uploadJson = await uploadRes.json();
-        photoUrls = uploadJson.urls || [];
-      }
 
-      let videoUrls: string[] = [];
-      if (videoFile.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "listing_video");
-        uploadData.append("files", videoFile[0]);
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload video");
-        const uploadJson = await uploadRes.json();
-        if (uploadJson.urls?.length) {
-          videoUrls = [uploadJson.urls[0]];
-        }
-      }
+      // Upload photos, video, and video cover in parallel
+      const [logoUrls, photoUrls, videoUrl, videoThumbnailUrl] = await Promise.all([
+        logoFile.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "listing_logo");
+              uploadData.append("files", logoFile[0]);
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) throw new Error("Failed to upload listing logo");
+              const uploadJson = await uploadRes.json();
+              return (uploadJson.urls || []) as string[];
+            })()
+          : Promise.resolve([] as string[]),
+        // Photos via server proxy (small files)
+        photoFiles.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "listing");
+              photoFiles.forEach((file) => uploadData.append("files", file));
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) throw new Error("Failed to upload photos");
+              const uploadJson = await uploadRes.json();
+              const urls = (uploadJson.urls || []) as string[];
+              const fileErrors = (uploadJson.errors || []) as string[];
+              if (urls.length === 0 && fileErrors.length > 0) {
+                throw new Error("Failed to upload photos");
+              }
+              if (fileErrors.length > 0) {
+                toast({
+                  title: `${urls.length} of ${photoFiles.length} photos uploaded. Some files were rejected.`,
+                  variant: "destructive",
+                });
+              }
+              return urls;
+            })()
+          : Promise.resolve([] as string[]),
 
-      let videoThumbnailUrl: string | null = null;
-      if (videoCoverFile.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "listing");
-        uploadData.append("files", videoCoverFile[0]);
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (uploadRes.ok) {
-          const uploadJson = await uploadRes.json();
-          videoThumbnailUrl = uploadJson.urls?.[0] || null;
-        }
-      }
+        // Video via presigned URL (direct to R2, avoids proxying large files)
+        videoFile.length > 0
+          ? (async () => {
+              const file = videoFile[0];
+              const urlRes = await fetch("/api/media/upload-url", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  filename: file.name,
+                  contentType: file.type,
+                  size: file.size,
+                  area: "listing_video",
+                }),
+              });
+              if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+              const { uploadUrl, publicUrl } = await urlRes.json();
+              const putRes = await fetch(uploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": file.type },
+                body: file,
+              });
+              if (!putRes.ok) throw new Error("Failed to upload video");
+              return publicUrl as string;
+            })()
+          : Promise.resolve(null as string | null),
+
+        // Video cover image via server proxy
+        videoCoverFile.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "listing");
+              uploadData.append("files", videoCoverFile[0]);
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) return null;
+              const uploadJson = await uploadRes.json();
+              return (uploadJson.urls?.[0] || null) as string | null;
+            })()
+          : Promise.resolve(null as string | null),
+      ]);
+
+      setSubmitProgress("Saving listing...");
 
       const res = await fetch("/api/listings", {
         method: "POST",
@@ -326,8 +402,9 @@ export default function CreateListingPage() {
           province,
           city,
           town,
+          logo_url: logoUrls[0] || null,
           images: photoUrls,
-          videos: videoUrls,
+          videos: videoUrl ? [videoUrl] : [],
           videoThumbnail: videoThumbnailUrl,
           contactMethods,
         }),
@@ -345,9 +422,10 @@ export default function CreateListingPage() {
       toast({ title: "Listing submitted for review.", variant: "success" });
       router.push("/dashboard/listings");
     } catch (error: unknown) {
-      setFormError(error instanceof Error ? error.message : "Something went wrong.");
+      setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -356,12 +434,33 @@ export default function CreateListingPage() {
     const normalizedAttributes = category
       ? coerceListingAttributes(category, categoryAttributes)
       : {};
+    const cardMediaUrl = videoPreviewUrl || photoPreviewUrls[0];
+    const cardPosterUrl = videoCoverPreviewUrl || photoPreviewUrls[0] || undefined;
 
     return (
       <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
           <Eye className="h-4 w-4" />
           Listing preview
+        </div>
+
+        <div className="mb-4 max-w-[264px]">
+          <ListingCard
+            id="preview-listing"
+            title={title || "Your listing title"}
+            price={
+              !Number.isNaN(numericPrice) && numericPrice > 0 ? Math.round(numericPrice * 100) : 0
+            }
+            imageUrl={cardMediaUrl || undefined}
+            posterUrl={cardPosterUrl}
+            logoUrl={logoPreviewUrl}
+            province={province || "Province"}
+            city={city || "City"}
+            category={category || "property"}
+            attributes={normalizedAttributes}
+            condition={condition || undefined}
+            createdAt={new Date().toISOString()}
+          />
         </div>
 
         <ListingDetailContent
@@ -376,9 +475,10 @@ export default function CreateListingPage() {
             category: category || null,
             condition: condition || null,
             attributes: normalizedAttributes,
-            photos: previewUrl ? [previewUrl] : [],
+            photos: photoPreviewUrls,
             videos: videoPreviewUrl ? [videoPreviewUrl] : [],
             video_thumbnail: videoCoverPreviewUrl,
+            logo_url: logoPreviewUrl,
             location_province: province || null,
             location_city: city || null,
             location_suburb: town || null,
@@ -393,6 +493,7 @@ export default function CreateListingPage() {
           }}
           showContactActions={false}
           showSimilarListings={false}
+          photoCount={photoPreviewUrls.length}
         />
       </div>
     );
@@ -428,7 +529,7 @@ export default function CreateListingPage() {
                     onNext={goNext}
                     submitDisabled={isSubmitting}
                     isSubmitting={isSubmitting}
-                    submittingLabel="Submitting..."
+                    submittingLabel={submitProgress || "Submitting..."}
                   />
                 }
               >
@@ -569,19 +670,22 @@ export default function CreateListingPage() {
                           />
                         </div>
 
-                        <button
-                          type="button"
-                          aria-pressed={negotiable}
-                          onClick={() => setNegotiable((current) => !current)}
+                        <label
                           className={cn(
-                            "rounded-md border px-3 py-2 text-sm font-medium transition-all",
+                            "flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm font-medium transition-all",
                             negotiable
                               ? "border-brand-green bg-brand-green/10 text-brand-green"
                               : "border-input text-muted-foreground hover:border-brand-green/40"
                           )}
                         >
+                          <input
+                            type="checkbox"
+                            checked={negotiable}
+                            onChange={(event) => setNegotiable(event.target.checked)}
+                            className="sr-only"
+                          />
                           Negotiable
-                        </button>
+                        </label>
                       </div>
                       {fieldErrors.price_zar && (
                         <p className="inline-form-error">{fieldErrors.price_zar}</p>
@@ -671,32 +775,31 @@ export default function CreateListingPage() {
                       <p className="text-xs text-muted-foreground">
                         Choose how buyers should reach you.
                       </p>
-                      <div
-                        role="group"
-                        aria-label="Contact methods"
-                        className="grid grid-cols-3 gap-2"
-                      >
+                      <div className="grid grid-cols-3 gap-2">
                         {CONTACT_OPTIONS.map((option) => {
                           const Icon = option.icon;
                           const isSelected = contactMethods.includes(option.id);
 
                           return (
-                            <button
+                            <label
                               key={option.id}
-                              type="button"
-                              aria-pressed={isSelected}
-                              onClick={() => toggleContact(option.id)}
                               className={cn(
-                                "flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all",
+                                "flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all",
                                 isSelected
                                   ? "border-brand-green bg-brand-green/10 text-brand-green"
                                   : "border-input text-muted-foreground hover:border-brand-green/40 hover:bg-muted/50",
                                 fieldErrors.contactMethods && !isSelected && "border-destructive/40"
                               )}
                             >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleContact(option.id)}
+                                className="sr-only"
+                              />
                               <Icon className="h-5 w-5" />
                               {option.label}
-                            </button>
+                            </label>
                           );
                         })}
                       </div>
@@ -709,6 +812,19 @@ export default function CreateListingPage() {
 
                 {step === 2 && (
                   <div className="space-y-5">
+                    <div className="space-y-2">
+                      <MediaUpload
+                        label="Listing logo (optional)"
+                        maxFiles={1}
+                        files={logoFile}
+                        onChange={setLogoFile}
+                        accept="image/*"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        If present, this logo will be shown on listing cards across the marketplace.
+                      </p>
+                    </div>
+
                     <div id="listing-images" tabIndex={-1} className="space-y-2 rounded-lg">
                       <MediaUpload
                         label={`Photos (max ${maxPhotos})`}

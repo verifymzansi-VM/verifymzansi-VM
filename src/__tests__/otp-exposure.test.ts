@@ -3,11 +3,14 @@ import { NextRequest } from "next/server";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────────────
 
-const { mockGetUser, mockAdminFrom, mockSendOtpSms } = vi.hoisted(() => ({
-  mockGetUser: vi.fn(),
-  mockAdminFrom: vi.fn(),
-  mockSendOtpSms: vi.fn(),
-}));
+const { mockGetUser, mockAdminFrom, mockSendOtpSms, mockCheckRateLimit, mockGetClientIp } =
+  vi.hoisted(() => ({
+    mockGetUser: vi.fn(),
+    mockAdminFrom: vi.fn(),
+    mockSendOtpSms: vi.fn(),
+    mockCheckRateLimit: vi.fn(),
+    mockGetClientIp: vi.fn(),
+  }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
@@ -31,8 +34,14 @@ vi.mock("@/lib/utils/logger", () => ({
     debug: vi.fn(),
   }),
 }));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: mockCheckRateLimit,
+  getClientIp: mockGetClientIp,
+}));
 
 import { POST } from "@/app/api/otp/send/route";
+
+const CSRF_TOKEN = "a".repeat(64);
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -40,7 +49,12 @@ function createOtpRequest(body: Record<string, unknown>, hostname = "localhost")
   const url = `http://${hostname}:3000/api/otp/send`;
   return new NextRequest(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      origin: `http://${hostname}:3000`,
+      cookie: `vm_csrf=${CSRF_TOKEN}`,
+      "x-csrf-token": CSRF_TOKEN,
+    },
     body: JSON.stringify(body),
   });
 }
@@ -54,19 +68,37 @@ function mockOtpDbSuccess() {
   mockAdminFrom.mockImplementation((table: string) => {
     if (table === "otp_challenges") {
       const challengeQuery = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        gte: vi.fn().mockResolvedValue({ count: 0 }),
-        insert: vi.fn().mockResolvedValue({ error: null }),
+        select: vi.fn(),
+        eq: vi.fn(),
+        gte: vi.fn(),
+        update: vi.fn(),
+        insert: vi.fn(),
       };
-      return {
-        ...challengeQuery,
+      challengeQuery.select.mockReturnValue(challengeQuery);
+      challengeQuery.eq.mockReturnValue(challengeQuery);
+      challengeQuery.gte.mockResolvedValue({ count: 0 });
+
+      const invalidateQuery = {
+        eq: vi.fn(),
+        is: vi.fn().mockResolvedValue({ error: null }),
       };
+      invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      challengeQuery.update.mockReturnValue(invalidateQuery);
+      challengeQuery.insert.mockResolvedValue({ error: null });
+
+      return challengeQuery;
     }
     if (table === "otp_logs") {
-      return {
+      const otpLogsQuery = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        gte: vi.fn(),
         insert: vi.fn().mockResolvedValue({ error: null }),
       };
+      otpLogsQuery.select.mockReturnValue(otpLogsQuery);
+      otpLogsQuery.eq.mockReturnValue(otpLogsQuery);
+      otpLogsQuery.gte.mockResolvedValue({ count: 0 });
+      return otpLogsQuery;
     }
     return {};
   });
@@ -80,6 +112,8 @@ describe("OTP send — no OTP exposure", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientIp.mockReturnValue("127.0.0.1");
     mockAuthenticatedUser();
     mockOtpDbSuccess();
     mockSendOtpSms.mockResolvedValue({ success: true });

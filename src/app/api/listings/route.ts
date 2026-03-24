@@ -4,10 +4,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { listingSchema } from "@/lib/validations/listing";
 import { logAuditEvent } from "@/lib/services/audit";
 import { getEntitlements, canCreateListing } from "@/lib/services/entitlements";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { checkLocalRateLimit, checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { isPostingLimitBypassEnabled } from "../../../lib/utils/posting-limit-bypass";
 import {
   ACCOUNT_PROFILE_NOT_FOUND_ERROR,
@@ -18,13 +20,50 @@ import {
   withOwnerColumn,
   withOwnerField,
 } from "@/lib/account/compat";
+import { ensureAccountProfile } from "@/lib/account/ensure-profile";
+import { hasPhoneNumber } from "@/lib/account/require-phone";
+import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
-import { parseMarketplaceFiltersFromSearchParams } from "@/lib/utils/marketplace-query";
+import {
+  normalizeMarketplaceCategoryParam,
+  normalizeMarketplaceConditionParam,
+  parseMarketplaceFiltersFromSearchParams,
+} from "@/lib/utils/marketplace-query";
 import { createVerificationRequiredPayload, isVerifiedMember } from "@/app/post/_lib/post-access";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
+import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
+import {
+  createBoundedIntegerSchema,
+  createNonNegativeNumberSchema,
+  optionalTrimmedStringSchema,
+} from "@/lib/validations/shared";
+import { z } from "zod";
+import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
+import {
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+  shouldHidePlaywrightFixtures,
+} from "@/lib/supabase/playwright-visual-fixtures";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
+const LISTING_SELECT_FALLBACK_FIELDS = [
+  "featured_until",
+  "condition",
+  "video_thumbnail",
+  "logo_url",
+] as const;
+const listingsQuerySchema = z.object({
+  category: optionalTrimmedStringSchema,
+  q: optionalTrimmedStringSchema,
+  province: optionalTrimmedStringSchema,
+  city: optionalTrimmedStringSchema,
+  condition: optionalTrimmedStringSchema,
+  sort: optionalTrimmedStringSchema,
+  minPrice: createNonNegativeNumberSchema("minPrice"),
+  maxPrice: createNonNegativeNumberSchema("maxPrice"),
+  page: createBoundedIntegerSchema({ defaultValue: 1, min: 1, max: 10_000, fieldName: "page" }),
+  limit: createBoundedIntegerSchema({ defaultValue: 24, min: 1, max: 50, fieldName: "limit" }),
+});
 
 type MarketQueryOps = {
   eq: (column: string, value: unknown) => MarketQueryOps;
@@ -62,7 +101,9 @@ function applyBaseMarketFilters<T>(
     builder = builder.eq("condition", filters.condition) as T & MarketQueryOps;
   }
   if (filters.query) {
-    const safeSearch = filters.query.replace(/[,.()\\/]/g, "");
+    // Strip all characters that are special in PostgREST filter syntax or
+    // Postgres LIKE patterns to prevent filter injection and query errors.
+    const safeSearch = filters.query.replace(/[^\p{L}\p{N}\s]/gu, "").trim();
     if (safeSearch) {
       builder = builder.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`) as T &
         MarketQueryOps;
@@ -130,49 +171,138 @@ function isPlaceholderListing(listing: { title: string | null; description?: str
   return isPlaceholderMarketplaceContent(listing.title, listing.description);
 }
 
+function normalizeListingSelectShape(
+  listings: Record<string, unknown>[]
+): Record<string, unknown>[] {
+  return listings.map((listing) => ({
+    ...listing,
+    featured_until: listing.featured_until ?? null,
+    condition: listing.condition ?? null,
+    video_thumbnail: listing.video_thumbnail ?? null,
+    logo_url: listing.logo_url ?? null,
+  }));
+}
+
 /**
  * GET /api/listings
  *
  * Public listing discovery endpoint for Mzansi Market with filtering and pagination.
+ *
+ * NOTE: Uses admin client (bypasses RLS) intentionally for public marketplace reads.
+ * Security relies on explicit application-level filters (.eq("status", "live"),
+ * .neq("status", "rejected"), etc.) rather than RLS policies. This allows efficient
+ * queries with seller profile joins that would be restricted by user-scoped RLS.
  */
 export async function GET(request: NextRequest) {
   try {
+    const hideFixtures = shouldHidePlaywrightFixtures(
+      request.cookies?.get?.(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+    );
+    // Rate limit public marketplace queries to prevent scraping/DoS
+    const ip = getClientIp(request);
+    const rl = checkLocalRateLimit(ip, "listings:read", 120);
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     const admin = createAdminClient();
     const ownerColumn = await getOwnerColumn(admin, "listings");
+    const parsedQuery = parseAndValidateSearchParams(
+      request.nextUrl.searchParams,
+      listingsQuerySchema,
+      {
+        validationErrorMessage: "Invalid listings query",
+      }
+    );
+    if (!parsedQuery.success) {
+      return parsedQuery.response;
+    }
+
+    const query = parsedQuery.data;
+    if (query.category && !normalizeMarketplaceCategoryParam(query.category)) {
+      return NextResponse.json({ error: "Invalid listing category" }, { status: 400 });
+    }
+    if (query.condition && !normalizeMarketplaceConditionParam(query.condition)) {
+      return NextResponse.json({ error: "Invalid listing condition" }, { status: 400 });
+    }
+    if (query.sort && !["newest", "price_asc", "price_desc", "popular"].includes(query.sort)) {
+      return NextResponse.json({ error: "Invalid listing sort" }, { status: 400 });
+    }
+
     const filters = parseMarketplaceFiltersFromSearchParams(request.nextUrl.searchParams);
-    const limit = Math.min(
-      50,
-      Math.max(1, parseInt(request.nextUrl.searchParams.get("limit") || "24", 10))
-    );
+    filters.page = query.page;
+    const limit = query.limit;
     const offset = (filters.page - 1) * limit;
-    const selectClause = withOwnerColumn(
-      "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured",
-      ownerColumn
-    );
+    const selectAttempts = [
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+          ownerColumn
+        ),
+        omittedFields: [] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured",
+          ownerColumn
+        ),
+        omittedFields: ["featured_until"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+          ownerColumn
+        ),
+        omittedFields: ["condition"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+          ownerColumn
+        ),
+        omittedFields: ["video_thumbnail"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+          ownerColumn
+        ),
+        omittedFields: ["logo_url"] as const,
+      },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, location_province, location_city, created_at, boost_until, featured",
+          ownerColumn
+        ),
+        omittedFields: ["featured_until", "condition", "video_thumbnail", "logo_url"] as const,
+      },
+    ] as const;
     const hasAttributeFilters = Object.keys(filters.attributes).length > 0;
 
     let listings: Record<string, unknown>[] = [];
     let total = 0;
-
+    const MAX_ATTRIBUTE_FILTER_ROWS = 10_000;
     if (hasAttributeFilters) {
       const batchSize = 500;
       let from = 0;
 
       while (true) {
-        const batchQuery = applyBaseMarketFilters(
-          admin
-            .from("listings")
-            .select(selectClause)
-            .eq("status", "live")
-            .eq("area", AREA)
-            .not("title", "ilike", "%seed%")
-            .not("title", "ilike", "%[seed]%")
-            .not("title", "ilike", "%demo%")
-            .not("title", "ilike", "%sample%"),
-          filters
-        ).range(from, from + batchSize - 1);
+        const batchResult = await queryWithSelectFallbacks({
+          attempts: selectAttempts,
+          fallbackFields: LISTING_SELECT_FALLBACK_FIELDS,
+          runQuery: (selectClause) =>
+            applyBaseMarketFilters(
+              // SECURITY: admin client bypasses RLS for efficient JOINs.
+              // These application-level status filters are the security boundary.
+              admin.from("listings").select(selectClause).eq("status", "live").eq("area", AREA),
+              filters
+            ).range(from, from + batchSize - 1),
+        });
 
-        const { data, error } = await batchQuery;
+        const { data, error } = batchResult;
         if (error) {
           if (error.code === "PGRST205") {
             log.warn("Listings schema cache unavailable", {
@@ -193,7 +323,9 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
         }
 
-        const batch = (data ?? []) as unknown as Record<string, unknown>[];
+        const batch = normalizeListingSelectShape(
+          (data ?? []) as unknown as Record<string, unknown>[]
+        );
         listings.push(...batch);
 
         if (batch.length < batchSize) {
@@ -201,6 +333,15 @@ export async function GET(request: NextRequest) {
         }
 
         from += batchSize;
+
+        // Guard against unbounded memory growth on very large tables
+        if (from >= MAX_ATTRIBUTE_FILTER_ROWS) {
+          log.warn("Attribute filter batch cap reached", {
+            cap: MAX_ATTRIBUTE_FILTER_ROWS,
+            query: filters.query,
+          });
+          break;
+        }
       }
 
       listings = listings.filter(
@@ -217,21 +358,23 @@ export async function GET(request: NextRequest) {
       total = listings.length;
       listings = listings.slice(offset, offset + limit);
     } else {
-      const query = applyBaseMarketFilters(
-        admin
-          .from("listings")
-          .select(selectClause, { count: "exact" })
-          .eq("status", "live")
-          .eq("area", AREA)
-          .not("title", "ilike", "%seed%")
-          .not("title", "ilike", "%[seed]%")
-          .not("title", "ilike", "%demo%")
-          .not("title", "ilike", "%sample%"),
-        filters
-      ).range(offset, offset + limit - 1);
+      const result = await queryWithSelectFallbacks({
+        attempts: selectAttempts,
+        fallbackFields: LISTING_SELECT_FALLBACK_FIELDS,
+        runQuery: (selectClause) =>
+          applyBaseMarketFilters(
+            // SECURITY: admin client bypasses RLS for efficient JOINs.
+            // These application-level status filters are the security boundary.
+            admin
+              .from("listings")
+              .select(selectClause, { count: "exact" })
+              .eq("status", "live")
+              .eq("area", AREA),
+            filters
+          ).range(offset, offset + limit - 1),
+      });
 
-      const { data, count, error } = await query;
-
+      const { data, count, error } = result;
       if (error) {
         if (error.code === "PGRST205") {
           log.warn("Listings schema cache unavailable", {
@@ -252,7 +395,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
       }
 
-      const filteredListings = ((data ?? []) as unknown as Record<string, unknown>[]).filter(
+      const filteredListings = normalizeListingSelectShape(
+        (data ?? []) as unknown as Record<string, unknown>[]
+      ).filter(
         (listing) =>
           !isPlaceholderListing({
             title: String(listing.title ?? ""),
@@ -260,14 +405,21 @@ export async function GET(request: NextRequest) {
           })
       );
 
-      listings = normalizeOwnerRecords(filteredListings);
+      listings = filteredListings;
       total = Math.max(
         0,
         (count ?? filteredListings.length) - ((data?.length ?? 0) - filteredListings.length)
       );
     }
 
-    listings = normalizeOwnerRecords(listings);
+    const normalizedListings = normalizeOwnerRecords(listings);
+    const publicListings = hideFixtures
+      ? normalizedListings.filter(
+          (listing) => !shouldHidePlaywrightFixtureRowWhenEnabled(listing, true)
+        )
+      : normalizedListings;
+    total = Math.max(0, total - (normalizedListings.length - publicListings.length));
+    listings = publicListings;
 
     const sellerIds = Array.from(
       new Set(listings.map((listing) => String(listing.owner_id)).filter(Boolean))
@@ -297,6 +449,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     log.error("Unexpected error in listing fetch", {
       error: err instanceof Error ? err.message : "unknown",
+      stack: err instanceof Error ? err.stack : undefined,
     });
     return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
   }
@@ -310,6 +463,12 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // ── CSRF protection ───────────────────────────────────────
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
+
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
     const {
@@ -334,22 +493,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "listings");
+    let admin: ReturnType<typeof createAdminClient> | null = null;
+    const getAdmin = () => {
+      admin ??= createAdminClient();
+      return admin;
+    };
+    const ownerColumn = await getOwnerColumn(supabase, "listings");
 
     // ── Get account profile ──────────────────────────────────
-    const { data: profile } = await admin
-      .from("account_profiles")
-      .select("id, account_verification_status")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const verification = await resolveAccountVerification(supabase, user.id);
+    let profile = verification.profile;
 
     if (!profile) {
-      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+      profile = await ensureAccountProfile(getAdmin(), user);
+      if (!profile) {
+        return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+      }
+      // Auto-created profiles are always "incomplete" → caught by isVerifiedMember below
     }
 
-    if (!isVerifiedMember(readAccountVerificationStatus(profile))) {
+    if (!isVerifiedMember(verification.accountVerificationStatus)) {
       return NextResponse.json(createVerificationRequiredPayload(AREA), { status: 403 });
+    }
+
+    // Phone gate: prevent content creation without a verified phone number
+    if (!(await hasPhoneNumber(supabase, user.id))) {
+      return NextResponse.json(
+        { error: "Phone number required", redirectUrl: "/dashboard/complete-profile" },
+        { status: 403 }
+      );
     }
 
     // ── Parse body ───────────────────────────────────────────
@@ -379,7 +551,7 @@ export async function POST(request: NextRequest) {
 
     // ── Check entitlement / plan limits ──────────────────────
     // Check if user has a paid entitlement (not expired)
-    const { data: activeEntitlement } = await admin
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -394,31 +566,76 @@ export async function POST(request: NextRequest) {
     const tier = (activeEntitlement?.tier as string) || null;
     const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
 
+    // ── Enforce photo/video limits based on plan ─────────────
+    // Validated BEFORE claiming the free post slot so that a validation
+    // failure never consumes the user's one-time free post quota.
+    const ent =
+      hasPaidPlan && tier
+        ? getEntitlements(tier as PlanTier, AREA)
+        : {
+            maxPhotos: FREE_POST_CONFIG.maxPhotos,
+            maxVideos: FREE_POST_CONFIG.maxVideos,
+            videoAllowed: FREE_POST_CONFIG.videoAllowed,
+          };
+
+    if (data.images.length > ent.maxPhotos) {
+      return NextResponse.json(
+        {
+          error: `Maximum ${ent.maxPhotos} photos allowed on your plan`,
+        },
+        { status: 422 }
+      );
+    }
+
+    if (data.videos.length > 0 && !ent.videoAllowed) {
+      return NextResponse.json(
+        { error: "Video upload is not available on your current plan." },
+        { status: 422 }
+      );
+    }
+
+    if (data.videos.length > ent.maxVideos) {
+      return NextResponse.json(
+        { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
+        { status: 422 }
+      );
+    }
+
     // Check free post availability for unpaid users
     if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { data: freePostRow } = await admin
+      // Atomic claim: INSERT (not upsert) to prevent TOCTOU race.
+      // If a concurrent request already claimed, the unique constraint
+      // on (user_id, area) causes a conflict error → return 403.
+      const { error: claimError } = await supabase
         .from("free_posts_used")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("area", AREA)
-        .maybeSingle();
+        .insert({ user_id: user.id, area: AREA });
 
-      if (freePostRow) {
-        return NextResponse.json(
-          {
-            error: "Free post already used",
-            reason:
-              "You have already used your free post for Mzansi Market. Subscribe to a plan to post more.",
-          },
-          { status: 403 }
-        );
+      if (claimError) {
+        // 23505 = unique_violation → free post already used
+        if (claimError.code === "23505") {
+          return NextResponse.json(
+            {
+              error: "Free post already used",
+              reason:
+                "You have already used your free post for Mzansi Market. Subscribe to a plan to post more.",
+              upgradeUrl: "/billing",
+            },
+            { status: 403 }
+          );
+        }
+        log.error("Failed to claim free post slot", {
+          error: claimError.message,
+          code: claimError.code,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Failed to reserve free post" }, { status: 500 });
       }
     }
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
       // Paid plan — check listing count against plan limits
       const countQuery = applyOwnerFilter(
-        admin
+        supabase
           .from("listings")
           .select("id", { count: "exact", head: true })
           .neq("status", "rejected"),
@@ -439,46 +656,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Enforce photo/video limits based on plan ─────────────
-    const ent =
-      hasPaidPlan && tier
-        ? getEntitlements(tier as PlanTier, AREA)
-        : {
-            maxPhotos: FREE_POST_CONFIG.maxPhotos,
-            maxVideos: FREE_POST_CONFIG.maxVideos,
-            videoAllowed: FREE_POST_CONFIG.videoAllowed,
-          };
-
-    const rawVideos = Array.isArray((body as Record<string, unknown>).videos)
-      ? ((body as Record<string, unknown>).videos as unknown[])
-      : [];
-    if (rawVideos.some((video) => typeof video !== "string")) {
-      return NextResponse.json({ error: "Videos must be an array of URLs" }, { status: 422 });
-    }
-
-    if (data.images.length > ent.maxPhotos) {
-      return NextResponse.json(
-        {
-          error: `Maximum ${ent.maxPhotos} photos allowed on your plan`,
-        },
-        { status: 422 }
-      );
-    }
-
-    if (rawVideos.length > 0 && !ent.videoAllowed) {
-      return NextResponse.json(
-        { error: "Video upload is not available on your current plan." },
-        { status: 422 }
-      );
-    }
-
-    if (rawVideos.length > ent.maxVideos) {
-      return NextResponse.json(
-        { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
-        { status: 422 }
-      );
-    }
-
     // ── Prepare listing record ───────────────────────────────
     const priceCents = Math.round(data.price_zar * 100);
 
@@ -493,20 +670,21 @@ export async function POST(request: NextRequest) {
         condition: data.condition || null,
         location_province: data.province || null,
         location_city: data.city || null,
-        location_suburb: (body as Record<string, unknown>).town || null,
+        location_suburb: data.town || null,
         status: "pending_moderation",
         area: AREA,
         photos: data.images,
-        videos: rawVideos,
-        video_thumbnail: (body as Record<string, unknown>).videoThumbnail || null,
-        contact_methods: (body as Record<string, unknown>).contactMethods || ["call"],
+        videos: data.videos,
+        video_thumbnail: data.videoThumbnail || null,
+        logo_url: data.logo_url || null,
+        contact_methods: data.contactMethods,
       },
       ownerColumn,
       user.id
     );
 
     // ── Insert listing ───────────────────────────────────────
-    const { data: newListing, error: insertError } = await admin
+    const { data: newListing, error: insertError } = await supabase
       .from("listings")
       .insert(listingRecord)
       .select("id")
@@ -517,24 +695,51 @@ export async function POST(request: NextRequest) {
         error: insertError.message,
         userId: user.id,
       });
+      // Release free post slot if listing insert failed
+      if (!hasPaidPlan && !postingLimitBypassEnabled) {
+        const { error: rollbackError } = await getAdmin()
+          .from("free_posts_used")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("area", AREA);
+        if (rollbackError) {
+          log.error("Failed to rollback free post claim after listing insert failure", {
+            userId: user.id,
+            error: rollbackError.message,
+            code: rollbackError.code,
+          });
+        }
+      }
       return NextResponse.json(
         { error: "Failed to create listing", details: insertError.message },
         { status: 500 }
       );
     }
 
-    // ── Mark free post as used if no paid entitlement ────────
-    if (!hasPaidPlan && !postingLimitBypassEnabled) {
-      const { error: freePostError } = await admin
-        .from("free_posts_used")
-        .upsert({ user_id: user.id, area: AREA }, { onConflict: "user_id,area" });
-
-      if (freePostError) {
-        log.error("Failed to mark free post as used", {
-          error: freePostError.message,
+    // ── Post-insert limit check (closes TOCTOU window for paid plans) ──
+    if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
+      const postCountQuery = applyOwnerFilter(
+        supabase
+          .from("listings")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "rejected"),
+        ownerColumn,
+        user.id
+      );
+      const { count: postInsertCount } = await postCountQuery;
+      const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
+      if (!postCheck.allowed) {
+        // Over limit due to concurrent insert — roll back
+        await getAdmin().from("listings").delete().eq("id", newListing.id);
+        log.warn("Rolled back listing due to concurrent limit breach", {
+          listingId: newListing.id,
           userId: user.id,
+          count: postInsertCount,
         });
-        // Don't fail the request — the listing was already created
+        return NextResponse.json(
+          { error: "Listing limit reached", reason: postCheck.reason },
+          { status: 403 }
+        );
       }
     }
 
@@ -567,6 +772,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     log.error("Unexpected error in listing creation", {
       error: err instanceof Error ? err.message : "unknown",
+      stack: err instanceof Error ? err.stack : undefined,
     });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

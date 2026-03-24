@@ -89,15 +89,17 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
 
   if (velocityErr) {
     log.error("Velocity check RPC failed", { error: velocityErr.message });
-    // Fail open with a warning signal rather than blocking uploads
+    // In production, treat velocity check failure as block-level to prevent abuse.
+    // In non-production, fail open with a warning to avoid blocking development.
+    const velocityFailSeverity = process.env.NODE_ENV === "production" ? "block" : "warn";
     await writeSignal(adminClient, {
       userId,
       artifactId,
       signalCode: "velocity_check_error",
-      severity: "warn",
+      severity: velocityFailSeverity,
       valueJson: { error: velocityErr.message },
     });
-    signalScore += SEVERITY_WEIGHT.warn;
+    signalScore += SEVERITY_WEIGHT[velocityFailSeverity];
   } else if (velocityOk === false) {
     log.warn("Velocity threshold exceeded (DB-enforced)", { userId, stepType });
     await writeSignal(adminClient, {

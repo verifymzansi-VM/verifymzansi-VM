@@ -14,7 +14,7 @@ VerifyMzansi combines:
 - `Mzansi Business` for verified businesses, shops, and services
 - `Promotions & Events` for deals, campaigns, and business posts
 - KYC, moderation, audit logging, and POPIA-sensitive data handling
-- PayFast billing, Africa's Talking OTP, Resend email, Turnstile CAPTCHA, and
+- Ozow billing, Africa's Talking OTP, Resend email, Turnstile CAPTCHA, and
   Cloudflare R2 file storage
 
 ## Prerequisites
@@ -24,7 +24,7 @@ VerifyMzansi combines:
 - pnpm `>=10`
 - Supabase project
 - Cloudflare account for Pages/Workers/R2/Turnstile
-- PayFast, Africa's Talking, and Resend credentials for launch validation
+- Ozow, Africa's Talking, and Resend credentials for launch validation
 
 ## Local Development
 
@@ -116,8 +116,8 @@ site root with `?code=...` instead of the app callback handler.
 - Required check: `pnpm validate:launch-env`
 - Full release check: `pnpm preflight:prod`
 - `NEXT_PUBLIC_APP_URL` must be public HTTPS
-- `AFRICASTALKING_SENDER_ID`, `IP_HASH_SECRET`, PayFast production secrets,
-  Turnstile, R2, Resend, and encryption keys must all be populated
+- `AFRICASTALKING_SENDER_ID`, `IP_HASH_SECRET`, Ozow credentials, Turnstile, R2,
+  Resend, and encryption keys must all be populated
 - If you set `RATE_LIMITER_API_KEY`, you must also set `OTP_RATE_LIMITER_URL`
 - Sensitive values belong in GitHub Actions secrets and Cloudflare Wrangler
   secrets, not in committed files
@@ -139,10 +139,11 @@ site root with `?code=...` instead of the app callback handler.
 | `pnpm test:all`                                                                        | Full validation shortcut                             |
 | `pnpm test:e2e`                                                                        | Full Playwright suite                                |
 | `pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome` | Launch-path smoke coverage                           |
+| `pnpm bootstrap:operator`                                                              | Create or update the first live staff account        |
+| `pnpm reset:launch-data`                                                               | Capture a non-destructive launch-reset inventory     |
 | `pnpm preflight`                                                                       | Local launch checks with development-mode validation |
-| `pnpm preflight:prod`                                                                  | Production launch checks, including plan seed parity |
+| `pnpm preflight:prod`                                                                  | Production launch checks                             |
 | `pnpm validate:launch-env`                                                             | Fail-fast production env validation                  |
-| `pnpm seed:prod`                                                                       | Sync plan rows and seed staff accounts               |
 | `pnpm security:audit`                                                                  | Dependency vulnerability gate                        |
 | `pnpm secret-scan`                                                                     | Secret leak scan                                     |
 | `pnpm licenses:check`                                                                  | License policy gate                                  |
@@ -178,6 +179,29 @@ Before a production release, also run the production-only validation checks:
 pnpm validate:launch-env
 pnpm preflight:prod
 ```
+
+## Live Operator Bootstrap
+
+After a launch reset, the linked Supabase project can be left with zero auth
+users. Use the minimal operator bootstrap script to create the first admin or
+moderator without reintroducing any demo or seed data:
+
+```bash
+pnpm bootstrap:operator -- \
+  --email=admin@verifymzansi.com \
+  --password='replace-with-strong-password' \
+  --display-name='VerifyMzansi Admin' \
+  --role=admin \
+  --confirm-project=your-project-ref
+```
+
+Notes:
+
+- The script only supports `admin` and `moderator` roles.
+- It creates or updates the auth user, sets both `user_metadata.role` and
+  `app_metadata.role`, and upserts a minimal `account_profiles` row.
+- It refuses to run unless `--confirm-project` matches the current
+  `NEXT_PUBLIC_SUPABASE_URL` project ref.
 
 ## Deployment
 
@@ -248,7 +272,7 @@ src/
   lib/                 domain logic, config, services, Supabase helpers
   stores/              Zustand stores
   test/                shared test setup
-scripts/               seed, preflight, validation, security, and release tooling
+scripts/               preflight, validation, security, and release tooling
 supabase/              migrations and schema assets
 workers/               Cloudflare Workers
 e2e/                   Playwright suites
@@ -258,8 +282,6 @@ e2e/                   Playwright suites
 
 - `Mzansi Business` is the primary business experience.
 - Legacy public routes remain available for compatibility.
-- Runtime pricing in `src/lib/constants/pricing.ts` is treated as the source of
-  truth for seeded `plans`.
 - `/api/health` now reports config, Supabase, and audit status without exposing
   secrets.
 

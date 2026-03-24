@@ -6,7 +6,7 @@ import type {
   ListingCondition,
 } from "@/types/enums";
 
-interface Filters {
+export interface MarketplaceFilters {
   category?: string;
   province?: string;
   city?: string;
@@ -22,41 +22,53 @@ interface Filters {
   businessCategory?: BusinessCategory;
 }
 
+export function cloneMarketplaceFilters(
+  filters: Partial<MarketplaceFilters> = {}
+): MarketplaceFilters {
+  const { attributes, ...rest } = filters;
+  return {
+    sort: "newest",
+    ...rest,
+    attributes: { ...(attributes ?? {}) },
+  };
+}
+
 interface MarketplaceState {
   activeArea: MarketplaceArea;
-  filters: Filters;
+  filters: MarketplaceFilters;
   page: number;
   isSearching: boolean;
 
   setActiveArea: (area: MarketplaceArea) => void;
-  hydrateFilters: (area: MarketplaceArea, filters: Partial<Filters>, page?: number) => void;
-  setFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
+  hydrateFilters: (
+    area: MarketplaceArea,
+    filters: Partial<MarketplaceFilters>,
+    page?: number
+  ) => void;
+  replaceFilters: (filters: Partial<MarketplaceFilters>, page?: number) => void;
+  setFilter: <K extends keyof MarketplaceFilters>(key: K, value: MarketplaceFilters[K]) => void;
   setAttribute: (name: string, value: string | boolean | undefined) => void;
   resetFilters: () => void;
   setPage: (page: number) => void;
   setSearching: (searching: boolean) => void;
 }
 
-const defaultFilters: Filters = {
-  sort: "newest",
-  attributes: {},
-};
-
 export const useMarketplaceStore = create<MarketplaceState>((set) => ({
   activeArea: "MZANSI_MARKET",
-  filters: { ...defaultFilters },
+  filters: cloneMarketplaceFilters(),
   page: 1,
   isSearching: false,
 
-  setActiveArea: (activeArea) => set({ activeArea, filters: { ...defaultFilters }, page: 1 }),
+  setActiveArea: (activeArea) => set({ activeArea, filters: cloneMarketplaceFilters(), page: 1 }),
   hydrateFilters: (activeArea, filters, page = 1) =>
     set({
       activeArea,
-      filters: {
-        ...defaultFilters,
-        ...filters,
-        attributes: filters.attributes ?? {},
-      },
+      filters: cloneMarketplaceFilters(filters),
+      page,
+    }),
+  replaceFilters: (filters, page = 1) =>
+    set({
+      filters: cloneMarketplaceFilters(filters),
       page,
     }),
   setFilter: (key, value) =>
@@ -65,7 +77,6 @@ export const useMarketplaceStore = create<MarketplaceState>((set) => ({
       // Clear attribute filters when category changes
       if (key === "category") {
         next.attributes = {};
-        next.condition = undefined;
       }
       // Clear city when province changes
       if (key === "province") {
@@ -83,12 +94,7 @@ export const useMarketplaceStore = create<MarketplaceState>((set) => ({
     })),
   resetFilters: () =>
     set({
-      filters: {
-        ...defaultFilters,
-        attributes: {},
-        businessType: undefined,
-        businessCategory: undefined,
-      },
+      filters: cloneMarketplaceFilters(),
       page: 1,
     }),
   setPage: (page) => set({ page }),

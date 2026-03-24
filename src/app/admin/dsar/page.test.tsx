@@ -2,9 +2,10 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdminDSARPage from "./page";
 
-const { mockGetUser, mockFrom, redirectMock } = vi.hoisted(() => ({
+const { mockGetUser, mockSessionFrom, mockAdminFrom, redirectMock } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
-  mockFrom: vi.fn(),
+  mockSessionFrom: vi.fn(),
+  mockAdminFrom: vi.fn(),
   redirectMock: vi.fn(),
 }));
 
@@ -13,7 +14,13 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: {
       getUser: mockGetUser,
     },
-    from: mockFrom,
+    from: mockSessionFrom,
+  })),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(() => ({
+    from: mockAdminFrom,
   })),
 }));
 
@@ -35,9 +42,13 @@ vi.mock("@/components/layout/page-header", () => ({
 }));
 
 vi.mock("./dsar-action-buttons", () => ({
-  DsarActionButtons: ({ requestId }: { requestId: string }) => (
-    <div data-testid={`dsar-actions-${requestId}`}>Actions</div>
-  ),
+  DsarActionButtons: ({
+    requestId,
+    status,
+  }: {
+    requestId: string;
+    status: "submitted" | "in_progress";
+  }) => <div data-testid={`dsar-actions-${requestId}-${status}`}>Actions</div>,
 }));
 
 describe("AdminDSARPage", () => {
@@ -49,7 +60,7 @@ describe("AdminDSARPage", () => {
   });
 
   it("only renders action buttons for submitted requests", async () => {
-    mockFrom.mockReturnValue({
+    mockAdminFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
         order: vi.fn().mockReturnValue({
           limit: vi.fn().mockResolvedValue({
@@ -78,12 +89,17 @@ describe("AdminDSARPage", () => {
 
     render(await AdminDSARPage());
 
-    expect(screen.getByTestId("dsar-actions-req-submitted")).toBeInTheDocument();
-    expect(screen.queryByTestId("dsar-actions-req-progress")).not.toBeInTheDocument();
+    expect(mockSessionFrom).not.toHaveBeenCalled();
+    expect(mockAdminFrom).toHaveBeenCalledWith("dsar_cases");
+    expect(screen.getByText("s***d@example.com")).toBeInTheDocument();
+    expect(screen.getByText("p***s@example.com")).toBeInTheDocument();
+    expect(screen.getByTestId("dsar-actions-req-submitted-submitted")).toBeInTheDocument();
+    expect(screen.getByTestId("dsar-actions-req-progress-in_progress")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /export json/i })).toHaveLength(2);
   });
 
   it("uses neutral empty-state copy when there are no data requests", async () => {
-    mockFrom.mockReturnValue({
+    mockAdminFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
         order: vi.fn().mockReturnValue({
           limit: vi.fn().mockResolvedValue({ data: [] }),

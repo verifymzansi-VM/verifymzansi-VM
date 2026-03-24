@@ -7,6 +7,10 @@ const {
   mockLogAuditEvent,
   mockCreateNotification,
   mockCheckLocalRateLimit,
+  mockEnforceSameOriginMutation,
+  mockEnforceCsrfToken,
+  mockGetStaffActorRole,
+  mockGetOwnerColumn,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -14,6 +18,10 @@ const {
   mockLogAuditEvent: vi.fn(),
   mockCreateNotification: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(),
+  mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
+  mockEnforceCsrfToken: vi.fn<(request: Request) => Response | null>(() => null),
+  mockGetStaffActorRole: vi.fn(() => "admin"),
+  mockGetOwnerColumn: vi.fn(async () => "owner_id"),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -36,14 +44,16 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: mockCheckLocalRateLimit,
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  getRoleFromUser: (user: { app_metadata?: Record<string, unknown> }) =>
-    (user.app_metadata?.role as string) || "admin",
-  isModeratorOrAdmin: (user: { app_metadata?: Record<string, unknown> }) => {
-    const role = user.app_metadata?.role;
-    return role === "admin" || role === "moderator";
-  },
-  asAdminRole: (role: string) => (role === "moderator" ? "moderator" : "admin"),
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyStaffActorRoleFromDb: vi.fn(async () => mockGetStaffActorRole()),
+}));
+
+vi.mock("@/lib/account/compat", () => ({
+  getOwnerColumn: mockGetOwnerColumn,
+  readOwnerId: (record: Record<string, unknown>) =>
+    (record.owner_id as string | null | undefined) ??
+    (record.seller_id as string | null | undefined) ??
+    null,
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -52,6 +62,14 @@ vi.mock("@/lib/utils/logger", () => ({
     warn: vi.fn(),
     error: vi.fn(),
   }),
+}));
+
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: mockEnforceSameOriginMutation,
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: mockEnforceCsrfToken,
 }));
 
 import { POST } from "./route";
@@ -75,8 +93,31 @@ describe("POST /api/admin/content/decide", () => {
     });
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
+    mockEnforceSameOriginMutation.mockReturnValue(null);
+    mockEnforceCsrfToken.mockReturnValue(null);
     mockLogAuditEvent.mockResolvedValue(undefined);
     mockCreateNotification.mockResolvedValue(true);
+  });
+
+  it("rejects cross-origin moderation requests before auth or body parsing", async () => {
+    mockEnforceSameOriginMutation.mockReturnValue(
+      new Response(JSON.stringify({ error: "Cross-origin request blocked" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const response = await POST(
+      createMockRequest({
+        itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        area: "PROMOTIONS_EVENTS",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "Cross-origin request blocked" });
+    expect(mockCreateClient).not.toHaveBeenCalled();
   });
 
   it("approves promotions surfaced in the moderation queue", async () => {
@@ -84,11 +125,12 @@ describe("POST /api/admin/content/decide", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === "promotions") {
+        const eqStatus = vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+        });
         return {
           update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
-            }),
+            eq: vi.fn().mockReturnValue({ eq: eqStatus }),
           }),
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
@@ -137,11 +179,12 @@ describe("POST /api/admin/content/decide", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === "businesses") {
+        const eqStatus = vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+        });
         return {
           update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
-            }),
+            eq: vi.fn().mockReturnValue({ eq: eqStatus }),
           }),
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({

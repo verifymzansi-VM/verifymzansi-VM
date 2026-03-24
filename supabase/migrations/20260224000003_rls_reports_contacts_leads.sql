@@ -18,7 +18,6 @@ DO $$ BEGIN
       WITH CHECK (reporter_user_id = auth.uid());
   END IF;
 END $$;
-
 -- ── Contact Events ──────────────────────────────────────────
 -- Contact events are inserted via service-role (admin client) in the API route.
 -- No anon/authenticated insert policy needed — service role bypasses RLS.

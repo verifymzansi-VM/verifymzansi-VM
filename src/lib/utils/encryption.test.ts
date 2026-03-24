@@ -6,6 +6,7 @@ import {
   decryptFile,
   generateEncryptionKey,
 } from "./encryption";
+import { _resetEnvCacheForTesting } from "@/lib/config/env";
 
 // A valid 64-char hex key (32 bytes)
 const TEST_KEY = "a".repeat(64);
@@ -17,6 +18,7 @@ describe("encryption", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    _resetEnvCacheForTesting();
   });
 
   describe("generateEncryptionKey", () => {
@@ -89,6 +91,14 @@ describe("encryption", () => {
   });
 
   describe("error cases", () => {
+    beforeEach(() => {
+      // Clear cached env so the next env() call re-validates.
+      _resetEnvCacheForTesting();
+      // Disable CI flag so validateEnv() uses the strict path instead of
+      // the lenient CI path that supplies valid fallback defaults.
+      vi.stubEnv("CI", "");
+    });
+
     it("throws when KYC_ENCRYPTION_KEY is not set", async () => {
       vi.stubEnv("KYC_ENCRYPTION_KEY", "");
 

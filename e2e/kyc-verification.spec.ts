@@ -84,9 +84,11 @@ test.describe("KYC Verification Flows", () => {
       expect(res.status()).toBe(401);
     });
 
-    test("proof-of-address endpoint returns 401 without auth", async ({ request }) => {
+    test("manual location endpoint returns 401 without auth", async ({ request }) => {
       const res = await withTransientNetworkRetry(() =>
-        request.post("/api/verification/location/proof")
+        request.post("/api/verification/location/manual", {
+          data: { province: "Gauteng", city: "Johannesburg" },
+        })
       );
       expect(res.status()).toBe(401);
     });

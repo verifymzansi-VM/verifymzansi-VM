@@ -6,6 +6,7 @@ import { Loader2, X, Phone, MessageCircle, Mail, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
@@ -15,18 +16,29 @@ import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
+import {
+  usePlanMaxPhotos,
+  usePlanMaxVideos,
+  usePlanVideoAllowed,
+} from "@/components/billing/plan-gate";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import type { ListingCategory, ListingCondition, UploadArea } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
-import { normalizeMediaUrls } from "@/lib/utils/media-url";
+import { normalizeMediaUrl, normalizeMediaUrls } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
-import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
+import {
+  normalizeCreatePostError,
+  normalizeCreatePostRuntimeError,
+} from "@/app/post/_lib/create-post-errors";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
+import { ListingCard } from "@/components/listings/listing-card";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("EditListingPage");
+const TITLE_MAX = 120;
+const DESC_MAX = 5000;
 
 export default function EditListingPage() {
   const params = useParams();
@@ -46,11 +58,16 @@ export default function EditListingPage() {
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [existingStatus, setExistingStatus] = useState<string | null>(null);
+  const [existingLogo, setExistingLogo] = useState<string | null>(null);
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [existingVideos, setExistingVideos] = useState<string[]>([]);
   const [existingVideoThumbnail, setExistingVideoThumbnail] = useState<string | null>(null);
+  const [newLogoFile, setNewLogoFile] = useState<File[]>([]);
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newVideoFile, setNewVideoFile] = useState<File[]>([]);
   const [newVideoCoverFile, setNewVideoCoverFile] = useState<File[]>([]);
@@ -58,6 +75,13 @@ export default function EditListingPage() {
   const { toast } = useToast();
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
+  const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
+  const maxVideos = usePlanMaxVideos("MZANSI_MARKET");
+  const videoAllowed = usePlanVideoAllowed("MZANSI_MARKET");
+  const previewLogoUrl = useMemo(
+    () => (newLogoFile.length > 0 ? URL.createObjectURL(newLogoFile[0]) : null),
+    [newLogoFile]
+  );
   const previewPhotoUrls = useMemo(
     () => newPhotoFiles.map((file) => URL.createObjectURL(file)),
     [newPhotoFiles]
@@ -77,6 +101,15 @@ export default function EditListingPage() {
     async function load() {
       try {
         const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          router.push("/login");
+          return;
+        }
+
         const { data, error } = await supabase
           .from("listings")
           .select("*")
@@ -111,6 +144,18 @@ export default function EditListingPage() {
           return;
         }
 
+        // Defense-in-depth: verify current user is the listing owner
+        const ownerId =
+          (data as Record<string, unknown>).seller_id ?? (data as Record<string, unknown>).owner_id;
+        if (ownerId !== user.id) {
+          if (!cancelled) {
+            setLoadFailed(true);
+            toast({ title: "You are not the owner of this listing", variant: "destructive" });
+            router.push("/dashboard/listings");
+          }
+          return;
+        }
+
         if (cancelled) {
           return;
         }
@@ -118,6 +163,7 @@ export default function EditListingPage() {
         setTitle(data.title || "");
         setDescription(data.description || "");
         setPrice(data.price_cents ? (data.price_cents / 100).toString() : "");
+        setExistingStatus((data.status as string | null) ?? null);
         setCategory((data.category as ListingCategory) || "");
         setCondition(
           ((data.condition as ListingCondition | null) ??
@@ -136,15 +182,12 @@ export default function EditListingPage() {
             ? (data.contact_methods as string[])
             : ["call"]
         );
+        setExistingLogo(((data as Record<string, unknown>).logo_url as string | null) ?? null);
         setExistingVideoThumbnail(
           ((data as Record<string, unknown>).video_thumbnail as string | null) ?? null
         );
-        setExistingPhotos(
-          normalizeMediaUrls(Array.isArray(data.photos) ? (data.photos as string[]) : [])
-        );
-        setExistingVideos(
-          normalizeMediaUrls(Array.isArray(data.videos) ? (data.videos as string[]) : [])
-        );
+        setExistingPhotos(Array.isArray(data.photos) ? (data.photos as string[]) : []);
+        setExistingVideos(Array.isArray(data.videos) ? (data.videos as string[]) : []);
       } catch (error) {
         log.error("Listing load threw unexpectedly", {
           listingId: id,
@@ -175,6 +218,13 @@ export default function EditListingPage() {
 
   useEffect(
     () => () => {
+      if (previewLogoUrl) URL.revokeObjectURL(previewLogoUrl);
+    },
+    [previewLogoUrl]
+  );
+
+  useEffect(
+    () => () => {
       previewPhotoUrls.forEach((url) => URL.revokeObjectURL(url));
     },
     [previewPhotoUrls]
@@ -194,12 +244,26 @@ export default function EditListingPage() {
     [previewVideoCoverUrl]
   );
 
+  function clearErrors(...keys: string[]) {
+    setFormError(null);
+    if (keys.length === 0) {
+      setFieldErrors({});
+      return;
+    }
+
+    setFieldErrors((current) => {
+      const next = { ...current };
+      for (const key of keys) delete next[key];
+      return next;
+    });
+  }
+
   function handleCategoryChange(cat: ListingCategory) {
     setCategory(cat);
     setCategoryAttributes({});
+    clearErrors("category");
     setFieldErrors((current) => {
       const next = { ...current };
-      delete next.category;
       Object.keys(next)
         .filter((key) => key.startsWith("attributes."))
         .forEach((key) => delete next[key]);
@@ -215,23 +279,23 @@ export default function EditListingPage() {
 
   function toggleContact(id: string) {
     setContactMethods((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
+    clearErrors("contactMethods");
   }
 
   function handleAttributeChange(name: string, value: string | boolean) {
     setCategoryAttributes((prev) => ({ ...prev, [name]: value }));
-    setFieldErrors((current) => {
-      const next = { ...current };
-      delete next[`attributes.${name}`];
-      return next;
-    });
+    clearErrors(`attributes.${name}`);
   }
 
   const normalizedPreviewAttributes = category
     ? coerceListingAttributes(category, categoryAttributes)
     : {};
+  const displayExistingPhotos = useMemo(() => normalizeMediaUrls(existingPhotos), [existingPhotos]);
+  const displayExistingVideos = useMemo(() => normalizeMediaUrls(existingVideos), [existingVideos]);
   const previewPhotos = previewPhotoUrls.length > 0 ? previewPhotoUrls : existingPhotos;
   const previewVideos = previewVideoUrls.length > 0 ? previewVideoUrls : existingVideos;
   const previewVideoThumbnail = previewVideoCoverUrl ?? existingVideoThumbnail;
+  const previewLogo = previewLogoUrl ?? existingLogo;
 
   async function uploadMedia(files: File[], area: UploadArea): Promise<string[]> {
     if (files.length === 0) return [];
@@ -244,64 +308,113 @@ export default function EditListingPage() {
     return uploadJson.urls || [];
   }
 
+  function validateForm() {
+    const errors: Record<string, string> = {};
+
+    if (!category) errors.category = "Select a category.";
+    if (!title.trim()) errors.title = "Enter a title.";
+    else if (title.trim().length < 5) errors.title = "Title must be at least 5 characters.";
+    else if (title.trim().length > TITLE_MAX)
+      errors.title = `Title must be ${TITLE_MAX} characters or fewer.`;
+
+    if (!description.trim()) errors.description = "Enter a description.";
+    else if (description.trim().length < 20)
+      errors.description = "Description must be at least 20 characters.";
+    else if (description.trim().length > DESC_MAX)
+      errors.description = `Description must be ${DESC_MAX} characters or fewer.`;
+
+    if (category) {
+      Object.assign(errors, validateListingAttributes(category, categoryAttributes));
+    }
+
+    if (!price || Number.isNaN(parseFloat(price)) || parseFloat(price) < 0) {
+      errors.price_zar = "Enter a valid price.";
+    }
+    if (!province) errors.province = "Select a province.";
+    if (!city) errors.city = "Select a city.";
+    if (contactMethods.length === 0) {
+      errors.contactMethods = "Choose at least one contact method.";
+    }
+
+    const totalPhotos = existingPhotos.length + newPhotoFiles.length;
+    if (totalPhotos === 0) errors.images = "Upload at least one photo.";
+    if (totalPhotos > maxPhotos) {
+      errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
+    }
+
+    const totalVideos = existingVideos.length + newVideoFile.length;
+    if (totalVideos > 0 && !videoAllowed) {
+      errors.videos = "Video upload is not available on your current plan.";
+    }
+    if (totalVideos > maxVideos) {
+      errors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
+    }
+
+    return errors;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title || !description || !price || !category) {
-      toast({ title: "Please fill in all required fields", variant: "destructive" });
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      );
       return;
     }
 
-    const attributeErrors = validateListingAttributes(category, categoryAttributes);
-    if (Object.keys(attributeErrors).length > 0) {
-      setFieldErrors(attributeErrors);
-      toast({
-        title: "Please fix the highlighted listing details",
-        description: Object.values(attributeErrors)[0],
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const numPrice = parseFloat(price);
-    if (isNaN(numPrice) || numPrice < 0) {
-      toast({ title: "Please enter a valid price", variant: "destructive" });
-      return;
-    }
-
-    if (!province) {
-      toast({ title: "Please select a province", variant: "destructive" });
-      return;
-    }
-    if (!city) {
-      toast({ title: "Please select a city", variant: "destructive" });
-      return;
-    }
-    if (contactMethods.length === 0) {
-      toast({ title: "Please select at least one contact method", variant: "destructive" });
-      return;
-    }
-
+    clearErrors();
     setIsSubmitting(true);
+    setSubmitProgress("Uploading media...");
     try {
-      const normalizedAttributes = coerceListingAttributes(category, categoryAttributes);
-      const newPhotoUrls = await uploadMedia(newPhotoFiles, "listing");
-      const newVideoUrls = await uploadMedia(newVideoFile, "listing_video");
-      const newCoverUrls = await uploadMedia(newVideoCoverFile, "listing");
+      const numPrice = parseFloat(price);
+      const normalizedAttributes = category
+        ? coerceListingAttributes(category, categoryAttributes)
+        : {};
+
+      // Upload photos, video, and video cover in parallel
+      const [newLogoUrls, newPhotoUrls, newVideoUrl, newCoverUrls] = await Promise.all([
+        uploadMedia(newLogoFile, "listing_logo"),
+        uploadMedia(newPhotoFiles, "listing"),
+        newVideoFile.length > 0
+          ? (async () => {
+              const file = newVideoFile[0];
+              const urlRes = await fetch("/api/media/upload-url", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  filename: file.name,
+                  contentType: file.type,
+                  size: file.size,
+                  area: "listing_video",
+                }),
+              });
+              if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+              const { uploadUrl, publicUrl } = await urlRes.json();
+              const putRes = await fetch(uploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": file.type },
+                body: file,
+              });
+              if (!putRes.ok) throw new Error("Failed to upload video");
+              return publicUrl as string;
+            })()
+          : Promise.resolve(null as string | null),
+        uploadMedia(newVideoCoverFile, "listing"),
+      ]);
 
       // Resolve video thumbnail: new upload > existing > null
       let videoThumbnail: string | null = existingVideoThumbnail;
       if (newCoverUrls.length > 0) {
         videoThumbnail = newCoverUrls[0];
       }
+      const finalLogoUrl = newLogoUrls[0] || existingLogo || null;
 
       const allPhotos = [...existingPhotos, ...newPhotoUrls];
-      const allVideos = [...existingVideos, ...newVideoUrls];
+      const allVideos = [...existingVideos, ...(newVideoUrl ? [newVideoUrl] : [])];
 
-      if (allPhotos.length === 0) {
-        toast({ title: "At least one photo is required", variant: "destructive" });
-        setIsSubmitting(false);
-        return;
-      }
+      setSubmitProgress("Saving listing...");
 
       // Submit via server-side API route for full validation & ownership check
       const res = await fetch(`/api/listings/${id}`, {
@@ -321,6 +434,7 @@ export default function EditListingPage() {
           images: allPhotos,
           videos: allVideos,
           videoThumbnail,
+          logo_url: finalLogoUrl,
           contactMethods,
         }),
       });
@@ -329,20 +443,21 @@ export default function EditListingPage() {
         const data = await res.json().catch(() => ({}));
         const normalized = normalizeCreatePostError(data, "Something went wrong");
         setFieldErrors(normalized.fieldErrors);
-        toast({
-          title: "Failed to update listing",
-          description: normalized.formError,
-          variant: "destructive",
-        });
+        setFormError(normalized.formError);
         return;
       }
 
-      toast({ title: "Listing updated!", variant: "success" });
+      toast({
+        title:
+          existingStatus === "live" ? "Updated and resubmitted for review" : "Listing updated!",
+        variant: "success",
+      });
       router.push("/dashboard/listings");
-    } catch {
-      toast({ title: "Something went wrong", variant: "destructive" });
+    } catch (error: unknown) {
+      setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -401,6 +516,12 @@ export default function EditListingPage() {
               </CardHeader>
               <CardContent>
                 <form noValidate onSubmit={handleSubmit} className="space-y-5">
+                  {formError && (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                      {formError}
+                    </div>
+                  )}
+
                   {/* ── Category Picker ────────────────────────── */}
                   <CategoryPicker
                     value={category}
@@ -409,6 +530,9 @@ export default function EditListingPage() {
                     onAttributeChange={handleAttributeChange}
                     errors={fieldErrors}
                   />
+                  {fieldErrors.category && (
+                    <p className="inline-form-error">{fieldErrors.category}</p>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="condition">Condition</Label>
@@ -434,23 +558,39 @@ export default function EditListingPage() {
                     <Input
                       id="title"
                       value={title}
-                      onChange={(e) => setTitle(e.target.value)}
+                      onChange={(e) => {
+                        setTitle(e.target.value.slice(0, TITLE_MAX));
+                        clearErrors("title");
+                      }}
                       required
+                      maxLength={TITLE_MAX}
+                      aria-invalid={!!fieldErrors.title}
+                      className={cn(fieldErrors.title && "border-destructive")}
                     />
+                    {fieldErrors.title && <p className="inline-form-error">{fieldErrors.title}</p>}
                   </div>
 
                   {/* ── Description ────────────────────────────── */}
                   <div className="space-y-2">
                     <Label htmlFor="description">Description *</Label>
-                    <textarea
+                    <Textarea
                       id="description"
-                      title="Listing description"
                       placeholder="Describe your listing..."
-                      className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      onChange={(e) => {
+                        setDescription(e.target.value.slice(0, DESC_MAX));
+                        clearErrors("description");
+                      }}
                       required
+                      className={cn(
+                        "min-h-[100px]",
+                        fieldErrors.description && "border-destructive"
+                      )}
+                      aria-invalid={!!fieldErrors.description}
                     />
+                    {fieldErrors.description && (
+                      <p className="inline-form-error">{fieldErrors.description}</p>
+                    )}
                   </div>
 
                   {/* ── Price ──────────────────────────────────── */}
@@ -464,9 +604,13 @@ export default function EditListingPage() {
                         min="0"
                         step="0.01"
                         value={price}
-                        onChange={(e) => setPrice(e.target.value)}
+                        onChange={(e) => {
+                          setPrice(e.target.value);
+                          clearErrors("price_zar");
+                        }}
                         required
-                        className="flex-1"
+                        className={cn("flex-1", fieldErrors.price_zar && "border-destructive")}
+                        aria-invalid={!!fieldErrors.price_zar}
                       />
                       <button
                         type="button"
@@ -491,6 +635,9 @@ export default function EditListingPage() {
                         Negotiable
                       </button>
                     </div>
+                    {fieldErrors.price_zar && (
+                      <p className="inline-form-error">{fieldErrors.price_zar}</p>
+                    )}
                   </div>
 
                   {/* ── Location: Province / City / Town ───────── */}
@@ -502,12 +649,16 @@ export default function EditListingPage() {
                         <select
                           id="province"
                           aria-label="Province"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          className={cn(
+                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                            fieldErrors.province && "border-destructive"
+                          )}
                           value={province}
                           onChange={(e) => {
                             setProvince(e.target.value);
                             setCity("");
                             setTown("");
+                            clearErrors("province", "city");
                           }}
                         >
                           <option value="">Select province</option>
@@ -517,6 +668,9 @@ export default function EditListingPage() {
                             </option>
                           ))}
                         </select>
+                        {fieldErrors.province && (
+                          <p className="inline-form-error">{fieldErrors.province}</p>
+                        )}
                       </div>
 
                       <div className="space-y-1.5">
@@ -524,9 +678,15 @@ export default function EditListingPage() {
                         <select
                           id="city"
                           aria-label="City"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          className={cn(
+                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                            fieldErrors.city && "border-destructive"
+                          )}
                           value={city}
-                          onChange={(e) => setCity(e.target.value)}
+                          onChange={(e) => {
+                            setCity(e.target.value);
+                            clearErrors("city");
+                          }}
                           disabled={!province}
                         >
                           <option value="">Select city</option>
@@ -536,6 +696,9 @@ export default function EditListingPage() {
                             </option>
                           ))}
                         </select>
+                        {fieldErrors.city && (
+                          <p className="inline-form-error">{fieldErrors.city}</p>
+                        )}
                       </div>
 
                       <div className="space-y-1.5">
@@ -551,6 +714,48 @@ export default function EditListingPage() {
                     </div>
                   </div>
 
+                  <div className="space-y-2">
+                    <Label>Listing Logo</Label>
+                    {previewLogo ? (
+                      <div className="flex items-start gap-3">
+                        <div className="relative h-20 w-20 overflow-hidden rounded-2xl border bg-muted">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={normalizeMediaUrl(previewLogo)}
+                            alt="Listing logo"
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setExistingLogo(null);
+                              setNewLogoFile([]);
+                            }}
+                          >
+                            Remove logo
+                          </Button>
+                          <p className="text-xs text-muted-foreground">
+                            This logo is shown on listing cards across the marketplace.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No listing logo uploaded.</p>
+                    )}
+                  </div>
+
+                  <MediaUpload
+                    label="Replace listing logo (optional)"
+                    maxFiles={1}
+                    files={newLogoFile}
+                    onChange={setNewLogoFile}
+                    accept="image/*"
+                  />
+
                   {/* ── Existing Images ──────────────────────── */}
                   {existingPhotos.length > 0 && (
                     <div className="space-y-2">
@@ -563,16 +768,17 @@ export default function EditListingPage() {
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                              src={url}
+                              src={displayExistingPhotos[i] || normalizeMediaUrl(url)}
                               alt={`Photo ${i + 1}`}
                               className="aspect-square object-cover w-full"
                             />
                             <button
                               type="button"
                               title="Remove photo"
-                              onClick={() =>
-                                setExistingPhotos((prev) => prev.filter((_, idx) => idx !== i))
-                              }
+                              onClick={() => {
+                                setExistingPhotos((prev) => prev.filter((_, idx) => idx !== i));
+                                clearErrors("images");
+                              }}
                               className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                               <X className="h-3.5 w-3.5" />
@@ -585,13 +791,17 @@ export default function EditListingPage() {
 
                   {/* ── New Photo Upload ──────────────────────── */}
                   <MediaUpload
-                    label={`Add Photos (max ${8 - existingPhotos.length} more)`}
-                    maxFiles={8 - existingPhotos.length}
+                    label={`Add Photos (max ${Math.max(0, maxPhotos - existingPhotos.length)} more)`}
+                    maxFiles={Math.max(0, maxPhotos - existingPhotos.length)}
                     files={newPhotoFiles}
-                    onChange={setNewPhotoFiles}
+                    onChange={(files) => {
+                      setNewPhotoFiles(files);
+                      clearErrors("images");
+                    }}
                     accept="image/*"
-                    disabled={existingPhotos.length >= 8}
+                    disabled={existingPhotos.length >= maxPhotos}
                   />
+                  {fieldErrors.images && <p className="inline-form-error">{fieldErrors.images}</p>}
 
                   {/* ── Existing Videos ──────────────────────── */}
                   {existingVideos.length > 0 && (
@@ -603,13 +813,17 @@ export default function EditListingPage() {
                             key={url}
                             className="relative group rounded-md overflow-hidden border w-48"
                           >
-                            <video src={url} className="aspect-video object-cover w-full" />
+                            <video
+                              src={displayExistingVideos[i] || normalizeMediaUrl(url)}
+                              className="aspect-video object-cover w-full"
+                            />
                             <button
                               type="button"
                               title="Remove video"
-                              onClick={() =>
-                                setExistingVideos((prev) => prev.filter((_, idx) => idx !== i))
-                              }
+                              onClick={() => {
+                                setExistingVideos((prev) => prev.filter((_, idx) => idx !== i));
+                                clearErrors("videos");
+                              }}
                               className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                               <X className="h-3.5 w-3.5" />
@@ -623,13 +837,21 @@ export default function EditListingPage() {
                   {/* ── New Video Upload ──────────────────────── */}
                   {existingVideos.length === 0 && (
                     <MediaUpload
-                      label="Add Video (max 1)"
-                      maxFiles={1}
+                      label={`Add Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                      maxFiles={Math.max(0, maxVideos - existingVideos.length)}
                       files={newVideoFile}
-                      onChange={setNewVideoFile}
+                      onChange={(files) => {
+                        setNewVideoFile(files);
+                        if (files.length === 0) {
+                          setNewVideoCoverFile([]);
+                        }
+                        clearErrors("videos");
+                      }}
                       accept="video/*"
+                      disabled={!videoAllowed || existingVideos.length >= maxVideos}
                     />
                   )}
+                  {fieldErrors.videos && <p className="inline-form-error">{fieldErrors.videos}</p>}
 
                   {/* ── Video Cover Image ────────────────────── */}
                   {(existingVideos.length > 0 || newVideoFile.length > 0) && (
@@ -672,10 +894,29 @@ export default function EditListingPage() {
                         );
                       })}
                     </div>
+                    {fieldErrors.contactMethods && (
+                      <p className="inline-form-error">{fieldErrors.contactMethods}</p>
+                    )}
                   </div>
 
                   <div className="space-y-3 rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
                     <div className="text-sm font-medium text-muted-foreground">Listing preview</div>
+                    <div className="max-w-[264px]">
+                      <ListingCard
+                        id={id}
+                        title={title || "Your listing title"}
+                        price={price ? Math.round(parseFloat(price || "0") * 100) : 0}
+                        imageUrl={previewVideos[0] || previewPhotos[0]}
+                        posterUrl={previewVideoThumbnail || previewPhotos[0] || undefined}
+                        logoUrl={previewLogo}
+                        province={province || "Province"}
+                        city={city || "City"}
+                        category={category || "property"}
+                        attributes={normalizedPreviewAttributes}
+                        condition={condition || undefined}
+                        createdAt={new Date().toISOString()}
+                      />
+                    </div>
                     <ListingDetailContent
                       listing={{
                         id,
@@ -690,6 +931,7 @@ export default function EditListingPage() {
                         photos: previewPhotos,
                         videos: previewVideos,
                         video_thumbnail: previewVideoThumbnail,
+                        logo_url: previewLogo,
                         location_province: province || null,
                         location_city: city || null,
                         location_suburb: town || null,
@@ -708,6 +950,7 @@ export default function EditListingPage() {
                       similarSellers={new Map()}
                       showContactActions={false}
                       showSimilarListings={false}
+                      photoCount={previewPhotos.length}
                     />
                   </div>
 
@@ -722,7 +965,7 @@ export default function EditListingPage() {
                     </Button>
                     <Button type="submit" className="flex-1" disabled={isSubmitting}>
                       {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Save Changes
+                      {isSubmitting ? submitProgress || "Saving..." : "Save Changes"}
                     </Button>
                   </div>
                 </form>

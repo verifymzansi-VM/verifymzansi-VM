@@ -14,14 +14,21 @@ vi.mock("@supabase/ssr", () => ({
   }),
 }));
 
-import { proxy, routeRequest } from "@/proxy";
+import { middleware } from "@/middleware";
+import { routeRequest } from "@/proxy-handler";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function createMockRequest(path: string, options?: { hostname?: string }): NextRequest {
+function createMockRequest(
+  path: string,
+  options?: { hostname?: string; cookieHeader?: string }
+): NextRequest {
   const hostname = options?.hostname ?? "localhost";
   const url = `http://${hostname}:3000${path}`;
-  return new NextRequest(url);
+  return new NextRequest(url, {
+    headers: options?.cookieHeader ? { cookie: options.cookieHeader } : undefined,
+  });
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -72,7 +79,7 @@ describe("middleware — missing Supabase env", () => {
     expect(location.pathname).toBe("/auth/callback");
     expect(location.searchParams.get("code")).toBe("legacy-code");
     expect(location.searchParams.get("type")).toBe("signup");
-    expect(location.searchParams.get("next")).toBe("/?confirmed=true");
+    expect(location.searchParams.get("next")).toBe("/login?confirmed=true");
   });
 
   it("blocks /billing when Supabase not configured", async () => {
@@ -94,20 +101,53 @@ describe("proxy security headers", () => {
     delete process.env.PLAYWRIGHT_SUPABASE_MODE;
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    vi.stubEnv("NODE_ENV", "development");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("adds the full security header set to successful responses", async () => {
-    const res = await proxy(createMockRequest("/"));
+    const res = await middleware(createMockRequest("/"));
+    const csp = res.headers.get("Content-Security-Policy");
+    const setCookie = res.headers.get("set-cookie");
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'self'");
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("connect-src 'self'");
+    expect(csp).toContain("https://*.r2.cloudflarestorage.com");
+    expect(csp).toContain("https://images.unsplash.com");
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
     expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
+    expect(setCookie).toContain("vm_csrf=");
+  });
+
+  it("uses a development-friendly CSP without x-nonce in development", async () => {
+    const res = await middleware(createMockRequest("/"));
+    const csp = res.headers.get("Content-Security-Policy");
+
+    expect(csp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
+    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(res.headers.get("x-nonce")).toBeNull();
+  });
+
+  it("uses strict nonce CSP in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    const res = await middleware(createMockRequest("/", { hostname: "verifymzansi.com" }));
+    const csp = res.headers.get("Content-Security-Policy");
+    const nonce = res.headers.get("x-nonce");
+
+    expect(nonce).toBeTruthy();
+    expect(csp).toContain("script-src 'self' 'nonce-");
+    expect(csp).toContain("style-src 'self' 'nonce-");
+    expect(csp).toContain("style-src-attr 'unsafe-inline'");
   });
 
   it("keeps basic security headers on redirects", async () => {
-    const res = await proxy(createMockRequest("/dashboard"));
+    const res = await middleware(createMockRequest("/dashboard"));
 
     expect(res.status).toBe(307);
     expect(res.headers.get("Content-Security-Policy")).toBeNull();
@@ -131,6 +171,21 @@ describe("middleware — authenticated routing", () => {
     const location = new URL(res.headers.get("location")!);
     expect(location.pathname).toBe("/login");
     expect(location.searchParams.get("returnUrl")).toBe("/dashboard");
+  });
+
+  it("preserves nested verification returnUrl when redirecting unauthenticated users to login", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const res = await routeRequest(
+      createMockRequest("/verification?returnUrl=%2Fpost%2Fcreate-listing")
+    );
+
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("returnUrl")).toBe(
+      "/verification?returnUrl=%2Fpost%2Fcreate-listing"
+    );
   });
 
   it("returns 401 for unauthenticated API requests to protected routes", async () => {
@@ -230,7 +285,30 @@ describe("middleware — authenticated routing", () => {
     expect(res.status).toBe(200);
   });
 
-  it("allows /post/create through without legacy seller verification lookup", async () => {
+  it("preserves nested verification returnUrl for anonymous sessions", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "anon-1",
+          is_anonymous: true,
+          app_metadata: {},
+        },
+      },
+    });
+
+    const res = await routeRequest(
+      createMockRequest("/verification?returnUrl=%2Fpost%2Fcreate-business")
+    );
+
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("returnUrl")).toBe(
+      "/verification?returnUrl=%2Fpost%2Fcreate-business"
+    );
+  });
+
+  it("allows /post/create through for verified users", async () => {
     mockGetUser.mockResolvedValue({
       data: {
         user: {
@@ -241,21 +319,32 @@ describe("middleware — authenticated routing", () => {
       },
     });
 
-    // The phone-missing gate calls from("account_profiles") to check for a phone.
-    // Return a profile that already has a phone set so the gate lets the request through.
+    // The phone-missing gate and posting gate both call from("account_profiles").
+    // Return a verified profile with phone so both gates pass.
     mockFrom.mockReturnValue({
       select: () => ({
         eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: { phone: "+27600000000" }, error: null }),
+          maybeSingle: () =>
+            Promise.resolve({
+              data: {
+                phone: "+27600000000",
+                account_verification_status: "verified",
+                account_status: "active",
+                suspended_until: null,
+              },
+              error: null,
+            }),
         }),
       }),
     });
 
     const res = await routeRequest(createMockRequest("/post/create"));
     expect(res.status).toBe(200);
+    expect(mockFrom).toHaveBeenCalledWith(ACCOUNT_PROFILE_WRITE_TABLE);
+    expect(ACCOUNT_PROFILE_WRITE_TABLE).toBe("account_profiles");
   });
 
-  it("allows legacy /api/post/create paths through middleware without legacy seller gating", async () => {
+  it("does not trust a stale x-phone-ok cookie when the profile no longer has a phone", async () => {
     mockGetUser.mockResolvedValue({
       data: {
         user: {
@@ -266,20 +355,219 @@ describe("middleware — authenticated routing", () => {
       },
     });
 
+    mockFrom.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () =>
+            Promise.resolve({
+              data: {
+                phone: null,
+                account_verification_status: "verified",
+                account_status: "active",
+                suspended_until: null,
+              },
+              error: null,
+            }),
+        }),
+      }),
+    });
+
+    const res = await routeRequest(
+      createMockRequest("/dashboard", { cookieHeader: "x-phone-ok=1" })
+    );
+
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/dashboard/complete-profile");
+    expect(location.searchParams.get("returnUrl")).toBe("/dashboard");
+  });
+
+  it("redirects to the recovery page when the phone gate profile lookup fails", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          is_anonymous: false,
+          app_metadata: { role: "seller" },
+        },
+      },
+    });
+
+    mockFrom.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () => Promise.reject(new Error("database offline")),
+        }),
+      }),
+    });
+
+    const res = await routeRequest(createMockRequest("/dashboard"));
+
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/error");
+    expect(location.searchParams.get("reason")).toBe("unavailable");
+  });
+
+  it("allows /api/post/create for verified users through posting gate", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          is_anonymous: false,
+          app_metadata: { role: "seller" },
+        },
+      },
+    });
+
+    mockFrom.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () =>
+            Promise.resolve({
+              data: {
+                phone: "+27600000000",
+                account_verification_status: "verified",
+                account_status: "active",
+                suspended_until: null,
+              },
+              error: null,
+            }),
+        }),
+      }),
+    });
+
     const res = await routeRequest(createMockRequest("/api/post/create"));
     expect(res.status).toBe(200);
-    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("allows verified posting routes when the legacy profile status is stale but all steps are approved", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          is_anonymous: false,
+          app_metadata: { role: "seller" },
+        },
+      },
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              phone: "+27600000000",
+              account_verification_status: "incomplete",
+              account_status: "active",
+              suspended_until: null,
+            },
+            error: null,
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({
+            data: [
+              { step_type: "phone", status: "approved" },
+              { step_type: "id_doc", status: "approved" },
+              { step_type: "selfie", status: "approved" },
+              { step_type: "location", status: "approved" },
+            ],
+            error: null,
+          }),
+        };
+      }
+
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+    });
+
+    const res = await routeRequest(createMockRequest("/post/create-business"));
+    expect(res.status).toBe(200);
+  });
+
+  it("preserves the returnUrl when an unverified user is redirected from an edit posting route", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          is_anonymous: false,
+          app_metadata: { role: "seller" },
+        },
+      },
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              phone: "+27600000000",
+              account_verification_status: "incomplete",
+              account_status: "active",
+              suspended_until: null,
+            },
+            error: null,
+          }),
+        };
+      }
+
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({
+            data: [{ step_type: "phone", status: "approved" }],
+            error: null,
+          }),
+        };
+      }
+
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+    });
+
+    const res = await routeRequest(createMockRequest("/post/edit-business/123"));
+    expect(res.status).toBe(307);
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/verification");
+    expect(location.searchParams.get("returnUrl")).toBe("/post/edit-business/123");
   });
 });
 
 describe("middleware — Playwright stub mode", () => {
   const originalStubMode = process.env.PLAYWRIGHT_SUPABASE_MODE;
+  const originalPublicStubMode = process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE;
+  const originalPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE;
+  const originalPublicPlaywrightTestMode = process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE;
   const origUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const origKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetUser.mockImplementation(() => {
+      throw new Error("Supabase auth should not be called in stub mode");
+    });
     process.env.PLAYWRIGHT_SUPABASE_MODE = "stub";
+    // jsdom defines `window`, so isPlaywrightSupabaseStubMode() checks
+    // the NEXT_PUBLIC_ variant — set it too so the stub branch activates.
+    process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE = "stub";
+    delete process.env.PLAYWRIGHT_TEST_MODE;
+    delete process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://playwright.supabase.stub";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "playwright-anon-key";
   });
@@ -287,6 +575,19 @@ describe("middleware — Playwright stub mode", () => {
   afterEach(() => {
     if (originalStubMode) process.env.PLAYWRIGHT_SUPABASE_MODE = originalStubMode;
     else delete process.env.PLAYWRIGHT_SUPABASE_MODE;
+
+    if (originalPublicStubMode)
+      process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE = originalPublicStubMode;
+    else delete process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE;
+
+    if (originalPlaywrightTestMode) process.env.PLAYWRIGHT_TEST_MODE = originalPlaywrightTestMode;
+    else delete process.env.PLAYWRIGHT_TEST_MODE;
+
+    if (originalPublicPlaywrightTestMode) {
+      process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE = originalPublicPlaywrightTestMode;
+    } else {
+      delete process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE;
+    }
 
     if (origUrl) process.env.NEXT_PUBLIC_SUPABASE_URL = origUrl;
     else delete process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -321,6 +622,21 @@ describe("middleware — Playwright stub mode", () => {
 
   it("keeps auth pages reachable", async () => {
     const res = await routeRequest(createMockRequest("/login"));
+
+    expect(res.status).toBe(200);
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+
+  it("allows protected pages when a valid playwright stub session cookie is present", async () => {
+    process.env.PLAYWRIGHT_TEST_MODE = "1";
+    process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE = "1";
+    process.env.PLAYWRIGHT_E2E_AUTH = "1";
+
+    const res = await routeRequest(
+      createMockRequest("/dashboard", {
+        cookieHeader: "vmz_pw_session=persona%3Aproxy-authenticated",
+      })
+    );
 
     expect(res.status).toBe(200);
     expect(mockGetUser).not.toHaveBeenCalled();

@@ -11,22 +11,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validations/auth";
-import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [sessionValid, setSessionValid] = useState<boolean | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
   // Check if the user has a valid recovery session (set by the reset link)
   useEffect(() => {
-    const supabase = createClient();
-
     async function checkSession() {
-      const { data } = await supabase.auth.getSession();
-      setSessionValid(!!data.session);
+      try {
+        const res = await fetch("/api/auth/reset-password");
+        const data = await res.json();
+        setSessionValid(data.valid === true);
+      } catch {
+        setSessionValid(false);
+      }
     }
 
     void checkSession();
@@ -52,24 +55,25 @@ export default function ResetPasswordPage() {
 
   async function onSubmit(data: ResetPasswordInput) {
     try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.updateUser({
-        password: data.password,
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password: data.password,
+          confirmPassword: data.confirmPassword,
+        }),
       });
 
-      if (error) {
-        // Handle expired or invalid session specifically
-        if (
-          error.message?.toLowerCase().includes("session") ||
-          error.message?.toLowerCase().includes("token") ||
-          error.message?.toLowerCase().includes("expired")
-        ) {
+      const result = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (res.status === 401) {
           setSessionValid(false);
           return;
         }
         toast({
-          title: "Error",
-          description: error.message,
+          title: "Password reset failed",
+          description: typeof result.error === "string" ? result.error : "Please try again.",
           variant: "destructive",
         });
         return;
@@ -84,6 +88,7 @@ export default function ResetPasswordPage() {
     } catch {
       toast({
         title: "Something went wrong",
+        description: "Please try again later.",
         variant: "destructive",
       });
     }
@@ -177,17 +182,28 @@ export default function ResetPasswordPage() {
 
         <div className="space-y-2">
           <Label htmlFor="confirmPassword">Confirm password</Label>
-          <Input
-            id="confirmPassword"
-            type="password"
-            placeholder="Confirm your password"
-            autoComplete="new-password"
-            spellCheck={false}
-            autoCapitalize="none"
-            aria-invalid={!!errors.confirmPassword}
-            aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
-            {...register("confirmPassword")}
-          />
+          <div className="relative">
+            <Input
+              id="confirmPassword"
+              type={showConfirmPassword ? "text" : "password"}
+              placeholder="Confirm your password"
+              autoComplete="new-password"
+              spellCheck={false}
+              autoCapitalize="none"
+              aria-invalid={!!errors.confirmPassword}
+              aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
+              {...register("confirmPassword")}
+            />
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              tabIndex={-1}
+              aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           {errors.confirmPassword && (
             <p id="confirmPassword-error" className="inline-form-error" role="alert">
               {errors.confirmPassword.message}

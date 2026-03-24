@@ -3,10 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { uploadToR2, generateStorageKey } from "@/lib/services/storage";
 import { createLogger } from "@/lib/utils/logger";
 import { UPLOAD_AREAS } from "@/types/enums";
-import { ACCOUNT_PROFILE_NOT_FOUND_ERROR } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
+import { ensureAccountProfile } from "@/lib/account/ensure-profile";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { stripExifFromJpeg } from "@/lib/utils/exif-strip";
+import { scanForMalware } from "@/lib/utils/malware-scan";
+import { parseAndValidateFormData } from "@/lib/utils/api";
+import { z } from "zod";
 
 const log = createLogger("MediaUpload");
 
@@ -15,6 +21,15 @@ const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
 const MAX_FILES = 10;
+const mediaUploadMetadataSchema = z.object({
+  area: z.enum(UPLOAD_AREAS).default("listing"),
+});
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
 
 /**
  * POST /api/media/upload
@@ -60,15 +75,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let admin: ReturnType<typeof createAdminClient> | null = null;
+    const getAdmin = () => {
+      admin ??= createAdminClient();
+      return admin;
+    };
+
     // ── Get account profile ──────────────────────────────────
     const { data: profile } = await supabase
-      .from("account_profiles")
+      .from(ACCOUNT_PROFILE_TABLE)
       .select("id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (!profile) {
-      return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+      const autoProfile = await ensureAccountProfile(getAdmin(), user);
+      if (!autoProfile) {
+        return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
+      }
     }
 
     // ── Parse form data ──────────────────────────────────────
@@ -79,13 +103,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
     }
 
-    const area = (formData.get("area") as string) || "listing";
-    if (!(UPLOAD_AREAS as readonly string[]).includes(area)) {
-      return NextResponse.json(
-        { error: `Invalid area. Must be one of: ${UPLOAD_AREAS.join(", ")}` },
-        { status: 400 }
-      );
+    const metadata = parseAndValidateFormData(formData, mediaUploadMetadataSchema, {
+      validationErrorMessage: `Invalid area. Must be one of: ${UPLOAD_AREAS.join(", ")}`,
+      includeValidationDetails: false,
+    });
+    if (!metadata.success) {
+      return metadata.response;
     }
+    const { area } = metadata.data;
 
     // Collect all files from the form data
     const files: File[] = [];
@@ -111,6 +136,7 @@ export async function POST(request: NextRequest) {
     const bucket = process.env.R2_PUBLIC_BUCKET || "verifymzansi-public";
     const uploadedUrls: string[] = [];
     const errors: string[] = [];
+    let hadUploadFailure = false;
 
     for (const file of files) {
       const isImage = IMAGE_TYPES.has(file.type);
@@ -148,29 +174,78 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // Scan for embedded malware / polyglot attacks
+      const fileBuffer = new Uint8Array(await file.arrayBuffer());
+      const scanResult = scanForMalware(fileBuffer, file.type);
+      if (!scanResult.safe) {
+        log.warn("Malware scan rejected upload", {
+          filename: file.name,
+          threat: scanResult.threat,
+          userId: user.id,
+        });
+        errors.push(`"${file.name}": file rejected by security scan`);
+        continue;
+      }
+
       const key = generateStorageKey(`media/${area}`, user.id, file.name);
 
       try {
+        // Strip EXIF metadata from JPEG images to prevent GPS/PII leaks (POPIA)
+        let uploadFile: File | Blob = file;
+        if (file.type === "image/jpeg") {
+          const stripped = stripExifFromJpeg(fileBuffer);
+          uploadFile = new Blob([toArrayBuffer(stripped)], { type: file.type });
+        }
+
         const result = await uploadToR2({
           bucket,
           key,
-          file,
+          file: uploadFile,
           contentType: file.type,
         });
         uploadedUrls.push(result.url);
+
+        // Track upload for orphan detection — blocking to ensure R2/DB consistency
+        const { error: trackErr } = await supabase.from("media_uploads").insert({
+          user_id: user.id,
+          r2_key: key,
+          bucket,
+          url: result.url,
+          content_type: file.type,
+          file_size: file.size,
+          area,
+        });
+
+        if (trackErr) {
+          log.error("Failed to track media upload — file exists in R2 without DB record", {
+            key,
+            error: trackErr.message,
+            userId: user.id,
+          });
+        }
       } catch (err) {
         log.error(`Failed to upload ${file.name}`, { error: err });
+        hadUploadFailure = true;
         errors.push(`"${file.name}": upload failed`);
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      urls: uploadedUrls,
-      errors: errors.length > 0 ? errors : undefined,
-    });
+    const hasErrors = errors.length > 0;
+    const allFailed = hasErrors && uploadedUrls.length === 0;
+
+    return NextResponse.json(
+      {
+        success: !hasErrors,
+        urls: uploadedUrls,
+        errors: hasErrors ? errors : undefined,
+      },
+      { status: allFailed ? (hadUploadFailure ? 500 : 400) : hasErrors ? 207 : 200 }
+    );
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "Unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "Unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Failed to upload media" }, { status: 500 });
   }
 }

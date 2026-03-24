@@ -2,7 +2,6 @@
 
 -- 1. Add bio column
 ALTER TABLE public.seller_profiles ADD COLUMN IF NOT EXISTS bio TEXT;
-
 -- 2. Deduplicate phones: keep on earliest account, NULL the rest
 WITH ranked AS (
   SELECT id, phone, ROW_NUMBER() OVER (PARTITION BY phone ORDER BY created_at ASC) AS rn
@@ -13,12 +12,10 @@ UPDATE public.seller_profiles sp
 SET phone = NULL, masked_phone_public = NULL
 FROM ranked r
 WHERE sp.id = r.id AND r.rn > 1;
-
 -- 3. Enforce phone uniqueness (partial index allows NULLs)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_seller_profiles_unique_phone
   ON public.seller_profiles (phone)
   WHERE phone IS NOT NULL;
-
 -- 4. Update account_profiles view to include bio
 CREATE OR REPLACE VIEW public.account_profiles AS
 SELECT
@@ -43,6 +40,5 @@ SELECT
   sp.created_at,
   sp.updated_at
 FROM public.seller_profiles sp;
-
 COMMENT ON VIEW public.account_profiles IS
   'Compatibility view exposing seller_profiles through neutral account/member terminology.';

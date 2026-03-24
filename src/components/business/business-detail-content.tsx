@@ -781,6 +781,7 @@ export function BusinessDetailContent({
                         promo.featured_until ? new Date(promo.featured_until) > new Date() : false
                       }
                       endDate={promo.end_date}
+                      logoUrl={business.logo_url}
                     />
                   ))}
                 </div>

@@ -3,7 +3,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { ACCOUNT_PROFILE_WRITE_TABLE, getOwnerColumn } from "@/lib/account/compat";
 import { logAuditEvent, type AuditAction } from "./audit";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -20,6 +20,8 @@ interface EnforceParams {
   reportId?: string;
   /** Marketplace area for accurate moderation record tracking */
   area?: string;
+  /** Number of days for suspension duration (default: 7). Only used for "suspend" action. */
+  durationDays?: number;
 }
 
 /**
@@ -52,9 +54,21 @@ export async function enforceAction(params: EnforceParams) {
   }
 
   // Update account status
+  const updatePayload: Record<string, unknown> = {
+    account_status: statusMap[params.action],
+  };
+  if (params.action === "suspend") {
+    const days = params.durationDays ?? 7;
+    const suspendUntil = new Date();
+    suspendUntil.setDate(suspendUntil.getDate() + days);
+    updatePayload.suspended_until = suspendUntil.toISOString();
+  }
+  if (params.action === "unban") {
+    updatePayload.suspended_until = null;
+  }
   const { error } = await supabase
     .from(ACCOUNT_PROFILE_WRITE_TABLE)
-    .update({ account_status: statusMap[params.action] })
+    .update(updatePayload)
     .eq("user_id", params.ownerId);
 
   if (error) {
@@ -77,11 +91,25 @@ export async function enforceAction(params: EnforceParams) {
     );
   }
 
-  // If banned, hide all content across all marketplace areas
+  // Resolve owner columns via compat layer
+  const [listingsOwnerCol, businessesOwnerCol, promotionsOwnerCol] = await Promise.all([
+    getOwnerColumn(supabase as never, "listings").catch(() => "owner_id" as const),
+    getOwnerColumn(supabase as never, "businesses").catch(() => "owner_id" as const),
+    getOwnerColumn(supabase as never, "promotions").catch(() => "owner_id" as const),
+  ]);
+
+  // If banned, hide all content across all marketplace areas (including promotions)
   if (params.action === "ban") {
     const hideResults = await Promise.all([
-      supabase.from("listings").update({ status: "hidden" }).eq("owner_id", params.ownerId),
-      supabase.from("businesses").update({ status: "hidden" }).eq("owner_id", params.ownerId),
+      supabase.from("listings").update({ status: "hidden" }).eq(listingsOwnerCol, params.ownerId),
+      supabase
+        .from("businesses")
+        .update({ status: "hidden" })
+        .eq(businessesOwnerCol, params.ownerId),
+      supabase
+        .from("promotions")
+        .update({ status: "hidden" })
+        .eq(promotionsOwnerCol, params.ownerId),
     ]);
     const hideErrors = hideResults.filter((r) => r.error);
     if (hideErrors.length > 0) {
@@ -91,18 +119,23 @@ export async function enforceAction(params: EnforceParams) {
     }
   }
 
-  // If suspended, hide live content temporarily across all areas
+  // If suspended, hide live content temporarily across all areas (including promotions)
   if (params.action === "suspend") {
     const suspendResults = await Promise.all([
       supabase
         .from("listings")
         .update({ status: "hidden" })
-        .eq("owner_id", params.ownerId)
+        .eq(listingsOwnerCol, params.ownerId)
         .eq("status", "live"),
       supabase
         .from("businesses")
         .update({ status: "hidden" })
-        .eq("owner_id", params.ownerId)
+        .eq(businessesOwnerCol, params.ownerId)
+        .eq("status", "live"),
+      supabase
+        .from("promotions")
+        .update({ status: "hidden" })
+        .eq(promotionsOwnerCol, params.ownerId)
         .eq("status", "live"),
     ]);
     const suspendErrors = suspendResults.filter((r) => r.error);
@@ -138,13 +171,19 @@ export async function enforceAction(params: EnforceParams) {
       supabase
         .from("listings")
         .update({ status: "live" })
-        .eq("owner_id", params.ownerId)
+        .eq(listingsOwnerCol, params.ownerId)
         .eq("status", "hidden")
         .gte("updated_at", hiddenSince),
       supabase
         .from("businesses")
         .update({ status: "live" })
-        .eq("owner_id", params.ownerId)
+        .eq(businessesOwnerCol, params.ownerId)
+        .eq("status", "hidden")
+        .gte("updated_at", hiddenSince),
+      supabase
+        .from("promotions")
+        .update({ status: "live" })
+        .eq(promotionsOwnerCol, params.ownerId)
         .eq("status", "hidden")
         .gte("updated_at", hiddenSince),
     ]);

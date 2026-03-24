@@ -34,10 +34,10 @@ function safeOrigin(raw: string | null | undefined): string | null {
 export function evaluateSameOriginMutation(request: RequestLike): SameOriginDecision {
   const origin = request.headers.get("origin");
   const secFetchSite = request.headers.get("sec-fetch-site");
-  const canonicalOrigin = safeOrigin(resolveAppOrigin({ url: request.url }));
-  const requestOrigin = safeOrigin(request.url);
 
   if (origin) {
+    const canonicalOrigin = safeOrigin(resolveAppOrigin({ url: request.url }));
+    const requestOrigin = safeOrigin(request.url);
     const normalizedOrigin = safeOrigin(origin);
 
     if (!normalizedOrigin) {
@@ -71,7 +71,15 @@ export function evaluateSameOriginMutation(request: RequestLike): SameOriginDeci
   }
 
   if (secFetchSite === "none") {
-    return { allowed: true, reason: "browser-none" };
+    // sec-fetch-site: none is sent by browser-initiated navigations (e.g. typing
+    // a URL directly). This is unusual for state-changing API calls — block it to
+    // reduce the CSRF attack surface.
+    return {
+      allowed: false,
+      status: 403,
+      error: "Cross-site requests are not allowed",
+      reason: "cross-site-fetch" as const,
+    };
   }
 
   return {

@@ -4,9 +4,9 @@ import { PromotionsExplorer } from "./client";
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 
 export const metadata: Metadata = {
-  title: "Promotions & Events",
+  title: "Promote Products, Services & Events",
   description:
-    "Discover promotions, launches, deals, and events from verified businesses and members across South Africa.",
+    "Promote products, services, launches, deals, and events with verification-first visibility across South Africa.",
   alternates: {
     canonical: `${BASE_URL}/promotions`,
   },

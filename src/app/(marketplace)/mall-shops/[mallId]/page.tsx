@@ -1,6 +1,6 @@
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 
 export default async function Page({ params }: { params: Promise<{ mallId: string }> }) {
-  await params;
-  notFound();
+  const { mallId } = await params;
+  redirect(`/mzansi-business/${mallId}`);
 }

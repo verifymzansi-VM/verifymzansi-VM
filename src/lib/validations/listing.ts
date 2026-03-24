@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { priceSchema } from "./shared";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
+import { ELECTRONICS_DEVICE_TYPES } from "@/lib/constants/categories";
+import type { ContactMethod } from "@/types/enums";
+
+const CONTACT_METHODS: [ContactMethod, ...ContactMethod[]] = ["call", "whatsapp", "form", "in_app"];
+const trustedMediaUrl = z.string().url().refine(isTrustedPlatformMediaUrl, {
+  message: "Media must be hosted on the VerifyMzansi platform",
+});
 
 // ── Shared listing fields ───────────────────────────────────
 const listingBase = z.object({
@@ -27,12 +34,20 @@ const listingBase = z.object({
   condition: z.enum(["new", "like_new", "good", "fair", "for_parts"]).optional(),
   images: z
     .array(
-      z.string().url().refine(isTrustedPlatformMediaUrl, {
-        message: "Images must be hosted on the VerifyMzansi platform",
-      })
+      trustedMediaUrl.refine((url) => {
+        return !/\.(mp4|webm|ogg|mov)(?:[?#]|$)/i.test(url);
+      }, "Images must be image URLs")
     )
     .min(1, "At least 1 image is required")
     .max(10, "Maximum 10 images"),
+  videos: z.array(trustedMediaUrl).max(9, "Maximum 9 videos").default([]),
+  videoThumbnail: trustedMediaUrl.nullable().optional(),
+  logo_url: trustedMediaUrl.nullable().optional(),
+  town: z.string().trim().max(120, "Town / suburb must be 120 characters or fewer").optional(),
+  contactMethods: z
+    .array(z.enum(CONTACT_METHODS))
+    .min(1, "Choose at least one contact method.")
+    .default(["call"]),
 });
 
 // ── Category-specific attributes ────────────────────────────
@@ -69,6 +84,7 @@ const autoPartsAttrs = z.object({
 });
 
 const electronicsAttrs = z.object({
+  device_type: z.enum(ELECTRONICS_DEVICE_TYPES),
   brand: z.string().min(1, "Brand is required"),
   model_name: z.string().optional(),
   storage_gb: z.number().int().min(1).optional(),

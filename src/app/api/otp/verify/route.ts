@@ -1,10 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { otpVerifySchema } from "@/lib/validations/auth";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import {
   ACCOUNT_PHONE_IN_USE_ERROR,
   buildAccountPhoneFields,
@@ -15,25 +18,8 @@ const log = createLogger("OTPVerify");
 const MAX_VERIFY_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
 
-function getDefaultDisplayName(user: { email?: string | null; user_metadata?: unknown }): string {
-  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
-  const displayName = metadata.display_name;
-  const fullName = metadata.full_name;
-
-  if (typeof displayName === "string" && displayName.trim().length > 0) {
-    return displayName.trim();
-  }
-
-  if (typeof fullName === "string" && fullName.trim().length > 0) {
-    return fullName.trim();
-  }
-
-  if (user.email) {
-    return user.email.split("@")[0] || "New Member";
-  }
-
-  return "New Member";
-}
+// Re-exported from shared module
+import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
 
 /** Convert a hex string to Uint8Array */
 function fromHex(hex: string): Uint8Array {
@@ -66,7 +52,7 @@ async function verifyOtp(otp: string, storedHash: string): Promise<boolean> {
     {
       name: "PBKDF2",
       salt: fromHex(salt).buffer as ArrayBuffer,
-      iterations: 100000,
+      iterations: 150000,
       hash: "SHA-512",
     },
     keyMaterial,
@@ -86,20 +72,22 @@ async function verifyOtp(otp: string, storedHash: string): Promise<boolean> {
 }
 
 async function finalizePhoneVerification(
+  supabase: Awaited<ReturnType<typeof createClient>>,
   adminSupabase: ReturnType<typeof createAdminClient>,
   user: { id: string; email?: string | null; user_metadata?: unknown },
   accountPhoneFields: ReturnType<typeof buildAccountPhoneFields>,
-  nowIso: string
+  nowIso: string,
+  otpLogLookup: { phone: string; otpHash: string }
 ): Promise<{ success: true } | { success: false; error: string; status: number }> {
-  let { data: profile } = await adminSupabase
-    .from("account_profiles")
+  let { data: profile } = await supabase
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (!profile) {
-    const { data: createdProfile, error: createProfileError } = await adminSupabase
-      .from("account_profiles")
+    const { data: createdProfile, error: createProfileError } = await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .upsert(
         {
           user_id: user.id,
@@ -131,8 +119,8 @@ async function finalizePhoneVerification(
   }
 
   if (profile) {
-    const { error: profileUpdateError } = await adminSupabase
-      .from("account_profiles")
+    const { error: profileUpdateError } = await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update(accountPhoneFields)
       .eq("id", profile.id);
 
@@ -167,7 +155,7 @@ async function finalizePhoneVerification(
     log.error("Failed to update verification steps", { error: stepsError.message });
   }
 
-  const { error: sessionError } = await adminSupabase.from("verification_sessions").upsert(
+  const { error: sessionError } = await supabase.from("verification_sessions").upsert(
     {
       user_id: user.id,
       phone_verified_at: nowIso,
@@ -181,14 +169,42 @@ async function finalizePhoneVerification(
     });
   }
 
+  const { error: otpLogError } = await adminSupabase
+    .from("otp_logs")
+    .update({ verified: true, verified_at: nowIso })
+    .eq("phone", otpLogLookup.phone)
+    .eq("otp_hash", otpLogLookup.otpHash)
+    .is("verified_at", null);
+
+  if (otpLogError) {
+    log.warn("Failed to sync OTP audit log verification state", {
+      error: otpLogError.message,
+      userId: user.id,
+    });
+  }
+
   return { success: true };
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const sameOriginFailure = enforceSameOriginMutation(request, log);
+    if (sameOriginFailure) {
+      return sameOriginFailure;
+    }
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) {
+      return csrfBlock;
+    }
+
     // Rate limit by IP to prevent brute-force across multiple OTP challenges
     const ip = getClientIp(request);
-    const rl = await checkRateLimit({ key: ip, action: "otp:verify" });
+    const rl = await checkRateLimit({
+      key: ip,
+      action: "otp:verify",
+      degradedMode: "local",
+    });
     if (rl.limited) {
       return NextResponse.json(
         { error: "Too many attempts. Please try again later." },
@@ -196,18 +212,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-    const parsed = otpVerifySchema.safeParse(body);
+    const parsedBody = await parseAndValidateJsonRequest(request, otpVerifySchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
 
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+    if (!parsedBody.success) {
+      return parsedBody.response;
     }
 
-    const { otp } = parsed.data;
-    const phone = normalizeSaPhone(parsed.data.phone);
+    const { otp } = parsedBody.data;
+    const phone = normalizeSaPhone(parsedBody.data.phone);
     const accountPhoneFields = buildAccountPhoneFields(phone);
     const supabase = await createClient();
     const {
@@ -274,18 +290,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Mark this challenge as verified atomically.
+    // Mark ALL pending challenges for this user+phone as verified so older
+    // OTPs cannot be replayed after a newer one succeeds.
     await adminSupabase
       .from("otp_challenges")
       .update({ verified_at: nowIso })
-      .eq("id", challenge.id)
+      .eq("user_id", user.id)
+      .eq("phone", phone)
       .is("verified_at", null);
 
     const verificationResult = await finalizePhoneVerification(
+      supabase,
       adminSupabase,
       user,
       accountPhoneFields,
-      nowIso
+      nowIso,
+      { phone, otpHash: challenge.otp_hash }
     );
     if (!verificationResult.success) {
       return NextResponse.json(
@@ -296,7 +316,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, verified: true });
   } catch (err) {
-    log.error("Unexpected error", { error: err instanceof Error ? err.message : "unknown error" });
+    log.error("Unexpected error", {
+      error: err instanceof Error ? err.message : "unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

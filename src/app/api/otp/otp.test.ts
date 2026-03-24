@@ -8,6 +8,8 @@ import * as smsService from "@/lib/services/sms";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 async function hashOtpForTest(otp: string): Promise<string> {
   const salt = new Uint8Array(16);
   salt.fill(7);
@@ -19,7 +21,7 @@ async function hashOtpForTest(otp: string): Promise<string> {
     {
       name: "PBKDF2",
       salt: salt.buffer as ArrayBuffer,
-      iterations: 100000,
+      iterations: 150000,
       hash: "SHA-512",
     },
     keyMaterial,
@@ -53,7 +55,23 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 function createMockRequest(path: string, body: Record<string, unknown>) {
   return new NextRequest(`http://localhost${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      origin: "http://localhost",
+      cookie: `vm_csrf=${CSRF_TOKEN}`,
+      "x-csrf-token": CSRF_TOKEN,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function createMissingCsrfRequest(path: string, body: Record<string, unknown>) {
+  return new NextRequest(`http://localhost${path}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "http://localhost",
+    },
     body: JSON.stringify(body),
   });
 }
@@ -75,27 +93,69 @@ describe("OTP Routes", () => {
   });
 
   describe("POST /api/otp/send", () => {
+    it("rejects requests without a CSRF token", async () => {
+      const res = await sendOtp(
+        createMissingCsrfRequest("/api/otp/send", { phone: "+27821234567" })
+      );
+
+      expect(res.status).toBe(403);
+    });
+
     it("returns the shared rate-limit response when the external limiter blocks the request", async () => {
       vi.mocked(checkRateLimit).mockResolvedValue({ limited: true, retryAfter: 45 });
 
       const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+      const data = await res.json();
 
       expect(res.status).toBe(429);
       expect(res.headers.get("Retry-After")).toBe("45");
+      expect(data).toMatchObject({
+        error: "Too many OTP requests. Please wait before trying again.",
+        code: "rate_limited",
+        retryAfter: 45,
+      });
+    });
+
+    it("keeps OTP send available when the shared limiter is degraded and only returns 429 after the fallback limit is hit", async () => {
+      vi.mocked(checkRateLimit).mockResolvedValue({
+        limited: true,
+        degraded: true,
+        retryAfter: 30,
+      });
+
+      const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+      const data = await res.json();
+
+      expect(res.status).toBe(429);
+      expect(data).toMatchObject({
+        error: "Too many OTP requests. Please wait before trying again.",
+        code: "rate_limited",
+        retryAfter: 30,
+      });
     });
 
     it("blocks when challenge send limit is exceeded", async () => {
+      const adminQuery = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        gte: vi.fn(),
+        update: vi.fn(),
+        insert: vi.fn(),
+      };
+      adminQuery.select.mockReturnValue(adminQuery);
+      adminQuery.eq.mockReturnValue(adminQuery);
+      adminQuery.gte.mockResolvedValue({ count: 5 });
+
+      const invalidateQuery = {
+        eq: vi.fn(),
+        is: vi.fn().mockResolvedValue({ error: null }),
+      };
+      invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      adminQuery.update.mockReturnValue(invalidateQuery);
+      adminQuery.insert.mockResolvedValue({ error: null });
+
       const mockAdminClient = {
-        from: vi.fn((table: string) => {
-          if (table === "otp_challenges") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              gte: vi.fn().mockResolvedValue({ count: 5 }),
-            };
-          }
-          return { insert: vi.fn().mockResolvedValue({ error: null }) };
-        }),
+        from: vi.fn().mockReturnValue(adminQuery),
       };
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
 
@@ -103,27 +163,37 @@ describe("OTP Routes", () => {
       const data = await res.json();
 
       expect(res.status).toBe(429);
+      expect(res.headers.get("Retry-After")).toBe("3600");
       expect(data.error).toBe("Maximum SMS limit reached. Please try again in 1 hour.");
+      expect(data.code).toBe("hourly_limit_reached");
+      expect(data.retryAfter).toBe(3600);
     });
 
     it("creates challenge and sends OTP when allowed", async () => {
+      const otpLogInsert = vi
+        .fn()
+        .mockResolvedValueOnce({ error: null })
+        .mockResolvedValueOnce({ error: null });
+      const adminQuery = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        gte: vi.fn(),
+        update: vi.fn(),
+        insert: otpLogInsert,
+      };
+      adminQuery.select.mockReturnValue(adminQuery);
+      adminQuery.eq.mockReturnValue(adminQuery);
+      adminQuery.gte.mockResolvedValue({ count: 0 });
+
+      const invalidateQuery = {
+        eq: vi.fn(),
+        is: vi.fn().mockResolvedValue({ error: null }),
+      };
+      invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      adminQuery.update.mockReturnValue(invalidateQuery);
+
       const mockAdminClient = {
-        from: vi.fn((table: string) => {
-          if (table === "otp_challenges") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              gte: vi.fn().mockResolvedValue({ count: 0 }),
-              insert: vi.fn().mockResolvedValue({ error: null }),
-            };
-          }
-          if (table === "otp_logs") {
-            return {
-              insert: vi.fn().mockResolvedValue({ error: null }),
-            };
-          }
-          return {};
-        }),
+        from: vi.fn().mockReturnValue(adminQuery),
       };
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
       vi.mocked(smsService.sendOtpSms).mockResolvedValue({
@@ -136,10 +206,81 @@ describe("OTP Routes", () => {
       expect(res.status).toBe(200);
       expect(data).toEqual({ success: true });
       expect(smsService.sendOtpSms).toHaveBeenCalledWith("+27821234567", expect.any(String));
+      expect(otpLogInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phone: "+27821234567",
+          delivery_status: "sent",
+          provider_name: "africastalking",
+          provider_message_id: "sms-1",
+          provider_error: null,
+        })
+      );
+    });
+
+    it("returns a structured provider error when the SMS provider rejects the send", async () => {
+      const otpLogInsert = vi
+        .fn()
+        .mockResolvedValueOnce({ error: null })
+        .mockResolvedValueOnce({ error: null });
+      const adminQuery = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        gte: vi.fn(),
+        update: vi.fn(),
+        insert: otpLogInsert,
+      };
+      adminQuery.select.mockReturnValue(adminQuery);
+      adminQuery.eq.mockReturnValue(adminQuery);
+      adminQuery.gte.mockResolvedValue({ count: 0 });
+
+      const invalidateQuery = {
+        eq: vi.fn(),
+        is: vi.fn().mockResolvedValue({ error: null }),
+      };
+      invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      adminQuery.update.mockReturnValue(invalidateQuery);
+
+      const mockAdminClient = {
+        from: vi.fn().mockReturnValue(adminQuery),
+      };
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+      vi.mocked(smsService.sendOtpSms).mockResolvedValue({
+        success: false,
+        error: "HTTP 401: Generator rejected",
+      } as never);
+
+      const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+      const data = await res.json();
+
+      expect(res.status).toBe(502);
+      expect(res.headers.get("Retry-After")).toBe("60");
+      expect(data).toMatchObject({
+        error: "Failed to send OTP. Please try again.",
+        code: "sms_delivery_failed",
+        detail: "The SMS provider could not accept the message.",
+        retryAfter: 60,
+      });
+      expect(otpLogInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phone: "+27821234567",
+          delivery_status: "failed",
+          provider_name: "africastalking",
+          provider_message_id: undefined,
+          provider_error: "HTTP 401: Generator rejected",
+        })
+      );
     });
   });
 
   describe("POST /api/otp/verify", () => {
+    it("rejects OTP verification requests without a CSRF token", async () => {
+      const res = await verifyOtp(
+        createMissingCsrfRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+
+      expect(res.status).toBe(403);
+    });
+
     it("returns 400 when there is no active challenge for the user+phone", async () => {
       const mockAdminClient = {
         from: vi.fn((table: string) => {
@@ -166,6 +307,23 @@ describe("OTP Routes", () => {
 
       expect(res.status).toBe(400);
       expect(data.error).toBe("Invalid or expired OTP");
+    });
+
+    it("keeps OTP verification available when the shared limiter is degraded and only returns 429 after the fallback limit is hit", async () => {
+      vi.mocked(checkRateLimit).mockResolvedValue({
+        limited: true,
+        degraded: true,
+        retryAfter: 25,
+      });
+
+      const res = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+      const data = await res.json();
+
+      expect(res.status).toBe(429);
+      expect(res.headers.get("Retry-After")).toBe("25");
+      expect(data.error).toBe("Too many attempts. Please try again later.");
     });
 
     it("does not allow legacy bypass codes without a stored challenge", async () => {
@@ -198,12 +356,24 @@ describe("OTP Routes", () => {
     });
 
     it("persists phone verification to profile, step, and session on success", async () => {
-      const challengeUpdateEq = vi.fn().mockReturnValue({
-        is: vi.fn().mockResolvedValue({ error: null }),
+      const challengeUpdateIs = vi.fn().mockResolvedValue({ error: null });
+      const challengeUpdateEq: ReturnType<typeof vi.fn> = vi.fn().mockImplementation(() => ({
+        eq: challengeUpdateEq,
+        is: challengeUpdateIs,
+      }));
+      const profileSelectMaybeSingle = vi.fn().mockResolvedValue({
+        data: { id: "profile-1" },
+        error: null,
+      });
+      const profileSelectEq = vi.fn().mockReturnValue({
+        maybeSingle: profileSelectMaybeSingle,
       });
       const profileUpdateEq = vi.fn().mockResolvedValue({ error: null });
       const verificationStepUpsert = vi.fn().mockResolvedValue({ error: null });
       const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
+      const otpLogVerifyIs = vi.fn().mockResolvedValue({ error: null });
+      const otpLogVerifyHashEq = vi.fn().mockReturnValue({ is: otpLogVerifyIs });
+      const otpLogVerifyPhoneEq = vi.fn().mockReturnValue({ eq: otpLogVerifyHashEq });
       const storedHash = await hashOtpForTest("123456");
 
       const mockAdminClient = {
@@ -232,30 +402,17 @@ describe("OTP Routes", () => {
             };
           }
 
-          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
-            return {
-              select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  maybeSingle: vi
-                    .fn()
-                    .mockResolvedValue({ data: { id: "profile-1" }, error: null }),
-                }),
-              }),
-              update: vi.fn().mockReturnValue({
-                eq: profileUpdateEq,
-              }),
-            };
-          }
-
           if (table === "verification_steps") {
             return {
               upsert: verificationStepUpsert,
             };
           }
 
-          if (table === "verification_sessions") {
+          if (table === "otp_logs") {
             return {
-              upsert: sessionUpsert,
+              update: vi.fn().mockReturnValue({
+                eq: otpLogVerifyPhoneEq,
+              }),
             };
           }
 
@@ -264,6 +421,26 @@ describe("OTP Routes", () => {
       };
 
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: profileSelectEq,
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: profileUpdateEq,
+            }),
+          };
+        }
+
+        if (table === "verification_sessions") {
+          return {
+            upsert: sessionUpsert,
+          };
+        }
+
+        return {};
+      });
 
       const res = await verifyOtp(
         createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
@@ -288,10 +465,20 @@ describe("OTP Routes", () => {
         }),
         { onConflict: "user_id" }
       );
+      expect(otpLogVerifyPhoneEq).toHaveBeenCalledWith("phone", "+27821234567");
+      expect(otpLogVerifyHashEq).toHaveBeenCalledWith("otp_hash", storedHash);
+      expect(otpLogVerifyIs).toHaveBeenCalledWith("verified_at", null);
     });
 
     it("returns 409 when the verified phone already belongs to another account", async () => {
       const storedHash = await hashOtpForTest("123456");
+      const profileSelectMaybeSingle = vi.fn().mockResolvedValue({
+        data: { id: "profile-1" },
+        error: null,
+      });
+      const profileSelectEq = vi.fn().mockReturnValue({
+        maybeSingle: profileSelectMaybeSingle,
+      });
 
       const mockAdminClient = {
         from: vi.fn((table: string) => {
@@ -313,30 +500,11 @@ describe("OTP Routes", () => {
                 },
                 error: null,
               }),
-              update: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  is: vi.fn().mockResolvedValue({ error: null }),
-                }),
-              }),
-            };
-          }
-
-          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
-            return {
-              select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  maybeSingle: vi
-                    .fn()
-                    .mockResolvedValue({ data: { id: "profile-1" }, error: null }),
-                }),
-              }),
-              update: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue({
-                  error: {
-                    code: "23505",
-                    message: "Phone number already linked to another account",
-                  },
-                }),
+              update: vi.fn().mockImplementation(() => {
+                const chain: Record<string, unknown> = {};
+                chain.eq = vi.fn().mockReturnValue(chain);
+                chain.is = vi.fn().mockResolvedValue({ error: null });
+                return chain;
               }),
             };
           }
@@ -347,17 +515,36 @@ describe("OTP Routes", () => {
             };
           }
 
-          if (table === "verification_sessions") {
-            return {
-              upsert: vi.fn().mockResolvedValue({ error: null }),
-            };
-          }
-
           return {};
         }),
       };
 
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: profileSelectEq,
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({
+                error: {
+                  code: "23505",
+                  message: "Phone number already linked to another account",
+                },
+              }),
+            }),
+          };
+        }
+
+        if (table === "verification_sessions") {
+          return {
+            upsert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+
+        return {};
+      });
 
       const res = await verifyOtp(
         createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })

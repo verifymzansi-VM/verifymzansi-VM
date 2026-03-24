@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { adminContentDecideSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
-import { getRoleFromUser, isModeratorOrAdmin, asAdminRole } from "@/lib/auth/roles";
+import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
+import { getOwnerColumn, readOwnerId } from "@/lib/account/compat";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createNotification } from "@/lib/notifications";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const log = createLogger("AdminContentDecide");
 
@@ -17,6 +20,10 @@ const log = createLogger("AdminContentDecide");
  */
 export async function POST(request: Request) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
     const supabase = await createClient();
     const {
       data: { user },
@@ -26,12 +33,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!isModeratorOrAdmin(user)) {
+    const adminRole = await verifyStaffActorRoleFromDb(user);
+    if (!adminRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-
-    const role = getRoleFromUser(user);
-    const adminRole = asAdminRole(role);
 
     const rl = checkLocalRateLimit(user.id, "admin:content:decide");
     if (rl.limited) {
@@ -41,17 +46,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await parseJsonRequest(request);
-    if (!body) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    const bodyResult = await parseAndValidateJsonRequest(request, adminContentDecideSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
+    if (!bodyResult.success) {
+      return bodyResult.response;
     }
-    const parsed = adminContentDecideSchema.safeParse(body);
 
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
-    }
-
-    const { itemId, area, decision, reason } = parsed.data;
+    const { itemId, area, decision, reason } = bodyResult.data;
 
     const admin = createAdminClient();
 
@@ -82,6 +86,7 @@ export async function POST(request: Request) {
       .from(table)
       .update(updatePayload)
       .eq("id", itemId)
+      .eq("status", "pending_moderation")
       .select("id");
 
     if (updateError) {
@@ -137,7 +142,7 @@ export async function POST(request: Request) {
     const { targetType, approveAction, rejectAction } = auditConfig[table];
     await logAuditEvent({
       actorId: user.id,
-      actorRole: adminRole || "admin",
+      actorRole: adminRole,
       action: decision === "approve" ? approveAction : rejectAction,
       targetType,
       targetId: itemId,
@@ -146,8 +151,18 @@ export async function POST(request: Request) {
 
     // Notify the account holder about the moderation decision
     try {
-      // Get the account holder's user ID and content title
-      const ownerField = table === "listings" ? "owner_id" : "owner_id";
+      // Resolve owner column via compat layer for tables that support it
+      const compatTable =
+        table === "listings"
+          ? "listings"
+          : table === "businesses"
+            ? "businesses"
+            : table === "promotions"
+              ? "promotions"
+              : null;
+      const ownerField = compatTable
+        ? await getOwnerColumn(admin as never, compatTable).catch(() => "owner_id")
+        : "owner_id";
       const titleField =
         table === "listings"
           ? "title"
@@ -163,8 +178,8 @@ export async function POST(request: Request) {
         .single();
 
       if (contentItem) {
-        const record = contentItem as Record<string, unknown>;
-        const accountHolderId = record[ownerField] as string;
+        const record = contentItem as unknown as Record<string, unknown>;
+        const accountHolderId = (record[ownerField] ?? readOwnerId(record)) as string;
         const contentTitle = (record[titleField] as string)?.slice(0, 40) || "your content";
         const contentLabel =
           table === "listings"

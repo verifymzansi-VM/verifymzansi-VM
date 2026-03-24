@@ -35,7 +35,7 @@ export default function TermsPage() {
         "• Post only items, businesses, offers, or events you legally own or are authorised to advertise",
         "• Provide accurate descriptions, images, pricing, and business details",
         "• Not list prohibited items (weapons, illegal substances, counterfeit goods)",
-        "• Comply with the Consumer Protection Act and all applicable SA laws",
+        "• Comply with the Consumer Protection Act (CPA) of South Africa and all applicable SA laws",
       ],
     },
     {
@@ -52,11 +52,21 @@ export default function TermsPage() {
     {
       title: "5. Payments & Billing",
       content: [
-        "Paid features are billed via PayFast in ZAR (incl. VAT). Subscriptions auto-renew unless cancelled. Refunds follow CPA guidelines.",
+        "Paid features are billed via secure hosted checkout in ZAR (incl. VAT). Subscriptions auto-renew unless cancelled. Refunds follow CPA guidelines.",
       ],
     },
     {
-      title: "6. Limitation of Liability",
+      title: "6. Promotion & Distribution Rights",
+      content: [
+        "When you create a promotion, advertisement, event, or campaign on VerifyMzansi, you confirm that you own it or are authorised to market it.",
+        "If you authorize VerifyMzansi social distribution for a promotion, you grant VerifyMzansi a non-exclusive license to publish, adapt, and distribute that promotion on VerifyMzansi-owned social channels.",
+        "• Only authorize external social distribution when you have the rights to do so",
+        "• VerifyMzansi-owned channel or post monetization belongs to VerifyMzansi unless a separate written agreement says otherwise",
+        "• No revenue share or compensation is implied unless both parties agree to it in writing",
+      ],
+    },
+    {
+      title: "7. Limitation of Liability",
       content: [
         "VerifyMzansi connects buyers, account holders, businesses, and advertisers — we are not a party to transactions. We do not guarantee quality, safety, or legality of listed items or promotions. Liability is limited to the maximum extent permitted by SA law.",
       ],
@@ -74,7 +84,7 @@ export default function TermsPage() {
               Terms of Service
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Last updated: February 2026 · Governed by South African law
+              Last updated: March 2026 · Governed by South African law
             </p>
           </div>
         </div>
@@ -112,7 +122,7 @@ export default function TermsPage() {
               <section className="space-y-1.5 pt-1">
                 <h2 className="font-display text-base font-bold flex items-center gap-2">
                   <span className="text-brand-green text-sm font-mono" aria-hidden="true">
-                    07
+                    08
                   </span>
                   Privacy & Contact
                 </h2>

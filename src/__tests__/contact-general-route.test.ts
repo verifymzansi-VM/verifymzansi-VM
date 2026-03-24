@@ -25,6 +25,9 @@ vi.mock("@/lib/utils/turnstile", () => ({
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => mockLogger,
 }));
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: vi.fn().mockReturnValue(null),
+}));
 
 import { POST } from "@/app/api/contact/general/route";
 
@@ -128,7 +131,7 @@ describe("POST /api/contact/general", () => {
     expect(insert).toHaveBeenCalledWith({
       name: "Nomsa",
       email: "nomsa@example.com",
-      message: 'alert("xss")Hello from customer support form.',
+      message: "alert(&quot;xss&quot;)Hello from customer support form.",
       status: "new",
     });
     expect(mockLogger.info).toHaveBeenCalledWith("Contact form submission received", {

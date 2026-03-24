@@ -1,32 +1,47 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { MarketPreviewCard } from "./market-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
+import { createLogger } from "@/lib/utils/logger";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
+import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
+import {
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+  shouldHidePlaywrightFixtures,
+} from "@/lib/supabase/playwright-visual-fixtures";
+
+const log = createLogger("HomeMzansiMarketShowcase");
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
 }
 
 export async function HomeMzansiMarketShowcase() {
+  const cookieStore = await cookies();
+  const hideFixtures = shouldHidePlaywrightFixtures(
+    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+  );
   const supabase = await createClient();
-  const { data: listings } = await supabase
+  const { data: listings, error } = await supabase
     .from("listings")
-    .select(
-      "id, title, description, price_cents, photos, videos, video_thumbnail, location_province, location_city, boost_until"
-    )
+    .select("*")
     .eq("status", "live")
     .eq("area", "MZANSI_MARKET")
-    .not("title", "ilike", "%seed%")
-    .not("title", "ilike", "%[seed]%")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(16);
 
+  if (error) {
+    log.warn("Failed to load home Mzansi Market showcase", { error: error.message });
+    return null;
+  }
+
   const items = (listings ?? [])
+    .filter((listing) => !shouldHidePlaywrightFixtureRowWhenEnabled(listing, hideFixtures))
     .filter((listing) => !isPlaceholderMarketplaceContent(listing.title, listing.description))
     .slice(0, 8);
   if (items.length === 0) return null;
@@ -60,7 +75,7 @@ export async function HomeMzansiMarketShowcase() {
             return (
               <div
                 key={l.id}
-                className="min-w-[220px] max-w-[260px] sm:min-w-[260px] sm:max-w-[260px]"
+                className="min-w-[240px] max-w-[264px] sm:min-w-[264px] sm:max-w-[264px]"
               >
                 <MarketPreviewCard
                   href={`/listing/${l.id}`}

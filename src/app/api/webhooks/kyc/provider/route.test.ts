@@ -23,6 +23,10 @@ import { POST } from "./route";
 function createMockRequest(body: Record<string, unknown>) {
   return {
     json: async () => body,
+    nextUrl: new URL("http://localhost/api/webhooks/kyc/provider"),
+    headers: {
+      get: vi.fn(() => null),
+    },
   } as unknown as NextRequest;
 }
 
@@ -33,12 +37,26 @@ const providerResult = {
   provider_status: "pending",
 };
 
+function pendingStep(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "step-1",
+    status: "pending",
+    risk_score: 10,
+    ...overrides,
+  };
+}
+
 // ── Tests ────────────────────────────────────────────────────
 
 describe("POST /api/webhooks/kyc/provider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLogAuditEvent.mockResolvedValue(undefined);
+    vi.unstubAllEnvs();
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ENABLE_DEV_KYC_WEBHOOK_BYPASS", "1");
+    delete process.env.KYC_WEBHOOK_SECRET;
+    delete process.env.PLAYWRIGHT_TEST_MODE;
   });
 
   it("returns 400 when provider_ref is missing", async () => {
@@ -51,6 +69,27 @@ describe("POST /api/webhooks/kyc/provider", () => {
   it("returns 400 for completely empty payload", async () => {
     const res = await POST(createMockRequest({}));
     expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when status is invalid", async () => {
+    const res = await POST(createMockRequest({ provider_ref: "ref-1", status: "pending" }));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("Invalid webhook status");
+  });
+
+  it("returns 400 when score types are invalid", async () => {
+    const res = await POST(
+      createMockRequest({
+        provider_ref: "ref-1",
+        status: "approved",
+        scores: { face_match_score: "high" },
+      })
+    );
+
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("Score must be a number");
   });
 
   it("acknowledges unknown provider_ref without error", async () => {
@@ -105,7 +144,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({
-                  data: { id: "step-1", risk_score: 10 },
+                  data: pendingStep(),
                   error: null,
                 }),
               }),
@@ -174,7 +213,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({
-                  data: { id: "step-1", risk_score: 20 },
+                  data: pendingStep({ risk_score: 20 }),
                   error: null,
                 }),
               }),
@@ -238,7 +277,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({
-                  data: { id: "step-1", risk_score: 90 },
+                  data: pendingStep({ risk_score: 90 }),
                   error: null,
                 }),
               }),
@@ -300,39 +339,83 @@ describe("POST /api/webhooks/kyc/provider", () => {
     );
   });
 
+  it("does not overwrite an already-decided verification step", async () => {
+    const stepUpdateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "kyc_provider_results") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { step_type: "id_doc" }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: pendingStep({ status: "approved", risk_score: 40 }),
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+          update: stepUpdateMock,
+        };
+      }
+      return {};
+    });
+
+    const res = await POST(createMockRequest({ provider_ref: "ref-1", status: "rejected" }));
+
+    expect(res.status).toBe(200);
+    expect(stepUpdateMock).not.toHaveBeenCalled();
+  });
+
   it("returns 503 in production without secret and without test mode", async () => {
     const origEnv = process.env.NODE_ENV;
     const origPw = process.env.PLAYWRIGHT_TEST_MODE;
+    const origBypass = process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS;
     try {
       // @ts-expect-error -- overriding readonly for test
       process.env.NODE_ENV = "production";
       delete process.env.KYC_WEBHOOK_SECRET;
       delete process.env.PLAYWRIGHT_TEST_MODE;
+      delete process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS;
       const res = await POST(createMockRequest({ provider_ref: "ref-1", status: "approved" }));
       expect(res.status).toBe(503);
     } finally {
       // @ts-expect-error -- restoring readonly
       process.env.NODE_ENV = origEnv;
       process.env.PLAYWRIGHT_TEST_MODE = origPw;
+      if (origBypass) process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS = origBypass;
+      else delete process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS;
     }
   });
 
-  it("bypasses 503 in production when PLAYWRIGHT_TEST_MODE=1", async () => {
-    const origEnv = process.env.NODE_ENV;
-    const origPw = process.env.PLAYWRIGHT_TEST_MODE;
-    try {
-      // @ts-expect-error -- overriding readonly for test
-      process.env.NODE_ENV = "production";
-      delete process.env.KYC_WEBHOOK_SECRET;
-      process.env.PLAYWRIGHT_TEST_MODE = "1";
-      const res = await POST(createMockRequest({}));
-      // Should hit payload validation (400) instead of 503
-      expect(res.status).toBe(400);
-    } finally {
-      // @ts-expect-error -- restoring readonly
-      process.env.NODE_ENV = origEnv;
-      process.env.PLAYWRIGHT_TEST_MODE = origPw;
-    }
+  it("allows unsigned webhook payloads only in explicit local development mode", async () => {
+    const res = await POST(createMockRequest({}));
+
+    // Should hit payload validation (400) instead of 503
+    expect(res.status).toBe(400);
   });
 
   it("sets auto_status to needs_manual_review for ambiguous result", async () => {
@@ -368,7 +451,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({
-                  data: { id: "step-1", risk_score: 10 },
+                  data: pendingStep(),
                   error: null,
                 }),
               }),

@@ -36,6 +36,7 @@ export interface PendingVerification {
   risk_level: string | null;
   risk_score: number | null;
   auto_status: string | null;
+  reviewed_at: string | null;
   account_display_name?: string | null;
   account_verification_status?: string | null;
   /** @deprecated Use account_display_name */
@@ -51,6 +52,19 @@ export interface AuditLogEntry {
   area: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
+}
+
+export interface RecentOtpAttempt {
+  id: string;
+  phone: string;
+  delivery_status: "pending" | "sent" | "failed";
+  provider_name: string | null;
+  provider_message_id: string | null;
+  provider_error: string | null;
+  verified: boolean;
+  verified_at: string | null;
+  created_at: string;
+  expires_at: string;
 }
 
 async function getPendingModerationCountInternal() {
@@ -77,6 +91,71 @@ async function getPendingModerationCountInternal() {
 
 export async function getPendingModerationCount(): Promise<number> {
   return getPendingModerationCountInternal();
+}
+
+export async function getRecentOtpAttempts(limit = 12): Promise<RecentOtpAttempt[]> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("otp_logs")
+    .select(
+      "id, phone, delivery_status, provider_name, provider_message_id, provider_error, verified, verified_at, created_at, expires_at"
+    )
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) {
+    return [];
+  }
+
+  const attempts = data as RecentOtpAttempt[];
+  const phones = Array.from(new Set(attempts.map((attempt) => attempt.phone).filter(Boolean)));
+
+  if (phones.length === 0) {
+    return attempts;
+  }
+
+  const { data: profiles } = await supabase
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
+    .select("user_id, phone")
+    .in("phone", phones);
+
+  const phoneToUserId = new Map<string, string>();
+  for (const profile of profiles ?? []) {
+    if (typeof profile.phone === "string" && profile.phone && typeof profile.user_id === "string") {
+      phoneToUserId.set(profile.phone, profile.user_id);
+    }
+  }
+
+  const userIds = Array.from(new Set(Array.from(phoneToUserId.values())));
+  const verifiedAtByUserId = new Map<string, string>();
+
+  if (userIds.length > 0) {
+    const { data: phoneSteps } = await supabase
+      .from("verification_steps")
+      .select("user_id, phone_verified_at, status")
+      .eq("step_type", "phone")
+      .eq("status", "approved")
+      .in("user_id", userIds);
+
+    for (const step of phoneSteps ?? []) {
+      if (typeof step.user_id === "string" && typeof step.phone_verified_at === "string") {
+        verifiedAtByUserId.set(step.user_id, step.phone_verified_at);
+      }
+    }
+  }
+
+  return attempts.map((attempt) => {
+    const fallbackVerifiedAt =
+      verifiedAtByUserId.get(phoneToUserId.get(attempt.phone) ?? "") ?? null;
+    const verifiedAt = attempt.verified_at ?? fallbackVerifiedAt;
+
+    return {
+      ...attempt,
+      verified: attempt.verified || Boolean(verifiedAt),
+      verified_at: verifiedAt,
+    };
+  });
 }
 
 // ── Queries ──────────────────────────────────────────────────
@@ -326,7 +405,9 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
 
   const { data: steps } = await supabase
     .from("verification_steps")
-    .select("id, user_id, step_type, status, created_at, risk_level, risk_score, auto_status")
+    .select(
+      "id, user_id, step_type, status, created_at, risk_level, risk_score, auto_status, reviewed_at"
+    )
     .eq("status", "pending")
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -429,6 +510,7 @@ export interface DashboardKycItem {
   location_method: string | null;
   location_province: string | null;
   location_city: string | null;
+  location_address_line: string | null;
   submitted_at: string | null;
   created_at: string;
   risk_level: string | null;
@@ -451,7 +533,7 @@ export async function getDashboardKycQueue(limit = 50): Promise<DashboardKycItem
   const { data: steps } = await supabase
     .from("verification_steps")
     .select(
-      "id, user_id, step_type, status, full_name, dob, document_type, location_method, location_province, location_city, submitted_at, created_at, risk_level, risk_score, auto_status"
+      "id, user_id, step_type, status, full_name, dob, document_type, location_method, location_province, location_city, location_address_line, submitted_at, created_at, risk_level, risk_score, auto_status"
     )
     .eq("status", "pending")
     .order("created_at", { ascending: true })

@@ -1,12 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockCheckLocalRateLimit } =
-  vi.hoisted(() => ({
-    mockCreateClient: vi.fn(),
-    mockCreateAdminClient: vi.fn(),
-    mockLogAuditEvent: vi.fn(),
-    mockCheckLocalRateLimit: vi.fn(),
-  }));
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockLogAuditEvent,
+  mockCheckLocalRateLimit,
+  mockEnforceSameOriginMutation,
+  mockEnforceCsrfToken,
+} = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
+  mockLogAuditEvent: vi.fn(),
+  mockCheckLocalRateLimit: vi.fn(),
+  mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
+  mockEnforceCsrfToken: vi.fn<(request: Request) => Response | null>(() => null),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
@@ -24,8 +32,8 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: mockCheckLocalRateLimit,
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  isAdmin: () => true,
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyAdminActorRoleFromDb: vi.fn(async () => "admin"),
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -34,6 +42,14 @@ vi.mock("@/lib/utils/logger", () => ({
     warn: vi.fn(),
     error: vi.fn(),
   }),
+}));
+
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: mockEnforceSameOriginMutation,
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: mockEnforceCsrfToken,
 }));
 
 import { POST } from "./route";
@@ -56,6 +72,8 @@ describe("POST /api/admin/dsar/decide", () => {
       },
     });
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
+    mockEnforceSameOriginMutation.mockReturnValue(null);
+    mockEnforceCsrfToken.mockReturnValue(null);
     mockLogAuditEvent.mockResolvedValue(undefined);
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -68,6 +86,26 @@ describe("POST /api/admin/dsar/decide", () => {
         }),
       }),
     });
+  });
+
+  it("rejects cross-origin DSAR decisions before auth or DB access", async () => {
+    mockEnforceSameOriginMutation.mockReturnValue(
+      new Response(JSON.stringify({ error: "Cross-origin request blocked" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const response = await POST(
+      createMockRequest({
+        requestId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        decision: "approve",
+      })
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "Cross-origin request blocked" });
+    expect(mockCreateClient).not.toHaveBeenCalled();
   });
 
   it("logs dsar_started when an admin approves a request", async () => {
@@ -85,6 +123,7 @@ describe("POST /api/admin/dsar/decide", () => {
     expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "dsar_started",
+        actorRole: "admin",
         targetId: requestId,
       })
     );

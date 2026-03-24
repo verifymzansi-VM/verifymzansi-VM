@@ -33,7 +33,7 @@ shadow_port = 54320
 health_timeout = "2m"
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
 # server_version;` on the remote database to check.
-major_version = 15
+major_version = 17
 
 [db.pooler]
 enabled = true
@@ -59,10 +59,10 @@ schema_paths = []
 
 [db.seed]
 # If enabled, seeds the database after migrations during a db reset.
-enabled = true
+enabled = false
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
-sql_paths = ["./seed.sql"]
+sql_paths = []
 
 [db.network_restrictions]
 # Enable management of network restrictions.
@@ -75,8 +75,9 @@ allowed_cidrs = ["0.0.0.0/0"]
 allowed_cidrs_v6 = ["::/0"]
 
 # Reject non-secure connections to the database.
-[db.ssl_enforcement]
-enabled = true
+# NOTE: ssl_enforcement is managed via the Supabase dashboard, not supported by CLI v2.75.
+# [db.ssl_enforcement]
+# enabled = true
 
 [realtime]
 enabled = true

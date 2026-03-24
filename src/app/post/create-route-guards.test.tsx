@@ -25,17 +25,38 @@ describe("create route guards", () => {
     vi.clearAllMocks();
   });
 
-  function mockServerProfile(status: string) {
+  function mockServerProfile(
+    status: string,
+    steps: Array<{ step_type: string; status: string }> = []
+  ) {
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
       },
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: { account_verification_status: status },
-        }),
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { account_verification_status: status },
+            }),
+          };
+        }
+
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: steps }),
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
       }),
     });
   }
@@ -57,6 +78,24 @@ describe("create route guards", () => {
     "allows verified users into %s",
     async (key) => {
       mockServerProfile("verified");
+
+      const mod = await layoutLoaders[key]();
+      const ui = await mod.default({ children: <div>Allowed</div> });
+
+      expect(ui).toEqual(<div>Allowed</div>);
+      expect(mockRedirect).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["listing", "business", "promotion"] as const)(
+    "allows stale verified users into %s when all verification steps are approved",
+    async (key) => {
+      mockServerProfile("incomplete", [
+        { step_type: "phone", status: "approved" },
+        { step_type: "id_doc", status: "approved" },
+        { step_type: "selfie", status: "approved" },
+        { step_type: "location", status: "approved" },
+      ]);
 
       const mod = await layoutLoaders[key]();
       const ui = await mod.default({ children: <div>Allowed</div> });

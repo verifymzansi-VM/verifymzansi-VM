@@ -5,9 +5,10 @@ import { listingSchema } from "@/lib/validations/listing";
 import { logAuditEvent } from "@/lib/services/audit";
 import { getEntitlements } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseJsonRequest, parseAndValidateRouteParams } from "@/lib/utils/api";
 import {
   collectMediaUrls,
   diffRemovedMediaUrls,
@@ -20,9 +21,13 @@ import {
   readOwnerId,
   withOwnerColumn,
 } from "@/lib/account/compat";
+import { uuidSchema } from "@/lib/validations/shared";
+import { z } from "zod";
 
 const log = createLogger("ListingUpdate");
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const listingIdParamsSchema = z.object({
+  id: uuidSchema,
+});
 const AREA: MarketplaceArea = "MZANSI_MARKET";
 type ListingUpdateRow = {
   id: string;
@@ -31,6 +36,7 @@ type ListingUpdateRow = {
   photos?: string[] | null;
   videos?: string[] | null;
   video_thumbnail?: string | null;
+  logo_url?: string | null;
   owner_id?: string | null;
   seller_id?: string | null;
 };
@@ -43,12 +49,18 @@ type ListingUpdateRow = {
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: listingId } = await params;
+    // ── CSRF protection ───────────────────────────────────────
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
 
-    // ── Validate UUID format ─────────────────────────────────
-    if (!UUID_RE.test(listingId)) {
-      return NextResponse.json({ error: "Invalid listing ID" }, { status: 400 });
+    const parsedParams = parseAndValidateRouteParams(await params, listingIdParamsSchema, {
+      validationErrorMessage: "Invalid listing ID",
+      includeValidationDetails: false,
+    });
+    if (!parsedParams.success) {
+      return parsedParams.response;
     }
+    const { id: listingId } = parsedParams.data;
 
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
@@ -98,23 +110,30 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const data = parsed.data;
-    const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "listings");
+    const ownerColumn = await getOwnerColumn(supabase, "listings");
 
     // ── Check listing exists and user owns it ────────────────
-    const { data: rawListing } = await admin
-      .from("listings")
-      .select(
-        withOwnerColumn("id, owner_id, status, area, photos, videos, video_thumbnail", ownerColumn)
-      )
-      .eq("id", listingId)
-      .maybeSingle();
+    const { data: rawListing } = await applyOwnerFilter(
+      supabase
+        .from("listings")
+        .select(
+          withOwnerColumn(
+            "id, owner_id, status, area, photos, videos, video_thumbnail, logo_url",
+            ownerColumn
+          )
+        )
+        .eq("id", listingId),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
     const listing = rawListing as ListingUpdateRow | null;
 
     if (!listing) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
 
+    // Defense-in-depth: applyOwnerFilter already scopes results to the current
+    // user, so this check should never trigger. Kept as a safety net.
     if (readOwnerId(listing) !== user.id) {
       return NextResponse.json(
         { error: "Forbidden — you do not own this listing" },
@@ -132,7 +151,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // ── Enforce photo/video limits based on plan ─────────────
     // Check if user has a paid entitlement (not expired)
-    const { data: activeEntitlement } = await admin
+    const { data: activeEntitlement } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -155,17 +174,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             videoAllowed: FREE_POST_CONFIG.videoAllowed,
           };
 
-    const rawVideos = Array.isArray((body as Record<string, unknown>).videos)
-      ? ((body as Record<string, unknown>).videos as unknown[])
-      : [];
-    if (rawVideos.some((video) => typeof video !== "string")) {
-      return NextResponse.json({ error: "Videos must be an array of URLs" }, { status: 422 });
-    }
-    const videoUrls = rawVideos as string[];
-    const nextVideoThumbnail =
-      typeof (body as Record<string, unknown>).videoThumbnail === "string"
-        ? ((body as Record<string, unknown>).videoThumbnail as string)
-        : null;
+    const videoUrls = data.videos;
+    const nextVideoThumbnail = data.videoThumbnail || null;
+    const nextLogoUrl = data.logo_url || null;
 
     if (data.images.length > ent.maxPhotos) {
       return NextResponse.json(
@@ -176,14 +187,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    if (rawVideos.length > 0 && !ent.videoAllowed) {
+    if (videoUrls.length > 0 && !ent.videoAllowed) {
       return NextResponse.json(
         { error: "Video upload is not available on your current plan." },
         { status: 422 }
       );
     }
 
-    if (rawVideos.length > ent.maxVideos) {
+    if (videoUrls.length > ent.maxVideos) {
       return NextResponse.json(
         { error: `Maximum ${ent.maxVideos} videos allowed on your plan` },
         { status: 422 }
@@ -203,22 +214,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       condition: data.condition || null,
       location_province: data.province || null,
       location_city: data.city || null,
-      location_suburb: (body as Record<string, unknown>).town || null,
+      location_suburb: data.town || null,
       photos: data.images,
       videos: videoUrls,
       video_thumbnail: nextVideoThumbnail,
-      contact_methods: (body as Record<string, unknown>).contactMethods || ["call"],
+      logo_url: nextLogoUrl,
+      contact_methods: data.contactMethods,
       // Re-submit for moderation on edit
       status: listing.status === "live" ? "pending_moderation" : listing.status,
     };
     const removedMediaUrls = diffRemovedMediaUrls(
-      collectMediaUrls(listing.photos, listing.videos, listing.video_thumbnail),
-      collectMediaUrls(updateRecord.photos, videoUrls, nextVideoThumbnail)
+      collectMediaUrls(listing.photos, listing.videos, listing.video_thumbnail, listing.logo_url),
+      collectMediaUrls(updateRecord.photos, videoUrls, nextVideoThumbnail, nextLogoUrl)
     );
 
     // ── Update listing ───────────────────────────────────────
     const updateQuery = applyOwnerFilter(
-      admin.from("listings").update(updateRecord).eq("id", listingId),
+      supabase.from("listings").update(updateRecord).eq("id", listingId),
       ownerColumn,
       user.id
     ); // Double-check ownership at DB level
@@ -239,6 +251,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (removedMediaUrls.length > 0) {
       try {
+        const admin = createAdminClient();
         await queuePublicMediaCleanup(admin, removedMediaUrls, "listing_media_replaced");
       } catch (cleanupError) {
         log.error("Failed to queue replaced listing media for cleanup", {

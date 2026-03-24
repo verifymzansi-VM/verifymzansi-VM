@@ -1,14 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Building2, Plus, Pencil, Eye, Megaphone, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PageHeader } from "@/components/layout/page-header";
+import { BoostButton } from "@/components/listings/boost-button";
 import { timeAgo, expiresIn } from "@/lib/utils/format";
 import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
+import { canBoost as checkCanBoost } from "@/lib/services/entitlements";
+import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import {
   BUSINESS_TYPE_LABELS,
   BUSINESS_CATEGORY_LABELS,
@@ -17,7 +20,7 @@ import {
 } from "@/types/enums";
 
 export const metadata = {
-  title: "My Businesses",
+  title: "Mzansi Business",
   description: "Manage your registered businesses on VerifyMzansi.",
 };
 
@@ -32,18 +35,23 @@ interface DashboardBusiness {
   created_at: string;
 }
 
-export default async function MyBusinessesPage() {
+export default async function MyBusinessesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ created?: string; updated?: string }>;
+} = {}) {
   const supabase = await createClient();
+  const params = searchParams ? await searchParams : {};
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const admin = createAdminClient();
-  const businessOwnerColumn = await getOwnerColumn(admin, "businesses");
+  const businessOwnerColumn = await getOwnerColumn(supabase, "businesses");
+  const businessTier = await getActivePlanTierForArea(user.id, "MZANSI_BUSINESS");
 
   const businessesQuery = applyOwnerFilter(
-    admin
+    supabase
       .from("businesses")
       .select(
         "id, business_name, business_type, category, status, boost_until, featured_until, created_at"
@@ -58,13 +66,35 @@ export default async function MyBusinessesPage() {
   const { data: businesses } = await businessesQuery;
 
   const myBusinesses = (businesses ?? []) as unknown as DashboardBusiness[];
+  const successState = params.updated
+    ? {
+        title: "Business updated",
+        description:
+          "Your changes were saved and the business was resubmitted for review before it goes live again.",
+      }
+    : params.created
+      ? {
+          title: "Business submitted",
+          description:
+            "Your business profile was created successfully and is now waiting for moderation.",
+        }
+      : null;
 
   return (
     <div className="space-y-6">
+      {successState && (
+        <Alert variant="success">
+          <div>
+            <AlertTitle>{successState.title}</AlertTitle>
+            <AlertDescription>{successState.description}</AlertDescription>
+          </div>
+        </Alert>
+      )}
+
       <PageHeader
-        title="My Businesses"
-        description="Manage your Mzansi Business listings."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Businesses" }]}
+        title="Mzansi Business"
+        description="Manage your Mzansi Business profiles."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Mzansi Business" }]}
       >
         <Button asChild size="sm" className="gap-1">
           <Link href="/post/create-business">
@@ -80,10 +110,10 @@ export default async function MyBusinessesPage() {
             <Building2 className="h-8 w-8 text-muted-foreground mx-auto" />
             <h2 className="font-display text-lg font-semibold">No businesses yet</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Create your first business to showcase your brand and link promotions.
+              Create your first business profile to showcase your brand and connect promotions.
             </p>
             <Button asChild size="sm">
-              <Link href="/post/create-business">Create Business</Link>
+              <Link href="/post/create-business">Create your first business</Link>
             </Button>
           </CardContent>
         </Card>
@@ -171,6 +201,16 @@ export default async function MyBusinessesPage() {
                         Edit
                       </Link>
                     </Button>
+                    <BoostButton
+                      listingId={b.id}
+                      isBoosted={Boolean(isBoosted)}
+                      canBoost={
+                        b.status === "live" &&
+                        checkCanBoost(businessTier, "MZANSI_BUSINESS").allowed
+                      }
+                      itemTypeLabel="business"
+                      boostApiPath={`/api/businesses/${b.id}/boost`}
+                    />
                     {b.status === "live" && (
                       <Button asChild size="sm" variant="ghost" className="h-8 gap-1">
                         <Link href={`/post/create-promotion?business_id=${b.id}`}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SlidersHorizontal, Search } from "lucide-react";
 import {
   Sheet,
@@ -9,7 +9,6 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetClose,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,26 +17,25 @@ import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { useMarketplaceStore } from "@/stores";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { triggerHaptic } from "@/lib/utils/haptics";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 const selectClassName =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function BusinessFilterDrawer() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
-  const [localQuery, setLocalQuery] = useState(filters.query || "");
-
+  const [open, setOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const isInteractive = useHydrated();
   const debouncedSetQuery = useDebouncedCallback(
     (value: string) => setFilter("query", value || undefined),
     300
   );
 
-  const [prevStoreQuery, setPrevStoreQuery] = useState(filters.query);
-
-  if (filters.query !== prevStoreQuery) {
-    debouncedSetQuery.cancel();
-    setPrevStoreQuery(filters.query);
-    setLocalQuery(filters.query || "");
-  }
+  useEffect(() => {
+    return () => debouncedSetQuery.cancel();
+  }, [debouncedSetQuery]);
 
   const activeFilterCount = [
     filters.query,
@@ -48,27 +46,39 @@ export function BusinessFilterDrawer() {
   ].filter(Boolean).length;
 
   const clearAllFilters = () => {
+    triggerHaptic("light");
     debouncedSetQuery.cancel();
-    setLocalQuery("");
+    if (searchInputRef.current) {
+      searchInputRef.current.value = "";
+    }
     resetFilters();
   };
 
   return (
-    <Sheet>
-      <div className="fixed bottom-20 right-4 z-40 lg:hidden">
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (next) triggerHaptic("medium");
+        setOpen(next);
+      }}
+    >
+      {/* ── Inline filter bar (mobile only) ─────────── */}
+      <div className="lg:hidden">
         <SheetTrigger asChild>
-          <Button
-            size="lg"
-            className="rounded-full shadow-lg h-14 w-14 bg-brand-blue hover:bg-brand-blue/90"
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
             aria-label="Open business filters"
+            disabled={!isInteractive}
           >
-            <SlidersHorizontal className="h-5 w-5" />
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
+            <span className="flex-1 text-left">Filter &amp; search businesses</span>
             {activeFilterCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-blue px-1.5 text-[10px] font-bold text-white">
                 {activeFilterCount}
               </span>
             )}
-          </Button>
+          </button>
         </SheetTrigger>
       </div>
 
@@ -90,14 +100,16 @@ export function BusinessFilterDrawer() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                key={filters.query || "__empty-query__"}
+                ref={searchInputRef}
                 id="drawer-business-search"
                 type="search"
                 placeholder="Search businesses, services, or brands"
                 aria-label="Search businesses"
                 className="pl-9"
-                value={localQuery}
+                defaultValue={filters.query || ""}
+                disabled={!isInteractive}
                 onChange={(event) => {
-                  setLocalQuery(event.target.value);
                   debouncedSetQuery(event.target.value);
                 }}
               />
@@ -112,6 +124,7 @@ export function BusinessFilterDrawer() {
               aria-label="Category"
               className={selectClassName}
               value={filters.businessCategory || ""}
+              disabled={!isInteractive}
               onChange={(event) =>
                 setFilter(
                   "businessCategory",
@@ -138,6 +151,7 @@ export function BusinessFilterDrawer() {
               aria-label="Business type"
               className={selectClassName}
               value={filters.businessType || ""}
+              disabled={!isInteractive}
               onChange={(event) =>
                 setFilter(
                   "businessType",
@@ -164,6 +178,7 @@ export function BusinessFilterDrawer() {
               aria-label="Province"
               className={selectClassName}
               value={filters.province || ""}
+              disabled={!isInteractive}
               onChange={(event) => {
                 setFilter("province", event.target.value || undefined);
                 setFilter("city", undefined);
@@ -187,7 +202,7 @@ export function BusinessFilterDrawer() {
               className={selectClassName}
               value={filters.city || ""}
               onChange={(event) => setFilter("city", event.target.value || undefined)}
-              disabled={!filters.province}
+              disabled={!isInteractive || !filters.province}
             >
               <option value="">All cities</option>
               {filters.province &&
@@ -204,13 +219,20 @@ export function BusinessFilterDrawer() {
               variant="outline"
               className="flex-1"
               onClick={clearAllFilters}
-              disabled={activeFilterCount === 0}
+              disabled={!isInteractive || activeFilterCount === 0}
             >
               Clear all
             </Button>
-            <SheetClose asChild>
-              <Button className="flex-1 bg-brand-blue hover:bg-brand-blue/90">View results</Button>
-            </SheetClose>
+            <Button
+              className="flex-1 bg-brand-blue hover:bg-brand-blue/90"
+              disabled={!isInteractive}
+              onClick={() => {
+                triggerHaptic("success");
+                setOpen(false);
+              }}
+            >
+              View results
+            </Button>
           </div>
         </div>
       </SheetContent>

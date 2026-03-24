@@ -12,7 +12,6 @@ interface KycStep {
   step_type: string;
   status: string;
   created_at: string;
-  risk_level?: string;
 }
 
 type KycStatus = "unverified" | "pending" | "verified" | "rejected" | "loading";
@@ -58,16 +57,16 @@ export function useKycStatus() {
         // Check if there are pending steps
         const { data: verificationSteps } = await supabase
           .from("verification_steps")
-          .select("id, step_type, status, created_at, risk_level")
+          .select("id, step_type, status, created_at")
           .eq("user_id", user.id)
           .order("created_at", { ascending: true });
 
         setSteps(verificationSteps || []);
 
-        const hasPending = verificationSteps?.some(
-          (s: { status: string }) => s.status === "pending"
+        const hasPendingOrAction = verificationSteps?.some(
+          (s: { status: string }) => s.status === "pending" || s.status === "needs_resubmission"
         );
-        setStatus(hasPending ? "pending" : "unverified");
+        setStatus(hasPendingOrAction ? "pending" : "unverified");
       }
     } catch (err) {
       log.error("Failed to fetch KYC status", {

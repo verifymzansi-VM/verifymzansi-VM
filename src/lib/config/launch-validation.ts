@@ -21,8 +21,24 @@ const HEX_PLACEHOLDER = "cafebabe".repeat(8);
 const TRUTHY_VALUES = new Set(["1", "true", "yes", "on"]);
 const DEV_ONLY_FLAGS = [
   "ENABLE_DEV_PAYMENT_BYPASS",
-  "ENABLE_MOCK_PAYFAST",
+  "ENABLE_MOCK_OZOW",
   "DEV_EXPOSE_OTP",
+  "ENABLE_DEV_KYC_WEBHOOK_BYPASS",
+  "ENABLE_TEST_POSTING_BYPASS",
+  "NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS",
+  "ENABLE_DEV_TURNSTILE_BYPASS",
+] as const;
+
+/**
+ * Environment variables that must NOT be set in production.
+ * Unlike DEV_ONLY_FLAGS (which are boolean toggles), these carry
+ * values that directly weaken security when present.
+ */
+const DANGEROUS_IN_PRODUCTION = [
+  "BYPASS_OTP_CODE",
+  "TEST_PHONE_NUMBERS",
+  "SMS_MOCK",
+  "PLAYWRIGHT_TEST_MODE",
 ] as const;
 
 const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
@@ -70,9 +86,11 @@ const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
     "AFRICASTALKING_API_KEY",
     "AFRICASTALKING_USERNAME",
     "AFRICASTALKING_SENDER_ID",
-    "PAYFAST_MERCHANT_ID",
-    "PAYFAST_MERCHANT_KEY",
-    "PAYFAST_PASSPHRASE",
+    "OZOW_ENV",
+    "OZOW_CLIENT_ID",
+    "OZOW_CLIENT_SECRET",
+    "OZOW_SITE_CODE",
+    "OZOW_WEBHOOK_SECRET",
     "RESEND_API_KEY",
     "R2_ACCOUNT_ID",
     "R2_ACCESS_KEY_ID",
@@ -95,9 +113,8 @@ const PRODUCTION_SECRET_KEYS = [
   "HMAC_SECRET",
   "IP_HASH_SECRET",
   "AFRICASTALKING_API_KEY",
-  "PAYFAST_MERCHANT_ID",
-  "PAYFAST_MERCHANT_KEY",
-  "PAYFAST_PASSPHRASE",
+  "OZOW_CLIENT_SECRET",
+  "OZOW_WEBHOOK_SECRET",
   "RESEND_API_KEY",
   "TURNSTILE_SECRET_KEY",
 ] as const;
@@ -119,6 +136,10 @@ function normalizeMode(value?: string): LaunchValidationMode | null {
 
 function hasValue(value?: string): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function isValidAfricaTalkingSenderId(value?: string): boolean {
+  return hasValue(value) && /^[A-Za-z0-9]{1,11}$/.test(value.trim());
 }
 
 function isTruthy(value?: string): boolean {
@@ -238,6 +259,13 @@ export function validateLaunchConfiguration(
         "fail",
         "AFRICASTALKING_SENDER_ID still contains a placeholder value"
       );
+    } else if (!isValidAfricaTalkingSenderId(afSenderId)) {
+      addCheck(
+        checks,
+        "Africa's Talking",
+        "fail",
+        "AFRICASTALKING_SENDER_ID must be 1-11 alphanumeric characters"
+      );
     } else if (afUsername === "sandbox") {
       addCheck(
         checks,
@@ -254,6 +282,13 @@ export function validateLaunchConfiguration(
       "Africa's Talking",
       "warn",
       "AFRICASTALKING_SENDER_ID is optional locally but required for production SMS delivery"
+    );
+  } else if (!isValidAfricaTalkingSenderId(afSenderId)) {
+    addCheck(
+      checks,
+      "Africa's Talking",
+      "warn",
+      "AFRICASTALKING_SENDER_ID should be 1-11 alphanumeric characters for SMS delivery"
     );
   } else {
     addCheck(checks, "Africa's Talking", "pass", `user=${afUsername} sender=${afSenderId}`);
@@ -273,16 +308,55 @@ export function validateLaunchConfiguration(
     addCheck(checks, "Resend", "pass", "API key format looks valid");
   }
 
-  const payfastSandbox = env.PAYFAST_SANDBOX;
-  if (mode === "production" && isTruthy(payfastSandbox)) {
+  const ozowEnv = env.OZOW_ENV;
+  const ozowClientId = env.OZOW_CLIENT_ID;
+  const ozowClientSecret = env.OZOW_CLIENT_SECRET;
+  const ozowSiteCode = env.OZOW_SITE_CODE;
+  const ozowWebhookSecret = env.OZOW_WEBHOOK_SECRET;
+  const ozowApiBaseUrl = env.OZOW_API_BASE_URL;
+  if (mode === "production") {
+    if (
+      !hasValue(ozowEnv) ||
+      !hasValue(ozowClientId) ||
+      !hasValue(ozowClientSecret) ||
+      !hasValue(ozowSiteCode) ||
+      !hasValue(ozowWebhookSecret)
+    ) {
+      addCheck(
+        checks,
+        "Ozow",
+        "fail",
+        "Ozow payment credentials are required for production checkout."
+      );
+    } else if (ozowEnv !== "production") {
+      addCheck(checks, "Ozow", "fail", "OZOW_ENV must be set to production for live checkout");
+    } else {
+      addCheck(
+        checks,
+        "Ozow",
+        "pass",
+        `env=${ozowEnv} site=${ozowSiteCode}${hasValue(ozowApiBaseUrl) ? " custom-base-url" : ""}`
+      );
+    }
+  } else if (
+    hasValue(ozowClientId) &&
+    hasValue(ozowClientSecret) &&
+    hasValue(ozowSiteCode) &&
+    hasValue(ozowWebhookSecret)
+  ) {
     addCheck(
       checks,
-      "PayFast",
-      "fail",
-      "PAYFAST_SANDBOX is enabled in production and would route payments to the sandbox gateway"
+      "Ozow",
+      "pass",
+      `env=${ozowEnv ?? "staging"} site=${ozowSiteCode}${hasValue(ozowApiBaseUrl) ? " custom-base-url" : ""}`
     );
   } else {
-    addCheck(checks, "PayFast", "pass", `sandbox=${isTruthy(payfastSandbox) ? "true" : "false"}`);
+    addCheck(
+      checks,
+      "Ozow",
+      "warn",
+      "Ozow credentials are optional locally but required before production launch"
+    );
   }
 
   const r2AccountId = env.R2_ACCOUNT_ID;
@@ -366,6 +440,25 @@ export function validateLaunchConfiguration(
     addCheck(checks, "Dev-only flags", "warn", `Enabled: ${activeDevOnlyFlags.join(", ")}`);
   } else {
     addCheck(checks, "Dev-only flags", "pass", "No dev-only bypass flags enabled");
+  }
+
+  const dangerousVars = DANGEROUS_IN_PRODUCTION.filter((key) => hasValue(env[key]));
+  if (mode === "production" && dangerousVars.length > 0) {
+    addCheck(
+      checks,
+      "Dangerous env vars",
+      "fail",
+      `Remove before launch — these weaken security: ${dangerousVars.join(", ")}`
+    );
+  } else if (dangerousVars.length > 0) {
+    addCheck(
+      checks,
+      "Dangerous env vars",
+      "warn",
+      `Set in ${mode} (OK for dev, must remove for production): ${dangerousVars.join(", ")}`
+    );
+  } else {
+    addCheck(checks, "Dangerous env vars", "pass", "No dangerous override variables detected");
   }
 
   if (mode === "production") {

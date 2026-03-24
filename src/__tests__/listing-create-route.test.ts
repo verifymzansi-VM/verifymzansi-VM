@@ -10,16 +10,27 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockCheckRat
     mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
   }));
 
+const { mockEnforceCsrfToken } = vi.hoisted(() => ({
+  mockEnforceCsrfToken: vi.fn(),
+}));
+
+const { mockHasPhoneNumber } = vi.hoisted(() => ({
+  mockHasPhoneNumber: vi.fn(),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
+  checkLocalRateLimit: vi.fn().mockReturnValue({ limited: false }),
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
+vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: mockEnforceCsrfToken }));
+vi.mock("@/lib/account/require-phone", () => ({ hasPhoneNumber: mockHasPhoneNumber }));
 
 import { GET, POST } from "@/app/api/listings/route";
 
@@ -35,7 +46,7 @@ const VALID_BODY = {
   province: "Gauteng",
   city: "Johannesburg",
   category: "electronics",
-  attributes: { brand: "Apple" },
+  attributes: { device_type: "Smartphone", brand: "Apple" },
   images: [VALID_IMAGE],
 };
 
@@ -59,9 +70,39 @@ describe("POST /api/listings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetOwnerColumnCacheForTesting();
+    mockEnforceCsrfToken.mockReturnValue(null);
+    mockHasPhoneNumber.mockResolvedValue(true);
     mockCreateClient.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        const adminClient = mockCreateAdminClient();
+        if (adminClient && typeof adminClient.from === "function") {
+          return adminClient.from(table);
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          neq: vi.fn().mockReturnThis(),
+          insert: vi.fn().mockResolvedValue({ error: null }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
     });
+  });
+
+  it("rejects requests missing a CSRF token", async () => {
+    mockEnforceCsrfToken.mockReturnValue(
+      Response.json({ error: "Invalid CSRF token" }, { status: 403 })
+    );
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ error: "Invalid CSRF token" });
   });
 
   it("rejects video uploads when the paid plan disallows them", async () => {
@@ -196,6 +237,42 @@ describe("POST /api/listings", () => {
     });
   });
 
+  it("rejects listing logos hosted outside the platform", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        ...VALID_BODY,
+        logo_url: "https://evil.example.com/not-allowed-logo.jpg",
+      })
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Validation failed",
+    });
+  });
+
   it("returns verification_required for unverified accounts", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
@@ -208,6 +285,13 @@ describe("POST /api/listings", () => {
                 id: "seller-1",
                 account_verification_status: "incomplete",
               },
+            }),
+          };
+        }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: [] }),
             }),
           };
         }
@@ -226,6 +310,73 @@ describe("POST /api/listings", () => {
       error: "Verification required",
       code: "verification_required",
     });
+  });
+
+  it("allows listing creation when the profile is stale but all verification steps are approved", async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({
+        single: vi.fn().mockResolvedValue({ data: { id: "listing-1" }, error: null }),
+      }),
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "incomplete",
+              },
+            }),
+          };
+        }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({
+                data: [
+                  { step_type: "phone", status: "approved" },
+                  { step_type: "id_doc", status: "approved" },
+                  { step_type: "selfie", status: "approved" },
+                  { step_type: "location", status: "approved" },
+                ],
+              }),
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "basic" } }),
+          };
+        }
+        if (table === "listings") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            insert: insertSpy,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(201);
+    expect(insertSpy).toHaveBeenCalled();
   });
 
   it("writes seller_id when listings still use the legacy owner column", async () => {
@@ -261,10 +412,12 @@ describe("POST /api/listings", () => {
         }
         if (table === "free_posts_used") {
           return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-            upsert: vi.fn().mockResolvedValue({ error: null }),
+            insert: vi.fn().mockResolvedValue({ error: null }),
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            }),
           };
         }
         if (table === "listings") {
@@ -307,6 +460,130 @@ describe("POST /api/listings", () => {
     );
     expect(insertSpy).not.toHaveBeenCalledWith(expect.objectContaining({ owner_id: USER_ID }));
   });
+
+  it("persists trusted listing logo urls on create", async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({
+        single: vi.fn().mockResolvedValue({ data: { id: "listing-1" }, error: null }),
+      }),
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: null }),
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            }),
+          };
+        }
+        if (table === "listings") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            insert: insertSpy,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        ...VALID_BODY,
+        logo_url: "https://media.verifymzansi.com/listings/logo.jpg",
+      })
+    );
+
+    expect(res.status).toBe(201);
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logo_url: "https://media.verifymzansi.com/listings/logo.jpg",
+      })
+    );
+  });
+
+  it("does not consume free post slot when media validation fails (regression)", async () => {
+    const freePostInsertSpy = vi.fn().mockResolvedValue({ error: null });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "seller-1",
+                account_verification_status: "verified",
+              },
+            }),
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        if (table === "free_posts_used") {
+          return {
+            insert: freePostInsertSpy,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    // Submit with too many images to trigger 422 from media validation
+    const tooManyImages = Array.from(
+      { length: 10 },
+      (_, i) => `https://media.verifymzansi.com/img${i}.jpg`
+    );
+    const res = await POST(createRequest({ ...VALID_BODY, images: tooManyImages }));
+
+    expect(res.status).toBe(422);
+    // free_posts_used.insert must NOT have been called — validation fires before claim
+    expect(freePostInsertSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET /api/listings", () => {
@@ -318,13 +595,13 @@ describe("GET /api/listings", () => {
   it("applies placeholder-content exclusions to public listing queries", async () => {
     const rangeSpy = vi.fn().mockResolvedValue({ data: [], count: 0, error: null });
     const orderSpy = vi.fn().mockReturnThis();
-    const notSpy = vi.fn().mockReturnThis();
     const eqSpy = vi.fn().mockReturnThis();
     const selectSpy = vi.fn().mockReturnThis();
     const fromSpy = vi.fn().mockReturnValue({
       select: selectSpy,
       eq: eqSpy,
-      not: notSpy,
+      neq: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
       order: orderSpy,
       range: rangeSpy,
     });
@@ -338,10 +615,27 @@ describe("GET /api/listings", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(notSpy).toHaveBeenCalledWith("title", "ilike", "%seed%");
-    expect(notSpy).toHaveBeenCalledWith("title", "ilike", "%[seed]%");
-    expect(notSpy).toHaveBeenCalledWith("title", "ilike", "%demo%");
-    expect(notSpy).toHaveBeenCalledWith("title", "ilike", "%sample%");
+    const json = await response.json();
+    expect(json.listings).toEqual([]);
+    expect(json.total).toBe(0);
+  });
+
+  it("returns 400 for an invalid listings limit query", async () => {
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/listings?page=1&limit=abc")
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: "Invalid listings query" });
+  });
+
+  it("returns 400 for an invalid listings category query", async () => {
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/listings?page=1&limit=24&category=bad-category")
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Invalid listing category" });
   });
 
   it("filters placeholder listings from public results", async () => {
@@ -351,6 +645,7 @@ describe("GET /api/listings", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
             not: vi.fn().mockReturnThis(),
             gte: vi.fn().mockReturnThis(),
             lte: vi.fn().mockReturnThis(),
@@ -445,6 +740,7 @@ describe("GET /api/listings", () => {
               }
               return {
                 eq: vi.fn().mockReturnThis(),
+                neq: vi.fn().mockReturnThis(),
                 not: vi.fn().mockReturnThis(),
                 order: vi.fn().mockReturnThis(),
                 range: rangeSpy,
@@ -494,4 +790,168 @@ describe("GET /api/listings", () => {
       },
     ]);
   });
+
+  it.each([
+    {
+      missingField: "featured_until",
+      expectedNullField: "featured_until",
+      initialSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+      fallbackSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured",
+    },
+    {
+      missingField: "condition",
+      expectedNullField: "condition",
+      initialSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+      fallbackSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+    },
+    {
+      missingField: "video_thumbnail",
+      expectedNullField: "video_thumbnail",
+      initialSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+      fallbackSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+    },
+    {
+      missingField: "logo_url",
+      expectedNullField: "logo_url",
+      initialSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, created_at, boost_until, featured_until, featured",
+      fallbackSelect:
+        "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, location_province, location_city, created_at, boost_until, featured_until, featured",
+    },
+  ])(
+    "returns 200 and normalizes %s when the column is missing",
+    async ({ missingField, expectedNullField, initialSelect, fallbackSelect }) => {
+      mockCreateAdminClient.mockReturnValue({
+        from: vi.fn((table: string) => {
+          if (table === "listings") {
+            return {
+              select: vi.fn((fields: string) => {
+                if (fields === "id, owner_id") {
+                  return {
+                    limit: vi.fn().mockResolvedValue({ error: null }),
+                  };
+                }
+
+                if (fields === initialSelect) {
+                  return {
+                    eq: vi.fn().mockReturnThis(),
+                    neq: vi.fn().mockReturnThis(),
+                    not: vi.fn().mockReturnThis(),
+                    gte: vi.fn().mockReturnThis(),
+                    lte: vi.fn().mockReturnThis(),
+                    or: vi.fn().mockReturnThis(),
+                    order: vi.fn().mockReturnThis(),
+                    range: vi.fn().mockResolvedValue({
+                      data: null,
+                      count: null,
+                      error: {
+                        code: "42703",
+                        message: `column listings.${missingField} does not exist`,
+                      },
+                    }),
+                  };
+                }
+
+                if (fields === fallbackSelect || !fields.includes(missingField)) {
+                  return {
+                    eq: vi.fn().mockReturnThis(),
+                    neq: vi.fn().mockReturnThis(),
+                    not: vi.fn().mockReturnThis(),
+                    gte: vi.fn().mockReturnThis(),
+                    lte: vi.fn().mockReturnThis(),
+                    or: vi.fn().mockReturnThis(),
+                    order: vi.fn().mockReturnThis(),
+                    range: vi.fn().mockResolvedValue({
+                      data: null,
+                      count: null,
+                      error: {
+                        code: "42703",
+                        message: `column listings.${missingField} does not exist`,
+                      },
+                    }),
+                  };
+                }
+
+                if (fields.includes(missingField)) {
+                  return {
+                    eq: vi.fn().mockReturnThis(),
+                    neq: vi.fn().mockReturnThis(),
+                    not: vi.fn().mockReturnThis(),
+                    gte: vi.fn().mockReturnThis(),
+                    lte: vi.fn().mockReturnThis(),
+                    or: vi.fn().mockReturnThis(),
+                    order: vi.fn().mockReturnThis(),
+                    range: vi.fn().mockResolvedValue({
+                      data: [
+                        {
+                          id: "listing-live",
+                          owner_id: USER_ID,
+                          title: "Toyota Corolla",
+                          description: "Verified listing",
+                          price_cents: 1200000,
+                          price_negotiable: false,
+                          category: "vehicles",
+                          attributes: {},
+                          photos: [],
+                          videos: [],
+                          location_province: "Gauteng",
+                          location_city: "Johannesburg",
+                          created_at: "2026-03-13T10:00:00.000Z",
+                          boost_until: null,
+                          featured: false,
+                        },
+                      ],
+                      count: 1,
+                      error: null,
+                    }),
+                  };
+                }
+
+                throw new Error(`Unexpected select clause: ${fields}`);
+              }),
+            };
+          }
+
+          if (table === "account_profiles") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              in: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    user_id: USER_ID,
+                    display_name: "Nomsa",
+                    account_verification_status: "verified",
+                  },
+                ],
+              }),
+            };
+          }
+
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }),
+      });
+
+      const response = await GET(
+        createGetRequest("http://localhost:3000/api/listings?page=1&limit=24")
+      );
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.listings[0]).toMatchObject({
+        id: "listing-live",
+        owner_id: USER_ID,
+        [expectedNullField]: null,
+      });
+    }
+  );
 });

@@ -20,7 +20,7 @@ describe("sms service", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("AFRICASTALKING_API_KEY", "test-key");
     vi.stubEnv("AFRICASTALKING_USERNAME", "sandbox");
-    vi.stubEnv("AFRICASTALKING_SENDER_ID", "VerifyMzansi");
+    vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
   });
 
   afterEach(() => {
@@ -99,6 +99,26 @@ describe("sms service", () => {
       expect(result.error).toBe("No recipient data in response");
     });
 
+    it("returns failure when Africa's Talking rejects the sender ID", async () => {
+      globalThis.fetch = mockFetchResponse(
+        {
+          SMSMessageData: {
+            Message: "InvalidSenderId",
+            Recipients: [],
+          },
+        },
+        201
+      );
+
+      const result = await sendSms({
+        to: "+27821234567",
+        message: "Sender test",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("InvalidSenderId");
+    });
+
     it("catches thrown errors", async () => {
       globalThis.fetch = vi.fn().mockRejectedValue(new Error("API Down"));
 
@@ -138,6 +158,27 @@ describe("sms service", () => {
         "https://api.africastalking.com/version1/messaging",
         expect.objectContaining({ method: "POST" })
       );
+    });
+
+    it("omits an invalid sender ID instead of sending a broken from value", async () => {
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
+
+      globalThis.fetch = mockFetchResponse({
+        SMSMessageData: {
+          Recipients: [{ statusCode: 101, messageId: "otp-fallback-1" }],
+        },
+      });
+
+      const result = await sendSms({
+        to: "+27821234567",
+        message: "Fallback sender test",
+      });
+
+      expect(result.success).toBe(true);
+
+      const callArgs = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const body = new URLSearchParams(callArgs[1].body as string);
+      expect(body.get("from")).toBeNull();
     });
   });
 

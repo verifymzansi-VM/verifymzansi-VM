@@ -59,6 +59,13 @@ export function EvidenceDecisionControls({
       toast({ title: "Please select a reason code", variant: "destructive" });
       return;
     }
+    if (decision !== "approved" && !reasonNote.trim()) {
+      toast({
+        title: "Please provide a written explanation for this decision",
+        variant: "destructive",
+      });
+      return;
+    }
     if (needsOverride && !overrideReasonCode) {
       toast({
         title: "Override reason required",
@@ -118,10 +125,18 @@ export function EvidenceDecisionControls({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Resubmission warning */}
+        {step.status === "needs_resubmission" && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
+            This step was previously flagged for resubmission. Verify the user has corrected the
+            issue before approving.
+          </div>
+        )}
+
         {/* Risk warning */}
         {isHighRisk && (
           <div className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-            ⚠️ This step has <strong>{step.risk_level}</strong> risk
+            This step has <strong>{step.risk_level}</strong> risk
             {step.risk_score !== null && <> (score: {step.risk_score})</>}. Approval requires an
             override reason.
           </div>
@@ -203,7 +218,11 @@ export function EvidenceDecisionControls({
         {/* Note templates */}
         {decision && (
           <div className="space-y-1.5">
-            <Label className="text-xs">Note (optional — click template to fill)</Label>
+            <Label className="text-xs">
+              {decision === "approved"
+                ? "Note (optional — click template to fill)"
+                : "Written Explanation (required — click template or type)"}
+            </Label>
             <div className="flex flex-wrap gap-1">
               {DECISION_NOTE_TEMPLATES.map((template, i) => (
                 <button
@@ -220,8 +239,12 @@ export function EvidenceDecisionControls({
               value={reasonNote}
               onChange={(e) => setReasonNote(e.target.value)}
               rows={2}
-              placeholder="Additional notes for this decision…"
-              className="text-xs"
+              placeholder={
+                decision === "approved"
+                  ? "Additional notes for this decision…"
+                  : "Explain the issue to the user…"
+              }
+              className={`text-xs ${decision !== "approved" && !reasonNote.trim() ? "border-destructive" : ""}`}
             />
           </div>
         )}

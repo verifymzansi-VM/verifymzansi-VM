@@ -108,9 +108,6 @@ export function PromotionDetailContent({
   const leadPhoto = photos[0];
   const leadPoster = promotion.video_thumbnail || leadPhoto || undefined;
   const contactMethods = promotion.contact_methods ?? [];
-  const now = new Date();
-  const isBoosted = promotion.boost_until ? new Date(promotion.boost_until) > now : false;
-  const isFeatured = promotion.featured_until ? new Date(promotion.featured_until) > now : false;
   const isEvent = promotion.promotion_type === "event";
   const eventState = isEvent ? getEventState(promotion.start_date, promotion.end_date) : null;
   const categoryLabel = getPromotionCategoryDisplayLabel(
@@ -149,10 +146,9 @@ export function PromotionDetailContent({
                 />
               )}
               <div className="absolute left-3 top-3 flex gap-1">
-                {isFeatured && <Badge className="bg-brand-gold text-amber-950">Featured</Badge>}
-                {isBoosted && <Badge className="bg-brand-blue text-white">Boosted</Badge>}
+                {/* Featured/Boosted badge text hidden – feature & boost logic preserved */}
                 <Badge variant="secondary">
-                  {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] || "Ad"}
+                  {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] || "Ads"}
                 </Badge>
               </div>
             </div>

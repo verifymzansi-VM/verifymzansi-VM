@@ -16,20 +16,28 @@ import {
   usePlanVideoAllowed,
 } from "@/components/billing/plan-gate";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
-import { PROMOTION_TYPE_LABELS, type BusinessCategory, type PromotionType } from "@/types/enums";
+import {
+  getPromotionFilterTypeFromStoredType,
+  getStoredPromotionTypeForFilter,
+  PROMOTION_FILTER_TYPE_OPTIONS,
+} from "@/lib/promotions/type-taxonomy";
+import { type BusinessCategory, type PromotionType } from "@/types/enums";
 import { cn } from "@/lib/utils";
 import {
   PostFormFooter,
   PostFormScaffold,
   type PostFormStep,
 } from "@/components/post/post-form-scaffold";
-import { normalizeCreatePostError } from "@/app/post/_lib/create-post-errors";
+import {
+  normalizeCreatePostError,
+  normalizeCreatePostRuntimeError,
+} from "@/app/post/_lib/create-post-errors";
 import { useToast } from "@/hooks/use-toast";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
-
-const PROMOTION_TYPES = Object.entries(PROMOTION_TYPE_LABELS) as [PromotionType, string][];
+import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
+import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
 const SELECT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
@@ -50,6 +58,11 @@ const FIELD_IDS: Record<string, string> = {
   end_date: "end_date",
   images: "promotion-images",
   videos: "promotion-videos",
+  "socialAuthorization.authorizerName": "social-authorizer-name",
+  "socialAuthorization.authorizerRole": "social-authorizer-role",
+  "socialAuthorization.relationship": "social-authorizer-relationship",
+  "socialAuthorization.monetizationAcknowledged": "social-monetization-acknowledged",
+  "socialAuthorization.acceptedVersion": "social-authorization-version",
 };
 
 export default function CreatePromotionPage() {
@@ -72,6 +85,7 @@ function CreatePromotionContent() {
   const { toast } = useToast();
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [promotionType, setPromotionType] = useState<PromotionType>("general");
@@ -89,18 +103,24 @@ function CreatePromotionContent() {
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [videoThumbnailFile, setVideoThumbnailFile] = useState<File[]>([]);
+  const [socialAuthorization, setSocialAuthorization] = useState<PromotionSocialAuthorizationInput>(
+    {
+      granted: false,
+    }
+  );
   const [businessId, setBusinessId] = useState(searchParams.get("business_id") || "");
   const [myBusinesses, setMyBusinesses] = useState<{ id: string; business_name: string }[]>([]);
   const provinces = getProvinceNames();
   const cities = province ? getCitiesForProvince(province) : [];
   const isEvent = promotionType === "event";
+  const selectedPromotionFilterType = getPromotionFilterTypeFromStoredType(promotionType);
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
 
-  // Stable blob URL for the cover photo preview — revoked on change
-  const coverPhotoUrl = useMemo(
-    () => (photoFiles.length > 0 ? URL.createObjectURL(photoFiles[0]) : null),
+  // Stable blob URLs for photo previews — revoked on change
+  const photoPreviewUrls = useMemo(
+    () => photoFiles.map((file) => URL.createObjectURL(file)),
     [photoFiles]
   );
   const previewVideoUrls = useMemo(
@@ -113,9 +133,9 @@ function CreatePromotionContent() {
   );
   useEffect(
     () => () => {
-      if (coverPhotoUrl) URL.revokeObjectURL(coverPhotoUrl);
+      photoPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
     },
-    [coverPhotoUrl]
+    [photoPreviewUrls]
   );
   useEffect(
     () => () => {
@@ -180,6 +200,17 @@ function CreatePromotionContent() {
     clearErrors("contact_methods");
   }
 
+  function handleSocialAuthorizationChange(nextValue: PromotionSocialAuthorizationInput) {
+    setSocialAuthorization(nextValue);
+    clearErrors(
+      "socialAuthorization.authorizerName",
+      "socialAuthorization.authorizerRole",
+      "socialAuthorization.relationship",
+      "socialAuthorization.monetizationAcknowledged",
+      "socialAuthorization.acceptedVersion"
+    );
+  }
+
   function validateStep(targetStep: number) {
     const errors: Record<string, string> = {};
     const promotionValidationErrors = validatePromotionForm({
@@ -187,6 +218,7 @@ function CreatePromotionContent() {
       startDate,
       endDate,
       contactMethods,
+      socialAuthorization: targetStep === 2 ? socialAuthorization : { granted: false },
     });
     if (targetStep === 0) {
       if (!title.trim()) errors.title = isEvent ? "Enter an event title." : "Enter a title.";
@@ -223,48 +255,81 @@ function CreatePromotionContent() {
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
       setFieldErrors(stepErrors[firstInvalidStep]);
-      setFormError("Please fix the highlighted fields before submitting.");
+      setFormError(
+        "Some required fields are missing or invalid. Check the highlighted fields above."
+      );
       focusFirstError(stepErrors[firstInvalidStep], firstInvalidStep);
       return;
     }
 
     clearErrors();
     setIsSubmitting(true);
+    setSubmitProgress("Uploading media...");
 
     try {
-      let imageUrls: string[] = [];
-      if (photoFiles.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "promotion");
-        photoFiles.forEach((file) => uploadData.append("files", file));
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload photos");
-        const uploadJson = await uploadRes.json();
-        imageUrls = uploadJson.urls || [];
-      }
+      // Upload photos, videos, and video thumbnail in parallel
+      const [imageUrls, videoUrls, uploadedVideoThumbnailUrl] = await Promise.all([
+        // Photos via server proxy (small files)
+        photoFiles.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "promotion");
+              photoFiles.forEach((file) => uploadData.append("files", file));
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) throw new Error("Failed to upload photos");
+              const uploadJson = await uploadRes.json();
+              return (uploadJson.urls || []) as string[];
+            })()
+          : Promise.resolve([] as string[]),
 
-      let videoUrls: string[] = [];
-      if (videoFiles.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "promotion");
-        videoFiles.forEach((file) => uploadData.append("files", file));
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (!uploadRes.ok) throw new Error("Failed to upload video");
-        const uploadJson = await uploadRes.json();
-        videoUrls = uploadJson.urls || [];
-      }
+        // Videos via presigned URL (direct to R2, avoids proxying large files)
+        videoFiles.length > 0
+          ? Promise.all(
+              videoFiles.map(async (file) => {
+                const urlRes = await fetch("/api/media/upload-url", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    filename: file.name,
+                    contentType: file.type,
+                    size: file.size,
+                    area: "promotion",
+                  }),
+                });
+                if (!urlRes.ok) throw new Error("Failed to get video upload URL");
+                const { uploadUrl, publicUrl } = await urlRes.json();
+                const putRes = await fetch(uploadUrl, {
+                  method: "PUT",
+                  headers: { "Content-Type": file.type },
+                  body: file,
+                });
+                if (!putRes.ok) throw new Error("Failed to upload video");
+                return publicUrl as string;
+              })
+            )
+          : Promise.resolve([] as string[]),
 
-      let videoThumbnailUrl: string | undefined;
-      if (videoThumbnailFile.length > 0) {
-        const uploadData = new FormData();
-        uploadData.append("area", "promotion");
-        uploadData.append("files", videoThumbnailFile[0]);
-        const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-        if (uploadRes.ok) {
-          const uploadJson = await uploadRes.json();
-          videoThumbnailUrl = uploadJson.urls?.[0];
-        }
-      }
+        // Video thumbnail via server proxy
+        videoThumbnailFile.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "promotion");
+              uploadData.append("files", videoThumbnailFile[0]);
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) return undefined;
+              const uploadJson = await uploadRes.json();
+              return uploadJson.urls?.[0] as string | undefined;
+            })()
+          : Promise.resolve(undefined as string | undefined),
+      ]);
+
+      setSubmitProgress("Saving promotion...");
 
       const body = {
         title: title.trim(),
@@ -279,10 +344,11 @@ function CreatePromotionContent() {
         contact_methods: contactMethods,
         images: imageUrls,
         videos: videoUrls,
-        video_thumbnail: videoThumbnailUrl,
+        video_thumbnail: uploadedVideoThumbnailUrl,
         start_date: startDate ? new Date(startDate).toISOString() : undefined,
         end_date: endDate ? new Date(endDate).toISOString() : undefined,
         business_id: businessId || undefined,
+        socialAuthorization,
       };
 
       const res = await fetch("/api/promotions", {
@@ -303,9 +369,10 @@ function CreatePromotionContent() {
       toast({ title: "Promotion submitted for review.", variant: "success" });
       router.push("/dashboard/promotions?created=true");
     } catch (error: unknown) {
-      setFormError(error instanceof Error ? error.message : "Something went wrong.");
+      setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -318,7 +385,7 @@ function CreatePromotionContent() {
           <PlanGate area="PROMOTIONS_EVENTS">
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
-                title="Create a Promotions & Events Post"
+                title={isEvent ? "Create an Event" : "Create a Promotion"}
                 description="Promote your offer or event with the key details people need to act quickly."
                 breadcrumbs={[
                   { label: "Dashboard", href: "/dashboard" },
@@ -347,7 +414,9 @@ function CreatePromotionContent() {
                       const errors = validateStep(step);
                       if (Object.keys(errors).length > 0) {
                         setFieldErrors((current) => ({ ...current, ...errors }));
-                        setFormError("Please fix the highlighted fields before continuing.");
+                        setFormError(
+                          "Some required fields are missing or invalid. Check the highlighted fields above."
+                        );
                         focusFirstError(errors);
                         return;
                       }
@@ -356,7 +425,7 @@ function CreatePromotionContent() {
                     }}
                     submitDisabled={isSubmitting}
                     isSubmitting={isSubmitting}
-                    submittingLabel="Submitting..."
+                    submittingLabel={submitProgress || "Submitting..."}
                   />
                 }
               >
@@ -368,10 +437,18 @@ function CreatePromotionContent() {
                         id="promotion_type"
                         aria-label="Promotion Type"
                         className={SELECT_CLASS}
-                        value={promotionType}
-                        onChange={(event) => setPromotionType(event.target.value as PromotionType)}
+                        value={selectedPromotionFilterType}
+                        onChange={(event) =>
+                          setPromotionType(
+                            getStoredPromotionTypeForFilter(
+                              event.target
+                                .value as (typeof PROMOTION_FILTER_TYPE_OPTIONS)[number]["value"],
+                              promotionType
+                            )
+                          )
+                        }
                       >
-                        {PROMOTION_TYPES.map(([value, label]) => (
+                        {PROMOTION_FILTER_TYPE_OPTIONS.map(({ value, label }) => (
                           <option key={value} value={value}>
                             {label}
                           </option>
@@ -703,6 +780,12 @@ function CreatePromotionContent() {
                       />
                     )}
 
+                    <SocialAuthorizationFields
+                      value={socialAuthorization}
+                      onChange={handleSocialAuthorizationChange}
+                      errors={fieldErrors}
+                    />
+
                     <div className="rounded-xl border border-dashed border-amber-600/30 bg-amber-50/70 p-4 text-sm dark:bg-amber-950/20">
                       <div className="mb-3 flex items-center gap-2 font-medium text-muted-foreground">
                         <Megaphone className="h-4 w-4" />
@@ -720,7 +803,7 @@ function CreatePromotionContent() {
                           promotion_type: promotionType,
                           category: category || null,
                           category_key: categoryKey || null,
-                          photos: coverPhotoUrl ? [coverPhotoUrl] : [],
+                          photos: photoPreviewUrls,
                           videos: previewVideoUrls,
                           video_thumbnail: videoThumbnailUrl,
                           price_cents: priceZar

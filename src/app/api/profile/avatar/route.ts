@@ -5,6 +5,9 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { validateBufferIntegrity } from "@/lib/utils/file-validation";
+import { scanForMalware } from "@/lib/utils/malware-scan";
+import { stripExifFromJpeg } from "@/lib/utils/exif-strip";
 
 const log = createLogger("AvatarUpload");
 
@@ -65,20 +68,57 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "File too large. Maximum size is 2 MB." }, { status: 400 });
   }
 
-  const ext = file.type === "image/jpeg" ? "jpg" : file.type === "image/png" ? "png" : "webp";
-  const storagePath = `${user.id}/avatar.${ext}`;
-
-  const admin = createAdminClient();
+  let admin: ReturnType<typeof createAdminClient> | null = null;
+  const getAdmin = () => {
+    admin ??= createAdminClient();
+    return admin;
+  };
 
   try {
-    // Upload to Supabase Storage (upsert to overwrite existing avatar)
     const arrayBuffer = await file.arrayBuffer();
-    const { error: uploadError } = await admin.storage
-      .from(BUCKET)
-      .upload(storagePath, arrayBuffer, {
-        contentType: file.type,
-        upsert: true,
+    let fileBuffer = new Uint8Array(arrayBuffer);
+
+    // ── Server-side magic-byte MIME validation ────────────────
+    const integrity = validateBufferIntegrity(fileBuffer, file.type);
+    if (!integrity.valid) {
+      log.warn("Avatar MIME mismatch", {
+        declared: file.type,
+        detected: integrity.detectedMime,
+        userId: user.id,
       });
+      return NextResponse.json(
+        { error: "File type does not match its content. Please upload a valid image." },
+        { status: 400 }
+      );
+    }
+
+    // ── Malware scan ──────────────────────────────────────────
+    const scanResult = scanForMalware(fileBuffer, file.type);
+    if (!scanResult.safe) {
+      log.warn("Malware detected in avatar upload", {
+        threat: scanResult.threat,
+        userId: user.id,
+      });
+      return NextResponse.json(
+        { error: "This file was rejected because it contains suspicious content." },
+        { status: 400 }
+      );
+    }
+
+    // ── Strip EXIF metadata (POPIA data minimization) ─────────
+    if (file.type === "image/jpeg" || integrity.detectedMime === "image/jpeg") {
+      fileBuffer = new Uint8Array(stripExifFromJpeg(fileBuffer));
+    }
+
+    const ext = file.type === "image/jpeg" ? "jpg" : file.type === "image/png" ? "png" : "webp";
+    const storagePath = `${user.id}/avatar.${ext}`;
+
+    // Upload to Supabase Storage (upsert to overwrite existing avatar)
+    const storage = getAdmin().storage;
+    const { error: uploadError } = await storage.from(BUCKET).upload(storagePath, fileBuffer, {
+      contentType: file.type,
+      upsert: true,
+    });
 
     if (uploadError) {
       log.error("Avatar upload failed", { userId: user.id, error: uploadError.message });
@@ -88,10 +128,10 @@ export async function POST(request: NextRequest) {
     // Get the public URL
     const {
       data: { publicUrl },
-    } = admin.storage.from(BUCKET).getPublicUrl(storagePath);
+    } = storage.from(BUCKET).getPublicUrl(storagePath);
 
     // Update profile with avatar URL
-    const { error: updateError } = await admin
+    const { error: updateError } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .update({ avatar_url: publicUrl })
       .eq("user_id", user.id);

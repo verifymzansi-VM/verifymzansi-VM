@@ -1,10 +1,8 @@
 import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import {
-  createPlaywrightStubSupabaseClient,
-  isPlaywrightSupabaseStubMode,
-} from "@/lib/supabase/playwright-stub";
+import { createPlaywrightStubSupabaseClient } from "@/lib/supabase/playwright-stub";
+import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 
 /**
  * Service-role Supabase client for server-only operations.

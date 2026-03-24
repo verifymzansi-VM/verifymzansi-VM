@@ -31,12 +31,30 @@ vi.mock("@/lib/services/storage", () => ({
   downloadKycDocument: vi.fn().mockResolvedValue(Buffer.from("test")),
 }));
 
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyStaffActorRoleFromDb: vi.fn(
+    async (user: { app_metadata?: Record<string, unknown> } | null | undefined) => {
+      const role = user?.app_metadata?.role;
+      return role === "admin" || role === "moderator" ? role : null;
+    }
+  ),
+}));
+
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
   }),
+}));
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: vi.fn(() => null),
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: vi.fn(() => ({ limited: false })),
 }));
 
 import { GET as getEvidence } from "@/app/api/admin/verification/evidence/route";
@@ -145,6 +163,31 @@ describe("Admin auth access control", () => {
             }),
           };
         }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          };
+        }
+        if (table === "verification_sessions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id_artifact_id: "art-1",
+                    selfie_artifact_id: null,
+                    location_submitted_at: null,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
         if (table === "kyc_evidence_access_logs") {
           return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
@@ -179,6 +222,31 @@ describe("Admin auth access control", () => {
             }),
           };
         }
+        if (table === "verification_steps") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ count: 1, error: null }),
+              }),
+            }),
+          };
+        }
+        if (table === "verification_sessions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id_artifact_id: "art-1",
+                    selfie_artifact_id: null,
+                    location_submitted_at: null,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
         if (table === "kyc_evidence_access_logs") {
           return { insert: vi.fn().mockResolvedValue({ error: null }) };
         }
@@ -199,7 +267,7 @@ describe("Admin auth access control", () => {
       const res = await postDecide(
         createMockNextRequest("http://localhost:3000/api/admin/verification/decide", {
           method: "POST",
-          body: { stepId: "step-1", decision: "approved" },
+          body: { stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", decision: "approved" },
         })
       );
       expect(res.status).toBe(401);
@@ -210,7 +278,7 @@ describe("Admin auth access control", () => {
       const res = await postDecide(
         createMockNextRequest("http://localhost:3000/api/admin/verification/decide", {
           method: "POST",
-          body: { stepId: "step-1", decision: "approved" },
+          body: { stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", decision: "approved" },
         })
       );
       expect(res.status).toBe(403);
@@ -221,7 +289,7 @@ describe("Admin auth access control", () => {
       const res = await postDecide(
         createMockNextRequest("http://localhost:3000/api/admin/verification/decide", {
           method: "POST",
-          body: { stepId: "step-1", decision: "approved" },
+          body: { stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", decision: "approved" },
         })
       );
       expect(res.status).toBe(403);
@@ -233,7 +301,7 @@ describe("Admin auth access control", () => {
       const res = await postDecide(
         createMockNextRequest("http://localhost:3000/api/admin/verification/decide", {
           method: "POST",
-          body: { stepId: "step-1", decision: "approved" },
+          body: { stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", decision: "approved" },
         })
       );
       // Should get past auth — could be 400 (validation) or 404 (step not found), not 401/403
@@ -246,7 +314,7 @@ describe("Admin auth access control", () => {
       const res = await postDecide(
         createMockNextRequest("http://localhost:3000/api/admin/verification/decide", {
           method: "POST",
-          body: { stepId: "step-1", decision: "approved" },
+          body: { stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", decision: "approved" },
         })
       );
       expect(res.status).not.toBe(401);

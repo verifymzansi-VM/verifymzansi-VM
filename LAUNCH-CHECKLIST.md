@@ -46,10 +46,6 @@ deployed Cloudflare/Wrangler runtime secrets:
 - `AFRICASTALKING_API_KEY`
 - `AFRICASTALKING_USERNAME` using the real production account, not `sandbox`
 - `AFRICASTALKING_SENDER_ID`
-- `PAYFAST_MERCHANT_ID`
-- `PAYFAST_MERCHANT_KEY`
-- `PAYFAST_PASSPHRASE`
-- `PAYFAST_SANDBOX=false`
 - `RESEND_API_KEY`
 - `R2_ACCOUNT_ID`
 - `R2_ACCESS_KEY_ID`
@@ -60,22 +56,36 @@ deployed Cloudflare/Wrangler runtime secrets:
 - `IP_HASH_SECRET`
 - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
 - `TURNSTILE_SECRET_KEY`
+- `OZOW_ENV=production`
+- `OZOW_CLIENT_ID`
+- `OZOW_CLIENT_SECRET`
+- `OZOW_SITE_CODE`
+- `OZOW_WEBHOOK_SECRET`
+- `KYC_WEBHOOK_SECRET`
 
 Failing any of the above should block deploy.
 
 If `RATE_LIMITER_API_KEY` is set, `OTP_RATE_LIMITER_URL` must also be set.
 
+`ENABLE_DEV_KYC_WEBHOOK_BYPASS` is local-development-only and must never be set
+outside explicit localhost development. Production startup validation now treats
+it the same as other dev bypass flags.
+
 ## 3. Data and Billing Checks
 
-- Run `pnpm seed:prod` against the target Supabase project before release if
-  `pnpm preflight:prod` reports plan drift.
-- Confirm the `plans` table contains the same active rows as
-  `src/lib/constants/pricing.ts`.
-- Confirm PayFast is in production mode and can receive callbacks at
-  `/api/webhooks/payfast`.
+- Confirm Ozow is in production mode and can receive callbacks at
+  `/api/webhooks/ozow`.
+- Confirm the Ozow webhook path rejects unsigned requests, amount mismatches,
+  and currency mismatches before fulfillment, and that fulfillment failures roll
+  back `processing` status.
+- Confirm the KYC provider webhook secret is configured before enabling live
+  provider callbacks at `/api/webhooks/kyc/provider`.
 - Confirm Africa's Talking sender approval is complete for the live sender ID.
 - Confirm Resend domain verification is complete for the production sender
   domain.
+- Confirm the shared rate-limiter worker is healthy. Verification upload,
+  session start, GPS location, manual location, OTP, and billing checkout now
+  fail closed with `503` when shared abuse protection is unavailable.
 
 ## 4. Deployment Path
 
@@ -102,6 +112,22 @@ ext4-backed workspace. Native Windows remains unsupported.
 - Admin moderation and KYC review pages load for staff accounts
 - No new warning classes appear beyond the documented OpenNext/Cloudflare
   warning classes
+
+## 6. Sensitive Calls Hardening Verification
+
+- [ ] Register → login redirect does NOT include `?email=` in the URL
+- [ ] Password reset uses `/api/auth/reset-password` (not direct Supabase client
+      call)
+- [ ] POST `/api/listings/[id]/boost`, `/featured`, `/urgent` reject
+      cross-origin requests (403)
+- [ ] POST `/api/businesses/[id]/boost` rejects cross-origin requests (403)
+- [ ] PUT+DELETE `/api/promotions/[id]` reject cross-origin requests (403)
+- [ ] Admin evidence desk fetches artifacts via POST body (not GET query params)
+- [ ] `GET /api/media/serve/kyc/...` returns 400 (key prefix blocked)
+- [ ] `GET /api/promotions?business_id=not-a-uuid` returns 400
+- [ ] No PII (email, ID number, artifact IDs) appears in browser URL bar during
+      normal flows
+- [ ] Full inventory: `docs/sensitive-calls-inventory.md`
 
 ## 6. Release Decision
 

@@ -5,8 +5,10 @@ function isTruthyEnvValue(value: string | undefined): boolean {
 }
 
 export function isPostingLimitBypassEnabled(): boolean {
-  return (
-    isTruthyEnvValue(process.env.ENABLE_TEST_POSTING_BYPASS) ||
-    isTruthyEnvValue(process.env.NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS)
-  );
+  // Never allow bypass in production — safety guard
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+
+  return isTruthyEnvValue(process.env.ENABLE_TEST_POSTING_BYPASS);
 }

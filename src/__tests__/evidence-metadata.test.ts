@@ -65,7 +65,7 @@ const MOCK_STEP = {
   id: "step-1",
   user_id: "seller-1",
   step_type: "id_doc",
-  status: "pending",
+  status: "pending_review",
   risk_level: "low",
   risk_score: 10,
   created_at: "2025-01-01T00:00:00Z",
@@ -117,7 +117,17 @@ function chainStub(data: unknown, error: unknown = null) {
 describe("Evidence Metadata API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateAdminClient.mockReturnValue({ from: mockFrom });
+    mockCreateAdminClient.mockReturnValue({
+      from: mockFrom,
+      auth: {
+        admin: {
+          getUserById: vi.fn().mockResolvedValue({
+            data: { user: { app_metadata: { role: "admin" } } },
+            error: null,
+          }),
+        },
+      },
+    });
     mockLogAuditEvent.mockResolvedValue(undefined);
   });
 
@@ -174,7 +184,7 @@ describe("Evidence Metadata API", () => {
       expect(res.status).toBe(400);
 
       const body = await res.json();
-      expect(body.error).toContain("stepId or userId");
+      expect(body.error).toBe("Invalid evidence metadata query");
     });
   });
 
@@ -213,6 +223,12 @@ describe("Evidence Metadata API", () => {
         switch (table) {
           case "verification_steps":
             return chainStub([MOCK_STEP]);
+          case "verification_sessions":
+            return chainStub({
+              id_artifact_id: "art-1",
+              selfie_artifact_id: null,
+              location_submitted_at: null,
+            });
           case "kyc_artifacts":
             return chainStub([MOCK_ARTIFACT]);
           case "kyc_provider_results":
@@ -255,6 +271,12 @@ describe("Evidence Metadata API", () => {
         switch (table) {
           case "verification_steps":
             return chainStub([MOCK_STEP]);
+          case "verification_sessions":
+            return chainStub({
+              id_artifact_id: "art-1",
+              selfie_artifact_id: null,
+              location_submitted_at: null,
+            });
           case "kyc_artifacts":
             return chainStub([MOCK_ARTIFACT]);
           case "kyc_provider_results":
@@ -292,6 +314,12 @@ describe("Evidence Metadata API", () => {
         switch (table) {
           case "verification_steps":
             return chainStub([MOCK_STEP]);
+          case "verification_sessions":
+            return chainStub({
+              id_artifact_id: "art-1",
+              selfie_artifact_id: null,
+              location_submitted_at: null,
+            });
           case "kyc_artifacts":
             return chainStub([MOCK_ARTIFACT]);
           case "kyc_provider_results":
@@ -339,6 +367,47 @@ describe("Evidence Metadata API", () => {
       );
 
       expect(mockLogAuditEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Session-bound metadata", () => {
+    it("returns no artifacts when the current verification session links none", async () => {
+      mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
+
+      mockFrom.mockImplementation((table: string) => {
+        switch (table) {
+          case "verification_steps":
+            return chainStub([MOCK_STEP]);
+          case "verification_sessions":
+            return chainStub({
+              id_artifact_id: null,
+              selfie_artifact_id: null,
+              location_submitted_at: null,
+            });
+          case "kyc_artifacts":
+            return chainStub([MOCK_ARTIFACT]);
+          case "kyc_provider_results":
+            return chainStub([]);
+          case "kyc_risk_signals":
+            return chainStub([]);
+          case "account_profiles":
+            return chainStub(MOCK_SELLER_PROFILE);
+          case "kyc_evidence_access_logs":
+            return chainStub([]);
+          default:
+            return chainStub([]);
+        }
+      });
+
+      const res = await GET(
+        createMockNextRequest(
+          "/api/admin/verification/evidence/metadata?stepId=00000000-0000-0000-0000-000000000010"
+        )
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.artifacts).toEqual([]);
     });
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  classifyPayFastPreflightCheck,
+  classifyOzowPreflightCheck,
   classifySupabaseSchemaPreflightError,
 } from "../../scripts/preflight-check";
 
@@ -36,29 +36,31 @@ describe("preflight-check", () => {
     expect(result.detail).toContain("PGRST205");
   });
 
-  it("fails production PayFast validation when sandbox mode is enabled", () => {
-    const result = classifyPayFastPreflightCheck({
+  it("fails production Ozow validation when env is not production", () => {
+    const result = classifyOzowPreflightCheck({
       mode: "production",
-      sandbox: "true",
-      merchantId: "10000100",
-      merchantKey: "merchant-key",
-      passphrase: "passphrase",
+      ozowEnv: "staging",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      siteCode: "site-code",
+      webhookSecret: "webhook-secret",
     });
 
     expect(result.status).toBe("fail");
-    expect(result.detail).toContain("PAYFAST_SANDBOX");
+    expect(result.detail).toContain("OZOW_ENV");
   });
 
-  it("passes production PayFast validation when sandbox mode is disabled", () => {
-    const result = classifyPayFastPreflightCheck({
+  it("passes production Ozow validation when required values are present", () => {
+    const result = classifyOzowPreflightCheck({
       mode: "production",
-      sandbox: "false",
-      merchantId: "10000100",
-      merchantKey: "merchant-key",
-      passphrase: "passphrase",
+      ozowEnv: "production",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      siteCode: "site-code",
+      webhookSecret: "webhook-secret",
     });
 
     expect(result.status).toBe("pass");
-    expect(result.detail).toContain("sandbox=false");
+    expect(result.detail).toContain("site-code");
   });
 });

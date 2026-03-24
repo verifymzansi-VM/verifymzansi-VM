@@ -13,6 +13,22 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
+vi.mock("@/lib/utils/file-validation", () => ({
+  validateBufferIntegrity: vi.fn(() => ({
+    valid: true,
+    detectedMime: "image/png",
+    mismatch: false,
+  })),
+}));
+vi.mock("@/lib/utils/malware-scan", () => ({
+  scanForMalware: vi.fn(() => ({ safe: true })),
+}));
+vi.mock("@/lib/utils/exif-strip", () => ({
+  stripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
+}));
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+}));
 
 import { POST } from "@/app/api/profile/avatar/route";
 
@@ -68,6 +84,11 @@ describe("POST /api/profile/avatar", () => {
     const updateEq = vi.fn().mockResolvedValue({ error: null });
 
     mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: updateEq,
+        }),
+      }),
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
       },
@@ -79,11 +100,6 @@ describe("POST /api/profile/avatar", () => {
           getPublicUrl,
         }),
       },
-      from: vi.fn().mockReturnValue({
-        update: vi.fn().mockReturnValue({
-          eq: updateEq,
-        }),
-      }),
     });
 
     const formData = new FormData();

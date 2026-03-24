@@ -1,6 +1,22 @@
+const ALLOWED_REDIRECT_PREFIXES = [
+  "/dashboard",
+  "/verification",
+  "/post",
+  "/billing",
+  "/admin",
+  "/login",
+  "/register",
+  "/mzansi-market",
+  "/mall-shops",
+  "/business-ads",
+  "/promotions",
+  "/dsar",
+  "/banned",
+];
+
 /**
  * Sanitize a return URL to prevent open redirect attacks.
- * Only allows relative paths starting with "/".
+ * Only allows relative paths starting with "/" that match known route prefixes.
  */
 export function sanitizeReturnUrl(url: string | null | undefined): string {
   if (!url) return "/dashboard";
@@ -16,6 +32,20 @@ export function sanitizeReturnUrl(url: string | null | undefined): string {
   // Block protocol-relative URLs and data URIs
   const lower = normalized.toLowerCase();
   if (lower.includes("://") || lower.startsWith("javascript:") || lower.startsWith("data:")) {
+    return "/dashboard";
+  }
+
+  // Allow exact "/" (home page)
+  if (normalized === "/") return normalized;
+
+  // Only allow known route prefixes to prevent redirect to attacker-controlled paths
+  const matchesAllowed = ALLOWED_REDIRECT_PREFIXES.some(
+    (prefix) =>
+      normalized === prefix ||
+      normalized.startsWith(prefix + "/") ||
+      normalized.startsWith(prefix + "?")
+  );
+  if (!matchesAllowed) {
     return "/dashboard";
   }
 

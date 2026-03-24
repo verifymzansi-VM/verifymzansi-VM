@@ -1,15 +1,29 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Megaphone, Star, Zap, Flame, Clock, Tag, Building2, Pencil, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PageHeader } from "@/components/layout/page-header";
+import { BoostButton } from "@/components/listings/boost-button";
+import { FeaturedButton } from "@/components/listings/featured-button";
+import { ResubmitButton } from "@/components/listings/resubmit-button";
+import { DeletePostButton } from "@/components/listings/delete-post-button";
 import { timeAgo, expiresIn } from "@/lib/utils/format";
-import { PROMOTION_TYPE_LABELS, type PromotionType } from "@/types/enums";
+import {
+  canBoost as checkCanBoost,
+  canFeatured as checkCanFeatured,
+} from "@/lib/services/entitlements";
+import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
+import {
+  PROMOTION_TYPE_LABELS,
+  type PromotionType,
+  type SocialAuthorizationStatus,
+} from "@/types/enums";
 import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
+import { derivePromotionSocialAuthorizationStatus } from "@/lib/promotions/social-authorization";
 
 interface DashboardListing {
   id: string;
@@ -26,29 +40,37 @@ interface DashboardPromotion {
   promotion_type: string;
   business_id: string | null;
   status: string;
+  status_reason: string | null;
   boost_until: string | null;
   featured_until: string | null;
   created_at: string;
+  social_distribution_authorized: boolean;
+  social_distribution_revoked_at: string | null;
 }
 
 export const metadata = {
-  title: "My Promotions",
+  title: "Promotions & Events",
   description: "Manage your promotions, ads, and event listings on VerifyMzansi.",
 };
 
-export default async function MyPromotionsPage() {
+export default async function MyPromotionsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ created?: string; updated?: string }>;
+} = {}) {
   const supabase = await createClient();
+  const params = searchParams ? await searchParams : {};
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const now = new Date().toISOString();
-  const admin = createAdminClient();
   const [listingOwnerColumn, promotionOwnerColumn] = await Promise.all([
     getOwnerColumn(supabase, "listings"),
-    getOwnerColumn(admin, "promotions"),
+    getOwnerColumn(supabase, "promotions"),
   ]);
+  const promotionsTier = await getActivePlanTierForArea(user.id, "PROMOTIONS_EVENTS");
 
   // ── Fetch all user's active promotions in parallel ───────
   const [boostedRes, featuredRes, urgentRes, myPromotionsRes] = await Promise.all([
@@ -90,12 +112,12 @@ export default async function MyPromotionsPage() {
 
     // User's promotions (unified — includes migrated storefront_posts + business_posts)
     applyOwnerFilter(
-      admin
+      supabase
         .from("promotions")
         .select(
-          "id, title, promotion_type, business_id, status, boost_until, featured_until, created_at"
+          "id, title, promotion_type, business_id, status, status_reason, boost_until, featured_until, created_at, social_distribution_authorized, social_distribution_revoked_at"
         )
-        .in("status", ["live", "pending_moderation", "draft"])
+        .in("status", ["live", "pending_moderation", "draft", "rejected"])
         .order("created_at", { ascending: false })
         .limit(50),
       promotionOwnerColumn,
@@ -107,25 +129,56 @@ export default async function MyPromotionsPage() {
   const featured = (featuredRes.data ?? []) as unknown as DashboardListing[];
   const urgent = (urgentRes.data ?? []) as unknown as DashboardListing[];
   const myPromotions = (myPromotionsRes.data ?? []) as unknown as DashboardPromotion[];
+  const promotionsWithSocialStatus = myPromotions.map((promotion) => ({
+    ...promotion,
+    socialAuthorizationStatus: derivePromotionSocialAuthorizationStatus(promotion),
+  }));
+  const successState = params.updated
+    ? {
+        title: "Promotion updated",
+        description:
+          "Your changes were saved and the promotion was resubmitted for review before it goes live again.",
+      }
+    : params.created
+      ? {
+          title: "Promotion submitted",
+          description:
+            "Your promotion or event was created successfully and is now waiting for moderation.",
+        }
+      : null;
 
   // Gather linked business names
   const businessIds = [
     ...new Set(myPromotions.map((p) => p.business_id).filter(Boolean)),
   ] as string[];
   const { data: businesses } = businessIds.length
-    ? await admin.from("businesses").select("id, business_name").in("id", businessIds)
+    ? await applyOwnerFilter(
+        supabase.from("businesses").select("id, business_name").in("id", businessIds),
+        await getOwnerColumn(supabase, "businesses"),
+        user.id
+      )
     : { data: [] };
 
   const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
 
-  const totalActive = boosted.length + featured.length + urgent.length + myPromotions.length;
+  const totalItems =
+    boosted.length + featured.length + urgent.length + promotionsWithSocialStatus.length;
 
   return (
     <div className="space-y-6">
+      {successState && (
+        <Alert variant="success">
+          <div>
+            <AlertTitle>{successState.title}</AlertTitle>
+            <AlertDescription>{successState.description}</AlertDescription>
+          </div>
+        </Alert>
+      )}
+
       <PageHeader
-        title="My Promotions"
+        title="Promotions & Events"
         description="Track boosts, features, and promotions."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Promotions" }]}
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Promotions & Events" }]}
       >
         <div className="flex gap-2">
           <Button asChild size="sm" variant="outline" className="gap-1">
@@ -137,19 +190,19 @@ export default async function MyPromotionsPage() {
           <Button asChild size="sm" className="gap-1">
             <Link href="/post/create-promotion">
               <Plus className="h-4 w-4" />
-              New Promotion
+              Create Promotion
             </Link>
           </Button>
         </div>
       </PageHeader>
 
-      {totalActive === 0 ? (
+      {totalItems === 0 ? (
         <Card>
           <CardContent className="p-6 text-center space-y-3">
             <Megaphone className="h-8 w-8 text-muted-foreground mx-auto" />
-            <h2 className="font-display text-lg font-semibold">No active promotions</h2>
+            <h2 className="font-display text-lg font-semibold">No promotions or events yet</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Boost your listings or create promotions to reach more buyers.
+              Create your first promotion or event to reach more buyers from your dashboard.
             </p>
             <div className="flex justify-center gap-2">
               <Button asChild variant="outline" size="sm">
@@ -246,17 +299,18 @@ export default async function MyPromotionsPage() {
           )}
 
           {/* ── My Promotions ─────────────────────────────── */}
-          {myPromotions.length > 0 && (
+          {promotionsWithSocialStatus.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-lg font-display font-semibold flex items-center gap-2">
                 <Tag className="h-5 w-5 text-brand-green" />
-                My Promotions ({myPromotions.length})
+                My Promotions ({promotionsWithSocialStatus.length})
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {myPromotions.map((p) => {
+                {promotionsWithSocialStatus.map((p) => {
                   const businessName = p.business_id ? businessMap.get(p.business_id) : undefined;
                   const isBoosted = p.boost_until && new Date(p.boost_until) > new Date();
                   const isFeatured = p.featured_until && new Date(p.featured_until) > new Date();
+                  const socialBadge = getSocialAuthorizationBadge(p.socialAuthorizationStatus);
 
                   return (
                     <Card key={p.id}>
@@ -291,6 +345,8 @@ export default async function MyPromotionsPage() {
                             <Badge variant="secondary">Pending</Badge>
                           )}
                           {p.status === "draft" && <Badge variant="outline">Draft</Badge>}
+                          {p.status === "rejected" && <Badge variant="destructive">Rejected</Badge>}
+                          <Badge className={socialBadge.className}>{socialBadge.label}</Badge>
                           {isBoosted && (
                             <Badge variant="outline" className="text-orange-600">
                               Boosted
@@ -300,6 +356,28 @@ export default async function MyPromotionsPage() {
                             <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
                               Featured
                             </Badge>
+                          )}
+                          {p.status === "live" && (
+                            <>
+                              <BoostButton
+                                listingId={p.id}
+                                isBoosted={Boolean(isBoosted)}
+                                canBoost={
+                                  checkCanBoost(promotionsTier, "PROMOTIONS_EVENTS").allowed
+                                }
+                                itemTypeLabel="promotion"
+                                boostApiPath={`/api/promotions/${p.id}/boost`}
+                              />
+                              <FeaturedButton
+                                listingId={p.id}
+                                isFeatured={Boolean(isFeatured)}
+                                canFeature={
+                                  checkCanFeatured(promotionsTier, "PROMOTIONS_EVENTS").allowed
+                                }
+                                itemTypeLabel="promotion"
+                                featuredApiPath={`/api/promotions/${p.id}/featured`}
+                              />
+                            </>
                           )}
                           <Button
                             asChild
@@ -314,6 +392,22 @@ export default async function MyPromotionsPage() {
                           </Button>
                         </div>
                       </CardContent>
+                      {p.status === "rejected" && (
+                        <CardContent className="pt-0 space-y-3">
+                          <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3 text-sm">
+                            <p className="font-medium text-destructive">Reason for rejection</p>
+                            <p className="mt-1 text-muted-foreground">
+                              {p.status_reason ||
+                                "This promotion needs updates before it can go live."}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <ResubmitButton itemId={p.id} area="PROMOTIONS_EVENTS" />
+                            <DeletePostButton itemId={p.id} area="PROMOTIONS_EVENTS" />
+                            <span>Edit your promotion, then resubmit it for review.</span>
+                          </div>
+                        </CardContent>
+                      )}
                     </Card>
                   );
                 })}
@@ -324,4 +418,27 @@ export default async function MyPromotionsPage() {
       )}
     </div>
   );
+}
+
+function getSocialAuthorizationBadge(status: SocialAuthorizationStatus) {
+  switch (status) {
+    case "authorized":
+      return {
+        label: "Social Authorized",
+        className:
+          "border-transparent bg-brand-green-100 text-brand-green-800 dark:bg-brand-green-900/40 dark:text-brand-green-300",
+      };
+    case "revoked":
+      return {
+        label: "Social Revoked",
+        className:
+          "border-transparent bg-brand-red-100 text-brand-red-800 dark:bg-brand-red-900/40 dark:text-brand-red-300",
+      };
+    default:
+      return {
+        label: "Social Not Authorized",
+        className:
+          "border-transparent bg-warm-100 text-warm-700 dark:bg-warm-800 dark:text-warm-200",
+      };
+  }
 }

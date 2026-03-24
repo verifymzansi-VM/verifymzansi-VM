@@ -1,9 +1,9 @@
+/* eslint-disable no-console */
 import fs from "node:fs";
 import path from "node:path";
 import {
   EmailProviderResponseSchema,
   KycWebhookPayloadSchema,
-  PayFastItnPayloadSchema,
   SmsProviderResponseSchema,
 } from "../src/test/contracts/webhooks";
 
@@ -16,16 +16,6 @@ type ContractCase = {
 const ROOT = path.join(process.cwd(), "src", "test", "fixtures", "contracts");
 
 const CASES: ContractCase[] = [
-  {
-    name: "PayFast ITN complete",
-    file: path.join("payfast", "itn.complete.json"),
-    validate: (value) => PayFastItnPayloadSchema.safeParse(value),
-  },
-  {
-    name: "PayFast ITN failed",
-    file: path.join("payfast", "itn.failed.json"),
-    validate: (value) => PayFastItnPayloadSchema.safeParse(value),
-  },
   {
     name: "KYC webhook approved",
     file: path.join("kyc", "provider-approved.json"),
@@ -78,14 +68,6 @@ async function main(): Promise<void> {
   }
 
   // Negative checks to ensure schema strictness on critical fields.
-  const invalidPayFast = readJson(path.join("payfast", "itn.complete.json")) as {
-    signature?: string;
-  };
-  delete invalidPayFast.signature;
-  if (PayFastItnPayloadSchema.safeParse(invalidPayFast).success) {
-    failures.push("PayFast negative case: missing signature should fail");
-  }
-
   const invalidKyc = readJson(path.join("kyc", "provider-approved.json")) as {
     status?: string;
   };

@@ -62,7 +62,14 @@ function createRequest(body: unknown): NextRequest {
   return {
     method: "POST",
     json: async () => body,
-    headers: { get: vi.fn().mockReturnValue("1.2.3.4") },
+    url: "http://localhost:3000/api/reports",
+    headers: {
+      get: vi.fn((name: string) => {
+        const normalized = name.toLowerCase();
+        if (normalized === "cf-connecting-ip") return "1.2.3.4";
+        return null;
+      }),
+    },
     nextUrl: new URL("http://localhost:3000/api/reports"),
   } as unknown as NextRequest;
 }
@@ -99,6 +106,7 @@ describe("POST /api/reports", () => {
       json: async () => {
         throw new Error("bad");
       },
+      url: "http://localhost:3000/api/reports",
       headers: { get: vi.fn().mockReturnValue(null) },
       nextUrl: new URL("http://localhost:3000/api/reports"),
     } as unknown as NextRequest;

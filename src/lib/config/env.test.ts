@@ -18,8 +18,12 @@ const VALID_ENV: Record<string, string> = {
   ID_ENCRYPTION_KEY: "b".repeat(64),
   AFRICASTALKING_API_KEY: "test-api-key",
   AFRICASTALKING_USERNAME: "sandbox",
-  PAYFAST_MERCHANT_ID: "10000100",
-  PAYFAST_MERCHANT_KEY: "46f0cd694581a",
+  AFRICASTALKING_SENDER_ID: "VERIFYMZANS",
+  OZOW_ENV: "staging",
+  OZOW_CLIENT_ID: "test-client-id",
+  OZOW_CLIENT_SECRET: "test-client-secret",
+  OZOW_SITE_CODE: "test-site-code",
+  OZOW_WEBHOOK_SECRET: "test-webhook-secret",
   RESEND_API_KEY: "re_test_1234567890",
   NEXT_PUBLIC_APP_URL: "http://localhost:3000",
   HMAC_SECRET: "a".repeat(64),
@@ -95,7 +99,7 @@ describe("env config", () => {
         vi.stubEnv(key, value);
       }
       vi.stubEnv("NODE_ENV", "production");
-      vi.stubEnv("PAYFAST_PASSPHRASE", "prod-passphrase");
+      vi.stubEnv("OZOW_ENV", "production");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
       delete process.env.AFRICASTALKING_SENDER_ID;
       const mod = await import("./env");
@@ -110,8 +114,8 @@ describe("env config", () => {
         vi.stubEnv(key, value);
       }
       vi.stubEnv("NODE_ENV", "production");
-      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VerifyMzansi");
-      vi.stubEnv("PAYFAST_PASSPHRASE", "prod-passphrase");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("OZOW_ENV", "production");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
       vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
       const mod = await import("./env");
@@ -129,7 +133,7 @@ describe("env config", () => {
       vi.stubEnv("VERIFYMZANSI_RUNTIME_MODE", "e2e");
       vi.stubEnv("PLAYWRIGHT_TEST_MODE", "1");
       vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
-      vi.stubEnv("PAYFAST_SANDBOX", "true");
+      vi.stubEnv("OZOW_ENV", "staging");
       vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://127.0.0.1:3000");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
       const mod = await import("./env");
@@ -175,7 +179,7 @@ describe("env config", () => {
       expect(result.IP_HASH_SECRET).toBe("a".repeat(32));
     });
 
-    it("allows missing IP_HASH_SECRET (optional field)", async () => {
+    it("allows missing IP_HASH_SECRET outside production", async () => {
       vi.resetModules();
       stubNoBypassFlags();
       for (const [key, value] of Object.entries(VALID_ENV)) {
@@ -186,6 +190,21 @@ describe("env config", () => {
       const mod = await import("./env");
       const result = mod.validateEnv();
       expect(result.IP_HASH_SECRET).toBeUndefined();
+    });
+
+    it("requires IP_HASH_SECRET in production", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("OZOW_ENV", "production");
+      delete process.env.IP_HASH_SECRET;
+      const mod = await import("./env");
+
+      expect(() => mod.validateEnv()).toThrow("IP_HASH_SECRET is required for launch paths");
     });
 
     it("rejects IP_HASH_SECRET shorter than 32 characters", async () => {

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Eye, EyeOff, Check, RefreshCw } from "lucide-react";
+import { type z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,13 +15,17 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
+import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
+  const [turnstileRetryToken, setTurnstileRetryToken] = useState(0);
+  const [captchaUnavailable, setCaptchaUnavailable] = useState(
+    getTurnstileClientState().mode === "unavailable"
+  );
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const { toast } = useToast();
@@ -31,7 +36,7 @@ export default function RegisterPage() {
     formState: { errors, isSubmitting },
     control,
     setValue,
-  } = useForm<RegisterInput>({
+  } = useForm<z.input<typeof registerSchema>, unknown, RegisterInput>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
       displayName: "",
@@ -45,24 +50,37 @@ export default function RegisterPage() {
   });
 
   // Turnstile widget load timeout — show error if it doesn't load in 15s.
-  const isTurnstileDev =
-    !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY === "dummy_site_key";
-  const skipTurnstileTimeout = isTurnstileDev || process.env.NODE_ENV !== "production";
+  const turnstileState = getTurnstileClientState();
+  const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;
+
+  const resetTurnstileChallenge = useCallback(() => {
+    if (turnstileState.mode !== "configured") {
+      return;
+    }
+
+    setTurnstileError(null);
+    setTurnstileLoaded(false);
+    setCaptchaUnavailable(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
+    TurnstileWidget.retry();
+    setTurnstileRetryToken((value) => value + 1);
+  }, [setValue, turnstileState.mode]);
 
   useEffect(() => {
     if (skipTurnstileTimeout || turnstileLoaded) return;
     timeoutRef.current = setTimeout(() => {
-      setTurnstileError("Security verification failed to load.");
-      setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
+      setTurnstileError("Security check failed to load. Please try again.");
+      setTurnstileLoaded(false);
+      setValue("turnstileToken", "", { shouldValidate: true });
     }, 15000);
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [skipTurnstileTimeout, turnstileLoaded, retryKey, setValue]);
+  }, [skipTurnstileTimeout, turnstileLoaded, turnstileRetryToken, setValue]);
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
+      setCaptchaUnavailable(false);
       setTurnstileError(null);
       setTurnstileLoaded(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -72,29 +90,37 @@ export default function RegisterPage() {
   );
 
   const handleTurnstileLoad = useCallback(() => {
-    setTurnstileLoaded(true);
+    setCaptchaUnavailable(false);
     setTurnstileError(null);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    // Don't set turnstileLoaded or clear the timeout here — only
+    // handleTurnstileSuccess should do that once a real token arrives.
+    // This ensures the 15 s safety timeout still fires when the script
+    // loads but the challenge iframe never renders (e.g. headless CI).
   }, []);
 
   const handleTurnstileError = useCallback(() => {
-    setTurnstileError("CAPTCHA verification failed. Please try again.");
+    setCaptchaUnavailable(false);
+    setTurnstileError("Security check failed to load. Please try again.");
+    setTurnstileLoaded(false);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
-  }, [setValue]);
-
-  const handleTurnstileExpire = useCallback(() => {
-    setTurnstileError("CAPTCHA expired. Please verify again.");
     setValue("turnstileToken", "", { shouldValidate: true });
   }, [setValue]);
 
-  const handleRetry = useCallback(() => {
-    setTurnstileError(null);
-    setTurnstileLoaded(false);
-    setValue("turnstileToken", "", { shouldValidate: false });
-    TurnstileWidget.retry();
-    setRetryKey((k) => k + 1);
+  const handleTurnstileExpire = useCallback(() => {
+    setTurnstileError("Security check expired. Please verify again.");
+    setValue("turnstileToken", "", { shouldValidate: true });
   }, [setValue]);
+
+  const handleTurnstileUnavailable = useCallback(() => {
+    setCaptchaUnavailable(true);
+    setTurnstileLoaded(false);
+    setTurnstileError(TURNSTILE_UNAVAILABLE_MESSAGE);
+    setValue("turnstileToken", "", { shouldValidate: false });
+  }, [setValue]);
+
+  const handleRetry = useCallback(() => {
+    resetTurnstileChallenge();
+  }, [resetTurnstileChallenge]);
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
   const requirements = [
@@ -115,6 +141,8 @@ export default function RegisterPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        resetTurnstileChallenge();
+
         toast({
           title: "Registration failed",
           description: typeof result.error === "string" ? result.error : "Please try again.",
@@ -128,8 +156,7 @@ export default function RegisterPage() {
         description: "Check your email to confirm, then complete your account verification.",
         variant: "success",
       });
-      const encodedEmail = encodeURIComponent(data.email);
-      router.push(`/login?registered=true&email=${encodedEmail}`);
+      router.push("/login?registered=true");
     } catch {
       toast({
         title: "Something went wrong",
@@ -152,7 +179,7 @@ export default function RegisterPage() {
           <span className="w-full border-t" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">or register with email</span>
+          <span className="bg-background px-2 text-muted-foreground">or continue with email</span>
         </div>
       </div>
 
@@ -325,30 +352,38 @@ export default function RegisterPage() {
         )}
 
         <TurnstileWidget
-          key={retryKey}
+          retryToken={turnstileRetryToken}
           onSuccess={handleTurnstileSuccess}
           onError={handleTurnstileError}
           onExpire={handleTurnstileExpire}
           onLoad={handleTurnstileLoad}
+          onUnavailable={handleTurnstileUnavailable}
         />
         {turnstileError && (
           <div className="flex items-center gap-2">
             <p className="inline-form-error">{turnstileError}</p>
-            <button
-              type="button"
-              onClick={handleRetry}
-              className="inline-flex items-center gap-1 text-xs font-medium text-brand-green underline hover:text-brand-green/80"
-            >
-              <RefreshCw className="h-3 w-3" />
-              Retry
-            </button>
+            {!captchaUnavailable && (
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="inline-flex items-center gap-1 text-xs font-medium text-brand-green underline hover:text-brand-green/80"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Retry
+              </button>
+            )}
           </div>
         )}
         {errors.turnstileToken && !turnstileError && (
           <p className="inline-form-error">{errors.turnstileToken.message}</p>
         )}
 
-        <Button type="submit" className="w-full" variant="trust-verified" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          className="w-full"
+          variant="trust-verified"
+          disabled={isSubmitting || captchaUnavailable || Boolean(turnstileError)}
+        >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Create Account
         </Button>

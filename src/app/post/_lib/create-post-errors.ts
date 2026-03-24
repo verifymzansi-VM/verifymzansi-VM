@@ -3,6 +3,44 @@ export interface CreatePostErrorState {
   fieldErrors: Record<string, string>;
 }
 
+function normalizeErrorMessage(error: unknown): string {
+  if (typeof error === "string") {
+    return error.trim();
+  }
+
+  if (error instanceof Error) {
+    return error.message.trim();
+  }
+
+  return "";
+}
+
+export function normalizeCreatePostRuntimeError(error: unknown, fallbackMessage: string): string {
+  const message = normalizeErrorMessage(error);
+
+  if (!message) {
+    return fallbackMessage;
+  }
+
+  if (
+    /failed to get video upload url|failed to upload video|network error during upload|upload was aborted/i.test(
+      message
+    )
+  ) {
+    return "Video upload could not be completed. Check your connection and try again. You can remove the video and submit again.";
+  }
+
+  if (/failed to upload photos|failed to upload photo|upload failed/i.test(message)) {
+    return "One or more files could not be uploaded. Check your connection and try again.";
+  }
+
+  if (/failed to fetch/i.test(message)) {
+    return "We couldn't reach the upload service. Check your connection and try again.";
+  }
+
+  return message;
+}
+
 export function normalizeCreatePostError(
   payload: unknown,
   fallbackMessage: string

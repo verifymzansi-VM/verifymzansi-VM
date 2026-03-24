@@ -48,7 +48,28 @@ describe("/api/notifications", () => {
     const res = await GET(createRequest("GET", "http://localhost:3000/api/notifications?limit=0"));
 
     expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toEqual({ error: "limit must be a positive number" });
+    await expect(res.json()).resolves.toEqual({
+      error: "Invalid notifications query",
+      details: { limit: "limit must be at least 1" },
+    });
+  });
+
+  it("rejects invalid GET unread flags", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+    });
+
+    const res = await GET(
+      createRequest("GET", "http://localhost:3000/api/notifications?unread=maybe")
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "Invalid notifications query",
+      details: { unread: "Expected true or false" },
+    });
   });
 
   it("returns a safe error when marking all notifications read fails", async () => {

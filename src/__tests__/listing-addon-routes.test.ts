@@ -17,6 +17,7 @@ const mockGetUser = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: { getUser: (...args: unknown[]) => mockGetUser(...args) },
+    from: (...args: unknown[]) => mockFrom(...args),
   }),
 }));
 
@@ -27,9 +28,12 @@ vi.mock("@/lib/supabase/admin", () => ({
   })),
 }));
 
-const mockBuildPayFastCheckoutUrl = vi.fn().mockReturnValue("https://payfast.test/checkout");
-vi.mock("@/lib/services/payfast", () => ({
-  buildPayFastCheckoutUrl: (...args: unknown[]) => mockBuildPayFastCheckoutUrl(...args),
+const mockCreateHostedCheckout = vi.fn().mockResolvedValue({
+  paymentId: "pay-001",
+  checkoutUrl: "https://pay.ozow.test/checkout",
+});
+vi.mock("@/lib/payments/checkout", () => ({
+  createHostedCheckout: (...args: unknown[]) => mockCreateHostedCheckout(...args),
 }));
 
 const mockCanFeatured = vi.fn().mockReturnValue({ allowed: true });
@@ -66,9 +70,7 @@ vi.mock("@/lib/config/env", () => ({
   env: vi.fn((key: string) => {
     const envMap: Record<string, string> = {
       NEXT_PUBLIC_APP_URL: "https://verifymzansi.com",
-      PAYFAST_MERCHANT_ID: "test-merchant-id",
-      PAYFAST_MERCHANT_KEY: "test-merchant-key",
-      PAYFAST_NOTIFY_URL: "https://verifymzansi.com/api/webhooks/payfast",
+      OZOW_ENV: "staging",
     };
     return envMap[key] ?? "";
   }),
@@ -126,6 +128,10 @@ function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_u
   const paymentBuilder = {
     insert: vi.fn().mockReturnThis(),
     select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    contains: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null }),
     single: vi.fn().mockResolvedValue({ data: { id: "pay-001" }, error: null }),
   };
 
@@ -214,7 +220,7 @@ describe.each([
     const res = await handler()(makeRequest(), makeParams(VALID_UUID));
     expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body.error).toContain("don't own");
+    expect(body.error).toContain("do not own this listing");
   });
 
   it("returns 400 when listing is not live", async () => {
@@ -313,11 +319,11 @@ describe.each([
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    expect(body.checkoutUrl).toBe("https://payfast.test/checkout");
+    expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
     expect(body.paymentId).toBe("pay-001");
   });
 
-  it("passes amount in ZAR (cents ÷ 100) to PayFast", async () => {
+  it("passes amount cents to the hosted checkout helper", async () => {
     setupHappyPath(addonField);
     mockCanFeatured.mockReturnValue({ allowed: true });
     mockCanBoost.mockReturnValue({ allowed: true });
@@ -325,16 +331,14 @@ describe.each([
 
     await handler()(makeRequest(), makeParams(VALID_UUID));
 
-    expect(mockBuildPayFastCheckoutUrl).toHaveBeenCalledTimes(1);
-    const passedParams = mockBuildPayFastCheckoutUrl.mock.calls[0][0];
-
-    // Verify amount is in ZAR, not cents
+    expect(mockCreateHostedCheckout).toHaveBeenCalledTimes(1);
+    const passedParams = mockCreateHostedCheckout.mock.calls[0][0];
     const expectedAmounts: Record<string, number> = {
       featured: 25, // 2500 / 100
       boost: 15, // 1500 / 100
       urgent: 10, // 1000 / 100
     };
-    expect(passedParams.amount).toBe(expectedAmounts[name]);
+    expect(passedParams.amountCents).toBe(expectedAmounts[name] * 100);
   });
 
   it("includes uppercase area in audit log (matches DB enum)", async () => {

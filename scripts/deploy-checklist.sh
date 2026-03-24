@@ -118,9 +118,11 @@ REQUIRED_VARS=(
   "AFRICASTALKING_API_KEY"
   "AFRICASTALKING_USERNAME"
   "AFRICASTALKING_SENDER_ID"
-  "PAYFAST_MERCHANT_ID"
-  "PAYFAST_MERCHANT_KEY"
-  "PAYFAST_PASSPHRASE"
+  "OZOW_ENV"
+  "OZOW_CLIENT_ID"
+  "OZOW_CLIENT_SECRET"
+  "OZOW_SITE_CODE"
+  "OZOW_WEBHOOK_SECRET"
   "NEXT_PUBLIC_TURNSTILE_SITE_KEY"
   "TURNSTILE_SECRET_KEY"
   "RESEND_API_KEY"
@@ -128,13 +130,11 @@ REQUIRED_VARS=(
 )
 
 PROD_CHECKS=(
-  "PAYFAST_SANDBOX|must be 'false' in production"
   "NODE_ENV|must be 'production'"
 )
 
 DEV_ONLY_VARS=(
   "ENABLE_DEV_PAYMENT_BYPASS"
-  "ENABLE_MOCK_PAYFAST"
   "DEV_EXPOSE_OTP"
 )
 
@@ -149,15 +149,6 @@ done
 
 echo ""
 info "Production-critical checks:"
-
-PAYFAST_SANDBOX="${PAYFAST_SANDBOX:-}"
-if [ "$PAYFAST_SANDBOX" = "false" ]; then
-  pass "PAYFAST_SANDBOX=false (production mode)"
-elif [ -n "$PAYFAST_SANDBOX" ]; then
-  warn "PAYFAST_SANDBOX=$PAYFAST_SANDBOX — must be 'false' in production"
-else
-  warn "PAYFAST_SANDBOX not set locally — ensure it's 'false' in Cloudflare"
-fi
 
 NODE_ENV="${NODE_ENV:-}"
 if [ "$NODE_ENV" = "production" ]; then
@@ -202,9 +193,10 @@ REQUIRED_SECRETS=(
   "RESEND_API_KEY"
   "AFRICASTALKING_API_KEY"
   "AFRICASTALKING_USERNAME"
-  "PAYFAST_MERCHANT_ID"
-  "PAYFAST_MERCHANT_KEY"
-  "PAYFAST_PASSPHRASE"
+  "OZOW_CLIENT_ID"
+  "OZOW_CLIENT_SECRET"
+  "OZOW_SITE_CODE"
+  "OZOW_WEBHOOK_SECRET"
   "TURNSTILE_SECRET_KEY"
   "KYC_ENCRYPTION_KEY"
   "ID_ENCRYPTION_KEY"
@@ -274,6 +266,10 @@ else
     fi
 
     info "Deploying KYC Encryptor worker..."
+    # NOTE: kyc-encryptor deployment is for legacy compatibility only.
+    # The canonical encryption path is now inline in the upload route.
+    # This worker can be removed once all v1/worker-encrypted files have
+    # been decrypted or purged by the retention-cleanup cron.
     if pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml; then
       pass "KYC Encryptor worker deployed"
     else
@@ -334,7 +330,7 @@ echo "    2. Register a new account — email confirmation sent"
 echo "    3. Log in → redirected to dashboard"
 echo "    4. Start KYC verification → OTP SMS arrives"
 echo "    5. Upload a listing photo → appears correctly"
-echo "    6. Test PayFast checkout → redirects to PayFast"
+echo "    6. Test Ozow checkout → redirects to Ozow"
 echo "    7. Check admin panel with admin account"
 echo ""
 

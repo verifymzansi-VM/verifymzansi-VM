@@ -16,7 +16,6 @@ const FIXTURE_FILE_PATTERNS = [
 
 const FIXTURE_RULES = new Set([
   "Hardcoded service role key assignment",
-  "PayFast passphrase",
   "Turnstile secret key",
   "Resend API key",
 ]);
@@ -47,10 +46,6 @@ export const SECRET_SCAN_RULES: SecretScanRule[] = [
   {
     name: "Hardcoded service role key assignment",
     pattern: /\bSUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*["'][^"'\n]{20,}["']/g,
-  },
-  {
-    name: "PayFast passphrase",
-    pattern: /\bPAYFAST_PASSPHRASE\s*[:=]\s*["'][^"'\n]{4,}["']/g,
   },
   {
     name: "Resend API key",
@@ -96,6 +91,23 @@ export function isDeterministicFixtureMatch({
   return FIXTURE_MARKERS.some((marker) => normalizedLine.includes(marker));
 }
 
+export function isAllowedComputedHashMatch({
+  filePath,
+  line,
+  ruleName,
+}: SecretScanMatchContext): boolean {
+  if (ruleName !== "64-char hex string (potential encryption key)") {
+    return false;
+  }
+
+  const normalizedPath = normalizeFilePath(filePath);
+  return normalizedPath === "skills-lock.json" && line.includes('"computedHash"');
+}
+
 export function shouldIgnoreSecretFinding(context: SecretScanMatchContext): boolean {
-  return isAllowedLine(context.line) || isDeterministicFixtureMatch(context);
+  return (
+    isAllowedLine(context.line) ||
+    isDeterministicFixtureMatch(context) ||
+    isAllowedComputedHashMatch(context)
+  );
 }

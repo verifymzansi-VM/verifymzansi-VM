@@ -5,6 +5,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/post/create-listing",
+}));
+
 // Mock Supabase client
 const mockGetUser = vi.fn();
 const mockFrom = vi.fn();
@@ -195,6 +199,35 @@ describe("PlanGate", () => {
 
     await waitFor(() => {
       expect(container).toBeTruthy();
+    });
+  });
+
+  it("sends signed-in users without a profile to phone setup with a returnUrl", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    render(
+      <PlanGate area={"MZANSI_MARKET" as never}>
+        <div>Protected Content</div>
+      </PlanGate>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: /add phone number/i })).toHaveAttribute(
+        "href",
+        "/dashboard/complete-profile?returnUrl=%2Fpost%2Fcreate-listing"
+      );
     });
   });
 });

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { Megaphone, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
@@ -7,6 +8,11 @@ import { AutoScrollRail } from "./auto-scroll-rail";
 import type { BusinessCategory, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
+import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
+import {
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+  shouldHidePlaywrightFixtures,
+} from "@/lib/supabase/playwright-visual-fixtures";
 
 interface PromotionRow {
   id: string;
@@ -27,28 +33,39 @@ interface PromotionRow {
   start_date: string | null;
   end_date: string | null;
   created_at: string;
+  business_id: string | null;
 }
 
 export async function HomePromotionsShowcase() {
+  const cookieStore = await cookies();
+  const hideFixtures = shouldHidePlaywrightFixtures(
+    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+  );
   const supabase = await createClient();
   const now = new Date().toISOString();
 
   const { data } = await supabase
     .from("promotions")
-    .select(
-      "id, title, price_cents, price_negotiable, category, category_key, photos, videos, video_thumbnail, location_province, location_city, promotion_type, view_count, boost_until, featured_until, start_date, end_date, created_at"
-    )
+    .select("*")
     .eq("status", "live")
-    .not("title", "ilike", "%seed%")
-    .not("title", "ilike", "%[seed]%")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(12);
 
   const promotions = ((data || []) as PromotionRow[])
+    .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
     .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
     .slice(0, 6);
+
+  // Fetch business logos for promotions linked to a business
+  const businessIds = [
+    ...new Set(promotions.map((p) => p.business_id).filter(Boolean)),
+  ] as string[];
+  const { data: businesses } = businessIds.length
+    ? await supabase.from("businesses").select("id, logo_url").in("id", businessIds)
+    : { data: [] };
+  const logoMap = new Map((businesses ?? []).map((b) => [b.id, b.logo_url as string | null]));
 
   if (promotions.length === 0) {
     return (
@@ -70,8 +87,8 @@ export async function HomePromotionsShowcase() {
               size="sm"
               className="bg-red-700 hover:bg-red-800 text-white rounded-full"
             >
-              <Link href="/post/create">
-                Create a Post
+              <Link href="/post/create-promotion">
+                Create Promotion
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Link>
             </Button>
@@ -106,7 +123,7 @@ export async function HomePromotionsShowcase() {
           {promotions.map((promo) => (
             <div
               key={promo.id}
-              className="min-w-[280px] max-w-[340px] sm:min-w-[340px] sm:max-w-[340px]"
+              className="min-w-[240px] max-w-[264px] sm:min-w-[264px] sm:max-w-[264px]"
             >
               <PromotionCard
                 id={promo.id}
@@ -127,6 +144,7 @@ export async function HomePromotionsShowcase() {
                 }
                 startDate={promo.start_date}
                 endDate={promo.end_date}
+                logoUrl={promo.business_id ? logoMap.get(promo.business_id) : undefined}
               />
             </div>
           ))}

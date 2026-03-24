@@ -16,7 +16,6 @@ CREATE TYPE business_type AS ENUM (
   'online_only',
   'market_stall'
 );
-
 CREATE TYPE business_category AS ENUM (
   'fashion_accessories',
   'electronics_tech',
@@ -31,11 +30,9 @@ CREATE TYPE business_category AS ENUM (
   'automotive_transport',
   'general_other'
 );
-
 -- ── 2. Add MZANSI_BUSINESS to marketplace_area enum ─────────
 
 ALTER TYPE marketplace_area ADD VALUE IF NOT EXISTS 'MZANSI_BUSINESS';
-
 -- ── 3. Create businesses table ──────────────────────────────
 
 CREATE TABLE businesses (
@@ -90,7 +87,6 @@ CREATE TABLE businesses (
   created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at               TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 -- ── 4. Indexes ──────────────────────────────────────────────
 
 CREATE INDEX idx_businesses_seller        ON businesses(seller_id);
@@ -108,7 +104,6 @@ CREATE INDEX idx_businesses_promo_sort    ON businesses(
   featured_until DESC NULLS LAST,
   created_at DESC
 ) WHERE status = 'live';
-
 -- ── 5. Full-text search trigger ─────────────────────────────
 
 CREATE FUNCTION businesses_search_update() RETURNS trigger AS $$
@@ -119,49 +114,38 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 CREATE TRIGGER businesses_search_trigger
   BEFORE INSERT OR UPDATE OF business_name, description ON businesses
   FOR EACH ROW EXECUTE FUNCTION businesses_search_update();
-
 -- ── 6. updated_at trigger ───────────────────────────────────
 
 CREATE TRIGGER set_updated_at
   BEFORE UPDATE ON businesses
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
 -- ── 7. RLS ──────────────────────────────────────────────────
 
 ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Public reads live businesses"
   ON businesses FOR SELECT
   USING (status = 'live' OR auth.uid() = seller_id);
-
 CREATE POLICY "Staff reads all businesses"
   ON businesses FOR SELECT
   USING (public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner creates business"
   ON businesses FOR INSERT
   WITH CHECK (auth.uid() = seller_id);
-
 CREATE POLICY "Owner or moderator updates business"
   ON businesses FOR UPDATE
   USING (auth.uid() = seller_id OR public.has_any_role(ARRAY['moderator', 'admin']));
-
 CREATE POLICY "Owner or admin deletes business"
   ON businesses FOR DELETE
   USING (auth.uid() = seller_id OR public.has_role('admin'));
-
 -- ── 8. Add business_id to promotions ────────────────────────
 
 ALTER TABLE promotions
   ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES businesses(id) ON DELETE SET NULL;
-
 CREATE INDEX idx_promotions_business
   ON promotions(business_id) WHERE business_id IS NOT NULL;
-
 -- ── 9. Data migration: storefronts → businesses ─────────────
 
 INSERT INTO businesses (
@@ -212,7 +196,6 @@ SELECT
   s.created_at,
   s.updated_at
 FROM storefronts s;
-
 -- ── 10. Data migration: business_profiles → businesses ──────
 
 INSERT INTO businesses (
@@ -265,7 +248,6 @@ SELECT
   bp.updated_at
 FROM business_profiles bp
 WHERE bp.id NOT IN (SELECT id FROM businesses);
-
 -- ── 11. Data migration: storefront_posts → promotions ───────
 -- Map storefront post types to promotion types and link via business_id.
 
@@ -295,7 +277,6 @@ SELECT
   sp.created_at
 FROM storefront_posts sp
 JOIN storefronts s ON s.id = sp.storefront_id;
-
 -- ── 12. Data migration: business_posts → promotions ─────────
 
 INSERT INTO promotions (
@@ -325,19 +306,16 @@ SELECT
   bp_post.created_at
 FROM business_posts bp_post
 JOIN business_profiles bp ON bp.id = bp_post.business_profile_id;
-
 -- ── 13. Update entitlements area references ─────────────────
 
 UPDATE entitlements
 SET area = 'MZANSI_BUSINESS'::marketplace_area
 WHERE area IN ('MALL_SHOPS'::marketplace_area, 'BUSINESS_ADS'::marketplace_area);
-
 -- ── 14. Update payments area references ─────────────────────
 
 UPDATE payments
 SET area = 'MZANSI_BUSINESS'::marketplace_area
 WHERE area IN ('MALL_SHOPS'::marketplace_area, 'BUSINESS_ADS'::marketplace_area);
-
 -- ── 15. Update plans seed data ──────────────────────────────
 
 -- Insert new Mzansi Business plans
@@ -348,10 +326,8 @@ INSERT INTO plans (area, tier, name, price_cents, billing_frequency, features) V
    '{"businesses": 3, "photos": 10, "videos": 3, "cover_video": true, "boost": true, "featured": false}'),
   ('MZANSI_BUSINESS', 'pro', 'Mzansi Business Pro', 100000, 'monthly',
    '{"businesses": 9, "photos": 10, "videos": 9, "cover_video": true, "boost": true, "featured": true}');
-
 -- Deactivate old Mall Shops and Business Ads plans
 UPDATE plans SET active = false WHERE area IN ('MALL_SHOPS'::marketplace_area, 'BUSINESS_ADS'::marketplace_area);
-
 -- ── 16. Update target_type CHECK constraints ────────────────
 -- Add 'business' to allowed target_types in leads, contact_events, reports, listing_views.
 
@@ -360,62 +336,50 @@ ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_target_type_check;
 ALTER TABLE leads
   ADD CONSTRAINT leads_target_type_check
   CHECK (target_type IN ('listing', 'storefront', 'business_profile', 'business', 'promotion'));
-
 -- Migrate existing target_type values
 UPDATE leads SET target_type = 'business'
 WHERE target_type IN ('storefront', 'business_profile');
-
 -- contact_events
 ALTER TABLE contact_events DROP CONSTRAINT IF EXISTS contact_events_target_type_check;
 ALTER TABLE contact_events
   ADD CONSTRAINT contact_events_target_type_check
   CHECK (target_type IN ('listing', 'storefront', 'business_profile', 'business', 'promotion'));
-
 UPDATE contact_events SET target_type = 'business'
 WHERE target_type IN ('storefront', 'business_profile');
-
 -- reports
 ALTER TABLE reports DROP CONSTRAINT IF EXISTS reports_target_type_check;
 ALTER TABLE reports
   ADD CONSTRAINT reports_target_type_check
   CHECK (target_type IN ('listing', 'storefront', 'business_profile', 'business', 'promotion'));
-
 UPDATE reports SET target_type = 'business'
 WHERE target_type IN ('storefront', 'business_profile');
-
 -- listing_views
 ALTER TABLE listing_views DROP CONSTRAINT IF EXISTS listing_views_target_type_check;
 ALTER TABLE listing_views
   ADD CONSTRAINT listing_views_target_type_check
   CHECK (target_type IN ('listing', 'storefront', 'business_profile', 'business', 'promotion'));
-
 UPDATE listing_views SET target_type = 'business'
 WHERE target_type IN ('storefront', 'business_profile');
-
 -- ── 17. Update free_posts_used for new area ─────────────────
 
 UPDATE free_posts_used
 SET area = 'MZANSI_BUSINESS'::marketplace_area
 WHERE area IN ('MALL_SHOPS'::marketplace_area, 'BUSINESS_ADS'::marketplace_area);
-
 -- ── 18. Update audit_logs area references ───────────────────
 
 UPDATE audit_logs
 SET area = 'MZANSI_BUSINESS'::marketplace_area
 WHERE area IN ('MALL_SHOPS'::marketplace_area, 'BUSINESS_ADS'::marketplace_area);
-
 -- ── 19. Update moderation_actions area references ───────────
 
 UPDATE moderation_actions
 SET area = 'MZANSI_BUSINESS'::marketplace_area
 WHERE area IN ('MALL_SHOPS'::marketplace_area, 'BUSINESS_ADS'::marketplace_area);
-
 -- ── 20. Update reports area references ──────────────────────
 
 UPDATE reports
 SET area = 'MZANSI_BUSINESS'::marketplace_area
 WHERE area IN ('MALL_SHOPS'::marketplace_area, 'BUSINESS_ADS'::marketplace_area);
-
 -- NOTE: Old tables (storefronts, business_profiles, storefront_posts, business_posts)
 -- are NOT dropped yet. They remain as read-only backups until the application is fully
--- migrated and stable on the new businesses table.
+-- migrated and stable on the new businesses table.;

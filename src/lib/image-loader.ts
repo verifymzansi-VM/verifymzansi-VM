@@ -32,10 +32,11 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
     return src;
   }
 
-  // Already an absolute URL (external image) — use Cloudflare's transform endpoint
+  // Absolute remote URLs are left untouched. The current production zone can
+  // resize same-origin paths, but remote sources like Unsplash return 404 when
+  // routed through `/cdn-cgi/image/.../<absolute-url>`.
   if (src.startsWith("http://") || src.startsWith("https://")) {
-    const cfParams = `width=${width},quality=${quality || 75},format=auto`;
-    return `/cdn-cgi/image/${cfParams}/${src}`;
+    return src;
   }
 
   // Relative URL (local asset) — transform via the same endpoint

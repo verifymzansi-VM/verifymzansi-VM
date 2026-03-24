@@ -2,18 +2,16 @@
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
-import {
-  EXPECTED_ACTIVE_PLAN_ROWS,
-  EXPECTED_FEATURE_FLAG_KEYS,
-  getPlanContractKey,
-  SEED_CONTRACT_VERSION,
-  type SeedPlanContractRow,
-} from "./seed-contract";
 import { verifySupabaseSchema } from "./check-supabase-schema";
 
 loadEnvConfig(process.cwd());
 
 const strictMode = process.env.STRICT_DB_TESTS === "true" || process.env.CI === "true";
+const REQUIRED_FEATURE_FLAG_KEYS = [
+  "kyc_v2_flow",
+  "kyc_gps_location",
+  "kyc_evidence_desk",
+] as const;
 
 function skipOrFail(message: string): never | void {
   if (strictMode) {
@@ -41,46 +39,6 @@ function isValidHttpUrl(value: string): boolean {
   }
 }
 
-async function verifyPlansDataset(url: string, serviceRoleKey: string): Promise<void> {
-  const service = createClient(url, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const { data, error } = await service
-    .from("plans")
-    .select("area,tier,name,price_cents,billing_frequency,active")
-    .eq("active", true);
-
-  assert(!error, `Failed reading plans: ${error?.message}`);
-  assert(Array.isArray(data), "Plans query returned no data");
-
-  const byKey = new Map<string, SeedPlanContractRow>();
-  for (const row of data as SeedPlanContractRow[]) {
-    byKey.set(getPlanContractKey(row), row);
-  }
-
-  for (const expected of EXPECTED_ACTIVE_PLAN_ROWS) {
-    const actual = byKey.get(getPlanContractKey(expected));
-    assert(actual, `Missing expected plan ${expected.area}/${expected.tier}`);
-    assert(
-      actual.price_cents === expected.price_cents,
-      `Unexpected price for ${expected.area}/${expected.tier}: ${actual.price_cents}`
-    );
-    assert(
-      actual.name === expected.name,
-      `Unexpected name for ${expected.area}/${expected.tier}: ${actual.name}`
-    );
-    assert(
-      actual.billing_frequency === expected.billing_frequency,
-      `Unexpected billing_frequency for ${expected.area}/${expected.tier}`
-    );
-  }
-
-  console.log(
-    `  [OK] Seed contract v${SEED_CONTRACT_VERSION}: ${EXPECTED_ACTIVE_PLAN_ROWS.length} active plan rows verified`
-  );
-}
-
 async function verifyFeatureFlagRls(
   url: string,
   anonKey: string,
@@ -100,10 +58,10 @@ async function verifyFeatureFlagRls(
   assert(!readErr, `Anon cannot read feature_flags: ${readErr?.message}`);
   assert(Array.isArray(flags), "feature_flags read returned no array");
 
-  for (const key of EXPECTED_FEATURE_FLAG_KEYS) {
+  for (const key of REQUIRED_FEATURE_FLAG_KEYS) {
     assert(
       flags.some((row) => row.key === key),
-      `Missing seeded feature flag key: ${key}`
+      `Missing required feature flag key: ${key}`
     );
   }
 
@@ -194,14 +152,18 @@ async function main(): Promise<void> {
     return skipOrFail("NEXT_PUBLIC_SUPABASE_URL must be a valid http(s) URL");
   }
 
-  console.log("Running DB/RLS/seed-contract checks...");
+  console.log("Running DB and RLS checks...");
   console.log(`Target project: ${mask(url)}`);
 
   const schema = await verifySupabaseSchema({ url, serviceRoleKey });
+  if (schema.unexpectedLegacyTables.length > 0) {
+    throw new Error(
+      `Legacy tables still queryable: ${schema.unexpectedLegacyTables.join(", ")}. Rename contract is incomplete.`
+    );
+  }
   assert(schema.ok, "Schema verification failed. Run `pnpm run db:verify-schema` for details.");
   console.log("  [OK] Required schema tables are queryable");
 
-  await verifyPlansDataset(url, serviceRoleKey);
   await verifyFeatureFlagRls(url, anonKey, serviceRoleKey);
   await verifyReportsRls(url, anonKey, serviceRoleKey);
   await verifyRoleHelpers(url, serviceRoleKey);

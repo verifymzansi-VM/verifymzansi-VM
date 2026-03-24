@@ -44,6 +44,14 @@ const PII_FIELDS = new Set([
   "dob",
   "date_of_birth",
   "dateOfBirth",
+  "ip_address",
+  "ip",
+  "user_agent",
+  "userAgent",
+  "code",
+  "pin",
+  "verification_code",
+  "verificationCode",
 ]);
 
 function maskValue(value: unknown): string {

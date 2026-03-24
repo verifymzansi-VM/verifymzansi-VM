@@ -76,7 +76,7 @@ describe("POST /api/media/upload-url", () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
+        maybeSingle: vi.fn().mockResolvedValue({
           data: null,
           error: { message: "permission denied" },
         }),
@@ -103,7 +103,7 @@ describe("POST /api/media/upload-url", () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
       }),
     });
 
@@ -122,6 +122,64 @@ describe("POST /api/media/upload-url", () => {
     expect(body.details).toBeDefined();
   });
 
+  it("rejects filename and content-type mismatches", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        filename: "clip.mov",
+        contentType: "video/mp4",
+        size: 2048,
+      })
+    );
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.details).toEqual(
+      expect.objectContaining({
+        filename: "filename extension must match video/mp4",
+      })
+    );
+  });
+
+  it("rejects dangerous filename characters", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        filename: "../clip.mp4",
+        contentType: "video/mp4",
+        size: 2048,
+      })
+    );
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.details).toEqual(
+      expect.objectContaining({
+        filename: "filename contains invalid characters",
+      })
+    );
+  });
+
   it("returns a signed upload URL for valid requests", async () => {
     process.env.R2_PUBLIC_URL = "https://media.verifymzansi.com";
 
@@ -132,7 +190,7 @@ describe("POST /api/media/upload-url", () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
       }),
     });
 

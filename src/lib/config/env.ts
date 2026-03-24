@@ -82,12 +82,13 @@ const envSchema = z.object({
   OTP_RATE_LIMITER_TIMEOUT_MS: z.coerce.number().positive().optional(),
   RATE_LIMITER_API_KEY: z.string().min(1).optional(),
 
-  // ── PayFast (optional at startup — validated at request time in billing routes)
-  PAYFAST_MERCHANT_ID: z.string().optional(),
-  PAYFAST_MERCHANT_KEY: z.string().optional(),
-  PAYFAST_PASSPHRASE: z.string().optional(),
-  PAYFAST_SANDBOX: z.enum(["true", "false", "1", "0"]).optional(),
-  PAYFAST_NOTIFY_URL: z.string().url().optional(),
+  // ── Ozow (validated for production launch paths)
+  OZOW_ENV: z.enum(["staging", "production"]).optional(),
+  OZOW_CLIENT_ID: z.string().optional(),
+  OZOW_CLIENT_SECRET: z.string().optional(),
+  OZOW_SITE_CODE: z.string().optional(),
+  OZOW_API_BASE_URL: z.string().url().optional(),
+  OZOW_WEBHOOK_SECRET: z.string().optional(),
 
   // ── Resend (required for email) ───────────────────────────
   RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required for transactional emails"),
@@ -152,11 +153,12 @@ function _createFallbackEnv(): Env {
       ? Number(process.env.OTP_RATE_LIMITER_TIMEOUT_MS)
       : undefined,
     RATE_LIMITER_API_KEY: process.env.RATE_LIMITER_API_KEY,
-    PAYFAST_MERCHANT_ID: process.env.PAYFAST_MERCHANT_ID || "",
-    PAYFAST_MERCHANT_KEY: process.env.PAYFAST_MERCHANT_KEY || "",
-    PAYFAST_PASSPHRASE: process.env.PAYFAST_PASSPHRASE,
-    PAYFAST_SANDBOX: process.env.PAYFAST_SANDBOX,
-    PAYFAST_NOTIFY_URL: process.env.PAYFAST_NOTIFY_URL,
+    OZOW_ENV: process.env.OZOW_ENV as "staging" | "production" | undefined,
+    OZOW_CLIENT_ID: process.env.OZOW_CLIENT_ID,
+    OZOW_CLIENT_SECRET: process.env.OZOW_CLIENT_SECRET,
+    OZOW_SITE_CODE: process.env.OZOW_SITE_CODE,
+    OZOW_API_BASE_URL: process.env.OZOW_API_BASE_URL,
+    OZOW_WEBHOOK_SECRET: process.env.OZOW_WEBHOOK_SECRET,
     RESEND_API_KEY: process.env.RESEND_API_KEY || "",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "",
     TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY || "",
@@ -299,6 +301,19 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
   }
 
   validateRateLimiterConfig(result.data);
+
+  if (result.data.NODE_ENV === "production" && !result.data.IP_HASH_SECRET) {
+    throw new Error(
+      [
+        "",
+        "VerifyMzansi — Environment Configuration Error",
+        "",
+        "IP_HASH_SECRET is required in production.",
+        "Configure it before starting the app so audit and access logs can hash IP addresses safely.",
+        "",
+      ].join("\n")
+    );
+  }
 
   for (const warning of launchSummary.warnings) {
     console.warn(`[ENV] WARNING: ${warning.name}: ${warning.detail}`);

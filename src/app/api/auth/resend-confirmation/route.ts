@@ -1,73 +1,135 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { parseJsonRequest } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
+import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { emailSchema, trimmedStringSchema, turnstileTokenSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 
 const log = createLogger("ResendConfirmation");
 
 const resendSchema = z.object({
-  email: z.string().email("Valid email is required"),
+  email: trimmedStringSchema.pipe(emailSchema),
+  turnstileToken: trimmedStringSchema.pipe(turnstileTokenSchema),
 });
 
 export async function POST(request: NextRequest) {
-  // Rate limit aggressively — this triggers outbound emails
-  const ip = getClientIp(request);
-  const rateCheck = await checkRateLimit({ key: ip, action: "auth:resend-confirmation" });
-  if (rateCheck.limited) {
-    return NextResponse.json(
-      { error: "Too many requests. Please wait before trying again." },
-      { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
-    );
-  }
+  try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) return originBlock;
 
-  const body = await parseJsonRequest(request);
-  if (!body) {
-    return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-  }
+    const isPlaywrightTestMode = checkPlaywrightTestMode();
+    const turnstileStatus = getTurnstileConfigStatus({ requestHost: request.nextUrl.hostname });
 
-  const parsed = resendSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid request" },
-      { status: 400 }
-    );
-  }
-
-  const supabase = await createClient();
-  const callbackUrl = buildAuthCallbackUrl(request, "/login?confirmed=true");
-  const { error } = await supabase.auth.resend({
-    type: "signup",
-    email: parsed.data.email,
-    options: {
-      emailRedirectTo: callbackUrl,
-    },
-  });
-
-  if (error) {
-    log.warn("Resend confirmation failed", {
-      error: error.message,
-      status: error.status,
-      code: error.code,
-    });
-
-    if (error.status === 429 || error.code === "over_email_send_rate_limit") {
+    if (
+      process.env.NODE_ENV === "production" &&
+      !turnstileStatus.configured &&
+      !isPlaywrightTestMode
+    ) {
       return NextResponse.json(
-        {
-          error:
-            "Confirmation emails are temporarily rate-limited. Please wait a few minutes and try again.",
-        },
-        { status: 429 }
+        { error: "Confirmation resend temporarily unavailable" },
+        { status: 503 }
       );
     }
-  }
 
-  // Always return success to prevent email enumeration — even if the
-  // email doesn't exist or is already confirmed, we respond identically.
-  return NextResponse.json({
-    success: true,
-    message: "If an account exists with that email, a new confirmation link has been sent.",
-  });
+    // Rate limit aggressively — this triggers outbound emails
+    const ip = getClientIp(request);
+    const rateCheck = await checkRateLimit({
+      key: ip,
+      action: "auth:resend-confirmation",
+      degradedMode: "local",
+    });
+    if (rateCheck.limited) {
+      if (rateCheck.degraded) {
+        return NextResponse.json(
+          {
+            error:
+              "Confirmation email protection is temporarily unavailable. Please try again shortly.",
+          },
+          { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
+      return NextResponse.json(
+        { error: "Too many requests. Please wait before trying again." },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+      );
+    }
+
+    const bodyResult = await parseAndValidateJsonRequest(request, resendSchema, {
+      invalidJsonMessage: "Invalid JSON payload",
+      validationErrorMessage: "Invalid request",
+      includeValidationDetails: false,
+    });
+    if (!bodyResult.success) {
+      return bodyResult.response;
+    }
+
+    const parsed = bodyResult.data;
+
+    if (turnstileStatus.configured) {
+      if (parsed.turnstileToken === "turnstile-unavailable") {
+        return NextResponse.json(
+          { error: "Security verification is temporarily unavailable. Please retry." },
+          { status: 503 }
+        );
+      }
+
+      const captcha = await verifyTurnstileToken({
+        token: parsed.turnstileToken,
+        remoteIp: ip,
+      });
+
+      if (!captcha.success) {
+        return NextResponse.json(
+          { error: captcha.error || "CAPTCHA verification failed" },
+          { status: 400 }
+        );
+      }
+    }
+
+    const supabase = await createClient();
+    const callbackUrl = buildAuthCallbackUrl(request, "/login?confirmed=true");
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: parsed.email,
+      options: {
+        emailRedirectTo: callbackUrl,
+      },
+    });
+
+    if (error) {
+      log.warn("Resend confirmation failed", {
+        error: error.message,
+        status: error.status,
+        code: error.code,
+      });
+
+      if (error.status === 429 || error.code === "over_email_send_rate_limit") {
+        return NextResponse.json(
+          {
+            error:
+              "Confirmation emails are temporarily rate-limited. Please wait a few minutes and try again.",
+          },
+          { status: 429 }
+        );
+      }
+    }
+
+    // Always return success to prevent email enumeration — even if the
+    // email doesn't exist or is already confirmed, we respond identically.
+    return NextResponse.json({
+      success: true,
+      message: "If an account exists with that email, a new confirmation link has been sent.",
+    });
+  } catch (error) {
+    log.error("Unexpected resend confirmation error", {
+      error: error instanceof Error ? error.message : "unknown error",
+    });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
