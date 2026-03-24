@@ -23,6 +23,17 @@ type ExistingUser = {
   app_metadata?: Record<string, unknown> | null;
 };
 
+function createAdminClient(supabaseUrl: string, serviceRoleKey: string) {
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
 function printUsage(): void {
   console.log("");
   console.log("Bootstrap a live operator account");
@@ -194,10 +205,7 @@ function getProjectRef(supabaseUrl: string): string {
   return projectRef;
 }
 
-async function findUserByEmail(
-  admin: ReturnType<typeof createClient>,
-  email: string
-): Promise<ExistingUser | null> {
+async function findUserByEmail(admin: AdminClient, email: string): Promise<ExistingUser | null> {
   let page = 1;
 
   while (true) {
@@ -234,7 +242,7 @@ async function findUserByEmail(
 }
 
 async function upsertAccountProfile(
-  admin: ReturnType<typeof createClient>,
+  admin: AdminClient,
   userId: string,
   displayName: string
 ): Promise<void> {
@@ -270,12 +278,7 @@ async function main(): Promise<void> {
     );
   }
 
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+  const admin = createAdminClient(supabaseUrl, serviceRoleKey);
 
   const existingUser = await findUserByEmail(admin, email);
   const userMetadata = {
