@@ -24,7 +24,11 @@ describe("instrumentation register", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _resetInstrumentationForTesting();
-    process.env.NODE_ENV = originalNodeEnv;
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: originalNodeEnv,
+      writable: true,
+      configurable: true,
+    });
     process.env.STRICT_ENV_STARTUP_BLOCK = originalStrictStartupBlock;
   });
 
@@ -54,7 +58,11 @@ describe("instrumentation register", () => {
   });
 
   it("soft-fails env validation in production unless strict block is enabled", async () => {
-    process.env.NODE_ENV = "production";
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "production",
+      writable: true,
+      configurable: true,
+    });
     delete process.env.STRICT_ENV_STARTUP_BLOCK;
 
     mockValidateEnv.mockImplementation(() => {
