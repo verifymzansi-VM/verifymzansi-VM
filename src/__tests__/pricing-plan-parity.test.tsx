@@ -21,6 +21,18 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+vi.mock("@/components/layout/header", () => ({
+  Header: () => <header data-testid="mock-header" />,
+}));
+
+vi.mock("@/components/layout/footer", () => ({
+  Footer: () => <footer data-testid="mock-footer" />,
+}));
+
+vi.mock("@/components/billing/subscribe-button", () => ({
+  SubscribeButton: () => <button type="button">Subscribe</button>,
+}));
+
 type DbPlanRow = {
   area: PlanDefinition["area"];
   tier: PlanDefinition["tier"];
