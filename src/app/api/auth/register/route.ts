@@ -3,7 +3,7 @@ import { registerSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { buildAccountPhoneFields, normalizeSaPhone } from "@/lib/utils/phone";
@@ -62,13 +62,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Registration temporarily unavailable" }, { status: 503 });
     }
 
-    const ip = getClientIp(request);
+    const clientIdentity = getClientRateLimitIdentity(request);
+    const ip = clientIdentity.ip ?? "unknown";
     const rateCheck = await checkRateLimit({
-      key: ip,
+      key: clientIdentity.key,
       action: "auth:register",
       degradedMode: "block",
     });
     if (rateCheck.limited) {
+      log.warn("Registration rate limit triggered", {
+        ip,
+        rateLimitKeySource: clientIdentity.source,
+        degraded: rateCheck.degraded ?? false,
+      });
+
       if (rateCheck.degraded) {
         return NextResponse.json(
           {
@@ -104,7 +111,7 @@ export async function POST(request: NextRequest) {
 
       const captcha = await verifyTurnstileToken({
         token: parsedBody.data.turnstileToken,
-        remoteIp: ip,
+        remoteIp: clientIdentity.ip,
       });
 
       if (!captcha.success) {

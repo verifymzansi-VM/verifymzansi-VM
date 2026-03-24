@@ -20,7 +20,7 @@ describe("sms service", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("AFRICASTALKING_API_KEY", "test-key");
     vi.stubEnv("AFRICASTALKING_USERNAME", "sandbox");
-    vi.stubEnv("AFRICASTALKING_SENDER_ID", "VerifyMzansi");
+    vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
   });
 
   afterEach(() => {

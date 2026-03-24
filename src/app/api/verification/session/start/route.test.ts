@@ -191,6 +191,7 @@ describe("POST /api/verification/session/start", () => {
     expect(response.status).toBe(403);
     const data = await response.json();
     expect(data.error).toContain("confirm your email");
+    expect(data.code).toBe("email_confirmation_required");
   });
 
   it("creates a new session when none exists", async () => {

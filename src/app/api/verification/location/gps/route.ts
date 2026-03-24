@@ -29,6 +29,7 @@ import {
   buildPendingVerificationStep,
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
+import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 
 /**
  * Canonical province name mapping for South African provinces.
@@ -96,10 +97,9 @@ export async function POST(request: NextRequest) {
 
     // Email confirmation gate — users must confirm their email before GPS location
     if (!user.email_confirmed_at) {
-      return NextResponse.json(
-        { error: "Please confirm your email address before starting verification" },
-        { status: 403 }
-      );
+      return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
+        status: 403,
+      });
     }
 
     const rateCheck = await checkRateLimit({

@@ -330,6 +330,24 @@ describe("POST /api/verification/upload", () => {
     expect(response.status).toBe(400);
   });
 
+  it("returns a coded email-confirmation blocker when the account email is unconfirmed", async () => {
+    mockAuth({ id: "user-1", email_confirmed_at: null });
+
+    const req = createFormDataRequest({
+      file: createTestFile(),
+      docType: "id_document",
+    });
+
+    const response = await POST(req);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("confirm your email"),
+        code: "email_confirmation_required",
+      })
+    );
+  });
+
   it("returns 503 when shared upload protection is unavailable", async () => {
     mockAuth({ id: "user-1" });
     mockCheckRateLimit.mockResolvedValue({ limited: true, degraded: true, retryAfter: 45 });

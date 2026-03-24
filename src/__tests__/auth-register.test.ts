@@ -8,14 +8,23 @@ const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
   mockVerifyTurnstile: vi.fn(),
 }));
 
-const { mockCreateAdminClient, mockProfileUpsert, mockDeleteUser, mockCheckRateLimit } = vi.hoisted(
-  () => ({
-    mockCreateAdminClient: vi.fn(),
-    mockProfileUpsert: vi.fn().mockResolvedValue({ error: null }),
-    mockDeleteUser: vi.fn().mockResolvedValue({ error: null }),
-    mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
-  })
-);
+const {
+  mockCreateAdminClient,
+  mockProfileUpsert,
+  mockDeleteUser,
+  mockCheckRateLimit,
+  mockGetClientRateLimitIdentity,
+} = vi.hoisted(() => ({
+  mockCreateAdminClient: vi.fn(),
+  mockProfileUpsert: vi.fn().mockResolvedValue({ error: null }),
+  mockDeleteUser: vi.fn().mockResolvedValue({ error: null }),
+  mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+  mockGetClientRateLimitIdentity: vi.fn().mockReturnValue({
+    key: "127.0.0.1",
+    source: "x-forwarded-for",
+    ip: "127.0.0.1",
+  }),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
@@ -28,7 +37,7 @@ vi.mock("@/lib/utils/turnstile", async () => {
 });
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
-  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+  getClientRateLimitIdentity: mockGetClientRateLimitIdentity,
 }));
 vi.mock("@/lib/utils/api", async () => {
   const actual = await vi.importActual<typeof ApiModule>("@/lib/utils/api");
@@ -107,6 +116,11 @@ describe("POST /api/auth/register", () => {
     delete process.env.TURNSTILE_SECRET_KEY;
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
     mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientRateLimitIdentity.mockReturnValue({
+      key: "127.0.0.1",
+      source: "x-forwarded-for",
+      ip: "127.0.0.1",
+    });
     mockCreateAdminClient.mockReturnValue(createAdminMock() as never);
     mockDeleteUser.mockResolvedValue({ error: null });
   });

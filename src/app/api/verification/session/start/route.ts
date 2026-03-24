@@ -12,6 +12,7 @@ import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 
 const log = createLogger("SessionStart");
 
@@ -41,10 +42,9 @@ export async function POST(_request: NextRequest) {
 
     // Email confirmation gate — users must confirm their email before starting verification
     if (!user.email_confirmed_at) {
-      return NextResponse.json(
-        { error: "Please confirm your email address before starting verification" },
-        { status: 403 }
-      );
+      return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
+        status: 403,
+      });
     }
 
     const rateCheck = await checkRateLimit({

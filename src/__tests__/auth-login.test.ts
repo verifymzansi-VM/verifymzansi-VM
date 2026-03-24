@@ -3,10 +3,20 @@ import type { NextRequest } from "next/server";
 import type * as ApiModule from "@/lib/utils/api";
 import type * as TurnstileModule from "@/lib/utils/turnstile";
 
-const { mockCreateClient, mockVerifyTurnstile, mockCheckRateLimit } = vi.hoisted(() => ({
+const {
+  mockCreateClient,
+  mockVerifyTurnstile,
+  mockCheckRateLimit,
+  mockGetClientRateLimitIdentity,
+} = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockVerifyTurnstile: vi.fn(),
   mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+  mockGetClientRateLimitIdentity: vi.fn().mockReturnValue({
+    key: "127.0.0.1",
+    source: "x-forwarded-for",
+    ip: "127.0.0.1",
+  }),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
@@ -19,7 +29,7 @@ vi.mock("@/lib/utils/turnstile", async () => {
 });
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
-  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+  getClientRateLimitIdentity: mockGetClientRateLimitIdentity,
 }));
 vi.mock("@/lib/utils/api", async () => {
   const actual = await vi.importActual<typeof ApiModule>("@/lib/utils/api");
@@ -88,6 +98,11 @@ describe("POST /api/auth/login", () => {
     delete process.env.TURNSTILE_SECRET_KEY;
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
     mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientRateLimitIdentity.mockReturnValue({
+      key: "127.0.0.1",
+      source: "x-forwarded-for",
+      ip: "127.0.0.1",
+    });
   });
 
   afterEach(() => {

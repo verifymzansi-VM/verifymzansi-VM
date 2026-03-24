@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { checkRateLimit, getClientIp } from "./rate-limit";
+import { checkRateLimit, getClientIp, getClientRateLimitIdentity } from "./rate-limit";
 
 describe("rate-limit", () => {
   beforeEach(() => {
@@ -156,6 +156,37 @@ describe("rate-limit", () => {
   });
 
   describe("getClientIp", () => {
+    it("returns the same key and IP when cf-connecting-ip is present", () => {
+      const request = new Request("https://example.com", {
+        headers: {
+          "cf-connecting-ip": "1.2.3.4",
+          "user-agent": "Mozilla/5.0",
+        },
+      });
+
+      expect(getClientRateLimitIdentity(request)).toEqual({
+        key: "1.2.3.4",
+        source: "cf-connecting-ip",
+        ip: "1.2.3.4",
+      });
+    });
+
+    it("falls back to a fingerprint key when no IP headers are present", () => {
+      const request = new Request("https://example.com", {
+        headers: {
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+          "accept-language": "en-ZA,en;q=0.9",
+          host: "verifymzansi.com",
+        },
+      });
+
+      expect(getClientRateLimitIdentity(request)).toMatchObject({
+        source: "fingerprint",
+      });
+      expect(getClientRateLimitIdentity(request).key).toMatch(/^fp:[0-9a-f]{8}$/);
+      expect(getClientIp(request)).toBe("unknown");
+    });
+
     it("prefers cf-connecting-ip", () => {
       const request = new Request("https://example.com", {
         headers: {
@@ -186,6 +217,7 @@ describe("rate-limit", () => {
 
     it("returns 'unknown' when no IP headers present", () => {
       const request = new Request("https://example.com");
+      expect(getClientRateLimitIdentity(request)).toEqual({ key: "unknown", source: "unknown" });
       expect(getClientIp(request)).toBe("unknown");
     });
   });

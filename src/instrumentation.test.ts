@@ -30,13 +30,13 @@ describe("instrumentation register", () => {
     expect(mockError).not.toHaveBeenCalled();
   });
 
-  it("logs and swallows launch validation failures", async () => {
+  it("logs and blocks launch validation failures", async () => {
     mockValidateEnv.mockImplementation(() => {
       throw new Error("AFRICASTALKING_SENDER_ID is required in production");
     });
 
-    await expect(register()).resolves.toBeUndefined();
-    await expect(register()).resolves.toBeUndefined();
+    await expect(register()).rejects.toThrow("AFRICASTALKING_SENDER_ID");
+    await expect(register()).rejects.toThrow("AFRICASTALKING_SENDER_ID");
 
     expect(mockValidateEnv).toHaveBeenCalledTimes(2);
     expect(mockError).toHaveBeenCalledTimes(1);

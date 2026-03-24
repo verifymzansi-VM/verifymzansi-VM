@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { loginSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
-import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -38,13 +38,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ip = getClientIp(request);
+    const clientIdentity = getClientRateLimitIdentity(request);
+    const ip = clientIdentity.ip ?? "unknown";
     const rateCheck = await checkRateLimit({
-      key: ip,
+      key: clientIdentity.key,
       action: "auth:login",
       degradedMode: "block",
     });
     if (rateCheck.limited) {
+      log.warn("Login rate limit triggered", {
+        ip,
+        rateLimitKeySource: clientIdentity.source,
+        degraded: rateCheck.degraded ?? false,
+      });
+
       if (rateCheck.degraded) {
         return NextResponse.json(
           { error: "Login protection is temporarily unavailable. Please try again shortly." },
@@ -98,13 +105,20 @@ export async function POST(request: NextRequest) {
       if (parsedBody.data.turnstileToken === "turnstile-unavailable") {
         log.warn("Turnstile widget failed to load on client — applying strict rate limit", {
           ip,
+          rateLimitKeySource: clientIdentity.source,
         });
         const strictCheck = await checkRateLimit({
-          key: `strict:${ip}`,
+          key: `strict:${clientIdentity.key}`,
           action: "auth:login:nocaptcha",
           degradedMode: "block",
         });
         if (strictCheck.limited) {
+          log.warn("Login no-CAPTCHA rate limit triggered", {
+            ip,
+            rateLimitKeySource: clientIdentity.source,
+            degraded: strictCheck.degraded ?? false,
+          });
+
           if (strictCheck.degraded) {
             return NextResponse.json(
               { error: "Login protection is temporarily unavailable. Please try again shortly." },
@@ -120,7 +134,7 @@ export async function POST(request: NextRequest) {
       } else {
         const captcha = await verifyTurnstileToken({
           token: parsedBody.data.turnstileToken,
-          remoteIp: ip,
+          remoteIp: clientIdentity.ip,
         });
 
         if (!captcha.success) {

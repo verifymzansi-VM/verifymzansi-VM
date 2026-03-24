@@ -53,11 +53,25 @@ export default function RegisterPage() {
   const turnstileState = getTurnstileClientState();
   const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;
 
+  const resetTurnstileChallenge = useCallback(() => {
+    if (turnstileState.mode !== "configured") {
+      return;
+    }
+
+    setTurnstileError(null);
+    setTurnstileLoaded(false);
+    setCaptchaUnavailable(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
+    TurnstileWidget.retry();
+    setTurnstileRetryToken((value) => value + 1);
+  }, [setValue, turnstileState.mode]);
+
   useEffect(() => {
     if (skipTurnstileTimeout || turnstileLoaded) return;
     timeoutRef.current = setTimeout(() => {
       setTurnstileError("Security check failed to load. Please try again.");
-      setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
+      setTurnstileLoaded(false);
+      setValue("turnstileToken", "", { shouldValidate: true });
     }, 15000);
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -87,8 +101,9 @@ export default function RegisterPage() {
   const handleTurnstileError = useCallback(() => {
     setCaptchaUnavailable(false);
     setTurnstileError("Security check failed to load. Please try again.");
+    setTurnstileLoaded(false);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
+    setValue("turnstileToken", "", { shouldValidate: true });
   }, [setValue]);
 
   const handleTurnstileExpire = useCallback(() => {
@@ -104,13 +119,8 @@ export default function RegisterPage() {
   }, [setValue]);
 
   const handleRetry = useCallback(() => {
-    setCaptchaUnavailable(false);
-    setTurnstileError(null);
-    setTurnstileLoaded(false);
-    setValue("turnstileToken", "", { shouldValidate: false });
-    TurnstileWidget.retry();
-    setTurnstileRetryToken((value) => value + 1);
-  }, [setValue]);
+    resetTurnstileChallenge();
+  }, [resetTurnstileChallenge]);
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
   const requirements = [
@@ -131,6 +141,8 @@ export default function RegisterPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        resetTurnstileChallenge();
+
         toast({
           title: "Registration failed",
           description: typeof result.error === "string" ? result.error : "Please try again.",
@@ -370,7 +382,7 @@ export default function RegisterPage() {
           type="submit"
           className="w-full"
           variant="trust-verified"
-          disabled={isSubmitting || captchaUnavailable}
+          disabled={isSubmitting || captchaUnavailable || Boolean(turnstileError)}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Create Account
