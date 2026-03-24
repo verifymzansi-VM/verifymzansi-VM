@@ -159,6 +159,27 @@ describe("sms service", () => {
         expect.objectContaining({ method: "POST" })
       );
     });
+
+    it("omits an invalid sender ID instead of sending a broken from value", async () => {
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
+
+      globalThis.fetch = mockFetchResponse({
+        SMSMessageData: {
+          Recipients: [{ statusCode: 101, messageId: "otp-fallback-1" }],
+        },
+      });
+
+      const result = await sendSms({
+        to: "+27821234567",
+        message: "Fallback sender test",
+      });
+
+      expect(result.success).toBe(true);
+
+      const callArgs = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const body = new URLSearchParams(callArgs[1].body as string);
+      expect(body.get("from")).toBeNull();
+    });
   });
 
   describe("sendOtpSms", () => {

@@ -143,6 +143,10 @@ describe("OTP Routes", () => {
 
     it("creates challenge and sends OTP when allowed", async () => {
       const otpLogInsert = vi.fn().mockResolvedValue({ error: null });
+      const invalidateQuery = {
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockResolvedValue({ error: null }),
+      };
       const mockAdminClient = {
         from: vi.fn((table: string) => {
           if (table === "otp_challenges") {
@@ -150,6 +154,7 @@ describe("OTP Routes", () => {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
               gte: vi.fn().mockResolvedValue({ count: 0 }),
+              update: vi.fn().mockReturnValue(invalidateQuery),
               insert: vi.fn().mockResolvedValue({ error: null }),
             };
           }
@@ -185,6 +190,10 @@ describe("OTP Routes", () => {
 
     it("returns a structured provider error when the SMS provider rejects the send", async () => {
       const otpLogInsert = vi.fn().mockResolvedValue({ error: null });
+      const invalidateQuery = {
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockResolvedValue({ error: null }),
+      };
       const mockAdminClient = {
         from: vi.fn((table: string) => {
           if (table === "otp_challenges") {
@@ -192,6 +201,7 @@ describe("OTP Routes", () => {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
               gte: vi.fn().mockResolvedValue({ count: 0 }),
+              update: vi.fn().mockReturnValue(invalidateQuery),
               insert: vi.fn().mockResolvedValue({ error: null }),
             };
           }

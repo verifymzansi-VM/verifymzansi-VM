@@ -39,10 +39,17 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 
 import { POST } from "@/app/api/otp/send/route";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 function createOtpRequest(body: Record<string, unknown>): NextRequest {
   return new NextRequest("http://localhost:3000/api/otp/send", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      origin: "http://localhost:3000",
+      cookie: `vm_csrf=${CSRF_TOKEN}`,
+      "x-csrf-token": CSRF_TOKEN,
+    },
     body: JSON.stringify(body),
   });
 }
@@ -59,10 +66,15 @@ describe("POST /api/otp/send safe error envelopes", () => {
   it("does not leak database details when challenge creation fails", async () => {
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === "otp_challenges") {
+        const invalidateQuery = {
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockResolvedValue({ error: null }),
+        };
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
           gte: vi.fn().mockResolvedValue({ count: 0 }),
+          update: vi.fn().mockReturnValue(invalidateQuery),
           insert: vi.fn().mockResolvedValue({
             error: {
               message: "duplicate key value violates unique constraint",

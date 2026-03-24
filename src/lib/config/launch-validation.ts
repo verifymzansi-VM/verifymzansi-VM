@@ -138,6 +138,10 @@ function hasValue(value?: string): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isValidAfricaTalkingSenderId(value?: string): boolean {
+  return hasValue(value) && /^[A-Za-z0-9]{1,11}$/.test(value.trim());
+}
+
 function isTruthy(value?: string): boolean {
   return hasValue(value) && TRUTHY_VALUES.has(value.trim().toLowerCase());
 }
@@ -255,6 +259,13 @@ export function validateLaunchConfiguration(
         "fail",
         "AFRICASTALKING_SENDER_ID still contains a placeholder value"
       );
+    } else if (!isValidAfricaTalkingSenderId(afSenderId)) {
+      addCheck(
+        checks,
+        "Africa's Talking",
+        "fail",
+        "AFRICASTALKING_SENDER_ID must be 1-11 alphanumeric characters"
+      );
     } else if (afUsername === "sandbox") {
       addCheck(
         checks,
@@ -271,6 +282,13 @@ export function validateLaunchConfiguration(
       "Africa's Talking",
       "warn",
       "AFRICASTALKING_SENDER_ID is optional locally but required for production SMS delivery"
+    );
+  } else if (!isValidAfricaTalkingSenderId(afSenderId)) {
+    addCheck(
+      checks,
+      "Africa's Talking",
+      "warn",
+      "AFRICASTALKING_SENDER_ID should be 1-11 alphanumeric characters for SMS delivery"
     );
   } else {
     addCheck(checks, "Africa's Talking", "pass", `user=${afUsername} sender=${afSenderId}`);

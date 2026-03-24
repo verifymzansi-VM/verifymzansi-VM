@@ -82,6 +82,24 @@ describe("launch validation", () => {
     expect(summary.errors.some((error) => error.name === "Dev-only flags")).toBe(true);
   });
 
+  it("fails production mode when the Africa's Talking sender ID is invalid", () => {
+    const summary = validateLaunchConfiguration(
+      {
+        ...BASE_ENV,
+        AFRICASTALKING_SENDER_ID: "verifymzansi",
+      },
+      { mode: "production" }
+    );
+
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "Africa's Talking",
+        detail: "AFRICASTALKING_SENDER_ID must be 1-11 alphanumeric characters",
+      })
+    );
+  });
+
   it("fails production mode when the local KYC webhook bypass is enabled", () => {
     const summary = validateLaunchConfiguration(
       {
