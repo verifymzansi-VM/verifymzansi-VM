@@ -2,13 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
-const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockCheckRateLimit } =
-  vi.hoisted(() => ({
-    mockCreateClient: vi.fn(),
-    mockCreateAdminClient: vi.fn(),
-    mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
-    mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
-  }));
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockLogAuditEvent,
+  mockCheckRateLimit,
+  mockCheckLocalRateLimit,
+} = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
+  mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
+  mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+  mockCheckLocalRateLimit: vi.fn().mockReturnValue({ limited: false }),
+}));
 
 const { mockEnforceCsrfToken } = vi.hoisted(() => ({
   mockEnforceCsrfToken: vi.fn(),
@@ -23,6 +29,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClien
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
+  checkLocalRateLimit: mockCheckLocalRateLimit,
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 vi.mock("@/lib/utils/logger", () => ({

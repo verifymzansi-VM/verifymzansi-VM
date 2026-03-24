@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MapPin, Play, Zap } from "lucide-react";
+import { MapPin, Play } from "lucide-react";
 import Image from "next/image";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
@@ -45,7 +45,7 @@ export function AreaPreviewCard({
   hasVideo,
   showViewDetails: _showViewDetails,
   accentColor = "green",
-  boosted,
+  boosted: _boosted,
 }: AreaPreviewCardProps) {
   const isVideo = isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
@@ -90,14 +90,7 @@ export function AreaPreviewCard({
         <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
 
         {/* Boost badge */}
-        {boosted && (
-          <div className="absolute top-2.5 left-2.5 z-10">
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold shadow-md backdrop-blur-md bg-brand-blue/90 text-white">
-              <Zap className="h-3 w-3 fill-current" />
-              Boosted
-            </span>
-          </div>
-        )}
+        {/* Boosted badge text hidden – boost logic preserved */}
 
         {/* Price badge */}
         {price != null && price > 0 && (

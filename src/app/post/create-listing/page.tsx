@@ -16,6 +16,7 @@ import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provi
 import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { cn } from "@/lib/utils";
+import { ListingCard } from "@/components/listings/listing-card";
 import {
   PostFormFooter,
   PostFormScaffold,
@@ -101,6 +102,7 @@ export default function CreateListingPage() {
   const [city, setCity] = useState("");
   const [town, setTown] = useState("");
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
+  const [logoFile, setLogoFile] = useState<File[]>([]);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [videoFile, setVideoFile] = useState<File[]>([]);
   const [videoCoverFile, setVideoCoverFile] = useState<File[]>([]);
@@ -115,6 +117,10 @@ export default function CreateListingPage() {
   const cities = province ? getCitiesForProvince(province) : [];
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
   const videoAllowed = usePlanVideoAllowed("MZANSI_MARKET");
+  const logoPreviewUrl = useMemo(
+    () => (logoFile.length > 0 ? URL.createObjectURL(logoFile[0]) : null),
+    [logoFile]
+  );
   const photoPreviewUrls = useMemo(
     () => photoFiles.map((file) => URL.createObjectURL(file)),
     [photoFiles]
@@ -126,6 +132,13 @@ export default function CreateListingPage() {
   const videoCoverPreviewUrl = useMemo(
     () => (videoCoverFile.length > 0 ? URL.createObjectURL(videoCoverFile[0]) : null),
     [videoCoverFile]
+  );
+
+  useEffect(
+    () => () => {
+      if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+    },
+    [logoPreviewUrl]
   );
 
   useEffect(
@@ -288,7 +301,21 @@ export default function CreateListingPage() {
         : {};
 
       // Upload photos, video, and video cover in parallel
-      const [photoUrls, videoUrl, videoThumbnailUrl] = await Promise.all([
+      const [logoUrls, photoUrls, videoUrl, videoThumbnailUrl] = await Promise.all([
+        logoFile.length > 0
+          ? (async () => {
+              const uploadData = new FormData();
+              uploadData.append("area", "listing_logo");
+              uploadData.append("files", logoFile[0]);
+              const uploadRes = await fetch("/api/media/upload", {
+                method: "POST",
+                body: uploadData,
+              });
+              if (!uploadRes.ok) throw new Error("Failed to upload listing logo");
+              const uploadJson = await uploadRes.json();
+              return (uploadJson.urls || []) as string[];
+            })()
+          : Promise.resolve([] as string[]),
         // Photos via server proxy (small files)
         photoFiles.length > 0
           ? (async () => {
@@ -375,6 +402,7 @@ export default function CreateListingPage() {
           province,
           city,
           town,
+          logo_url: logoUrls[0] || null,
           images: photoUrls,
           videos: videoUrl ? [videoUrl] : [],
           videoThumbnail: videoThumbnailUrl,
@@ -406,12 +434,33 @@ export default function CreateListingPage() {
     const normalizedAttributes = category
       ? coerceListingAttributes(category, categoryAttributes)
       : {};
+    const cardMediaUrl = videoPreviewUrl || photoPreviewUrls[0];
+    const cardPosterUrl = videoCoverPreviewUrl || photoPreviewUrls[0] || undefined;
 
     return (
       <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
           <Eye className="h-4 w-4" />
           Listing preview
+        </div>
+
+        <div className="mb-4 max-w-[264px]">
+          <ListingCard
+            id="preview-listing"
+            title={title || "Your listing title"}
+            price={
+              !Number.isNaN(numericPrice) && numericPrice > 0 ? Math.round(numericPrice * 100) : 0
+            }
+            imageUrl={cardMediaUrl || undefined}
+            posterUrl={cardPosterUrl}
+            logoUrl={logoPreviewUrl}
+            province={province || "Province"}
+            city={city || "City"}
+            category={category || "property"}
+            attributes={normalizedAttributes}
+            condition={condition || undefined}
+            createdAt={new Date().toISOString()}
+          />
         </div>
 
         <ListingDetailContent
@@ -429,6 +478,7 @@ export default function CreateListingPage() {
             photos: photoPreviewUrls,
             videos: videoPreviewUrl ? [videoPreviewUrl] : [],
             video_thumbnail: videoCoverPreviewUrl,
+            logo_url: logoPreviewUrl,
             location_province: province || null,
             location_city: city || null,
             location_suburb: town || null,
@@ -762,6 +812,19 @@ export default function CreateListingPage() {
 
                 {step === 2 && (
                   <div className="space-y-5">
+                    <div className="space-y-2">
+                      <MediaUpload
+                        label="Listing logo (optional)"
+                        maxFiles={1}
+                        files={logoFile}
+                        onChange={setLogoFile}
+                        accept="image/*"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        If present, this logo will be shown on listing cards across the marketplace.
+                      </p>
+                    </div>
+
                     <div id="listing-images" tabIndex={-1} className="space-y-2 rounded-lg">
                       <MediaUpload
                         label={`Photos (max ${maxPhotos})`}

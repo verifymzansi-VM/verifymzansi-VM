@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { Megaphone, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
@@ -7,6 +8,11 @@ import { AutoScrollRail } from "./auto-scroll-rail";
 import type { BusinessCategory, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
+import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
+import {
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+  shouldHidePlaywrightFixtures,
+} from "@/lib/supabase/playwright-visual-fixtures";
 
 interface PromotionRow {
   id: string;
@@ -31,14 +37,16 @@ interface PromotionRow {
 }
 
 export async function HomePromotionsShowcase() {
+  const cookieStore = await cookies();
+  const hideFixtures = shouldHidePlaywrightFixtures(
+    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+  );
   const supabase = await createClient();
   const now = new Date().toISOString();
 
   const { data } = await supabase
     .from("promotions")
-    .select(
-      "id, title, price_cents, price_negotiable, category, category_key, photos, videos, video_thumbnail, location_province, location_city, promotion_type, view_count, boost_until, featured_until, start_date, end_date, created_at, business_id"
-    )
+    .select("*")
     .eq("status", "live")
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
@@ -46,6 +54,7 @@ export async function HomePromotionsShowcase() {
     .limit(12);
 
   const promotions = ((data || []) as PromotionRow[])
+    .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
     .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
     .slice(0, 6);
 

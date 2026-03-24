@@ -102,7 +102,9 @@ describe("PromotionCard", () => {
     );
 
     expect(screen.getByText("10 MAR")).toBeTruthy();
-    expect(screen.getByText("Events")).toBeTruthy();
+    expect(screen.getByText("Event")).toBeTruthy();
+    expect(screen.getByText("Event")).toHaveClass("bg-red-500");
+    expect(screen.getByTestId("card")).toHaveClass("hover:border-red-600/60");
   });
 
   it("hides linked business context in the reduced card", () => {
@@ -122,8 +124,31 @@ describe("PromotionCard", () => {
       />
     );
 
-    expect(screen.getByText("Featured")).toBeTruthy();
-    expect(screen.queryByText("Deal")).toBeNull();
+    expect(screen.getByText("Deal")).toBeTruthy();
     expect(screen.queryByText(/Food & Dining/i)).toBeNull();
+    expect(screen.getByTestId("card")).toHaveClass("hover:border-blue-600/60");
+  });
+
+  it("uses the shared deal styling when no override badge is active", () => {
+    render(<PromotionCard {...defaultProps} promotionType="deal" />);
+
+    expect(screen.getByText("Deal")).toHaveClass("bg-blue-600");
+    expect(screen.getByTestId("card")).toHaveClass("hover:border-blue-600/60");
+  });
+
+  it("keeps the type ribbon visible when the card is boosted", () => {
+    render(<PromotionCard {...defaultProps} promotionType="event" boosted />);
+
+    expect(screen.getByText("Event")).toBeTruthy();
+    expect(screen.getByText("Event")).toHaveClass("bg-red-500");
+  });
+
+  it("renders the linked business logo when provided", () => {
+    render(<PromotionCard {...defaultProps} logoUrl="https://example.com/logo.jpg" />);
+
+    expect(screen.getByAltText("Business logo")).toHaveAttribute(
+      "src",
+      "https://example.com/logo.jpg"
+    );
   });
 });

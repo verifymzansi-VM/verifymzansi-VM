@@ -96,7 +96,7 @@ describe("ListingsPage", () => {
     // Assertions
     expect(screen.getByRole("heading", { name: /Your Content/i })).toBeDefined();
     expect(screen.getByText(/Active \(1\)/)).toBeDefined();
-    expect(screen.getByText(/Pending \(1\)/)).toBeDefined();
+    expect(screen.getByText(/Under Review \(1\)/)).toBeDefined();
   });
 
   it("[Edge Case] should not attempt to fetch listings with missing profile UUID", async () => {

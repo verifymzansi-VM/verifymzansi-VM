@@ -172,7 +172,13 @@ describe("KycPreviewLightbox", () => {
     expect(screen.getByText(/document preview/i)).toBeDefined();
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("artifactId=art-1"));
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/admin/verification/evidence",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ artifactId: "art-1" }),
+        })
+      );
     });
 
     await waitFor(() => {

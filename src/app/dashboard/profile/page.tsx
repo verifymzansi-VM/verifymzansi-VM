@@ -30,7 +30,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { profileUpdateSchema } from "@/lib/validations/profile";
-import { ACCOUNT_PHONE_IN_USE_ERROR } from "@/lib/utils/phone";
+import { ACCOUNT_PHONE_IN_USE_ERROR, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import type { AccountVerificationStatus } from "@/types/enums";
 
@@ -132,7 +132,7 @@ export default function ProfilePage() {
         setBio(profile.bio || "");
         setProvince(profile.location_province || "");
         setCity(profile.location_city || "");
-        setPhone(profile.phone || "");
+        setPhone(sanitizeSaPhoneInput(profile.phone || ""));
         setAvatarUrl(profile.avatar_url || null);
       }
       setVerificationStatus(verificationSummary.accountVerificationStatus);
@@ -242,7 +242,7 @@ export default function ProfilePage() {
       }
 
       if (data.profile?.phone) {
-        setPhone(data.profile.phone);
+        setPhone(sanitizeSaPhoneInput(data.profile.phone));
       }
 
       toast({ title: "Profile updated!", variant: "success" });
@@ -456,7 +456,7 @@ export default function ProfilePage() {
                     type="tel"
                     inputMode="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(sanitizeSaPhoneInput(e.target.value))}
                     placeholder="082 000 0000"
                     autoComplete="tel"
                     pattern="^(\+27|0)[6-8][0-9]{8}$"

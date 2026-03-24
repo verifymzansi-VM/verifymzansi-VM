@@ -208,9 +208,9 @@ describe("Dashboard listings page", () => {
 
     expect(screen.getByRole("heading", { name: "Your Content" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Active (1)" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pending (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Under Review (1)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rejected (3)" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Expired (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sold / Expired (1)" })).toBeInTheDocument();
 
     expect(screen.getByText("Needs VIN photo")).toBeInTheDocument();
     expect(screen.getByText("Township Tutors")).toBeInTheDocument();

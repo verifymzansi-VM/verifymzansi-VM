@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     if (originBlock) return originBlock;
 
     const isPlaywrightTestMode = checkPlaywrightTestMode();
-    const turnstileStatus = getTurnstileConfigStatus();
+    const turnstileStatus = getTurnstileConfigStatus({ requestHost: request.nextUrl.hostname });
 
     if (
       process.env.NODE_ENV === "production" &&

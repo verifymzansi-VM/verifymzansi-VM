@@ -1,15 +1,13 @@
 "use client";
 
-import { Building2, Calendar, Search, X } from "lucide-react";
+import { Building2, Calendar, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { getProvinceNames } from "@/lib/constants/sa-provinces";
 import {
   getPromotionFilterTypeLabel,
-  PROMOTION_FILTER_TYPE_OPTIONS,
   type PromotionFilterType,
 } from "@/lib/promotions/type-taxonomy";
 import {
@@ -33,7 +31,6 @@ interface PromotionFilterPanelProps {
   filters: PromotionFilterState;
   cities: string[];
   businessMap: Map<string, string>;
-  onQueryChange: (value: string) => void;
   onTypeChange: (value: PromotionFilterType | undefined) => void;
   onCategoryChange: (value: BusinessCategory | undefined) => void;
   onProvinceChange: (value: string | undefined) => void;
@@ -52,7 +49,6 @@ export function PromotionFilterPanel({
   filters,
   cities,
   businessMap,
-  onQueryChange,
   onTypeChange,
   onCategoryChange,
   onProvinceChange,
@@ -83,51 +79,11 @@ export function PromotionFilterPanel({
       <div className="space-y-1">
         <p className="text-sm font-semibold tracking-tight">Refine what you see</p>
         <p className="text-xs leading-5 text-muted-foreground">
-          Search first, then filter by promotion type, category, and location.
+          Filter by category, location, and event timing.
         </p>
       </div>
 
       <div className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor={mode === "mobile" ? "promotion-search-mobile" : "promotion-search"}>
-            Search
-          </Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              key={`${mode}-${filters.query ?? ""}`}
-              id={mode === "mobile" ? "promotion-search-mobile" : "promotion-search"}
-              type="search"
-              placeholder="Search promotions, deals, or events"
-              className="pl-9"
-              defaultValue={filters.query ?? ""}
-              onChange={(event) => onQueryChange(event.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor={mode === "mobile" ? "promotion-type-mobile" : "promotion-type"}>
-            Promotion type
-          </Label>
-          <select
-            id={mode === "mobile" ? "promotion-type-mobile" : "promotion-type"}
-            aria-label="Promotion type"
-            className={selectClassName}
-            value={filters.type || ""}
-            onChange={(event) =>
-              onTypeChange((event.target.value || undefined) as PromotionFilterType | undefined)
-            }
-          >
-            <option value="">All types</option>
-            {PROMOTION_FILTER_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className="space-y-1.5">
           <Label htmlFor={mode === "mobile" ? "promotion-category-mobile" : "promotion-category"}>
             Category

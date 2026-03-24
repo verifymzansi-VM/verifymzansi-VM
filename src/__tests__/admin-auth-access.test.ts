@@ -47,6 +47,15 @@ vi.mock("@/lib/utils/logger", () => ({
     error: vi.fn(),
   }),
 }));
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: vi.fn(() => null),
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: vi.fn(() => ({ limited: false })),
+}));
 
 import { GET as getEvidence } from "@/app/api/admin/verification/evidence/route";
 import { POST as postDecide } from "@/app/api/admin/verification/decide/route";
@@ -258,7 +267,7 @@ describe("Admin auth access control", () => {
       const res = await postDecide(
         createMockNextRequest("http://localhost:3000/api/admin/verification/decide", {
           method: "POST",
-          body: { stepId: "step-1", decision: "approved" },
+          body: { stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", decision: "approved" },
         })
       );
       expect(res.status).toBe(401);
@@ -269,7 +278,7 @@ describe("Admin auth access control", () => {
       const res = await postDecide(
         createMockNextRequest("http://localhost:3000/api/admin/verification/decide", {
           method: "POST",
-          body: { stepId: "step-1", decision: "approved" },
+          body: { stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", decision: "approved" },
         })
       );
       expect(res.status).toBe(403);
@@ -280,7 +289,7 @@ describe("Admin auth access control", () => {
       const res = await postDecide(
         createMockNextRequest("http://localhost:3000/api/admin/verification/decide", {
           method: "POST",
-          body: { stepId: "step-1", decision: "approved" },
+          body: { stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", decision: "approved" },
         })
       );
       expect(res.status).toBe(403);
@@ -292,7 +301,7 @@ describe("Admin auth access control", () => {
       const res = await postDecide(
         createMockNextRequest("http://localhost:3000/api/admin/verification/decide", {
           method: "POST",
-          body: { stepId: "step-1", decision: "approved" },
+          body: { stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", decision: "approved" },
         })
       );
       // Should get past auth — could be 400 (validation) or 404 (step not found), not 401/403
@@ -305,7 +314,7 @@ describe("Admin auth access control", () => {
       const res = await postDecide(
         createMockNextRequest("http://localhost:3000/api/admin/verification/decide", {
           method: "POST",
-          body: { stepId: "step-1", decision: "approved" },
+          body: { stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", decision: "approved" },
         })
       );
       expect(res.status).not.toBe(401);

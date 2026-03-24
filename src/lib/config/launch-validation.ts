@@ -86,6 +86,11 @@ const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
     "AFRICASTALKING_API_KEY",
     "AFRICASTALKING_USERNAME",
     "AFRICASTALKING_SENDER_ID",
+    "OZOW_ENV",
+    "OZOW_CLIENT_ID",
+    "OZOW_CLIENT_SECRET",
+    "OZOW_SITE_CODE",
+    "OZOW_WEBHOOK_SECRET",
     "RESEND_API_KEY",
     "R2_ACCOUNT_ID",
     "R2_ACCESS_KEY_ID",
@@ -108,8 +113,8 @@ const PRODUCTION_SECRET_KEYS = [
   "HMAC_SECRET",
   "IP_HASH_SECRET",
   "AFRICASTALKING_API_KEY",
-  // Ozow secrets omitted — PayFast is the active payment provider.
-  // Re-add when Ozow integration is activated.
+  "OZOW_CLIENT_SECRET",
+  "OZOW_WEBHOOK_SECRET",
   "RESEND_API_KEY",
   "TURNSTILE_SECRET_KEY",
 ] as const;
@@ -131,6 +136,10 @@ function normalizeMode(value?: string): LaunchValidationMode | null {
 
 function hasValue(value?: string): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function isValidAfricaTalkingSenderId(value?: string): boolean {
+  return hasValue(value) && /^[A-Za-z0-9]{1,11}$/.test(value.trim());
 }
 
 function isTruthy(value?: string): boolean {
@@ -202,26 +211,6 @@ export function validateLaunchConfiguration(
     addCheck(checks, "Launch env", "fail", `Missing: ${missingRequired.join(", ")}`);
   }
 
-  // Ozow payment vars are optional — warn when missing in production
-  if (mode === "production") {
-    const ozowKeys = [
-      "OZOW_ENV",
-      "OZOW_CLIENT_ID",
-      "OZOW_CLIENT_SECRET",
-      "OZOW_SITE_CODE",
-      "OZOW_WEBHOOK_SECRET",
-    ];
-    const missingOzow = ozowKeys.filter((key) => !hasValue(env[key]));
-    if (missingOzow.length > 0) {
-      addCheck(
-        checks,
-        "Ozow payments",
-        "warn",
-        `Not configured: ${missingOzow.join(", ")}. Payment features will be unavailable.`
-      );
-    }
-  }
-
   const appUrl = env.NEXT_PUBLIC_APP_URL;
   if (!hasValue(appUrl)) {
     addCheck(checks, "App URL", "fail", "NEXT_PUBLIC_APP_URL is missing");
@@ -270,6 +259,13 @@ export function validateLaunchConfiguration(
         "fail",
         "AFRICASTALKING_SENDER_ID still contains a placeholder value"
       );
+    } else if (!isValidAfricaTalkingSenderId(afSenderId)) {
+      addCheck(
+        checks,
+        "Africa's Talking",
+        "fail",
+        "AFRICASTALKING_SENDER_ID must be 1-11 alphanumeric characters"
+      );
     } else if (afUsername === "sandbox") {
       addCheck(
         checks,
@@ -286,6 +282,13 @@ export function validateLaunchConfiguration(
       "Africa's Talking",
       "warn",
       "AFRICASTALKING_SENDER_ID is optional locally but required for production SMS delivery"
+    );
+  } else if (!isValidAfricaTalkingSenderId(afSenderId)) {
+    addCheck(
+      checks,
+      "Africa's Talking",
+      "warn",
+      "AFRICASTALKING_SENDER_ID should be 1-11 alphanumeric characters for SMS delivery"
     );
   } else {
     addCheck(checks, "Africa's Talking", "pass", `user=${afUsername} sender=${afSenderId}`);
@@ -319,20 +322,14 @@ export function validateLaunchConfiguration(
       !hasValue(ozowSiteCode) ||
       !hasValue(ozowWebhookSecret)
     ) {
-      // Ozow is optional — PayFast may be the active payment provider
       addCheck(
         checks,
         "Ozow",
-        "warn",
-        "Ozow payment credentials not configured. Ozow payment features will be unavailable."
+        "fail",
+        "Ozow payment credentials are required for production checkout."
       );
     } else if (ozowEnv !== "production") {
-      addCheck(
-        checks,
-        "Ozow",
-        "warn",
-        "OZOW_ENV is not set to production — Ozow payments will use staging"
-      );
+      addCheck(checks, "Ozow", "fail", "OZOW_ENV must be set to production for live checkout");
     } else {
       addCheck(
         checks,

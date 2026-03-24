@@ -519,7 +519,7 @@ test.describe("Post-Registration UX", () => {
 
     await expect(page.getByText("Check your email", { exact: true })).toBeVisible();
     await expect(page.getByText(/We've sent a confirmation link/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /didn't receive it\? resend/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /resend confirmation email/i })).toBeVisible();
 
     await screenshot(page, "TC13-registered-true-landing");
 

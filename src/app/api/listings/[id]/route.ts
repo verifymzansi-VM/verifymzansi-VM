@@ -36,6 +36,7 @@ type ListingUpdateRow = {
   photos?: string[] | null;
   videos?: string[] | null;
   video_thumbnail?: string | null;
+  logo_url?: string | null;
   owner_id?: string | null;
   seller_id?: string | null;
 };
@@ -117,7 +118,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         .from("listings")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, area, photos, videos, video_thumbnail",
+            "id, owner_id, status, area, photos, videos, video_thumbnail, logo_url",
             ownerColumn
           )
         )
@@ -175,6 +176,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const videoUrls = data.videos;
     const nextVideoThumbnail = data.videoThumbnail || null;
+    const nextLogoUrl = data.logo_url || null;
 
     if (data.images.length > ent.maxPhotos) {
       return NextResponse.json(
@@ -216,13 +218,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       photos: data.images,
       videos: videoUrls,
       video_thumbnail: nextVideoThumbnail,
+      logo_url: nextLogoUrl,
       contact_methods: data.contactMethods,
       // Re-submit for moderation on edit
       status: listing.status === "live" ? "pending_moderation" : listing.status,
     };
     const removedMediaUrls = diffRemovedMediaUrls(
-      collectMediaUrls(listing.photos, listing.videos, listing.video_thumbnail),
-      collectMediaUrls(updateRecord.photos, videoUrls, nextVideoThumbnail)
+      collectMediaUrls(listing.photos, listing.videos, listing.video_thumbnail, listing.logo_url),
+      collectMediaUrls(updateRecord.photos, videoUrls, nextVideoThumbnail, nextLogoUrl)
     );
 
     // ── Update listing ───────────────────────────────────────

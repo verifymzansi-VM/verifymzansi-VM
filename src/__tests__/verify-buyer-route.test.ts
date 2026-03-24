@@ -86,7 +86,7 @@ describe("POST /api/verify-buyer", () => {
           data: {
             first_name_initial: "N.",
             issued_at: "2026-03-10T12:00:00.000Z",
-            expires_at: "2026-03-20T12:00:00.000Z",
+            expires_at: "2026-04-20T12:00:00.000Z",
             status: "valid",
           },
           error: null,

@@ -17,7 +17,9 @@ const logger = createLogger("Proxy");
 
 /** Generate a per-request CSP nonce. */
 function generateNonce(): string {
-  return btoa(crypto.randomUUID());
+  // Avoid runtime-specific globals (e.g. btoa) so nonce generation is stable
+  // across Cloudflare/workerd and Node-compatible environments.
+  return crypto.randomUUID().replace(/-/g, "");
 }
 
 function shouldUseStrictNonceCsp(): boolean {
@@ -653,6 +655,23 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
  * the response with security headers (CSP nonce, HSTS, etc.).
  */
 export async function handleMiddlewareRequest(request: NextRequest): Promise<NextResponse> {
-  const routeResponse = await routeRequest(request);
-  return withSecurityHeaders(request, routeResponse);
+  try {
+    const routeResponse = await routeRequest(request);
+    return withSecurityHeaders(request, routeResponse);
+  } catch (error) {
+    logger.error("Middleware request handler failed", {
+      path: request.nextUrl.pathname,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    const fallback = request.nextUrl.pathname.startsWith("/api/")
+      ? NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 })
+      : NextResponse.next();
+
+    fallback.headers.set("X-Content-Type-Options", "nosniff");
+    fallback.headers.set("X-Frame-Options", "DENY");
+    fallback.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+
+    return fallback;
+  }
 }

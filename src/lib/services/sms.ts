@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("SMS");
+const AT_SENDER_ID_REGEX = /^[A-Za-z0-9]{1,11}$/;
 
 /**
  * Africa's Talking SMS service for South African phone numbers.
@@ -27,6 +28,12 @@ interface SendSmsResult {
   error?: string;
 }
 
+interface SenderIdValidationResult {
+  valid: boolean;
+  value?: string;
+  reason?: string;
+}
+
 /** Africa's Talking REST API response shape */
 interface ATSmsResponse {
   SMSMessageData: {
@@ -39,6 +46,26 @@ interface ATSmsResponse {
       cost: string;
     }>;
   };
+}
+
+function validateAfricaTalkingSenderId(senderId: string | undefined): SenderIdValidationResult {
+  if (!senderId) {
+    return { valid: false, reason: "missing" };
+  }
+
+  const trimmed = senderId.trim();
+  if (!trimmed) {
+    return { valid: false, reason: "blank" };
+  }
+
+  if (!AT_SENDER_ID_REGEX.test(trimmed)) {
+    return {
+      valid: false,
+      reason: "must be 1-11 alphanumeric characters",
+    };
+  }
+
+  return { valid: true, value: trimmed };
 }
 
 /**
@@ -76,15 +103,20 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       ? validatedParams.to
       : [validatedParams.to];
 
-    const senderId = process.env.AFRICASTALKING_SENDER_ID;
+    const senderIdResult = validateAfricaTalkingSenderId(process.env.AFRICASTALKING_SENDER_ID);
 
     // Build URL-encoded form body
     const formData = new URLSearchParams();
     formData.set("username", username);
     formData.set("to", recipients.join(","));
     formData.set("message", validatedParams.message);
-    if (senderId) {
-      formData.set("from", senderId);
+    if (senderIdResult.valid && senderIdResult.value) {
+      formData.set("from", senderIdResult.value);
+    } else if (process.env.AFRICASTALKING_SENDER_ID) {
+      log.warn("Ignoring invalid Africa's Talking sender ID", {
+        reason: senderIdResult.reason,
+        configuredLength: process.env.AFRICASTALKING_SENDER_ID.trim().length,
+      });
     }
 
     const response = await fetch(`${baseUrl}/version1/messaging`, {

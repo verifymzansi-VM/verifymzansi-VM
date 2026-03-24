@@ -139,6 +139,8 @@ site root with `?code=...` instead of the app callback handler.
 | `pnpm test:all`                                                                        | Full validation shortcut                             |
 | `pnpm test:e2e`                                                                        | Full Playwright suite                                |
 | `pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome` | Launch-path smoke coverage                           |
+| `pnpm bootstrap:operator`                                                              | Create or update the first live staff account        |
+| `pnpm reset:launch-data`                                                               | Capture a non-destructive launch-reset inventory     |
 | `pnpm preflight`                                                                       | Local launch checks with development-mode validation |
 | `pnpm preflight:prod`                                                                  | Production launch checks                             |
 | `pnpm validate:launch-env`                                                             | Fail-fast production env validation                  |
@@ -177,6 +179,29 @@ Before a production release, also run the production-only validation checks:
 pnpm validate:launch-env
 pnpm preflight:prod
 ```
+
+## Live Operator Bootstrap
+
+After a launch reset, the linked Supabase project can be left with zero auth
+users. Use the minimal operator bootstrap script to create the first admin or
+moderator without reintroducing any demo or seed data:
+
+```bash
+pnpm bootstrap:operator -- \
+  --email=admin@verifymzansi.com \
+  --password='replace-with-strong-password' \
+  --display-name='VerifyMzansi Admin' \
+  --role=admin \
+  --confirm-project=your-project-ref
+```
+
+Notes:
+
+- The script only supports `admin` and `moderator` roles.
+- It creates or updates the auth user, sets both `user_metadata.role` and
+  `app_metadata.role`, and upserts a minimal `account_profiles` row.
+- It refuses to run unless `--confirm-project` matches the current
+  `NEXT_PUBLIC_SUPABASE_URL` project ref.
 
 ## Deployment
 

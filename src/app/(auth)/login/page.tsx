@@ -25,7 +25,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [turnstileError, setTurnstileError] = useState(false);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
+  const [turnstileRetryToken, setTurnstileRetryToken] = useState(0);
   const [captchaUnavailable, setCaptchaUnavailable] = useState(
     getTurnstileClientState().mode === "unavailable"
   );
@@ -92,15 +92,30 @@ export default function LoginPage() {
   const turnstileState = getTurnstileClientState();
   const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;
 
+  const resetTurnstileChallenge = useCallback(() => {
+    if (turnstileState.mode !== "configured") {
+      return;
+    }
+
+    setTurnstileLoaded(false);
+    setTurnstileError(false);
+    setCaptchaUnavailable(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
+    TurnstileWidget.retry();
+    setTurnstileRetryToken((value) => value + 1);
+  }, [setValue, turnstileState.mode]);
+
   useEffect(() => {
     if (skipTurnstileTimeout || turnstileLoaded) return;
     timeoutRef.current = setTimeout(() => {
+      setTurnstileLoaded(false);
       setTurnstileError(true);
+      setValue("turnstileToken", "", { shouldValidate: true });
     }, 15000);
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [skipTurnstileTimeout, turnstileLoaded, retryKey]);
+  }, [setValue, skipTurnstileTimeout, turnstileLoaded, turnstileRetryToken]);
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
@@ -124,21 +139,22 @@ export default function LoginPage() {
 
   const handleTurnstileError = useCallback(() => {
     setCaptchaUnavailable(false);
+    setTurnstileLoaded(false);
     setTurnstileError(true);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    // When Turnstile widget errors, set a bypass token so the server
-    // can decide whether to allow the request without CAPTCHA.
-    setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
+    setValue("turnstileToken", "", { shouldValidate: true });
+  }, [setValue]);
+
+  const handleTurnstileUnavailable = useCallback(() => {
+    setCaptchaUnavailable(true);
+    setTurnstileLoaded(false);
+    setTurnstileError(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
   }, [setValue]);
 
   const handleRetry = useCallback(() => {
-    setCaptchaUnavailable(false);
-    setTurnstileError(false);
-    setTurnstileLoaded(false);
-    setValue("turnstileToken", "", { shouldValidate: false });
-    TurnstileWidget.retry();
-    setRetryKey((k) => k + 1);
-  }, [setValue]);
+    resetTurnstileChallenge();
+  }, [resetTurnstileChallenge]);
 
   // Clean up cooldown interval on unmount to prevent memory leaks
   useEffect(() => {
@@ -231,6 +247,12 @@ export default function LoginPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        resetTurnstileChallenge();
+
+        if (result.code === "email_not_confirmed") {
+          setJustRegistered(true);
+        }
+
         toast({
           title: typeof result.error === "string" ? result.error : "Sign in failed",
           description:
@@ -375,16 +397,11 @@ export default function LoginPage() {
         </div>
 
         <TurnstileWidget
-          key={retryKey}
+          retryToken={turnstileRetryToken}
           onSuccess={handleTurnstileSuccess}
           onError={handleTurnstileError}
           onLoad={handleTurnstileLoad}
-          onUnavailable={() => {
-            setCaptchaUnavailable(true);
-            setTurnstileLoaded(false);
-            setTurnstileError(false);
-            setValue("turnstileToken", "", { shouldValidate: false });
-          }}
+          onUnavailable={handleTurnstileUnavailable}
         />
         {errors.turnstileToken && !turnstileError && (
           <p className="inline-form-error">{errors.turnstileToken.message}</p>
@@ -408,7 +425,7 @@ export default function LoginPage() {
           type="submit"
           className="w-full"
           variant="trust-verified"
-          disabled={!isInteractive || isSubmitting || captchaUnavailable}
+          disabled={!isInteractive || isSubmitting || captchaUnavailable || turnstileError}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Sign in

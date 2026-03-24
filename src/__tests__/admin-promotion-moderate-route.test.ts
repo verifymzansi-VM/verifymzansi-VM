@@ -7,12 +7,16 @@ const {
   mockLogAuditEvent,
   mockLoggerError,
   mockEnforceSameOriginMutation,
+  mockVerifyStaffActorRoleFromDb,
+  mockCheckLocalRateLimit,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
   mockLoggerError: vi.fn(),
   mockEnforceSameOriginMutation: vi.fn<(request: NextRequest) => Response | null>(() => null),
+  mockVerifyStaffActorRoleFromDb: vi.fn(),
+  mockCheckLocalRateLimit: vi.fn(() => ({ limited: false })),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
@@ -23,6 +27,15 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: mockEnforceSameOriginMutation,
+}));
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyStaffActorRoleFromDb: mockVerifyStaffActorRoleFromDb,
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: mockCheckLocalRateLimit,
 }));
 
 import { POST } from "@/app/api/admin/promotions/[id]/moderate/route";
@@ -46,6 +59,10 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnforceSameOriginMutation.mockReturnValue(null);
+    mockVerifyStaffActorRoleFromDb.mockImplementation(async (user) => {
+      const role = user?.app_metadata?.role;
+      return role === "admin" || role === "moderator" ? role : null;
+    });
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({

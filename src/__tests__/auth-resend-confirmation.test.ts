@@ -66,9 +66,9 @@ function createRequest(body: unknown): NextRequest {
   return {
     method: "POST",
     json: async () => body,
-    url: "http://localhost:3000/api/auth/resend-confirmation",
+    url: "https://verifymzansi.com/api/auth/resend-confirmation",
     headers: new Headers(),
-    nextUrl: new URL("http://localhost:3000/api/auth/resend-confirmation"),
+    nextUrl: new URL("https://verifymzansi.com/api/auth/resend-confirmation"),
   } as unknown as NextRequest;
 }
 

@@ -21,6 +21,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { parseAndValidateFormData } from "@/lib/utils/api";
+import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 
 const log = createLogger("VerificationUpload");
 
@@ -99,10 +100,9 @@ export async function POST(request: NextRequest) {
 
     // Email confirmation gate — users must confirm their email before uploading
     if (!user.email_confirmed_at) {
-      return NextResponse.json(
-        { error: "Please confirm your email address before starting verification" },
-        { status: 403 }
-      );
+      return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
+        status: 403,
+      });
     }
 
     // Feature flag check — must match session start route

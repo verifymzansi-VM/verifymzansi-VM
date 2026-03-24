@@ -47,6 +47,17 @@ vi.mock("@/lib/utils/logger", () => ({
     error: vi.fn(),
   }),
 }));
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyStaffActorRoleFromDb: vi.fn(
+    async (user: { app_metadata?: Record<string, unknown> } | null | undefined) => {
+      const role = user?.app_metadata?.role;
+      return role === "admin" || role === "moderator" ? role : null;
+    }
+  ),
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: vi.fn(() => ({ limited: false })),
+}));
 
 import { GET as getEvidence } from "@/app/api/admin/verification/evidence/route";
 

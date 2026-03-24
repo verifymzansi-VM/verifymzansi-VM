@@ -3,6 +3,7 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { createLogger } from "@/lib/utils/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { parseAndValidateSearchParams } from "@/lib/utils/api";
 import {
   createNonNegativeNumberSchema,
@@ -39,8 +40,11 @@ function isPrivateIp(hostname: string): boolean {
 function isSafeUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    if (isPrivateIp(parsed.hostname)) return false;
     const allowedHosts = ["localhost", "127.0.0.1", "verifymzansi.com", "www.verifymzansi.com"];
+    if (allowedHosts.includes(parsed.hostname)) {
+      return true;
+    }
+    if (isPrivateIp(parsed.hostname)) return false;
     return allowedHosts.some(
       (host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`)
     );
@@ -51,7 +55,7 @@ function isSafeUrl(url: string): boolean {
 }
 
 export async function GET(request: Request) {
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production" && !isPlaywrightTestMode()) {
     log.error("Mock Ozow endpoint hit in production — blocked");
     return new NextResponse("Not found", { status: 404 });
   }
@@ -80,12 +84,20 @@ export async function GET(request: Request) {
       const supabase = createAdminClient();
       const { data: payment } = await supabase
         .from("payments")
-        .select("id, provider")
+        .select("id, provider, provider_data")
         .eq("id", paymentId)
-        .eq("provider", "mock-ozow")
         .maybeSingle();
 
-      if (!payment) {
+      const providerData =
+        payment?.provider_data && typeof payment.provider_data === "object"
+          ? payment.provider_data
+          : null;
+      const isMockFlow =
+        payment?.provider === "mock-ozow" ||
+        providerData?.mock_flow === true ||
+        providerData?.checkout?.mockFlow === true;
+
+      if (!payment || !isMockFlow) {
         log.warn("Mock Ozow attempted on non-mock payment", { paymentId });
         return new NextResponse("Payment not found or not a mock payment", { status: 404 });
       }

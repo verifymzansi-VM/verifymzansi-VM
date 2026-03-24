@@ -10,6 +10,7 @@ function createDeterministicEnv() {
     PLAYWRIGHT_SUPABASE_MODE: "stub",
     PLAYWRIGHT_E2E_AUTO_APPROVE: "1",
     PLAYWRIGHT_E2E_AUTH: "1",
+    ENABLE_MOCK_OZOW: "true",
     VERIFYMZANSI_RUNTIME_MODE: "e2e",
     VERIFYMZANSI_VALIDATION_MODE: "e2e",
     NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE: "1",
@@ -30,6 +31,7 @@ function createDeterministicEnv() {
     AFRICASTALKING_API_KEY: "playwright-africas-talking-key",
     AFRICASTALKING_USERNAME: "sandbox",
     AFRICASTALKING_SENDER_ID: "VERIFYMZANS",
+    OZOW_WEBHOOK_SECRET: "playwright-ozow-webhook-secret", // secret-scan: allow deterministic fixture
     RESEND_API_KEY: "re_playwright_1234567890",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key",
     TURNSTILE_SECRET_KEY: "dummy_secret_key", // secret-scan: allow deterministic fixture

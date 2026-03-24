@@ -116,18 +116,46 @@ describe("OTP Routes", () => {
       });
     });
 
+    it("keeps OTP send available when the shared limiter is degraded and only returns 429 after the fallback limit is hit", async () => {
+      vi.mocked(checkRateLimit).mockResolvedValue({
+        limited: true,
+        degraded: true,
+        retryAfter: 30,
+      });
+
+      const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+      const data = await res.json();
+
+      expect(res.status).toBe(429);
+      expect(data).toMatchObject({
+        error: "Too many OTP requests. Please wait before trying again.",
+        code: "rate_limited",
+        retryAfter: 30,
+      });
+    });
+
     it("blocks when challenge send limit is exceeded", async () => {
+      const adminQuery = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        gte: vi.fn(),
+        update: vi.fn(),
+        insert: vi.fn(),
+      };
+      adminQuery.select.mockReturnValue(adminQuery);
+      adminQuery.eq.mockReturnValue(adminQuery);
+      adminQuery.gte.mockResolvedValue({ count: 5 });
+
+      const invalidateQuery = {
+        eq: vi.fn(),
+        is: vi.fn().mockResolvedValue({ error: null }),
+      };
+      invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      adminQuery.update.mockReturnValue(invalidateQuery);
+      adminQuery.insert.mockResolvedValue({ error: null });
+
       const mockAdminClient = {
-        from: vi.fn((table: string) => {
-          if (table === "otp_challenges") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              gte: vi.fn().mockResolvedValue({ count: 5 }),
-            };
-          }
-          return { insert: vi.fn().mockResolvedValue({ error: null }) };
-        }),
+        from: vi.fn().mockReturnValue(adminQuery),
       };
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
 
@@ -142,24 +170,30 @@ describe("OTP Routes", () => {
     });
 
     it("creates challenge and sends OTP when allowed", async () => {
-      const otpLogInsert = vi.fn().mockResolvedValue({ error: null });
+      const otpLogInsert = vi
+        .fn()
+        .mockResolvedValueOnce({ error: null })
+        .mockResolvedValueOnce({ error: null });
+      const adminQuery = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        gte: vi.fn(),
+        update: vi.fn(),
+        insert: otpLogInsert,
+      };
+      adminQuery.select.mockReturnValue(adminQuery);
+      adminQuery.eq.mockReturnValue(adminQuery);
+      adminQuery.gte.mockResolvedValue({ count: 0 });
+
+      const invalidateQuery = {
+        eq: vi.fn(),
+        is: vi.fn().mockResolvedValue({ error: null }),
+      };
+      invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      adminQuery.update.mockReturnValue(invalidateQuery);
+
       const mockAdminClient = {
-        from: vi.fn((table: string) => {
-          if (table === "otp_challenges") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              gte: vi.fn().mockResolvedValue({ count: 0 }),
-              insert: vi.fn().mockResolvedValue({ error: null }),
-            };
-          }
-          if (table === "otp_logs") {
-            return {
-              insert: otpLogInsert,
-            };
-          }
-          return {};
-        }),
+        from: vi.fn().mockReturnValue(adminQuery),
       };
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
       vi.mocked(smsService.sendOtpSms).mockResolvedValue({
@@ -184,24 +218,30 @@ describe("OTP Routes", () => {
     });
 
     it("returns a structured provider error when the SMS provider rejects the send", async () => {
-      const otpLogInsert = vi.fn().mockResolvedValue({ error: null });
+      const otpLogInsert = vi
+        .fn()
+        .mockResolvedValueOnce({ error: null })
+        .mockResolvedValueOnce({ error: null });
+      const adminQuery = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        gte: vi.fn(),
+        update: vi.fn(),
+        insert: otpLogInsert,
+      };
+      adminQuery.select.mockReturnValue(adminQuery);
+      adminQuery.eq.mockReturnValue(adminQuery);
+      adminQuery.gte.mockResolvedValue({ count: 0 });
+
+      const invalidateQuery = {
+        eq: vi.fn(),
+        is: vi.fn().mockResolvedValue({ error: null }),
+      };
+      invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      adminQuery.update.mockReturnValue(invalidateQuery);
+
       const mockAdminClient = {
-        from: vi.fn((table: string) => {
-          if (table === "otp_challenges") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              gte: vi.fn().mockResolvedValue({ count: 0 }),
-              insert: vi.fn().mockResolvedValue({ error: null }),
-            };
-          }
-          if (table === "otp_logs") {
-            return {
-              insert: otpLogInsert,
-            };
-          }
-          return {};
-        }),
+        from: vi.fn().mockReturnValue(adminQuery),
       };
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
       vi.mocked(smsService.sendOtpSms).mockResolvedValue({
@@ -267,6 +307,23 @@ describe("OTP Routes", () => {
 
       expect(res.status).toBe(400);
       expect(data.error).toBe("Invalid or expired OTP");
+    });
+
+    it("keeps OTP verification available when the shared limiter is degraded and only returns 429 after the fallback limit is hit", async () => {
+      vi.mocked(checkRateLimit).mockResolvedValue({
+        limited: true,
+        degraded: true,
+        retryAfter: 25,
+      });
+
+      const res = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+      const data = await res.json();
+
+      expect(res.status).toBe(429);
+      expect(res.headers.get("Retry-After")).toBe("25");
+      expect(data.error).toBe("Too many attempts. Please try again later.");
     });
 
     it("does not allow legacy bypass codes without a stored challenge", async () => {

@@ -41,7 +41,13 @@ import type {
   AccountVerificationStatus,
 } from "@/types/enums";
 import { GPS_REQUEST_TIMEOUT_MS, GPS_MAX_AGE_MS } from "@/lib/constants/verification";
+import {
+  VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE,
+  VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE,
+  isVerificationEmailConfirmationRequired,
+} from "@/lib/constants/verification-email-confirmation";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { isValidSaPhone, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 
 type WizardStep = "phone" | "id_doc" | "selfie" | "location" | "complete";
 type UploadReceipt = { name: string; sizeBytes: number; uploadedAtIso: string };
@@ -58,18 +64,21 @@ type StepStatusEntry = {
 const STEP_ORDER: Exclude<WizardStep, "complete">[] = ["phone", "id_doc", "selfie", "location"];
 const REVIEWABLE_STEP_ORDER: VerificationStepType[] = ["phone", "id_doc", "selfie", "location"];
 
-const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"];
 const OTP_RESEND_COOLDOWN_SECONDS = 30;
+const EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION =
+  "Check your inbox for the confirmation link, then return here to continue with document and location verification.";
 
-type OtpSendResponse = {
+type VerificationApiResponse = {
   error?: string;
   code?: string;
   detail?: string;
   retryAfter?: number;
 };
+
+type OtpSendResponse = VerificationApiResponse;
 
 const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
   phone: "Use your real South African mobile number. We will send a one-time password by SMS.",
@@ -103,6 +112,8 @@ function mapUploadFailureMessage(label: string, error: unknown, code?: string): 
       return `${normalizedLabel} could not be encrypted securely. Please contact support.`;
     case "artifact_record_failed":
       return `${normalizedLabel} upload reached the server but could not be recorded. Please retry.`;
+    case VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE:
+      return VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE;
     default: {
       const message = error instanceof Error ? error.message : String(error ?? "").trim();
       if (!message) {
@@ -255,7 +266,7 @@ function formatCountdown(totalSeconds: number): string {
 }
 
 function buildOtpSupportMessage(
-  payload: OtpSendResponse,
+  payload: VerificationApiResponse,
   retryAfterSeconds: number,
   formattedPhone: string
 ): string {
@@ -284,6 +295,7 @@ export default function VerificationPage() {
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [otpRetryAfterSeconds, setOtpRetryAfterSeconds] = useState(0);
   const [otpSupportMessage, setOtpSupportMessage] = useState<string | null>(null);
+  const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
 
   const [idNumber, setIdNumber] = useState("");
   const [idFile, setIdFile] = useState<File | null>(null);
@@ -340,7 +352,7 @@ export default function VerificationPage() {
 
   const idFileError = validateFile(idFile, true);
   const selfieFileError = validateFile(selfieFile);
-  const isPhoneValid = SA_PHONE_REGEX.test(phone);
+  const isPhoneValid = isValidSaPhone(phone);
   const isOtpValid = otp.length === 6;
   const isIdReady = /^\d{13}$/.test(idNumber) && !idFileError && idChecksumValid !== false;
   const isSelfieReady = !selfieFileError;
@@ -366,6 +378,16 @@ export default function VerificationPage() {
       }),
     [serverStepMap]
   );
+  const verificationSubmissionBlocked = emailConfirmationRequired;
+
+  const applyEmailConfirmationBlocker = useCallback((payload?: VerificationApiResponse | null) => {
+    if (!isVerificationEmailConfirmationRequired(payload)) {
+      return false;
+    }
+
+    setEmailConfirmationRequired(true);
+    return true;
+  }, []);
 
   const syncVerificationStatus = useCallback(async () => {
     try {
@@ -451,6 +473,11 @@ export default function VerificationPage() {
               setPhoneVerified(true);
             }
           }
+        } else if (res.status === 403) {
+          const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
+          if (!cancelled) {
+            applyEmailConfirmationBlocker(data);
+          }
         } else if (res.status === 410) {
           // Session expired — toast and fall back to legacy
           if (!cancelled) {
@@ -499,7 +526,7 @@ export default function VerificationPage() {
     return () => {
       cancelled = true;
     };
-  }, [syncVerificationStatus, toast]);
+  }, [applyEmailConfirmationBlocker, syncVerificationStatus, toast]);
 
   // SA ID number validation effect
   useEffect(() => {
@@ -589,7 +616,16 @@ export default function VerificationPage() {
               variant: "destructive",
             });
           } else {
-            const data = await res.json().catch(() => ({}));
+            const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
+            if (applyEmailConfirmationBlocker(data)) {
+              setGpsStatus("idle");
+              toast({
+                title: "Confirm your email first",
+                description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+                variant: "destructive",
+              });
+              return;
+            }
             setGpsStatus("error");
             toast({
               title: "GPS could not verify this location",
@@ -619,7 +655,7 @@ export default function VerificationPage() {
         maximumAge: GPS_MAX_AGE_MS,
       }
     );
-  }, [gpsStatus, toast, manualSubmitted, province, city]);
+  }, [applyEmailConfirmationBlocker, gpsStatus, toast, manualSubmitted, province, city]);
 
   // GPS is no longer auto-triggered — it's optional confirmation after manual selection
 
@@ -665,7 +701,7 @@ export default function VerificationPage() {
   }
 
   function handlePhoneChange(value: string) {
-    setPhone(value);
+    setPhone(sanitizeSaPhoneInput(value));
     setOtp("");
     setOtpSent(false);
     setOtpRetryAfterSeconds(0);
@@ -766,6 +802,15 @@ export default function VerificationPage() {
   }
 
   async function goToSelfieStep() {
+    if (verificationSubmissionBlocked) {
+      toast({
+        title: "Confirm your email first",
+        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!/^\d{13}$/.test(idNumber)) {
       toast({ title: "Enter a valid 13-digit SA ID number", variant: "destructive" });
       return;
@@ -780,8 +825,11 @@ export default function VerificationPage() {
       await syncVerificationStatus();
       setStep("selfie");
     } catch (err) {
+      const isEmailBlocker =
+        err instanceof SubmissionError &&
+        err.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE;
       toast({
-        title: "ID document upload failed",
+        title: isEmailBlocker ? "Confirm your email first" : "ID document upload failed",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
@@ -791,6 +839,15 @@ export default function VerificationPage() {
   }
 
   async function goToLocationStep() {
+    if (verificationSubmissionBlocked) {
+      toast({
+        title: "Confirm your email first",
+        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (selfieFileError) {
       toast({ title: selfieFileError, variant: "destructive" });
       return;
@@ -801,8 +858,11 @@ export default function VerificationPage() {
       await syncVerificationStatus();
       setStep("location");
     } catch (err) {
+      const isEmailBlocker =
+        err instanceof SubmissionError &&
+        err.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE;
       toast({
-        title: "Selfie upload failed",
+        title: isEmailBlocker ? "Confirm your email first" : "Selfie upload failed",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
@@ -822,8 +882,14 @@ export default function VerificationPage() {
         headers: withCsrfHeaders(),
         body: buildFormData(),
       });
-      const payload = await res.json().catch(() => ({}));
+      const payload = (await res.json().catch(() => ({}))) as VerificationApiResponse;
       if (!res.ok) {
+        if (applyEmailConfirmationBlocker(payload)) {
+          throw new SubmissionError(
+            VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE,
+            VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE
+          );
+        }
         throw new SubmissionError(
           mapUploadFailureMessage(
             label,
@@ -838,7 +904,14 @@ export default function VerificationPage() {
 
     try {
       return await attempt();
-    } catch {
+    } catch (error) {
+      if (
+        error instanceof SubmissionError &&
+        error.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE
+      ) {
+        throw error;
+      }
+
       // One automatic retry after 2 s for transient failures
       await new Promise((r) => setTimeout(r, 2000));
       return await attempt();
@@ -903,6 +976,15 @@ export default function VerificationPage() {
   }
 
   async function handleManualLocationSubmit() {
+    if (verificationSubmissionBlocked) {
+      toast({
+        title: "Confirm your email first",
+        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!province || !city) {
       toast({ title: "Please select both province and city", variant: "destructive" });
       return;
@@ -919,7 +1001,15 @@ export default function VerificationPage() {
         markStepComplete("location");
         toast({ title: "Location saved", variant: "success" });
       } else {
-        const data = await res.json().catch(() => ({}));
+        const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
+        if (applyEmailConfirmationBlocker(data)) {
+          toast({
+            title: "Confirm your email first",
+            description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+            variant: "destructive",
+          });
+          return;
+        }
         toast({
           title: "Failed to save location",
           description: data.detail || data.error || "Please try again.",
@@ -938,6 +1028,15 @@ export default function VerificationPage() {
   }
 
   async function handleFinalize() {
+    if (verificationSubmissionBlocked) {
+      toast({
+        title: "Confirm your email first",
+        description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!phoneVerified) {
       setStep("phone");
       toast({ title: "Verify your phone first", variant: "destructive" });
@@ -976,8 +1075,11 @@ export default function VerificationPage() {
       });
       setStep("complete");
     } catch (err) {
+      const isEmailBlocker =
+        err instanceof SubmissionError &&
+        err.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE;
       toast({
-        title: "Submission failed",
+        title: isEmailBlocker ? "Confirm your email first" : "Submission failed",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
@@ -1110,6 +1212,19 @@ export default function VerificationPage() {
                 </Card>
               )}
 
+            {verificationSubmissionBlocked && (
+              <Card className="border-amber-300/70 bg-amber-50/80 dark:border-amber-700/70 dark:bg-amber-950/20">
+                <CardContent className="space-y-2 p-4 text-sm">
+                  <div className="rounded-md border border-amber-400/40 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+                    <p className="font-medium">
+                      Confirm your email before submitting documents and location.
+                    </p>
+                    <p className="mt-1 text-xs">{EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {step === "phone" && (
               <Card className="border-warm-200/70 dark:border-warm-700/70 bg-background/95">
                 <CardHeader>
@@ -1136,9 +1251,14 @@ export default function VerificationPage() {
                     <Label htmlFor="phone">SA mobile number</Label>
                     <Input
                       id="phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
                       placeholder="071 234 5678"
                       value={phone}
                       onChange={(e) => handlePhoneChange(e.target.value)}
+                      pattern="^(\\+27|0)[6-8][0-9]{8}$"
+                      title="Enter a valid SA mobile number (e.g. 071 234 5678)"
                       disabled={phoneVerified}
                     />
                   </div>
@@ -1245,6 +1365,7 @@ export default function VerificationPage() {
                       id="idNumber"
                       maxLength={13}
                       value={idNumber}
+                      disabled={verificationSubmissionBlocked}
                       onChange={(e) => {
                         setIdNumber(e.target.value.replace(/\D/g, ""));
                         clearStepCompletion("id_doc");
@@ -1282,6 +1403,7 @@ export default function VerificationPage() {
                       id="idFile"
                       type="file"
                       accept="image/jpeg,image/png,image/webp,.pdf,application/pdf"
+                      disabled={verificationSubmissionBlocked}
                       onChange={(e) => {
                         setIdFile(e.target.files?.[0] ?? null);
                         setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
@@ -1313,7 +1435,7 @@ export default function VerificationPage() {
                     </Button>
                     <Button
                       onClick={goToSelfieStep}
-                      disabled={!isIdReady || isUploadingId}
+                      disabled={!isIdReady || isUploadingId || verificationSubmissionBlocked}
                       variant="trust-verified"
                       className="gap-1"
                     >
@@ -1368,6 +1490,7 @@ export default function VerificationPage() {
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
                       capture="user"
+                      disabled={verificationSubmissionBlocked}
                       onChange={(e) => {
                         setSelfieFile(e.target.files?.[0] ?? null);
                         setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
@@ -1401,7 +1524,9 @@ export default function VerificationPage() {
                     </Button>
                     <Button
                       onClick={goToLocationStep}
-                      disabled={!isSelfieReady || isUploadingSelfie}
+                      disabled={
+                        !isSelfieReady || isUploadingSelfie || verificationSubmissionBlocked
+                      }
                       variant="trust-verified"
                       className="gap-1"
                     >
@@ -1467,7 +1592,7 @@ export default function VerificationPage() {
                           aria-label="Province"
                           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                           value={province}
-                          disabled={manualSubmitted}
+                          disabled={manualSubmitted || verificationSubmissionBlocked}
                           onChange={(e) => {
                             setProvince(e.target.value);
                             setCity("");
@@ -1492,7 +1617,7 @@ export default function VerificationPage() {
                           aria-label="City"
                           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                           value={city}
-                          disabled={!province || manualSubmitted}
+                          disabled={!province || manualSubmitted || verificationSubmissionBlocked}
                           onChange={(e) => setCity(e.target.value)}
                         >
                           <option value="">Select city…</option>
@@ -1508,7 +1633,9 @@ export default function VerificationPage() {
                       {!manualSubmitted && (
                         <Button
                           onClick={handleManualLocationSubmit}
-                          disabled={!province || !city || manualSubmitting}
+                          disabled={
+                            !province || !city || manualSubmitting || verificationSubmissionBlocked
+                          }
                           variant="default"
                           size="sm"
                           className="gap-2"
@@ -1548,6 +1675,7 @@ export default function VerificationPage() {
                             variant="outline"
                             className="gap-2"
                             size="sm"
+                            disabled={verificationSubmissionBlocked}
                           >
                             <Navigation className="h-4 w-4" />
                             Confirm with GPS
@@ -1637,7 +1765,7 @@ export default function VerificationPage() {
                       </Button>
                       <Button
                         onClick={handleFinalize}
-                        disabled={!isLocationReady || isFinalizing}
+                        disabled={!isLocationReady || isFinalizing || verificationSubmissionBlocked}
                         variant="trust-verified"
                         className="gap-2"
                       >

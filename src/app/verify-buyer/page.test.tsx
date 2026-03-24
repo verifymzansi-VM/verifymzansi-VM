@@ -56,7 +56,7 @@ describe("VerifyBuyerPage", () => {
     fireEvent.change(screen.getByLabelText("Buyer Token"), {
       target: { value: validToken },
     });
-    fireEvent.click(screen.getByRole("button", { name: /verify token/i }));
+    fireEvent.click(screen.getByRole("button", { name: /verify buyer token/i }));
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
@@ -82,9 +82,9 @@ describe("VerifyBuyerPage", () => {
     fireEvent.change(screen.getByLabelText("Buyer Token"), {
       target: { value: validToken },
     });
-    fireEvent.click(screen.getByRole("button", { name: /verify token/i }));
+    fireEvent.click(screen.getByRole("button", { name: /verify buyer token/i }));
 
-    expect(await screen.findByText("Token Expired")).toBeInTheDocument();
+    expect(await screen.findByText("Token expired")).toBeInTheDocument();
   });
 
   it("shows validation toast and skips fetch for invalid UUID", () => {
@@ -93,7 +93,7 @@ describe("VerifyBuyerPage", () => {
     fireEvent.change(screen.getByLabelText("Buyer Token"), {
       target: { value: "invalid-token" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /verify token/i }));
+    fireEvent.click(screen.getByRole("button", { name: /verify buyer token/i }));
 
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({

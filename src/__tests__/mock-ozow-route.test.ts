@@ -38,4 +38,18 @@ describe("GET /api/mock-ozow", () => {
       details: { returnUrl: "returnUrl is invalid" },
     });
   });
+
+  it("accepts localhost and loopback return urls for e2e flows", async () => {
+    const localhostRes = await GET(
+      new Request("http://localhost/api/mock-ozow?returnUrl=http://localhost:3100/billing/success")
+    );
+    const loopbackRes = await GET(
+      new Request("http://localhost/api/mock-ozow?returnUrl=http://127.0.0.1:3100/billing/success")
+    );
+
+    expect(localhostRes.status).toBe(307);
+    expect(loopbackRes.status).toBe(307);
+    expect(localhostRes.headers.get("location")).toBe("http://localhost:3100/billing/success");
+    expect(loopbackRes.headers.get("location")).toBe("http://127.0.0.1:3100/billing/success");
+  });
 });

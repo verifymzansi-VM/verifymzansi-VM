@@ -34,6 +34,7 @@ interface ListingRow {
   photos: string[];
   videos: string[];
   video_thumbnail: string | null;
+  logo_url: string | null;
   boost_until: string | null;
   featured: boolean;
   owner_id: string;
@@ -380,6 +381,7 @@ export function MzansiMarketGrid() {
                   negotiable={listing.price_negotiable}
                   imageUrl={displayUrl}
                   posterUrl={posterSrc}
+                  logoUrl={listing.logo_url}
                   province={listing.location_province}
                   city={listing.location_city}
                   category={listing.category}
@@ -421,6 +423,7 @@ export function MzansiMarketGrid() {
                   negotiable={listing.price_negotiable}
                   imageUrl={displayUrl}
                   posterUrl={posterSrc}
+                  logoUrl={listing.logo_url}
                   province={listing.location_province}
                   city={listing.location_city}
                   category={listing.category}

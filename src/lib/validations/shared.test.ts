@@ -28,6 +28,12 @@ describe("saPhoneSchema", () => {
     expect(saPhoneSchema.safeParse("0612345678").success).toBe(true);
   });
 
+  it("accepts formatted numbers after sanitizing whitespace and punctuation", () => {
+    expect(saPhoneSchema.safeParse("081 234 5678").success).toBe(true);
+    expect(saPhoneSchema.safeParse("+27 81 234 5678").success).toBe(true);
+    expect(saPhoneSchema.safeParse("27+ 81 234 5678").success).toBe(true);
+  });
+
   it("rejects invalid numbers", () => {
     expect(saPhoneSchema.safeParse("12345").success).toBe(false);
     expect(saPhoneSchema.safeParse("+1234567890").success).toBe(false);

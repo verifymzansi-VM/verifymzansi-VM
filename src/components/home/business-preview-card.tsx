@@ -25,21 +25,9 @@ export function BusinessPreviewCard({
   title,
   city,
   provinceCode,
-  boosted,
-  featured,
+  boosted: _boosted,
+  featured: _featured,
 }: BusinessPreviewCardProps) {
-  const status = featured
-    ? {
-        label: "Featured",
-        className: "bg-brand-gold/95 text-amber-950 border border-amber-300/50",
-      }
-    : boosted
-      ? {
-          label: "Boosted",
-          className: "bg-brand-blue/95 text-white border border-white/10",
-        }
-      : null;
-
   return (
     <PosterCardShell
       href={href}
@@ -49,8 +37,8 @@ export function BusinessPreviewCard({
       posterUrl={posterUrl}
       mediaAlt={title}
       logoUrl={logoUrl}
-      statusLabel={status?.label}
-      statusClassName={status?.className}
+      statusLabel={null}
+      statusClassName={undefined}
       accentClassName="hover:border-brand-blue/55"
       fallback={
         <div className="flex h-full w-full items-center justify-center text-brand-blue/35">

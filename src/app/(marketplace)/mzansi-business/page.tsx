@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { PageHeader } from "@/components/layout";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { MzansiBusinessGrid } from "./grid";
@@ -13,6 +14,11 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
+import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
+import {
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+  shouldHidePlaywrightFixtures,
+} from "@/lib/supabase/playwright-visual-fixtures";
 
 export const metadata = {
   title: "Mzansi Business",
@@ -27,14 +33,16 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function MzansiBusinessPage() {
+  const cookieStore = await cookies();
+  const hideFixtures = shouldHidePlaywrightFixtures(
+    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+  );
   const supabase = await createClient();
 
   // Fetch top businesses for showroom hero
   const { data: topBusinesses } = await supabase
     .from("businesses")
-    .select(
-      "id, business_name, description, cover_photo, cover_video, video_thumbnail, location_province, location_city, boost_until"
-    )
+    .select("*")
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS")
     .order("boost_until", { ascending: false, nullsFirst: false })
@@ -42,6 +50,7 @@ export default async function MzansiBusinessPage() {
     .limit(10);
 
   const visibleTopBusinesses = (topBusinesses ?? [])
+    .filter((business) => !shouldHidePlaywrightFixtureRowWhenEnabled(business, hideFixtures))
     .filter(
       (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
     )

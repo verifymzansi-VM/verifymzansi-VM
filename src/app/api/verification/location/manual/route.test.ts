@@ -98,4 +98,24 @@ describe("POST /api/verification/location/manual", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe("40");
   });
+
+  it("returns a coded email-confirmation blocker when the account email is unconfirmed", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1", email_confirmed_at: null } },
+          error: null,
+        }),
+      },
+    });
+
+    const response = await POST(createRequest("http://localhost"));
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("confirm your email"),
+        code: "email_confirmation_required",
+      })
+    );
+  });
 });

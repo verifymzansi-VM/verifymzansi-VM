@@ -4,7 +4,6 @@ import { PromotionFilterPanel, type PromotionFilterState } from "./promotion-fil
 
 function renderPanel(filters: PromotionFilterState = {}) {
   const handlers = {
-    onQueryChange: vi.fn(),
     onTypeChange: vi.fn(),
     onCategoryChange: vi.fn(),
     onProvinceChange: vi.fn(),
@@ -27,13 +26,16 @@ function renderPanel(filters: PromotionFilterState = {}) {
 }
 
 describe("PromotionFilterPanel", () => {
-  it("shows promotion type as a vertical filter and calls back when it changes", () => {
-    const handlers = renderPanel();
+  it("does not render a search field", () => {
+    renderPanel();
 
-    fireEvent.change(screen.getByLabelText("Promotion type"), { target: { value: "promotion" } });
+    expect(screen.queryByLabelText("Search")).not.toBeInTheDocument();
+  });
 
-    expect(handlers.onTypeChange).toHaveBeenCalledWith("promotion");
-    expect(screen.getByRole("option", { name: "Promotions" })).toBeInTheDocument();
+  it("does not render the promotion type selector in the secondary filter panel", () => {
+    renderPanel();
+
+    expect(screen.queryByLabelText("Promotion type")).not.toBeInTheDocument();
   });
 
   it("reveals event-state filtering when the type is event", () => {

@@ -6,6 +6,7 @@
  */
 
 import { createLogger } from "@/lib/utils/logger";
+import { shouldBypassTurnstileInNonProduction } from "@/lib/turnstile-mode";
 
 const log = createLogger("Turnstile");
 
@@ -23,7 +24,10 @@ interface TurnstileVerifyResult {
 
 export type TurnstileConfigStatus =
   | { configured: true }
-  | { configured: false; reason: "missing-secret" | "missing-site-key" | "dummy-site-key" };
+  | {
+      configured: false;
+      reason: "missing-secret" | "missing-site-key" | "dummy-site-key" | "dev-host-bypass";
+    };
 
 async function readResponseBody(response: {
   text?: () => Promise<string>;
@@ -50,7 +54,20 @@ async function readResponseBody(response: {
   return "";
 }
 
-export function getTurnstileConfigStatus(): TurnstileConfigStatus {
+export function getTurnstileConfigStatus(options?: {
+  requestHost?: string | null;
+  configuredAppUrl?: string | null;
+}): TurnstileConfigStatus {
+  if (
+    shouldBypassTurnstileInNonProduction({
+      currentHost: options?.requestHost,
+      configuredAppUrl: options?.configuredAppUrl ?? process.env.NEXT_PUBLIC_APP_URL,
+      nodeEnv: process.env.NODE_ENV,
+    })
+  ) {
+    return { configured: false, reason: "dev-host-bypass" };
+  }
+
   const secretKey = process.env.TURNSTILE_SECRET_KEY?.trim();
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
 

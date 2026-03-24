@@ -21,6 +21,18 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+vi.mock("@/components/layout/header", () => ({
+  Header: () => <header data-testid="mock-header" />,
+}));
+
+vi.mock("@/components/layout/footer", () => ({
+  Footer: () => <footer data-testid="mock-footer" />,
+}));
+
+vi.mock("@/components/billing/subscribe-button", () => ({
+  SubscribeButton: () => <button type="button">Subscribe</button>,
+}));
+
 type DbPlanRow = {
   area: PlanDefinition["area"];
   tier: PlanDefinition["tier"];
@@ -69,7 +81,7 @@ describe("Active-area pricing parity", () => {
     expect(
       screen.getByText(
         new RegExp(
-          `1 free post per area with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video`,
+          `1 free post per area every ${FREE_POST_CONFIG.durationDays} days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video`,
           "i"
         )
       )

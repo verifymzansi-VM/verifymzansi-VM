@@ -32,6 +32,7 @@ import {
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
+import { ListingCard } from "@/components/listings/listing-card";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -62,9 +63,11 @@ export default function EditListingPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [existingStatus, setExistingStatus] = useState<string | null>(null);
+  const [existingLogo, setExistingLogo] = useState<string | null>(null);
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [existingVideos, setExistingVideos] = useState<string[]>([]);
   const [existingVideoThumbnail, setExistingVideoThumbnail] = useState<string | null>(null);
+  const [newLogoFile, setNewLogoFile] = useState<File[]>([]);
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newVideoFile, setNewVideoFile] = useState<File[]>([]);
   const [newVideoCoverFile, setNewVideoCoverFile] = useState<File[]>([]);
@@ -75,6 +78,10 @@ export default function EditListingPage() {
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
   const maxVideos = usePlanMaxVideos("MZANSI_MARKET");
   const videoAllowed = usePlanVideoAllowed("MZANSI_MARKET");
+  const previewLogoUrl = useMemo(
+    () => (newLogoFile.length > 0 ? URL.createObjectURL(newLogoFile[0]) : null),
+    [newLogoFile]
+  );
   const previewPhotoUrls = useMemo(
     () => newPhotoFiles.map((file) => URL.createObjectURL(file)),
     [newPhotoFiles]
@@ -175,6 +182,7 @@ export default function EditListingPage() {
             ? (data.contact_methods as string[])
             : ["call"]
         );
+        setExistingLogo(((data as Record<string, unknown>).logo_url as string | null) ?? null);
         setExistingVideoThumbnail(
           ((data as Record<string, unknown>).video_thumbnail as string | null) ?? null
         );
@@ -207,6 +215,13 @@ export default function EditListingPage() {
       cancelled = true;
     };
   }, [id, router, toast]);
+
+  useEffect(
+    () => () => {
+      if (previewLogoUrl) URL.revokeObjectURL(previewLogoUrl);
+    },
+    [previewLogoUrl]
+  );
 
   useEffect(
     () => () => {
@@ -280,6 +295,7 @@ export default function EditListingPage() {
   const previewPhotos = previewPhotoUrls.length > 0 ? previewPhotoUrls : existingPhotos;
   const previewVideos = previewVideoUrls.length > 0 ? previewVideoUrls : existingVideos;
   const previewVideoThumbnail = previewVideoCoverUrl ?? existingVideoThumbnail;
+  const previewLogo = previewLogoUrl ?? existingLogo;
 
   async function uploadMedia(files: File[], area: UploadArea): Promise<string[]> {
     if (files.length === 0) return [];
@@ -358,7 +374,8 @@ export default function EditListingPage() {
         : {};
 
       // Upload photos, video, and video cover in parallel
-      const [newPhotoUrls, newVideoUrl, newCoverUrls] = await Promise.all([
+      const [newLogoUrls, newPhotoUrls, newVideoUrl, newCoverUrls] = await Promise.all([
+        uploadMedia(newLogoFile, "listing_logo"),
         uploadMedia(newPhotoFiles, "listing"),
         newVideoFile.length > 0
           ? (async () => {
@@ -392,6 +409,7 @@ export default function EditListingPage() {
       if (newCoverUrls.length > 0) {
         videoThumbnail = newCoverUrls[0];
       }
+      const finalLogoUrl = newLogoUrls[0] || existingLogo || null;
 
       const allPhotos = [...existingPhotos, ...newPhotoUrls];
       const allVideos = [...existingVideos, ...(newVideoUrl ? [newVideoUrl] : [])];
@@ -416,6 +434,7 @@ export default function EditListingPage() {
           images: allPhotos,
           videos: allVideos,
           videoThumbnail,
+          logo_url: finalLogoUrl,
           contactMethods,
         }),
       });
@@ -695,6 +714,48 @@ export default function EditListingPage() {
                     </div>
                   </div>
 
+                  <div className="space-y-2">
+                    <Label>Listing Logo</Label>
+                    {previewLogo ? (
+                      <div className="flex items-start gap-3">
+                        <div className="relative h-20 w-20 overflow-hidden rounded-2xl border bg-muted">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={normalizeMediaUrl(previewLogo)}
+                            alt="Listing logo"
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setExistingLogo(null);
+                              setNewLogoFile([]);
+                            }}
+                          >
+                            Remove logo
+                          </Button>
+                          <p className="text-xs text-muted-foreground">
+                            This logo is shown on listing cards across the marketplace.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No listing logo uploaded.</p>
+                    )}
+                  </div>
+
+                  <MediaUpload
+                    label="Replace listing logo (optional)"
+                    maxFiles={1}
+                    files={newLogoFile}
+                    onChange={setNewLogoFile}
+                    accept="image/*"
+                  />
+
                   {/* ── Existing Images ──────────────────────── */}
                   {existingPhotos.length > 0 && (
                     <div className="space-y-2">
@@ -840,6 +901,22 @@ export default function EditListingPage() {
 
                   <div className="space-y-3 rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
                     <div className="text-sm font-medium text-muted-foreground">Listing preview</div>
+                    <div className="max-w-[264px]">
+                      <ListingCard
+                        id={id}
+                        title={title || "Your listing title"}
+                        price={price ? Math.round(parseFloat(price || "0") * 100) : 0}
+                        imageUrl={previewVideos[0] || previewPhotos[0]}
+                        posterUrl={previewVideoThumbnail || previewPhotos[0] || undefined}
+                        logoUrl={previewLogo}
+                        province={province || "Province"}
+                        city={city || "City"}
+                        category={category || "property"}
+                        attributes={normalizedPreviewAttributes}
+                        condition={condition || undefined}
+                        createdAt={new Date().toISOString()}
+                      />
+                    </div>
                     <ListingDetailContent
                       listing={{
                         id,
@@ -854,6 +931,7 @@ export default function EditListingPage() {
                         photos: previewPhotos,
                         videos: previewVideos,
                         video_thumbnail: previewVideoThumbnail,
+                        logo_url: previewLogo,
                         location_province: province || null,
                         location_city: city || null,
                         location_suburb: town || null,

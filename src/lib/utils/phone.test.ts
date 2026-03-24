@@ -1,5 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { normalizeSaPhone, buildAccountPhoneFields, buildSellerPhoneFields } from "./phone";
+import {
+  sanitizeSaPhoneInput,
+  normalizeSaPhone,
+  buildAccountPhoneFields,
+  buildSellerPhoneFields,
+} from "./phone";
+
+describe("sanitizeSaPhoneInput", () => {
+  it("strips spacing and punctuation from local numbers", () => {
+    expect(sanitizeSaPhoneInput("082 123 4567")).toBe("0821234567");
+  });
+
+  it("recovers international numbers even when the plus sign is misplaced", () => {
+    expect(sanitizeSaPhoneInput("27+ 64 933 4601")).toBe("+27649334601");
+  });
+});
 
 describe("normalizeSaPhone", () => {
   it("formats +27 from 27-prefixed 11-digit number", () => {
@@ -12,6 +27,10 @@ describe("normalizeSaPhone", () => {
 
   it("returns trimmed input for non-matching patterns", () => {
     expect(normalizeSaPhone("  +27821234567  ")).toBe("+27821234567");
+  });
+
+  it("normalizes spaced local numbers", () => {
+    expect(normalizeSaPhone("082 123 4567")).toBe("+27821234567");
   });
 
   it("returns trimmed input for short numbers", () => {

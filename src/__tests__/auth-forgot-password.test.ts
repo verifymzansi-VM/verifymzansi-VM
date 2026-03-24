@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import type * as TurnstileModule from "@/lib/utils/turnstile";
+import type * as ApiModule from "@/lib/utils/api";
 
 const { mockCreateClient, mockVerifyTurnstile, mockCheckRateLimit, mockGetClientIp } = vi.hoisted(
   () => ({
@@ -19,15 +20,33 @@ vi.mock("@/lib/utils/turnstile", async () => {
     verifyTurnstileToken: mockVerifyTurnstile,
   };
 });
-vi.mock("@/lib/utils/api", () => ({
-  parseJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }) => {
-    try {
-      return await req.json();
-    } catch {
-      return null;
-    }
-  }),
-}));
+vi.mock("@/lib/utils/api", async () => {
+  const actual = await vi.importActual<typeof ApiModule>("@/lib/utils/api");
+  return {
+    ...actual,
+    parseAndValidateJsonRequest: vi.fn(async (req: { json: () => Promise<unknown> }, schema) => {
+      try {
+        const body = await req.json();
+        const parsed = schema.safeParse(body);
+        if (!parsed.success) {
+          return {
+            success: false,
+            response: Response.json(
+              { error: parsed.error.issues[0]?.message ?? "Invalid request" },
+              { status: 400 }
+            ),
+          };
+        }
+        return { success: true, data: parsed.data };
+      } catch {
+        return {
+          success: false,
+          response: Response.json({ error: "Invalid JSON payload" }, { status: 400 }),
+        };
+      }
+    }),
+  };
+});
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
   getClientIp: mockGetClientIp,
@@ -39,9 +58,9 @@ function createRequest(body: unknown): NextRequest {
   return {
     method: "POST",
     json: async () => body,
-    url: "http://localhost:3000/api/auth/forgot-password",
+    url: "https://verifymzansi.com/api/auth/forgot-password",
     headers: { get: vi.fn().mockReturnValue(null) },
-    nextUrl: new URL("http://localhost:3000/api/auth/forgot-password"),
+    nextUrl: new URL("https://verifymzansi.com/api/auth/forgot-password"),
   } as unknown as NextRequest;
 }
 

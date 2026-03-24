@@ -155,9 +155,17 @@ describe("ListingCard", () => {
 
   it("renders the highest-priority status chip only", () => {
     render(<ListingCard {...defaultProps} featured boosted urgent />);
-    expect(screen.getByText("Featured")).toBeTruthy();
+    expect(screen.getByText("Urgent")).toBeTruthy();
     expect(screen.queryByText("Boosted")).toBeNull();
-    expect(screen.queryByText("Urgent")).toBeNull();
+  });
+
+  it("renders the listing logo when provided", () => {
+    render(<ListingCard {...defaultProps} logoUrl="https://example.com/logo.jpg" />);
+
+    expect(screen.getByAltText("Business logo")).toHaveAttribute(
+      "src",
+      "https://example.com/logo.jpg"
+    );
   });
 
   it("should render link to listing detail page", () => {

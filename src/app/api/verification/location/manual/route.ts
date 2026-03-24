@@ -22,6 +22,7 @@ import {
 } from "@/lib/services/verification-state";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { trimmedStringSchema } from "@/lib/validations/shared";
+import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 
 const log = createLogger("ManualLocationVerification");
 
@@ -55,10 +56,9 @@ export async function POST(request: NextRequest) {
 
     // Email confirmation gate — users must confirm their email before manual location
     if (!user.email_confirmed_at) {
-      return NextResponse.json(
-        { error: "Please confirm your email address before starting verification" },
-        { status: 403 }
-      );
+      return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
+        status: 403,
+      });
     }
 
     // Feature flag check — must match session start route

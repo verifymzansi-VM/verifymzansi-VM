@@ -124,7 +124,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           STRICT_DB_TESTS: "true"
-        run: pnpm run test:db
+        run: |
+          pnpm run db:verify-schema
+          pnpm run test:db
 
   e2e-smoke:
     runs-on: ubuntu-latest

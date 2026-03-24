@@ -39,10 +39,17 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 
 import { POST } from "@/app/api/otp/send/route";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 function createOtpRequest(body: Record<string, unknown>): NextRequest {
   return new NextRequest("http://localhost:3000/api/otp/send", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      origin: "http://localhost:3000",
+      cookie: `vm_csrf=${CSRF_TOKEN}`,
+      "x-csrf-token": CSRF_TOKEN,
+    },
     body: JSON.stringify(body),
   });
 }
@@ -58,24 +65,40 @@ describe("POST /api/otp/send safe error envelopes", () => {
 
   it("does not leak database details when challenge creation fails", async () => {
     mockAdminFrom.mockImplementation((table: string) => {
-      if (table === "otp_challenges") {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          gte: vi.fn().mockResolvedValue({ count: 0 }),
-          insert: vi.fn().mockResolvedValue({
-            error: {
-              message: "duplicate key value violates unique constraint",
-              code: "23505",
-              details: "otp_challenges_user_id_phone_key",
-              hint: null,
-            },
-          }),
+      if (table === "otp_logs") {
+        const otpLogsQuery = {
+          select: vi.fn(),
+          eq: vi.fn(),
+          gte: vi.fn(),
+          insert: vi.fn().mockResolvedValue({ error: null }),
         };
+        otpLogsQuery.select.mockReturnValue(otpLogsQuery);
+        otpLogsQuery.eq.mockReturnValue(otpLogsQuery);
+        otpLogsQuery.gte.mockResolvedValue({ count: 0 });
+        return otpLogsQuery;
       }
 
-      if (table === "otp_logs") {
-        return { insert: vi.fn().mockResolvedValue({ error: null }) };
+      if (table === "otp_challenges") {
+        const challengeQuery = {
+          update: vi.fn(),
+          insert: vi.fn(),
+        };
+
+        const invalidateQuery = {
+          eq: vi.fn(),
+          is: vi.fn().mockResolvedValue({ error: null }),
+        };
+        invalidateQuery.eq.mockReturnValue(invalidateQuery);
+        challengeQuery.update.mockReturnValue(invalidateQuery);
+        challengeQuery.insert.mockResolvedValue({
+          error: {
+            message: "duplicate key value violates unique constraint",
+            code: "23505",
+            details: "otp_challenges_user_id_phone_key",
+            hint: null,
+          },
+        });
+        return challengeQuery;
       }
 
       return {};

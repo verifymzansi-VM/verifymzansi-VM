@@ -18,6 +18,7 @@ const VALID_ENV: Record<string, string> = {
   ID_ENCRYPTION_KEY: "b".repeat(64),
   AFRICASTALKING_API_KEY: "test-api-key",
   AFRICASTALKING_USERNAME: "sandbox",
+  AFRICASTALKING_SENDER_ID: "VERIFYMZANS",
   OZOW_ENV: "staging",
   OZOW_CLIENT_ID: "test-client-id",
   OZOW_CLIENT_SECRET: "test-client-secret",
@@ -113,7 +114,7 @@ describe("env config", () => {
         vi.stubEnv(key, value);
       }
       vi.stubEnv("NODE_ENV", "production");
-      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VerifyMzansi");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
       vi.stubEnv("OZOW_ENV", "production");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
       vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
@@ -198,7 +199,7 @@ describe("env config", () => {
         vi.stubEnv(key, value);
       }
       vi.stubEnv("NODE_ENV", "production");
-      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VerifyMzansi");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
       vi.stubEnv("OZOW_ENV", "production");
       delete process.env.IP_HASH_SECRET;
       const mod = await import("./env");

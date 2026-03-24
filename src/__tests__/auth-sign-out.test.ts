@@ -6,6 +6,9 @@ const { mockCreateClient } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
 
 import { POST } from "@/app/api/auth/sign-out/route";
 

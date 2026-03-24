@@ -11,6 +11,9 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
 
 import { POST } from "@/app/api/auth/change-password/route";
 

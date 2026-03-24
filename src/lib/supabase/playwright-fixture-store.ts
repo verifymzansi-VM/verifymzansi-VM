@@ -1,6 +1,8 @@
 import "server-only";
 
 import crypto from "node:crypto";
+import { PLANS, isActiveMarketplaceArea } from "@/lib/constants/pricing";
+import { getStablePlanId } from "@/lib/constants/plan-ids";
 
 type StubUser = {
   id: string;
@@ -49,6 +51,10 @@ function stableUuid(input: string): string {
   )}-${hash.slice(20, 32)}`;
 }
 
+function playwrightUserId(persona: string): string {
+  return `pw-${persona}`;
+}
+
 function encodeSessionPersona(persona: string): string {
   return `${PLAYWRIGHT_SESSION_PREFIX}${encodeURIComponent(persona)}`;
 }
@@ -77,6 +83,22 @@ function createEmptyStore(): PlaywrightFixtureStore {
   for (const table of DEFAULT_TABLES) {
     tables.set(table, []);
   }
+
+  tables.set(
+    "plans",
+    PLANS.map((plan) => ({
+      id: getStablePlanId(plan.area, plan.tier),
+      area: plan.area,
+      tier: plan.tier,
+      name: plan.name,
+      price_cents: plan.priceCents,
+      billing_frequency: plan.billingFrequency,
+      features: cloneValue(plan.features),
+      active: isActiveMarketplaceArea(plan.area),
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    }))
+  );
 
   return {
     sessions: new Map<string, string>(),
@@ -160,7 +182,7 @@ function rowBelongsToUser(row: StoreTableRow, userId: string): boolean {
 
 export function resetPlaywrightFixtureStoreForPersona(persona: string): void {
   const store = getPlaywrightFixtureStore();
-  const userId = stableUuid(`user:${persona}`);
+  const userId = playwrightUserId(persona);
 
   for (const [table, rows] of store.tables.entries()) {
     store.tables.set(
@@ -178,7 +200,7 @@ export function resetPlaywrightFixtureStoreForPersona(persona: string): void {
 
 export function ensurePlaywrightVerifiedMember(persona: string): StubUser {
   const store = getPlaywrightFixtureStore();
-  const userId = stableUuid(`user:${persona}`);
+  const userId = playwrightUserId(persona);
   const email = `${persona}@playwright.verifymzansi.test`;
   const password = `Playwright-${persona}-Password1!`;
 

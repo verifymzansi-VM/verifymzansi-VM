@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { BusinessPreviewCard } from "./business-preview-card";
@@ -6,18 +7,25 @@ import { AutoScrollRail } from "./auto-scroll-rail";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import type { BusinessType } from "@/types/enums";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
+import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
+import {
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+  shouldHidePlaywrightFixtures,
+} from "@/lib/supabase/playwright-visual-fixtures";
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
 }
 
 export async function HomeBusinessShowcase() {
+  const cookieStore = await cookies();
+  const hideFixtures = shouldHidePlaywrightFixtures(
+    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+  );
   const supabase = await createClient();
   const { data: businesses } = await supabase
     .from("businesses")
-    .select(
-      "id, business_name, description, cover_photo, cover_video, video_thumbnail, logo_url, business_type, location_province, location_city, boost_until, featured_until"
-    )
+    .select("*")
     .eq("status", "live")
     .eq("area", "MZANSI_BUSINESS")
     .order("boost_until", { ascending: false, nullsFirst: false })
@@ -25,6 +33,7 @@ export async function HomeBusinessShowcase() {
     .limit(16);
 
   const items = (businesses ?? [])
+    .filter((business) => !shouldHidePlaywrightFixtureRowWhenEnabled(business, hideFixtures))
     .filter(
       (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
     )

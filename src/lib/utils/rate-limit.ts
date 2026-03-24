@@ -101,8 +101,81 @@ interface RateLimitResult {
   degraded?: boolean;
 }
 
+export interface ClientRateLimitIdentity {
+  key: string;
+  source: "cf-connecting-ip" | "x-forwarded-for" | "x-real-ip" | "fingerprint" | "unknown";
+  ip?: string;
+}
+
 function degradedBlockResult(retryAfter = 60): RateLimitResult {
   return { limited: true, retryAfter, degraded: true };
+}
+
+function readHeaderValue(request: Request, headerName: string): string | null {
+  const value = request.headers.get(headerName);
+  if (!value) {
+    return null;
+  }
+
+  const normalizedValue =
+    headerName === "x-forwarded-for" ? value.split(",")[0]?.trim() : value.trim();
+
+  return normalizedValue && normalizedValue.length > 0 ? normalizedValue : null;
+}
+
+function hashFingerprint(value: string): string {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function buildClientFingerprint(request: Request): string | null {
+  const fingerprintParts = [
+    readHeaderValue(request, "user-agent"),
+    readHeaderValue(request, "accept-language"),
+    readHeaderValue(request, "sec-ch-ua"),
+    readHeaderValue(request, "sec-ch-ua-platform"),
+    readHeaderValue(request, "host"),
+  ].filter((value): value is string => Boolean(value));
+
+  if (fingerprintParts.length === 0) {
+    return null;
+  }
+
+  return `fp:${hashFingerprint(fingerprintParts.join("|"))}`;
+}
+
+export function getClientRateLimitIdentity(request: Request): ClientRateLimitIdentity {
+  const cfConnectingIp = readHeaderValue(request, "cf-connecting-ip");
+  if (cfConnectingIp) {
+    return { key: cfConnectingIp, source: "cf-connecting-ip", ip: cfConnectingIp };
+  }
+
+  const forwardedIp = readHeaderValue(request, "x-forwarded-for");
+  if (forwardedIp) {
+    return { key: forwardedIp, source: "x-forwarded-for", ip: forwardedIp };
+  }
+
+  const realIp = readHeaderValue(request, "x-real-ip");
+  if (realIp) {
+    return { key: realIp, source: "x-real-ip", ip: realIp };
+  }
+
+  const fingerprint = buildClientFingerprint(request);
+  if (fingerprint) {
+    return { key: fingerprint, source: "fingerprint" };
+  }
+
+  return { key: "unknown", source: "unknown" };
+}
+
+export function getClientRateLimitKey(request: Request): string {
+  return getClientRateLimitIdentity(request).key;
 }
 
 /**
@@ -194,10 +267,5 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
  * Prefers cf-connecting-ip, falls back to x-forwarded-for, then x-real-ip.
  */
 export function getClientIp(request: Request): string {
-  return (
-    request.headers.get("cf-connecting-ip") ??
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "unknown"
-  );
+  return getClientRateLimitIdentity(request).ip ?? "unknown";
 }

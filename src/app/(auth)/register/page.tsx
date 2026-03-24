@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Eye, EyeOff, Check, RefreshCw } from "lucide-react";
+import { type z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
+  const [turnstileRetryToken, setTurnstileRetryToken] = useState(0);
   const [captchaUnavailable, setCaptchaUnavailable] = useState(
     getTurnstileClientState().mode === "unavailable"
   );
@@ -35,7 +36,7 @@ export default function RegisterPage() {
     formState: { errors, isSubmitting },
     control,
     setValue,
-  } = useForm<RegisterInput>({
+  } = useForm<z.input<typeof registerSchema>, unknown, RegisterInput>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
       displayName: "",
@@ -52,16 +53,30 @@ export default function RegisterPage() {
   const turnstileState = getTurnstileClientState();
   const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;
 
+  const resetTurnstileChallenge = useCallback(() => {
+    if (turnstileState.mode !== "configured") {
+      return;
+    }
+
+    setTurnstileError(null);
+    setTurnstileLoaded(false);
+    setCaptchaUnavailable(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
+    TurnstileWidget.retry();
+    setTurnstileRetryToken((value) => value + 1);
+  }, [setValue, turnstileState.mode]);
+
   useEffect(() => {
     if (skipTurnstileTimeout || turnstileLoaded) return;
     timeoutRef.current = setTimeout(() => {
       setTurnstileError("Security check failed to load. Please try again.");
-      setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
+      setTurnstileLoaded(false);
+      setValue("turnstileToken", "", { shouldValidate: true });
     }, 15000);
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [skipTurnstileTimeout, turnstileLoaded, retryKey, setValue]);
+  }, [skipTurnstileTimeout, turnstileLoaded, turnstileRetryToken, setValue]);
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
@@ -86,8 +101,9 @@ export default function RegisterPage() {
   const handleTurnstileError = useCallback(() => {
     setCaptchaUnavailable(false);
     setTurnstileError("Security check failed to load. Please try again.");
+    setTurnstileLoaded(false);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
+    setValue("turnstileToken", "", { shouldValidate: true });
   }, [setValue]);
 
   const handleTurnstileExpire = useCallback(() => {
@@ -95,14 +111,16 @@ export default function RegisterPage() {
     setValue("turnstileToken", "", { shouldValidate: true });
   }, [setValue]);
 
-  const handleRetry = useCallback(() => {
-    setCaptchaUnavailable(false);
-    setTurnstileError(null);
+  const handleTurnstileUnavailable = useCallback(() => {
+    setCaptchaUnavailable(true);
     setTurnstileLoaded(false);
+    setTurnstileError(TURNSTILE_UNAVAILABLE_MESSAGE);
     setValue("turnstileToken", "", { shouldValidate: false });
-    TurnstileWidget.retry();
-    setRetryKey((k) => k + 1);
   }, [setValue]);
+
+  const handleRetry = useCallback(() => {
+    resetTurnstileChallenge();
+  }, [resetTurnstileChallenge]);
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
   const requirements = [
@@ -123,6 +141,8 @@ export default function RegisterPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        resetTurnstileChallenge();
+
         toast({
           title: "Registration failed",
           description: typeof result.error === "string" ? result.error : "Please try again.",
@@ -332,17 +352,12 @@ export default function RegisterPage() {
         )}
 
         <TurnstileWidget
-          key={retryKey}
+          retryToken={turnstileRetryToken}
           onSuccess={handleTurnstileSuccess}
           onError={handleTurnstileError}
           onExpire={handleTurnstileExpire}
           onLoad={handleTurnstileLoad}
-          onUnavailable={() => {
-            setCaptchaUnavailable(true);
-            setTurnstileLoaded(false);
-            setTurnstileError(TURNSTILE_UNAVAILABLE_MESSAGE);
-            setValue("turnstileToken", "", { shouldValidate: false });
-          }}
+          onUnavailable={handleTurnstileUnavailable}
         />
         {turnstileError && (
           <div className="flex items-center gap-2">
@@ -367,7 +382,7 @@ export default function RegisterPage() {
           type="submit"
           className="w-full"
           variant="trust-verified"
-          disabled={isSubmitting || captchaUnavailable}
+          disabled={isSubmitting || captchaUnavailable || Boolean(turnstileError)}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Create Account

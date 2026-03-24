@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { env } from "@/lib/config/env";
+import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("Ozow");
@@ -17,15 +18,18 @@ function getOzowBaseUrl(): string {
     return configuredBaseUrl.replace(/\/$/, "");
   }
 
-  return env("OZOW_ENV") === "production" ? "https://api.ozow.com" : "https://api.staging.ozow.com";
+  return env("OZOW_ENV") === "production" ? "https://one.ozow.com" : "https://stagingone.ozow.com";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function getMockOzowEnabled(): boolean {
-  return process.env.NODE_ENV !== "production" && process.env.ENABLE_MOCK_OZOW === "true";
+export function isMockOzowEnabled(): boolean {
+  return (
+    process.env.ENABLE_MOCK_OZOW === "true" &&
+    (process.env.NODE_ENV !== "production" || isPlaywrightTestMode())
+  );
 }
 
 function toSafeString(value: unknown): string | null {
@@ -57,7 +61,7 @@ async function getOzowAccessToken(forceRefresh = false): Promise<string> {
     throw new Error("Ozow credentials are not configured");
   }
 
-  const response = await fetch(`${getOzowBaseUrl()}/oauth/token`, {
+  const response = await fetch(`${getOzowBaseUrl()}/v1/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -122,7 +126,7 @@ export async function createOzowHostedPayment(
   const correlationId = crypto.randomUUID();
   const idempotencyKey = crypto.randomUUID();
 
-  if (getMockOzowEnabled()) {
+  if (isMockOzowEnabled()) {
     const appUrl = env("NEXT_PUBLIC_APP_URL") || "http://localhost:3000";
     const redirectUrl = new URL("/api/mock-ozow", appUrl);
     redirectUrl.searchParams.set("paymentId", input.paymentId);
@@ -141,6 +145,7 @@ export async function createOzowHostedPayment(
         id: `mock-${input.paymentId}`,
         redirectUrl: redirectUrl.toString(),
         expireAt,
+        mockFlow: true,
       },
     };
   }
@@ -155,7 +160,7 @@ export async function createOzowHostedPayment(
     siteCode,
     amount,
     currencyCode: "ZAR",
-    merchantReference: input.paymentId,
+    merchantReference: input.paymentId.replace(/-/g, ""),
     expireAt,
     returnUrl: input.returnUrl,
     cancelUrl: input.cancelUrl,
@@ -163,7 +168,7 @@ export async function createOzowHostedPayment(
     itemName: input.itemName,
   };
 
-  const response = await fetch(`${getOzowBaseUrl()}/payments`, {
+  const response = await fetch(`${getOzowBaseUrl()}/v1/payments`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,

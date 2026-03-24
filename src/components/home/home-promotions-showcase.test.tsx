@@ -27,6 +27,12 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock("next/headers", () => ({
+  cookies: vi.fn().mockResolvedValue({
+    get: vi.fn(),
+  }),
+}));
+
 vi.mock("./auto-scroll-rail", () => ({
   AutoScrollRail: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="auto-scroll-rail">{children}</div>
@@ -45,16 +51,33 @@ vi.mock("@/components/listings/promotion-card", () => ({
 }));
 
 function createSupabaseMock(data: unknown[]) {
-  const builder = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    not: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue({ data }),
-  };
-
   return {
-    from: vi.fn().mockReturnValue(builder),
+    from: vi.fn((table: string) => {
+      if (table === "promotions") {
+        const builder = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          not: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue({ data }),
+        };
+
+        return builder;
+      }
+
+      if (table === "businesses") {
+        const builder = {
+          select: vi.fn().mockReturnThis(),
+          in: vi.fn().mockResolvedValue({
+            data: [{ id: "biz-1", logo_url: "https://example.com/business-logo.jpg" }],
+          }),
+        };
+
+        return builder;
+      }
+
+      throw new Error(`Unexpected table ${table}`);
+    }),
   };
 }
 
@@ -84,6 +107,7 @@ describe("HomePromotionsShowcase", () => {
           featured_until: "2099-01-02T00:00:00.000Z",
           end_date: "2099-01-05T00:00:00.000Z",
           created_at: "2026-03-01T00:00:00.000Z",
+          business_id: "biz-1",
         },
       ]) as never
     );
@@ -97,11 +121,13 @@ describe("HomePromotionsShowcase", () => {
       posterUrl: string;
       boosted: boolean;
       featured: boolean;
+      logoUrl: string;
     };
     expect(props.imageUrl).toBe("https://example.com/video.mp4");
     expect(props.posterUrl).toBe("https://example.com/thumb.jpg");
     expect(props.boosted).toBe(true);
     expect(props.featured).toBe(true);
+    expect(props.logoUrl).toBe("https://example.com/business-logo.jpg");
   });
 
   it("renders an empty-state CTA when no promotions exist", async () => {

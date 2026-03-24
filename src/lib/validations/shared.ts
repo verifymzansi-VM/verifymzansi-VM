@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { validateSaIdFull } from "@/lib/utils/sa-id-validation";
+import { sanitizeSaPhoneInput } from "@/lib/utils/phone";
 
 function trimStringInput(value: unknown): unknown {
   return typeof value === "string" ? value.trim() : value;
@@ -15,10 +16,13 @@ function trimToUndefined(value: unknown): unknown {
 // ── Phone (SA) ──────────────────────────────────────────────
 
 /** Zod schema for a South African mobile number (`+27` or `0` prefix, 10 digits). */
-export const saPhoneSchema = z
-  .string()
-  .min(10, "Phone number is required")
-  .regex(/^(\+27|0)[6-8][0-9]{8}$/, "Enter a valid SA mobile number (e.g. 071 234 5678)");
+export const saPhoneSchema = z.preprocess(
+  (value) => (typeof value === "string" ? sanitizeSaPhoneInput(value) : value),
+  z
+    .string()
+    .min(10, "Phone number is required")
+    .regex(/^(\+27|0)[6-8][0-9]{8}$/, "Enter a valid SA mobile number (e.g. 071 234 5678)")
+);
 
 // ── SA ID validation (full: Luhn + DOB + structure) ─────────
 

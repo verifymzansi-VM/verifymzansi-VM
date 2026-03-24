@@ -149,12 +149,13 @@ export default async function EventsPage() {
   const { data: businesses } = businessIds.length
     ? await admin
         .from("businesses")
-        .select("id, business_name")
+        .select("id, business_name, logo_url")
         .eq("status", "live")
         .in("id", businessIds)
     : { data: [] };
 
   const businessMap = new Map((businesses ?? []).map((b) => [b.id, b.business_name]));
+  const businessLogoMap = new Map((businesses ?? []).map((b) => [b.id, b.logo_url]));
 
   // Group upcoming events by month
   const monthGroups = groupByMonth(upcoming);
@@ -194,6 +195,9 @@ export default async function EventsPage() {
                   const businessName = event.business_id
                     ? businessMap.get(event.business_id as string)
                     : undefined;
+                  const businessLogo = event.business_id
+                    ? businessLogoMap.get(event.business_id as string)
+                    : undefined;
                   const nowDate = new Date();
                   const isBoosted = event.boost_until
                     ? new Date(event.boost_until as string) > nowDate
@@ -228,6 +232,7 @@ export default async function EventsPage() {
                         startDate={event.start_date as string | null}
                         endDate={event.end_date as string | null}
                         businessName={businessName}
+                        logoUrl={businessLogo}
                       />
                     </div>
                   );
@@ -274,6 +279,9 @@ export default async function EventsPage() {
               ownerName: accountProfile?.name,
               startDate: event.start_date,
               endDate: event.end_date,
+              logoUrl: event.business_id
+                ? (businessLogoMap.get(event.business_id as string) ?? null)
+                : null,
             };
           })}
         />

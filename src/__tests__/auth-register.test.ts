@@ -8,14 +8,23 @@ const { mockCreateClient, mockVerifyTurnstile } = vi.hoisted(() => ({
   mockVerifyTurnstile: vi.fn(),
 }));
 
-const { mockCreateAdminClient, mockProfileUpsert, mockDeleteUser, mockCheckRateLimit } = vi.hoisted(
-  () => ({
-    mockCreateAdminClient: vi.fn(),
-    mockProfileUpsert: vi.fn().mockResolvedValue({ error: null }),
-    mockDeleteUser: vi.fn().mockResolvedValue({ error: null }),
-    mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
-  })
-);
+const {
+  mockCreateAdminClient,
+  mockProfileUpsert,
+  mockDeleteUser,
+  mockCheckRateLimit,
+  mockGetClientRateLimitIdentity,
+} = vi.hoisted(() => ({
+  mockCreateAdminClient: vi.fn(),
+  mockProfileUpsert: vi.fn().mockResolvedValue({ error: null }),
+  mockDeleteUser: vi.fn().mockResolvedValue({ error: null }),
+  mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+  mockGetClientRateLimitIdentity: vi.fn().mockReturnValue({
+    key: "127.0.0.1",
+    source: "x-forwarded-for",
+    ip: "127.0.0.1",
+  }),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
@@ -28,7 +37,7 @@ vi.mock("@/lib/utils/turnstile", async () => {
 });
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
-  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+  getClientRateLimitIdentity: mockGetClientRateLimitIdentity,
 }));
 vi.mock("@/lib/utils/api", async () => {
   const actual = await vi.importActual<typeof ApiModule>("@/lib/utils/api");
@@ -71,9 +80,9 @@ function createRequest(body: unknown): NextRequest {
   return {
     method: "POST",
     json: async () => body,
-    url: "http://localhost:3000/api/auth/register",
+    url: "https://verifymzansi.com/api/auth/register",
     headers: { get: vi.fn().mockReturnValue(null) },
-    nextUrl: new URL("http://localhost:3000/api/auth/register"),
+    nextUrl: new URL("https://verifymzansi.com/api/auth/register"),
   } as unknown as NextRequest;
 }
 
@@ -107,6 +116,11 @@ describe("POST /api/auth/register", () => {
     delete process.env.TURNSTILE_SECRET_KEY;
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
     mockCheckRateLimit.mockResolvedValue({ limited: false });
+    mockGetClientRateLimitIdentity.mockReturnValue({
+      key: "127.0.0.1",
+      source: "x-forwarded-for",
+      ip: "127.0.0.1",
+    });
     mockCreateAdminClient.mockReturnValue(createAdminMock() as never);
     mockDeleteUser.mockResolvedValue({ error: null });
   });
@@ -134,6 +148,18 @@ describe("POST /api/auth/register", () => {
   it("returns 400 for missing required fields", async () => {
     const res = await POST(createRequest({}));
     expect(res.status).toBe(400);
+  });
+
+  it("returns 429 when registration attempts are rate limited", async () => {
+    mockCheckRateLimit.mockResolvedValue({ limited: true, retryAfter: 120 });
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("120");
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Too many registration attempts. Please try again later.",
+    });
   });
 
   it("succeeds with valid data (no Turnstile configured)", async () => {

@@ -1,3 +1,5 @@
+import { sanitizeSaPhoneInput } from "@/lib/utils/phone";
+
 /**
  * Format an amount in cents as South African Rand.
  * @example formatZAR(26000) → "R 260.00"
@@ -117,7 +119,7 @@ export function expiresIn(dateStr: string): string {
  * @example formatPhone("+27821234567") → "+27 82 123 4567"
  */
 export function formatPhone(phone: string): string {
-  const cleaned = phone.replace(/\D/g, "");
+  const cleaned = sanitizeSaPhoneInput(phone).replace(/\D/g, "");
   if (cleaned.startsWith("27") && cleaned.length === 11) {
     return `+27 ${cleaned.slice(2, 4)} ${cleaned.slice(4, 7)} ${cleaned.slice(7)}`;
   }

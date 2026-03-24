@@ -18,7 +18,7 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [turnstileError, setTurnstileError] = useState(false);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
+  const [turnstileRetryToken, setTurnstileRetryToken] = useState(0);
   const [captchaUnavailable, setCaptchaUnavailable] = useState(
     getTurnstileClientState().mode === "unavailable"
   );
@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [skipTurnstileTimeout, turnstileLoaded, retryKey, setValue]);
+  }, [skipTurnstileTimeout, turnstileLoaded, turnstileRetryToken, setValue]);
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
@@ -78,13 +78,20 @@ export default function ForgotPasswordPage() {
     setValue("turnstileToken", "turnstile-unavailable", { shouldValidate: true });
   }, [setValue]);
 
+  const handleTurnstileUnavailable = useCallback(() => {
+    setCaptchaUnavailable(true);
+    setTurnstileLoaded(false);
+    setTurnstileError(false);
+    setValue("turnstileToken", "", { shouldValidate: false });
+  }, [setValue]);
+
   const handleRetry = useCallback(() => {
     setCaptchaUnavailable(false);
     setTurnstileError(false);
     setTurnstileLoaded(false);
     setValue("turnstileToken", "", { shouldValidate: false });
     TurnstileWidget.retry();
-    setRetryKey((k) => k + 1);
+    setTurnstileRetryToken((value) => value + 1);
   }, [setValue]);
 
   async function onSubmit(data: ForgotPasswordInput) {
@@ -181,16 +188,11 @@ export default function ForgotPasswordPage() {
         </div>
 
         <TurnstileWidget
-          key={retryKey}
+          retryToken={turnstileRetryToken}
           onSuccess={handleTurnstileSuccess}
           onError={handleTurnstileError}
           onLoad={handleTurnstileLoad}
-          onUnavailable={() => {
-            setCaptchaUnavailable(true);
-            setTurnstileLoaded(false);
-            setTurnstileError(false);
-            setValue("turnstileToken", "", { shouldValidate: false });
-          }}
+          onUnavailable={handleTurnstileUnavailable}
         />
         {errors.turnstileToken && !turnstileError && (
           <p className="inline-form-error">{errors.turnstileToken.message}</p>
