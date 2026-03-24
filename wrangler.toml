@@ -96,6 +96,8 @@ bucket_name = "verifymzansi-private"
 #   pnpm wrangler secret put RESEND_API_KEY
 #   pnpm wrangler secret put AFRICASTALKING_API_KEY
 #   pnpm wrangler secret put AFRICASTALKING_USERNAME
+#   pnpm wrangler secret put AFRICASTALKING_SENDER_ID
+#   pnpm wrangler secret put OZOW_ENV
 #   pnpm wrangler secret put OZOW_CLIENT_ID
 #   pnpm wrangler secret put OZOW_CLIENT_SECRET
 #   pnpm wrangler secret put OZOW_SITE_CODE
@@ -110,6 +112,10 @@ bucket_name = "verifymzansi-private"
 #   pnpm wrangler secret put IP_HASH_SECRET
 #
 # Verify with: pnpm wrangler secret list
+#
+# NOTE: production launch validation is strict. Missing any OZOW_* key or
+# AFRICASTALKING_SENDER_ID can block startup and cause full-site request
+# failures until the secret/binding is restored.
 
 # ────────────────────────────────────────────────────────────────────────────
 # Staging Environment   (deploy with: pnpm wrangler deploy --env staging)

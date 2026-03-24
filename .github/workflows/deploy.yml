@@ -69,6 +69,16 @@ jobs:
         run: pnpm run licenses:check
       - name: Validate production launch env
         run: pnpm exec tsx scripts/validate-launch-env.ts --mode=production
+      - name: Enforce production Ozow mode
+        run: |
+          if [ -z "$OZOW_ENV" ]; then
+            echo "::error::OZOW_ENV is required for production deploys"
+            exit 1
+          fi
+          if [ "$OZOW_ENV" != "production" ]; then
+            echo "::error::OZOW_ENV must be 'production' for production deploys (received '$OZOW_ENV')"
+            exit 1
+          fi
       - name: Validate required public build envs
         run: |
           FAILED=0
