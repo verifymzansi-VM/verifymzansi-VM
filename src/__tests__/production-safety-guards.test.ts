@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { validateLaunchConfiguration, type EnvSource } from "../lib/config/launch-validation";
 
@@ -332,5 +334,30 @@ describe("instrumentation: dev bypass startup guard", () => {
     _resetInstrumentationForTesting();
 
     await expect(register()).resolves.toBeUndefined();
+  });
+});
+
+describe("cloudflare preflight production overrides", () => {
+  it("neutralizes every startup-blocking local override before Cloudflare builds", () => {
+    const scriptPath = path.resolve(process.cwd(), "scripts", "preflight-cloudflare.js");
+    const script = fs.readFileSync(scriptPath, "utf8");
+
+    const requiredOverrides = [
+      "BYPASS_OTP_CODE",
+      "TEST_PHONE_NUMBERS",
+      "ENABLE_MOCK_OZOW",
+      "ENABLE_DEV_PAYMENT_BYPASS",
+      "ENABLE_DEV_KYC_WEBHOOK_BYPASS",
+      "ENABLE_TEST_POSTING_BYPASS",
+      "NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS",
+      "ENABLE_DEV_TURNSTILE_BYPASS",
+      "DEV_EXPOSE_OTP",
+      "SMS_MOCK",
+      "PLAYWRIGHT_TEST_MODE",
+    ];
+
+    for (const variableName of requiredOverrides) {
+      expect(script).toContain(`"${variableName}"`);
+    }
   });
 });
