@@ -5,10 +5,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { act, render, waitFor } from "@testing-library/react";
 
-const { mockShouldBypassTurnstileInNonProduction, mockTurnstileRender } = vi.hoisted(() => ({
-  mockShouldBypassTurnstileInNonProduction: vi.fn(() => false),
-  mockTurnstileRender: vi.fn(() => "widget-id"),
-}));
+const { mockShouldBypassTurnstileInNonProduction, mockTurnstileRender, mockTurnstileRemove } =
+  vi.hoisted(() => ({
+    mockShouldBypassTurnstileInNonProduction: vi.fn(() => false),
+    mockTurnstileRender: vi.fn(() => "widget-id"),
+    mockTurnstileRemove: vi.fn(),
+  }));
 
 vi.mock("@/lib/turnstile-mode", () => ({
   shouldBypassTurnstileInNonProduction: mockShouldBypassTurnstileInNonProduction,
@@ -18,7 +20,7 @@ vi.mock("@/lib/turnstile-mode", () => ({
 vi.stubGlobal("turnstile", {
   render: mockTurnstileRender,
   reset: vi.fn(),
-  remove: vi.fn(),
+  remove: mockTurnstileRemove,
 });
 
 vi.mock("@/components/ui/button", () => ({
@@ -102,5 +104,43 @@ describe("TurnstileWidget", () => {
       expect(onUnavailable).toHaveBeenCalled();
     });
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("does not recreate the widget when parent callbacks change", async () => {
+    const firstUnavailable = vi.fn();
+    const secondUnavailable = vi.fn();
+    const { rerender } = render(
+      <TurnstileWidget onSuccess={vi.fn()} onUnavailable={firstUnavailable} />
+    );
+
+    await waitFor(() => {
+      expect(mockTurnstileRender).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      rerender(<TurnstileWidget onSuccess={vi.fn()} onUnavailable={secondUnavailable} />);
+    });
+
+    await waitFor(() => {
+      expect(mockTurnstileRender).toHaveBeenCalledTimes(1);
+    });
+    expect(mockTurnstileRemove).not.toHaveBeenCalled();
+  });
+
+  it("recreates the widget only when retryToken changes", async () => {
+    const { rerender } = render(<TurnstileWidget onSuccess={vi.fn()} retryToken={0} />);
+
+    await waitFor(() => {
+      expect(mockTurnstileRender).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      rerender(<TurnstileWidget onSuccess={vi.fn()} retryToken={1} />);
+    });
+
+    await waitFor(() => {
+      expect(mockTurnstileRender).toHaveBeenCalledTimes(2);
+    });
+    expect(mockTurnstileRemove).toHaveBeenCalledTimes(1);
   });
 });

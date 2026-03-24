@@ -32,6 +32,18 @@ interface TurnstileWidgetProps {
   size?: "normal" | "compact";
   /** Additional CSS class */
   className?: string;
+  /** Changes when the caller wants to explicitly retry the widget */
+  retryToken?: number;
+}
+
+function useLatestRef<T>(value: T) {
+  const ref = useRef(value);
+
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+
+  return ref;
 }
 
 // Track global script load state
@@ -114,6 +126,7 @@ export function TurnstileWidget({
   theme = "auto",
   size = "normal",
   className,
+  retryToken,
 }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
@@ -122,7 +135,16 @@ export function TurnstileWidget({
   const unavailableReportedRef = useRef(false);
   const bypassReportedRef = useRef(false);
   const errorCountRef = useRef(0);
-  const [terminalUnavailable, setTerminalUnavailable] = useState(false);
+  const previousRetryTokenRef = useRef(retryToken);
+  const [unavailableState, setUnavailableState] = useState<{
+    active: boolean;
+    retryToken: number | undefined;
+  }>({ active: false, retryToken: undefined });
+  const onSuccessRef = useLatestRef(onSuccess);
+  const onExpireRef = useLatestRef(onExpire);
+  const onErrorRef = useLatestRef(onError);
+  const onLoadRef = useLatestRef(onLoad);
+  const onUnavailableRef = useLatestRef(onUnavailable);
   const runtimeConfig = getPublicRuntimeConfig();
   const { mode, siteKey } = getTurnstileClientState(runtimeConfig);
   const shouldBypassConfiguredTurnstile =
@@ -134,6 +156,7 @@ export function TurnstileWidget({
       nodeEnv: process.env.NODE_ENV,
     });
   const isBypassMode = mode === "bypass" || shouldBypassConfiguredTurnstile;
+  const terminalUnavailable = unavailableState.active && unavailableState.retryToken === retryToken;
   const isConfigured =
     mode === "configured" && !shouldBypassConfiguredTurnstile && !terminalUnavailable;
   const isUnavailable = mode === "unavailable" || terminalUnavailable;
@@ -170,14 +193,14 @@ export function TurnstileWidget({
   const markUnavailable = useCallback(
     (message = TURNSTILE_UNAVAILABLE_MESSAGE) => {
       cleanupWidget();
-      setTerminalUnavailable(true);
+      setUnavailableState({ active: true, retryToken });
 
       if (!unavailableReportedRef.current) {
         unavailableReportedRef.current = true;
-        onUnavailable?.(message);
+        onUnavailableRef.current?.(message);
       }
     },
-    [cleanupWidget, onUnavailable]
+    [cleanupWidget, onUnavailableRef, retryToken]
   );
 
   const renderWidget = useCallback(async () => {
@@ -193,7 +216,7 @@ export function TurnstileWidget({
     try {
       await loadTurnstileScript();
     } catch {
-      onError?.("Turnstile script failed to load");
+      onErrorRef.current?.("Turnstile script failed to load");
       return;
     }
 
@@ -212,12 +235,12 @@ export function TurnstileWidget({
       renderAttemptRef.current !== attemptId ||
       containerRef.current !== container
     ) {
-      onError?.("Turnstile not available after script load");
+      onErrorRef.current?.("Turnstile not available after script load");
       return;
     }
 
     // Signal that the widget has loaded
-    onLoad?.();
+    onLoadRef.current?.();
 
     widgetIdRef.current = turnstile.render(containerRef.current, {
       sitekey: siteKey,
@@ -225,11 +248,11 @@ export function TurnstileWidget({
       size,
       callback: (token: string) => {
         clearRenderTimeout();
-        onSuccess(token);
+        onSuccessRef.current(token);
       },
       "expired-callback": () => {
         clearRenderTimeout();
-        onExpire?.();
+        onExpireRef.current?.();
       },
       "error-callback": (err: string) => {
         clearRenderTimeout();
@@ -243,7 +266,7 @@ export function TurnstileWidget({
           return;
         }
 
-        onError?.(err);
+        onErrorRef.current?.(err);
       },
     });
 
@@ -259,56 +282,60 @@ export function TurnstileWidget({
     siteKey,
     theme,
     size,
-    onSuccess,
-    onExpire,
-    onError,
-    onLoad,
     cleanupWidget,
     clearRenderTimeout,
     markUnavailable,
+    onErrorRef,
+    onExpireRef,
+    onLoadRef,
+    onSuccessRef,
   ]);
+
+  useEffect(() => {
+    if (previousRetryTokenRef.current === retryToken) {
+      return;
+    }
+
+    previousRetryTokenRef.current = retryToken;
+    unavailableReportedRef.current = false;
+    bypassReportedRef.current = false;
+    errorCountRef.current = 0;
+  }, [retryToken]);
 
   useEffect(() => {
     if (!shouldBypassConfiguredTurnstile || bypassReportedRef.current) return;
 
     cleanupWidget();
     bypassReportedRef.current = true;
-    onSuccess("dev-turnstile-bypass");
-  }, [shouldBypassConfiguredTurnstile, cleanupWidget, onSuccess]);
+    onSuccessRef.current("dev-turnstile-bypass");
+  }, [shouldBypassConfiguredTurnstile, cleanupWidget, onSuccessRef]);
 
   useEffect(() => {
     if (!isConfigured) return;
-
-    const shouldBypass = shouldBypassTurnstileInNonProduction({
-      currentHost: window.location.hostname,
-      configuredAppUrl: runtimeConfig.appUrl,
-      nodeEnv: process.env.NODE_ENV,
-    });
-    if (shouldBypass) return;
 
     renderWidget();
 
     return () => {
       cleanupWidget();
     };
-  }, [isConfigured, renderWidget, cleanupWidget, runtimeConfig.appUrl]);
+  }, [cleanupWidget, isConfigured, renderWidget, retryToken]);
 
   useEffect(() => {
     if (mode === "bypass" && !bypassReportedRef.current) {
       bypassReportedRef.current = true;
-      onSuccess("dev-turnstile-bypass");
+      onSuccessRef.current("dev-turnstile-bypass");
     }
-  }, [mode, onSuccess]);
+  }, [mode, onSuccessRef]);
 
   useEffect(() => {
     if (mode === "unavailable") {
       cleanupWidget();
       if (!unavailableReportedRef.current) {
         unavailableReportedRef.current = true;
-        onUnavailable?.(TURNSTILE_UNAVAILABLE_MESSAGE);
+        onUnavailableRef.current?.(TURNSTILE_UNAVAILABLE_MESSAGE);
       }
     }
-  }, [mode, cleanupWidget, onUnavailable]);
+  }, [mode, cleanupWidget, onUnavailableRef]);
 
   if (isBypassMode || isUnavailable) {
     return null;

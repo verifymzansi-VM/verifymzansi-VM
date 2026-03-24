@@ -22,7 +22,7 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
+  const [turnstileRetryToken, setTurnstileRetryToken] = useState(0);
   const [captchaUnavailable, setCaptchaUnavailable] = useState(
     getTurnstileClientState().mode === "unavailable"
   );
@@ -62,7 +62,7 @@ export default function RegisterPage() {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [skipTurnstileTimeout, turnstileLoaded, retryKey, setValue]);
+  }, [skipTurnstileTimeout, turnstileLoaded, turnstileRetryToken, setValue]);
 
   const handleTurnstileSuccess = useCallback(
     (token: string) => {
@@ -96,13 +96,20 @@ export default function RegisterPage() {
     setValue("turnstileToken", "", { shouldValidate: true });
   }, [setValue]);
 
+  const handleTurnstileUnavailable = useCallback(() => {
+    setCaptchaUnavailable(true);
+    setTurnstileLoaded(false);
+    setTurnstileError(TURNSTILE_UNAVAILABLE_MESSAGE);
+    setValue("turnstileToken", "", { shouldValidate: false });
+  }, [setValue]);
+
   const handleRetry = useCallback(() => {
     setCaptchaUnavailable(false);
     setTurnstileError(null);
     setTurnstileLoaded(false);
     setValue("turnstileToken", "", { shouldValidate: false });
     TurnstileWidget.retry();
-    setRetryKey((k) => k + 1);
+    setTurnstileRetryToken((value) => value + 1);
   }, [setValue]);
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
@@ -333,17 +340,12 @@ export default function RegisterPage() {
         )}
 
         <TurnstileWidget
-          key={retryKey}
+          retryToken={turnstileRetryToken}
           onSuccess={handleTurnstileSuccess}
           onError={handleTurnstileError}
           onExpire={handleTurnstileExpire}
           onLoad={handleTurnstileLoad}
-          onUnavailable={() => {
-            setCaptchaUnavailable(true);
-            setTurnstileLoaded(false);
-            setTurnstileError(TURNSTILE_UNAVAILABLE_MESSAGE);
-            setValue("turnstileToken", "", { shouldValidate: false });
-          }}
+          onUnavailable={handleTurnstileUnavailable}
         />
         {turnstileError && (
           <div className="flex items-center gap-2">
