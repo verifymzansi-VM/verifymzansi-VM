@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { env } from "@/lib/config/env";
+import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("Ozow");
@@ -24,8 +25,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function getMockOzowEnabled(): boolean {
-  return process.env.NODE_ENV !== "production" && process.env.ENABLE_MOCK_OZOW === "true";
+export function isMockOzowEnabled(): boolean {
+  return (
+    process.env.ENABLE_MOCK_OZOW === "true" &&
+    (process.env.NODE_ENV !== "production" || isPlaywrightTestMode())
+  );
 }
 
 function toSafeString(value: unknown): string | null {
@@ -122,7 +126,7 @@ export async function createOzowHostedPayment(
   const correlationId = crypto.randomUUID();
   const idempotencyKey = crypto.randomUUID();
 
-  if (getMockOzowEnabled()) {
+  if (isMockOzowEnabled()) {
     const appUrl = env("NEXT_PUBLIC_APP_URL") || "http://localhost:3000";
     const redirectUrl = new URL("/api/mock-ozow", appUrl);
     redirectUrl.searchParams.set("paymentId", input.paymentId);
@@ -141,6 +145,7 @@ export async function createOzowHostedPayment(
         id: `mock-${input.paymentId}`,
         redirectUrl: redirectUrl.toString(),
         expireAt,
+        mockFlow: true,
       },
     };
   }

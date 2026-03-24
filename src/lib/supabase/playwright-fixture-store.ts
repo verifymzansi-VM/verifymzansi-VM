@@ -1,6 +1,8 @@
 import "server-only";
 
 import crypto from "node:crypto";
+import { PLANS, isActiveMarketplaceArea } from "@/lib/constants/pricing";
+import { getStablePlanId } from "@/lib/constants/plan-ids";
 
 type StubUser = {
   id: string;
@@ -77,6 +79,22 @@ function createEmptyStore(): PlaywrightFixtureStore {
   for (const table of DEFAULT_TABLES) {
     tables.set(table, []);
   }
+
+  tables.set(
+    "plans",
+    PLANS.map((plan) => ({
+      id: getStablePlanId(plan.area, plan.tier),
+      area: plan.area,
+      tier: plan.tier,
+      name: plan.name,
+      price_cents: plan.priceCents,
+      billing_frequency: plan.billingFrequency,
+      features: cloneValue(plan.features),
+      active: isActiveMarketplaceArea(plan.area),
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    }))
+  );
 
   return {
     sessions: new Map<string, string>(),

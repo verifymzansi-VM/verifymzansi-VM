@@ -1,6 +1,8 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
 import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
+import { getStablePlanId } from "@/lib/constants/plan-ids";
+import { PLANS, isActiveMarketplaceArea } from "@/lib/constants/pricing";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -124,19 +126,22 @@ function createBrowserPlaywrightStubClient(): SupabaseClient {
   }
 
   function createQuery(table: string) {
-    const state: { filterColumn?: string; filterValue?: unknown } = {};
+    const state: { filters: Array<{ column: string; value: unknown }> } = { filters: [] };
+
+    function readFilter(column: string) {
+      return state.filters.find((filter) => filter.column === column)?.value;
+    }
 
     const builder = {
       select: () => builder,
       eq: (column: string, value: unknown) => {
-        state.filterColumn = column;
-        state.filterValue = value;
+        state.filters.push({ column, value });
         return builder;
       },
       single: async () => {
         const user = readUser();
 
-        if (table === "account_profiles" && user && state.filterColumn === "user_id") {
+        if (table === "account_profiles" && user && readFilter("user_id") === user.id) {
           return {
             data: {
               id: `pw-profile-${user.id}`,
@@ -151,8 +156,34 @@ function createBrowserPlaywrightStubClient(): SupabaseClient {
           };
         }
 
-        if (table === "listings" && state.filterColumn === "id") {
-          return readFixtureRow("listings", state.filterValue);
+        if (table === "plans") {
+          const area = readFilter("area");
+          const tier = readFilter("tier");
+          const active = readFilter("active");
+          const plan = PLANS.find(
+            (candidate) =>
+              candidate.area === area &&
+              candidate.tier === tier &&
+              (active === undefined || isActiveMarketplaceArea(candidate.area) === active)
+          );
+
+          if (!plan) {
+            return { data: null, error: null };
+          }
+
+          return {
+            data: {
+              id: getStablePlanId(plan.area, plan.tier),
+              area: plan.area,
+              tier: plan.tier,
+              active: isActiveMarketplaceArea(plan.area),
+            },
+            error: null,
+          };
+        }
+
+        if (table === "listings" && readFilter("id")) {
+          return readFixtureRow("listings", readFilter("id"));
         }
 
         return { data: null, error: null };
@@ -160,8 +191,8 @@ function createBrowserPlaywrightStubClient(): SupabaseClient {
       order: () => builder,
       in: () => builder,
       maybeSingle: async () => {
-        if (table === "listings" && state.filterColumn === "id") {
-          return readFixtureRow("listings", state.filterValue);
+        if (table === "listings" && readFilter("id")) {
+          return readFixtureRow("listings", readFilter("id"));
         }
 
         return { data: null, error: null };

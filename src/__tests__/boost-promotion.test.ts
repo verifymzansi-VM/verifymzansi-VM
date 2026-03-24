@@ -282,6 +282,11 @@ describe("POST /api/promotions/[id]/boost", () => {
         }
         if (table === "payments") {
           return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            contains: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
             insert: vi.fn().mockReturnValue({
               select: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({ data: { id: "payment-1" }, error: null }),

@@ -14,13 +14,23 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
+import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
 // ── Hoisted mocks ──────────────────────────────────────────────
-const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockEnv } = vi.hoisted(() => ({
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockLogAuditEvent,
+  mockEnv,
+  mockClientFrom,
+  mockCheckLocalRateLimit,
+} = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockEnv: vi.fn(),
+  mockClientFrom: vi.fn(),
+  mockCheckLocalRateLimit: vi.fn(),
 }));
 const mockCreateHostedCheckout = vi.hoisted(() => vi.fn());
 
@@ -50,6 +60,9 @@ vi.mock("@/lib/constants/pricing", () => ({
   FEATURED_DURATION_DAYS: 7,
   URGENT_DURATION_DAYS: 7,
 }));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: mockCheckLocalRateLimit,
+}));
 
 // ── Import route handlers ──────────────────────────────────────
 import { POST as FeaturedPOST } from "@/app/api/listings/[id]/featured/route";
@@ -71,6 +84,7 @@ function createRequest(): NextRequest {
 
 function mockAuth(user: { id: string; email?: string } | null) {
   mockCreateClient.mockResolvedValue({
+    from: mockClientFrom,
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: { user },
@@ -96,8 +110,39 @@ function mockAdmin(tableOverrides: Record<string, Record<string, unknown>> = {})
   });
 }
 
+function mockListingRow(row: Record<string, unknown> | null) {
+  mockClientFrom.mockImplementation((table: string) => {
+    if (table === "listings") {
+      return {
+        select: vi.fn((fields: string) => {
+          if (fields === "id, owner_id") {
+            return {
+              limit: vi.fn().mockResolvedValue({ error: null }),
+            };
+          }
+
+          return {
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: row }),
+          };
+        }),
+      };
+    }
+
+    throw new Error(`Unexpected client table ${table}`);
+  });
+}
+
 function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_until") {
   mockAuth({ id: USER_ID, email: "seller@test.com" });
+  mockListingRow({
+    id: UUID,
+    title: "Test Listing",
+    status: "live",
+    area: "MZANSI_MARKET",
+    owner_id: USER_ID,
+    [addonField]: null,
+  });
   mockCreateHostedCheckout.mockResolvedValue({
     paymentId: "payment-1",
     checkoutUrl: "https://pay.ozow.test/checkout",
@@ -105,18 +150,6 @@ function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_u
   mockAdmin({
     account_profiles: {
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-    },
-    listings: {
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: {
-          id: UUID,
-          title: "Test Listing",
-          status: "live",
-          area: "MZANSI_MARKET",
-          owner_id: USER_ID,
-          [addonField]: null,
-        },
-      }),
     },
     payments: {
       single: vi.fn().mockResolvedValue({ data: { id: "payment-1" }, error: null }),
@@ -164,7 +197,11 @@ describe("Route module exports (regression: routes excluded from build)", () => 
 // ── Test 2: billing misconfiguration fails safely ──────────────
 
 describe("Billing not configured", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
+  });
 
   it("featured fails safely when Ozow credentials are missing", async () => {
     setupHappyPath("featured_until");
@@ -206,26 +243,26 @@ describe("Billing not configured", () => {
 // ── Test 3: Payment DB insert failure ──────────────────────────
 
 describe("Payment insert failure path", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
+  });
 
   it("featured returns 500 when payment creation fails with DB error", async () => {
     mockAuth({ id: USER_ID, email: "seller@test.com" });
+    mockListingRow({
+      id: UUID,
+      title: "Test",
+      status: "live",
+      area: "MZANSI_MARKET",
+      owner_id: USER_ID,
+      featured_until: null,
+    });
     setupEnvWithOzow();
     mockAdmin({
       account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-      },
-      listings: {
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: {
-            id: UUID,
-            title: "Test",
-            status: "live",
-            area: "MZANSI_MARKET",
-            owner_id: USER_ID,
-            featured_until: null,
-          },
-        }),
       },
     });
     mockCreateHostedCheckout.mockRejectedValueOnce(new Error("Failed to create payment"));
@@ -242,7 +279,11 @@ describe("Payment insert failure path", () => {
 // ── Test 4: Audit log failure doesn't crash checkout ───────────
 
 describe("Audit log failure resilience", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
+  });
 
   it("featured checkout succeeds even when audit log throws (audit is non-fatal)", async () => {
     setupHappyPath("featured_until");
@@ -289,27 +330,27 @@ describe("Audit log failure resilience", () => {
 // ── Test 5: Already-active with future date edge case ──────────
 
 describe("Already-active guard edge cases", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOwnerColumnCacheForTesting();
+    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
+  });
 
   it("featured allows re-purchase when featured_until is in the past", async () => {
     const pastDate = new Date(Date.now() - 86_400_000).toISOString();
     mockAuth({ id: USER_ID, email: "seller@test.com" });
+    mockListingRow({
+      id: UUID,
+      title: "Test",
+      status: "live",
+      area: "MZANSI_MARKET",
+      owner_id: USER_ID,
+      featured_until: pastDate,
+    });
     setupEnvWithOzow();
     mockAdmin({
       account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-      },
-      listings: {
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: {
-            id: UUID,
-            title: "Test",
-            status: "live",
-            area: "MZANSI_MARKET",
-            owner_id: USER_ID,
-            featured_until: pastDate, // Expired
-          },
-        }),
       },
       payments: {
         single: vi.fn().mockResolvedValue({ data: { id: "pay-1" }, error: null }),
@@ -328,22 +369,18 @@ describe("Already-active guard edge cases", () => {
   it("featured blocks re-purchase when featured_until is 1 second in the future", async () => {
     const nearFutureDate = new Date(Date.now() + 1000).toISOString();
     mockAuth({ id: USER_ID, email: "seller@test.com" });
+    mockListingRow({
+      id: UUID,
+      title: "Test",
+      status: "live",
+      area: "MZANSI_MARKET",
+      owner_id: USER_ID,
+      featured_until: nearFutureDate,
+    });
     setupEnvWithOzow();
     mockAdmin({
       account_profiles: {
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-      },
-      listings: {
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: {
-            id: UUID,
-            title: "Test",
-            status: "live",
-            area: "MZANSI_MARKET",
-            owner_id: USER_ID,
-            featured_until: nearFutureDate, // Still active
-          },
-        }),
       },
     });
 

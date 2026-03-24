@@ -36,6 +36,11 @@ jobs:
       AFRICASTALKING_API_KEY: ${{ secrets.AFRICASTALKING_API_KEY }}
       AFRICASTALKING_USERNAME: ${{ secrets.AFRICASTALKING_USERNAME }}
       AFRICASTALKING_SENDER_ID: ${{ secrets.AFRICASTALKING_SENDER_ID }}
+      OZOW_ENV: ${{ secrets.OZOW_ENV }}
+      OZOW_CLIENT_ID: ${{ secrets.OZOW_CLIENT_ID }}
+      OZOW_CLIENT_SECRET: ${{ secrets.OZOW_CLIENT_SECRET }}
+      OZOW_SITE_CODE: ${{ secrets.OZOW_SITE_CODE }}
+      OZOW_WEBHOOK_SECRET: ${{ secrets.OZOW_WEBHOOK_SECRET }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -63,8 +68,7 @@ jobs:
       - name: License policy check
         run: pnpm run licenses:check
       - name: Validate production launch env
-        continue-on-error: true
-        run: pnpm exec tsx scripts/validate-launch-env.ts --mode=production || echo "::warning::Launch env validation incomplete — secrets are configured as Cloudflare Worker secrets, not GitHub Actions env vars"
+        run: pnpm exec tsx scripts/validate-launch-env.ts --mode=production
       - name: Validate required public build envs
         run: |
           FAILED=0
@@ -81,7 +85,6 @@ jobs:
           done
           exit $FAILED
       - name: Run production preflight
-        continue-on-error: true
         run: pnpm run preflight:prod
       - name: Build for Cloudflare
         run: pnpm run build:cloudflare

@@ -68,6 +68,40 @@ describe("launch env validation", () => {
     expect(summary.errors.some((error) => error.name === "Production secrets")).toBe(true);
   });
 
+  it("fails launch validation when Ozow production credentials are missing", () => {
+    const summary = validateLaunchConfiguration({
+      ...validProductionEnv,
+      OZOW_CLIENT_SECRET: undefined,
+    });
+
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "Launch env",
+      })
+    );
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "Ozow",
+      })
+    );
+  });
+
+  it("fails launch validation when Ozow is still pointed at staging", () => {
+    const summary = validateLaunchConfiguration({
+      ...validProductionEnv,
+      OZOW_ENV: "staging",
+    });
+
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "Ozow",
+        detail: "OZOW_ENV must be set to production for live checkout",
+      })
+    );
+  });
+
   it("accepts a valid strict production env", () => {
     applyEnv(validProductionEnv);
 

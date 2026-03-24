@@ -246,6 +246,8 @@ describe("instrumentation: dev bypass startup guard", () => {
     delete process.env.ENABLE_TEST_POSTING_BYPASS;
     delete process.env.NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS;
     delete process.env.ENABLE_DEV_TURNSTILE_BYPASS;
+    delete process.env.VERIFYMZANSI_RUNTIME_MODE;
+    delete process.env.VERIFYMZANSI_VALIDATION_MODE;
   });
 
   it("allows startup when no dev bypasses are set", async () => {
@@ -291,6 +293,17 @@ describe("instrumentation: dev bypass startup guard", () => {
     _resetInstrumentationForTesting();
 
     await expect(register()).rejects.toThrow("PLAYWRIGHT_TEST_MODE");
+  });
+
+  it("allows explicit e2e runtime boot in production with Playwright flags", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.PLAYWRIGHT_TEST_MODE = "1";
+    process.env.VERIFYMZANSI_RUNTIME_MODE = "e2e";
+    process.env.VERIFYMZANSI_VALIDATION_MODE = "e2e";
+    const { register, _resetInstrumentationForTesting } = await import("../instrumentation");
+    _resetInstrumentationForTesting();
+
+    await expect(register()).resolves.toBeUndefined();
   });
 
   it("blocks startup in production when ENABLE_TEST_POSTING_BYPASS is set", async () => {

@@ -1,11 +1,19 @@
 let hasLoggedBootstrapValidationFailure = false;
 
+function isExplicitE2eRuntime(): boolean {
+  const e2eModes = new Set(["e2e", "playwright", "test"]);
+  const runtimeMode = process.env.VERIFYMZANSI_RUNTIME_MODE?.trim().toLowerCase();
+  const validationMode = process.env.VERIFYMZANSI_VALIDATION_MODE?.trim().toLowerCase();
+
+  return e2eModes.has(runtimeMode ?? "") || e2eModes.has(validationMode ?? "");
+}
+
 /**
  * Check for dev bypass environment variables that must never exist in production.
  * This runs independently of the full env validation to provide a hard safety net.
  */
 function assertNoDevBypassesInProduction(): string[] {
-  if (process.env.NODE_ENV !== "production") return [];
+  if (process.env.NODE_ENV !== "production" || isExplicitE2eRuntime()) return [];
 
   const violations: string[] = [];
   const dangerous: Record<string, string> = {
