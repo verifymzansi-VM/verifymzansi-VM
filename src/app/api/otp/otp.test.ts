@@ -135,34 +135,27 @@ describe("OTP Routes", () => {
     });
 
     it("blocks when challenge send limit is exceeded", async () => {
-      const sentLogCountQuery = {
+      const adminQuery = {
         select: vi.fn(),
         eq: vi.fn(),
         gte: vi.fn(),
+        update: vi.fn(),
+        insert: vi.fn(),
       };
-      sentLogCountQuery.select.mockReturnValue(sentLogCountQuery);
-      sentLogCountQuery.eq.mockReturnValue(sentLogCountQuery);
-      sentLogCountQuery.gte.mockResolvedValue({ count: 5 });
+      adminQuery.select.mockReturnValue(adminQuery);
+      adminQuery.eq.mockReturnValue(adminQuery);
+      adminQuery.gte.mockResolvedValue({ count: 5 });
 
       const invalidateQuery = {
         eq: vi.fn(),
         is: vi.fn().mockResolvedValue({ error: null }),
       };
       invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      adminQuery.update.mockReturnValue(invalidateQuery);
+      adminQuery.insert.mockResolvedValue({ error: null });
 
       const mockAdminClient = {
-        from: vi.fn((table: string) => {
-          if (table === "otp_logs") {
-            return sentLogCountQuery;
-          }
-          if (table === "otp_challenges") {
-            return {
-              update: vi.fn().mockReturnValue(invalidateQuery),
-              insert: vi.fn().mockResolvedValue({ error: null }),
-            };
-          }
-          return { insert: vi.fn().mockResolvedValue({ error: null }) };
-        }),
+        from: vi.fn().mockReturnValue(adminQuery),
       };
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
 
@@ -177,38 +170,30 @@ describe("OTP Routes", () => {
     });
 
     it("creates challenge and sends OTP when allowed", async () => {
-      const otpLogInsert = vi.fn().mockResolvedValue({ error: null });
-      const sentLogCountQuery = {
+      const otpLogInsert = vi
+        .fn()
+        .mockResolvedValueOnce({ error: null })
+        .mockResolvedValueOnce({ error: null });
+      const adminQuery = {
         select: vi.fn(),
         eq: vi.fn(),
         gte: vi.fn(),
+        update: vi.fn(),
+        insert: otpLogInsert,
       };
-      sentLogCountQuery.select.mockReturnValue(sentLogCountQuery);
-      sentLogCountQuery.eq.mockReturnValue(sentLogCountQuery);
-      sentLogCountQuery.gte.mockResolvedValue({ count: 0 });
+      adminQuery.select.mockReturnValue(adminQuery);
+      adminQuery.eq.mockReturnValue(adminQuery);
+      adminQuery.gte.mockResolvedValue({ count: 0 });
 
       const invalidateQuery = {
         eq: vi.fn(),
         is: vi.fn().mockResolvedValue({ error: null }),
       };
       invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      adminQuery.update.mockReturnValue(invalidateQuery);
 
       const mockAdminClient = {
-        from: vi.fn((table: string) => {
-          if (table === "otp_logs") {
-            return {
-              ...sentLogCountQuery,
-              insert: otpLogInsert,
-            };
-          }
-          if (table === "otp_challenges") {
-            return {
-              update: vi.fn().mockReturnValue(invalidateQuery),
-              insert: vi.fn().mockResolvedValue({ error: null }),
-            };
-          }
-          return {};
-        }),
+        from: vi.fn().mockReturnValue(adminQuery),
       };
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
       vi.mocked(smsService.sendOtpSms).mockResolvedValue({
@@ -233,38 +218,30 @@ describe("OTP Routes", () => {
     });
 
     it("returns a structured provider error when the SMS provider rejects the send", async () => {
-      const otpLogInsert = vi.fn().mockResolvedValue({ error: null });
-      const sentLogCountQuery = {
+      const otpLogInsert = vi
+        .fn()
+        .mockResolvedValueOnce({ error: null })
+        .mockResolvedValueOnce({ error: null });
+      const adminQuery = {
         select: vi.fn(),
         eq: vi.fn(),
         gte: vi.fn(),
+        update: vi.fn(),
+        insert: otpLogInsert,
       };
-      sentLogCountQuery.select.mockReturnValue(sentLogCountQuery);
-      sentLogCountQuery.eq.mockReturnValue(sentLogCountQuery);
-      sentLogCountQuery.gte.mockResolvedValue({ count: 0 });
+      adminQuery.select.mockReturnValue(adminQuery);
+      adminQuery.eq.mockReturnValue(adminQuery);
+      adminQuery.gte.mockResolvedValue({ count: 0 });
 
       const invalidateQuery = {
         eq: vi.fn(),
         is: vi.fn().mockResolvedValue({ error: null }),
       };
       invalidateQuery.eq.mockReturnValue(invalidateQuery);
+      adminQuery.update.mockReturnValue(invalidateQuery);
 
       const mockAdminClient = {
-        from: vi.fn((table: string) => {
-          if (table === "otp_logs") {
-            return {
-              ...sentLogCountQuery,
-              insert: otpLogInsert,
-            };
-          }
-          if (table === "otp_challenges") {
-            return {
-              update: vi.fn().mockReturnValue(invalidateQuery),
-              insert: vi.fn().mockResolvedValue({ error: null }),
-            };
-          }
-          return {};
-        }),
+        from: vi.fn().mockReturnValue(adminQuery),
       };
       vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
       vi.mocked(smsService.sendOtpSms).mockResolvedValue({
