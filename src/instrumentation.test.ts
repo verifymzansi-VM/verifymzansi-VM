@@ -18,9 +18,14 @@ vi.mock("./lib/utils/logger", () => ({
 import { _resetInstrumentationForTesting, register } from "./instrumentation";
 
 describe("instrumentation register", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalStrictStartupBlock = process.env.STRICT_ENV_STARTUP_BLOCK;
+
   beforeEach(() => {
     vi.clearAllMocks();
     _resetInstrumentationForTesting();
+    process.env.NODE_ENV = originalNodeEnv;
+    process.env.STRICT_ENV_STARTUP_BLOCK = originalStrictStartupBlock;
   });
 
   it("runs launch validation during bootstrap", async () => {
@@ -44,6 +49,34 @@ describe("instrumentation register", () => {
       "Launch configuration validation failed during instrumentation bootstrap",
       expect.objectContaining({
         error: expect.stringContaining("AFRICASTALKING_SENDER_ID"),
+      })
+    );
+  });
+
+  it("soft-fails env validation in production unless strict block is enabled", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.STRICT_ENV_STARTUP_BLOCK;
+
+    mockValidateEnv.mockImplementation(() => {
+      throw new Error("RESEND_API_KEY should start with re_");
+    });
+
+    await expect(register()).resolves.toBeUndefined();
+
+    expect(mockValidateEnv).toHaveBeenCalledTimes(1);
+    expect(mockError).toHaveBeenCalledTimes(2);
+    expect(mockError).toHaveBeenNthCalledWith(
+      1,
+      "Launch configuration validation failed during instrumentation bootstrap",
+      expect.objectContaining({
+        error: expect.stringContaining("RESEND_API_KEY"),
+      })
+    );
+    expect(mockError).toHaveBeenNthCalledWith(
+      2,
+      "Continuing startup with degraded launch configuration",
+      expect.objectContaining({
+        reason: expect.stringContaining("STRICT_ENV_STARTUP_BLOCK"),
       })
     );
   });

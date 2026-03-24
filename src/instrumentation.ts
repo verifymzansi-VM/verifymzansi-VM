@@ -8,6 +8,17 @@ function isExplicitE2eRuntime(): boolean {
   return e2eModes.has(runtimeMode ?? "") || e2eModes.has(validationMode ?? "");
 }
 
+function shouldSoftFailEnvValidationInProduction(): boolean {
+  if (process.env.NODE_ENV !== "production" || isExplicitE2eRuntime()) {
+    return false;
+  }
+
+  // Default to availability-first in production: env validation failures
+  // should degrade health checks, not hard-crash the entire worker.
+  // Set STRICT_ENV_STARTUP_BLOCK=1 to restore fail-closed startup behavior.
+  return process.env.STRICT_ENV_STARTUP_BLOCK !== "1";
+}
+
 /**
  * Check for dev bypass environment variables that must never exist in production.
  * This runs independently of the full env validation to provide a hard safety net.
@@ -75,15 +86,21 @@ export async function register() {
   try {
     validateEnv();
   } catch (error) {
-    if (hasLoggedBootstrapValidationFailure) {
-      throw error;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    if (!hasLoggedBootstrapValidationFailure) {
+      hasLoggedBootstrapValidationFailure = true;
+      logger.error("Launch configuration validation failed during instrumentation bootstrap", {
+        error: errorMessage,
+      });
     }
 
-    hasLoggedBootstrapValidationFailure = true;
-
-    logger.error("Launch configuration validation failed during instrumentation bootstrap", {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    if (shouldSoftFailEnvValidationInProduction()) {
+      logger.error("Continuing startup with degraded launch configuration", {
+        reason: "STRICT_ENV_STARTUP_BLOCK is not enabled",
+      });
+      return;
+    }
 
     throw error;
   }
