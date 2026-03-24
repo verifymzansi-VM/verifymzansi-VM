@@ -242,7 +242,8 @@ async function findUserByEmail(admin: AdminClient, email: string): Promise<Exist
 }
 
 async function upsertAccountProfile(
-  admin: AdminClient,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
   userId: string,
   displayName: string
 ): Promise<void> {
