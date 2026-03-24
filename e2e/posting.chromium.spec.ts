@@ -10,8 +10,9 @@ test.describe.configure({ mode: "serial" });
 
 function uploaderFor(page: Page, label: RegExp) {
   return page
-    .locator("div")
-    .filter({ has: page.getByText(label) })
+    .getByText(label)
+    .first()
+    .locator("xpath=ancestor::*[.//input[@type='file']][1]")
     .locator("input[type='file']")
     .first();
 }
@@ -73,8 +74,8 @@ async function completeListingCreate(page: Page) {
 async function completeBusinessCreate(page: Page) {
   const businessName = `Playwright Business Studio ${RUN_SUFFIX}`;
   const businessSlug = `playwright-business-studio-${RUN_SUFFIX}`;
-  const businessesHeading = page.getByRole("heading", { name: "My Businesses" });
-  const businessLink = page.getByRole("link", { name: businessName });
+  const businessesHeading = page.getByRole("heading", { name: "Mzansi Business" });
+  const businessLink = page.getByRole("link", { name: businessName }).first();
   const businessTypeLabel = page.locator("label").filter({ hasText: /Standalone Shop/ });
   await page.goto("/post/create-business");
   await enterPostingForm(page, businessTypeLabel);

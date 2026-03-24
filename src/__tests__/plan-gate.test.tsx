@@ -224,7 +224,7 @@ describe("PlanGate", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: /complete phone setup/i })).toHaveAttribute(
+      expect(screen.getByRole("link", { name: /add phone number/i })).toHaveAttribute(
         "href",
         "/dashboard/complete-profile?returnUrl=%2Fpost%2Fcreate-listing"
       );

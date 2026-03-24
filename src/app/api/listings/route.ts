@@ -38,6 +38,11 @@ import {
   optionalTrimmedStringSchema,
 } from "@/lib/validations/shared";
 import { z } from "zod";
+import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
+import {
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+  shouldHidePlaywrightFixtures,
+} from "@/lib/supabase/playwright-visual-fixtures";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
@@ -190,6 +195,9 @@ function normalizeListingSelectShape(
  */
 export async function GET(request: NextRequest) {
   try {
+    const hideFixtures = shouldHidePlaywrightFixtures(
+      request.cookies?.get?.(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+    );
     // Rate limit public marketplace queries to prevent scraping/DoS
     const ip = getClientIp(request);
     const rl = checkLocalRateLimit(ip, "listings:read", 120);
@@ -404,7 +412,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    listings = normalizeOwnerRecords(listings);
+    const normalizedListings = normalizeOwnerRecords(listings);
+    const publicListings = hideFixtures
+      ? normalizedListings.filter(
+          (listing) => !shouldHidePlaywrightFixtureRowWhenEnabled(listing, true)
+        )
+      : normalizedListings;
+    total = Math.max(0, total - (normalizedListings.length - publicListings.length));
+    listings = publicListings;
 
     const sellerIds = Array.from(
       new Set(listings.map((listing) => String(listing.owner_id)).filter(Boolean))

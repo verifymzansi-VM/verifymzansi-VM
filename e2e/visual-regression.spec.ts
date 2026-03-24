@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { existsSync } from "node:fs";
+import { PLAYWRIGHT_HIDE_FIXTURES_COOKIE } from "@/lib/supabase/playwright-visual-fixtures";
 
 /**
  * Visual regression tests — captures key page screenshots and compares
@@ -13,33 +14,46 @@ const publicRoutes = [
   {
     name: "homepage",
     path: "/",
-    readySelector: 'h2:has-text("Start here on VerifyMzansi")',
+    readySelector: 'h2:has-text("Promote, discover, and build trust on VerifyMzansi"):visible',
   },
   {
     name: "mzansi-market",
     path: "/mzansi-market",
-    readySelector: 'h1:has-text("Browse Listings")',
+    readySelector:
+      'h1:has-text("Browse Listings"):visible, button:has-text("Filter & search listings"):visible',
   },
   {
     name: "mzansi-business",
     path: "/mzansi-business",
-    readySelector: 'h1:has-text("Mzansi Business")',
+    readySelector:
+      'h1:has-text("Mzansi Business"):visible, button:has-text("Filter & search businesses"):visible',
   },
-  { name: "login", path: "/login", readySelector: 'h1:has-text("Sign in to your account")' },
+  {
+    name: "login",
+    path: "/login",
+    readySelector: 'h1:has-text("Sign in to your account"):visible',
+  },
   {
     name: "register",
     path: "/register",
-    readySelector: 'h1:has-text("Create your account")',
+    readySelector: 'h1:has-text("Create your account"):visible',
   },
-  { name: "pricing", path: "/pricing", readySelector: 'h1:has-text("Pricing")' },
-  { name: "contact", path: "/contact", readySelector: 'h1:has-text("Contact Us")' },
-  { name: "privacy", path: "/privacy", readySelector: 'h1:has-text("Privacy Policy")' },
-  { name: "terms", path: "/terms", readySelector: 'h1:has-text("Terms of Service")' },
+  { name: "pricing", path: "/pricing", readySelector: 'h1:has-text("Pricing"):visible' },
+  { name: "contact", path: "/contact", readySelector: 'h1:has-text("Contact Us"):visible' },
+  { name: "privacy", path: "/privacy", readySelector: 'h1:has-text("Privacy Policy"):visible' },
+  { name: "terms", path: "/terms", readySelector: 'h1:has-text("Terms of Service"):visible' },
 ] as const;
 
 async function gotoAndWaitForStablePage(page: Page, route: (typeof publicRoutes)[number]) {
+  await page.context().addCookies([
+    {
+      name: PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+      value: "1",
+      url: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3100",
+    },
+  ]);
   await page.goto(route.path, { waitUntil: "domcontentloaded" });
-  await page.locator("main").first().waitFor({ state: "visible" });
+  await page.locator("body").waitFor({ state: "visible" });
   await page.locator(route.readySelector).first().waitFor({ state: "visible" });
 
   if (route.name === "mzansi-market") {

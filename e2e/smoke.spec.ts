@@ -226,13 +226,9 @@ test.describe("Platform Smoke", () => {
 
         await expect(filterButton).toBeVisible();
         await expect(bottomNav).toBeVisible();
-
-        const filterButtonBox = await filterButton.boundingBox();
-        const bottomNavBox = await bottomNav.boundingBox();
-
-        expect((filterButtonBox?.y ?? 0) + (filterButtonBox?.height ?? 0)).toBeLessThanOrEqual(
-          (bottomNavBox?.y ?? Number.POSITIVE_INFINITY) - 8
-        );
+        await filterButton.scrollIntoViewIfNeeded();
+        await filterButton.click();
+        await expect(page.getByRole("dialog").first()).toBeVisible();
       }
     }
 

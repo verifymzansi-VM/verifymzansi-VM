@@ -39,6 +39,11 @@ import {
   normalizeBusinessTypeParam,
 } from "@/lib/utils/marketplace-query";
 import { z } from "zod";
+import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
+import {
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
+  shouldHidePlaywrightFixtures,
+} from "@/lib/supabase/playwright-visual-fixtures";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -373,6 +378,9 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    const hideFixtures = shouldHidePlaywrightFixtures(
+      request.cookies?.get?.(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
+    );
     const parsedQuery = parseAndValidateSearchParams(
       request.nextUrl.searchParams,
       businessesQuerySchema,
@@ -575,8 +583,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch businesses" }, { status: 500 });
     }
 
-    const filteredBusinesses = normalizeOwnerRecords(businesses).filter(
+    const normalizedBusinesses = normalizeOwnerRecords(businesses);
+    const filteredBusinesses = normalizedBusinesses.filter(
       (b) =>
+        !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures) &&
         !isPlaceholderMarketplaceContent(
           String((b as Record<string, unknown>).business_name ?? ""),
           typeof (b as Record<string, unknown>).description === "string"
@@ -591,7 +601,8 @@ export async function GET(request: NextRequest) {
       businesses: publicBusinesses,
       total: Math.max(
         0,
-        (count ?? filteredBusinesses.length) - (businesses.length - filteredBusinesses.length)
+        (count ?? filteredBusinesses.length) -
+          (normalizedBusinesses.length - filteredBusinesses.length)
       ),
       page,
       limit,

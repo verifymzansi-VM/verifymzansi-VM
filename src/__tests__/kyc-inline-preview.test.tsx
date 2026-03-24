@@ -144,11 +144,17 @@ describe("KycInlinePreview", () => {
     });
 
     // First call = metadata
-    expect(mockFetch.mock.calls[0][0]).toContain("/api/admin/verification/evidence/metadata");
+    expect(mockFetch.mock.calls[0][0]).toBe("/api/admin/verification/evidence/metadata");
+    expect(mockFetch.mock.calls[0][1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ stepId: "step-1", userId: "user-1" }),
+    });
     // Second call = blob
-    expect(mockFetch.mock.calls[1][0]).toContain(
-      "/api/admin/verification/evidence?artifactId=art-1"
-    );
+    expect(mockFetch.mock.calls[1][0]).toBe("/api/admin/verification/evidence");
+    expect(mockFetch.mock.calls[1][1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ artifactId: "art-1" }),
+    });
 
     // Should create a blob URL for the thumbnail
     await waitFor(() => {

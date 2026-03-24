@@ -27,6 +27,12 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock("next/headers", () => ({
+  cookies: vi.fn().mockResolvedValue({
+    get: vi.fn(),
+  }),
+}));
+
 vi.mock("./auto-scroll-rail", () => ({
   AutoScrollRail: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="auto-scroll-rail">{children}</div>

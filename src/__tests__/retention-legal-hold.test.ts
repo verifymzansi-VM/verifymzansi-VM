@@ -45,6 +45,23 @@ vi.mock("@/lib/utils/logger", () => ({
     error: vi.fn(),
   }),
 }));
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: vi.fn(() => null),
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: vi.fn(() => ({ limited: false })),
+}));
+vi.mock("@/lib/notifications", () => ({
+  createNotification: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@/lib/services/email", () => ({
+  sendVerificationApprovedEmail: vi.fn().mockResolvedValue({ success: true }),
+  sendVerificationRejectedEmail: vi.fn().mockResolvedValue({ success: true }),
+  sendVerificationResubmissionEmail: vi.fn().mockResolvedValue({ success: true }),
+}));
 
 import { POST as postDecide } from "@/app/api/admin/verification/decide/route";
 

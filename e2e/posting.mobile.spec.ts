@@ -10,8 +10,9 @@ test.describe.configure({ mode: "serial" });
 
 function uploaderFor(page: Page, label: RegExp) {
   return page
-    .locator("div")
-    .filter({ has: page.getByText(label) })
+    .getByText(label)
+    .first()
+    .locator("xpath=ancestor::*[.//input[@type='file']][1]")
     .locator("input[type='file']")
     .first();
 }
@@ -98,7 +99,7 @@ async function completeMobileBusinessCreate(page: Page) {
   await page.getByLabel(/City \/ Town/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Profile photos/i).setInputFiles(IMAGE_FIXTURE);
-  await completeSubmission(page, /\/dashboard\/businesses/, "My Businesses");
+  await completeSubmission(page, /\/dashboard\/businesses/, "Mzansi Business");
 }
 
 async function completeMobilePromotionCreate(page: Page) {
@@ -116,7 +117,7 @@ async function completeMobilePromotionCreate(page: Page) {
   await page.getByLabel(/City \/ Town/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Photos \(max/i).setInputFiles(IMAGE_FIXTURE);
-  await completeSubmission(page, /\/dashboard\/promotions/, "Promotions");
+  await completeSubmission(page, /\/dashboard\/promotions/, "Promotions & Events");
 }
 
 test.describe("Posting flows on mobile Chrome", () => {

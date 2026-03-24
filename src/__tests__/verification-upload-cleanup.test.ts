@@ -77,6 +77,9 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
 vi.mock("@/lib/utils/local-dev", () => ({
   isStrictLocalDevelopmentRequest: () => true,
 }));
+vi.mock("@/lib/services/feature-flags", () => ({
+  isFeatureEnabled: vi.fn().mockResolvedValue(true),
+}));
 vi.mock("@/lib/account/compat", () => ({
   ACCOUNT_PROFILE_TABLE: "account_profiles",
   ACCOUNT_PROFILE_WRITE_TABLE: "account_profiles",
@@ -145,7 +148,8 @@ function chainable(overrides: Record<string, unknown> = {}): Record<string, unkn
 
 describe("POST /api/verification/upload — R2 cleanup on step failure", () => {
   let artifactDeleteSpy: ReturnType<typeof vi.fn>;
-  let upsertStepSpy: ReturnType<typeof vi.fn>;
+  let updateStepSpy: ReturnType<typeof vi.fn>;
+  let insertStepSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -153,7 +157,13 @@ describe("POST /api/verification/upload — R2 cleanup on step failure", () => {
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: USER_ID, email: "test@example.com" } },
+          data: {
+            user: {
+              id: USER_ID,
+              email: "test@example.com",
+              email_confirmed_at: "2026-03-24T12:00:00.000Z",
+            },
+          },
         }),
       },
       from: vi.fn((table: string) => {
@@ -163,7 +173,7 @@ describe("POST /api/verification/upload — R2 cleanup on step failure", () => {
               chainable({
                 maybeSingle: () =>
                   Promise.resolve({
-                    data: { id: "profile-1" },
+                    data: { id: "profile-1", phone: "+27110000000" },
                     error: null,
                   }),
               }),
@@ -192,8 +202,25 @@ describe("POST /api/verification/upload — R2 cleanup on step failure", () => {
       .fn()
       .mockReturnValue(chainable({ eq: () => Promise.resolve({ error: null }) }));
 
-    // Make verification_steps upsert FAIL to trigger cleanup
-    upsertStepSpy = vi.fn().mockReturnValue(
+    // Make verification_steps save FAIL in the current update-then-insert flow
+    updateStepSpy = vi.fn().mockReturnValue(
+      chainable({
+        eq: () =>
+          chainable({
+            eq: () =>
+              chainable({
+                neq: () =>
+                  chainable({
+                    select: () =>
+                      chainable({
+                        maybeSingle: () => Promise.resolve({ data: null, error: null }),
+                      }),
+                  }),
+              }),
+          }),
+      })
+    );
+    insertStepSpy = vi.fn().mockReturnValue(
       chainable({
         select: () =>
           chainable({
@@ -215,7 +242,7 @@ describe("POST /api/verification/upload — R2 cleanup on step failure", () => {
               chainable({
                 maybeSingle: () =>
                   Promise.resolve({
-                    data: { id: "profile-1" },
+                    data: { id: "profile-1", phone: "+27110000000" },
                   }),
               }),
           });
@@ -227,8 +254,8 @@ describe("POST /api/verification/upload — R2 cleanup on step failure", () => {
               chainable({
                 maybeSingle: () => Promise.resolve({ data: null }),
               }),
-            // The upsert we want to fail
-            upsert: upsertStepSpy,
+            update: updateStepSpy,
+            insert: insertStepSpy,
           };
         }
         if (table === "kyc_artifacts") {

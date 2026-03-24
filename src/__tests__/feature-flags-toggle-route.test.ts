@@ -6,16 +6,14 @@ const {
   mockToggle,
   mockUpdateConfig,
   mockAudit,
-  mockIsAdmin,
-  mockGetRoleFromUser,
+  mockVerifyAdminActorRoleFromDb,
   mockParseJson,
 } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockToggle: vi.fn(),
   mockUpdateConfig: vi.fn(),
   mockAudit: vi.fn(),
-  mockIsAdmin: vi.fn(),
-  mockGetRoleFromUser: vi.fn(),
+  mockVerifyAdminActorRoleFromDb: vi.fn(),
   mockParseJson: vi.fn(),
 }));
 
@@ -34,9 +32,12 @@ vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: mockAudit,
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  isAdmin: mockIsAdmin,
-  getRoleFromUser: mockGetRoleFromUser,
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyAdminActorRoleFromDb: mockVerifyAdminActorRoleFromDb,
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/utils/api", async () => {
@@ -72,7 +73,7 @@ function makeRequest(body: Record<string, unknown>) {
 describe("POST /api/admin/feature-flags/toggle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetRoleFromUser.mockReturnValue("admin");
+    mockVerifyAdminActorRoleFromDb.mockResolvedValue("admin");
   });
 
   it("should return 401 when not authenticated", async () => {
@@ -97,8 +98,7 @@ describe("POST /api/admin/feature-flags/toggle", () => {
       data: { user: { id: "u1" } },
       error: null,
     });
-    mockIsAdmin.mockReturnValue(false);
-    mockGetRoleFromUser.mockReturnValue(null);
+    mockVerifyAdminActorRoleFromDb.mockResolvedValue(null);
 
     const res = await POST(makeRequest({ key: "test", enabled: true }));
     expect(res.status).toBe(403);
@@ -109,7 +109,7 @@ describe("POST /api/admin/feature-flags/toggle", () => {
       data: { user: { id: "u1", email: "admin@example.com" } },
       error: null,
     });
-    mockIsAdmin.mockReturnValue(true);
+    mockVerifyAdminActorRoleFromDb.mockResolvedValue("admin");
     mockParseJson.mockResolvedValue({ key: "dark_mode", enabled: true });
     mockToggle.mockResolvedValue({ success: true });
     mockAudit.mockResolvedValue(undefined);
@@ -127,7 +127,7 @@ describe("POST /api/admin/feature-flags/toggle", () => {
       data: { user: { id: "u1", email: "admin@example.com" } },
       error: null,
     });
-    mockIsAdmin.mockReturnValue(true);
+    mockVerifyAdminActorRoleFromDb.mockResolvedValue("admin");
     mockParseJson.mockResolvedValue({
       key: "new_feature",
       mode: "percent",

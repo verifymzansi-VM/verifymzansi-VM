@@ -12,6 +12,12 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock("next/headers", () => ({
+  cookies: vi.fn().mockResolvedValue({
+    get: vi.fn(),
+  }),
+}));
+
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({
     debug: vi.fn(),
@@ -193,7 +199,7 @@ describe("HomeMzansiMarketShowcase", () => {
     expect(props.title).toBe("MacBook Pro");
   });
 
-  it("queries listings without requesting logo_url", async () => {
+  it("queries listing fixture rows in a schema-tolerant way", async () => {
     const { client, builder } = createSupabaseMock({
       data: [
         {
@@ -214,9 +220,7 @@ describe("HomeMzansiMarketShowcase", () => {
 
     await HomeMzansiMarketShowcase();
 
-    expect(builder.select).toHaveBeenCalledWith(
-      "id, title, description, price_cents, photos, videos, video_thumbnail, location_province, location_city, boost_until"
-    );
+    expect(builder.select).toHaveBeenCalledWith("*");
   });
 
   it("returns null and logs a warning when the listings query fails", async () => {

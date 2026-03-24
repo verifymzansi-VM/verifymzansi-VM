@@ -110,7 +110,7 @@ describe("POST /api/verify-buyer", () => {
       createQueryResponse({
         first_name_initial: "S",
         issued_at: "2026-02-20T10:00:00.000Z",
-        expires_at: "2026-03-20T10:00:00.000Z",
+        expires_at: "2026-04-20T10:00:00.000Z",
         status: "valid",
       })
     );

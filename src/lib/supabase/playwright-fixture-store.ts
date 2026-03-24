@@ -51,6 +51,10 @@ function stableUuid(input: string): string {
   )}-${hash.slice(20, 32)}`;
 }
 
+function playwrightUserId(persona: string): string {
+  return `pw-${persona}`;
+}
+
 function encodeSessionPersona(persona: string): string {
   return `${PLAYWRIGHT_SESSION_PREFIX}${encodeURIComponent(persona)}`;
 }
@@ -178,7 +182,7 @@ function rowBelongsToUser(row: StoreTableRow, userId: string): boolean {
 
 export function resetPlaywrightFixtureStoreForPersona(persona: string): void {
   const store = getPlaywrightFixtureStore();
-  const userId = stableUuid(`user:${persona}`);
+  const userId = playwrightUserId(persona);
 
   for (const [table, rows] of store.tables.entries()) {
     store.tables.set(
@@ -196,7 +200,7 @@ export function resetPlaywrightFixtureStoreForPersona(persona: string): void {
 
 export function ensurePlaywrightVerifiedMember(persona: string): StubUser {
   const store = getPlaywrightFixtureStore();
-  const userId = stableUuid(`user:${persona}`);
+  const userId = playwrightUserId(persona);
   const email = `${persona}@playwright.verifymzansi.test`;
   const password = `Playwright-${persona}-Password1!`;
 
