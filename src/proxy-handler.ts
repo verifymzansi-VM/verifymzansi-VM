@@ -13,6 +13,22 @@ import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger("Proxy");
 
+function isPlaywrightStubHost(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  if (!normalized) return false;
+
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized.endsWith(".test")
+  );
+}
+
+function shouldUsePlaywrightStubForRequest(request: NextRequest): boolean {
+  return isPlaywrightSupabaseStubMode() && isPlaywrightStubHost(request.nextUrl.hostname);
+}
+
 // -- Security helpers --------------------------------------------------------
 
 /** Generate a per-request CSP nonce. */
@@ -118,12 +134,32 @@ function clearPhoneOkCookie(response: NextResponse): void {
   response.cookies.delete("x-phone-ok");
 }
 
+function clearPlaywrightSessionCookie(response: NextResponse): void {
+  response.cookies.set({
+    name: PLAYWRIGHT_SESSION_COOKIE,
+    value: "",
+    path: "/",
+    maxAge: 0,
+    httpOnly: false,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+}
+
 /**
  * Wrap a proxy result with CSP nonce + security headers.
  * Redirects and error responses get basic security headers only.
  */
 function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse): NextResponse {
+  const shouldClearPlaywrightSession =
+    !shouldUsePlaywrightStubForRequest(request) &&
+    !!request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value;
+
   if (proxyResponse.headers.has("location") || proxyResponse.status >= 400) {
+    if (shouldClearPlaywrightSession) {
+      clearPlaywrightSessionCookie(proxyResponse);
+    }
+
     proxyResponse.headers.set("X-Content-Type-Options", "nosniff");
     proxyResponse.headers.set("X-Frame-Options", "DENY");
     proxyResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -167,6 +203,10 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
   // Preserve cookies set during auth (Supabase session refresh, etc.)
   for (const cookie of proxyResponse.cookies.getAll()) {
     response.cookies.set(cookie);
+  }
+
+  if (shouldClearPlaywrightSession) {
+    clearPlaywrightSessionCookie(response);
   }
 
   // Preserve any non-cookie headers the routing layer already attached.
@@ -232,7 +272,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.redirect(callbackUrl);
   }
 
-  if (isPlaywrightSupabaseStubMode()) {
+  if (shouldUsePlaywrightStubForRequest(request)) {
     const stubUser =
       process.env.PLAYWRIGHT_E2E_AUTH === "1"
         ? getPlaywrightStubUserFromToken(

@@ -44,8 +44,29 @@ function ensureEnabled() {
   return isPlaywrightTestMode() && isPlaywrightSupabaseStubMode();
 }
 
+function isLocalOrTestHost(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  if (!normalized) return false;
+
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized.endsWith(".test")
+  );
+}
+
+function isPrivilegedPersona(persona: string): boolean {
+  const normalized = persona.trim().toLowerCase();
+  return /(^|[-_])(admin|moderator|mod|staff|superuser|root)($|[-_])/.test(normalized);
+}
+
 export async function GET(request: NextRequest) {
   if (!ensureEnabled()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (!isLocalOrTestHost(new URL(request.url).hostname)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -63,6 +84,10 @@ export async function GET(request: NextRequest) {
   }
 
   const persona = parsedQuery.data.persona || parsedQuery.data.project || "verified-member";
+  if (isPrivilegedPersona(persona)) {
+    return NextResponse.json({ error: "Privileged personas are not allowed" }, { status: 403 });
+  }
+
   if (parsedQuery.data.reset) {
     resetPlaywrightFixtureStoreForPersona(persona);
   }
@@ -88,8 +113,12 @@ export async function GET(request: NextRequest) {
   return response;
 }
 
-export async function DELETE(_request: NextRequest) {
+export async function DELETE(request: NextRequest) {
   if (!ensureEnabled()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (!isLocalOrTestHost(new URL(request.url).hostname)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

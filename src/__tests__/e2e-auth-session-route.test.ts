@@ -50,4 +50,24 @@ describe("GET /api/e2e/auth/session", () => {
     expect(mockCreatePlaywrightSession).toHaveBeenCalledWith("verified-member");
     expect(res.headers.get("set-cookie")).toContain("vmz_pw_session=token-1");
   });
+
+  it("rejects privileged personas", async () => {
+    const res = await GET(
+      new Request("http://localhost/api/e2e/auth/session?persona=admin-operator") as never
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({ error: "Privileged personas are not allowed" });
+    expect(mockCreatePlaywrightSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-local hosts", async () => {
+    const res = await GET(
+      new Request("https://verifymzansi.com/api/e2e/auth/session?persona=verified-member") as never
+    );
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({ error: "Not found" });
+    expect(mockCreatePlaywrightSession).not.toHaveBeenCalled();
+  });
 });

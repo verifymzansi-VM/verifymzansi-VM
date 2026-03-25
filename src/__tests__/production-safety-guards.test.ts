@@ -176,6 +176,49 @@ describe("launch-validation: dangerous env vars in production", () => {
     expect(dangerCheck?.detail).toContain("PLAYWRIGHT_TEST_MODE");
   });
 
+  it("fails when PLAYWRIGHT_SUPABASE_MODE is set in production", () => {
+    const env = { ...createBaseProductionEnv(), PLAYWRIGHT_SUPABASE_MODE: "stub" };
+    const result = validateLaunchConfiguration(env, { mode: "production" });
+
+    expect(result.isValid).toBe(false);
+    const dangerCheck = result.checks.find((c) => c.name === "Dangerous env vars");
+    expect(dangerCheck?.status).toBe("fail");
+    expect(dangerCheck?.detail).toContain("PLAYWRIGHT_SUPABASE_MODE");
+  });
+
+  it("fails when PLAYWRIGHT_E2E_AUTH is set in production", () => {
+    const env = { ...createBaseProductionEnv(), PLAYWRIGHT_E2E_AUTH: "1" };
+    const result = validateLaunchConfiguration(env, { mode: "production" });
+
+    expect(result.isValid).toBe(false);
+    const dangerCheck = result.checks.find((c) => c.name === "Dangerous env vars");
+    expect(dangerCheck?.status).toBe("fail");
+    expect(dangerCheck?.detail).toContain("PLAYWRIGHT_E2E_AUTH");
+  });
+
+  it("fails when NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE is set in production", () => {
+    const env = { ...createBaseProductionEnv(), NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE: "1" };
+    const result = validateLaunchConfiguration(env, { mode: "production" });
+
+    expect(result.isValid).toBe(false);
+    const dangerCheck = result.checks.find((c) => c.name === "Dangerous env vars");
+    expect(dangerCheck?.status).toBe("fail");
+    expect(dangerCheck?.detail).toContain("NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE");
+  });
+
+  it("fails when NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE is set in production", () => {
+    const env = {
+      ...createBaseProductionEnv(),
+      NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE: "stub",
+    };
+    const result = validateLaunchConfiguration(env, { mode: "production" });
+
+    expect(result.isValid).toBe(false);
+    const dangerCheck = result.checks.find((c) => c.name === "Dangerous env vars");
+    expect(dangerCheck?.status).toBe("fail");
+    expect(dangerCheck?.detail).toContain("NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE");
+  });
+
   it("fails when multiple dangerous vars are set in production", () => {
     const env = {
       ...createBaseProductionEnv(),
@@ -245,6 +288,10 @@ describe("instrumentation: dev bypass startup guard", () => {
     delete process.env.DEV_EXPOSE_OTP;
     delete process.env.SMS_MOCK;
     delete process.env.PLAYWRIGHT_TEST_MODE;
+    delete process.env.PLAYWRIGHT_SUPABASE_MODE;
+    delete process.env.PLAYWRIGHT_E2E_AUTH;
+    delete process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE;
+    delete process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE;
     delete process.env.ENABLE_TEST_POSTING_BYPASS;
     delete process.env.NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS;
     delete process.env.ENABLE_DEV_TURNSTILE_BYPASS;
@@ -295,6 +342,15 @@ describe("instrumentation: dev bypass startup guard", () => {
     _resetInstrumentationForTesting();
 
     await expect(register()).rejects.toThrow("PLAYWRIGHT_TEST_MODE");
+  });
+
+  it("blocks startup in production when PLAYWRIGHT_SUPABASE_MODE is set", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.PLAYWRIGHT_SUPABASE_MODE = "stub";
+    const { register, _resetInstrumentationForTesting } = await import("../instrumentation");
+    _resetInstrumentationForTesting();
+
+    await expect(register()).rejects.toThrow("PLAYWRIGHT_SUPABASE_MODE");
   });
 
   it("allows explicit e2e runtime boot in production with Playwright flags", async () => {
@@ -354,6 +410,10 @@ describe("cloudflare preflight production overrides", () => {
       "DEV_EXPOSE_OTP",
       "SMS_MOCK",
       "PLAYWRIGHT_TEST_MODE",
+      "PLAYWRIGHT_SUPABASE_MODE",
+      "PLAYWRIGHT_E2E_AUTH",
+      "NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE",
+      "NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE",
     ];
 
     for (const variableName of requiredOverrides) {

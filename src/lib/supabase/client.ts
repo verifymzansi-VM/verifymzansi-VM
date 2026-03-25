@@ -80,7 +80,7 @@ function createBrowserPlaywrightStubClient(): SupabaseClient {
       aud: "authenticated",
       created_at: new Date(0).toISOString(),
       is_anonymous: false,
-      app_metadata: { role: persona.includes("admin") ? "admin" : "member" },
+      app_metadata: { role: "member" },
       user_metadata: { display_name: `Playwright ${persona}` },
       identities: [{ id: `pw-identity-${persona}` }],
     };

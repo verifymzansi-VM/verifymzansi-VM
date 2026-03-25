@@ -52,7 +52,7 @@ function buildStubUser(persona: string): StubUser {
     password: `Playwright-${normalizedPersona}-Password1!`,
     persona: normalizedPersona,
     is_anonymous: false,
-    app_metadata: { role: normalizedPersona.includes("admin") ? "admin" : "member" },
+    app_metadata: { role: "member" },
     user_metadata: { display_name: `Playwright ${normalizedPersona}` },
     identities: [{ id: deterministicId(`identity:${normalizedPersona}`) }],
   };

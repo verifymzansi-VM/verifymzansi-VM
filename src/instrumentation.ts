@@ -36,6 +36,11 @@ function assertNoDevBypassesInProduction(): string[] {
     DEV_EXPOSE_OTP: "Exposes OTP codes in API responses",
     SMS_MOCK: "Prevents real SMS delivery",
     PLAYWRIGHT_TEST_MODE: "Enables Turnstile CAPTCHA bypass and unsigned KYC webhooks",
+    PLAYWRIGHT_SUPABASE_MODE: "Routes auth/data through Playwright stub clients",
+    PLAYWRIGHT_E2E_AUTH: "Allows persona-based Playwright session auth shortcuts",
+    NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE: "Enables client Playwright test toggles in production",
+    NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE:
+      "Enables client Supabase Playwright stub mode in production",
     ENABLE_TEST_POSTING_BYPASS: "Removes posting count limits",
     NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS: "Client-side posting limit bypass",
     ENABLE_DEV_TURNSTILE_BYPASS: "Allows CAPTCHA verification bypass",

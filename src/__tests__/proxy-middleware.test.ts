@@ -154,6 +154,16 @@ describe("proxy security headers", () => {
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
   });
+
+  it("clears stale Playwright session cookies outside stub mode", async () => {
+    const res = await middleware(
+      createMockRequest("/", { cookieHeader: "vmz_pw_session=persona%3Aold" })
+    );
+    const setCookie = res.headers.get("set-cookie") ?? "";
+
+    expect(setCookie).toContain("vmz_pw_session=");
+    expect(setCookie).toContain("Max-Age=0");
+  });
 });
 
 describe("middleware — authenticated routing", () => {
@@ -562,17 +572,20 @@ describe("middleware — Playwright stub mode", () => {
     mockGetUser.mockImplementation(() => {
       throw new Error("Supabase auth should not be called in stub mode");
     });
+    document.documentElement.dataset.playwright = "1";
     process.env.PLAYWRIGHT_SUPABASE_MODE = "stub";
     // jsdom defines `window`, so isPlaywrightSupabaseStubMode() checks
     // the NEXT_PUBLIC_ variant — set it too so the stub branch activates.
     process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE = "stub";
-    delete process.env.PLAYWRIGHT_TEST_MODE;
-    delete process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE;
+    process.env.PLAYWRIGHT_TEST_MODE = "1";
+    process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE = "1";
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://playwright.supabase.stub";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "playwright-anon-key";
   });
 
   afterEach(() => {
+    delete document.documentElement.dataset.playwright;
+
     if (originalStubMode) process.env.PLAYWRIGHT_SUPABASE_MODE = originalStubMode;
     else delete process.env.PLAYWRIGHT_SUPABASE_MODE;
 
@@ -640,5 +653,25 @@ describe("middleware — Playwright stub mode", () => {
 
     expect(res.status).toBe(200);
     expect(mockGetUser).not.toHaveBeenCalled();
+  });
+
+  it("does not allow stub mode on non-test hosts", async () => {
+    process.env.PLAYWRIGHT_TEST_MODE = "1";
+    process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE = "1";
+    process.env.PLAYWRIGHT_E2E_AUTH = "1";
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const res = await routeRequest(
+      createMockRequest("/dashboard", {
+        hostname: "verifymzansi.com",
+        cookieHeader: "vmz_pw_session=persona%3Aproxy-authenticated",
+      })
+    );
+
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("returnUrl")).toBe("/dashboard");
+    expect(mockGetUser).toHaveBeenCalled();
   });
 });
