@@ -6,7 +6,7 @@ import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turn
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
-import { buildAccountPhoneFields, normalizeSaPhone } from "@/lib/utils/phone";
+import { normalizeSaPhone } from "@/lib/utils/phone";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { sendAlreadyRegisteredEmail } from "@/lib/services/email";
@@ -123,7 +123,8 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedPhone = normalizeSaPhone(parsedBody.data.phone);
-    const accountPhoneFields = buildAccountPhoneFields(normalizedPhone);
+    // Phone is NOT canonical at registration time — requires OTP verification.
+    // Store as pending_phone so the complete-profile OTP step can pre-fill it.
     const admin = createAdminClient();
 
     const supabase = await createClient();
@@ -184,7 +185,9 @@ export async function POST(request: NextRequest) {
           {
             user_id: signUpData.user.id,
             display_name: parsedBody.data.displayName,
-            ...accountPhoneFields,
+            // pending_phone: staged until the user completes OTP verification.
+            // Canonical `phone` is only set by /api/otp/verify after hash check.
+            pending_phone: normalizedPhone,
             account_verification_status: "incomplete",
             account_status: "active",
           },
@@ -192,16 +195,6 @@ export async function POST(request: NextRequest) {
         );
 
         if (profileError) {
-          if (profileError.code === "23505") {
-            await deleteOrphanedAuthUser(signUpData.user.id, admin);
-            // Return generic success to prevent phone number enumeration
-            // (matches the existing email-exists behavior above).
-            log.info("Registration blocked: phone already in use", {
-              userId: signUpData.user.id,
-            });
-            return NextResponse.json({ success: true });
-          }
-
           throw profileError;
         }
       } catch (profileError) {
@@ -210,11 +203,9 @@ export async function POST(request: NextRequest) {
           "code" in profileError &&
           (profileError as unknown as { code: string }).code === "23505"
         ) {
+          // Keep anti-enumeration behavior aligned with existing-account responses.
+          // Even if profile upsert loses a uniqueness race, return generic success.
           await deleteOrphanedAuthUser(signUpData.user.id, admin);
-          // Return generic success to prevent phone number enumeration.
-          log.info("Registration blocked (catch): phone already in use", {
-            userId: signUpData.user.id,
-          });
           return NextResponse.json({ success: true });
         }
 

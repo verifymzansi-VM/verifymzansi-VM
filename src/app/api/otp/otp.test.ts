@@ -89,6 +89,19 @@ describe("OTP Routes", () => {
       data: { user: { id: "user-1" } },
       error: null,
     });
+    mockUserClient.from.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
     vi.mocked(createClient).mockResolvedValue(mockUserClient as never);
   });
 
@@ -553,6 +566,70 @@ describe("OTP Routes", () => {
       expect(res.status).toBe(409);
       await expect(res.json()).resolves.toMatchObject({
         error: "This phone number is already linked to another account.",
+      });
+    });
+
+    it("rejects OTP verify when profile pending_phone does not match requested phone", async () => {
+      const storedHash = await hashOtpForTest("123456");
+
+      const mockAdminClient = {
+        from: vi.fn((table: string) => {
+          if (table === "otp_challenges") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              is: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "challenge-1",
+                  otp_hash: storedHash,
+                  attempt_count: 0,
+                  locked_until: null,
+                  expires_at: new Date(Date.now() + 60_000).toISOString(),
+                },
+                error: null,
+              }),
+              update: vi.fn().mockImplementation(() => {
+                const chain: Record<string, unknown> = {};
+                chain.eq = vi.fn().mockReturnValue(chain);
+                chain.is = vi.fn().mockResolvedValue({ error: null });
+                return chain;
+              }),
+            };
+          }
+
+          return {};
+        }),
+      };
+
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: { pending_phone: "+27825555555" },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+
+        return {};
+      });
+
+      const res = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toMatchObject({
+        error: "Invalid or expired OTP",
       });
     });
   });

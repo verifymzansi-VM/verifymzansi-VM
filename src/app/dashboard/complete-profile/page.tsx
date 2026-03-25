@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Phone, Save } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,14 +12,24 @@ import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { saPhoneSchema } from "@/lib/validations/shared";
 import { ACCOUNT_PHONE_IN_USE_ERROR, sanitizeSaPhoneInput } from "@/lib/utils/phone";
+import { formatPhone } from "@/lib/utils/format";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
+
+/** Step 1: enter phone and request OTP. Step 2: enter OTP code to verify. */
+type Step = "phone" | "otp";
+
+const OTP_RESEND_COOLDOWN_SECONDS = 30;
 
 export default function CompleteProfilePage() {
+  const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
+  const [otpCode, setOtpCode] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [displayName, setDisplayName] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -39,26 +49,44 @@ export default function CompleteProfilePage() {
 
       const { data: profile } = await supabase
         .from(ACCOUNT_PROFILE_TABLE)
-        .select("display_name, phone")
+        .select("display_name, phone, pending_phone")
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (profile?.phone) {
-        // Phone already set — continue to the requested destination
+        // Canonical OTP-verified phone already exists — skip this step.
         router.push(returnUrl);
         return;
       }
 
-      setDisplayName(profile?.display_name || "");
+      // Pre-fill from pending_phone so manual-registration users don't re-type their number.
+      if (profile?.pending_phone) {
+        setPhone(sanitizeSaPhoneInput(profile.pending_phone));
+      }
       setIsLoading(false);
     }
 
     void load();
   }, [router]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  // Resend countdown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCooldown((c) => (c <= 1 ? 0 : c - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
 
+  function getReturnUrl(): string {
+    return sanitizeReturnUrl(new URLSearchParams(window.location.search).get("returnUrl"));
+  }
+
+  /**
+   * Send OTP to the entered phone number.
+   * Called both by the "Send Verification Code" button and the "Resend code" button.
+   */
+  const doSendOtp = useCallback(async () => {
     const phoneResult = saPhoneSchema.safeParse(phone);
     if (!phoneResult.success) {
       toast({
@@ -69,18 +97,72 @@ export default function CompleteProfilePage() {
       return;
     }
 
-    setIsSaving(true);
+    setIsSending(true);
     try {
-      const res = await fetch("/api/profile/update", {
+      const res = await fetch("/api/otp/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          displayName: displayName || "Member",
-          phone,
-        }),
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ phone }),
       });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        retryAfter?: number;
+      };
 
-      const data = await res.json();
+      if (!res.ok) {
+        if (data.retryAfter) setResendCooldown(data.retryAfter);
+        toast({
+          title: "Could not send verification code",
+          description: data.error || "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setOtpCode("");
+      setStep("otp");
+      setResendCooldown(OTP_RESEND_COOLDOWN_SECONDS);
+      toast({
+        title: "Code sent",
+        description: `A 6-digit code was sent to ${formatPhone(phone)}. Valid for 5 minutes.`,
+        variant: "success",
+      });
+    } catch {
+      toast({
+        title: "Could not send verification code",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
+    }
+  }, [phone, toast]);
+
+  async function handleSendOtp(e: React.FormEvent) {
+    e.preventDefault();
+    await doSendOtp();
+  }
+
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!/^\d{6}$/.test(otpCode)) {
+      toast({
+        title: "Enter the 6-digit code",
+        description: "Use the code sent to your phone.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const res = await fetch("/api/otp/verify", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ phone, otp: otpCode }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
 
       if (!res.ok) {
         if (res.status === 409) {
@@ -92,26 +174,23 @@ export default function CompleteProfilePage() {
           return;
         }
         toast({
-          title: "Failed to save",
-          description: data.error || "Please try again.",
+          title: "Verification failed",
+          description: data.error || "Invalid or expired code. Please try again.",
           variant: "destructive",
         });
         return;
       }
 
-      toast({ title: "Phone number saved!", variant: "success" });
-      const returnUrl = sanitizeReturnUrl(
-        new URLSearchParams(window.location.search).get("returnUrl")
-      );
-      router.push(returnUrl);
+      toast({ title: "Phone number verified!", variant: "success" });
+      router.push(getReturnUrl());
     } catch {
       toast({
-        title: "Couldn’t save phone number",
+        title: "Verification failed",
         description: "Please try again.",
         variant: "destructive",
       });
     } finally {
-      setIsSaving(false);
+      setIsVerifying(false);
     }
   }
 
@@ -127,53 +206,110 @@ export default function CompleteProfilePage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Add Your Phone Number"
-        description="Add your phone number before you continue."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Add Phone Number" }]}
+        title="Verify Your Phone Number"
+        description="Verify your phone number before you continue."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Verify Phone" }]}
       />
 
       <Card className="max-w-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Phone className="h-5 w-5" />
-            Add Your Phone Number
+            {step === "phone" ? "Add Your Phone Number" : "Enter Verification Code"}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="mb-4 text-sm text-muted-foreground">
-            A valid South African mobile number is required to use marketplace features, verify your
-            identity, and receive important notifications.
-          </p>
-          <form noValidate onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="phone">SA mobile number *</Label>
-              <Input
-                id="phone"
-                type="tel"
-                inputMode="tel"
-                value={phone}
-                onChange={(e) => setPhone(sanitizeSaPhoneInput(e.target.value))}
-                placeholder="071 234 5678"
-                autoComplete="tel"
-                pattern="^(\+27|0)[6-8][0-9]{8}$"
-                title="Enter a valid SA mobile number (e.g. 071 234 5678)"
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                Format: 0XX XXX XXXX or +27XX XXX XXXX. Each phone number can only belong to one
-                account.
+          {step === "phone" ? (
+            <>
+              <p className="mb-4 text-sm text-muted-foreground">
+                A valid South African mobile number is required to use marketplace features, verify
+                your identity, and receive important notifications.
               </p>
-            </div>
+              <form noValidate onSubmit={handleSendOtp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phone">SA mobile number *</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    inputMode="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(sanitizeSaPhoneInput(e.target.value))}
+                    placeholder="071 234 5678"
+                    autoComplete="tel"
+                    pattern="^(\+27|0)[6-8][0-9]{8}$"
+                    title="Enter a valid SA mobile number (e.g. 071 234 5678)"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Format: 0XX XXX XXXX or +27XX XXX XXXX. Each phone number can only belong to one
+                    account.
+                  </p>
+                </div>
 
-            <Button type="submit" className="gap-2" disabled={isSaving}>
-              {isSaving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              Save &amp; Continue
-            </Button>
-          </form>
+                <Button type="submit" className="gap-2" disabled={isSending}>
+                  {isSending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowRight className="h-4 w-4" />
+                  )}
+                  Send Verification Code
+                </Button>
+              </form>
+            </>
+          ) : (
+            <>
+              <p className="mb-4 text-sm text-muted-foreground">
+                A 6-digit code was sent to <strong>{formatPhone(phone)}</strong>. Enter it below.
+              </p>
+              <form noValidate onSubmit={handleVerifyOtp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="otp">6-digit code</Label>
+                  <Input
+                    id="otp"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="123456"
+                    autoComplete="one-time-code"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">Valid for 5 minutes.</p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="submit" className="gap-2" disabled={isVerifying}>
+                    {isVerifying ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" />
+                    )}
+                    Verify
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setStep("phone")}
+                    disabled={isVerifying}
+                  >
+                    Change number
+                  </Button>
+
+                  {resendCooldown > 0 ? (
+                    <p className="text-xs text-muted-foreground">Resend in {resendCooldown}s</p>
+                  ) : (
+                    <Button type="button" variant="ghost" disabled={isSending} onClick={doSendOtp}>
+                      {isSending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                      Resend code
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

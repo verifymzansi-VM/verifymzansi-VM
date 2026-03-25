@@ -121,7 +121,8 @@ async function finalizePhoneVerification(
   if (profile) {
     const { error: profileUpdateError } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .update(accountPhoneFields)
+      // Promote pending_phone to canonical phone and clear the staging column.
+      .update({ ...accountPhoneFields, pending_phone: null })
       .eq("id", profile.id);
 
     if (profileUpdateError) {
@@ -232,6 +233,18 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // If a pending_phone exists, OTP verification must target that exact staged value.
+    // This prevents verifying a phone number that was not explicitly staged for this user.
+    const { data: profileGuard } = await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
+      .select("pending_phone")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (profileGuard?.pending_phone && normalizeSaPhone(profileGuard.pending_phone) !== phone) {
+      return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 400 });
     }
 
     // Use service-role for challenge state transitions.

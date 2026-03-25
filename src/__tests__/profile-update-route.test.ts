@@ -14,7 +14,20 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 
 import { POST } from "@/app/api/profile/update/route";
 
+const CSRF_TOKEN = "a".repeat(64);
+
 function createRequest(body: unknown, headers: Record<string, string> = {}) {
+  const lowered = Object.fromEntries(
+    Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v])
+  ) as Record<string, string>;
+
+  const mergedHeaders: Record<string, string> = {
+    origin: "http://localhost:3000",
+    cookie: `vm_csrf=${CSRF_TOKEN}`,
+    "x-csrf-token": CSRF_TOKEN,
+    ...lowered,
+  };
+
   return {
     method: "POST",
     json: async () => body,
@@ -22,7 +35,7 @@ function createRequest(body: unknown, headers: Record<string, string> = {}) {
     nextUrl: new URL("http://localhost:3000/api/profile/update"),
     headers: {
       get(name: string) {
-        return headers[name.toLowerCase()] ?? headers[name] ?? null;
+        return mergedHeaders[name.toLowerCase()] ?? null;
       },
     },
   } as unknown as NextRequest;
@@ -58,6 +71,23 @@ describe("POST /api/profile/update", () => {
     const res = await POST(createRequest({ displayName: "Nomsa" }));
 
     expect(res.status).toBe(401);
+  });
+
+  it("rejects requests without a CSRF token", async () => {
+    const res = await POST(
+      createRequest(
+        {
+          displayName: "Nomsa",
+        },
+        {
+          origin: "http://localhost:3000",
+          cookie: "",
+          "x-csrf-token": "",
+        }
+      )
+    );
+
+    expect(res.status).toBe(403);
   });
 
   it("returns 409 when the new phone number is already used elsewhere", async () => {

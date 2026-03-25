@@ -6,6 +6,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PHONE_IN_USE_ERROR, normalizeSaPhone } from "@/lib/utils/phone";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
 const log = createLogger("ProfileUpdate");
@@ -15,6 +16,11 @@ export async function POST(request: NextRequest) {
     const sameOriginFailure = enforceSameOriginMutation(request, log);
     if (sameOriginFailure) {
       return sameOriginFailure;
+    }
+
+    const csrfFailure = enforceCsrfToken(request, log);
+    if (csrfFailure) {
+      return csrfFailure;
     }
 
     const ip = getClientIp(request);
@@ -63,7 +69,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (parsedBody.data.phone !== undefined) {
-      updatePayload.phone = normalizedPhone;
+      // Stage as pending — canonical phone is only promoted by /api/otp/verify.
+      updatePayload.pending_phone = normalizedPhone;
     }
 
     const { data: updatedProfile, error: updateError } = await supabase
@@ -83,18 +90,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });
     }
 
-    // Set/clear the phone-gate cache cookie so the middleware doesn't
-    // need a DB round-trip to verify phone presence on every request.
     const res = NextResponse.json({ success: true, profile: updatedProfile });
-    if (normalizedPhone) {
-      res.cookies.set("x-phone-ok", "1", {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 86400, // 24 hours
-        path: "/",
-      });
-    } else if (parsedBody.data.phone !== undefined) {
+    // profile-update no longer writes canonical phone, so x-phone-ok is never
+    // set here. Clear it only when the user explicitly removed their phone entry
+    // (normalizedPhone === null) so the middleware re-checks on the next request.
+    if (normalizedPhone === null && parsedBody.data.phone !== undefined) {
       res.cookies.delete("x-phone-ok");
     }
     return res;
