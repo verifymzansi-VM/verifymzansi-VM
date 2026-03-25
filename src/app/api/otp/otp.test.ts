@@ -285,6 +285,20 @@ describe("OTP Routes", () => {
     });
   });
 
+  it("returns service unavailable when admin client credentials are missing", async () => {
+    vi.mocked(createAdminClient).mockImplementation(() => {
+      throw new Error("Missing Supabase admin credentials");
+    });
+
+    const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+    const data = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(data).toMatchObject({
+      error: "Service temporarily unavailable",
+      code: "database_unavailable",
+    });
+  });
   describe("POST /api/otp/verify", () => {
     it("rejects OTP verification requests without a CSRF token", async () => {
       const res = await verifyOtp(

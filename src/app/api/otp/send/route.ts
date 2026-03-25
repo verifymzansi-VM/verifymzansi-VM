@@ -20,6 +20,7 @@ type OtpSendErrorCode =
   | "unauthorized"
   | "rate_limited"
   | "hourly_limit_reached"
+  | "database_unavailable"
   | "otp_generation_failed"
   | "sms_delivery_failed"
   | "internal_error";
@@ -124,7 +125,17 @@ export async function POST(request: NextRequest) {
     }
 
     // otp_logs is service-only; use admin client to bypass RLS safely in this server route.
-    const adminSupabase = createAdminClient();
+    let adminSupabase: ReturnType<typeof createAdminClient>;
+    try {
+      adminSupabase = createAdminClient();
+    } catch (adminClientErr) {
+      log.error("Failed to initialize Supabase admin client for OTP send", {
+        error: adminClientErr instanceof Error ? adminClientErr.message : "Unknown error",
+      });
+      return otpSendError("Service temporarily unavailable", 503, {
+        code: "database_unavailable",
+      });
+    }
 
     // Rate limit by phone only — do NOT use client-supplied x-device-id as a
     // rate-limit key because attackers can rotate the header to bypass limits.
@@ -239,7 +250,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    logApiError(log, "Unexpected error in OTP generation", error);
+    logApiError(log, "Unexpected error in OTP generation", error, {
+      errorType: error instanceof Error ? error.name : typeof error,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return otpSendError("Internal server error", 500, { code: "internal_error" });
   }
 }
