@@ -16,8 +16,11 @@ const FIXTURE_FILE_PATTERNS = [
 
 const FIXTURE_RULES = new Set([
   "Hardcoded service role key assignment",
+  "Supabase access token",
+  "Africa's Talking API key",
   "Turnstile secret key",
   "Resend API key",
+  "Worker API key",
 ]);
 
 const FIXTURE_MARKERS = ["playwright", "test", "stub", "dummy", "sandbox", "example"];
@@ -45,7 +48,16 @@ export const SECRET_SCAN_RULES: SecretScanRule[] = [
   },
   {
     name: "Hardcoded service role key assignment",
-    pattern: /\bSUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*["'][^"'\n]{20,}["']/g,
+    pattern:
+      /\bSUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*(?:["']eyJ[A-Za-z0-9._-]{20,}["']|eyJ[A-Za-z0-9._-]{20,})/g,
+  },
+  {
+    name: "Supabase access token",
+    pattern: /\bSUPABASE_ACCESS_TOKEN\s*[:=]\s*["']?(?:sbp_[A-Za-z0-9]{20,})["']?/g,
+  },
+  {
+    name: "Africa's Talking API key",
+    pattern: /\bAFRICASTALKING_API_KEY\s*[:=]\s*["']?(?:atsk_[A-Za-z0-9]{20,})["']?/g,
   },
   {
     name: "Resend API key",
@@ -57,7 +69,13 @@ export const SECRET_SCAN_RULES: SecretScanRule[] = [
   },
   {
     name: "Turnstile secret key",
-    pattern: /\bTURNSTILE_SECRET_KEY\s*[:=]\s*["'][^"'\n]{10,}["']/g,
+    pattern:
+      /\bTURNSTILE_SECRET_KEY\s*[:=]\s*(?:["'](?!process\.env\.)[A-Za-z0-9._-]{10,}["']|(?!process\.env\.|\$\{)[A-Za-z0-9._-]{10,})/g,
+  },
+  {
+    name: "Worker API key",
+    pattern:
+      /\bWORKER_API_KEY\s*[:=]\s*["']?(?!(?:dummy|placeholder|example|replace)[-_a-z0-9]*\b)[A-Za-z0-9+/=._-]{20,}["']?/g,
   },
   {
     name: "64-char hex string (potential encryption key)",

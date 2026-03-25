@@ -1,1 +1,2 @@
+pnpm run secret-scan
 pnpm exec lint-staged
