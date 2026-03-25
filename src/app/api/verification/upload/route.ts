@@ -108,7 +108,13 @@ export async function POST(request: NextRequest) {
     // Feature flag check — must match session start route
     const v2Enabled = await isFeatureEnabled("kyc_v2_flow");
     if (!v2Enabled) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: "New verification flow is not yet enabled",
+          code: "kyc_v2_disabled",
+        },
+        { status: 404 }
+      );
     }
 
     const rateCheck = await checkRateLimit({

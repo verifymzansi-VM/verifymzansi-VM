@@ -103,6 +103,8 @@ function mapUploadFailureMessage(label: string, error: unknown, code?: string): 
   const normalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
 
   switch (code) {
+    case "kyc_v2_disabled":
+      return "Verification is temporarily unavailable. Please try again later.";
     case "storage_unavailable":
     case "storage_failed":
       return `${normalizedLabel} upload is temporarily unavailable. Please try again in a moment.`;
@@ -118,6 +120,9 @@ function mapUploadFailureMessage(label: string, error: unknown, code?: string): 
       const message = error instanceof Error ? error.message : String(error ?? "").trim();
       if (!message) {
         return `Failed to upload ${label}.`;
+      }
+      if (/^not found$/i.test(message)) {
+        return "Verification is temporarily unavailable. Please try again later.";
       }
       if (/failed to upload document/i.test(message)) {
         return `Failed to upload ${label}. Please try again.`;
