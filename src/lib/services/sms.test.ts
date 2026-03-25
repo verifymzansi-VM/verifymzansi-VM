@@ -99,24 +99,54 @@ describe("sms service", () => {
       expect(result.error).toBe("No recipient data in response");
     });
 
-    it("returns failure when Africa's Talking rejects the sender ID", async () => {
-      globalThis.fetch = mockFetchResponse(
-        {
-          SMSMessageData: {
-            Message: "InvalidSenderId",
-            Recipients: [],
-          },
-        },
-        201
-      );
+    it("retries without sender ID when Africa's Talking rejects the configured sender ID", async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              SMSMessageData: {
+                Message: "InvalidSenderId",
+                Recipients: [],
+              },
+            }),
+            {
+              status: 201,
+              headers: { "Content-Type": "application/json" },
+            }
+          )
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              SMSMessageData: {
+                Recipients: [{ statusCode: 100, messageId: "sms-fallback-1", status: "Success" }],
+              },
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }
+          )
+        );
 
       const result = await sendSms({
         to: "+27821234567",
         message: "Sender test",
       });
 
-      expect(result.success).toBe(false);
-      expect(result.error).toBe("InvalidSenderId");
+      expect(result.success).toBe(true);
+      expect(result.messageId).toBe("sms-fallback-1");
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+
+      const firstBody = new URLSearchParams(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string
+      );
+      const secondBody = new URLSearchParams(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[1][1].body as string
+      );
+      expect(firstBody.get("from")).toBe("VERIFYMZANS");
+      expect(secondBody.get("from")).toBeNull();
     });
 
     it("catches thrown errors", async () => {

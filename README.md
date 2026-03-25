@@ -122,6 +122,32 @@ site root with `?code=...` instead of the app callback handler.
 - Sensitive values belong in GitHub Actions secrets and Cloudflare Wrangler
   secrets, not in committed files
 
+### Ozow webhook secret setup
+
+Ozow webhook signature verification depends on a real `OZOW_WEBHOOK_SECRET`.
+
+Use the helper script (OAuth + `GET /v1/webhooks/{id}/secret`) to retrieve it:
+
+```bash
+pnpm ozow:webhook:secret
+```
+
+If you already know the webhook subscription ID from Ozow, fetch only that one:
+
+```bash
+pnpm ozow:webhook:secret -- --webhook-id=<ozow-webhook-id>
+```
+
+You can also set `OZOW_WEBHOOK_ID` in your env file and run
+`pnpm ozow:webhook:secret`.
+
+Then set the returned secret in `.env.local` and also store it as a Cloudflare
+secret for production:
+
+```bash
+pnpm wrangler secret put OZOW_WEBHOOK_SECRET
+```
+
 ## Key Commands
 
 | Command                                                                                | Purpose                                              |
@@ -144,6 +170,7 @@ site root with `?code=...` instead of the app callback handler.
 | `pnpm preflight`                                                                       | Local launch checks with development-mode validation |
 | `pnpm preflight:prod`                                                                  | Production launch checks                             |
 | `pnpm validate:launch-env`                                                             | Fail-fast production env validation                  |
+| `pnpm ozow:webhook:secret`                                                             | Fetch Ozow webhook secret(s) via One API             |
 | `pnpm security:audit`                                                                  | Dependency vulnerability gate                        |
 | `pnpm secret-scan`                                                                     | Secret leak scan                                     |
 | `pnpm licenses:check`                                                                  | License policy gate                                  |

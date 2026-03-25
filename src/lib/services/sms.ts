@@ -28,6 +28,10 @@ interface SendSmsResult {
   error?: string;
 }
 
+interface SendSmsAttemptResult extends SendSmsResult {
+  invalidSenderIdRejected?: boolean;
+}
+
 interface SenderIdValidationResult {
   valid: boolean;
   value?: string;
@@ -85,7 +89,6 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
 
   try {
     const validatedParams = SmsParamsSchema.parse(params);
-
     const apiKey = process.env.AFRICASTALKING_API_KEY;
     const username = process.env.AFRICASTALKING_USERNAME;
 
@@ -104,126 +107,151 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       : [validatedParams.to];
 
     const senderIdResult = validateAfricaTalkingSenderId(process.env.AFRICASTALKING_SENDER_ID);
-
-    // Build URL-encoded form body
-    const formData = new URLSearchParams();
-    formData.set("username", username);
-    formData.set("to", recipients.join(","));
-    formData.set("message", validatedParams.message);
-    if (senderIdResult.valid && senderIdResult.value) {
-      formData.set("from", senderIdResult.value);
-    } else if (process.env.AFRICASTALKING_SENDER_ID) {
+    if (!senderIdResult.valid && process.env.AFRICASTALKING_SENDER_ID) {
       log.warn("Ignoring invalid Africa's Talking sender ID", {
         reason: senderIdResult.reason,
         configuredLength: process.env.AFRICASTALKING_SENDER_ID.trim().length,
       });
     }
 
-    const response = await fetch(`${baseUrl}/version1/messaging`, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-        apiKey: apiKey,
-      },
-      body: formData.toString(),
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    // Read body once as text so we can log it before parsing
-    const rawBody = await response.text();
-
-    if (!response.ok) {
-      log.error("Africa's Talking HTTP error", {
-        status: response.status,
-        body: rawBody,
-        username,
-        baseUrl,
-        hasApiKey: !!apiKey,
-        apiKeyPrefix: apiKey.slice(0, 4) + "...",
-      });
-      if (response.status === 401) {
-        log.error(
-          "AT 401 — API key is rejected. Regenerate it at https://account.africastalking.com → Settings → API Key"
-        );
+    const sendAttempt = async (includeSenderId: boolean): Promise<SendSmsAttemptResult> => {
+      const formData = new URLSearchParams();
+      formData.set("username", username);
+      formData.set("to", recipients.join(","));
+      formData.set("message", validatedParams.message);
+      if (includeSenderId && senderIdResult.valid && senderIdResult.value) {
+        formData.set("from", senderIdResult.value);
       }
-      return { success: false, error: `HTTP ${response.status}: ${rawBody}` };
-    }
 
-    let result: ATSmsResponse;
-    try {
-      result = JSON.parse(rawBody);
-    } catch (parseErr) {
-      log.error("Africa's Talking JSON parse error", {
-        rawBody: rawBody.slice(0, 500),
-        error: parseErr instanceof Error ? parseErr.message : "Unknown parse error",
+      const response = await fetch(`${baseUrl}/version1/messaging`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
+          apiKey: apiKey,
+        },
+        body: formData.toString(),
+        signal: AbortSignal.timeout(10_000),
       });
-      // AT returned 200 OK but body isn't valid JSON — do not assume success
-      return { success: false, error: "Unexpected response format from SMS provider" };
-    }
 
-    log.info("Africa's Talking response received", {
-      recipientCount: result.SMSMessageData?.Recipients?.length ?? 0,
-      rawResponse: rawBody.slice(0, 500),
-    });
+      // Read body once as text so we can log it before parsing
+      const rawBody = await response.text();
 
-    const providerMessage = result.SMSMessageData?.Message?.trim();
+      if (!response.ok) {
+        log.error("Africa's Talking HTTP error", {
+          status: response.status,
+          body: rawBody,
+          username,
+          baseUrl,
+          hasApiKey: !!apiKey,
+          apiKeyPrefix: apiKey.slice(0, 4) + "...",
+          includeSenderId,
+        });
+        if (response.status === 401) {
+          log.error(
+            "AT 401 — API key is rejected. Regenerate it at https://account.africastalking.com → Settings → API Key"
+          );
+        }
+        return { success: false, error: `HTTP ${response.status}: ${rawBody}` };
+      }
 
-    // Check if message was sent successfully
-    if (result.SMSMessageData?.Recipients) {
-      const atRecipients = result.SMSMessageData.Recipients;
+      let result: ATSmsResponse;
+      try {
+        result = JSON.parse(rawBody);
+      } catch (parseErr) {
+        log.error("Africa's Talking JSON parse error", {
+          rawBody: rawBody.slice(0, 500),
+          error: parseErr instanceof Error ? parseErr.message : "Unknown parse error",
+          includeSenderId,
+        });
+        // AT returned 200 OK but body isn't valid JSON — do not assume success
+        return { success: false, error: "Unexpected response format from SMS provider" };
+      }
 
-      if (atRecipients.length === 0) {
-        const normalizedProviderMessage = providerMessage?.toLowerCase() ?? "";
-        if (
-          normalizedProviderMessage.includes("invalidsenderid") ||
-          normalizedProviderMessage.includes("invalid sender")
-        ) {
-          log.warn("AT rejected sender ID", {
-            providerMessage,
+      log.info("Africa's Talking response received", {
+        recipientCount: result.SMSMessageData?.Recipients?.length ?? 0,
+        rawResponse: rawBody.slice(0, 500),
+        includeSenderId,
+      });
+
+      const providerMessage = result.SMSMessageData?.Message?.trim();
+
+      if (result.SMSMessageData?.Recipients) {
+        const atRecipients = result.SMSMessageData.Recipients;
+
+        if (atRecipients.length === 0) {
+          const normalizedProviderMessage = providerMessage?.toLowerCase() ?? "";
+          if (
+            normalizedProviderMessage.includes("invalidsenderid") ||
+            normalizedProviderMessage.includes("invalid sender")
+          ) {
+            log.warn("AT rejected sender ID", {
+              providerMessage,
+              includeSenderId,
+            });
+            return {
+              success: false,
+              error: providerMessage || "SMS provider rejected the configured sender ID",
+              invalidSenderIdRejected: true,
+            };
+          }
+
+          // AT can accept the message before per-recipient details are available.
+          log.warn("AT returned 200 OK with empty Recipients array", {
+            rawBody: rawBody.slice(0, 500),
+            includeSenderId,
+          });
+          return { success: true, messageId: "at-accepted-empty-recipients" };
+        }
+
+        // AT success codes: 100 (Processed), 101 (Sent), 102 (Queued)
+        // Anything under 200 is a non-failure state per AT docs
+        const failed = atRecipients.filter((r) => r.statusCode >= 200);
+        if (failed.length > 0) {
+          log.warn("AT recipients with non-success status", {
+            failed: failed.map((f) => ({
+              number: f.number,
+              status: f.status,
+              statusCode: f.statusCode,
+            })),
+            includeSenderId,
           });
           return {
             success: false,
-            error: providerMessage || "SMS provider rejected the configured sender ID",
+            error:
+              failed[0].status || `${failed.length} of ${atRecipients.length} recipients failed`,
           };
         }
 
-        // AT can accept the message before per-recipient details are available.
-        log.warn("AT returned 200 OK with empty Recipients array", {
-          rawBody: rawBody.slice(0, 500),
-        });
-        return { success: true, messageId: "at-accepted-empty-recipients" };
-      }
-
-      // AT success codes: 100 (Processed), 101 (Sent), 102 (Queued)
-      // Anything under 200 is a non-failure state per AT docs
-      const failed = atRecipients.filter((r) => r.statusCode >= 200);
-      if (failed.length > 0) {
-        log.warn("AT recipients with non-success status", {
-          failed: failed.map((f) => ({
-            number: f.number,
-            status: f.status,
-            statusCode: f.statusCode,
-          })),
-        });
         return {
-          success: false,
-          error: failed[0].status || `${failed.length} of ${atRecipients.length} recipients failed`,
+          success: true,
+          messageId: atRecipients[0].messageId,
         };
       }
 
-      return {
-        success: true,
-        messageId: atRecipients[0].messageId,
-      };
+      // SMSMessageData or Recipients missing but AT returned 200 OK
+      // Without recipient status data, we cannot confirm delivery — report failure
+      log.warn("AT returned 200 OK but no SMSMessageData.Recipients", {
+        rawBody: rawBody.slice(0, 500),
+        includeSenderId,
+      });
+      return { success: false, error: "No recipient data in response" };
+    };
+
+    const firstAttempt = await sendAttempt(senderIdResult.valid);
+    if (
+      !firstAttempt.success &&
+      firstAttempt.invalidSenderIdRejected &&
+      senderIdResult.valid &&
+      senderIdResult.value
+    ) {
+      log.warn("Retrying SMS without sender ID after provider rejection", {
+        senderId: senderIdResult.value,
+      });
+      return await sendAttempt(false);
     }
 
-    // SMSMessageData or Recipients missing but AT returned 200 OK
-    // Without recipient status data, we cannot confirm delivery — report failure
-    log.warn("AT returned 200 OK but no SMSMessageData.Recipients", {
-      rawBody: rawBody.slice(0, 500),
-    });
-    return { success: false, error: "No recipient data in response" };
+    return firstAttempt;
   } catch (error) {
     log.error("Africa's Talking error", {
       error: error instanceof Error ? error.message : "SMS sending failed",

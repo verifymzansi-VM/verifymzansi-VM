@@ -46,6 +46,7 @@
     "preflight": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts",
     "preflight:prod": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts --mode=production",
     "validate:launch-env": "tsx scripts/validate-launch-env.ts --mode=production",
+    "ozow:webhook:secret": "node scripts/fetch-ozow-webhook-secret.mjs",
     "prepare": "husky"
   },
   "dependencies": {

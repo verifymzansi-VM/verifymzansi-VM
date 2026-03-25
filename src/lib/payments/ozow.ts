@@ -8,9 +8,10 @@ const log = createLogger("Ozow");
 type CachedToken = {
   accessToken: string;
   expiresAt: number;
+  scope: string;
 };
 
-let cachedToken: CachedToken | null = null;
+const cachedTokens = new Map<string, CachedToken>();
 
 function getOzowBaseUrl(): string {
   const configuredBaseUrl = env("OZOW_API_BASE_URL");
@@ -50,7 +51,17 @@ function createTimingSafeMatch(expected: string, received: string): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
-async function getOzowAccessToken(forceRefresh = false): Promise<string> {
+function normalizeScope(scope: string): string {
+  return scope
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<string> {
+  const normalizedScope = normalizeScope(scope);
+  const cachedToken = cachedTokens.get(normalizedScope);
   if (!forceRefresh && cachedToken && cachedToken.expiresAt > Date.now() + 5_000) {
     return cachedToken.accessToken;
   }
@@ -68,6 +79,7 @@ async function getOzowAccessToken(forceRefresh = false): Promise<string> {
       grant_type: "client_credentials",
       client_id: clientId,
       client_secret: clientSecret,
+      scope: normalizedScope,
     }),
     signal: AbortSignal.timeout(15_000),
   });
@@ -91,10 +103,11 @@ async function getOzowAccessToken(forceRefresh = false): Promise<string> {
     throw new Error("Ozow token response did not include an access token");
   }
 
-  cachedToken = {
+  cachedTokens.set(normalizedScope, {
     accessToken,
     expiresAt: Date.now() + expiresIn * 1000,
-  };
+    scope: normalizedScope,
+  });
 
   return accessToken;
 }
@@ -150,7 +163,7 @@ export async function createOzowHostedPayment(
     };
   }
 
-  const token = await getOzowAccessToken();
+  const token = await getOzowAccessToken("payment");
   const siteCode = env("OZOW_SITE_CODE");
   if (!siteCode) {
     throw new Error("OZOW_SITE_CODE is not configured");
@@ -284,5 +297,5 @@ export function normalizeOzowWebhook(body: unknown): NormalizedOzowWebhook | nul
 }
 
 export function resetOzowTokenCacheForTesting(): void {
-  cachedToken = null;
+  cachedTokens.clear();
 }

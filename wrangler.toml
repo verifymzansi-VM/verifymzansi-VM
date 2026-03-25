@@ -127,10 +127,33 @@ bucket_name = "verifymzansi-private"
 [env.staging]
 name = "verifymzansi-staging"
 workers_dev = true
+routes = []
+
+[env.staging.durable_objects]
+bindings = [
+  { name = "NEXT_CACHE_DO_QUEUE", class_name = "DOQueueHandler" },
+  { name = "NEXT_TAG_CACHE_DO_SHARDED", class_name = "DOShardedTagCache" },
+  { name = "NEXT_CACHE_DO_PURGE", class_name = "BucketCachePurge" },
+  { name = "RATE_LIMITER_DO", class_name = "RateLimiterDO" },
+]
+
+[[env.staging.kv_namespaces]]
+binding = "OTP_RATE_LIMITS"
+id = "247144b6d9b1406093351378a57c62fa"
+
+[[env.staging.r2_buckets]]
+binding = "PUBLIC_BUCKET"
+bucket_name = "verifymzansi-public"
+
+[[env.staging.r2_buckets]]
+binding = "PRIVATE_BUCKET"
+bucket_name = "verifymzansi-private"
 
 [env.staging.vars]
 NODE_ENV = "production"
 ENVIRONMENT = "staging"
+VERIFYMZANSI_RUNTIME_MODE = "development"
+VERIFYMZANSI_VALIDATION_MODE = "development"
 NEXT_PUBLIC_APP_URL = "https://staging.verifymzansi.com"
 NEXT_PUBLIC_MEDIA_URL = "https://media-staging.verifymzansi.com"
 R2_PUBLIC_URL = "https://media-staging.verifymzansi.com"
