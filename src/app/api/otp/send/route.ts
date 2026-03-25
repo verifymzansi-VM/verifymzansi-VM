@@ -14,6 +14,7 @@ import { logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 const log = createLogger("OTP");
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
 const MAX_SENDS_PER_HOUR = 5;
+const OTP_PBKDF2_ITERATIONS = 100000;
 const otpSendSchema = z.object({ phone: saPhoneSchema });
 
 type OtpSendErrorCode =
@@ -82,7 +83,8 @@ async function hashOtp(otp: string): Promise<string> {
     {
       name: "PBKDF2",
       salt: salt.buffer as ArrayBuffer,
-      iterations: 150000,
+      // Cloudflare Workers currently rejects PBKDF2 iteration counts above 100000.
+      iterations: OTP_PBKDF2_ITERATIONS,
       hash: "SHA-512",
     },
     keyMaterial,

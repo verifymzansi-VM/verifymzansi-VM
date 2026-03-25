@@ -17,6 +17,7 @@ import {
 const log = createLogger("OTPVerify");
 const MAX_VERIFY_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
+const OTP_PBKDF2_ITERATIONS = 100000;
 
 // Re-exported from shared module
 import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
@@ -52,7 +53,8 @@ async function verifyOtp(otp: string, storedHash: string): Promise<boolean> {
     {
       name: "PBKDF2",
       salt: fromHex(salt).buffer as ArrayBuffer,
-      iterations: 150000,
+      // Keep in sync with send route and within Cloudflare Workers PBKDF2 limits.
+      iterations: OTP_PBKDF2_ITERATIONS,
       hash: "SHA-512",
     },
     keyMaterial,

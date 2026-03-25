@@ -9,6 +9,7 @@ import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 const CSRF_TOKEN = "a".repeat(64);
+const OTP_PBKDF2_ITERATIONS = 100000;
 
 async function hashOtpForTest(otp: string): Promise<string> {
   const salt = new Uint8Array(16);
@@ -21,7 +22,7 @@ async function hashOtpForTest(otp: string): Promise<string> {
     {
       name: "PBKDF2",
       salt: salt.buffer as ArrayBuffer,
-      iterations: 150000,
+      iterations: OTP_PBKDF2_ITERATIONS,
       hash: "SHA-512",
     },
     keyMaterial,
