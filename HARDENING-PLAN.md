@@ -673,3 +673,51 @@ Document:
 6. **Phase 3 remaining** — hardening
 7. **Phase 4** — polish
 8. **Phase 6** — documentation update
+
+---
+
+## Credential Rotation Runbook (2026-03-25)
+
+### Scope
+
+- Supabase: `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ACCESS_TOKEN`,
+  `SUPABASE_DB_PASSWORD`
+- Cloudflare R2: `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+- Africa's Talking: `AFRICASTALKING_API_KEY`
+- Ozow: `OZOW_CLIENT_SECRET`, `OZOW_WEBHOOK_SECRET`
+- Turnstile: `TURNSTILE_SECRET_KEY`
+- Worker shared auth: `WORKER_API_KEY`
+- Encryption/hash keys: `KYC_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEY`,
+  `HMAC_SECRET`, `IP_HASH_SECRET`
+- Resend: `RESEND_API_KEY`
+
+`AFRICASTALKING_SENDER_ID` is an identifier, not a secret.
+
+### Recommended Rotation Order
+
+1. Supabase credentials
+2. OTP/payment provider credentials
+3. Cloudflare worker and R2 credentials
+4. Encryption/hash keys
+5. Resend key
+
+### Update Targets
+
+- Local `.env.local`
+- Cloudflare worker secrets (`wrangler secret put ...`)
+- GitHub Actions repository/environment secrets
+- Any deployment-time secret store
+
+### Validation Gate After Rotation
+
+1. `pnpm run secret-scan`
+2. `pnpm run test`
+3. `pnpm run test:contract`
+4. OTP/payment/upload/email smoke tests
+5. CI required checks green
+
+### Closure
+
+1. Revoke all superseded credentials
+2. Record owner/date for the rotation window
+3. Schedule next rotation cycle

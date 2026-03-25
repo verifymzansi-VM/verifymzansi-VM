@@ -59,17 +59,17 @@ describe("secret scan allowlisting", () => {
     ).toBe(true);
     expect(
       getRule("Supabase access token").pattern.test(
-        "SUPABASE_ACCESS_TOKEN=sbp_1234567890abcdefghijklmnop"
+        "SUPABASE_ACCESS_TOKEN=sbp_test1234567890abcdefghijklmnop"
       )
     ).toBe(true);
     expect(
       getRule("Africa's Talking API key").pattern.test(
-        "AFRICASTALKING_API_KEY=atsk_1234567890abcdefghijklmnop"
+        "AFRICASTALKING_API_KEY=atsk_test1234567890abcdefghijklmnop"
       )
     ).toBe(true);
     expect(
       getRule("Worker API key").pattern.test(
-        "WORKER_API_KEY=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789+/="
+        "WORKER_API_KEY=exampleAbCdEfGhIjKlMnOpQrStUvWxYz0123456789+/="
       )
     ).toBe(true);
   });
