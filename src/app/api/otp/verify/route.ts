@@ -106,18 +106,49 @@ async function finalizePhoneVerification(
         return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
       }
 
-      log.error("Failed to auto-create account profile during OTP verification", {
-        error: createProfileError.message,
-        userId: user.id,
-      });
-      return {
-        success: false,
-        error: "Failed to save the verified phone number on your account.",
-        status: 500,
-      };
-    }
+      log.warn(
+        "Profile create via user client failed during OTP verification; retrying with admin",
+        {
+          error: createProfileError.message,
+          code: createProfileError.code,
+          userId: user.id,
+        }
+      );
 
-    profile = createdProfile;
+      const { data: adminCreatedProfile, error: adminCreateProfileError } = await adminSupabase
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .upsert(
+          {
+            user_id: user.id,
+            display_name: getDefaultDisplayName(user),
+            ...accountPhoneFields,
+          },
+          { onConflict: "user_id" }
+        )
+        .select("id")
+        .single();
+
+      if (adminCreateProfileError) {
+        if (adminCreateProfileError.code === "23505") {
+          return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
+        }
+
+        log.error("Failed to auto-create account profile during OTP verification", {
+          error: adminCreateProfileError.message,
+          code: adminCreateProfileError.code,
+          userId: user.id,
+        });
+        return {
+          success: false,
+          error: "Failed to save the verified phone number on your account.",
+          status: 500,
+        };
+      }
+
+      profile = adminCreatedProfile;
+    } else {
+      profile = createdProfile;
+    }
   }
 
   if (profile) {
@@ -132,15 +163,38 @@ async function finalizePhoneVerification(
         return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
       }
 
-      log.error("Failed to save phone on account profile", {
-        error: profileUpdateError.message,
-        userId: user.id,
-      });
-      return {
-        success: false,
-        error: "Failed to save the verified phone number on your account.",
-        status: 500,
-      };
+      log.warn(
+        "Profile update via user client failed during OTP verification; retrying with admin",
+        {
+          error: profileUpdateError.message,
+          code: profileUpdateError.code,
+          userId: user.id,
+        }
+      );
+
+      const { error: adminProfileUpdateError } = await adminSupabase
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        // Promote pending_phone to canonical phone and clear the staging column.
+        .update({ ...accountPhoneFields, pending_phone: null })
+        .eq("id", profile.id)
+        .eq("user_id", user.id);
+
+      if (adminProfileUpdateError) {
+        if (adminProfileUpdateError.code === "23505") {
+          return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
+        }
+
+        log.error("Failed to save phone on account profile", {
+          error: adminProfileUpdateError.message,
+          code: adminProfileUpdateError.code,
+          userId: user.id,
+        });
+        return {
+          success: false,
+          error: "Failed to save the verified phone number on your account.",
+          status: 500,
+        };
+      }
     }
   }
 
