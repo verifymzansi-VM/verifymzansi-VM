@@ -36,6 +36,7 @@
     "test:db": "tsx scripts/test-db.ts",
     "test:perf": "tsx scripts/test-perf.ts",
     "test:mutation": "tsx scripts/test-mutation.ts",
+    "check:bundle-budget": "tsx scripts/check-bundle-budget.ts",
     "test:e2e": "playwright test",
     "test:public-verify": "tsx scripts/verify-public-pages.ts",
     "bootstrap:operator": "tsx scripts/bootstrap-operator.ts",

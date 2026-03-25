@@ -5,10 +5,12 @@ describe("shouldHidePlaywrightFixtureRow", () => {
   afterEach(() => {
     delete process.env.PLAYWRIGHT_TEST_MODE;
     delete process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE;
+    document.documentElement.dataset.playwright = "";
   });
 
   it("ignores Playwright-owned marketplace rows during Playwright runs", () => {
     process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE = "1";
+    document.documentElement.dataset.playwright = "1";
 
     expect(
       shouldHidePlaywrightFixtureRow({
@@ -21,6 +23,7 @@ describe("shouldHidePlaywrightFixtureRow", () => {
 
   it("keeps non-Playwright rows visible during Playwright runs", () => {
     process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE = "1";
+    document.documentElement.dataset.playwright = "1";
 
     expect(
       shouldHidePlaywrightFixtureRow({

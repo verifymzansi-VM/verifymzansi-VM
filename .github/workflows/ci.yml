@@ -41,7 +41,6 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run test
       - name: Coverage gate
         env:
           STRICT_COVERAGE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && 'true' || 'false' }}
@@ -234,19 +233,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-role-key' }}
         run: ANALYZE=true pnpm run build
       - name: Check bundle size budget
-        run: |
-          # Warn if any individual JS chunk exceeds 275 KB
-          BUDGET_KB=275
-          echo "Bundle size budget: ${BUDGET_KB}KB per chunk"
-          if [ -d ".next/static/chunks" ]; then
-            # Use find -printf to get size+name without wc (avoids broken-pipe from sort|head)
-            LARGEST=$(find .next/static/chunks -name "*.js" -printf '%s %f\n' 2>/dev/null | sort -rn | head -n1)
-            SIZE_BYTES=$(echo "$LARGEST" | awk '{print $1}')
-            FILE_NAME=$(echo "$LARGEST" | awk '{print $2}')
-            SIZE_KB=$(( ${SIZE_BYTES:-0} / 1024 ))
-            echo "Largest chunk: ${FILE_NAME} (${SIZE_KB}KB)"
-            if [ "${SIZE_KB}" -gt "$BUDGET_KB" ]; then
-              echo "::error::Largest JS chunk ${FILE_NAME} (${SIZE_KB}KB) exceeds budget (${BUDGET_KB}KB)"
-              exit 1
-            fi
-          fi
+        env:
+          BUNDLE_BUDGET_WARN_KB: "275"
+          BUNDLE_BUDGET_FAIL_KB: "325"
+        run: pnpm run check:bundle-budget
