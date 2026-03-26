@@ -33,6 +33,11 @@ type CloudflareContextLike = {
   env?: Record<string, unknown>;
 };
 
+type GlobalScopeWithEnv = Record<PropertyKey, unknown> & {
+  env?: Record<string, unknown>;
+  __env__?: Record<string, unknown>;
+};
+
 function isR2BucketBinding(value: unknown): value is R2BucketBinding {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
@@ -62,7 +67,7 @@ function getBindingFromEnvObject(
 
 function getCloudflareContextFromGlobalScope(): CloudflareContextLike | null {
   const contextSymbol = Symbol.for("__cloudflare-context__");
-  const globalScope = globalThis as Record<PropertyKey, unknown>;
+  const globalScope = globalThis as GlobalScopeWithEnv;
   const context = globalScope[contextSymbol] as CloudflareContextLike | undefined;
 
   if (!context || typeof context !== "object") {
@@ -70,6 +75,26 @@ function getCloudflareContextFromGlobalScope(): CloudflareContextLike | null {
   }
 
   return context;
+}
+
+function getR2BucketBindingFromGlobalScope(bucketName: string): R2BucketBinding | null {
+  const globalScope = globalThis as GlobalScopeWithEnv;
+
+  if (globalScope.env) {
+    const fromEnv = getBindingFromEnvObject(bucketName, globalScope.env);
+    if (fromEnv) {
+      return fromEnv;
+    }
+  }
+
+  if (globalScope.__env__) {
+    const fromPrivateEnv = getBindingFromEnvObject(bucketName, globalScope.__env__);
+    if (fromPrivateEnv) {
+      return fromPrivateEnv;
+    }
+  }
+
+  return getBindingFromEnvObject(bucketName, globalScope);
 }
 
 /**
@@ -86,6 +111,11 @@ async function getR2BucketBinding(bucketName: string): Promise<R2BucketBinding |
   const fromProcessEnv = getBindingFromEnvObject(bucketName, processEnvCandidate);
   if (fromProcessEnv) {
     return fromProcessEnv;
+  }
+
+  const fromGlobalScope = getR2BucketBindingFromGlobalScope(bucketName);
+  if (fromGlobalScope) {
+    return fromGlobalScope;
   }
 
   const globalContext = getCloudflareContextFromGlobalScope();

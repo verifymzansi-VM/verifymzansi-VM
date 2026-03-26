@@ -44,6 +44,7 @@ import {
   uploadKycDocument,
   downloadKycDocument,
   getKycDocumentViewUrl,
+  hasR2WriteAccess,
 } from "./storage";
 
 describe("storage service", () => {
@@ -55,6 +56,8 @@ describe("storage service", () => {
     process.env.R2_SECRET_ACCESS_KEY = "test-secret";
     process.env.R2_PUBLIC_URL = "https://cdn.verifymzansi.com";
     process.env.R2_PRIVATE_BUCKET = "verifymzansi-private";
+    delete (globalThis as Record<string, unknown>).env;
+    delete (globalThis as Record<string, unknown>).__env__;
   });
 
   describe("generateStorageKey", () => {
@@ -141,6 +144,44 @@ describe("storage service", () => {
       expect(result.url).toMatch(/^private:\/\//);
       expect(result.key).toMatch(/^kyc\/id_document\/seller-1\//);
       expect(mockSend).toHaveBeenCalled();
+    });
+
+    it("uses a native Cloudflare R2 binding from global env when available", async () => {
+      const put = vi.fn().mockResolvedValue(undefined);
+      const get = vi.fn();
+      const del = vi.fn();
+      (globalThis as Record<string, unknown>).env = {
+        PRIVATE_BUCKET: {
+          put,
+          get,
+          delete: del,
+        },
+      };
+
+      const file = new Blob(["id doc content"]);
+      const result = await uploadKycDocument(file, "seller-1", "id_document");
+
+      expect(put).toHaveBeenCalledTimes(1);
+      expect(mockSend).not.toHaveBeenCalled();
+      expect(result.url).toMatch(/^private:\/\/verifymzansi-private\//);
+    });
+  });
+
+  describe("hasR2WriteAccess", () => {
+    it("returns true when a native Cloudflare R2 binding exists on global env", async () => {
+      (globalThis as Record<string, unknown>).env = {
+        PRIVATE_BUCKET: {
+          put: vi.fn(),
+          get: vi.fn(),
+          delete: vi.fn(),
+        },
+      };
+
+      delete process.env.R2_ACCOUNT_ID;
+      delete process.env.R2_ACCESS_KEY_ID;
+      delete process.env.R2_SECRET_ACCESS_KEY;
+
+      await expect(hasR2WriteAccess("verifymzansi-private")).resolves.toBe(true);
     });
   });
 
