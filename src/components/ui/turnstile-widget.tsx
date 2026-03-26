@@ -303,20 +303,6 @@ export function TurnstileWidget({
   ]);
 
   useEffect(() => {
-    if (previousRetryTokenRef.current === retryToken) {
-      return;
-    }
-
-    previousRetryTokenRef.current = retryToken;
-    unavailableReportedRef.current = false;
-    bypassReportedRef.current = false;
-    errorCountRef.current = 0;
-    queueMicrotask(() => {
-      setUnavailableState({ active: false, retryToken: undefined });
-    });
-  }, [retryToken]);
-
-  useEffect(() => {
     if (!shouldBypassConfiguredTurnstile || bypassReportedRef.current) return;
 
     cleanupWidget();

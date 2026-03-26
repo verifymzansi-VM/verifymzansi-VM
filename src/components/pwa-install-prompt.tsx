@@ -46,7 +46,6 @@ export function PwaInstallPrompt() {
     // iOS Safari does not fire beforeinstallprompt; show manual A2HS guidance.
     if (isIOSDevice && !isStandalone) {
       queueMicrotask(() => {
-        setIsIOSFallback(true);
         setShowPrompt(true);
       });
     }
