@@ -115,7 +115,7 @@ function HeaderInner({
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background lg:bg-background/95 lg:backdrop-blur lg:supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-[70] w-full border-b bg-background lg:bg-background/95 lg:backdrop-blur lg:supports-[backdrop-filter]:bg-background/60">
       <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
         <Link
           href="/"
@@ -250,11 +250,12 @@ function HeaderInner({
 
         {/* Mobile Hamburger */}
         <button
-          className="justify-self-end p-2 lg:hidden"
+          className="relative z-[80] justify-self-end rounded-md p-2 lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
           aria-controls="mobile-nav-menu"
           aria-expanded={mobileOpen}
+          data-testid="mobile-menu-toggle"
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
@@ -274,7 +275,7 @@ function HeaderInner({
           aria-label="Mobile navigation"
           className="lg:hidden border-t bg-background animate-fade-in-up"
         >
-          <div className="container-page py-4 space-y-4">
+          <div className="container-page space-y-4 py-4 pb-safe">
             <div className="flex flex-col gap-2">
               {isAuthenticated ? (
                 <>

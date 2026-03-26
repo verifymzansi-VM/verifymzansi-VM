@@ -300,6 +300,9 @@ export function TurnstileWidget({
     unavailableReportedRef.current = false;
     bypassReportedRef.current = false;
     errorCountRef.current = 0;
+    queueMicrotask(() => {
+      setUnavailableState({ active: false, retryToken: undefined });
+    });
   }, [retryToken]);
 
   useEffect(() => {

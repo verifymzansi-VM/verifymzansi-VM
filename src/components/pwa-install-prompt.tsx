@@ -17,10 +17,23 @@ interface BeforeInstallPromptEvent extends Event {
 export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
+  const [isIOSFallback, setIsIOSFallback] = useState(false);
 
   useEffect(() => {
     // Check if the user has already dismissed or installed the app in this session/device
     const isDismissed = localStorage.getItem("pwa-prompt-dismissed");
+
+    const userAgent = window.navigator.userAgent;
+    const isIOSDevice = /iPad|iPhone|iPod/.test(userAgent);
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
+
+    // iOS Safari does not fire beforeinstallprompt; show manual A2HS guidance.
+    if (isIOSDevice && !isStandalone) {
+      queueMicrotask(() => {
+        setIsIOSFallback(true);
+        setShowPrompt(true);
+      });
+    }
 
     // Only handle if not dismissed previously
     if (isDismissed !== "true") {
@@ -50,6 +63,10 @@ export function PwaInstallPrompt() {
   }, []);
 
   const handleInstallClick = async () => {
+    if (isIOSFallback) {
+      return;
+    }
+
     if (!deferredPrompt) return;
 
     // Show the install prompt
@@ -82,7 +99,11 @@ export function PwaInstallPrompt() {
           </div>
           <div>
             <h3 className="font-semibold text-sm">Install App</h3>
-            <p className="text-xs text-muted-foreground mr-1">Fast & easy access to VerifyMzansi</p>
+            <p className="text-xs text-muted-foreground mr-1">
+              {isIOSFallback
+                ? "On iPhone: tap Share, then Add to Home Screen"
+                : "Fast & easy access to VerifyMzansi"}
+            </p>
           </div>
         </div>
 
@@ -92,7 +113,7 @@ export function PwaInstallPrompt() {
             onClick={handleInstallClick}
             className="rounded-full shadow-sm shadow-brand-green/20"
           >
-            Install
+            {isIOSFallback ? "How To Install" : "Install"}
           </Button>
           <button
             onClick={handleDismiss}
