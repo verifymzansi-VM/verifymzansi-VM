@@ -6,6 +6,9 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { encryptFile, decryptFile } from "@/lib/utils/encryption";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("Storage");
 
 /**
  * R2-compatible object storage helpers for listing images
@@ -129,21 +132,96 @@ async function getR2BucketBinding(bucketName: string): Promise<R2BucketBinding |
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const ctx = await getCloudflareContext({ async: true });
-    return getBindingFromEnvObject(bucketName, ctx.env as Record<string, unknown>);
-  } catch {
-    // Not running in a Cloudflare Workers context — fall back to S3 API.
+    const binding = getBindingFromEnvObject(bucketName, ctx.env as Record<string, unknown>);
+    if (!binding) {
+      const envKeys = ctx.env ? Object.keys(ctx.env as Record<string, unknown>) : [];
+      log.warn("getCloudflareContext succeeded but binding not found", {
+        bucketName,
+        availableBindings: envKeys.filter((k) => /bucket/i.test(k)),
+        envKeyCount: envKeys.length,
+      });
+    }
+    return binding;
+  } catch (err) {
+    log.warn("getCloudflareContext import/call failed — falling back to S3 API", {
+      bucketName,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }
 
+/**
+ * Read a string value from the Cloudflare Workers env object (via ALS or OpenNext context).
+ * Falls back to process.env. This is more reliable than process.env alone because
+ * OpenNext's populateProcessEnv only runs once and may miss values in some edge cases.
+ */
+export async function getCloudflareEnvValue(key: string): Promise<string | undefined> {
+  // 1. Try the ALS-backed global scope symbol (set by OpenNext's init.js)
+  const globalContext = getCloudflareContextFromGlobalScope();
+  if (globalContext?.env) {
+    const val = (globalContext.env as Record<string, unknown>)[key];
+    if (typeof val === "string" && val) return val;
+  }
+
+  // 2. Try the @opennextjs/cloudflare async context
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const ctx = await getCloudflareContext({ async: true });
+    const val = (ctx.env as Record<string, unknown>)[key];
+    if (typeof val === "string" && val) return val;
+  } catch {
+    // Not in Cloudflare context
+  }
+
+  // 3. Fallback to process.env
+  return process.env[key] || undefined;
+}
+
 export async function hasR2WriteAccess(bucketName: string): Promise<boolean> {
-  if (await getR2BucketBinding(bucketName)) {
+  const nativeBinding = await getR2BucketBinding(bucketName);
+  if (nativeBinding) {
+    log.debug("R2 write access via native binding", { bucketName });
     return true;
   }
 
-  return Boolean(
+  // Check process.env first (fast path), then Cloudflare env directly.
+  const hasS3CredsViaProcessEnv = Boolean(
     process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
   );
+  if (hasS3CredsViaProcessEnv) {
+    log.debug("R2 write access via S3 credentials (process.env)", { bucketName });
+    return true;
+  }
+
+  // Fallback: read credentials directly from the Cloudflare env object.
+  // This handles cases where OpenNext's populateProcessEnv hasn't run yet
+  // or process.env writes don't persist in the current runtime.
+  const accountId = await getCloudflareEnvValue("R2_ACCOUNT_ID");
+  const accessKey = await getCloudflareEnvValue("R2_ACCESS_KEY_ID");
+  const secretKey = await getCloudflareEnvValue("R2_SECRET_ACCESS_KEY");
+  const hasS3CredsViaCfEnv = Boolean(accountId && accessKey && secretKey);
+
+  if (hasS3CredsViaCfEnv) {
+    // Populate process.env so downstream code (getR2Client) can use them.
+    process.env.R2_ACCOUNT_ID = accountId;
+    process.env.R2_ACCESS_KEY_ID = accessKey;
+    process.env.R2_SECRET_ACCESS_KEY = secretKey;
+    log.info(
+      "R2 write access via S3 credentials (Cloudflare env direct read, populated process.env)",
+      { bucketName }
+    );
+    return true;
+  }
+
+  log.warn("No R2 write access: native binding not found and S3 credentials missing", {
+    bucketName,
+    hasAccountId: Boolean(process.env.R2_ACCOUNT_ID),
+    hasAccessKey: Boolean(process.env.R2_ACCESS_KEY_ID),
+    hasSecretKey: Boolean(process.env.R2_SECRET_ACCESS_KEY),
+    hasAccountIdViaCfEnv: Boolean(accountId),
+  });
+  return false;
 }
 
 interface UploadParams {

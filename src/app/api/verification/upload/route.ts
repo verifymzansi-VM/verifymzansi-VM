@@ -78,6 +78,8 @@ export async function POST(request: NextRequest) {
           hasAccessKey: Boolean(process.env.R2_ACCESS_KEY_ID),
           hasSecretKey: Boolean(process.env.R2_SECRET_ACCESS_KEY),
           nodeEnv: process.env.NODE_ENV,
+          privateBucket,
+          runtime: process.env.NEXT_RUNTIME ?? "unknown",
         });
         return jsonError(
           { error: "Document upload temporarily unavailable", code: "storage_unavailable" },
