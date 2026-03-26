@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -14,10 +14,26 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
+function subscribeDisplayMode(callback: () => void) {
+  const mql = window.matchMedia("(display-mode: standalone)");
+  mql.addEventListener("change", callback);
+  return () => mql.removeEventListener("change", callback);
+}
+
+function getIOSFallbackSnapshot() {
+  const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  return isIOSDevice && !window.matchMedia("(display-mode: standalone)").matches;
+}
+
 export function PwaInstallPrompt() {
+  const isIOSFallback = useSyncExternalStore(
+    subscribeDisplayMode,
+    getIOSFallbackSnapshot,
+    () => false
+  );
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
-  const [isIOSFallback, setIsIOSFallback] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     // Check if the user has already dismissed or installed the app in this session/device
@@ -82,10 +98,11 @@ export function PwaInstallPrompt() {
 
   const handleDismiss = () => {
     setShowPrompt(false);
+    setDismissed(true);
     localStorage.setItem("pwa-prompt-dismissed", "true");
   };
 
-  if (!showPrompt) return null;
+  if (dismissed || !(showPrompt || isIOSFallback)) return null;
 
   return (
     <div className="fixed bottom-20 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom flex justify-center pb-safe">

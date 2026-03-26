@@ -135,7 +135,7 @@ export function TurnstileWidget({
   const unavailableReportedRef = useRef(false);
   const bypassReportedRef = useRef(false);
   const errorCountRef = useRef(0);
-  const previousRetryTokenRef = useRef(retryToken);
+  const [prevRetryToken, setPrevRetryToken] = useState(retryToken);
   const [unavailableState, setUnavailableState] = useState<{
     active: boolean;
     retryToken: number | undefined;
@@ -160,6 +160,17 @@ export function TurnstileWidget({
   const isConfigured =
     mode === "configured" && !shouldBypassConfiguredTurnstile && !terminalUnavailable;
   const isUnavailable = mode === "unavailable" || terminalUnavailable;
+
+  if (prevRetryToken !== retryToken) {
+    setPrevRetryToken(retryToken);
+    setUnavailableState({ active: false, retryToken: undefined });
+  }
+
+  useEffect(() => {
+    unavailableReportedRef.current = false;
+    bypassReportedRef.current = false;
+    errorCountRef.current = 0;
+  }, [retryToken]);
 
   const clearRenderTimeout = useCallback(() => {
     if (renderTimeoutRef.current !== null) {
