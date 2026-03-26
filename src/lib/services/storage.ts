@@ -12,6 +12,53 @@ import { encryptFile, decryptFile } from "@/lib/utils/encryption";
  * and verification documents.
  */
 
+/**
+ * Minimal R2Bucket interface matching the Cloudflare Workers R2 binding API.
+ * Full types are in @cloudflare/workers-types but that package is not installed.
+ */
+interface R2BucketBinding {
+  put(
+    key: string,
+    value: ArrayBuffer | ArrayBufferView | ReadableStream | Blob | string | null,
+    options?: { customMetadata?: Record<string, string>; httpMetadata?: { contentType?: string } }
+  ): Promise<unknown>;
+  delete(keys: string | string[]): Promise<void>;
+  get(
+    key: string,
+    options?: Record<string, unknown>
+  ): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+}
+
+/**
+ * Try to obtain a native R2 bucket binding from the Cloudflare Workers context.
+ * Returns null when running outside Cloudflare (e.g. local `next dev`).
+ *
+ * Binding names are defined in wrangler.toml:
+ *   - PRIVATE_BUCKET → verifymzansi-private
+ *   - PUBLIC_BUCKET  → verifymzansi-public
+ */
+async function getR2BucketBinding(bucketName: string): Promise<R2BucketBinding | null> {
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const ctx = await getCloudflareContext({ async: true });
+    const cfEnv = ctx.env as Record<string, unknown>;
+
+    const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+    const publicBucket = process.env.R2_PUBLIC_BUCKET || "verifymzansi-public";
+
+    if (bucketName === privateBucket && cfEnv.PRIVATE_BUCKET) {
+      return cfEnv.PRIVATE_BUCKET as R2BucketBinding;
+    }
+    if (bucketName === publicBucket && cfEnv.PUBLIC_BUCKET) {
+      return cfEnv.PUBLIC_BUCKET as R2BucketBinding;
+    }
+    return null;
+  } catch {
+    // Not running in a Cloudflare Workers context — fall back to S3 API.
+    return null;
+  }
+}
+
 interface UploadParams {
   bucket: string;
   key: string;
@@ -151,8 +198,16 @@ export function generateStorageKey(prefix: string, ownerId: string, filename: st
  * Delete a file from R2.
  */
 export async function deleteFromR2(bucket: string, key: string): Promise<void> {
-  const client = getR2Client();
+  assertSafeStorageKey(key);
 
+  // Prefer native R2 binding when running on Cloudflare Workers.
+  const r2Binding = await getR2BucketBinding(bucket);
+  if (r2Binding) {
+    await r2Binding.delete(key);
+    return;
+  }
+
+  const client = getR2Client();
   const command = new DeleteObjectCommand({
     Bucket: bucket,
     Key: key,
@@ -226,6 +281,16 @@ export async function uploadKycDocument(
   // Generate storage key
   const key = generateStorageKey(`kyc/${docType}`, ownerId, "encrypted.bin");
 
+  // Prefer native R2 binding when running on Cloudflare Workers (no S3 credentials needed).
+  const r2Binding = await getR2BucketBinding(privateBucket);
+  if (r2Binding) {
+    await r2Binding.put(key, encryptedBuffer, {
+      customMetadata: { ownerId, docType, encrypted: "true" },
+    });
+    return { url: `private://${privateBucket}/${key}`, key };
+  }
+
+  // Fall back to S3-compatible API (local Next.js dev, or Cloudflare without binding).
   const client = getR2Client();
   const command = new PutObjectCommand({
     Bucket: privateBucket,

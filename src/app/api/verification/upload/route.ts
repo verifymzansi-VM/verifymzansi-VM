@@ -47,17 +47,32 @@ export async function POST(request: NextRequest) {
       process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
     );
 
+    // In production, require either S3 credentials OR a native R2 Worker binding.
+    // Native bindings (PRIVATE_BUCKET) are preferred on Cloudflare Workers and do
+    // not need separate API credentials — they are configured in wrangler.toml.
     if (process.env.NODE_ENV === "production" && !hasStorageSecrets) {
-      log.error("R2 storage secrets are missing in production", {
-        hasAccountId: Boolean(process.env.R2_ACCOUNT_ID),
-        hasAccessKey: Boolean(process.env.R2_ACCESS_KEY_ID),
-        hasSecretKey: Boolean(process.env.R2_SECRET_ACCESS_KEY),
-        nodeEnv: process.env.NODE_ENV,
-      });
-      return NextResponse.json(
-        { error: "Document upload temporarily unavailable", code: "storage_unavailable" },
-        { status: 503 }
-      );
+      // Check whether the native Cloudflare R2 binding is available before failing.
+      let hasNativeR2 = false;
+      try {
+        const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+        const ctx = await getCloudflareContext({ async: true });
+        hasNativeR2 = Boolean((ctx.env as Record<string, unknown>).PRIVATE_BUCKET);
+      } catch {
+        hasNativeR2 = false;
+      }
+
+      if (!hasNativeR2) {
+        log.error("R2 storage is not available: missing S3 credentials and no native binding", {
+          hasAccountId: Boolean(process.env.R2_ACCOUNT_ID),
+          hasAccessKey: Boolean(process.env.R2_ACCESS_KEY_ID),
+          hasSecretKey: Boolean(process.env.R2_SECRET_ACCESS_KEY),
+          nodeEnv: process.env.NODE_ENV,
+        });
+        return NextResponse.json(
+          { error: "Document upload temporarily unavailable", code: "storage_unavailable" },
+          { status: 503 }
+        );
+      }
     }
 
     // ── Validate encryption keys upfront ─────────────────────
