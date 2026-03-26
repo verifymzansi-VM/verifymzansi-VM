@@ -41,6 +41,26 @@ import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
  * - idDocumentType: (optional) "sa_id"
  */
 export async function POST(request: NextRequest) {
+  const requestId = crypto.randomUUID();
+  const jsonError = (
+    body: Record<string, unknown>,
+    init: ResponseInit & { headers?: HeadersInit } = {}
+  ) => {
+    const headers = new Headers(init.headers);
+    headers.set("X-Request-Id", requestId);
+
+    return NextResponse.json(
+      {
+        ...body,
+        requestId,
+      },
+      {
+        ...init,
+        headers,
+      }
+    );
+  };
+
   try {
     const allowDevFallback = isStrictLocalDevelopmentRequest(request);
 
@@ -53,12 +73,13 @@ export async function POST(request: NextRequest) {
 
       if (!hasWritableStorage) {
         log.error("R2 storage is not available: missing S3 credentials and no native binding", {
+          requestId,
           hasAccountId: Boolean(process.env.R2_ACCOUNT_ID),
           hasAccessKey: Boolean(process.env.R2_ACCESS_KEY_ID),
           hasSecretKey: Boolean(process.env.R2_SECRET_ACCESS_KEY),
           nodeEnv: process.env.NODE_ENV,
         });
-        return NextResponse.json(
+        return jsonError(
           { error: "Document upload temporarily unavailable", code: "storage_unavailable" },
           { status: 503 }
         );
@@ -69,11 +90,12 @@ export async function POST(request: NextRequest) {
     const kycKey = process.env.KYC_ENCRYPTION_KEY;
     if (!kycKey || kycKey.length !== 64 || !/^[0-9a-fA-F]+$/.test(kycKey)) {
       log.error("KYC_ENCRYPTION_KEY is missing or malformed", {
+        requestId,
         present: Boolean(kycKey),
         length: kycKey?.length,
       });
       if (!allowDevFallback) {
-        return NextResponse.json(
+        return jsonError(
           {
             error: "Document encryption is not configured. Please contact support.",
             code: "config_missing",
@@ -100,12 +122,12 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return jsonError({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Email confirmation gate — users must confirm their email before uploading
     if (!user.email_confirmed_at) {
-      return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
+      return jsonError(buildVerificationEmailConfirmationRequiredPayload(), {
         status: 403,
       });
     }
@@ -113,7 +135,7 @@ export async function POST(request: NextRequest) {
     // Feature flag check — must match session start route
     const v2Enabled = await isFeatureEnabled("kyc_v2_flow");
     if (!v2Enabled) {
-      return NextResponse.json(
+      return jsonError(
         {
           error: "New verification flow is not yet enabled",
           code: "kyc_v2_disabled",
@@ -129,13 +151,13 @@ export async function POST(request: NextRequest) {
     });
     if (rateCheck.limited) {
       if (rateCheck.degraded) {
-        return NextResponse.json(
+        return jsonError(
           { error: "Verification upload protection is temporarily unavailable. Please try again." },
           { status: 503, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
         );
       }
 
-      return NextResponse.json(
+      return jsonError(
         { error: "Too many verification upload attempts. Please try again later." },
         { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
       );
@@ -146,15 +168,12 @@ export async function POST(request: NextRequest) {
     try {
       formData = await request.formData();
     } catch {
-      return NextResponse.json(
-        { error: "Invalid form data. Send multipart/form-data." },
-        { status: 400 }
-      );
+      return jsonError({ error: "Invalid form data. Send multipart/form-data." }, { status: 400 });
     }
 
     const file = formData.get("file");
     if (!file || !(file instanceof File) || file.size === 0) {
-      return NextResponse.json({ error: "File is required" }, { status: 400 });
+      return jsonError({ error: "File is required" }, { status: 400 });
     }
 
     // ── Validate metadata fields ─────────────────────────────
@@ -177,7 +196,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (!fileValidation.valid) {
-      return NextResponse.json({ error: fileValidation.error }, { status: 400 });
+      return jsonError({ error: fileValidation.error }, { status: 400 });
     }
 
     // ── Get account profile ──────────────────────────────────
@@ -203,9 +222,10 @@ export async function POST(request: NextRequest) {
 
       if (createProfileError || !createdProfile) {
         log.error("Failed to auto-create account profile", {
+          requestId,
           error: createProfileError?.message,
         });
-        return NextResponse.json(
+        return jsonError(
           { error: "Failed to initialize account profile. Please try again." },
           { status: 500 }
         );
@@ -218,7 +238,7 @@ export async function POST(request: NextRequest) {
     // page routes (not API routes), so we check here to prevent uploads
     // from accounts without a phone number.
     if (!profile.phone) {
-      return NextResponse.json(
+      return jsonError(
         {
           error: "Please complete your profile with a phone number before starting verification.",
           code: "phone_required",
@@ -250,7 +270,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (existingStep?.status === "approved") {
-      return NextResponse.json(
+      return jsonError(
         {
           error: "This verification step has already been approved.",
           code: "step_already_approved",
@@ -271,7 +291,10 @@ export async function POST(request: NextRequest) {
         userId: user.id,
       });
       return NextResponse.json(
-        { error: "File type does not match its content. Please upload a valid image or document." },
+        {
+          error: "File type does not match its content. Please upload a valid image or document.",
+          requestId,
+        },
         { status: 400 }
       );
     }
@@ -288,6 +311,7 @@ export async function POST(request: NextRequest) {
         {
           error:
             "This file was rejected because it contains suspicious content. Please upload a clean photo.",
+          requestId,
         },
         { status: 400 }
       );
@@ -320,6 +344,7 @@ export async function POST(request: NextRequest) {
         errMsg.includes("InvalidAccessKeyId");
 
       log.error("Failed to upload KYC document to storage", {
+        requestId,
         error: errMsg,
         stack: errStack,
         category: isEncryptionError ? "encryption" : isCredentialError ? "credentials" : "storage",
@@ -330,7 +355,7 @@ export async function POST(request: NextRequest) {
           ? "Document encryption failed. Please contact support."
           : "Failed to upload document. Please try again in a moment.";
         const code = isEncryptionError ? "encryption_failed" : "storage_failed";
-        return NextResponse.json({ error: userMessage, code }, { status: 500 });
+        return jsonError({ error: userMessage, code }, { status: 500 });
       }
 
       // Local dev fallback when R2 is not configured/reachable.
@@ -358,7 +383,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (artifactError || !artifact) {
-      log.error("Failed to record artifact", { error: artifactError });
+      log.error("Failed to record artifact", { error: artifactError, requestId });
 
       // Rollback orphaned R2 file only if upload reached R2.
       if (uploadedToR2) {
@@ -370,7 +395,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json(
+      return jsonError(
         { error: "Failed to record upload", code: "artifact_record_failed" },
         { status: 500 }
       );
@@ -481,6 +506,7 @@ export async function POST(request: NextRequest) {
             {
               error: "This verification step has already been approved.",
               code: "step_already_approved",
+              requestId,
             },
             { status: 409 }
           );
@@ -491,7 +517,7 @@ export async function POST(request: NextRequest) {
     const stepError = stepUpsertError;
 
     if (stepError) {
-      log.error("Failed to update verification step", { error: stepError });
+      log.error("Failed to update verification step", { error: stepError, requestId });
 
       // Clean up the orphaned artifact row and R2 file so they don't
       // accumulate without a matching verification_step record.
@@ -515,7 +541,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json(
+      return jsonError(
         {
           error: "Failed to save verification step. Please retry the upload.",
           code: "step_upsert_failed",
@@ -579,6 +605,7 @@ export async function POST(request: NextRequest) {
 
     if (sessionUpsertError) {
       log.error("Failed to update verification session — artifact saved, session out of sync", {
+        requestId,
         error: sessionUpsertError.message,
         userId: user.id,
         artifactId: artifact.id,
@@ -693,6 +720,7 @@ export async function POST(request: NextRequest) {
           : "unknown";
 
     log.error("Unexpected error in verification upload", {
+      requestId,
       error: message,
       stack,
       category: errorCategory,
@@ -707,7 +735,7 @@ export async function POST(request: NextRequest) {
           ? "config_missing"
           : "unexpected_error";
 
-    return NextResponse.json(
+    return jsonError(
       {
         error:
           process.env.NODE_ENV === "development"

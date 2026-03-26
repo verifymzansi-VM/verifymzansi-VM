@@ -365,6 +365,11 @@ describe("POST /api/verification/upload", () => {
     const response = await POST(req);
     expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe("45");
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        requestId: expect.any(String),
+      })
+    );
   });
 
   it("returns storage_unavailable in production when no writable KYC storage is configured", async () => {
@@ -380,9 +385,11 @@ describe("POST /api/verification/upload", () => {
     );
 
     expect(response.status).toBe(503);
+    expect(response.headers.get("X-Request-Id")).toEqual(expect.any(String));
     await expect(response.json()).resolves.toEqual(
       expect.objectContaining({
         code: "storage_unavailable",
+        requestId: expect.any(String),
       })
     );
     expect(mockUploadKycDocument).not.toHaveBeenCalled();

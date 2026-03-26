@@ -111,6 +111,32 @@ describe("launch env validation", () => {
     expect(env.R2_PUBLIC_BUCKET).toBe("verifymzansi-public");
   });
 
+  it("accepts production launch validation with native R2 bindings and no S3 credentials", () => {
+    const nativeBindingEnv = {
+      ...validProductionEnv,
+      R2_ACCOUNT_ID: "",
+      R2_ACCESS_KEY_ID: "",
+      R2_SECRET_ACCESS_KEY: "",
+      R2_PRIVATE_BUCKET: "verifymzansi-private",
+      R2_PUBLIC_BUCKET: "verifymzansi-public",
+    };
+
+    const summary = validateLaunchConfiguration(nativeBindingEnv, { mode: "production" });
+
+    expect(summary.isValid).toBe(true);
+    expect(summary.errors).not.toContainEqual(
+      expect.objectContaining({
+        name: "R2 storage",
+      })
+    );
+    expect(summary.checks).toContainEqual(
+      expect.objectContaining({
+        name: "R2 storage",
+        status: "pass",
+      })
+    );
+  });
+
   it("fails fast on invalid production app urls", () => {
     applyEnv({
       ...validProductionEnv,

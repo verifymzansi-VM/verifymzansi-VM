@@ -54,9 +54,6 @@ const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
     "AFRICASTALKING_API_KEY",
     "AFRICASTALKING_USERNAME",
     "RESEND_API_KEY",
-    "R2_ACCOUNT_ID",
-    "R2_ACCESS_KEY_ID",
-    "R2_SECRET_ACCESS_KEY",
     "KYC_ENCRYPTION_KEY",
     "ID_ENCRYPTION_KEY",
     "HMAC_SECRET",
@@ -72,9 +69,6 @@ const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
     "AFRICASTALKING_USERNAME",
     "AFRICASTALKING_SENDER_ID",
     "RESEND_API_KEY",
-    "R2_ACCOUNT_ID",
-    "R2_ACCESS_KEY_ID",
-    "R2_SECRET_ACCESS_KEY",
     "KYC_ENCRYPTION_KEY",
     "ID_ENCRYPTION_KEY",
     "HMAC_SECRET",
@@ -96,9 +90,6 @@ const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
     "OZOW_SITE_CODE",
     "OZOW_WEBHOOK_SECRET",
     "RESEND_API_KEY",
-    "R2_ACCOUNT_ID",
-    "R2_ACCESS_KEY_ID",
-    "R2_SECRET_ACCESS_KEY",
     "KYC_ENCRYPTION_KEY",
     "ID_ENCRYPTION_KEY",
     "HMAC_SECRET",
@@ -110,8 +101,6 @@ const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
 
 const PRODUCTION_SECRET_KEYS = [
   "SUPABASE_SERVICE_ROLE_KEY",
-  "R2_ACCESS_KEY_ID",
-  "R2_SECRET_ACCESS_KEY",
   "KYC_ENCRYPTION_KEY",
   "ID_ENCRYPTION_KEY",
   "HMAC_SECRET",
@@ -166,6 +155,18 @@ function isPlaceholderValue(value?: string): boolean {
     lowered.startsWith("changeme") ||
     lowered.startsWith("replace-me") ||
     lowered === "your-value-here"
+  );
+}
+
+function hasNativeR2BindingConfig(env: EnvSource): boolean {
+  return hasValue(env.R2_PRIVATE_BUCKET) || hasValue(env.R2_PUBLIC_BUCKET);
+}
+
+function hasS3R2CredentialConfig(env: EnvSource): boolean {
+  return (
+    hasValue(env.R2_ACCOUNT_ID) &&
+    hasValue(env.R2_ACCESS_KEY_ID) &&
+    hasValue(env.R2_SECRET_ACCESS_KEY)
   );
 }
 
@@ -363,25 +364,50 @@ export function validateLaunchConfiguration(
     );
   }
 
-  const r2AccountId = env.R2_ACCOUNT_ID;
-  const r2AccessKey = env.R2_ACCESS_KEY_ID;
-  const r2SecretKey = env.R2_SECRET_ACCESS_KEY;
-  if (
-    hasValue(r2AccountId) &&
-    hasValue(r2AccessKey) &&
-    hasValue(r2SecretKey) &&
-    r2AccountId.length >= 8 &&
-    r2AccessKey.length >= 8 &&
-    r2SecretKey.length >= 8
-  ) {
-    addCheck(checks, "R2 credentials", "pass", "R2 credential values look populated");
+  const hasNativeR2 = hasNativeR2BindingConfig(env);
+  const hasS3R2 = hasS3R2CredentialConfig(env);
+
+  if (hasNativeR2 && hasS3R2) {
+    addCheck(
+      checks,
+      "R2 storage",
+      "pass",
+      "Native R2 bucket bindings and S3-compatible credentials are both configured"
+    );
+  } else if (hasNativeR2) {
+    addCheck(
+      checks,
+      "R2 storage",
+      "pass",
+      "Native Cloudflare R2 bucket binding configuration is present"
+    );
+  } else if (hasS3R2) {
+    const r2AccountId = env.R2_ACCOUNT_ID;
+    const r2AccessKey = env.R2_ACCESS_KEY_ID;
+    const r2SecretKey = env.R2_SECRET_ACCESS_KEY;
+    const looksValid =
+      hasValue(r2AccountId) &&
+      hasValue(r2AccessKey) &&
+      hasValue(r2SecretKey) &&
+      r2AccountId.length >= 8 &&
+      r2AccessKey.length >= 8 &&
+      r2SecretKey.length >= 8;
+
+    addCheck(
+      checks,
+      "R2 storage",
+      looksValid ? "pass" : mode === "production" ? "fail" : "warn",
+      looksValid
+        ? "S3-compatible R2 credential values look populated"
+        : "S3-compatible R2 credentials look incomplete or too short for a real deployment"
+    );
   } else {
     const status = mode === "production" ? "fail" : "warn";
     addCheck(
       checks,
-      "R2 credentials",
+      "R2 storage",
       status,
-      "R2 credentials look incomplete or too short for a real deployment"
+      "Configure either native Cloudflare R2 bucket bindings or S3-compatible R2 credentials"
     );
   }
 

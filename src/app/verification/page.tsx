@@ -70,12 +70,15 @@ const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"];
 const OTP_RESEND_COOLDOWN_SECONDS = 30;
 const EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION =
   "Check your inbox for the confirmation link, then return here to continue with document and location verification.";
+const VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION =
+  "Verification is temporarily unavailable right now. Please try again later.";
 
 type VerificationApiResponse = {
   error?: string;
   code?: string;
   detail?: string;
   retryAfter?: number;
+  requestId?: string;
 };
 
 type OtpSendResponse = VerificationApiResponse;
@@ -91,12 +94,19 @@ const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
 
 class SubmissionError extends Error {
   code?: string;
+  requestId?: string;
 
-  constructor(message: string, code?: string) {
+  constructor(message: string, code?: string, requestId?: string) {
     super(message);
     this.name = "SubmissionError";
     this.code = code;
+    this.requestId = requestId;
   }
+}
+
+function appendRequestId(message: string, requestId?: string): string {
+  if (!requestId) return message;
+  return `${message} Ref: ${requestId}`;
 }
 
 function mapUploadFailureMessage(label: string, error: unknown, code?: string): string {
@@ -301,6 +311,7 @@ export default function VerificationPage() {
   const [otpRetryAfterSeconds, setOtpRetryAfterSeconds] = useState(0);
   const [otpSupportMessage, setOtpSupportMessage] = useState<string | null>(null);
   const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
+  const [verificationUnavailable, setVerificationUnavailable] = useState(false);
 
   const [idNumber, setIdNumber] = useState("");
   const [idFile, setIdFile] = useState<File | null>(null);
@@ -383,7 +394,7 @@ export default function VerificationPage() {
       }),
     [serverStepMap]
   );
-  const verificationSubmissionBlocked = emailConfirmationRequired;
+  const verificationSubmissionBlocked = emailConfirmationRequired || verificationUnavailable;
 
   const applyEmailConfirmationBlocker = useCallback((payload?: VerificationApiResponse | null) => {
     if (!isVerificationEmailConfirmationRequired(payload)) {
@@ -492,8 +503,11 @@ export default function VerificationPage() {
               variant: "destructive",
             });
           }
+        } else if (res.status === 404) {
+          if (!cancelled) {
+            setVerificationUnavailable(true);
+          }
         }
-        // 404 means v2 not enabled — use legacy flow silently
       } catch {
         // Session start failed — fall back to legacy
       } finally {
@@ -892,16 +906,21 @@ export default function VerificationPage() {
         if (applyEmailConfirmationBlocker(payload)) {
           throw new SubmissionError(
             VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE,
-            VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE
+            VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE,
+            payload.requestId
           );
         }
         throw new SubmissionError(
-          mapUploadFailureMessage(
-            label,
-            payload.error || `Failed to upload ${label}`,
-            payload.code
+          appendRequestId(
+            mapUploadFailureMessage(
+              label,
+              payload.error || `Failed to upload ${label}`,
+              payload.code
+            ),
+            payload.requestId
           ),
-          payload.code
+          payload.code,
+          payload.requestId
         );
       }
       return payload;
@@ -1222,9 +1241,15 @@ export default function VerificationPage() {
                 <CardContent className="space-y-2 p-4 text-sm">
                   <div className="rounded-md border border-amber-400/40 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                     <p className="font-medium">
-                      Confirm your email before submitting documents and location.
+                      {verificationUnavailable
+                        ? "Verification temporarily unavailable."
+                        : "Confirm your email before submitting documents and location."}
                     </p>
-                    <p className="mt-1 text-xs">{EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION}</p>
+                    <p className="mt-1 text-xs">
+                      {verificationUnavailable
+                        ? VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION
+                        : EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION}
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -1264,7 +1289,7 @@ export default function VerificationPage() {
                       onChange={(e) => handlePhoneChange(e.target.value)}
                       pattern="^(\\+27|0)[6-8][0-9]{8}$"
                       title="Enter a valid SA mobile number (e.g. 071 234 5678)"
-                      disabled={phoneVerified}
+                      disabled={phoneVerified || verificationUnavailable}
                     />
                   </div>
 
@@ -1272,7 +1297,12 @@ export default function VerificationPage() {
                     <div className="space-y-2">
                       <Button
                         onClick={handleSendOtp}
-                        disabled={isLoading || !isPhoneValid || otpRetryAfterSeconds > 0}
+                        disabled={
+                          isLoading ||
+                          !isPhoneValid ||
+                          otpRetryAfterSeconds > 0 ||
+                          verificationUnavailable
+                        }
                         variant="trust-verified"
                         className="gap-2"
                       >

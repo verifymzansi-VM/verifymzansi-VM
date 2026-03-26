@@ -361,6 +361,22 @@ describe("VerificationPage", () => {
     expect(screen.getByRole("button", { name: /^Continue$/i })).toBeDisabled();
   });
 
+  it("blocks the verification flow when session start reports v2 is unavailable", async () => {
+    sessionResponse = jsonResponse({ error: "New verification flow is not yet enabled" }, 404);
+    statusResponse = jsonResponse({ error: "Account profile not found" }, 404);
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Verification temporarily unavailable\./i)).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/Verification is temporarily unavailable right now/i)
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/SA mobile number/i)).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Send code/i })).toBeDisabled();
+  });
+
   it("shows the explicit email-confirmation blocker when upload is rejected", async () => {
     sessionResponse = jsonResponse(
       {
@@ -439,6 +455,7 @@ describe("VerificationPage", () => {
       {
         error: "Document upload temporarily unavailable",
         code: "storage_unavailable",
+        requestId: "req_test_123",
       },
       503
     );
@@ -465,7 +482,7 @@ describe("VerificationPage", () => {
           expect.objectContaining({
             title: "ID document upload failed",
             description:
-              "ID document upload is temporarily unavailable. Please try again in a moment.",
+              "ID document upload is temporarily unavailable. Please try again in a moment. Ref: req_test_123",
           })
         );
       },
