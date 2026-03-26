@@ -29,6 +29,33 @@ interface R2BucketBinding {
   ): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
 }
 
+function isR2BucketBinding(value: unknown): value is R2BucketBinding {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.put === "function" &&
+    typeof candidate.get === "function" &&
+    typeof candidate.delete === "function"
+  );
+}
+
+function getBindingFromEnvObject(
+  bucketName: string,
+  envObject: Record<string, unknown>
+): R2BucketBinding | null {
+  const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+  const publicBucket = process.env.R2_PUBLIC_BUCKET || "verifymzansi-public";
+
+  if (bucketName === privateBucket && isR2BucketBinding(envObject.PRIVATE_BUCKET)) {
+    return envObject.PRIVATE_BUCKET;
+  }
+  if (bucketName === publicBucket && isR2BucketBinding(envObject.PUBLIC_BUCKET)) {
+    return envObject.PUBLIC_BUCKET;
+  }
+
+  return null;
+}
+
 /**
  * Try to obtain a native R2 bucket binding from the Cloudflare Workers context.
  * Returns null when running outside Cloudflare (e.g. local `next dev`).
@@ -38,21 +65,17 @@ interface R2BucketBinding {
  *   - PUBLIC_BUCKET  → verifymzansi-public
  */
 async function getR2BucketBinding(bucketName: string): Promise<R2BucketBinding | null> {
+  // Fast path: some runtimes expose bindings directly via process.env-like object.
+  const processEnvCandidate = process.env as unknown as Record<string, unknown>;
+  const fromProcessEnv = getBindingFromEnvObject(bucketName, processEnvCandidate);
+  if (fromProcessEnv) {
+    return fromProcessEnv;
+  }
+
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const ctx = await getCloudflareContext({ async: true });
-    const cfEnv = ctx.env as Record<string, unknown>;
-
-    const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
-    const publicBucket = process.env.R2_PUBLIC_BUCKET || "verifymzansi-public";
-
-    if (bucketName === privateBucket && cfEnv.PRIVATE_BUCKET) {
-      return cfEnv.PRIVATE_BUCKET as R2BucketBinding;
-    }
-    if (bucketName === publicBucket && cfEnv.PUBLIC_BUCKET) {
-      return cfEnv.PUBLIC_BUCKET as R2BucketBinding;
-    }
-    return null;
+    return getBindingFromEnvObject(bucketName, ctx.env as Record<string, unknown>);
   } catch {
     // Not running in a Cloudflare Workers context — fall back to S3 API.
     return null;

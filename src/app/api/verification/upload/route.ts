@@ -54,9 +54,28 @@ export async function POST(request: NextRequest) {
       // Check whether the native Cloudflare R2 binding is available before failing.
       let hasNativeR2 = false;
       try {
-        const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-        const ctx = await getCloudflareContext({ async: true });
-        hasNativeR2 = Boolean((ctx.env as Record<string, unknown>).PRIVATE_BUCKET);
+        const processEnvCandidate = process.env as unknown as Record<string, unknown>;
+        const processEnvBinding = processEnvCandidate.PRIVATE_BUCKET as
+          | Record<string, unknown>
+          | undefined;
+        hasNativeR2 =
+          Boolean(processEnvBinding) &&
+          typeof processEnvBinding?.put === "function" &&
+          typeof processEnvBinding?.get === "function" &&
+          typeof processEnvBinding?.delete === "function";
+
+        if (!hasNativeR2) {
+          const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+          const ctx = await getCloudflareContext({ async: true });
+          const ctxBinding = (ctx.env as Record<string, unknown>).PRIVATE_BUCKET as
+            | Record<string, unknown>
+            | undefined;
+          hasNativeR2 =
+            Boolean(ctxBinding) &&
+            typeof ctxBinding?.put === "function" &&
+            typeof ctxBinding?.get === "function" &&
+            typeof ctxBinding?.delete === "function";
+        }
       } catch {
         hasNativeR2 = false;
       }
