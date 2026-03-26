@@ -13,6 +13,7 @@ const {
   mockFrom,
   mockUploadKycDocument,
   mockDeleteFromR2,
+  mockHasR2WriteAccess,
   mockLogAuditEvent,
   mockProcessKycArtifact,
   mockCheckRateLimit,
@@ -28,6 +29,7 @@ const {
   mockFrom: vi.fn(),
   mockUploadKycDocument: vi.fn(),
   mockDeleteFromR2: vi.fn(),
+  mockHasR2WriteAccess: vi.fn(),
   mockLogAuditEvent: vi.fn(),
   mockProcessKycArtifact: vi.fn(),
   mockCheckRateLimit: vi.fn(),
@@ -56,6 +58,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 vi.mock("@/lib/services/storage", () => ({
   uploadKycDocument: mockUploadKycDocument,
   deleteFromR2: mockDeleteFromR2,
+  hasR2WriteAccess: mockHasR2WriteAccess,
 }));
 
 vi.mock("@/lib/services/audit", () => ({
@@ -278,6 +281,7 @@ describe("POST /api/verification/upload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
+    mockHasR2WriteAccess.mockResolvedValue(true);
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
     mockIsFeatureEnabled.mockResolvedValue(true);
@@ -290,6 +294,7 @@ describe("POST /api/verification/upload", () => {
     mockStripExifFromJpeg.mockImplementation((buf: Uint8Array) => buf);
     mockStripMetadataFromPng.mockImplementation((buf: Uint8Array) => buf);
     vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("KYC_ENCRYPTION_KEY", "ab".repeat(32));
     vi.stubEnv(
       "ID_ENCRYPTION_KEY",
       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" // secret-scan: allow
@@ -361,6 +366,57 @@ describe("POST /api/verification/upload", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe("45");
   });
+
+  it("returns storage_unavailable in production when no writable KYC storage is configured", async () => {
+    mockAuth({ id: "user-1" });
+    mockHasR2WriteAccess.mockResolvedValue(false);
+    vi.stubEnv("NODE_ENV", "production");
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+      })
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        code: "storage_unavailable",
+      })
+    );
+    expect(mockUploadKycDocument).not.toHaveBeenCalled();
+  });
+
+  it.each(["id_document", "selfie"])(
+    "allows %s uploads in production when native KYC storage is available",
+    async (docType) => {
+      mockAuth({ id: "user-1", email: "test@example.com" });
+      setupDefaultAdminMocks();
+      mockHasR2WriteAccess.mockResolvedValue(true);
+      vi.stubEnv("NODE_ENV", "production");
+
+      const file =
+        docType === "selfie"
+          ? createTestFile("selfie-data", "image/png", "selfie.png")
+          : createTestFile();
+
+      const response = await POST(
+        createFormDataRequest({
+          file,
+          docType,
+        })
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual(
+        expect.objectContaining({
+          success: true,
+          stepType: docType === "selfie" ? "selfie" : "id_doc",
+        })
+      );
+    }
+  );
 
   it("returns success for valid id_document upload", async () => {
     mockAuth({ id: "user-1", email: "test@example.com" });

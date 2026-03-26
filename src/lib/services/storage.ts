@@ -29,6 +29,10 @@ interface R2BucketBinding {
   ): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
 }
 
+type CloudflareContextLike = {
+  env?: Record<string, unknown>;
+};
+
 function isR2BucketBinding(value: unknown): value is R2BucketBinding {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
@@ -56,6 +60,18 @@ function getBindingFromEnvObject(
   return null;
 }
 
+function getCloudflareContextFromGlobalScope(): CloudflareContextLike | null {
+  const contextSymbol = Symbol.for("__cloudflare-context__");
+  const globalScope = globalThis as Record<PropertyKey, unknown>;
+  const context = globalScope[contextSymbol] as CloudflareContextLike | undefined;
+
+  if (!context || typeof context !== "object") {
+    return null;
+  }
+
+  return context;
+}
+
 /**
  * Try to obtain a native R2 bucket binding from the Cloudflare Workers context.
  * Returns null when running outside Cloudflare (e.g. local `next dev`).
@@ -72,6 +88,14 @@ async function getR2BucketBinding(bucketName: string): Promise<R2BucketBinding |
     return fromProcessEnv;
   }
 
+  const globalContext = getCloudflareContextFromGlobalScope();
+  if (globalContext?.env) {
+    const fromGlobalContext = getBindingFromEnvObject(bucketName, globalContext.env);
+    if (fromGlobalContext) {
+      return fromGlobalContext;
+    }
+  }
+
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const ctx = await getCloudflareContext({ async: true });
@@ -80,6 +104,16 @@ async function getR2BucketBinding(bucketName: string): Promise<R2BucketBinding |
     // Not running in a Cloudflare Workers context — fall back to S3 API.
     return null;
   }
+}
+
+export async function hasR2WriteAccess(bucketName: string): Promise<boolean> {
+  if (await getR2BucketBinding(bucketName)) {
+    return true;
+  }
+
+  return Boolean(
+    process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
+  );
 }
 
 interface UploadParams {

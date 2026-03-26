@@ -417,6 +417,62 @@ describe("VerificationPage", () => {
     expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeDisabled();
   });
 
+  it("shows the shared temporary-unavailable message when KYC storage is unavailable", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-1",
+        completedSteps: ["phone"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: null,
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        steps: [{ step_type: "phone", status: "approved" }],
+      }),
+      200
+    );
+    verificationUploadResponse = jsonResponse(
+      {
+        error: "Document upload temporarily unavailable",
+        code: "storage_unavailable",
+      },
+      503
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/13-digit SA ID number/i), {
+      target: { value: "8001015009087" },
+    });
+    fireEvent.change(screen.getByLabelText(/ID file \(image\/PDF\)/i), {
+      target: {
+        files: [new File(["fake-pdf"], "id.pdf", { type: "application/pdf" })],
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    await waitFor(
+      () => {
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "ID document upload failed",
+            description:
+              "ID document upload is temporarily unavailable. Please try again in a moment.",
+          })
+        );
+      },
+      { timeout: 3500 }
+    );
+  });
+
   it("shows the explicit email-confirmation blocker when manual location is rejected", async () => {
     sessionResponse = jsonResponse(
       {

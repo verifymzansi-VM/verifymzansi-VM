@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { uploadKycDocument, deleteFromR2 } from "@/lib/services/storage";
+import { uploadKycDocument, deleteFromR2, hasR2WriteAccess } from "@/lib/services/storage";
 import { logAuditEvent } from "@/lib/services/audit";
 import { fileUploadSchema, validateUploadedFile } from "@/lib/validations/verification";
 import { processKycArtifact } from "@/lib/services/kyc-engine";
@@ -43,44 +43,15 @@ import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
 export async function POST(request: NextRequest) {
   try {
     const allowDevFallback = isStrictLocalDevelopmentRequest(request);
-    const hasStorageSecrets = Boolean(
-      process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
-    );
 
     // In production, require either S3 credentials OR a native R2 Worker binding.
     // Native bindings (PRIVATE_BUCKET) are preferred on Cloudflare Workers and do
     // not need separate API credentials — they are configured in wrangler.toml.
-    if (process.env.NODE_ENV === "production" && !hasStorageSecrets) {
-      // Check whether the native Cloudflare R2 binding is available before failing.
-      let hasNativeR2 = false;
-      try {
-        const processEnvCandidate = process.env as unknown as Record<string, unknown>;
-        const processEnvBinding = processEnvCandidate.PRIVATE_BUCKET as
-          | Record<string, unknown>
-          | undefined;
-        hasNativeR2 =
-          Boolean(processEnvBinding) &&
-          typeof processEnvBinding?.put === "function" &&
-          typeof processEnvBinding?.get === "function" &&
-          typeof processEnvBinding?.delete === "function";
+    if (process.env.NODE_ENV === "production") {
+      const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+      const hasWritableStorage = await hasR2WriteAccess(privateBucket);
 
-        if (!hasNativeR2) {
-          const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-          const ctx = await getCloudflareContext({ async: true });
-          const ctxBinding = (ctx.env as Record<string, unknown>).PRIVATE_BUCKET as
-            | Record<string, unknown>
-            | undefined;
-          hasNativeR2 =
-            Boolean(ctxBinding) &&
-            typeof ctxBinding?.put === "function" &&
-            typeof ctxBinding?.get === "function" &&
-            typeof ctxBinding?.delete === "function";
-        }
-      } catch {
-        hasNativeR2 = false;
-      }
-
-      if (!hasNativeR2) {
+      if (!hasWritableStorage) {
         log.error("R2 storage is not available: missing S3 credentials and no native binding", {
           hasAccountId: Boolean(process.env.R2_ACCOUNT_ID),
           hasAccessKey: Boolean(process.env.R2_ACCESS_KEY_ID),
