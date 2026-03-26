@@ -115,7 +115,7 @@ function HeaderInner({
   }
 
   return (
-    <header className="sticky top-0 z-[70] w-full border-b bg-background lg:bg-background/95 lg:backdrop-blur lg:supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-[110] isolate w-full border-b bg-background lg:bg-background/95 lg:backdrop-blur lg:supports-[backdrop-filter]:bg-background/60">
       <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
         <Link
           href="/"
@@ -250,11 +250,12 @@ function HeaderInner({
 
         {/* Mobile Hamburger */}
         <button
-          className="relative z-[80] justify-self-end rounded-md p-2 lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          onClick={() => setMobileOpen(!mobileOpen)}
+          type="button"
+          className="relative z-[120] justify-self-end rounded-md p-2 lg:hidden touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          onClick={() => setMobileOpen((prev) => !prev)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
           aria-controls="mobile-nav-menu"
-          aria-expanded={mobileOpen}
+          aria-expanded={mobileOpen ? "true" : "false"}
           data-testid="mobile-menu-toggle"
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

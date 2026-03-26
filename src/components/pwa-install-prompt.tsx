@@ -34,6 +34,7 @@ export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [showIOSHelp, setShowIOSHelp] = useState(false);
 
   useEffect(() => {
     // Check if the user has already dismissed or installed the app in this session/device
@@ -79,6 +80,7 @@ export function PwaInstallPrompt() {
 
   const handleInstallClick = async () => {
     if (isIOSFallback) {
+      setShowIOSHelp(true);
       return;
     }
 
@@ -140,6 +142,39 @@ export function PwaInstallPrompt() {
           </button>
         </div>
       </div>
+
+      {showIOSHelp && (
+        <div
+          className="fixed inset-0 z-[120] bg-black/70 px-4 py-6 flex items-end md:items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Install on iPhone"
+        >
+          <div className="w-full max-w-md rounded-2xl border bg-background p-5 shadow-2xl safe-area-inset-bottom">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-base font-semibold">Install on iPhone</h3>
+              <button
+                type="button"
+                onClick={() => setShowIOSHelp(false)}
+                className="rounded-full p-1 text-muted-foreground hover:bg-muted/50"
+                aria-label="Close install instructions"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <ol className="mt-3 space-y-2 text-sm text-muted-foreground list-decimal pl-5">
+              <li>Tap the Share button in Safari.</li>
+              <li>Scroll and tap Add to Home Screen.</li>
+              <li>Tap Add to finish installation.</li>
+            </ol>
+            <div className="mt-4 flex justify-end">
+              <Button size="sm" onClick={() => setShowIOSHelp(false)}>
+                Got it
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
