@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
-import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { isStaff } from "@/lib/auth/roles";
 import {
   getPlaywrightStubUserFromToken,
   PLAYWRIGHT_SESSION_COOKIE,
@@ -488,7 +488,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    if (!isModeratorOrAdmin(user)) {
+    if (!isStaff(user)) {
       if (isApiRoute) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }

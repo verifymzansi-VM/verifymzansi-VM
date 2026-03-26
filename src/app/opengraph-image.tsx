@@ -38,7 +38,6 @@ const glowStyle: CSSProperties = {
 
 const contentStyle: CSSProperties = {
   position: "relative",
-  zIndex: 1,
   display: "flex",
   width: "100%",
   height: "100%",
@@ -114,7 +113,7 @@ export default function OpenGraphImage() {
 
       <div style={contentStyle}>
         <div style={brandRowStyle}>
-          <img src={shieldSrc} width="128" height="128" alt="VerifyMzansi shield" />
+          <img src={shieldSrc} width={128} height={128} alt="VerifyMzansi shield" />
 
           <div style={brandTextStyle}>
             <div style={eyebrowStyle}>Promote With Trust</div>

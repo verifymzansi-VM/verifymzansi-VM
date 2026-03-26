@@ -293,11 +293,14 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
   });
 
   if (!launchSummary.isValid) {
-    // Launch validation failures are logged as warnings at runtime rather than
-    // throwing, so an issue in one service (e.g. Resend API key format) doesn't
-    // block unrelated features (e.g. KYC uploads, auth). The Zod schema above is
-    // the authoritative guard for required values.
     const msg = formatLaunchValidationFailure(validationMode, launchSummary.errors);
+    if (options.strict && validationMode === "production") {
+      // In strict production mode, launch validation failures are fatal.
+      // This prevents deploying with insecure config (e.g. HTTP app URL).
+      throw new Error(msg);
+    }
+    // At runtime, log non-fatally so one misconfigured service doesn't
+    // block unrelated features (Zod schema is the authoritative guard).
     console.error(`[ENV] Launch validation failed (non-fatal):\n${msg}`);
   }
 

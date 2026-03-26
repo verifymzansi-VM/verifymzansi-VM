@@ -38,6 +38,8 @@ export function normalizeUserRole(role: string | null | undefined): UserRole | n
       return "member";
     case "moderator":
       return "moderator";
+    case "governance_controller":
+      return "governance_controller";
     case "admin":
       return "admin";
     default:

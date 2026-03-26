@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
+import { getRoleFromUser, isStaff } from "@/lib/auth/roles";
 import {
   getAdminDashboardStats,
   getDashboardReports,
@@ -25,6 +25,18 @@ export const metadata = {
   description: "VerifyMzansi admin overview — pending verifications, reports, and platform stats.",
 };
 
+const ROLE_LABELS: Record<string, string> = {
+  moderator: "Moderator",
+  governance_controller: "Governance",
+  admin: "Admin",
+};
+
+const ROLE_VARIANTS: Record<string, "secondary" | "destructive" | "outline"> = {
+  moderator: "secondary",
+  governance_controller: "outline",
+  admin: "destructive",
+};
+
 export default async function AdminPage() {
   const supabase = await createClient();
   const {
@@ -33,14 +45,17 @@ export default async function AdminPage() {
   if (!user) redirect("/login");
 
   const role = getRoleFromUser(user);
-  if (!isModeratorOrAdmin(user) || !role) redirect("/dashboard");
+  if (!isStaff(user) || !role) redirect("/dashboard");
 
   const isAdminRole = role === "admin";
+  const isGovernance = role === "governance_controller";
+  const roleLabel = ROLE_LABELS[role] ?? role;
+  const roleBadgeVariant = ROLE_VARIANTS[role] ?? "secondary";
 
   const [stats, reports, extended, areaSummary, areaCounts, stepCounts] = await Promise.all([
     getAdminDashboardStats(),
     getDashboardReports(10),
-    isAdminRole ? getExtendedPlatformStats() : Promise.resolve(null),
+    isAdminRole || isGovernance ? getExtendedPlatformStats() : Promise.resolve(null),
     getDashboardAreaSummary(),
     getAreaCardCounts(),
     getVerificationStepCounts(),
@@ -71,7 +86,9 @@ export default async function AdminPage() {
   const overviewMetrics = [
     { label: "Accounts", value: totalAccounts },
     ...(verifiedPct !== null ? [{ label: "Verified", value: `${verifiedPct}%` }] : []),
-    ...(isAdminRole && extended ? [{ label: "Live Content", value: extended.liveListings }] : []),
+    ...((isAdminRole || isGovernance) && extended
+      ? [{ label: "Live Content", value: extended.liveListings }]
+      : []),
     { label: "KYC queue", value: stats.pendingVerifications },
     { label: "Reports", value: stats.openReports },
     { label: "Moderation", value: stats.pendingModeration },
@@ -81,9 +98,7 @@ export default async function AdminPage() {
     <div className="space-y-4">
       {/* ── Header ──────────────────────────────────────────── */}
       <PageHeader title="Admin" breadcrumbs={[{ label: "Admin" }]}>
-        <Badge variant={isAdminRole ? "destructive" : "secondary"}>
-          {isAdminRole ? "Admin" : "Moderator"}
-        </Badge>
+        <Badge variant={roleBadgeVariant}>{roleLabel}</Badge>
       </PageHeader>
 
       {/* ── 1. Overview Strip ───────────────────────────────── */}
@@ -111,8 +126,8 @@ export default async function AdminPage() {
         />
       </div>
 
-      {/* ── 4. Admin Controls (admin only) ──────────────────── */}
-      {isAdminRole && extended && (
+      {/* ── 4. Admin/Governance Controls ───────────────────── */}
+      {(isAdminRole || isGovernance) && extended && (
         <AdminControls
           enforcementStats={{
             hidden: extended.hiddenListings,

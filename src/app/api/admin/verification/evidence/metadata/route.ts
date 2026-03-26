@@ -16,6 +16,7 @@ import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
 import { optionalUuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("EvidenceMetadata");
 const evidenceMetadataQuerySchema = z
@@ -216,6 +217,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) {
+      return originBlock;
+    }
+
     const parsedBody = await parseAndValidateJsonRequest(request, evidenceMetadataBodySchema, {
       invalidJsonMessage: "Invalid JSON body",
       validationErrorMessage: "Invalid evidence metadata body",

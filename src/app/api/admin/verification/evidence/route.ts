@@ -16,6 +16,7 @@ import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib/utils/api";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("EvidenceProxy");
 const evidenceQuerySchema = z.object({
@@ -211,6 +212,11 @@ function hashIp(ip: string, secret: string | undefined): string {
  */
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) {
+      return originBlock;
+    }
+
     const parsedBody = await parseAndValidateJsonRequest(request, evidenceBodySchema, {
       invalidJsonMessage: "Invalid JSON body",
       validationErrorMessage: "artifactId is required in request body",

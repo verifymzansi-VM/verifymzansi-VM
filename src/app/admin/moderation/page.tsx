@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { ModerationQueueClient } from "./moderation-queue-client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { isStaff } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Moderation Queue — Admin",
@@ -16,7 +16,7 @@ export default async function AdminModerationPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !isModeratorOrAdmin(user)) {
+  if (!user || !isStaff(user)) {
     redirect("/dashboard");
   }
 

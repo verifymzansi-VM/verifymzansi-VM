@@ -2,7 +2,7 @@ import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getRoleFromUser, isModeratorOrAdmin } from "@/lib/auth/roles";
+import { getRoleFromUser, isStaff, asStaffRole } from "@/lib/auth/roles";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { getPendingModerationCount } from "@/lib/utils/admin-queries";
 
@@ -11,20 +11,28 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
+const WORKSPACE_LABELS: Record<string, string> = {
+  moderator: "Operations",
+  governance_controller: "Governance",
+  admin: "Intelligence",
+};
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Default to unprivileged role — never grant moderator/admin implicitly.
+  // Default to unprivileged role — never grant staff access implicitly.
   // The middleware enforces admin access, but defense-in-depth ensures
-  // non-admin authenticated users are never shown the admin UI.
-  if (!user || !isModeratorOrAdmin(user)) {
+  // non-staff authenticated users are never shown the admin UI.
+  if (!user || !isStaff(user)) {
     const { redirect } = await import("next/navigation");
     redirect(!user ? "/login" : "/dashboard");
   }
   const role = getRoleFromUser(user) || "viewer";
+  const staffRole = asStaffRole(role);
+  const workspaceLabel = staffRole ? (WORKSPACE_LABELS[staffRole] ?? "Admin") : "Admin";
 
   // Fetch counts for sidebar badges (using admin client for cross-user data)
   const admin = createAdminClient();
@@ -51,7 +59,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <div className="flex items-center gap-3">
             <BrandLogo size="sm" />
             <span className="rounded-full border border-border px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Admin
+              {workspaceLabel}
             </span>
           </div>
         </div>

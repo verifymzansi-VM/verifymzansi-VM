@@ -65,11 +65,27 @@ export type AuditAction =
   | "kyc_session_started"
   | "kyc_gps_submitted"
   | "kyc_proof_uploaded"
-  | "kyc_manual_location_submitted";
+  | "kyc_manual_location_submitted"
+  // Decision chain actions
+  | "decision_recommended"
+  | "decision_approved"
+  | "decision_rejected"
+  | "decision_overridden"
+  | "decision_escalated"
+  | "decision_reopened"
+  // Appeal actions
+  | "appeal_submitted"
+  | "appeal_reviewed"
+  | "appeal_upheld"
+  | "appeal_overturned"
+  // Role lifecycle actions
+  | "role_assigned"
+  | "role_revoked"
+  | "role_assignment_reviewed";
 
 interface AuditLogEntry {
   actorId: string;
-  actorRole?: "member" | "moderator" | "admin" | "system" | "owner";
+  actorRole?: "member" | "moderator" | "governance_controller" | "admin" | "system" | "owner";
   action: AuditAction;
   targetType?: string;
   targetId?: string;

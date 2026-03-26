@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { VerificationAlertBanner } from "@/components/admin/verification-alert-banner";
 import { KycQueueClient } from "./kyc-queue-client";
 import { getPendingVerifications } from "@/lib/utils/admin-queries";
-import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { isStaff } from "@/lib/auth/roles";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 
 export const metadata = {
@@ -18,7 +18,7 @@ export default async function AdminVerificationPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !isModeratorOrAdmin(user)) {
+  if (!user || !isStaff(user)) {
     redirect("/dashboard");
   }
 

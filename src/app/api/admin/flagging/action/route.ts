@@ -11,6 +11,9 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { sendAccountEnforcementEmail } from "@/lib/services/email";
+import { hasCapability } from "@/lib/auth/roles";
+import { createDecisionRecord } from "@/lib/services/decision-ledger";
+import type { StaffRole } from "@/types/enums";
 
 const log = createLogger("AdminFlagging");
 
@@ -139,6 +142,76 @@ export async function POST(request: Request) {
         { error: "Target content not found or has no associated account holder" },
         { status: 404 }
       );
+    }
+
+    // ── Decision Ledger Gate ───────────────────────────────────────────
+    // Sensitive actions (ban/suspend) require governance approval unless
+    // the actor already has the decision:approve capability.
+    const SENSITIVE_ACTIONS = ["ban", "suspend"];
+    if (SENSITIVE_ACTIONS.includes(action) && !hasCapability(user, "decision:approve")) {
+      let record: { id: string } | null = null;
+      try {
+        record = await createDecisionRecord({
+          caseType: "report",
+          caseId: reportId,
+          actionCategory: action === "ban" ? "account_ban" : "account_suspend",
+          recommenderId: user.id,
+          recommenderRole: adminRole as StaffRole,
+          recommendation: action,
+          rationale: reason || `Recommended: ${action}`,
+          evidenceRefs: [reportId],
+          beforeState: {
+            reportId,
+            targetType: report.target_type,
+            targetId: report.target_id,
+            ownerId,
+            currentStatus: report.status,
+          },
+        });
+      } catch (err) {
+        log.warn("Decision record creation failed; continuing with direct enforcement", {
+          reportId,
+          action,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      if (record) {
+        // Record moderation action as "pending_approval"
+        await admin.from("moderation_actions").insert({
+          report_id: reportId,
+          actor_id: user.id,
+          action: `${action}_recommended`,
+          target_owner_id: ownerId,
+          area: report.area || null,
+          reason: reason || null,
+          duration_days: action === "suspend" ? durationDays : null,
+        });
+
+        await logAuditEvent({
+          actorId: user.id,
+          actorRole: adminRole,
+          action: "decision_recommended",
+          targetType: "report",
+          targetId: reportId,
+          metadata: {
+            enforcement_action: action,
+            decision_record_id: record.id,
+            reason,
+            ownerId,
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          action: `${action}_recommended`,
+          status: "pending_approval",
+          decisionRecordId: record.id,
+          message: `${action} recommended. Awaiting governance approval.`,
+        });
+      }
+      // If decision record creation fails, fall through to direct execution
+      // (graceful degradation) — logged by the ledger service
     }
 
     // Execute action

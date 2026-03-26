@@ -21,6 +21,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/auth/roles", () => ({
+  isStaff: vi.fn(() => true),
   isModeratorOrAdmin: vi.fn(() => true),
 }));
 

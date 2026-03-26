@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { PageHeader } from "@/components/layout/page-header";
-import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { isStaff } from "@/lib/auth/roles";
 import { EvidenceDeskClient } from "@/components/admin/evidence-desk";
 
 export const metadata = {
@@ -19,7 +19,7 @@ export default async function EvidenceDeskPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !isModeratorOrAdmin(user)) {
+  if (!user || !isStaff(user)) {
     redirect("/dashboard");
   }
 

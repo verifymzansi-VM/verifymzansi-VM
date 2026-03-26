@@ -138,8 +138,43 @@ export type EnforcementAction = "warn" | "hide" | "suspend" | "ban" | "dismiss";
 
 export type AccountStatus = "active" | "warned" | "suspended" | "banned";
 
-export type UserRole = "member" | "moderator" | "admin";
+export type UserRole = "member" | "moderator" | "governance_controller" | "admin";
 export type CompatibleUserRole = UserRole;
+
+/** Staff roles that can access the back-office. */
+export type StaffRole = "moderator" | "governance_controller" | "admin";
+
+/* ── Decision Lifecycle Enums ───────────────────────────── */
+
+/** Status of a decision record flowing through the recommendation → approval chain. */
+export type DecisionStatus =
+  | "recommended"
+  | "pending_approval"
+  | "approved"
+  | "rejected"
+  | "escalated"
+  | "appealed"
+  | "overridden"
+  | "cancelled";
+
+/** Category of actions that require the full decision chain. */
+export type SensitiveActionCategory =
+  | "kyc_override"
+  | "account_ban"
+  | "account_suspend"
+  | "content_removal"
+  | "data_deletion"
+  | "role_change"
+  | "policy_exception";
+
+/** Status of an appeal/reconsideration case. */
+export type AppealStatus =
+  | "submitted"
+  | "under_review"
+  | "upheld"
+  | "overturned"
+  | "partially_overturned"
+  | "dismissed";
 
 export type DsarType = "access" | "correction" | "deletion" | "objection";
 

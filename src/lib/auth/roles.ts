@@ -1,7 +1,79 @@
 import type { User } from "@supabase/supabase-js";
 import { normalizeUserRole } from "@/lib/account/compat";
+import type { StaffRole } from "@/types/enums";
 
 type MaybeUser = Pick<User, "app_metadata" | "is_anonymous"> | null | undefined;
+
+/* ── Capability Model ──────────────────────────────────────
+   Each back-office action is a named capability.
+   Roles are mapped to the capabilities they are allowed to exercise.
+   All authorization checks go through `hasCapability()`.
+   ────────────────────────────────────────────────────────── */
+
+export type Capability =
+  // Moderator operations
+  | "queue:view"
+  | "queue:claim"
+  | "case:view"
+  | "case:recommend"
+  | "case:escalate"
+  | "case:add_note"
+  // Governance controller decisions
+  | "decision:approve"
+  | "decision:reject"
+  | "decision:override"
+  | "decision:reopen"
+  | "appeal:review"
+  | "appeal:decide"
+  | "enforcement:execute"
+  | "role:assign"
+  | "role:revoke"
+  | "oversight:view"
+  // Admin intelligence (read-only)
+  | "bi:view"
+  | "bi:export"
+  | "bi:drill_down"
+  // Cross-role
+  | "audit:view"
+  | "feature_flag:toggle"
+  | "dsar:manage";
+
+const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
+  moderator: new Set<Capability>([
+    "queue:view",
+    "queue:claim",
+    "case:view",
+    "case:recommend",
+    "case:escalate",
+    "case:add_note",
+  ]),
+  governance_controller: new Set<Capability>([
+    "queue:view",
+    "case:view",
+    "case:add_note",
+    "decision:approve",
+    "decision:reject",
+    "decision:override",
+    "decision:reopen",
+    "appeal:review",
+    "appeal:decide",
+    "enforcement:execute",
+    "role:assign",
+    "role:revoke",
+    "oversight:view",
+    "audit:view",
+    "dsar:manage",
+  ]),
+  admin: new Set<Capability>([
+    "bi:view",
+    "bi:export",
+    "bi:drill_down",
+    "audit:view",
+    "feature_flag:toggle",
+  ]),
+};
+
+/* ── Role Extraction ──────────────────────────────────────── */
 
 function readRole(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== "object") {
@@ -35,16 +107,69 @@ export function isAdmin(user: MaybeUser): boolean {
   return getRoleFromUser(user) === "admin";
 }
 
-/** Check whether the given user has the `moderator` or `admin` role. */
-export function isModeratorOrAdmin(user: MaybeUser): boolean {
-  const role = getRoleFromUser(user);
-  return role === "admin" || role === "moderator";
+/** Check whether the given user has the `governance_controller` role. */
+export function isGovernanceController(user: MaybeUser): boolean {
+  return getRoleFromUser(user) === "governance_controller";
 }
 
-/** Narrow a role string to the admin/moderator union type, or null. */
+/** Check whether the user holds any staff role (moderator, governance_controller, or admin). */
+export function isStaff(user: MaybeUser): boolean {
+  const role = getRoleFromUser(user);
+  return role === "admin" || role === "moderator" || role === "governance_controller";
+}
+
+/**
+ * @deprecated Use `isStaff()` or capability checks instead.
+ * Kept for backward compatibility during migration.
+ */
+export function isModeratorOrAdmin(user: MaybeUser): boolean {
+  return isStaff(user);
+}
+
+/** Narrow a role string to a staff role union type, or null. */
+export function asStaffRole(role: string | null): StaffRole | null {
+  if (role === "admin" || role === "moderator" || role === "governance_controller") return role;
+  return null;
+}
+
+/**
+ * @deprecated Use `asStaffRole()` instead.
+ */
 export function asAdminRole(role: string | null): "admin" | "moderator" | null {
   if (role === "admin" || role === "moderator") return role;
   return null;
+}
+
+/**
+ * Check whether a user has a specific capability.
+ * This is the primary authorization check for the back-office.
+ */
+export function hasCapability(user: MaybeUser, capability: Capability): boolean {
+  const role = getRoleFromUser(user);
+  const staffRole = asStaffRole(role);
+  if (!staffRole) return false;
+  return ROLE_CAPABILITIES[staffRole].has(capability);
+}
+
+/**
+ * Check whether a user has ALL of the listed capabilities.
+ */
+export function hasAllCapabilities(user: MaybeUser, capabilities: readonly Capability[]): boolean {
+  return capabilities.every((cap) => hasCapability(user, cap));
+}
+
+/**
+ * Check whether a user has ANY of the listed capabilities.
+ */
+export function hasAnyCapability(user: MaybeUser, capabilities: readonly Capability[]): boolean {
+  return capabilities.some((cap) => hasCapability(user, cap));
+}
+
+/**
+ * Return the full set of capabilities for a role.
+ */
+export function getCapabilitiesForRole(role: StaffRole): ReadonlySet<Capability> {
+  return ROLE_CAPABILITIES[role];
 }
 
 /**

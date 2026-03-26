@@ -12,7 +12,7 @@ import {
   type DashboardReport,
 } from "@/lib/utils/admin-queries";
 import { calculateSlaState } from "@/lib/utils/sla";
-import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { isStaff } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Mzansi Business — Admin",
@@ -24,7 +24,7 @@ export default async function AdminBusinessesPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !isModeratorOrAdmin(user)) {
+  if (!user || !isStaff(user)) {
     redirect("/dashboard");
   }
 

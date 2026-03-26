@@ -17,6 +17,12 @@ import {
   Building2,
   Megaphone,
   Clock,
+  Gavel,
+  BarChart3,
+  AlertTriangle,
+  Users,
+  TrendingUp,
+  Scale,
 } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -36,26 +42,20 @@ interface NavSection {
     href: string;
     label: string;
     icon: React.ElementType;
-    adminOnly?: boolean;
     badgeCount?: number;
   }[];
 }
 
-export function AdminSidebar({
-  pendingVerifications = 0,
-  openReports = 0,
-  pendingModeration = 0,
-  userRole = "moderator",
-  evidenceDeskEnabled = false,
-}: AdminSidebarProps) {
-  const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const isAdmin = userRole === "admin";
-
-  const sections: NavSection[] = [
+function buildModeratorSections(
+  pendingVerifications: number,
+  openReports: number,
+  pendingModeration: number,
+  evidenceDeskEnabled: boolean
+): NavSection[] {
+  return [
     {
-      label: "Overview",
-      items: [{ href: "/admin", label: "Dashboard", icon: LayoutDashboard }],
+      label: "Operations",
+      items: [{ href: "/admin", label: "My Queue", icon: LayoutDashboard }],
     },
     {
       label: "Verification",
@@ -96,19 +96,115 @@ export function AdminSidebar({
         },
       ],
     },
-    ...(isAdmin
-      ? [
-          {
-            label: "Admin Tools",
-            items: [
-              { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText },
-              { href: "/admin/dsar", label: "Data Requests", icon: FileText },
-              { href: "/admin/feature-flags", label: "Feature Flags", icon: ToggleLeft },
-            ],
-          },
-        ]
-      : []),
   ];
+}
+
+function buildGovernanceSections(pendingVerifications: number, openReports: number): NavSection[] {
+  return [
+    {
+      label: "Governance",
+      items: [{ href: "/admin", label: "Approval Center", icon: Gavel }],
+    },
+    {
+      label: "Decisions",
+      items: [
+        {
+          href: "/admin/governance/escalations",
+          label: "Escalations",
+          icon: AlertTriangle,
+          badgeCount: pendingVerifications > 0 ? pendingVerifications : undefined,
+        },
+        {
+          href: "/admin/governance/appeals",
+          label: "Appeals",
+          icon: Scale,
+        },
+        {
+          href: "/admin/governance/enforcement",
+          label: "Enforcement Review",
+          icon: ShieldCheck,
+          badgeCount: openReports > 0 ? openReports : undefined,
+        },
+      ],
+    },
+    {
+      label: "Oversight",
+      items: [
+        { href: "/admin/governance/oversight", label: "Oversight Hub", icon: Eye },
+        { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText },
+        { href: "/admin/governance/roles", label: "Role Management", icon: Users },
+      ],
+    },
+    {
+      label: "Compliance",
+      items: [{ href: "/admin/dsar", label: "Data Requests", icon: FileText }],
+    },
+  ];
+}
+
+function buildAdminSections(): NavSection[] {
+  return [
+    {
+      label: "Intelligence",
+      items: [{ href: "/admin", label: "Strategy Dashboard", icon: LayoutDashboard }],
+    },
+    {
+      label: "Analytics",
+      items: [
+        { href: "/admin/intelligence/users", label: "Users & Growth", icon: Users },
+        {
+          href: "/admin/intelligence/verification",
+          label: "Verification Metrics",
+          icon: ShieldCheck,
+        },
+        { href: "/admin/intelligence/revenue", label: "Revenue & Costs", icon: TrendingUp },
+        { href: "/admin/intelligence/marketplace", label: "Marketplace Health", icon: BarChart3 },
+      ],
+    },
+    {
+      label: "Planning",
+      items: [
+        { href: "/admin/intelligence/trends", label: "Trend Analysis", icon: TrendingUp },
+        { href: "/admin/intelligence/operations", label: "Ops Summary", icon: Clock },
+      ],
+    },
+    {
+      label: "Tools",
+      items: [
+        { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText },
+        { href: "/admin/feature-flags", label: "Feature Flags", icon: ToggleLeft },
+      ],
+    },
+  ];
+}
+
+export function AdminSidebar({
+  pendingVerifications = 0,
+  openReports = 0,
+  pendingModeration = 0,
+  userRole = "moderator",
+  evidenceDeskEnabled = false,
+}: AdminSidebarProps) {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
+  let sections: NavSection[];
+  switch (userRole) {
+    case "governance_controller":
+      sections = buildGovernanceSections(pendingVerifications, openReports);
+      break;
+    case "admin":
+      sections = buildAdminSections();
+      break;
+    default:
+      sections = buildModeratorSections(
+        pendingVerifications,
+        openReports,
+        pendingModeration,
+        evidenceDeskEnabled
+      );
+      break;
+  }
 
   return (
     <aside

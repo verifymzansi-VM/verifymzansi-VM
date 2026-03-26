@@ -7,7 +7,7 @@ import { Flag } from "lucide-react";
 import { ReportsClient } from "./reports-client";
 import { countOpenReports } from "@/lib/utils/reports";
 import type { Report } from "@/types/database";
-import { isModeratorOrAdmin } from "@/lib/auth/roles";
+import { isStaff } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "Reports — Admin",
@@ -19,7 +19,7 @@ export default async function AdminReportsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !isModeratorOrAdmin(user)) {
+  if (!user || !isStaff(user)) {
     redirect("/dashboard");
   }
 

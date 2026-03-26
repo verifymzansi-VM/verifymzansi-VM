@@ -100,6 +100,22 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
     await expect(response.json()).resolves.toEqual({ error: "Invalid promotion ID" });
   });
 
+  it("returns 401 before role verification when there is no authenticated user", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: null },
+        }),
+      },
+    });
+
+    const response = await POST(createRequest({ decision: "approve" }), createParams());
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+    expect(mockVerifyStaffActorRoleFromDb).not.toHaveBeenCalled();
+  });
+
   it("blocks non-moderators from changing promotion status", async () => {
     mockCreateClient.mockResolvedValue({
       auth: {

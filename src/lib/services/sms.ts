@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("SMS");
-const AT_SENDER_ID_REGEX = /^[A-Za-z0-9]{1,12}$/;
+const AT_SENDER_ID_REGEX = /^[A-Za-z0-9]{1,11}$/;
 
 /**
  * Africa's Talking SMS service for South African phone numbers.
@@ -65,7 +65,7 @@ function validateAfricaTalkingSenderId(senderId: string | undefined): SenderIdVa
   if (!AT_SENDER_ID_REGEX.test(trimmed)) {
     return {
       valid: false,
-      reason: "must be 1-12 alphanumeric characters",
+      reason: "must be 1-11 alphanumeric characters",
     };
   }
 

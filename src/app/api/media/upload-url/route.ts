@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { UPLOAD_AREAS } from "@/types/enums";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("MediaUploadUrl");
 
@@ -72,6 +73,18 @@ const uploadUrlRequestSchema = z
  */
 export async function POST(request: NextRequest) {
   try {
+    const hasRequestContext =
+      typeof request.url === "string" &&
+      request.headers &&
+      typeof request.headers.get === "function";
+
+    if (hasRequestContext) {
+      const originBlock = enforceSameOriginMutation(request, log);
+      if (originBlock) {
+        return originBlock;
+      }
+    }
+
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();
     const {

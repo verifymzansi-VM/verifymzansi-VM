@@ -3,6 +3,23 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { validateLaunchConfiguration, type EnvSource } from "../lib/config/launch-validation";
 
+const { mockValidateEnv, mockError, mockWarn } = vi.hoisted(() => ({
+  mockValidateEnv: vi.fn(),
+  mockError: vi.fn(),
+  mockWarn: vi.fn(),
+}));
+
+vi.mock("../lib/config/env", () => ({
+  validateEnv: mockValidateEnv,
+}));
+
+vi.mock("../lib/utils/logger", () => ({
+  createLogger: () => ({
+    error: mockError,
+    warn: mockWarn,
+  }),
+}));
+
 /**
  * Tests for production safety guards:
  * - Dev bypass flags blocked in production
@@ -257,23 +274,6 @@ describe("launch-validation: dangerous env vars in production", () => {
 // ── Instrumentation dev bypass guard tests ───────────────────
 
 describe("instrumentation: dev bypass startup guard", () => {
-  const { mockValidateEnv, mockError, mockWarn } = vi.hoisted(() => ({
-    mockValidateEnv: vi.fn(),
-    mockError: vi.fn(),
-    mockWarn: vi.fn(),
-  }));
-
-  vi.mock("../lib/config/env", () => ({
-    validateEnv: mockValidateEnv,
-  }));
-
-  vi.mock("../lib/utils/logger", () => ({
-    createLogger: () => ({
-      error: mockError,
-      warn: mockWarn,
-    }),
-  }));
-
   // We dynamically import to test with different env states
   beforeEach(() => {
     vi.clearAllMocks();

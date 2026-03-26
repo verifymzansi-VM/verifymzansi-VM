@@ -33,7 +33,11 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 }));
 
 vi.mock("@/lib/auth/admin-access", () => ({
-  verifyAdminActorRoleFromDb: vi.fn(async () => "admin"),
+  verifyCapabilityFromDb: vi.fn(async () => true),
+}));
+
+vi.mock("@/lib/auth/roles", () => ({
+  getRoleFromUser: vi.fn(() => "admin"),
 }));
 
 vi.mock("@/lib/utils/logger", () => ({

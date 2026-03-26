@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 const {
   mockCreateClient,
   mockCreateAdminClient,
+  mockCreateDecisionRecord,
   mockLogAuditEvent,
   mockSendAccountEnforcementEmail,
   mockVerifyStaffActorRoleFromDb,
@@ -13,6 +14,7 @@ const {
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
+  mockCreateDecisionRecord: vi.fn(),
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
   mockSendAccountEnforcementEmail: vi.fn().mockResolvedValue({ success: true }),
   mockVerifyStaffActorRoleFromDb: vi.fn(),
@@ -29,6 +31,9 @@ vi.mock("@/lib/auth/admin-access", () => ({
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/services/email", () => ({
   sendAccountEnforcementEmail: mockSendAccountEnforcementEmail,
+}));
+vi.mock("@/lib/services/decision-ledger", () => ({
+  createDecisionRecord: mockCreateDecisionRecord,
 }));
 vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: mockEnforceSameOriginMutation,
@@ -56,6 +61,7 @@ describe("POST /api/admin/flagging/action", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockVerifyStaffActorRoleFromDb.mockResolvedValue("moderator");
+    mockCreateDecisionRecord.mockResolvedValue({ id: "decision-1" });
     mockEnforceSameOriginMutation.mockReturnValue(null);
     mockEnforceCsrfToken.mockReturnValue(null);
     mockGetUserById.mockResolvedValue({
@@ -267,5 +273,100 @@ describe("POST /api/admin/flagging/action", () => {
       reason: "Policy warning",
       suspendedUntil: null,
     });
+  });
+
+  it("falls back to direct enforcement when decision record creation fails", async () => {
+    const reportsEq = vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: {
+          id: "report-1",
+          area: "MZANSI_MARKET",
+          target_type: "account_profile",
+          target_id: "owner-1",
+          status: "open",
+        },
+        error: null,
+      }),
+    });
+    const moderationInsert = vi.fn().mockResolvedValue({ error: null });
+    const accountUpdateEq = vi.fn().mockResolvedValue({ error: null });
+    const rpc = vi.fn().mockResolvedValue({ error: { message: "rpc missing" } });
+    const contentHideEqSecond = vi.fn().mockResolvedValue({ error: null });
+
+    const contentTableMock = {
+      select: vi.fn().mockReturnValue({
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+      }),
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: contentHideEqSecond,
+        }),
+      }),
+    };
+
+    mockCreateDecisionRecord.mockRejectedValue(new Error("ledger unavailable"));
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "mod-1", app_metadata: { role: "moderator" } } },
+        }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "reports") {
+          return {
+            select: vi.fn().mockReturnValue({ eq: reportsEq }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+
+        if (table === "account_profiles") {
+          return {
+            update: vi.fn().mockReturnValue({ eq: accountUpdateEq }),
+          };
+        }
+
+        if (table === "listings" || table === "businesses" || table === "promotions") {
+          return contentTableMock;
+        }
+
+        if (table === "moderation_actions") {
+          return {
+            insert: moderationInsert,
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+      rpc,
+    });
+
+    const res = await POST(
+      createRequest({
+        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        action: "suspend",
+        reason: "Escalation fallback",
+        durationDays: 3,
+      })
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      success: true,
+      action: "suspend",
+      reportStatus: "resolved",
+    });
+    expect(mockCreateDecisionRecord).toHaveBeenCalled();
+    expect(moderationInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "suspend",
+        target_owner_id: "owner-1",
+      })
+    );
+    expect(accountUpdateEq).toHaveBeenCalledWith("user_id", "owner-1");
   });
 });

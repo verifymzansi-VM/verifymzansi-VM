@@ -545,9 +545,13 @@ export async function GET(request: NextRequest) {
         query = query.eq("location_city", city);
       }
       if (search) {
-        // Escape PostgREST special characters to prevent filter injection
+        // Defense-in-depth: keep only a bounded, alphanumeric search token
+        // before interpolating into PostgREST filter syntax.
         const safeSearch = search
-          .replace(/[,.()\\/]/g, "")
+          .replace(/[^A-Za-z0-9\s-]/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 80)
           .replace(/%/g, "\\%")
           .replace(/_/g, "\\_");
         if (safeSearch) {

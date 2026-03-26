@@ -59,10 +59,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       data: { user },
     } = await supabase.auth.getUser();
 
-    const adminRole = await verifyStaffActorRoleFromDb(user);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const adminRole = await verifyStaffActorRoleFromDb(user);
     if (!adminRole) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
