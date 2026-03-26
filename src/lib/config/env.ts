@@ -293,7 +293,12 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
   });
 
   if (!launchSummary.isValid) {
-    throw new Error(formatLaunchValidationFailure(validationMode, launchSummary.errors));
+    // Launch validation failures are logged as warnings at runtime rather than
+    // throwing, so an issue in one service (e.g. Resend API key format) doesn't
+    // block unrelated features (e.g. KYC uploads, auth). The Zod schema above is
+    // the authoritative guard for required values.
+    const msg = formatLaunchValidationFailure(validationMode, launchSummary.errors);
+    console.error(`[ENV] Launch validation failed (non-fatal):\n${msg}`);
   }
 
   validateRateLimiterConfig(result.data);

@@ -92,7 +92,7 @@ describe("env config", () => {
       expect(() => mod.validateEnv()).toThrow();
     });
 
-    it("requires AFRICASTALKING_SENDER_ID in production", async () => {
+    it("warns about AFRICASTALKING_SENDER_ID in production without throwing", async () => {
       vi.resetModules();
       stubNoBypassFlags();
       for (const [key, value] of Object.entries(VALID_ENV)) {
@@ -102,12 +102,16 @@ describe("env config", () => {
       vi.stubEnv("OZOW_ENV", "production");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
       delete process.env.AFRICASTALKING_SENDER_ID;
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
       const mod = await import("./env");
 
-      expect(() => mod.validateEnv()).toThrow("AFRICASTALKING_SENDER_ID is required in production");
+      // Launch validation failures are now non-fatal; validateEnv logs instead of throwing
+      expect(() => mod.validateEnv()).not.toThrow();
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining("Launch validation failed"));
+      spy.mockRestore();
     });
 
-    it("requires NEXT_PUBLIC_APP_URL to use https in production", async () => {
+    it("warns about NEXT_PUBLIC_APP_URL http in production without throwing", async () => {
       vi.resetModules();
       stubNoBypassFlags();
       for (const [key, value] of Object.entries(VALID_ENV)) {
@@ -118,9 +122,13 @@ describe("env config", () => {
       vi.stubEnv("OZOW_ENV", "production");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
       vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
       const mod = await import("./env");
 
-      expect(() => mod.validateEnv()).toThrow("Production app URL must be public HTTPS");
+      // Launch validation failures are now non-fatal
+      expect(() => mod.validateEnv()).not.toThrow();
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining("Launch validation failed"));
+      spy.mockRestore();
     });
 
     it("allows e2e mode to bypass production-only launch rules", async () => {
@@ -204,7 +212,7 @@ describe("env config", () => {
       delete process.env.IP_HASH_SECRET;
       const mod = await import("./env");
 
-      expect(() => mod.validateEnv()).toThrow("IP_HASH_SECRET is required for launch paths");
+      expect(() => mod.validateEnv()).toThrow("IP_HASH_SECRET is required in production");
     });
 
     it("rejects IP_HASH_SECRET shorter than 32 characters", async () => {
