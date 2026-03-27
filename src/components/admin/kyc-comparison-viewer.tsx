@@ -76,10 +76,10 @@ export function KycComparisonViewer({
       setArtifactErrors({});
 
       try {
-        const params = new URLSearchParams({ userId });
-        const metaRes = await fetch(`/api/admin/verification/evidence/metadata?${params}`, {
-          method: "GET",
-          cache: "no-store",
+        const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
         });
 
         if (!metaRes.ok) {
@@ -120,25 +120,21 @@ export function KycComparisonViewer({
         for (const artifact of sorted) {
           try {
             let resolvedArtifact = artifact;
-            let evidenceRes = await fetch(
-              `/api/admin/verification/evidence?artifactId=${artifact.id}`,
-              {
-                method: "GET",
-                cache: "no-store",
-              }
-            );
+            let evidenceRes = await fetch(`/api/admin/verification/evidence`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ artifactId: artifact.id }),
+            });
 
             if (!evidenceRes.ok) {
               const firstErrorData = await evidenceRes.json().catch(() => null);
 
               if (firstErrorData?.code === "not_found") {
-                const retryMetaRes = await fetch(
-                  `/api/admin/verification/evidence/metadata?userId=${userId}&_ts=${Date.now()}`,
-                  {
-                    method: "GET",
-                    cache: "no-store",
-                  }
-                );
+                const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ userId }),
+                });
 
                 if (retryMetaRes.ok) {
                   const retryMeta = await retryMetaRes.json();
@@ -152,13 +148,11 @@ export function KycComparisonViewer({
 
                   if (replacement && replacement.id !== artifact.id) {
                     resolvedArtifact = replacement;
-                    evidenceRes = await fetch(
-                      `/api/admin/verification/evidence?artifactId=${replacement.id}`,
-                      {
-                        method: "GET",
-                        cache: "no-store",
-                      }
-                    );
+                    evidenceRes = await fetch(`/api/admin/verification/evidence`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ artifactId: replacement.id }),
+                    });
 
                     if (evidenceRes.ok) {
                       setArtifacts((prev) =>

@@ -77,10 +77,10 @@ export function KycInlinePreview({
       setError(null);
 
       async function fetchEvidenceByArtifactId(targetArtifactId: string) {
-        const evidenceParams = new URLSearchParams({ artifactId: targetArtifactId });
-        const evidenceRes = await fetch(`/api/admin/verification/evidence?${evidenceParams}`, {
-          method: "GET",
-          cache: "no-store",
+        const evidenceRes = await fetch(`/api/admin/verification/evidence`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ artifactId: targetArtifactId }),
         });
 
         if (evidenceRes.ok) {
@@ -103,10 +103,10 @@ export function KycInlinePreview({
 
       try {
         // 1. Fetch metadata to get artifact ID (use GET with query params)
-        const metaParams = new URLSearchParams({ stepId, userId });
-        const metaRes = await fetch(`/api/admin/verification/evidence/metadata?${metaParams}`, {
-          method: "GET",
-          cache: "no-store",
+        const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stepId, userId }),
         });
         if (!metaRes.ok) {
           const data = await metaRes.json().catch(() => null);
@@ -132,14 +132,11 @@ export function KycInlinePreview({
         let evidenceResult = await fetchEvidenceByArtifactId(match.id);
 
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
-          const retryMetaParams = new URLSearchParams({
-            userId,
-            _ts: String(Date.now()),
+          const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId }),
           });
-          const retryMetaRes = await fetch(
-            `/api/admin/verification/evidence/metadata?${retryMetaParams}`,
-            { method: "GET", cache: "no-store" }
-          );
 
           if (retryMetaRes.ok) {
             const retryMeta = await retryMetaRes.json();

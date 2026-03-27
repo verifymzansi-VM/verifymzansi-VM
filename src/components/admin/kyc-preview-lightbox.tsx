@@ -142,10 +142,10 @@ export function KycPreviewLightbox({
     async function loadBlob() {
       try {
         const fetchEvidenceById = async (targetArtifactId: string) => {
-          const params = new URLSearchParams({ artifactId: targetArtifactId });
-          const res = await fetch(`/api/admin/verification/evidence?${params}`, {
-            method: "GET",
-            cache: "no-store",
+          const res = await fetch(`/api/admin/verification/evidence`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ artifactId: targetArtifactId }),
           });
 
           if (res.ok) {
@@ -166,14 +166,11 @@ export function KycPreviewLightbox({
         let evidenceResult = await fetchEvidenceById(artifact.id);
 
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
-          const retryMetaParams = new URLSearchParams({
-            userId: step.user_id,
-            _ts: String(Date.now()),
+          const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: step.user_id }),
           });
-          const retryMetaRes = await fetch(
-            `/api/admin/verification/evidence/metadata?${retryMetaParams}`,
-            { method: "GET", cache: "no-store" }
-          );
 
           if (retryMetaRes.ok) {
             const retryMeta = await retryMetaRes.json();
