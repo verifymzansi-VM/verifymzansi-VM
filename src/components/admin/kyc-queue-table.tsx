@@ -5,6 +5,7 @@ import { formatRelativeTime } from "@/lib/utils/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { KycInlinePreview } from "./kyc-inline-preview";
 import { KycComparisonViewer } from "./kyc-comparison-viewer";
+import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
 import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 
 const KycPreviewLightbox = dynamic(
@@ -88,6 +90,8 @@ const STEP_LABELS: Record<string, string> = {
   location: "Location Proof",
 };
 
+const VIEWABLE_STEP_TYPES = new Set(["id_doc", "selfie", "location"]);
+
 const REASON_CODES = [
   { value: "blurry_image", label: "Image too blurry to verify" },
   { value: "mismatch", label: "Selfie does not match ID photo" },
@@ -104,6 +108,7 @@ export function KycQueueTable({
   onDecisionComplete,
   evidenceDeskEnabled = false,
 }: KycQueueTableProps) {
+  const { toast } = useToast();
   const [selectedStep, setSelectedStep] = useState<VerificationStep | null>(null);
   const [decision, setDecision] = useState<"approved" | "rejected" | "needs_resubmission" | null>(
     null
@@ -116,6 +121,7 @@ export function KycQueueTable({
   // Lightbox state for inline document preview
   const [lightboxStep, setLightboxStep] = useState<VerificationStep | null>(null);
   const [lightboxArtifact, setLightboxArtifact] = useState<Artifact | null>(null);
+  const [viewingStepId, setViewingStepId] = useState<string | null>(null);
 
   // Comparison viewer state
   const [comparisonViewerOpen, setComparisonViewerOpen] = useState(false);
@@ -132,6 +138,58 @@ export function KycQueueTable({
     setComparisonDisplayName(displayName);
     setComparisonViewerOpen(true);
   }, []);
+
+  const getLatestArtifactForStep = useCallback((artifacts: Artifact[], stepType: string) => {
+    const matches = artifacts
+      .filter((artifact) => artifact.step_type === stepType)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    return matches[0] ?? null;
+  }, []);
+
+  const handleRowViewClick = useCallback(
+    async (step: VerificationStep) => {
+      if (!VIEWABLE_STEP_TYPES.has(step.step_type)) {
+        return;
+      }
+
+      setViewingStepId(step.id);
+
+      try {
+        const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stepId: step.id, userId: step.user_id }),
+        });
+
+        if (!metaRes.ok) {
+          const data = await metaRes.json().catch(() => null);
+          throw new Error(
+            getKycEvidenceErrorMessage(data?.code, data?.error || "Failed to load metadata")
+          );
+        }
+
+        const meta = await metaRes.json();
+        const resolvedArtifact = getLatestArtifactForStep(meta.artifacts || [], step.step_type);
+
+        if (!resolvedArtifact) {
+          throw new Error("No document uploaded");
+        }
+
+        setLightboxStep(step);
+        setLightboxArtifact(resolvedArtifact);
+      } catch (err) {
+        toast({
+          title: "Unable to open evidence",
+          description: err instanceof Error ? err.message : "Failed to load document",
+          variant: "destructive",
+        });
+      } finally {
+        setViewingStepId(null);
+      }
+    },
+    [getLatestArtifactForStep, toast]
+  );
 
   if (!groups.length) {
     return (
@@ -303,6 +361,8 @@ export function KycQueueTable({
                         {group.steps.map((step) => {
                           const StepIcon = STEP_ICONS[step.step_type] || FileCheck;
                           const stepLabel = STEP_LABELS[step.step_type] || step.step_type;
+                          const canViewStep = VIEWABLE_STEP_TYPES.has(step.step_type);
+                          const isViewingStep = viewingStepId === step.id;
 
                           return (
                             <div
@@ -337,6 +397,23 @@ export function KycQueueTable({
                                 </div>
                               </div>
                               <div className="flex gap-1 flex-shrink-0 flex-wrap">
+                                {canViewStep && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
+                                    onClick={() => void handleRowViewClick(step)}
+                                    title="View"
+                                    disabled={isViewingStep}
+                                  >
+                                    {isViewingStep ? (
+                                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                    ) : (
+                                      <Eye className="h-4 w-4 mr-1" />
+                                    )}
+                                    <span className="hidden sm:inline text-xs">View</span>
+                                  </Button>
+                                )}
                                 <Button
                                   size="sm"
                                   variant="ghost"

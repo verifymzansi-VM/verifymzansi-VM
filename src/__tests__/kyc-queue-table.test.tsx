@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
 
+const mockToast = vi.fn();
+
 // Mock UI components
 vi.mock("@/components/ui/card", () => ({
   Card: ({ children, className, ..._ }: React.PropsWithChildren<Record<string, unknown>>) =>
@@ -62,12 +64,69 @@ vi.mock("next/link", () => ({
   default: ({ children, href }: React.PropsWithChildren<{ href: string }>) =>
     React.createElement("a", { href }, children),
 }));
+vi.mock("next/dynamic", () => ({
+  default: (loader: () => Promise<unknown>) => {
+    let Component: React.ComponentType<Record<string, unknown>> | null = null;
+
+    const DynamicComponent = (props: Record<string, unknown>) => {
+      const [Resolved, setResolved] = React.useState<React.ComponentType<
+        Record<string, unknown>
+      > | null>(() => Component);
+
+      React.useEffect(() => {
+        if (Resolved) return;
+
+        let mounted = true;
+        loader().then((mod: unknown) => {
+          const loaded = mod as { default?: React.ComponentType<Record<string, unknown>> };
+          Component = loaded.default || (loaded as React.ComponentType<Record<string, unknown>>);
+          if (mounted) {
+            setResolved(() => Component);
+          }
+        });
+
+        return () => {
+          mounted = false;
+        };
+      }, [Resolved]);
+
+      return Resolved ? React.createElement(Resolved, props) : null;
+    };
+
+    return DynamicComponent;
+  },
+}));
 vi.mock("@/components/admin/kyc-inline-preview", () => ({
   KycInlinePreview: () => React.createElement("div", { "data-testid": "kyc-inline-preview" }),
 }));
 vi.mock("@/components/admin/kyc-comparison-viewer", () => ({
   KycComparisonViewer: ({ isOpen }: { isOpen: boolean }) =>
     isOpen ? React.createElement("div", { "data-testid": "comparison-viewer" }) : null,
+}));
+vi.mock("@/components/admin/kyc-preview-lightbox", () => ({
+  KycPreviewLightbox: ({
+    open,
+    step,
+    artifact,
+  }: {
+    open: boolean;
+    step: { id: string };
+    artifact: { id: string };
+  }) =>
+    open
+      ? React.createElement(
+          "div",
+          {
+            "data-testid": "kyc-preview-lightbox",
+            "data-step-id": step.id,
+            "data-artifact-id": artifact.id,
+          },
+          "Preview Lightbox"
+        )
+      : null,
+}));
+vi.mock("@/hooks/use-toast", () => ({
+  useToast: () => ({ toast: mockToast }),
 }));
 vi.mock("lucide-react", () => ({
   CheckCircle: () => React.createElement("span", null, "✓"),
@@ -226,6 +285,125 @@ describe("KycQueueTable", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("comparison-viewer")).toBeInTheDocument();
+    });
+  });
+
+  it("opens a row-level document preview for the selected step", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        artifacts: [
+          {
+            id: "artifact-older",
+            step_type: "id_doc",
+            artifact_kind: "front",
+            r2_key: "older",
+            content_type: "image/jpeg",
+            file_size_bytes: 100,
+            status: "ready",
+            created_at: "2026-03-26T08:00:00.000Z",
+            purge_after: null,
+            sha256: null,
+          },
+          {
+            id: "artifact-newest",
+            step_type: "id_doc",
+            artifact_kind: "front",
+            r2_key: "newest",
+            content_type: "image/jpeg",
+            file_size_bytes: 120,
+            status: "ready",
+            created_at: "2026-03-27T08:00:00.000Z",
+            purge_after: null,
+            sha256: null,
+          },
+        ],
+      }),
+    } as Response);
+
+    render(React.createElement(KycQueueTable, { groups: groupedItems }));
+
+    fireEvent.click(screen.getAllByTitle("View")[0]);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith("/api/admin/verification/evidence/metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stepId: "step-1", userId: "user-1" }),
+      });
+      expect(screen.getByTestId("kyc-preview-lightbox")).toHaveAttribute(
+        "data-artifact-id",
+        "artifact-newest"
+      );
+    });
+  });
+
+  it("shows a destructive toast when no artifact matches the selected step", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        artifacts: [],
+      }),
+    } as Response);
+
+    render(React.createElement(KycQueueTable, { groups: groupedItems }));
+
+    fireEvent.click(screen.getAllByTitle("View")[0]);
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Unable to open evidence",
+          description: "No document uploaded",
+          variant: "destructive",
+        })
+      );
+    });
+
+    expect(screen.queryByTestId("kyc-preview-lightbox")).not.toBeInTheDocument();
+  });
+
+  it("disables only the clicked view button while metadata is loading", async () => {
+    let resolveFetch: ((value: Response) => void) | null = null;
+    vi.mocked(global.fetch).mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+
+    render(React.createElement(KycQueueTable, { groups: groupedItems }));
+
+    const viewButtons = screen.getAllByTitle("View");
+    fireEvent.click(viewButtons[0]);
+
+    await waitFor(() => {
+      expect(viewButtons[0]).toBeDisabled();
+      expect(viewButtons[1]).not.toBeDisabled();
+    });
+
+    resolveFetch?.({
+      ok: true,
+      json: async () => ({
+        artifacts: [
+          {
+            id: "artifact-selfie",
+            step_type: "id_doc",
+            artifact_kind: "front",
+            r2_key: "artifact-selfie",
+            content_type: "image/jpeg",
+            file_size_bytes: 200,
+            status: "ready",
+            created_at: "2026-03-27T08:00:00.000Z",
+            purge_after: null,
+            sha256: null,
+          },
+        ],
+      }),
+    } as Response);
+
+    await waitFor(() => {
+      expect(viewButtons[0]).not.toBeDisabled();
     });
   });
 });
