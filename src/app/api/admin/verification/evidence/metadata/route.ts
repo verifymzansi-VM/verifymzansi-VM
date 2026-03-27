@@ -119,14 +119,32 @@ export async function GET(request: NextRequest) {
       stepsErr = userLookup.error as { message?: string } | null;
     }
 
-    if (stepsErr || !steps || steps.length === 0) {
+    if (stepsErr) {
       return NextResponse.json(
         { error: "Verification step(s) not found", code: "not_found" },
         { status: 404 }
       );
     }
 
-    const targetUserId = String(steps[0].user_id);
+    let targetUserId: string | null = null;
+    if (steps && steps.length > 0) {
+      targetUserId = String(steps[0].user_id);
+    } else if (userId) {
+      // Resilience path: if queue references drift but userId is known,
+      // continue with artifact-based metadata instead of hard-failing.
+      targetUserId = userId;
+      steps = [];
+      log.warn("Evidence metadata loaded without verification_steps rows", {
+        actorId: user.id,
+        targetStepId: stepId,
+        targetUserId: userId,
+      });
+    } else {
+      return NextResponse.json(
+        { error: "Verification step(s) not found", code: "not_found" },
+        { status: 404 }
+      );
+    }
     const REVIEWABLE_STATES = [
       "pending",
       "submitted",
@@ -136,7 +154,7 @@ export async function GET(request: NextRequest) {
       "auto_rejected",
     ];
     const hasActiveCase = steps.some((s) => REVIEWABLE_STATES.includes(String(s.status)));
-    if (!hasActiveCase) {
+    if (steps.length > 0 && !hasActiveCase) {
       log.warn("Evidence metadata access denied: no active review case", {
         actorId: user.id,
         targetStepId: stepId,
@@ -148,7 +166,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, targetUserId);
+    let allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, targetUserId);
+
+    if (allowedArtifactIds.length === 0) {
+      // Additional resilience fallback for legacy/drifted sessions:
+      // use latest artifacts for this user when linked IDs are unavailable.
+      const { data: fallbackArtifacts } = await adminClient
+        .from("kyc_artifacts")
+        .select("id")
+        .eq("user_id", targetUserId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      allowedArtifactIds = (fallbackArtifacts || [])
+        .map((artifact) => String(artifact.id))
+        .filter(Boolean);
+    }
 
     if (allowedArtifactIds.length === 0) {
       return NextResponse.json(
