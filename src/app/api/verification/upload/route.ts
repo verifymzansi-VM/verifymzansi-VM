@@ -358,9 +358,9 @@ export async function POST(request: NextRequest) {
       }
 
       // Local dev fallback when R2 is not configured/reachable.
-      const devKey = `dev/kyc/${docType}/${profile.id}/${Date.now()}-local.bin`;
+      const devKey = `dev://${docType}/${profile.id}/${Date.now()}-local.bin`;
       uploadResult = {
-        url: `dev://${devKey}`,
+        url: devKey,
         key: devKey,
       };
       log.warn("Using local dev upload fallback (no R2 write)", { key: devKey });

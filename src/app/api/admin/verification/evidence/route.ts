@@ -28,7 +28,11 @@ const evidenceBodySchema = z.object({
 
 function isMissingArtifactError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /not found|no such key|nosuchkey/i.test(message);
+  // Match S3/R2 "not found" errors (NoSuchKey, 404, etc.)
+  return (
+    /not found|no such key|nosuchkey|404|code.*404/i.test(message) ||
+    /does not exist|object not found|^404/i.test(message)
+  );
 }
 
 export async function GET(request: NextRequest) {
@@ -178,12 +182,21 @@ export async function GET(request: NextRequest) {
       const isMissingFile = isMissingArtifactError(downloadErr);
 
       if (!isMissingFile) {
+        const isDecryptError = /decrypt|cipher|decipher|invalid auth/i.test(downloadMessage);
         log.error("Failed to download/decrypt artifact", {
           artifactId: artifact.id,
+          r2Key: artifact.r2_key,
           error: downloadMessage,
+          errorType: isDecryptError ? "decryption" : "download",
+          stack: downloadErr instanceof Error ? downloadErr.stack : undefined,
         });
         return NextResponse.json(
-          { error: "Failed to retrieve artifact", code: "server_error" },
+          {
+            error: isDecryptError
+              ? "Failed to decrypt artifact"
+              : "Failed to retrieve artifact from storage",
+            code: "server_error",
+          },
           { status: 500 }
         );
       }
@@ -207,6 +220,8 @@ export async function GET(request: NextRequest) {
       });
 
       let recovered = false;
+      const failedFallbacks: Array<{ candidateId: string; reason: string }> = [];
+
       for (const candidate of sameStepCandidates) {
         try {
           decryptedBuffer = await downloadKycDocument(candidate.r2_key);
@@ -215,22 +230,33 @@ export async function GET(request: NextRequest) {
             requestedArtifactId: artifact.id,
             fallbackArtifactId: candidate.id,
             userId: artifact.user_id,
+            fallbackAttempts: failedFallbacks.length,
           });
           break;
         } catch (fallbackErr) {
-          if (!isMissingArtifactError(fallbackErr)) {
-            const fallbackMessage =
-              fallbackErr instanceof Error ? fallbackErr.message : "unknown error";
-            log.error("Fallback artifact retrieval failed", {
+          const fallbackMessage =
+            fallbackErr instanceof Error ? fallbackErr.message : "unknown error";
+          const isMissing = isMissingArtifactError(fallbackErr);
+
+          if (!isMissing) {
+            // Track non-missing errors but continue trying other candidates
+            failedFallbacks.push({
+              candidateId: candidate.id,
+              reason: fallbackMessage.slice(0, 100),
+            });
+            log.warn("Fallback candidate has retrieval error (skipping, will try others)", {
               requestedArtifactId: artifact.id,
               fallbackArtifactId: candidate.id,
               error: fallbackMessage,
             });
-            return NextResponse.json(
-              { error: "Failed to retrieve artifact", code: "server_error" },
-              { status: 500 }
-            );
+            continue;
           }
+
+          // Fallback is also missing - continue to next candidate
+          failedFallbacks.push({
+            candidateId: candidate.id,
+            reason: "file_missing",
+          });
         }
       }
 
@@ -238,10 +264,15 @@ export async function GET(request: NextRequest) {
         log.error("All authorized KYC artifact candidates are missing in storage", {
           artifactId: artifact.id,
           userId: artifact.user_id,
-          candidateCount: sameStepCandidates.length + 1,
+          stepType: artifact.step_type,
+          requestedR2Key: artifact.r2_key,
+          fallbackAttempts: failedFallbacks.length,
+          totalCandidates: sameStepCandidates.length + 1,
+          artifactStatus: artifact.status || "unknown",
+          failedFallbacks: failedFallbacks.slice(0, 5),
         });
         return NextResponse.json(
-          { error: "Artifact file is missing", code: "missing_file" },
+          { error: "Artifact file is missing from storage", code: "missing_file" },
           { status: 404 }
         );
       }
