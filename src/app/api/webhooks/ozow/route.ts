@@ -195,7 +195,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
     }
 
-    const parsedBody = JSON.parse(rawBody) as unknown;
+    let parsedBody: unknown;
+    try {
+      parsedBody = JSON.parse(rawBody) as unknown;
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    }
     const payload = normalizeOzowWebhook(parsedBody);
     if (!payload?.merchantReference) {
       return NextResponse.json({ error: "Missing merchantReference" }, { status: 400 });

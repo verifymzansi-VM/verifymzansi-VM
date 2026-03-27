@@ -96,6 +96,8 @@ jobs:
           exit $FAILED
       - name: Run production preflight
         run: pnpm run preflight:prod
+      - name: Verify database schema invariants
+        run: pnpm run db:verify-schema
       - name: Build for Cloudflare
         run: pnpm run build:cloudflare
 
@@ -150,7 +152,8 @@ jobs:
             STATUS=$(echo "$BODY" | jq -r '.status' 2>/dev/null) || STATUS=""
             CONFIG_STATUS=$(echo "$BODY" | jq -r '.checks.config.status' 2>/dev/null) || CONFIG_STATUS=""
             SUPABASE_STATUS=$(echo "$BODY" | jq -r '.checks.supabase.status' 2>/dev/null) || SUPABASE_STATUS=""
-            if [ "$STATUS" = "ok" ] && [ "$CONFIG_STATUS" = "ok" ] && [ "$SUPABASE_STATUS" != "degraded" ]; then
+            SCHEMA_STATUS=$(echo "$BODY" | jq -r '.checks.schema.status' 2>/dev/null) || SCHEMA_STATUS=""
+            if [ "$STATUS" = "ok" ] && [ "$CONFIG_STATUS" = "ok" ] && [ "$SUPABASE_STATUS" != "degraded" ] && [ "$SCHEMA_STATUS" != "degraded" ]; then
               echo "Health check passed."
             else
               echo "::error::Health check returned a degraded body: ${BODY:0:400}"

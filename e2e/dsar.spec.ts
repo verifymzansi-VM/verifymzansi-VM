@@ -35,9 +35,9 @@ test.describe("DSAR (Data Subject Access Request)", () => {
   test("@smoke DSAR form validates SA ID", async ({ page }) => {
     await page.goto("/dsar");
 
-    // If redirected to login, skip
+    // If redirected to login, this is an accepted protected-route behavior.
     if (page.url().includes("/login")) {
-      test.skip();
+      await expect(page).toHaveURL(/\/login/);
       return;
     }
 

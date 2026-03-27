@@ -67,6 +67,17 @@ interface AccountHoldRow {
   user_id: string;
 }
 
+interface AuthAdminUser {
+  id: string;
+  created_at?: string;
+  email?: string | null;
+}
+
+const AUTH_USERS_PAGE_SIZE = 200;
+const AUTH_USERS_MAX_PAGES = 5;
+const ORPHAN_AUTH_MIN_AGE_MS = 30 * 60 * 1000;
+const ORPHAN_AUTH_DELETE_CAP = 50;
+
 function buildInFilter(values: string[]): string {
   return `(${values.map((value) => JSON.stringify(value)).join(",")})`;
 }
@@ -131,6 +142,126 @@ async function getHeldKycKeys(
       .filter((artifact) => heldUsers.has(artifact.user_id))
       .map((artifact) => artifact.r2_key)
   );
+}
+
+function parseCreatedAt(value?: string): number | null {
+  if (!value) return null;
+  const ts = new Date(value).getTime();
+  return Number.isFinite(ts) ? ts : null;
+}
+
+async function listAuthUsersPage(
+  env: Env,
+  headers: Record<string, string>,
+  page: number
+): Promise<AuthAdminUser[]> {
+  const response = await fetch(
+    `${env.SUPABASE_URL}/auth/v1/admin/users?page=${page}&per_page=${AUTH_USERS_PAGE_SIZE}`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    console.error("Failed to list auth users for orphan sweep:", await response.text());
+    return [];
+  }
+
+  const payload = (await response.json()) as { users?: AuthAdminUser[] };
+  return payload.users ?? [];
+}
+
+async function resolveExistingProfileUserIds(
+  env: Env,
+  headers: Record<string, string>,
+  userIds: string[]
+): Promise<Set<string>> {
+  if (userIds.length === 0) {
+    return new Set<string>();
+  }
+
+  const response = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/account_profiles?select=user_id&user_id=in.${encodeURIComponent(buildInFilter(userIds))}`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    console.error("Failed to resolve account profiles for orphan sweep:", await response.text());
+    return new Set<string>();
+  }
+
+  const rows = (await response.json()) as Array<{ user_id: string }>;
+  return new Set(rows.map((row) => row.user_id));
+}
+
+async function deleteAuthUser(
+  env: Env,
+  headers: Record<string, string>,
+  userId: string
+): Promise<boolean> {
+  const response = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+    method: "DELETE",
+    headers,
+  });
+
+  if (!response.ok) {
+    console.error(`Failed to delete orphan auth user ${userId}:`, await response.text());
+    return false;
+  }
+
+  return true;
+}
+
+async function cleanupOrphanedAuthUsers(
+  env: Env,
+  headers: Record<string, string>
+): Promise<number> {
+  const now = Date.now();
+  const candidates: AuthAdminUser[] = [];
+
+  for (let page = 1; page <= AUTH_USERS_MAX_PAGES; page += 1) {
+    const users = await listAuthUsersPage(env, headers, page);
+    if (users.length === 0) {
+      break;
+    }
+
+    for (const user of users) {
+      const createdAt = parseCreatedAt(user.created_at);
+      if (!createdAt) {
+        continue;
+      }
+      if (now - createdAt < ORPHAN_AUTH_MIN_AGE_MS) {
+        continue;
+      }
+      candidates.push(user);
+    }
+
+    if (users.length < AUTH_USERS_PAGE_SIZE) {
+      break;
+    }
+  }
+
+  if (candidates.length === 0) {
+    return 0;
+  }
+
+  const existingProfileUserIds = await resolveExistingProfileUserIds(
+    env,
+    headers,
+    candidates.map((user) => user.id)
+  );
+
+  const orphans = candidates
+    .filter((user) => !existingProfileUserIds.has(user.id))
+    .slice(0, ORPHAN_AUTH_DELETE_CAP);
+
+  let deletedCount = 0;
+  for (const orphan of orphans) {
+    const deleted = await deleteAuthUser(env, headers, orphan.id);
+    if (deleted) {
+      deletedCount += 1;
+    }
+  }
+
+  return deletedCount;
 }
 
 const worker: ExportedHandler<Env> = {
@@ -303,7 +434,15 @@ const worker: ExportedHandler<Env> = {
       console.error("Orphan media cleanup failed:", orphanErr);
     }
 
-    // 5. Log cleanup summary to audit_logs via REST API
+    // 5. Clean up orphaned auth users that have no account_profiles row.
+    let orphanAuthUsersDeleted = 0;
+    try {
+      orphanAuthUsersDeleted = await cleanupOrphanedAuthUsers(env, headers);
+    } catch (orphanAuthErr) {
+      console.error("Orphan auth user cleanup failed:", orphanAuthErr);
+    }
+
+    // 6. Log cleanup summary to audit_logs via REST API
     const auditPayload = {
       actor_id: "00000000-0000-0000-0000-000000000000", // system actor
       actor_role: "system",
@@ -317,6 +456,7 @@ const worker: ExportedHandler<Env> = {
         failed: failCount,
         held_skipped: heldSkipCount,
         orphan_media_deleted: orphanDeleteCount,
+        orphan_auth_users_deleted: orphanAuthUsersDeleted,
         run_at: new Date().toISOString(),
       },
       created_at: new Date().toISOString(),
@@ -335,7 +475,7 @@ const worker: ExportedHandler<Env> = {
     }
 
     console.warn(
-      `Retention cleanup complete: ${successCount} deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold, ${orphanDeleteCount} orphaned media deleted.`
+      `Retention cleanup complete: ${successCount} deleted, ${failCount} failed, ${heldSkipCount} skipped for legal hold, ${orphanDeleteCount} orphaned media deleted, ${orphanAuthUsersDeleted} orphaned auth users deleted.`
     );
   },
 

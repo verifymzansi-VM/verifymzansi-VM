@@ -306,6 +306,38 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
 
   validateRateLimiterConfig(result.data);
 
+  // Hard guard: reject cafebabe placeholder encryption keys in production.
+  // These are safe build-phase fallbacks that must never reach a live worker.
+  if (result.data.NODE_ENV === "production") {
+    const CAFEBABE = "cafebabe".repeat(8);
+    const placeholderKeys: Array<[keyof Env, string]> = [
+      ["KYC_ENCRYPTION_KEY", "KYC_ENCRYPTION_KEY"],
+      ["ID_ENCRYPTION_KEY", "ID_ENCRYPTION_KEY"],
+      ["HMAC_SECRET", "HMAC_SECRET"],
+    ];
+    const insecure = placeholderKeys.filter(([k]) => result.data[k] === CAFEBABE);
+    if (insecure.length > 0) {
+      const names = insecure.map(([, label]) => label).join(", ");
+      throw new Error(
+        [
+          "",
+          "══════════════════════════════════════════════════════",
+          "  VerifyMzansi — Insecure Placeholder Keys Detected",
+          "══════════════════════════════════════════════════════",
+          "",
+          `The following keys still contain the build-phase placeholder value (cafebabe…):`,
+          "",
+          `  ${names}`,
+          "",
+          "Generate real keys with:",
+          "  node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+          "══════════════════════════════════════════════════════",
+          "",
+        ].join("\n")
+      );
+    }
+  }
+
   if (result.data.NODE_ENV === "production" && !result.data.IP_HASH_SECRET) {
     throw new Error(
       [

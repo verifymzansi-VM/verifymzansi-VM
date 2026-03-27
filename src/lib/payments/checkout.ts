@@ -72,6 +72,8 @@ export async function createHostedCheckout(
     throw new Error("Failed to create payment");
   }
 
+  let paymentMarkedFailed = false;
+
   try {
     const ozowPayment = await createOzowHostedPayment({
       paymentId,
@@ -115,6 +117,7 @@ export async function createHostedCheckout(
         })
         .eq("id", paymentId)
         .eq("provider", "ozow");
+      paymentMarkedFailed = true;
       throw new Error(`Failed to update payment with provider details: ${updateError.message}`);
     }
 
@@ -123,17 +126,19 @@ export async function createHostedCheckout(
       checkoutUrl: ozowPayment.redirectUrl,
     };
   } catch (error) {
-    await input.admin
-      .from("payments")
-      .update({
-        status: "failed",
-        provider_data: {
-          ...providerData,
-          last_error: error instanceof Error ? error.message : "Unknown checkout error",
-        },
-      })
-      .eq("id", paymentId)
-      .eq("provider", "ozow");
+    if (!paymentMarkedFailed) {
+      await input.admin
+        .from("payments")
+        .update({
+          status: "failed",
+          provider_data: {
+            ...providerData,
+            last_error: error instanceof Error ? error.message : "Unknown checkout error",
+          },
+        })
+        .eq("id", paymentId)
+        .eq("provider", "ozow");
+    }
 
     throw error;
   }

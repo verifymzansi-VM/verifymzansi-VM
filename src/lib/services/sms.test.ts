@@ -161,6 +161,84 @@ describe("sms service", () => {
       expect(result.error).toBe("API Down");
     });
 
+    it("retries on transient 5xx HTTP error and succeeds on second attempt", async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response("Internal Server Error", {
+            status: 500,
+            headers: { "Content-Type": "text/plain" },
+          })
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              SMSMessageData: {
+                Recipients: [{ statusCode: 100, messageId: "retry-ok-1", status: "Sent" }],
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+
+      // Override setTimeout so retries don't actually wait
+      vi.useFakeTimers();
+      const sendPromise = sendSms({ to: "+27821234567", message: "retry test" });
+      // Flush all timers (exponential backoff)
+      await vi.runAllTimersAsync();
+      const result = await sendPromise;
+      vi.useRealTimers();
+
+      expect(result.success).toBe(true);
+      expect(result.messageId).toBe("retry-ok-1");
+      // Initial attempt + at least one retry
+      expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(1);
+    });
+
+    it("exhausts retries and returns failure after persistent 5xx errors", async () => {
+      // MAX_RETRIES = 2 means 1 initial + 2 retries = 3 attempts total
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response("Service Unavailable", {
+          status: 503,
+          headers: { "Content-Type": "text/plain" },
+        })
+      );
+
+      vi.useFakeTimers();
+      const sendPromise = sendSms({ to: "+27821234567", message: "all-fail test" });
+      await vi.runAllTimersAsync();
+      const result = await sendPromise;
+      vi.useRealTimers();
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("HTTP 503");
+    });
+
+    it("retries on network error (TypeError) and succeeds", async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockRejectedValueOnce(new TypeError("fetch failed"))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              SMSMessageData: {
+                Recipients: [{ statusCode: 101, messageId: "network-retry-1", status: "Sent" }],
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+
+      vi.useFakeTimers();
+      const sendPromise = sendSms({ to: "+27821234567", message: "network retry" });
+      await vi.runAllTimersAsync();
+      const result = await sendPromise;
+      vi.useRealTimers();
+
+      expect(result.success).toBe(true);
+      expect(result.messageId).toBe("network-retry-1");
+    });
+
     it("handles HTTP error responses", async () => {
       globalThis.fetch = mockFetchResponse("Unauthorized", 401);
 

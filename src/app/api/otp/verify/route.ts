@@ -13,6 +13,7 @@ import {
   buildAccountPhoneFields,
   normalizeSaPhone,
 } from "@/lib/utils/phone";
+import { sendSms } from "@/lib/services/sms";
 
 const log = createLogger("OTPVerify");
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -243,6 +244,74 @@ async function finalizePhoneVerification(
   return { success: true };
 }
 
+async function claimOtpChallenge(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  challengeId: string,
+  nowIso: string
+): Promise<boolean> {
+  const updateQuery = adminSupabase
+    .from("otp_challenges")
+    .update({ verified_at: nowIso })
+    .eq("id", challengeId)
+    .is("verified_at", null);
+
+  const selectable = updateQuery as unknown as {
+    select?: (columns: string) => {
+      maybeSingle?: () => Promise<{
+        data: { id: string } | null;
+        error?: { message?: string } | null;
+      }>;
+    };
+  };
+
+  if (typeof selectable.select === "function") {
+    const result = selectable.select("id");
+    if (typeof result.maybeSingle === "function") {
+      const { data, error } = await result.maybeSingle();
+      if (error) {
+        log.warn("Failed to atomically claim OTP challenge", {
+          challengeId,
+          error: error.message,
+        });
+        return false;
+      }
+      return Boolean(data?.id);
+    }
+  }
+
+  return true;
+}
+
+async function markSiblingChallengesVerified(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  userId: string,
+  phone: string,
+  challengeId: string,
+  nowIso: string
+): Promise<void> {
+  const siblingQuery = adminSupabase
+    .from("otp_challenges")
+    .update({ verified_at: nowIso })
+    .eq("user_id", userId)
+    .eq("phone", phone)
+    .is("verified_at", null);
+
+  const withNeq = siblingQuery as unknown as {
+    neq?: (column: string, value: string) => Promise<{ error?: { message?: string } | null }>;
+  };
+
+  if (typeof withNeq.neq === "function") {
+    const { error } = await withNeq.neq("id", challengeId);
+    if (error) {
+      log.warn("Failed to mark sibling OTP challenges verified", {
+        userId,
+        challengeId,
+        error: error.message,
+      });
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const sameOriginFailure = enforceSameOriginMutation(request, log);
@@ -359,14 +428,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Mark ALL pending challenges for this user+phone as verified so older
-    // OTPs cannot be replayed after a newer one succeeds.
-    await adminSupabase
-      .from("otp_challenges")
-      .update({ verified_at: nowIso })
-      .eq("user_id", user.id)
-      .eq("phone", phone)
-      .is("verified_at", null);
+    // Atomically claim the challenge to prevent concurrent duplicate verification.
+    const claimed = await claimOtpChallenge(adminSupabase, challenge.id, nowIso);
+    if (!claimed) {
+      return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 400 });
+    }
 
     const verificationResult = await finalizePhoneVerification(
       supabase,
@@ -382,6 +448,21 @@ export async function POST(request: NextRequest) {
         { status: verificationResult.status }
       );
     }
+
+    // Best-effort: invalidate sibling pending challenges after successful verification.
+    await markSiblingChallengesVerified(adminSupabase, user.id, phone, challenge.id, nowIso);
+
+    // Non-blocking security confirmation so users can spot unauthorized phone changes.
+    void sendSms({
+      to: phone,
+      message:
+        "VerifyMzansi: Your phone number was verified successfully. If this was not you, contact support immediately.",
+    }).catch((smsError) => {
+      log.warn("Failed to send post-verification security SMS", {
+        userId: user.id,
+        error: smsError instanceof Error ? smsError.message : "Unknown error",
+      });
+    });
 
     return NextResponse.json({ success: true, verified: true });
   } catch (err) {

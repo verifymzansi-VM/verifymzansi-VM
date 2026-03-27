@@ -89,6 +89,26 @@ describe("POST /api/webhooks/ozow", () => {
     await expect(response.json()).resolves.toEqual({ error: "Webhook secret not configured" });
   });
 
+  it("returns 400 for malformed JSON payloads", async () => {
+    const crypto = await import("crypto");
+    const raw = '{"eventType":"transaction.complete",';
+    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/webhooks/ozow", {
+        method: "POST",
+        body: raw,
+        headers: {
+          "Content-Type": "application/json",
+          "X-Ozow-Signature": signature,
+        },
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Invalid JSON payload" });
+  });
+
   it("rejects invalid signatures", async () => {
     const response = await POST(
       createSignedRequest({
@@ -124,6 +144,50 @@ describe("POST /api/webhooks/ozow", () => {
 
     expect(response.status).toBe(200);
     expect(data.ignored).toBe(true);
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  });
+
+  it("returns duplicate when payment is already complete for the same provider transaction", async () => {
+    const crypto = await import("crypto");
+    const body = {
+      eventType: "transaction.complete",
+      data: {
+        merchantReference: "payment-1",
+        transactionReference: "ozow-tx-1",
+        amount: "25.00",
+        currencyCode: "ZAR",
+      },
+    };
+    const raw = JSON.stringify(body);
+    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "payment-1",
+                area: "PROMOTIONS_EVENTS",
+                status: "complete",
+                provider: "ozow",
+                provider_payment_id: "ozow-tx-1",
+                provider_reference: "payment-1",
+                provider_data: {},
+                amount_cents: 2500,
+                user_id: "user-1",
+              },
+            }),
+          }),
+        }),
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+    });
+
+    const response = await POST(createSignedRequest(body, signature));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ success: true, duplicate: true });
     expect(mockFulfillPayment).not.toHaveBeenCalled();
   });
 

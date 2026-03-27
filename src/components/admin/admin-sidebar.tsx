@@ -142,8 +142,14 @@ function buildGovernanceSections(pendingVerifications: number, openReports: numb
   ];
 }
 
-function buildAdminSections(): NavSection[] {
+function buildAdminSections(
+  pendingVerifications: number,
+  openReports: number,
+  pendingModeration: number,
+  evidenceDeskEnabled: boolean
+): NavSection[] {
   return [
+    // Intelligence (admin-exclusive analytics)
     {
       label: "Intelligence",
       items: [{ href: "/admin", label: "Strategy Dashboard", icon: LayoutDashboard }],
@@ -168,6 +174,57 @@ function buildAdminSections(): NavSection[] {
         { href: "/admin/intelligence/operations", label: "Ops Summary", icon: Clock },
       ],
     },
+    // Governance (decisions, oversight, appeals)
+    {
+      label: "Governance",
+      items: [
+        {
+          href: "/admin/governance/escalations",
+          label: "Escalations",
+          icon: AlertTriangle,
+        },
+        { href: "/admin/governance/appeals", label: "Appeals", icon: Scale },
+        {
+          href: "/admin/governance/enforcement",
+          label: "Enforcement Review",
+          icon: ShieldCheck,
+        },
+        { href: "/admin/governance/oversight", label: "Oversight Hub", icon: Eye },
+        { href: "/admin/governance/roles", label: "Role Management", icon: Users },
+        { href: "/admin/dsar", label: "Data Requests", icon: FileText },
+      ],
+    },
+    // Operations (verification, marketplace, queues)
+    {
+      label: "Operations",
+      items: [
+        {
+          href: "/admin/verification",
+          label: "Verify Accounts",
+          icon: ShieldCheck,
+          badgeCount: pendingVerifications > 0 ? pendingVerifications : undefined,
+        },
+        ...(evidenceDeskEnabled
+          ? [{ href: "/admin/verification/evidence", label: "Evidence Desk", icon: Eye }]
+          : []),
+        { href: "/admin/mzansi-market", label: "Mzansi Market", icon: ShoppingBag },
+        { href: "/admin/businesses", label: "Mzansi Business", icon: Building2 },
+        { href: "/admin/promotions-events", label: "Promotions & Events", icon: Megaphone },
+        {
+          href: "/admin/moderation",
+          label: "Moderation",
+          icon: Clock,
+          badgeCount: pendingModeration > 0 ? pendingModeration : undefined,
+        },
+        {
+          href: "/admin/reports",
+          label: "Reports",
+          icon: Flag,
+          badgeCount: openReports > 0 ? openReports : undefined,
+        },
+      ],
+    },
+    // Tools
     {
       label: "Tools",
       items: [
@@ -194,7 +251,12 @@ export function AdminSidebar({
       sections = buildGovernanceSections(pendingVerifications, openReports);
       break;
     case "admin":
-      sections = buildAdminSections();
+      sections = buildAdminSections(
+        pendingVerifications,
+        openReports,
+        pendingModeration,
+        evidenceDeskEnabled
+      );
       break;
     default:
       sections = buildModeratorSections(

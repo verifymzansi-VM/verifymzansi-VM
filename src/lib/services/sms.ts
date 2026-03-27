@@ -74,10 +74,22 @@ function validateAfricaTalkingSenderId(senderId: string | undefined): SenderIdVa
 
 /**
  * Send SMS via Africa's Talking REST API (edge-compatible, no SDK required).
+ * Retries transient failures (network errors, 5xx) up to MAX_RETRIES times
+ * with exponential backoff before surfacing the error.
  *
  * @param params - SMS parameters (to, message)
  * @returns Result indicating success or failure
  */
+const MAX_RETRIES = 2;
+const RETRY_BASE_MS = 500;
+
+function isRetryable(error: unknown, statusCode?: number): boolean {
+  if (statusCode && statusCode >= 500) return true;
+  if (error instanceof DOMException && error.name === "TimeoutError") return true;
+  if (error instanceof TypeError) return true; // fetch network error
+  return false;
+}
+
 export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
   if (process.env.NODE_ENV === "development" && process.env.SMS_MOCK === "true") {
     log.info("Mock SMS sent", { to: Array.isArray(params.to) ? params.to[0] : params.to });
@@ -251,8 +263,75 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       return await sendAttempt(false);
     }
 
+    // Retry transient failures with exponential backoff
+    if (!firstAttempt.success && !firstAttempt.invalidSenderIdRejected) {
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        const backoff = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+        log.warn("Retrying SMS after transient failure", {
+          attempt,
+          backoffMs: backoff,
+          previousError: firstAttempt.error,
+        });
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+        const retryResult = await sendAttempt(senderIdResult.valid);
+        if (retryResult.success) return retryResult;
+        // If the retry also failed with a non-retryable error, stop
+        if (retryResult.invalidSenderIdRejected) return retryResult;
+      }
+    }
+
     return firstAttempt;
   } catch (error) {
+    // Retry transient errors (network failures, timeouts) at the outer level
+    if (isRetryable(error)) {
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        const backoff = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+        log.warn("Retrying SMS after caught exception", {
+          attempt,
+          backoffMs: backoff,
+          error: error instanceof Error ? error.message : "Unknown",
+        });
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+        try {
+          const validatedRetry = SmsParamsSchema.parse(params);
+          const retryRecipients = Array.isArray(validatedRetry.to)
+            ? validatedRetry.to
+            : [validatedRetry.to];
+          // Minimal inline retry — cannot reuse sendAttempt because it was
+          // defined inside the try block for scoping reasons.
+          const apiKey = process.env.AFRICASTALKING_API_KEY!;
+          const username = process.env.AFRICASTALKING_USERNAME!;
+          const isSandbox = username.toLowerCase() === "sandbox";
+          const baseUrl = isSandbox
+            ? "https://api.sandbox.africastalking.com"
+            : "https://api.africastalking.com";
+          const formData = new URLSearchParams();
+          formData.set("username", username);
+          formData.set("to", retryRecipients.join(","));
+          formData.set("message", validatedRetry.message);
+          const resp = await fetch(`${baseUrl}/version1/messaging`, {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/x-www-form-urlencoded",
+              apiKey,
+            },
+            body: formData.toString(),
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (resp.ok) {
+            const body: ATSmsResponse = await resp.json();
+            const r = body.SMSMessageData?.Recipients?.[0];
+            if (r && r.statusCode < 200) {
+              return { success: true, messageId: r.messageId };
+            }
+          }
+        } catch {
+          // continue to next retry
+        }
+      }
+    }
+
     log.error("Africa's Talking error", {
       error: error instanceof Error ? error.message : "SMS sending failed",
     });

@@ -10,6 +10,26 @@ import { getOwnerColumn, type OwnerColumn } from "@/lib/account/compat";
 
 const log = createLogger("PaymentFulfillment");
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
+const VAT_RATE_BPS = 1500;
+
+function computeVatInclusiveBreakdown(totalCents: number): {
+  amountCents: number;
+  vatCents: number;
+} {
+  const vatCents = Math.round((totalCents * VAT_RATE_BPS) / (10000 + VAT_RATE_BPS));
+  return {
+    amountCents: totalCents - vatCents,
+    vatCents,
+  };
+}
+
+function buildInvoiceNumber(payment: PaymentRecordShape): string {
+  const date = new Date(payment.created_at || Date.now())
+    .toISOString()
+    .slice(0, 10)
+    .replace(/-/g, "");
+  return `INV-${date}-${payment.id.slice(0, 8).toUpperCase()}`;
+}
 
 type AdminClient = {
   from: (table: string) => {
@@ -18,6 +38,12 @@ type AdminClient = {
         column: string,
         value: string
       ) => {
+        eq: (
+          column: string,
+          value: string
+        ) => {
+          maybeSingle: () => Promise<{ data: Record<string, unknown> | null }>;
+        };
         maybeSingle: () => Promise<{ data: Record<string, unknown> | null }>;
       };
     };
@@ -25,6 +51,7 @@ type AdminClient = {
       value: Record<string, unknown>,
       options: { onConflict: string }
     ) => Promise<{ error?: { message?: string } | null }>;
+    insert: (value: Record<string, unknown>) => Promise<{ error?: { message?: string } | null }>;
     update: (value: Record<string, unknown>) => {
       eq: (
         column: string,
@@ -126,6 +153,73 @@ export async function fulfillPayment(
 
       if (error) {
         throw new Error(`Entitlement creation failed: ${error.message}`);
+      }
+
+      // Idempotent invoice creation for successful subscription activations.
+      const { data: existingInvoice } = await supabase
+        .from("invoices")
+        .select("id")
+        .eq("payment_id", payment.id)
+        .maybeSingle();
+
+      if (!existingInvoice) {
+        const breakdown = computeVatInclusiveBreakdown(payment.amount_cents);
+        const { error: invoiceError } = await supabase.from("invoices").insert({
+          invoice_number: buildInvoiceNumber(payment),
+          user_id: payment.user_id,
+          payment_id: payment.id,
+          amount_cents: breakdown.amountCents,
+          vat_cents: breakdown.vatCents,
+          total_cents: payment.amount_cents,
+          description: `${plan.tier} subscription (${plan.area})`,
+        });
+
+        if (invoiceError) {
+          throw new Error(`Invoice creation failed: ${invoiceError.message}`);
+        }
+      }
+
+      const isPlanChange = meta.is_plan_change === true;
+      const previousEntitlementId =
+        typeof meta.previous_entitlement_id === "string" ? meta.previous_entitlement_id : null;
+
+      if (isPlanChange && previousEntitlementId) {
+        const { data: previousEntitlement } = await supabase
+          .from("entitlements")
+          .select("id, status")
+          .eq("id", previousEntitlementId)
+          .eq("user_id", payment.user_id)
+          .maybeSingle();
+
+        if (previousEntitlement?.status === "active") {
+          const { error: previousUpdateError } = await supabase
+            .from("entitlements")
+            .update({
+              status: "cancelled",
+              cancelled_at: new Date(baseTime).toISOString(),
+            })
+            .eq("id", previousEntitlementId)
+            .eq("user_id", payment.user_id);
+
+          if (previousUpdateError) {
+            throw new Error(
+              `Previous entitlement cancellation failed: ${previousUpdateError.message}`
+            );
+          }
+
+          await logAuditEvent({
+            actorId: payment.user_id || SYSTEM_ACTOR_ID,
+            actorRole: "member",
+            action: "subscription_cancelled",
+            targetType: "entitlement",
+            targetId: previousEntitlementId,
+            metadata: {
+              reason: "plan_change",
+              paymentId: payment.id,
+              replaced_by_plan_id: planId,
+            },
+          });
+        }
       }
     }
   }

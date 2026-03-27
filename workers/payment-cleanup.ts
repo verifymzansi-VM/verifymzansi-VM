@@ -22,6 +22,8 @@ interface Env {
 
 interface PaymentRow {
   id: string;
+  user_id?: string | null;
+  area?: string | null;
   status?: string;
   provider_data: Record<string, unknown> | null;
   updated_at?: string | null;
@@ -81,6 +83,43 @@ async function patchPayment(
   return true;
 }
 
+async function createNotification(
+  env: Env,
+  userId: string,
+  title: string,
+  message: string,
+  href = "/billing"
+): Promise<boolean> {
+  const headers = {
+    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    "Content-Type": "application/json",
+    Prefer: "return=minimal",
+  };
+
+  const response = await fetch(`${env.SUPABASE_URL}/rest/v1/notifications`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      user_id: userId,
+      type: "warning",
+      title,
+      message,
+      href,
+    }),
+  });
+
+  if (!response.ok) {
+    console.error(
+      `Payment cleanup notification insert failed for ${userId}`,
+      await response.text()
+    );
+    return false;
+  }
+
+  return true;
+}
+
 const worker: ExportedHandler<Env> = {
   async scheduled(_event, env) {
     const headers = {
@@ -90,7 +129,7 @@ const worker: ExportedHandler<Env> = {
     };
 
     const response = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/payments?provider=eq.ozow&status=eq.pending&select=id,provider_data&limit=200`,
+      `${env.SUPABASE_URL}/rest/v1/payments?provider=eq.ozow&status=eq.pending&select=id,user_id,area,provider_data&limit=200`,
       { headers }
     );
 
@@ -124,6 +163,7 @@ const worker: ExportedHandler<Env> = {
     let expiredPending = 0;
     let recoveredComplete = 0;
     let failedStaleProcessing = 0;
+    let expiryNotifications = 0;
 
     for (const payment of payments) {
       const updated = await patchPayment(env, payment.id, {
@@ -135,6 +175,18 @@ const worker: ExportedHandler<Env> = {
       });
       if (updated) {
         expiredPending += 1;
+        if (payment.user_id) {
+          const notified = await createNotification(
+            env,
+            payment.user_id,
+            "Payment expired",
+            "Your pending payment expired before completion. Start checkout again to activate your plan.",
+            "/billing"
+          );
+          if (notified) {
+            expiryNotifications += 1;
+          }
+        }
       }
     }
 
@@ -194,6 +246,7 @@ const worker: ExportedHandler<Env> = {
         expired_pending: expiredPending,
         recovered_complete: recoveredComplete,
         failed_stale_processing: failedStaleProcessing,
+        expiry_notifications: expiryNotifications,
         processing_stale_minutes: staleMinutes,
         run_at: new Date().toISOString(),
       },

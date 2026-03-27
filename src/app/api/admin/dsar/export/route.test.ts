@@ -1,12 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockGetOwnerColumn } =
-  vi.hoisted(() => ({
-    mockCreateClient: vi.fn(),
-    mockCreateAdminClient: vi.fn(),
-    mockLogAuditEvent: vi.fn(),
-    mockGetOwnerColumn: vi.fn(),
-  }));
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockLogAuditEvent,
+  mockGetOwnerColumn,
+  mockVerifyAdminActorRoleFromDb,
+  mockCheckLocalRateLimit,
+} = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
+  mockLogAuditEvent: vi.fn(),
+  mockGetOwnerColumn: vi.fn(),
+  mockVerifyAdminActorRoleFromDb: vi.fn(),
+  mockCheckLocalRateLimit: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
@@ -20,14 +28,13 @@ vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: mockLogAuditEvent,
 }));
 
-vi.mock("@/lib/auth/roles", async () => {
-  const actual = await vi.importActual("@/lib/auth/roles");
-  return {
-    ...actual,
-    isAdmin: () => true,
-    getRoleFromUser: () => "admin",
-  };
-});
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyAdminActorRoleFromDb: mockVerifyAdminActorRoleFromDb,
+}));
+
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: mockCheckLocalRateLimit,
+}));
 
 vi.mock("@/lib/account/compat", async () => {
   const actual = await vi.importActual("@/lib/account/compat");
@@ -69,6 +76,8 @@ describe("GET /api/admin/dsar/export", () => {
     vi.clearAllMocks();
     mockGetOwnerColumn.mockResolvedValue("owner_id");
     mockLogAuditEvent.mockResolvedValue(undefined);
+    mockVerifyAdminActorRoleFromDb.mockResolvedValue("admin");
+    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -179,5 +188,46 @@ describe("GET /api/admin/dsar/export", () => {
     );
 
     expect(response.status).toBe(400);
+  });
+
+  it("caps auth user lookup to five pages", async () => {
+    const listUsers = vi
+      .fn()
+      .mockResolvedValue({
+        data: { users: Array.from({ length: 200 }, (_, i) => ({ id: `u${i}` })) },
+        error: null,
+      });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "dsar_cases") {
+          return createQueryBuilder({
+            data: {
+              id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+              requester_email: "nomsa@example.com",
+            },
+            error: null,
+          });
+        }
+        if (table === "audit_logs") {
+          return createQueryBuilder({ data: [], error: null });
+        }
+        return createQueryBuilder({ data: [], error: null });
+      }),
+      auth: {
+        admin: {
+          listUsers,
+        },
+      },
+    });
+
+    const response = await GET(
+      createRequest(
+        "http://localhost:3000/api/admin/dsar/export?requestId=a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+      ) as never
+    );
+
+    expect(response.status).toBe(200);
+    expect(listUsers).toHaveBeenCalledTimes(5);
   });
 });

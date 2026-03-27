@@ -112,4 +112,41 @@ describe("launch validation", () => {
     expect(summary.isValid).toBe(false);
     expect(summary.errors.some((error) => error.name === "Dev-only flags")).toBe(true);
   });
+
+  it("fails production mode when OZOW_API_BASE_URL is set to a non-official host", () => {
+    const summary = validateLaunchConfiguration(
+      {
+        ...BASE_ENV,
+        OZOW_API_BASE_URL: "https://proxy.example.com",
+      },
+      { mode: "production" }
+    );
+
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "Ozow base URL",
+        detail: "OZOW_API_BASE_URL must use https://one.ozow.com in production",
+      })
+    );
+  });
+
+  it("warns in development mode when OZOW_API_BASE_URL is not an approved Ozow host", () => {
+    const summary = validateLaunchConfiguration(
+      {
+        ...BASE_ENV,
+        NODE_ENV: "development",
+        OZOW_ENV: "staging",
+        OZOW_API_BASE_URL: "https://proxy.example.com",
+      },
+      { mode: "development" }
+    );
+
+    expect(summary.isValid).toBe(true);
+    expect(summary.warnings).toContainEqual(
+      expect.objectContaining({
+        name: "Ozow base URL",
+      })
+    );
+  });
 });

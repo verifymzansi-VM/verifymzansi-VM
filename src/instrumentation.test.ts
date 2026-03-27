@@ -90,4 +90,40 @@ describe("instrumentation register", () => {
       })
     );
   });
+
+  it("blocks production startup when cafebabe placeholder keys are set", async () => {
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "production",
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+    delete process.env.STRICT_ENV_STARTUP_BLOCK;
+    delete process.env.VERIFYMZANSI_RUNTIME_MODE;
+    process.env.KYC_ENCRYPTION_KEY = "cafebabe".repeat(8);
+
+    await expect(register()).rejects.toThrow("Production startup blocked");
+    expect(mockError).toHaveBeenCalledWith(
+      expect.stringContaining("placeholder encryption keys detected")
+    );
+
+    delete process.env.KYC_ENCRYPTION_KEY;
+  });
+
+  it("does not block e2e runtime from having cafebabe keys", async () => {
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "production",
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+    process.env.VERIFYMZANSI_RUNTIME_MODE = "e2e";
+    process.env.KYC_ENCRYPTION_KEY = "cafebabe".repeat(8);
+
+    // e2e mode skips the cafebabe guard — workers can run in CI with placeholder keys
+    await expect(register()).resolves.toBeUndefined();
+
+    delete process.env.KYC_ENCRYPTION_KEY;
+    delete process.env.VERIFYMZANSI_RUNTIME_MODE;
+  });
 });

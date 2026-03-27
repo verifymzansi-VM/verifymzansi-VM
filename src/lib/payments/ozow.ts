@@ -13,13 +13,52 @@ type CachedToken = {
 
 const cachedTokens = new Map<string, CachedToken>();
 
-function getOzowBaseUrl(): string {
-  const configuredBaseUrl = env("OZOW_API_BASE_URL");
-  if (configuredBaseUrl) {
-    return configuredBaseUrl.replace(/\/$/, "");
+const OZOW_ALLOWED_HOSTS = {
+  production: new Set(["one.ozow.com"]),
+  nonProduction: new Set(["stagingone.ozow.com", "one.ozow.com"]),
+} as const;
+
+function isAllowedOzowBaseUrl(url: URL, ozowEnv: "staging" | "production"): boolean {
+  if (url.protocol !== "https:") {
+    return false;
   }
 
-  return env("OZOW_ENV") === "production" ? "https://one.ozow.com" : "https://stagingone.ozow.com";
+  const host = url.hostname.toLowerCase();
+  const allowedHosts =
+    ozowEnv === "production" ? OZOW_ALLOWED_HOSTS.production : OZOW_ALLOWED_HOSTS.nonProduction;
+  return allowedHosts.has(host);
+}
+
+export function validateOzowBaseUrl(
+  configuredBaseUrl: string,
+  ozowEnv: "staging" | "production"
+): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(configuredBaseUrl);
+  } catch {
+    throw new Error("OZOW_API_BASE_URL must be a valid URL");
+  }
+
+  if (!isAllowedOzowBaseUrl(parsed, ozowEnv)) {
+    throw new Error(
+      ozowEnv === "production"
+        ? "OZOW_API_BASE_URL must use https://one.ozow.com in production"
+        : "OZOW_API_BASE_URL must use an approved Ozow HTTPS host"
+    );
+  }
+
+  return parsed.toString().replace(/\/$/, "");
+}
+
+function getOzowBaseUrl(): string {
+  const ozowEnv = env("OZOW_ENV") === "production" ? "production" : "staging";
+  const configuredBaseUrl = env("OZOW_API_BASE_URL");
+  if (configuredBaseUrl) {
+    return validateOzowBaseUrl(configuredBaseUrl, ozowEnv);
+  }
+
+  return ozowEnv === "production" ? "https://one.ozow.com" : "https://stagingone.ozow.com";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

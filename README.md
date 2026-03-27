@@ -118,6 +118,8 @@ site root with `?code=...` instead of the app callback handler.
 - `NEXT_PUBLIC_APP_URL` must be public HTTPS
 - `AFRICASTALKING_SENDER_ID`, `IP_HASH_SECRET`, Ozow credentials, Turnstile, R2,
   Resend, and encryption keys must all be populated
+- If `OZOW_API_BASE_URL` is set, it must target an official Ozow HTTPS host.
+  Production accepts only `https://one.ozow.com`.
 - If you set `RATE_LIMITER_API_KEY`, you must also set `OTP_RATE_LIMITER_URL`
 - Sensitive values belong in GitHub Actions secrets and Cloudflare Wrangler
   secrets, not in committed files
@@ -161,6 +163,7 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 | `pnpm test:blocking`                                                                   | Explicit blocking Vitest lane                        |
 | `pnpm test:coverage`                                                                   | Alias for the core coverage lane                     |
 | `pnpm test:coverage:core`                                                              | Coverage lane focused on core server and domain code |
+| `pnpm test:launch:flows`                                                               | Billing + OTP + DSAR launch-confidence bundle        |
 | `pnpm test:deep`                                                                       | Core coverage plus Playwright                        |
 | `pnpm test:all`                                                                        | Full validation shortcut                             |
 | `pnpm test:e2e`                                                                        | Full Playwright suite                                |
@@ -175,6 +178,18 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 | `pnpm secret-scan`                                                                     | Secret leak scan                                     |
 | `pnpm licenses:check`                                                                  | License policy gate                                  |
 | `pnpm build:cloudflare`                                                                | OpenNext Cloudflare build                            |
+
+## Billing API Endpoints
+
+- `POST /api/billing/create-checkout` starts a subscription checkout session
+- `POST /api/billing/cancel` cancels an active subscription entitlement
+- `POST /api/billing/change-plan` starts checkout for an in-area plan change
+- `GET /api/billing/payment-status?payment=<payment-id>` returns normalized
+  payment status
+
+Billing fulfillment now records invoice rows in `invoices` for successful
+subscription payments. Invoice records are created idempotently by `payment_id`
+so duplicate webhooks cannot create duplicate invoices.
 
 ## Testing
 
@@ -199,6 +214,17 @@ candidate, after a risky refactor, or before changing shared infra code:
 pnpm test:coverage:core
 pnpm test:e2e
 ```
+
+Run the focused launch-path integration bundle when you want one command that
+exercises the billing, OTP, and DSAR flows together before release:
+
+```bash
+pnpm test:launch:flows
+```
+
+That bundle runs the billing payment route/library/worker tests, OTP route and
+verification page tests, DSAR submit/admin/page tests, then finishes with
+Chromium Playwright smoke for the billing round-trip and DSAR browser flow.
 
 Before a production release, also run the production-only validation checks:
 

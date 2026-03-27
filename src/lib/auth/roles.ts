@@ -8,6 +8,11 @@ type MaybeUser = Pick<User, "app_metadata" | "is_anonymous"> | null | undefined;
    Each back-office action is a named capability.
    Roles are mapped to the capabilities they are allowed to exercise.
    All authorization checks go through `hasCapability()`.
+
+   Role hierarchy (each level includes all lower capabilities):
+     1. Admin          — full platform access (super-role)
+     2. Governance Ctrl — decisions, oversight, appeals, enforcement
+     3. Moderator       — queues, cases, verification
    ────────────────────────────────────────────────────────── */
 
 export type Capability =
@@ -39,6 +44,7 @@ export type Capability =
   | "dsar:manage";
 
 const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
+  /* 3rd — Moderator: queue & case operations */
   moderator: new Set<Capability>([
     "queue:view",
     "queue:claim",
@@ -47,6 +53,7 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "case:escalate",
     "case:add_note",
   ]),
+  /* 2nd — Governance Controller: decisions, oversight, appeals, enforcement */
   governance_controller: new Set<Capability>([
     "queue:view",
     "case:view",
@@ -58,13 +65,33 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "appeal:review",
     "appeal:decide",
     "enforcement:execute",
-    "role:assign",
-    "role:revoke",
     "oversight:view",
     "audit:view",
     "dsar:manage",
   ]),
+  /* 1st — Admin: super-role — ALL platform capabilities */
   admin: new Set<Capability>([
+    // Moderator operations
+    "queue:view",
+    "queue:claim",
+    "case:view",
+    "case:recommend",
+    "case:escalate",
+    "case:add_note",
+    // Governance controller decisions
+    "decision:approve",
+    "decision:reject",
+    "decision:override",
+    "decision:reopen",
+    "appeal:review",
+    "appeal:decide",
+    "enforcement:execute",
+    "oversight:view",
+    "dsar:manage",
+    // Admin-exclusive: role management
+    "role:assign",
+    "role:revoke",
+    // Admin-exclusive: intelligence & tools
     "bi:view",
     "bi:export",
     "bi:drill_down",
@@ -72,6 +99,23 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "feature_flag:toggle",
   ]),
 };
+
+/* ── Admin Email Allowlist ─────────────────────────────────
+   Hard cap: only these two accounts can ever hold the admin role.
+   Stored in code (not DB) to prevent database-level tampering.
+   ────────────────────────────────────────────────────────── */
+
+export const ADMIN_EMAIL_ALLOWLIST: ReadonlyArray<string> = Object.freeze([
+  "ivelosm@gmail.com",
+  "senzonsm@gmail.com",
+]);
+
+/** Check whether an email is on the hardcoded admin allowlist (case-insensitive). */
+export function isAllowedAdmin(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const normalized = email.toLowerCase().trim();
+  return ADMIN_EMAIL_ALLOWLIST.includes(normalized);
+}
 
 /* ── Role Extraction ──────────────────────────────────────── */
 

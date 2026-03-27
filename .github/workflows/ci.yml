@@ -153,11 +153,33 @@ jobs:
       - run: npx playwright install --with-deps
       - run: pnpm exec playwright test --grep "@smoke" --project ${{ matrix.project }}
 
+  launch-flows-bundle:
+    runs-on: ubuntu-latest
+    needs: [unit-api-contract, build-route-verify]
+    env:
+      PLAYWRIGHT_TEST_MODE: "1"
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
+      TURNSTILE_SECRET_KEY: "dummy_secret_key" # secret-scan: allow
+      NEXT_PUBLIC_SUPABASE_URL: ${{ (startsWith(secrets.NEXT_PUBLIC_SUPABASE_URL, 'https://') || startsWith(secrets.NEXT_PUBLIC_SUPABASE_URL, 'http://')) && secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-role-key' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Billing + OTP + DSAR launch bundle
+        run: pnpm run test:launch:flows
+
   e2e-full-matrix:
     runs-on: ubuntu-latest
     continue-on-error: true
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
-    needs: [e2e-smoke, db-rls]
+    needs: [e2e-smoke, launch-flows-bundle, db-rls]
     strategy:
       fail-fast: false
       matrix:

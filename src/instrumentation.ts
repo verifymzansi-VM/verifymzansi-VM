@@ -64,6 +64,24 @@ export async function register() {
 
   const logger = createLogger("Instrumentation");
 
+  // Hard guard: reject placeholder encryption keys in production.
+  // This runs BEFORE env validation so it is never soft-failed.
+  if (process.env.NODE_ENV === "production" && !isExplicitE2eRuntime()) {
+    const CAFEBABE = "cafebabe".repeat(8);
+    const placeholderVars = ["KYC_ENCRYPTION_KEY", "ID_ENCRYPTION_KEY", "HMAC_SECRET"] as const;
+    const insecure = placeholderVars.filter((k) => process.env[k] === CAFEBABE);
+    if (insecure.length > 0) {
+      const logger = (await import("./lib/utils/logger")).createLogger("Instrumentation");
+      logger.error(
+        `Production startup blocked: placeholder encryption keys detected: ${insecure.join(", ")}`
+      );
+      throw new Error(
+        `Production startup blocked: placeholder encryption keys detected (${insecure.join(", ")}). ` +
+          `Generate real keys with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+      );
+    }
+  }
+
   // Hard guard: block production startup if dev bypasses are present
   const devBypassViolations = assertNoDevBypassesInProduction();
   if (devBypassViolations.length > 0) {

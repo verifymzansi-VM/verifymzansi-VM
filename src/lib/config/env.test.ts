@@ -149,6 +149,23 @@ describe("env config", () => {
       expect(mod.validateEnv().NEXT_PUBLIC_APP_URL).toBe("http://127.0.0.1:3000");
     });
 
+    it("throws in strict production mode when launch validation fails", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("OZOW_ENV", "production");
+      vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
+      vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+      const mod = await import("./env");
+
+      expect(() => mod.validateEnv({ strict: true, mode: "production" })).toThrow(
+        "Launch Configuration Error"
+      );
+    });
+
     it("fails fast when RATE_LIMITER_API_KEY is set without OTP_RATE_LIMITER_URL", async () => {
       vi.resetModules();
       stubNoBypassFlags();
@@ -177,6 +194,19 @@ describe("env config", () => {
       vi.stubEnv("NODE_ENV", "development");
       const mod = await import("./env");
       expect(mod.env("NODE_ENV")).toBe("development");
+    });
+
+    it("falls back to raw process.env in test mode when validation fails", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      vi.stubEnv("NODE_ENV", "test");
+      vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const mod = await import("./env");
+
+      expect(mod.env("NEXT_PUBLIC_APP_URL")).toBe("http://localhost:3000");
     });
   });
 
@@ -253,6 +283,104 @@ describe("env config", () => {
       expect(result.ID_ENCRYPTION_KEY).not.toBe("0".repeat(64));
       expect(result.HMAC_SECRET).not.toBe("0".repeat(64));
       warnSpy.mockRestore();
+    });
+
+    it("fails even in build mode when critical vars are missing", async () => {
+      vi.resetModules();
+      vi.stubEnv("npm_lifecycle_event", "build");
+      vi.stubEnv("CI", "false");
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const mod = await import("./env");
+
+      expect(() => mod.validateEnv()).toThrow("Missing critical env vars");
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Critical variables missing even during build")
+      );
+      errorSpy.mockRestore();
+    });
+  });
+
+  describe("production security guards", () => {
+    it("throws when cafebabe placeholder is used for KYC_ENCRYPTION_KEY in production", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("OZOW_ENV", "production");
+      vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("KYC_ENCRYPTION_KEY", "cafebabe".repeat(8));
+      const mod = await import("./env");
+
+      expect(() => mod.validateEnv()).toThrow("Insecure Placeholder Keys Detected");
+    });
+
+    it("throws when cafebabe placeholder is used for ID_ENCRYPTION_KEY in production", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("OZOW_ENV", "production");
+      vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("ID_ENCRYPTION_KEY", "cafebabe".repeat(8));
+      const mod = await import("./env");
+
+      expect(() => mod.validateEnv()).toThrow("Insecure Placeholder Keys Detected");
+    });
+
+    it("throws when cafebabe placeholder is used for HMAC_SECRET in production", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("OZOW_ENV", "production");
+      vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("HMAC_SECRET", "cafebabe".repeat(8));
+      const mod = await import("./env");
+
+      expect(() => mod.validateEnv()).toThrow("Insecure Placeholder Keys Detected");
+    });
+
+    it("does not throw when all three keys are real in production", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("OZOW_ENV", "production");
+      vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      const mod = await import("./env");
+
+      // VALID_ENV already has real hex keys (a*64, b*64, a*64 for HMAC)
+      expect(() => mod.validateEnv()).not.toThrow();
+    });
+
+    it("does not check cafebabe in development mode", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      // NODE_ENV is "test" in VALID_ENV, explicitly set development
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("KYC_ENCRYPTION_KEY", "cafebabe".repeat(8));
+      const mod = await import("./env");
+
+      // cafebabe is only rejected in production — in dev it is allowed to aid local setup
+      expect(() => mod.validateEnv()).not.toThrow();
     });
   });
 

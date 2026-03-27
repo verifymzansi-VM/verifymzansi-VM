@@ -135,6 +135,26 @@ function isValidAfricaTalkingSenderId(value?: string): boolean {
   return hasValue(value) && /^[A-Za-z0-9]{1,11}$/.test(value.trim());
 }
 
+function isAllowedOzowApiBaseUrl(value: string, mode: LaunchValidationMode): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+
+  if (parsed.protocol !== "https:") {
+    return false;
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  if (mode === "production") {
+    return host === "one.ozow.com";
+  }
+
+  return host === "stagingone.ozow.com" || host === "one.ozow.com";
+}
+
 function isTruthy(value?: string): boolean {
   return hasValue(value) && TRUTHY_VALUES.has(value.trim().toLowerCase());
 }
@@ -342,6 +362,15 @@ export function validateLaunchConfiguration(
         "pass",
         `env=${ozowEnv} site=${ozowSiteCode}${hasValue(ozowApiBaseUrl) ? " custom-base-url" : ""}`
       );
+
+      if (hasValue(ozowApiBaseUrl) && !isAllowedOzowApiBaseUrl(ozowApiBaseUrl, mode)) {
+        addCheck(
+          checks,
+          "Ozow base URL",
+          "fail",
+          "OZOW_API_BASE_URL must use https://one.ozow.com in production"
+        );
+      }
     }
   } else if (
     hasValue(ozowClientId) &&
@@ -355,6 +384,15 @@ export function validateLaunchConfiguration(
       "pass",
       `env=${ozowEnv ?? "staging"} site=${ozowSiteCode}${hasValue(ozowApiBaseUrl) ? " custom-base-url" : ""}`
     );
+
+    if (hasValue(ozowApiBaseUrl) && !isAllowedOzowApiBaseUrl(ozowApiBaseUrl, mode)) {
+      addCheck(
+        checks,
+        "Ozow base URL",
+        "warn",
+        "OZOW_API_BASE_URL should target an official Ozow HTTPS host"
+      );
+    }
   } else {
     addCheck(
       checks,

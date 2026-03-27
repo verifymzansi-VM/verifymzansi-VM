@@ -55,21 +55,50 @@ describe("getLaunchHealthSnapshot", () => {
   });
 
   it("returns ok when config, Supabase, and audit checks are healthy", async () => {
+    const resolvedOk = Promise.resolve({ error: null });
+    vi.mocked(createAdminClient).mockImplementation(() => {
+      // mock called
+      return {
+        from: (_table: string) => {
+          // from() called
+          return { select: () => ({ limit: () => resolvedOk }) };
+        },
+      } as never;
+    });
+    vi.mocked(getAuditFailureCount).mockReturnValue(0);
+
+    const snapshot = await getLaunchHealthSnapshot();
+
+    expect(snapshot.checks.config.status).toBe("ok");
+    expect(snapshot.checks.supabase.status).toBe("ok");
+    expect(snapshot.checks.schema.status).toBe("ok");
+    expect(snapshot.checks.audit.status).toBe("ok");
+    expect(snapshot.status).toBe("ok");
+  });
+
+  it("returns degraded when schema probe fails in production", async () => {
     vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ error: null }),
-        }),
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === "feature_flags") {
+          return {
+            select: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({ error: { message: "relation does not exist" } }),
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
       }),
     } as never);
     vi.mocked(getAuditFailureCount).mockReturnValue(0);
 
     const snapshot = await getLaunchHealthSnapshot();
 
-    expect(snapshot.status).toBe("ok");
-    expect(snapshot.checks.config.status).toBe("ok");
-    expect(snapshot.checks.supabase.status).toBe("ok");
-    expect(snapshot.checks.audit.status).toBe("ok");
+    expect(snapshot.status).toBe("degraded");
+    expect(snapshot.checks.schema.status).toBe("degraded");
   });
 
   it("returns degraded when production config drifts from launch requirements", async () => {
@@ -103,5 +132,6 @@ describe("getLaunchHealthSnapshot", () => {
     expect(snapshot.status).toBe("ok");
     expect(snapshot.mode).toBe("e2e");
     expect(snapshot.checks.supabase.status).toBe("skipped");
+    expect(snapshot.checks.schema.status).toBe("skipped");
   });
 });

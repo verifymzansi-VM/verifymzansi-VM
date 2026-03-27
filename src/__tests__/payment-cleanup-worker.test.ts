@@ -35,6 +35,8 @@ describe("payment cleanup worker", () => {
           json: async () => [
             {
               id: "pending-1",
+              user_id: "user-1",
+              area: "MZANSI_MARKET",
               provider_data: { expire_at: "2026-03-17T08:00:00.000Z" },
             },
           ],
@@ -75,6 +77,10 @@ describe("payment cleanup worker", () => {
       }
 
       if (url.includes("/rest/v1/payments?id=eq.processing-failed")) {
+        return { ok: true, text: async () => "" } satisfies Partial<Response>;
+      }
+
+      if (url.includes("/rest/v1/notifications")) {
         return { ok: true, text: async () => "" } satisfies Partial<Response>;
       }
 
@@ -134,7 +140,13 @@ describe("payment cleanup worker", () => {
         expired_pending: 1,
         recovered_complete: 1,
         failed_stale_processing: 1,
+        expiry_notifications: 1,
       },
     });
+
+    const notificationCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes("/rest/v1/notifications")
+    );
+    expect(notificationCall).toBeDefined();
   });
 });

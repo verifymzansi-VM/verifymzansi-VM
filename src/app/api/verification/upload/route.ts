@@ -72,11 +72,8 @@ export async function POST(request: NextRequest) {
       const hasWritableStorage = await hasR2WriteAccess(privateBucket);
 
       if (!hasWritableStorage) {
-        log.error("R2 storage is not available: missing S3 credentials and no native binding", {
+        log.error("R2 storage is not available: check bucket binding and runtime storage config", {
           requestId,
-          hasAccountId: Boolean(process.env.R2_ACCOUNT_ID),
-          hasAccessKey: Boolean(process.env.R2_ACCESS_KEY_ID),
-          hasSecretKey: Boolean(process.env.R2_SECRET_ACCESS_KEY),
           nodeEnv: process.env.NODE_ENV,
           privateBucket,
           runtime: process.env.NEXT_RUNTIME ?? "unknown",

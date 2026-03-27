@@ -120,6 +120,45 @@ describe("POST /api/businesses", () => {
     await expect(res.json()).resolves.toMatchObject({ error: "Invalid CSRF token" });
   });
 
+  it("returns 503 when owner-column probing fails during business create", async () => {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        if (table === "businesses") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({
+                    error: { code: "XX000", message: "schema cache temporarily unavailable" },
+                  }),
+                };
+              }
+
+              return {
+                eq: vi.fn().mockReturnThis(),
+                neq: vi.fn().mockReturnThis(),
+              };
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Service temporarily unavailable",
+    });
+  });
+
   it("blocks a second free post when no paid plan exists", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
@@ -998,6 +1037,47 @@ describe("GET /api/businesses", () => {
       ],
     });
     expect(eqSpy).toHaveBeenCalledWith("owner_id", USER_ID);
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 for mine mode when owner-column probing fails", async () => {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        if (table === "businesses") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({
+                    error: { code: "XX000", message: "schema cache temporarily unavailable" },
+                  }),
+                };
+              }
+
+              return {
+                order: vi.fn().mockReturnThis(),
+                limit: vi.fn().mockReturnThis(),
+                eq: vi.fn().mockResolvedValue({ data: [] }),
+              };
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
+    });
+
+    const request = {
+      nextUrl: new URL("http://localhost:3000/api/businesses?mine=true"),
+    } as NextRequest;
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Marketplace temporarily unavailable",
+    });
     expect(mockCreateAdminClient).not.toHaveBeenCalled();
   });
 

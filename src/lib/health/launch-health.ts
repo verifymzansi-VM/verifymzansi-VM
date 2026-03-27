@@ -25,6 +25,7 @@ export interface LaunchHealthSnapshot {
   checks: {
     config: HealthCheckStatus;
     supabase: HealthCheckStatus;
+    schema: HealthCheckStatus;
     audit: HealthCheckStatus;
   };
 }
@@ -82,11 +83,65 @@ async function getAuditHealth(): Promise<HealthCheckStatus> {
   }
 }
 
+/**
+ * Probe critical tables to verify the database schema is intact.
+ * Checks that core tables (plans, feature_flags, businesses) exist and are queryable.
+ */
+async function probeSchema(
+  mode: ReturnType<typeof resolveLaunchValidationMode>
+): Promise<HealthCheckStatus> {
+  if (mode !== "production") {
+    return {
+      status: "skipped",
+      detail: "Schema probe is only enforced in production mode",
+    };
+  }
+
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const supabase = createAdminClient();
+
+    const tables = ["plans", "feature_flags", "businesses"] as const;
+    const failures: string[] = [];
+
+    for (const table of tables) {
+      const { error } = await supabase.from(table).select("*").limit(1);
+      if (error) {
+        failures.push(`${table}: ${error.code ?? error.message}`);
+      }
+    }
+
+    if (failures.length > 0) {
+      logger.error("Schema probe found missing/broken tables", { failures });
+      return {
+        status: "degraded",
+        detail: `Schema probe failures: ${failures.join("; ")}`,
+        failedChecks: failures,
+      };
+    }
+
+    return {
+      status: "ok",
+      detail: `All ${tables.length} critical tables verified`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    logger.error("Schema probe threw", { error: message });
+    return {
+      status: "degraded",
+      detail: "Schema probe threw before completion",
+    };
+  }
+}
+
 export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
   const mode = resolveLaunchValidationMode(process.env);
   const configSummary = validateLaunchConfiguration(process.env, { mode });
-  const supabase = await probeSupabase(mode);
-  const audit = await getAuditHealth();
+  const [supabase, schema, audit] = await Promise.all([
+    probeSupabase(mode),
+    probeSchema(mode),
+    getAuditHealth(),
+  ]);
 
   const config: HealthCheckStatus = {
     status: configSummary.isValid ? "ok" : "degraded",
@@ -100,6 +155,7 @@ export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
   const degraded =
     config.status === "degraded" ||
     audit.status === "degraded" ||
+    schema.status === "degraded" ||
     (mode === "production" && supabase.status === "degraded");
 
   return {
@@ -109,6 +165,7 @@ export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
     checks: {
       config,
       supabase,
+      schema,
       audit,
     },
   };

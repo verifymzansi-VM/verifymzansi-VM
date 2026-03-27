@@ -151,4 +151,26 @@ describe("ozow payments", () => {
       })
     );
   });
+
+  it("accepts official production Ozow base URL", async () => {
+    const { validateOzowBaseUrl } = await import("./ozow");
+
+    expect(validateOzowBaseUrl("https://one.ozow.com/", "production")).toBe("https://one.ozow.com");
+  });
+
+  it("rejects non-Ozow hosts for production custom base URL", async () => {
+    const { validateOzowBaseUrl } = await import("./ozow");
+
+    expect(() => validateOzowBaseUrl("https://evil.example.com", "production")).toThrow(
+      "OZOW_API_BASE_URL must use https://one.ozow.com in production"
+    );
+  });
+
+  it("rejects non-HTTPS custom base URL", async () => {
+    const { validateOzowBaseUrl } = await import("./ozow");
+
+    expect(() => validateOzowBaseUrl("http://one.ozow.com", "staging")).toThrow(
+      "approved Ozow HTTPS host"
+    );
+  });
 });

@@ -11,6 +11,8 @@ import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 
 const log = createLogger("DSARExport");
+const DSAR_AUTH_LOOKUP_MAX_PAGES = 5;
+const DSAR_AUTH_LOOKUP_PER_PAGE = 200;
 const dsarExportQuerySchema = z.object({
   requestId: uuidSchema,
 });
@@ -47,10 +49,9 @@ async function resolveUserIdByEmail(
 
   const normalizedEmail = email.trim().toLowerCase();
   const matches: AuthListUser[] = [];
-  const perPage = 200;
 
-  for (let page = 1; page <= 10; page += 1) {
-    const { data, error } = await authAdmin.listUsers({ page, perPage });
+  for (let page = 1; page <= DSAR_AUTH_LOOKUP_MAX_PAGES; page += 1) {
+    const { data, error } = await authAdmin.listUsers({ page, perPage: DSAR_AUTH_LOOKUP_PER_PAGE });
     if (error) {
       throw new Error(error.message || "Failed to resolve requester email");
     }
@@ -60,7 +61,11 @@ async function resolveUserIdByEmail(
       ...users.filter((user) => (user.email || "").trim().toLowerCase() === normalizedEmail)
     );
 
-    if (users.length < perPage) {
+    if (matches.length > 1) {
+      return { status: "ambiguous", userId: null };
+    }
+
+    if (users.length < DSAR_AUTH_LOOKUP_PER_PAGE) {
       break;
     }
   }

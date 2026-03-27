@@ -46,6 +46,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/services/sms", () => ({
   sendOtpSms: vi.fn(),
+  sendSms: vi.fn().mockResolvedValue({ success: true }),
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -337,6 +338,96 @@ describe("OTP Routes", () => {
       expect(data.error).toBe("Invalid or expired OTP");
     });
 
+    it("returns 400 when the challenge was consumed by a concurrent verify request", async () => {
+      const storedHash = await hashOtpForTest("123456");
+      const claimMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+
+      const mockAdminClient = {
+        from: vi.fn((table: string) => {
+          if (table === "otp_challenges") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              is: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "challenge-1",
+                  otp_hash: storedHash,
+                  attempt_count: 0,
+                  locked_until: null,
+                  expires_at: new Date(Date.now() + 60_000).toISOString(),
+                },
+                error: null,
+              }),
+              update: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  is: vi.fn().mockReturnValue({
+                    select: vi.fn().mockReturnValue({
+                      maybeSingle: claimMaybeSingle,
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+
+          return {};
+        }),
+      };
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+
+      const res = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+      const data = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(data.error).toBe("Invalid or expired OTP");
+      expect(smsService.sendSms).not.toHaveBeenCalled();
+    });
+
+    it("returns 429 when the challenge is locked", async () => {
+      const mockAdminClient = {
+        from: vi.fn((table: string) => {
+          if (table === "otp_challenges") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              is: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "challenge-locked",
+                  otp_hash: "deadbeef:deadbeef",
+                  attempt_count: 5,
+                  locked_until: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+                  expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+                },
+                error: null,
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+
+      const res = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+      const data = await res.json();
+
+      expect(res.status).toBe(429);
+      expect(data).toMatchObject({
+        error: "Too many attempts. Please wait 15 minutes.",
+      });
+    });
+
     it("keeps OTP verification available when the shared limiter is degraded and only returns 429 after the fallback limit is hit", async () => {
       vi.mocked(checkRateLimit).mockResolvedValue({
         limited: true,
@@ -496,6 +587,110 @@ describe("OTP Routes", () => {
       expect(otpLogVerifyPhoneEq).toHaveBeenCalledWith("phone", "+27821234567");
       expect(otpLogVerifyHashEq).toHaveBeenCalledWith("otp_hash", storedHash);
       expect(otpLogVerifyIs).toHaveBeenCalledWith("verified_at", null);
+      expect(smsService.sendSms).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: "+27821234567",
+          message: expect.stringContaining("Your phone number was verified successfully"),
+        })
+      );
+    });
+
+    it("does not fail verification when post-verification SMS delivery fails", async () => {
+      vi.mocked(smsService.sendSms).mockRejectedValueOnce(new Error("sms down"));
+
+      const challengeUpdateIs = vi.fn().mockResolvedValue({ error: null });
+      const challengeUpdateEq: ReturnType<typeof vi.fn> = vi.fn().mockImplementation(() => ({
+        eq: challengeUpdateEq,
+        is: challengeUpdateIs,
+      }));
+      const profileSelectMaybeSingle = vi.fn().mockResolvedValue({
+        data: { id: "profile-1" },
+        error: null,
+      });
+      const profileSelectEq = vi.fn().mockReturnValue({
+        maybeSingle: profileSelectMaybeSingle,
+      });
+      const profileUpdateEq = vi.fn().mockResolvedValue({ error: null });
+      const verificationStepUpsert = vi.fn().mockResolvedValue({ error: null });
+      const sessionUpsert = vi.fn().mockResolvedValue({ error: null });
+      const otpLogVerifyIs = vi.fn().mockResolvedValue({ error: null });
+      const otpLogVerifyHashEq = vi.fn().mockReturnValue({ is: otpLogVerifyIs });
+      const otpLogVerifyPhoneEq = vi.fn().mockReturnValue({ eq: otpLogVerifyHashEq });
+      const storedHash = await hashOtpForTest("123456");
+
+      const mockAdminClient = {
+        from: vi.fn((table: string) => {
+          if (table === "otp_challenges") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              is: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "challenge-1",
+                  otp_hash: storedHash,
+                  attempt_count: 0,
+                  locked_until: null,
+                  expires_at: new Date(Date.now() + 60_000).toISOString(),
+                },
+                error: null,
+              }),
+              update: vi.fn().mockReturnValue({
+                eq: challengeUpdateEq,
+              }),
+            };
+          }
+
+          if (table === "verification_steps") {
+            return {
+              upsert: verificationStepUpsert,
+            };
+          }
+
+          if (table === "otp_logs") {
+            return {
+              update: vi.fn().mockReturnValue({
+                eq: otpLogVerifyPhoneEq,
+              }),
+            };
+          }
+
+          return {};
+        }),
+      };
+
+      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: profileSelectEq,
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: profileUpdateEq,
+            }),
+          };
+        }
+
+        if (table === "verification_sessions") {
+          return {
+            upsert: sessionUpsert,
+          };
+        }
+
+        return {};
+      });
+
+      const res = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data).toMatchObject({ success: true, verified: true });
     });
 
     it("retries profile create with admin client when user-scoped upsert is blocked", async () => {

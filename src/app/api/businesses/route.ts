@@ -16,6 +16,7 @@ import {
   normalizeOwnerRecords,
   withOwnerColumn,
   withOwnerField,
+  type OwnerColumn,
 } from "@/lib/account/compat";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
@@ -123,7 +124,22 @@ export async function POST(request: NextRequest) {
       admin ??= createAdminClient();
       return admin;
     };
-    const ownerColumn = await getOwnerColumn(supabase, "businesses");
+    let ownerColumn: OwnerColumn;
+    try {
+      ownerColumn = await getOwnerColumn(supabase, "businesses");
+    } catch (ownerColumnError) {
+      log.warn("Businesses owner-column probe failed during create", {
+        error: ownerColumnError instanceof Error ? ownerColumnError.message : "Unknown error",
+        userId: user.id,
+      });
+      return NextResponse.json(
+        {
+          error: "Service temporarily unavailable",
+          detail: "Business ownership metadata is unavailable. Please retry shortly.",
+        },
+        { status: 503 }
+      );
+    }
     const ip = getClientIp(request);
     const rl = await checkRateLimit({
       key: user.id,
@@ -447,7 +463,21 @@ export async function GET(request: NextRequest) {
     const mine = query.mine;
     if (mine) {
       const supabase = await createClient();
-      const ownerColumn = await getOwnerColumn(supabase, "businesses");
+      let ownerColumn: OwnerColumn;
+      try {
+        ownerColumn = await getOwnerColumn(supabase, "businesses");
+      } catch (ownerColumnError) {
+        log.warn("Businesses owner-column probe failed for mine query", {
+          error: ownerColumnError instanceof Error ? ownerColumnError.message : "Unknown error",
+        });
+        return NextResponse.json(
+          {
+            error: "Marketplace temporarily unavailable",
+            detail: "Business ownership metadata is unavailable. Please retry shortly.",
+          },
+          { status: 503 }
+        );
+      }
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -471,7 +501,21 @@ export async function GET(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "businesses");
+    let ownerColumn: OwnerColumn;
+    try {
+      ownerColumn = await getOwnerColumn(admin, "businesses");
+    } catch (ownerColumnError) {
+      log.warn("Businesses owner-column probe failed", {
+        error: ownerColumnError instanceof Error ? ownerColumnError.message : "Unknown error",
+      });
+      return NextResponse.json(
+        {
+          error: "Marketplace temporarily unavailable",
+          detail: "Business ownership metadata is unavailable. Please retry shortly.",
+        },
+        { status: 503 }
+      );
+    }
 
     const province = query.province;
     const city = query.city;

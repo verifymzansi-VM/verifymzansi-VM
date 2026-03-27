@@ -87,8 +87,11 @@ function isTruthy(value?: string): boolean {
 }
 
 function isExplicitLocalUnsignedWebhookBypass(request: NextRequest): boolean {
+  const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
+  const runtimeIsProduction = runtimeMode === "production";
   return (
     process.env.NODE_ENV === "development" &&
+    !runtimeIsProduction &&
     isTruthy(process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS) &&
     ["localhost", "127.0.0.1"].includes(request.nextUrl.hostname)
   );
@@ -210,14 +213,27 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── Idempotency: skip if this provider result was already finalized ──
+    // ── Idempotency: skip if this provider result was already processed with this status ──
+    // Uses a combination of checks:
+    // 1. If the status has already been set (not pending), check if this is the same final status
+    // 2. Additionally verify no update was recently made to prevent rapid duplicate processing
     const alreadyFinalized =
       providerResult.provider_status !== "pending" &&
       providerResult.provider_status === payloadData.status;
-    if (alreadyFinalized) {
+    const recentlyUpdated =
+      providerResult.updated_at &&
+      new Date().getTime() - new Date(providerResult.updated_at).getTime() < 2000;
+
+    if (alreadyFinalized || recentlyUpdated) {
+      log.info("Skipping webhook processing — already finalized or recently updated", {
+        providerRef: payloadData.provider_ref,
+        alreadyFinalized,
+        recentlyUpdated,
+      });
       return NextResponse.json({
         acknowledged: true,
         duplicate: true,
+        skipped_reason: alreadyFinalized ? "already_finalized" : "recently_updated",
         provider_result_id: providerResult.id,
       });
     }

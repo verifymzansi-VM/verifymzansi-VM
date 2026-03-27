@@ -70,6 +70,50 @@ describe("POST /api/auth/change-password", () => {
     expect(res.status).toBe(401);
   });
 
+  it("returns 503 when shared protection is degraded", async () => {
+    mockCheckRateLimit.mockResolvedValue({
+      limited: true,
+      degraded: true,
+      retryAfter: 45,
+    });
+
+    const res = await POST(
+      createRequest({
+        currentPassword: "old-pass-123",
+        newPassword: "NewPassword123",
+        confirmNewPassword: "NewPassword123",
+      })
+    );
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBe("45");
+    await expect(res.json()).resolves.toEqual({
+      error: "Password change protection is temporarily unavailable. Please try again shortly.",
+    });
+  });
+
+  it("returns 429 when rate limited", async () => {
+    mockCheckRateLimit.mockResolvedValue({
+      limited: true,
+      degraded: false,
+      retryAfter: 30,
+    });
+
+    const res = await POST(
+      createRequest({
+        currentPassword: "old-pass-123",
+        newPassword: "NewPassword123",
+        confirmNewPassword: "NewPassword123",
+      })
+    );
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("30");
+    await expect(res.json()).resolves.toEqual({
+      error: "Too many attempts. Please try again later.",
+    });
+  });
+
   it("returns 401 when the current password is incorrect", async () => {
     mockCreateClient.mockResolvedValue({
       auth: {

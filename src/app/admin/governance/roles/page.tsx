@@ -1,12 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { hasCapability } from "@/lib/auth/roles";
+import { hasCapability, isAdmin } from "@/lib/auth/roles";
 import { ACCOUNT_PROFILE_WRITE_TABLE, normalizeUserRole } from "@/lib/account/compat";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Shield, UserPlus, UserMinus, Clock } from "lucide-react";
+import { RoleAssignForm } from "@/components/admin/role-assign-form";
 
 export const metadata = {
   title: "Role Management — Governance",
@@ -31,9 +32,11 @@ export default async function GovernanceRolesPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || !hasCapability(user, "role:assign")) {
+  if (!user || !hasCapability(user, "audit:view")) {
     redirect("/admin");
   }
+
+  const userIsAdmin = isAdmin(user);
 
   const admin = createAdminClient();
 
@@ -131,6 +134,9 @@ export default async function GovernanceRolesPage() {
         description="View and audit staff role assignments."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Role Management" }]}
       />
+
+      {/* Admin-only: role assignment form */}
+      {userIsAdmin && <RoleAssignForm />}
 
       {/* Current staff roster */}
       <Card>

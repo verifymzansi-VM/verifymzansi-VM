@@ -105,6 +105,44 @@ describe("POST /api/listings", () => {
     await expect(res.json()).resolves.toMatchObject({ error: "Invalid CSRF token" });
   });
 
+  it("returns 503 when owner-column probing fails during create", async () => {
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        if (table === "listings") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({
+                    error: { code: "XX000", message: "schema cache temporarily unavailable" },
+                  }),
+                };
+              }
+              return {
+                eq: vi.fn().mockReturnThis(),
+                neq: vi.fn().mockReturnThis(),
+              };
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
+    });
+
+    const res = await POST(createRequest(VALID_BODY));
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Service temporarily unavailable",
+    });
+  });
+
   it("rejects video uploads when the paid plan disallows them", async () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
@@ -618,6 +656,47 @@ describe("GET /api/listings", () => {
     const json = await response.json();
     expect(json.listings).toEqual([]);
     expect(json.total).toBe(0);
+  });
+
+  it("returns 503 when owner-column probing fails for public listing discovery", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "listings") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id, owner_id") {
+                return {
+                  limit: vi.fn().mockResolvedValue({
+                    error: { code: "XX000", message: "schema cache temporarily unavailable" },
+                  }),
+                };
+              }
+              return {
+                eq: vi.fn().mockReturnThis(),
+                neq: vi.fn().mockReturnThis(),
+                not: vi.fn().mockReturnThis(),
+                order: vi.fn().mockReturnThis(),
+                range: vi.fn().mockResolvedValue({ data: [], count: 0, error: null }),
+              };
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn().mockReturnThis(),
+          in: vi.fn().mockResolvedValue({ data: [] }),
+        };
+      }),
+    });
+
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/listings?page=1&limit=24")
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Marketplace temporarily unavailable",
+    });
   });
 
   it("returns 400 for an invalid listings limit query", async () => {

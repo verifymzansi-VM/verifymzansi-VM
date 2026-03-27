@@ -16,6 +16,7 @@ import {
   applyOwnerFilter,
   getOwnerColumn,
   normalizeOwnerRecords,
+  type OwnerColumn,
   readAccountVerificationStatus,
   withOwnerColumn,
   withOwnerField,
@@ -209,7 +210,6 @@ export async function GET(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const ownerColumn = await getOwnerColumn(admin, "listings");
     const parsedQuery = parseAndValidateSearchParams(
       request.nextUrl.searchParams,
       listingsQuerySchema,
@@ -230,6 +230,22 @@ export async function GET(request: NextRequest) {
     }
     if (query.sort && !["newest", "price_asc", "price_desc", "popular"].includes(query.sort)) {
       return NextResponse.json({ error: "Invalid listing sort" }, { status: 400 });
+    }
+
+    let ownerColumn: OwnerColumn;
+    try {
+      ownerColumn = await getOwnerColumn(admin, "listings");
+    } catch (ownerColumnError) {
+      log.warn("Listings owner-column probe failed", {
+        error: ownerColumnError instanceof Error ? ownerColumnError.message : "Unknown error",
+      });
+      return NextResponse.json(
+        {
+          error: "Marketplace temporarily unavailable",
+          detail: "Listing ownership metadata is unavailable. Please retry shortly.",
+        },
+        { status: 503 }
+      );
     }
 
     const filters = parseMarketplaceFiltersFromSearchParams(request.nextUrl.searchParams);
@@ -498,7 +514,22 @@ export async function POST(request: NextRequest) {
       admin ??= createAdminClient();
       return admin;
     };
-    const ownerColumn = await getOwnerColumn(supabase, "listings");
+    let ownerColumn: OwnerColumn;
+    try {
+      ownerColumn = await getOwnerColumn(supabase, "listings");
+    } catch (ownerColumnError) {
+      log.warn("Listing owner-column probe failed during create", {
+        error: ownerColumnError instanceof Error ? ownerColumnError.message : "Unknown error",
+        userId: user.id,
+      });
+      return NextResponse.json(
+        {
+          error: "Service temporarily unavailable",
+          detail: "Listing ownership metadata is unavailable. Please retry shortly.",
+        },
+        { status: 503 }
+      );
+    }
 
     // ── Get account profile ──────────────────────────────────
     const verification = await resolveAccountVerification(supabase, user.id);

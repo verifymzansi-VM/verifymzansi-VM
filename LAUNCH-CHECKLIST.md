@@ -61,6 +61,8 @@ deployed Cloudflare/Wrangler runtime secrets:
 - `OZOW_CLIENT_SECRET`
 - `OZOW_SITE_CODE`
 - `OZOW_WEBHOOK_SECRET`
+- Optional `OZOW_API_BASE_URL` only when explicitly required. In production, it
+  must be `https://one.ozow.com`.
 - `KYC_WEBHOOK_SECRET`
 
 Failing any of the above should block deploy.
@@ -75,9 +77,19 @@ it the same as other dev bypass flags.
 
 - Confirm Ozow is in production mode and can receive callbacks at
   `/api/webhooks/ozow`.
+- Confirm authenticated members can cancel active subscriptions via
+  `POST /api/billing/cancel`.
+- Confirm authenticated members can start in-area plan changes via
+  `POST /api/billing/change-plan`.
 - Confirm the Ozow webhook path rejects unsigned requests, amount mismatches,
   and currency mismatches before fulfillment, and that fulfillment failures roll
   back `processing` status.
+- Confirm successful subscription fulfillment writes one `invoices` row per
+  payment and duplicate webhook deliveries do not create duplicate invoices.
+- Confirm malformed JSON posted to `/api/webhooks/ozow` returns `400` and does
+  not trigger fulfillment.
+- Run `pnpm test:launch:flows` before release to exercise the bundled billing,
+  OTP, and DSAR launch paths in one command.
 - Confirm the KYC provider webhook secret is configured before enabling live
   provider callbacks at `/api/webhooks/kyc/provider`.
 - Confirm Africa's Talking sender approval is complete for the live sender ID.
@@ -146,5 +158,27 @@ The most common launch blockers are:
 - `NEXT_PUBLIC_APP_URL` does not match the real environment origin
 - A production secret is missing or malformed
 - `RATE_LIMITER_API_KEY` is configured without `OTP_RATE_LIMITER_URL`
+- `OZOW_API_BASE_URL` is set to a non-Ozow or non-HTTPS host
+- Owner-column metadata probing fails for marketplace tables (`listings` or
+  `businesses`), causing controlled `503` responses until schema metadata
+  recovers
+- `KYC_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEY`, or `HMAC_SECRET` still contain the
+  build-phase placeholder value (`cafebabe` repeated). Production startup now
+  hard-blocks when these are detected — generate real keys with:
+  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+
+## 8. Startup Strictness
+
+By default, production env validation failures are non-fatal (availability-first
+approach). To enable fail-closed startup behavior — blocking the entire worker
+on any env validation error — set:
+
+```
+STRICT_ENV_STARTUP_BLOCK=1
+```
+
+This is recommended for regulated production deployments where a misconfigured
+service should never silently serve real users. When set, any error from
+`validateEnv()` will crash the worker at startup before handling any requests.
 
 Run `pnpm validate:launch-env` first when startup or deploy validation fails.

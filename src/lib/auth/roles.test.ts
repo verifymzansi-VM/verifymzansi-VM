@@ -11,6 +11,8 @@ import {
   hasAnyCapability,
   hasAllCapabilities,
   requireRole,
+  isAllowedAdmin,
+  ADMIN_EMAIL_ALLOWLIST,
 } from "./roles";
 
 function makeUser(role: unknown, isAnon = false) {
@@ -162,5 +164,81 @@ describe("requireRole", () => {
   });
   it("false for null user", () => {
     expect(requireRole(null, ["admin"])).toBe(false);
+  });
+});
+
+describe("isAllowedAdmin", () => {
+  it("returns true for allowlisted email", () => {
+    expect(isAllowedAdmin("ivelosm@gmail.com")).toBe(true);
+    expect(isAllowedAdmin("senzonsm@gmail.com")).toBe(true);
+  });
+
+  it("is case-insensitive", () => {
+    expect(isAllowedAdmin("IVELOSM@GMAIL.COM")).toBe(true);
+    expect(isAllowedAdmin("Senzonsm@Gmail.Com")).toBe(true);
+  });
+
+  it("trims whitespace", () => {
+    expect(isAllowedAdmin("  ivelosm@gmail.com  ")).toBe(true);
+  });
+
+  it("returns false for non-allowlisted email", () => {
+    expect(isAllowedAdmin("random@example.com")).toBe(false);
+  });
+
+  it("returns false for null/undefined", () => {
+    expect(isAllowedAdmin(null)).toBe(false);
+    expect(isAllowedAdmin(undefined)).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(isAllowedAdmin("")).toBe(false);
+  });
+});
+
+describe("ADMIN_EMAIL_ALLOWLIST", () => {
+  it("is frozen (immutable)", () => {
+    expect(Object.isFrozen(ADMIN_EMAIL_ALLOWLIST)).toBe(true);
+  });
+
+  it("contains exactly 2 entries", () => {
+    expect(ADMIN_EMAIL_ALLOWLIST).toHaveLength(2);
+  });
+});
+
+describe("admin super-role capabilities", () => {
+  const admin = makeUser("admin");
+
+  it("admin has all moderator capabilities", () => {
+    expect(hasCapability(admin, "queue:view")).toBe(true);
+    expect(hasCapability(admin, "case:recommend")).toBe(true);
+    expect(hasCapability(admin, "case:escalate")).toBe(true);
+    expect(hasCapability(admin, "queue:claim")).toBe(true);
+  });
+
+  it("admin has all governance capabilities", () => {
+    expect(hasCapability(admin, "decision:approve")).toBe(true);
+    expect(hasCapability(admin, "decision:reject")).toBe(true);
+    expect(hasCapability(admin, "appeal:decide")).toBe(true);
+    expect(hasCapability(admin, "enforcement:execute")).toBe(true);
+    expect(hasCapability(admin, "oversight:view")).toBe(true);
+    expect(hasCapability(admin, "audit:view")).toBe(true);
+  });
+
+  it("admin has exclusive role:assign and role:revoke", () => {
+    expect(hasCapability(admin, "role:assign")).toBe(true);
+    expect(hasCapability(admin, "role:revoke")).toBe(true);
+  });
+
+  it("governance_controller cannot assign or revoke roles", () => {
+    const gc = makeUser("governance_controller");
+    expect(hasCapability(gc, "role:assign")).toBe(false);
+    expect(hasCapability(gc, "role:revoke")).toBe(false);
+  });
+
+  it("moderator cannot assign or revoke roles", () => {
+    const mod = makeUser("moderator");
+    expect(hasCapability(mod, "role:assign")).toBe(false);
+    expect(hasCapability(mod, "role:revoke")).toBe(false);
   });
 });

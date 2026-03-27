@@ -77,6 +77,39 @@ describe("retention cleanup worker", () => {
         return { ok: true, text: async () => "" } satisfies Partial<Response>;
       }
 
+      if (url.includes("/rest/v1/media_uploads?confirmed_at=is.null")) {
+        return {
+          ok: true,
+          json: async () => [],
+        } satisfies Partial<Response>;
+      }
+
+      if (url.includes("/auth/v1/admin/users?page=1&per_page=200")) {
+        return {
+          ok: true,
+          json: async () => ({
+            users: [
+              {
+                id: "orphan-user-1",
+                created_at: "2026-03-17T00:00:00.000Z",
+                email: "orphan@example.com",
+              },
+            ],
+          }),
+        } satisfies Partial<Response>;
+      }
+
+      if (url.includes("/rest/v1/account_profiles?select=user_id&user_id=in.")) {
+        return {
+          ok: true,
+          json: async () => [],
+        } satisfies Partial<Response>;
+      }
+
+      if (url.includes("/auth/v1/admin/users/orphan-user-1")) {
+        return { ok: true, text: async () => "" } satisfies Partial<Response>;
+      }
+
       if (url.includes("/rest/v1/audit_logs")) {
         return { ok: true, text: async () => "" } satisfies Partial<Response>;
       }
@@ -107,7 +140,13 @@ describe("retention cleanup worker", () => {
         held_skipped: 1,
         success: 2,
         failed: 0,
+        orphan_auth_users_deleted: 1,
       },
     });
+
+    const authDeleteCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes("/auth/v1/admin/users/orphan-user-1")
+    );
+    expect(authDeleteCall).toBeDefined();
   });
 });
