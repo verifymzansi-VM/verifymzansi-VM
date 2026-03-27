@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState, type VideoHTMLAttributes } from "react";
-import { Play, RotateCcw, AlertTriangle } from "lucide-react";
+import { Play, RotateCcw, AlertTriangle, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -49,6 +49,7 @@ export function VideoWithPoster({
 }: VideoWithPosterProps) {
   const [activated, setActivated] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   /** Ref callback: set src and auto-play when the <video> mounts */
@@ -68,6 +69,7 @@ export function VideoWithPoster({
   /** Reset error state and try again */
   const handleRetry = useCallback(() => {
     setHasError(false);
+    setRetryCount((c) => c + 1);
     setActivated(true);
   }, []);
 
@@ -79,20 +81,9 @@ export function VideoWithPoster({
 
   /* ---- Error state: show poster with retry button ---- */
   if (hasError) {
+    const showDownload = retryCount >= 1;
     return (
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label="Retry playing video"
-        className={cn("relative cursor-pointer select-none", wrapperClassName)}
-        onClick={handleRetry}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            handleRetry();
-          }
-        }}
-      >
+      <div className={cn("relative select-none", wrapperClassName)}>
         {/* Cover image or gradient placeholder */}
         {posterUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -111,7 +102,7 @@ export function VideoWithPoster({
           />
         )}
 
-        {/* Error overlay with retry */}
+        {/* Error overlay with retry + download */}
         <div
           className={cn(
             "absolute inset-0 flex flex-col items-center justify-center gap-2",
@@ -121,9 +112,32 @@ export function VideoWithPoster({
         >
           <AlertTriangle className="h-5 w-5 text-amber-400" />
           <span className="text-xs font-medium text-white/90">Video failed to load</span>
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm text-white shadow-lg transition-transform hover:scale-110">
-            <RotateCcw className="h-5 w-5" />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm text-white shadow-lg transition-transform hover:scale-110"
+              aria-label="Retry playing video"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+            {showDownload && (
+              <a
+                href={src}
+                download
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm text-white shadow-lg transition-transform hover:scale-110"
+                aria-label="Download video"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Download className="h-4 w-4" />
+              </a>
+            )}
           </div>
+          {showDownload && (
+            <span className="text-[10px] text-white/60">
+              Format may not be supported in-browser
+            </span>
+          )}
         </div>
       </div>
     );

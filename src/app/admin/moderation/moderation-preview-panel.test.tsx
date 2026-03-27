@@ -48,7 +48,7 @@ describe("ModerationPreviewPanel", () => {
 
     expect(screen.getByTestId("video-with-poster")).toHaveAttribute(
       "data-src",
-      "https://media.verifymzansi.com/listings/video-1.mp4"
+      "/api/media/serve/listings/video-1.mp4"
     );
     expect(screen.getByTestId("video-with-poster")).toHaveAttribute(
       "data-poster-url",

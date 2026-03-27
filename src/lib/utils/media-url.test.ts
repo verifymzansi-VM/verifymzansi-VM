@@ -61,9 +61,9 @@ describe("normalizeMediaUrl", () => {
     expect(result).toBe("/api/media/serve/photos/abc.jpg");
   });
 
-  it("returns CDN URL for video URLs", () => {
+  it("routes video URLs through proxy", () => {
     const result = normalizeMediaUrl("https://media.verifymzansi.com/videos/clip.mp4");
-    expect(result).toBe("https://media.verifymzansi.com/videos/clip.mp4");
+    expect(result).toBe("/api/media/serve/videos/clip.mp4");
   });
 
   it("returns original string for unrecognized URL", () => {
@@ -72,9 +72,9 @@ describe("normalizeMediaUrl", () => {
     );
   });
 
-  it("handles webm video extension", () => {
+  it("routes webm videos through proxy", () => {
     const result = normalizeMediaUrl("https://media.verifymzansi.com/videos/clip.webm");
-    expect(result).toBe("https://media.verifymzansi.com/videos/clip.webm");
+    expect(result).toBe("/api/media/serve/videos/clip.webm");
   });
 
   it("routes .mov videos through proxy for correct MIME mapping", () => {
@@ -89,14 +89,14 @@ describe("normalizeVideoUrl", () => {
     expect(normalizeVideoUrl(undefined)).toBe("");
   });
 
-  it("returns CDN URL for mp4 videos", () => {
+  it("routes mp4 videos through proxy", () => {
     const result = normalizeVideoUrl("https://media.verifymzansi.com/videos/clip.mp4");
-    expect(result).toBe("https://media.verifymzansi.com/videos/clip.mp4");
+    expect(result).toBe("/api/media/serve/videos/clip.mp4");
   });
 
-  it("returns CDN URL for webm videos", () => {
+  it("routes webm videos through proxy", () => {
     const result = normalizeVideoUrl("https://media.verifymzansi.com/videos/clip.webm");
-    expect(result).toBe("https://media.verifymzansi.com/videos/clip.webm");
+    expect(result).toBe("/api/media/serve/videos/clip.webm");
   });
 
   it("routes .mov videos through proxy", () => {
