@@ -120,10 +120,20 @@ export async function GET(request: NextRequest) {
     }
 
     if (stepsErr) {
-      return NextResponse.json(
-        { error: "Verification step(s) not found", code: "not_found" },
-        { status: 404 }
-      );
+      if (userId) {
+        log.warn("Evidence metadata step lookup failed; using userId fallback", {
+          actorId: user.id,
+          targetStepId: stepId,
+          targetUserId: userId,
+          error: stepsErr.message,
+        });
+        steps = [];
+      } else {
+        return NextResponse.json(
+          { error: "Verification step(s) not found", code: "not_found" },
+          { status: 404 }
+        );
+      }
     }
 
     let targetUserId: string | null = null;
@@ -184,13 +194,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (allowedArtifactIds.length === 0) {
-      return NextResponse.json(
-        {
-          error: "Evidence is not linked to the current verification session",
-          code: "not_linked",
-        },
-        { status: 403 }
-      );
+      log.warn("Evidence metadata has no linked artifacts; returning empty artifact list", {
+        actorId: user.id,
+        targetStepId: stepId,
+        targetUserId: targetUserId,
+      });
     }
 
     // Fetch only artifacts linked to the current verification session.
