@@ -77,11 +77,10 @@ export function KycInlinePreview({
       setError(null);
 
       try {
-        // 1. Fetch metadata to get artifact ID
-        const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stepId, userId }),
+        // 1. Fetch metadata to get artifact ID (use GET with query params)
+        const metaParams = new URLSearchParams({ stepId, userId });
+        const metaRes = await fetch(`/api/admin/verification/evidence/metadata?${metaParams}`, {
+          method: "GET",
         });
         if (!metaRes.ok) {
           const data = await metaRes.json().catch(() => null);
@@ -102,11 +101,10 @@ export function KycInlinePreview({
 
         if (!cancelled) setArtifact(match);
 
-        // 2. Fetch decrypted blob
-        const evidenceRes = await fetch(`/api/admin/verification/evidence`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ artifactId: match.id }),
+        // 2. Fetch decrypted blob (use GET with query params)
+        const evidenceParams = new URLSearchParams({ artifactId: match.id });
+        const evidenceRes = await fetch(`/api/admin/verification/evidence?${evidenceParams}`, {
+          method: "GET",
         });
         if (!evidenceRes.ok) {
           const data = await evidenceRes.json().catch(() => null);

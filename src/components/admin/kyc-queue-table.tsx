@@ -30,6 +30,7 @@ import {
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { KycInlinePreview } from "./kyc-inline-preview";
+import { KycComparisonViewer } from "./kyc-comparison-viewer";
 import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 
 const KycPreviewLightbox = dynamic(
@@ -116,9 +117,22 @@ export function KycQueueTable({
   const [lightboxStep, setLightboxStep] = useState<VerificationStep | null>(null);
   const [lightboxArtifact, setLightboxArtifact] = useState<Artifact | null>(null);
 
+  // Comparison viewer state
+  const [comparisonViewerOpen, setComparisonViewerOpen] = useState(false);
+  const [comparisonUserId, setComparisonUserId] = useState<string | null>(null);
+  const [comparisonStepId, setComparisonStepId] = useState<string | null>(null);
+  const [comparisonDisplayName, setComparisonDisplayName] = useState("");
+
   const handlePreviewClick = useCallback((step: VerificationStep, artifact: Artifact) => {
     setLightboxStep(step);
     setLightboxArtifact(artifact);
+  }, []);
+
+  const handleComparisonClick = useCallback((step: VerificationStep, displayName: string) => {
+    setComparisonStepId(step.id);
+    setComparisonUserId(step.user_id);
+    setComparisonDisplayName(displayName);
+    setComparisonViewerOpen(true);
   }, []);
 
   if (!groups.length) {
@@ -293,6 +307,21 @@ export function KycQueueTable({
                               <div className="flex gap-1 flex-shrink-0 flex-wrap">
                                 <Button
                                   size="sm"
+                                  variant="default"
+                                  className="h-8 bg-brand-blue hover:bg-brand-blue/90"
+                                  onClick={() =>
+                                    handleComparisonClick(
+                                      step,
+                                      group.account_display_name || group.user_id
+                                    )
+                                  }
+                                  title="View and compare documents"
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  <span className="hidden sm:inline text-xs">View Docs</span>
+                                </Button>
+                                <Button
+                                  size="sm"
                                   variant="ghost"
                                   className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
                                   onClick={() => openReview(step, "approved")}
@@ -334,6 +363,22 @@ export function KycQueueTable({
           );
         })}
       </div>
+
+      {/* Document Comparison Viewer */}
+      {comparisonUserId && comparisonStepId && (
+        <KycComparisonViewer
+          isOpen={comparisonViewerOpen}
+          userId={comparisonUserId}
+          stepId={comparisonStepId}
+          displayName={comparisonDisplayName}
+          onClose={() => {
+            setComparisonViewerOpen(false);
+            setComparisonUserId(null);
+            setComparisonStepId(null);
+          }}
+          disableActions={false}
+        />
+      )}
 
       {/* Review Decision Dialog */}
       <Dialog open={!!selectedStep} onOpenChange={(open: boolean) => !open && closeDialog()}>
