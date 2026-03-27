@@ -521,6 +521,19 @@ describe("OTP Routes", () => {
             };
           }
 
+          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: "profile-1", display_name: "Member" },
+                    error: null,
+                  }),
+                }),
+              }),
+            };
+          }
+
           if (table === "verification_steps") {
             return {
               upsert: verificationStepUpsert,
@@ -644,6 +657,19 @@ describe("OTP Routes", () => {
             };
           }
 
+          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: "profile-1", display_name: "Member" },
+                    error: null,
+                  }),
+                }),
+              }),
+            };
+          }
+
           if (table === "verification_steps") {
             return {
               upsert: verificationStepUpsert,
@@ -753,6 +779,14 @@ describe("OTP Routes", () => {
 
           if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
             return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: null,
+                    error: null,
+                  }),
+                }),
+              }),
               upsert: vi.fn().mockReturnValue({
                 select: vi.fn().mockReturnValue({
                   single: adminProfileUpsertSingle,
@@ -813,7 +847,7 @@ describe("OTP Routes", () => {
 
       expect(res.status).toBe(200);
       expect(data).toMatchObject({ success: true, verified: true });
-      expect(profileUpsertSingle).toHaveBeenCalledTimes(1);
+      expect(profileUpsertSingle).toHaveBeenCalledTimes(0);
       expect(adminProfileUpsertSingle).toHaveBeenCalledTimes(1);
       expect(profileUpdateEq).toHaveBeenCalledWith("id", "profile-created-by-admin");
     });
@@ -874,6 +908,14 @@ describe("OTP Routes", () => {
 
           if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
             return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: "profile-1", display_name: "Member" },
+                    error: null,
+                  }),
+                }),
+              }),
               update: vi.fn().mockReturnValue({
                 eq: adminProfileUpdateIdEq,
               }),
@@ -966,6 +1008,19 @@ describe("OTP Routes", () => {
                 chain.eq = vi.fn().mockReturnValue(chain);
                 chain.is = vi.fn().mockResolvedValue({ error: null });
                 return chain;
+              }),
+            };
+          }
+
+          if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: "profile-1", display_name: "Member" },
+                    error: null,
+                  }),
+                }),
               }),
             };
           }

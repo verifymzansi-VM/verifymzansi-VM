@@ -191,12 +191,10 @@ describe("GET /api/admin/dsar/export", () => {
   });
 
   it("caps auth user lookup to five pages", async () => {
-    const listUsers = vi
-      .fn()
-      .mockResolvedValue({
-        data: { users: Array.from({ length: 200 }, (_, i) => ({ id: `u${i}` })) },
-        error: null,
-      });
+    const listUsers = vi.fn().mockResolvedValue({
+      data: { users: Array.from({ length: 200 }, (_, i) => ({ id: `u${i}` })) },
+      error: null,
+    });
 
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
