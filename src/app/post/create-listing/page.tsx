@@ -2,7 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Eye, FileText, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import {
+  Camera,
+  CheckCircle2,
+  Eye,
+  FileText,
+  Loader2,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Phone,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -87,6 +97,22 @@ const FIELD_IDS: Record<string, string> = {
   videos: "listing-video",
 };
 
+type UploadSlotStatus = "idle" | "uploading" | "done" | "skipped";
+
+interface UploadStatuses {
+  logo: UploadSlotStatus;
+  photos: UploadSlotStatus;
+  video: UploadSlotStatus;
+  saving: UploadSlotStatus;
+}
+
+const INITIAL_UPLOAD_STATUSES: UploadStatuses = {
+  logo: "idle",
+  photos: "idle",
+  video: "idle",
+  saving: "idle",
+};
+
 export default function CreateListingPage() {
   const [step, setStep] = useState(0);
   const [title, setTitle] = useState("");
@@ -108,6 +134,7 @@ export default function CreateListingPage() {
   const [videoCoverFile, setVideoCoverFile] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const [uploadStatuses, setUploadStatuses] = useState<UploadStatuses>(INITIAL_UPLOAD_STATUSES);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -294,6 +321,12 @@ export default function CreateListingPage() {
     clearErrors();
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
+    setUploadStatuses({
+      logo: logoFile.length > 0 ? "uploading" : "skipped",
+      photos: photoFiles.length > 0 ? "uploading" : "skipped",
+      video: videoFile.length > 0 ? "uploading" : "skipped",
+      saving: "idle",
+    });
 
     try {
       const normalizedAttributes = category
@@ -313,6 +346,7 @@ export default function CreateListingPage() {
               });
               if (!uploadRes.ok) throw new Error("Failed to upload listing logo");
               const uploadJson = await uploadRes.json();
+              setUploadStatuses((current) => ({ ...current, logo: "done" }));
               return (uploadJson.urls || []) as string[];
             })()
           : Promise.resolve([] as string[]),
@@ -339,6 +373,7 @@ export default function CreateListingPage() {
                   variant: "destructive",
                 });
               }
+              setUploadStatuses((current) => ({ ...current, photos: "done" }));
               return urls;
             })()
           : Promise.resolve([] as string[]),
@@ -365,6 +400,7 @@ export default function CreateListingPage() {
                 body: file,
               });
               if (!putRes.ok) throw new Error("Failed to upload video");
+              setUploadStatuses((current) => ({ ...current, video: "done" }));
               return publicUrl as string;
             })()
           : Promise.resolve(null as string | null),
@@ -387,6 +423,7 @@ export default function CreateListingPage() {
       ]);
 
       setSubmitProgress("Saving listing...");
+      setUploadStatuses((current) => ({ ...current, saving: "uploading" }));
 
       const res = await fetch("/api/listings", {
         method: "POST",
@@ -420,12 +457,14 @@ export default function CreateListingPage() {
       }
 
       toast({ title: "Listing submitted for review.", variant: "success" });
+      setUploadStatuses((current) => ({ ...current, saving: "done" }));
       router.push("/dashboard/listings");
     } catch (error: unknown) {
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);
+      setUploadStatuses(INITIAL_UPLOAD_STATUSES);
     }
   }
 
@@ -523,15 +562,71 @@ export default function CreateListingPage() {
                 currentStep={step}
                 error={formError}
                 footer={
-                  <PostFormFooter
-                    currentStep={step}
-                    totalSteps={STEPS.length}
-                    onBack={goBack}
-                    onNext={goNext}
-                    submitDisabled={isSubmitting}
-                    isSubmitting={isSubmitting}
-                    submittingLabel={submitProgress || "Submitting..."}
-                  />
+                  <>
+                    {isSubmitting && (
+                      <div className="space-y-1.5 border-t pt-3 text-sm text-muted-foreground">
+                        {logoFile.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            {uploadStatuses.logo === "uploading" ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-green" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-brand-green" />
+                            )}
+                            {uploadStatuses.logo === "done" ? "Logo uploaded" : "Uploading logo..."}
+                          </div>
+                        )}
+
+                        {photoFiles.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            {uploadStatuses.photos === "uploading" ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-green" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-brand-green" />
+                            )}
+                            {uploadStatuses.photos === "done"
+                              ? "Photos uploaded"
+                              : "Uploading photos..."}
+                          </div>
+                        )}
+
+                        {videoFile.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            {uploadStatuses.video === "uploading" ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-green" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-brand-green" />
+                            )}
+                            {uploadStatuses.video === "done"
+                              ? "Video uploaded"
+                              : "Uploading video..."}
+                          </div>
+                        )}
+
+                        {uploadStatuses.saving !== "idle" && (
+                          <div className="flex items-center gap-2">
+                            {uploadStatuses.saving === "uploading" ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-green" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-brand-green" />
+                            )}
+                            {uploadStatuses.saving === "done"
+                              ? "Listing saved"
+                              : "Saving listing..."}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <PostFormFooter
+                      currentStep={step}
+                      totalSteps={STEPS.length}
+                      onBack={goBack}
+                      onNext={goNext}
+                      submitDisabled={isSubmitting}
+                      isSubmitting={isSubmitting}
+                      submittingLabel={submitProgress || "Submitting..."}
+                    />
+                  </>
                 }
               >
                 {step === 0 && (

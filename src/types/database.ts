@@ -47,6 +47,8 @@ export interface AccountProfile {
   bio: string | null;
   account_verification_status: AccountVerificationStatus;
   phone: string | null;
+  pending_phone: string | null;
+  avatar_url: string | null;
   masked_phone_public: string | null;
   location_province: string | null;
   location_city: string | null;

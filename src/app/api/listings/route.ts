@@ -715,11 +715,26 @@ export async function POST(request: NextRequest) {
     );
 
     // ── Insert listing ───────────────────────────────────────
-    const { data: newListing, error: insertError } = await supabase
+    let { data: newListing, error: insertError } = await supabase
       .from("listings")
       .insert(listingRecord)
       .select("id")
       .single();
+
+    if (insertError && /schema cache|logo_url/i.test(insertError.message)) {
+      log.warn("Retrying listing insert without logo_url due to schema mismatch", {
+        userId: user.id,
+        error: insertError.message,
+      });
+      const { logo_url: _ignoredLogoUrl, ...listingRecordWithoutLogo } = listingRecord;
+      const retry = await supabase
+        .from("listings")
+        .insert(listingRecordWithoutLogo)
+        .select("id")
+        .single();
+      newListing = retry.data;
+      insertError = retry.error;
+    }
 
     if (insertError) {
       log.error("Failed to insert listing", {
@@ -741,8 +756,33 @@ export async function POST(request: NextRequest) {
           });
         }
       }
+      const details =
+        insertError.message.includes("schema cache") || insertError.message.includes("logo_url")
+          ? "Listing could not be saved right now. Please try again shortly."
+          : insertError.message;
+      return NextResponse.json({ error: "Failed to create listing", details }, { status: 500 });
+    }
+
+    if (!newListing) {
+      log.error("Listing insert returned no row", {
+        userId: user.id,
+      });
+      if (!hasPaidPlan && !postingLimitBypassEnabled) {
+        const { error: rollbackError } = await getAdmin()
+          .from("free_posts_used")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("area", AREA);
+        if (rollbackError) {
+          log.error("Failed to rollback free post claim after empty insert result", {
+            userId: user.id,
+            error: rollbackError.message,
+            code: rollbackError.code,
+          });
+        }
+      }
       return NextResponse.json(
-        { error: "Failed to create listing", details: insertError.message },
+        { error: "Failed to create listing", details: "Listing could not be saved right now." },
         { status: 500 }
       );
     }

@@ -26,30 +26,26 @@ export async function GET() {
     // 1. Environment variables
     checks.supabaseUrl = {
       ok: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      detail: process.env.NEXT_PUBLIC_SUPABASE_URL ? "set" : "MISSING",
     };
     checks.serviceRoleKey = {
       ok: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      detail: process.env.SUPABASE_SERVICE_ROLE_KEY ? "set" : "MISSING",
     };
     checks.africasTalkingApiKey = {
       ok: !!process.env.AFRICASTALKING_API_KEY,
-      detail: process.env.AFRICASTALKING_API_KEY ? "set" : "MISSING",
     };
     checks.africasTalkingUsername = {
       ok: !!process.env.AFRICASTALKING_USERNAME,
-      detail: process.env.AFRICASTALKING_USERNAME ? "set" : "MISSING",
     };
 
     // 2. Web Crypto API
     try {
       const arr = new Uint32Array(1);
       crypto.getRandomValues(arr);
-      checks.webCryptoRandom = { ok: true, detail: `randomInt=${arr[0]}` };
-    } catch (e) {
+      checks.webCryptoRandom = { ok: true };
+    } catch {
       checks.webCryptoRandom = {
         ok: false,
-        detail: e instanceof Error ? e.message : "unavailable",
+        detail: "unavailable",
       };
     }
 
@@ -68,10 +64,10 @@ export async function GET() {
         64
       );
       checks.webCryptoPbkdf2 = { ok: true };
-    } catch (e) {
+    } catch {
       checks.webCryptoPbkdf2 = {
         ok: false,
-        detail: e instanceof Error ? e.message : "unavailable",
+        detail: "unavailable",
       };
     }
 
@@ -79,19 +75,19 @@ export async function GET() {
     try {
       const { createAdminClient } = await import("@/lib/supabase/admin");
       const admin = createAdminClient();
-      const { count, error } = await admin
+      const { count: _count, error } = await admin
         .from("otp_challenges")
         .select("*", { count: "exact", head: true });
 
       if (error) {
-        checks.otpChallengesTable = { ok: false, detail: error.message };
+        checks.otpChallengesTable = { ok: false, detail: "query_failed" };
       } else {
-        checks.otpChallengesTable = { ok: true, detail: `rows=${count}` };
+        checks.otpChallengesTable = { ok: true };
       }
-    } catch (e) {
+    } catch {
       checks.otpChallengesTable = {
         ok: false,
-        detail: e instanceof Error ? e.message : "client creation failed",
+        detail: "client_creation_failed",
       };
     }
 
@@ -99,19 +95,19 @@ export async function GET() {
     try {
       const { createAdminClient } = await import("@/lib/supabase/admin");
       const admin = createAdminClient();
-      const { count, error } = await admin
+      const { count: _count, error } = await admin
         .from("otp_logs")
         .select("*", { count: "exact", head: true });
 
       if (error) {
-        checks.otpLogsTable = { ok: false, detail: error.message };
+        checks.otpLogsTable = { ok: false, detail: "query_failed" };
       } else {
-        checks.otpLogsTable = { ok: true, detail: `rows=${count}` };
+        checks.otpLogsTable = { ok: true };
       }
-    } catch (e) {
+    } catch {
       checks.otpLogsTable = {
         ok: false,
-        detail: e instanceof Error ? e.message : "client creation failed",
+        detail: "client_creation_failed",
       };
     }
 
@@ -121,11 +117,11 @@ export async function GET() {
       { status: allOk ? "healthy" : "unhealthy", checks },
       { status: allOk ? 200 : 503 }
     );
-  } catch (outerErr) {
+  } catch {
     return NextResponse.json(
       {
         status: "error",
-        detail: outerErr instanceof Error ? outerErr.message : "Unknown error",
+        detail: "Internal error",
         checks,
       },
       { status: 500 }
