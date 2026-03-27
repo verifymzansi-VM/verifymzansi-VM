@@ -53,8 +53,10 @@ vi.mock("@/components/ui/badge", () => ({
 
 vi.mock("lucide-react", async (importOriginal) => {
   const actual = await importOriginal();
+  const actualIcons =
+    actual && typeof actual === "object" ? (actual as Record<string, unknown>) : {};
   return {
-    ...actual,
+    ...actualIcons,
     FileText: () => <span>FileText</span>,
     Loader2: () => <span>Loader2</span>,
     MessageSquare: () => <span>MessageSquare</span>,
