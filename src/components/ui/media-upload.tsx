@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];
-const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
+const VIDEO_TYPES = ["video/mp4", "video/webm"];
 const ALL_ACCEPT = [...IMAGE_TYPES, ...VIDEO_TYPES].join(",");
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
@@ -81,14 +81,14 @@ export function MediaUpload({
         } else if (accept && accept.startsWith("video/") && !VIDEO_TYPES.includes(file.type)) {
           toast({
             title: "Unsupported file type",
-            description: `"${file.name}" is not supported. Use MP4, MOV, or WebM videos up to 50 MB.`,
+            description: `"${file.name}" is not supported. Use MP4 or WebM videos up to 50 MB.`,
             variant: "destructive",
           });
           continue;
         } else if (!accept && ![...IMAGE_TYPES, ...VIDEO_TYPES].includes(file.type)) {
           toast({
             title: "Unsupported file type",
-            description: `"${file.name}" is not supported. Use JPG, PNG, WebP, GIF, or AVIF images, or MP4, MOV, or WebM videos.`,
+            description: `"${file.name}" is not supported. Use JPG, PNG, WebP, GIF, or AVIF images, or MP4 or WebM videos.`,
             variant: "destructive",
           });
           continue;
@@ -257,10 +257,10 @@ export function MediaUpload({
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             {accept?.startsWith("video/")
-              ? "Videos (MP4, MOV, WebM) up to 50 MB"
+              ? "Videos (MP4, WebM) up to 50 MB"
               : accept?.startsWith("image/")
                 ? "Images (JPG, PNG, WebP, GIF, AVIF) up to 5 MB"
-                : "Images (JPG, PNG, WebP, GIF, AVIF) up to 5 MB • Videos (MP4, MOV, WebM) up to 50 MB"}
+                : "Images (JPG, PNG, WebP, GIF, AVIF) up to 5 MB • Videos (MP4, WebM) up to 50 MB"}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {remaining} of {maxFiles} remaining

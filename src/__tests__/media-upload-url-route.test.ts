@@ -151,6 +151,31 @@ describe("POST /api/media/upload-url", () => {
     );
   });
 
+  it("rejects unsupported quicktime uploads", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+      }),
+    });
+
+    const res = await POST(
+      createRequest({
+        filename: "clip.mov",
+        contentType: "video/quicktime",
+        size: 2048,
+      })
+    );
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("video/mp4, video/webm");
+  });
+
   it("rejects dangerous filename characters", async () => {
     mockCreateClient.mockResolvedValue({
       auth: {

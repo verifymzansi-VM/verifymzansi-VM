@@ -13,11 +13,10 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("MediaUploadUrl");
 
-const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+const VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
 const VIDEO_EXTENSIONS_BY_TYPE: Record<string, string[]> = {
   "video/mp4": ["mp4"],
-  "video/quicktime": ["mov", "qt"],
   "video/webm": ["webm"],
 };
 

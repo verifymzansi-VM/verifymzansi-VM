@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { VideoWithPoster } from "@/components/ui/video-with-poster";
 import { formatZAR, formatRelativeTime } from "@/lib/utils/format";
-import { normalizeMediaUrls } from "@/lib/utils/media-url";
+import { normalizeMediaUrl, normalizeVideoUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 
 export interface ModerationItem {
@@ -44,8 +44,9 @@ interface ModerationPreviewPanelProps {
   item: ModerationItem;
 }
 
-function isVideoUrl(url: string): boolean {
-  return /\.(mp4|webm|ogg)(\?.*)?$/i.test(url);
+interface ModerationMediaItem {
+  url: string;
+  isVideo: boolean;
 }
 
 const ATTRIBUTE_LABELS: Record<string, string> = {
@@ -92,19 +93,27 @@ function VideoThumbnailThumb({ firstPhoto }: { firstPhoto?: string }) {
 }
 
 export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
-  const allMedia = normalizeMediaUrls(
-    [...(item.photos ?? []), ...(item.videos ?? [])].filter(Boolean)
-  );
+  const allMedia: ModerationMediaItem[] = [
+    ...((item.photos ?? []).filter(Boolean).map((url) => ({
+      url: normalizeMediaUrl(url),
+      isVideo: false,
+    })) satisfies ModerationMediaItem[]),
+    ...((item.videos ?? []).filter(Boolean).map((url) => ({
+      url: normalizeVideoUrl(url),
+      isVideo: true,
+    })) satisfies ModerationMediaItem[]),
+  ];
   const [activeIndex, setActiveIndex] = useState(0);
 
   // Use video_thumbnail if available, then fall back to first photo
   const firstPhotoUrl =
-    (item.video_thumbnail ? normalizeMediaUrls([item.video_thumbnail])[0] : undefined) ||
-    normalizeMediaUrls((item.photos ?? []).filter(Boolean))[0] ||
+    (item.video_thumbnail ? normalizeMediaUrl(item.video_thumbnail) : undefined) ||
+    allMedia.find((media) => !media.isVideo)?.url ||
     undefined;
 
-  const activeUrl = allMedia[activeIndex] || "";
-  const isVideo = activeUrl ? isVideoUrl(activeUrl) : false;
+  const activeMedia = allMedia[activeIndex];
+  const activeUrl = activeMedia?.url || "";
+  const isVideo = activeMedia?.isVideo ?? false;
 
   function goTo(index: number) {
     if (index >= 0 && index < allMedia.length) {
@@ -182,11 +191,10 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
             {/* Thumbnails */}
             {allMedia.length > 1 && (
               <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-                {allMedia.map((url, i) => {
-                  const isVid = isVideoUrl(url);
+                {allMedia.map((media, i) => {
                   return (
                     <button
-                      key={i}
+                      key={`${media.url}-${i}`}
                       type="button"
                       onClick={() => setActiveIndex(i)}
                       className={cn(
@@ -196,12 +204,12 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
                           : "border-transparent opacity-60 hover:opacity-100"
                       )}
                     >
-                      {isVid ? (
+                      {media.isVideo ? (
                         <VideoThumbnailThumb firstPhoto={firstPhotoUrl} />
                       ) : (
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
-                          src={url}
+                          src={media.url}
                           alt={`Thumbnail ${i + 1}`}
                           className="w-full h-full object-cover"
                         />
@@ -214,7 +222,7 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
           </div>
         ) : (
           <div className="aspect-video rounded-lg bg-muted flex items-center justify-center">
-            <p className="text-sm text-muted-foreground">No images</p>
+            <p className="text-sm text-muted-foreground">No media</p>
           </div>
         )}
 

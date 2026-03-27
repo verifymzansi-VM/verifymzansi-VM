@@ -8,6 +8,10 @@ const { mockCreateClient, mockCreateAdminClient, mockRedirect } = vi.hoisted(() 
   mockRedirect: vi.fn(),
 }));
 
+let listingQuery: ReturnType<typeof createQuery> | undefined;
+let businessQuery: ReturnType<typeof createQuery> | undefined;
+let promotionQuery: ReturnType<typeof createQuery> | undefined;
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
 }));
@@ -50,6 +54,9 @@ function createQuery(data: unknown[]) {
 describe("AdminModerationPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    listingQuery = undefined;
+    businessQuery = undefined;
+    promotionQuery = undefined;
 
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -62,7 +69,7 @@ describe("AdminModerationPage", () => {
     mockCreateAdminClient.mockReturnValue({
       from: (table: string) => {
         if (table === "listings") {
-          return createQuery([
+          listingQuery = createQuery([
             {
               id: "listing-1",
               title: "Used iPhone 15",
@@ -70,12 +77,14 @@ describe("AdminModerationPage", () => {
               created_at: "2026-03-20T08:00:00.000Z",
               category: "electronics",
               owner_id: "user-1",
+              video_thumbnail: "https://media.verifymzansi.com/listings/thumb.jpg",
             },
           ]);
+          return listingQuery;
         }
 
         if (table === "businesses") {
-          return createQuery([
+          businessQuery = createQuery([
             {
               id: "business-1",
               business_name: "Nomsa Beauty Studio",
@@ -85,10 +94,11 @@ describe("AdminModerationPage", () => {
               owner_id: "user-2",
             },
           ]);
+          return businessQuery;
         }
 
         if (table === "promotions") {
-          return createQuery([
+          promotionQuery = createQuery([
             {
               id: "promotion-1",
               title: "Weekend Sale",
@@ -98,6 +108,7 @@ describe("AdminModerationPage", () => {
               owner_id: "user-3",
             },
           ]);
+          return promotionQuery;
         }
 
         throw new Error(`Unexpected table ${table}`);
@@ -113,5 +124,7 @@ describe("AdminModerationPage", () => {
     expect(screen.getByText("Listing:Used iPhone 15")).toBeInTheDocument();
     expect(screen.getByText("Business:Nomsa Beauty Studio")).toBeInTheDocument();
     expect(screen.getByText("Promotion:Weekend Sale")).toBeInTheDocument();
+    expect(listingQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"));
+    expect(promotionQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"));
   });
 });

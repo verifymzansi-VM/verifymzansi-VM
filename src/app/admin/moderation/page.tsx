@@ -28,7 +28,7 @@ export default async function AdminModerationPage() {
       admin
         .from("listings")
         .select(
-          "id, title, status, created_at, category, owner_id, description, photos, videos, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required"
+          "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required"
         )
         .eq("status", "pending_moderation")
         .order("created_at", { ascending: true })

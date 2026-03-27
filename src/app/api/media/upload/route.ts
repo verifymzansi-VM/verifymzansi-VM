@@ -17,7 +17,7 @@ import { z } from "zod";
 const log = createLogger("MediaUpload");
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
-const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+const VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
 const MAX_FILES = 10;

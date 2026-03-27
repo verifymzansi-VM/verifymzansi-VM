@@ -19,7 +19,7 @@ interface UploadOptions {
   maxDurationSec?: number;
 }
 
-const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+const VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
 
 /** Max video duration default: 2 minutes */
 const DEFAULT_MAX_DURATION_SEC = 120;
