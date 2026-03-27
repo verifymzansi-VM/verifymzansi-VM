@@ -5,6 +5,10 @@ function runVitest(lane: string) {
   if (lane === "coverage-core") {
     args.push("--coverage");
   }
+  const forwardedArgs = process.argv.slice(3);
+  if (forwardedArgs.length > 0) {
+    args.push(...forwardedArgs);
+  }
 
   const env = {
     ...process.env,

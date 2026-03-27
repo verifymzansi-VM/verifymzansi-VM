@@ -18,11 +18,17 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/auth/roles", () => ({
   hasCapability: vi.fn(() => true),
+  isAdmin: vi.fn(() => true),
 }));
 
 vi.mock("next/navigation", () => ({
   redirect: mockRedirect,
   notFound: mockNotFound,
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    refresh: vi.fn(),
+  }),
 }));
 
 vi.mock("@/components/layout/page-header", () => ({
@@ -45,15 +51,22 @@ vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock("lucide-react", () => ({
-  FileText: () => <span>FileText</span>,
-  MessageSquare: () => <span>MessageSquare</span>,
-  Clock: () => <span>Clock</span>,
-  User: () => <span>User</span>,
-  Shield: () => <span>Shield</span>,
-  UserPlus: () => <span>UserPlus</span>,
-  UserMinus: () => <span>UserMinus</span>,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    FileText: () => <span>FileText</span>,
+    Loader2: () => <span>Loader2</span>,
+    MessageSquare: () => <span>MessageSquare</span>,
+    Clock: () => <span>Clock</span>,
+    User: () => <span>User</span>,
+    UserCog: () => <span>UserCog</span>,
+    ShieldAlert: () => <span>ShieldAlert</span>,
+    Shield: () => <span>Shield</span>,
+    UserPlus: () => <span>UserPlus</span>,
+    UserMinus: () => <span>UserMinus</span>,
+  };
+});
 
 import AppealDetailPage from "@/app/admin/governance/appeals/[id]/page";
 import DecisionDetailPage from "@/app/admin/governance/escalations/[id]/page";

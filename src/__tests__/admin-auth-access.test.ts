@@ -8,11 +8,20 @@ import type { NextRequest } from "next/server";
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
-const { mockCreateClient, mockCreateAdminClient, mockFrom, mockLogAuditEvent } = vi.hoisted(() => ({
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockFrom,
+  mockLogAuditEvent,
+  mockDownloadKycDocumentWithMetrics,
+  mockGetLinkedEvidenceArtifactIds,
+} = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockFrom: vi.fn(),
   mockLogAuditEvent: vi.fn(),
+  mockDownloadKycDocumentWithMetrics: vi.fn(),
+  mockGetLinkedEvidenceArtifactIds: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -28,7 +37,11 @@ vi.mock("@/lib/services/audit", () => ({
 }));
 
 vi.mock("@/lib/services/storage", () => ({
-  downloadKycDocument: vi.fn().mockResolvedValue(Buffer.from("test")),
+  downloadKycDocumentWithMetrics: mockDownloadKycDocumentWithMetrics,
+}));
+
+vi.mock("@/lib/services/kyc-evidence-access", () => ({
+  getLinkedEvidenceArtifactIds: mockGetLinkedEvidenceArtifactIds,
 }));
 
 vi.mock("@/lib/auth/admin-access", () => ({
@@ -99,6 +112,12 @@ describe("Admin auth access control", () => {
     vi.clearAllMocks();
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
     mockLogAuditEvent.mockResolvedValue(undefined);
+    mockGetLinkedEvidenceArtifactIds.mockResolvedValue(["art-1"]);
+    mockDownloadKycDocumentWithMetrics.mockResolvedValue({
+      buffer: Buffer.from("test"),
+      downloadMs: 1,
+      decryptMs: 1,
+    });
   });
 
   describe("Evidence endpoint (GET /api/admin/verification/evidence)", () => {

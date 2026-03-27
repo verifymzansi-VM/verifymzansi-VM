@@ -269,8 +269,8 @@ describe("KycQueueTable", () => {
     const evidenceLinks = screen.getAllByTitle("View Evidence");
     expect(evidenceLinks.length).toBeGreaterThan(0);
     const links = screen.getAllByRole("link", { name: /evidence/i });
-    expect(links[0]).toHaveAttribute("href", "/admin/verification/evidence?userId=user-1");
-    expect(links[1]).toHaveAttribute("href", "/admin/verification/evidence?userId=user-2");
+    expect(links[0]).toHaveAttribute("href", "/admin/verification/evidence");
+    expect(links[1]).toHaveAttribute("href", "/admin/verification/evidence");
   });
 
   it("hides evidence link when evidenceDeskEnabled is false", () => {

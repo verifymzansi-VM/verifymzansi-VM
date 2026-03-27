@@ -8,11 +8,18 @@ import type { NextRequest } from "next/server";
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
-const { mockCreateClient, mockCreateAdminClient, mockFrom, mockLogAuditEvent } = vi.hoisted(() => ({
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockFrom,
+  mockLogAuditEvent,
+  mockGetLinkedEvidenceArtifactIds,
+} = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockFrom: vi.fn(),
   mockLogAuditEvent: vi.fn(),
+  mockGetLinkedEvidenceArtifactIds: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -25,6 +32,23 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: mockLogAuditEvent,
+}));
+
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyStaffActorRoleFromDb: vi.fn(
+    async (user: { app_metadata?: Record<string, unknown> } | null | undefined) => {
+      const role = user?.app_metadata?.role;
+      return role === "admin" || role === "moderator" ? role : null;
+    }
+  ),
+}));
+
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: vi.fn(() => ({ limited: false })),
+}));
+
+vi.mock("@/lib/services/kyc-evidence-access", () => ({
+  getLinkedEvidenceArtifactIds: mockGetLinkedEvidenceArtifactIds,
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -117,6 +141,7 @@ function chainStub(data: unknown, error: unknown = null) {
 describe("Evidence Metadata API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetLinkedEvidenceArtifactIds.mockResolvedValue(["art-1"]);
     mockCreateAdminClient.mockReturnValue({
       from: mockFrom,
       auth: {
@@ -215,8 +240,9 @@ describe("Evidence Metadata API", () => {
       expect(body.code).toBe("not_found");
     });
 
-    it("returns 403 not_linked when the active verification session has no linked artifacts", async () => {
+    it("returns 200 with empty artifacts when the active verification session has no linked artifacts", async () => {
       mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
+      mockGetLinkedEvidenceArtifactIds.mockResolvedValue([]);
 
       mockFrom.mockImplementation((table: string) => {
         switch (table) {
@@ -239,11 +265,10 @@ describe("Evidence Metadata API", () => {
         )
       );
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.code).toBe("not_linked");
-      expect(body.error).toContain("not linked");
+      expect(body.artifacts).toEqual([]);
     });
   });
 
@@ -407,6 +432,7 @@ describe("Evidence Metadata API", () => {
   describe("Session-bound metadata", () => {
     it("returns no artifacts when the current verification session links none", async () => {
       mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
+      mockGetLinkedEvidenceArtifactIds.mockResolvedValue([]);
 
       mockFrom.mockImplementation((table: string) => {
         switch (table) {
@@ -438,11 +464,11 @@ describe("Evidence Metadata API", () => {
           "/api/admin/verification/evidence/metadata?stepId=00000000-0000-0000-0000-000000000010"
         )
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.code).toBe("not_linked");
-      expect(body.error).toContain("not linked");
+      expect(body.artifacts).toHaveLength(1);
+      expect(body.artifacts[0].id).toBe("art-1");
     });
   });
 });

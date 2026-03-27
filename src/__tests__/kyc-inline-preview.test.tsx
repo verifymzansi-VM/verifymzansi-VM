@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
+import { clearCachedKycArtifactBlobs } from "@/lib/utils/kyc-artifact-blob-cache";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ const MOCK_METADATA_RESPONSE = {
 describe("KycInlinePreview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearCachedKycArtifactBlobs();
     intersectionCallback = null;
     lastObserver = null;
   });
@@ -145,19 +147,17 @@ describe("KycInlinePreview", () => {
 
     // First call = metadata
     expect(String(mockFetch.mock.calls[0][0])).toContain(
-      "/api/admin/verification/evidence/metadata?"
+      "/api/admin/verification/evidence/metadata"
     );
-    expect(String(mockFetch.mock.calls[0][0])).toContain("stepId=step-1");
-    expect(String(mockFetch.mock.calls[0][0])).toContain("userId=user-1");
     expect(mockFetch.mock.calls[0][1]).toMatchObject({
-      method: "GET",
+      method: "POST",
+      body: JSON.stringify({ stepId: "step-1", userId: "user-1" }),
     });
     // Second call = blob
-    expect(String(mockFetch.mock.calls[1][0])).toContain(
-      "/api/admin/verification/evidence?artifactId=art-1"
-    );
+    expect(String(mockFetch.mock.calls[1][0])).toContain("/api/admin/verification/evidence");
     expect(mockFetch.mock.calls[1][1]).toMatchObject({
-      method: "GET",
+      method: "POST",
+      body: JSON.stringify({ artifactId: "art-1" }),
     });
 
     // Should create a blob URL for the thumbnail
@@ -244,7 +244,7 @@ describe("KycInlinePreview", () => {
     await triggerIntersection();
 
     await waitFor(() => {
-      expect(screen.getByText(/not linked to active session/i)).toBeDefined();
+      expect(screen.getByText(/no document/i)).toBeDefined();
     });
   });
 
@@ -272,7 +272,7 @@ describe("KycInlinePreview", () => {
     await triggerIntersection();
 
     await waitFor(() => {
-      expect(screen.getByText(/missing file/i)).toBeDefined();
+      expect(screen.getByText(/file is missing from storage/i)).toBeDefined();
     });
   });
 

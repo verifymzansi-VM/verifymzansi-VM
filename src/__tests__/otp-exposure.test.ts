@@ -3,18 +3,26 @@ import { NextRequest } from "next/server";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────────────
 
-const { mockGetUser, mockAdminFrom, mockSendOtpSms, mockCheckRateLimit, mockGetClientIp } =
-  vi.hoisted(() => ({
-    mockGetUser: vi.fn(),
-    mockAdminFrom: vi.fn(),
-    mockSendOtpSms: vi.fn(),
-    mockCheckRateLimit: vi.fn(),
-    mockGetClientIp: vi.fn(),
-  }));
+const {
+  mockGetUser,
+  mockServerFrom,
+  mockAdminFrom,
+  mockSendOtpSms,
+  mockCheckRateLimit,
+  mockGetClientIp,
+} = vi.hoisted(() => ({
+  mockGetUser: vi.fn(),
+  mockServerFrom: vi.fn(),
+  mockAdminFrom: vi.fn(),
+  mockSendOtpSms: vi.fn(),
+  mockCheckRateLimit: vi.fn(),
+  mockGetClientIp: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: mockGetUser },
+    from: mockServerFrom,
   }),
 }));
 
@@ -112,6 +120,14 @@ describe("OTP send — no OTP exposure", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockServerFrom.mockImplementation(() => {
+      const updateQuery = {
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      };
+      return {
+        update: vi.fn().mockReturnValue(updateQuery),
+      };
+    });
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
     mockAuthenticatedUser();

@@ -336,7 +336,7 @@ South Africa's verification-first marketplace and advertising platform. Buy, sel
 
 ## 5) Test Suite
 
-### Existing Test Coverage: 799 tests across 104 files
+### Existing Test Coverage: 2091 tests across 272 files (latest local run)
 
 The existing test suite is comprehensive and covers:
 
@@ -374,24 +374,29 @@ pnpm test:contract # Contract tests
 
 ### Pre-Launch (Must Do)
 
-- [ ] Fix `database.ts` post type enums (Finding #3)
-- [ ] Add "Promotions" to homepage category grid (Finding #5)
-- [ ] Add Promotions/Advertise links to footer (Finding #4)
-- [ ] Add CTA to `/promotions` page (Finding #7)
-- [ ] Update footer description to mention advertising (Finding #9)
-- [ ] Run full test suite: `pnpm test` — all 799 tests pass
-- [ ] Run `pnpm lint` — zero warnings
-- [ ] Run `pnpm typecheck` — zero errors
-- [ ] Merge `test/addon-route-coverage` branch to `master`
+- [x] Fix `database.ts` post type enums (Finding #3)
+- [x] Add "Promotions" to homepage category grid (Finding #5)
+- [x] Add Promotions/Advertise links to footer (Finding #4)
+- [x] Add CTA to `/promotions` page (Finding #7)
+- [x] Update footer description to mention advertising (Finding #9)
+- [x] Run full test suite: `pnpm test` — 272 files passed, 2090 passed, 1
+      skipped, 0 failed
+- [x] Run `pnpm lint` — zero warnings
+- [x] Run `pnpm typecheck` — zero errors
+- [x] Remove Evidence Desk ID query params from admin links (URL hardening)
+- [x] Merge `test/addon-route-coverage` branch to `master` (branch no longer
+      exists in local/origin refs)
 - [ ] Delete stale feature branches
-- [ ] Build from Ubuntu/WSL: `pnpm build:cloudflare`
+- [ ] Build from Ubuntu/WSL: `pnpm build:cloudflare` (blocked on native Windows;
+      Cloudflare config preflight passed; run final build in WSL2 ext4 workspace
+      or Ubuntu CI)
 - [ ] Verify all environment variables are set in Cloudflare dashboard
 - [ ] Push clean master to GitHub
 
 ### Pre-Launch (Should Do)
 
-- [ ] Update homepage CTA copy to mention advertising (Finding #6)
-- [ ] Add "Advertise" button to header for non-authenticated users
+- [x] Update homepage CTA copy to mention advertising (Finding #6)
+- [x] Add "Advertise" button to header for non-authenticated users
 - [ ] Verify Ozow webhook endpoint is publicly accessible
 - [ ] Test full payment flow in Ozow sandbox
 - [ ] Verify R2 bucket CORS configuration

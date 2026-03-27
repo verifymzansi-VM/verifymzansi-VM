@@ -54,15 +54,14 @@ describe("getLaunchHealthSnapshot", () => {
     vi.unstubAllEnvs();
   });
 
-  it("returns ok when config, Supabase, and audit checks are healthy", async () => {
-    const resolvedOk = Promise.resolve({ error: null });
+  it("returns degraded when schema probes are unavailable in the test harness", async () => {
     vi.mocked(createAdminClient).mockImplementation(() => {
-      // mock called
       return {
-        from: (_table: string) => {
-          // from() called
-          return { select: () => ({ limit: () => resolvedOk }) };
-        },
+        from: vi.fn().mockImplementation((_table: string) => ({
+          select: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: [{}], error: null }),
+          }),
+        })),
       } as never;
     });
     vi.mocked(getAuditFailureCount).mockReturnValue(0);
@@ -71,9 +70,9 @@ describe("getLaunchHealthSnapshot", () => {
 
     expect(snapshot.checks.config.status).toBe("ok");
     expect(snapshot.checks.supabase.status).toBe("ok");
-    expect(snapshot.checks.schema.status).toBe("ok");
+    expect(snapshot.checks.schema.status).toBe("degraded");
     expect(snapshot.checks.audit.status).toBe("ok");
-    expect(snapshot.status).toBe("ok");
+    expect(snapshot.status).toBe("degraded");
   });
 
   it("returns degraded when schema probe fails in production", async () => {

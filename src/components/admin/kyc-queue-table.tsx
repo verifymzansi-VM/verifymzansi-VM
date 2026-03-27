@@ -301,7 +301,7 @@ export function KycQueueTable({
                             className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
                             title="View Evidence"
                           >
-                            <Link href={`/admin/verification/evidence?userId=${group.user_id}`}>
+                            <Link href="/admin/verification/evidence">
                               <Eye className="h-4 w-4 mr-1" />
                               <span className="text-xs">Evidence</span>
                             </Link>

@@ -513,7 +513,7 @@ describe("content media cleanup queueing", () => {
     ]);
   });
 
-  it.skip("queues removed business media after a successful update", async () => {
+  it("queues removed business media after a successful update", async () => {
     const queueInsert = vi.fn().mockResolvedValue({ error: null });
     mockCreateClient.mockResolvedValue(
       createAuthenticatedClient((table: string) => {
@@ -566,6 +566,14 @@ describe("content media cleanup queueing", () => {
       from: vi.fn((table: string) => {
         if (table === "r2_cleanup_queue") {
           return { insert: queueInsert };
+        }
+        if (table === "businesses") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          };
         }
         if (table === "entitlements") {
           return {

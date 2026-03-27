@@ -53,6 +53,8 @@ vi.mock("lucide-react", () => ({
   FileText: () => React.createElement("span", null, "file"),
   AlertTriangle: () => React.createElement("span", null, "alert"),
   RefreshCw: () => React.createElement("span", null, "refresh"),
+  ZoomIn: () => React.createElement("span", null, "zoom-in"),
+  ZoomOut: () => React.createElement("span", null, "zoom-out"),
   X: () => React.createElement("span", null, "close"),
   RotateCcw: () => React.createElement("span", null, "rotate"),
 }));
@@ -146,8 +148,10 @@ describe("KycComparisonViewer", () => {
       expect(mockFetch).toHaveBeenCalledTimes(4);
     });
 
-    expect(String(mockFetch.mock.calls[1][0])).toContain("artifactId=id-newer");
-    expect(String(mockFetch.mock.calls[2][0])).toContain("artifactId=id-older");
+    expect(String(mockFetch.mock.calls[1][0])).toContain("/api/admin/verification/evidence");
+    expect(String(mockFetch.mock.calls[2][0])).toContain("/api/admin/verification/evidence");
+    expect(String(mockFetch.mock.calls[1][1]?.body)).toContain('"artifactId":"id-newer"');
+    expect(String(mockFetch.mock.calls[2][1]?.body)).toContain('"artifactId":"id-older"');
     expect(screen.getAllByText("ID Document")).toHaveLength(1);
   });
 });

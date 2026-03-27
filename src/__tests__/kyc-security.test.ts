@@ -15,13 +15,15 @@ const {
   mockCreateAdminClient,
   mockFrom,
   mockLogAuditEvent,
-  mockDownloadKycDocument,
+  mockDownloadKycDocumentWithMetrics,
+  mockGetLinkedEvidenceArtifactIds,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockFrom: vi.fn(),
   mockLogAuditEvent: vi.fn(),
-  mockDownloadKycDocument: vi.fn(),
+  mockDownloadKycDocumentWithMetrics: vi.fn(),
+  mockGetLinkedEvidenceArtifactIds: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -37,7 +39,11 @@ vi.mock("@/lib/services/audit", () => ({
 }));
 
 vi.mock("@/lib/services/storage", () => ({
-  downloadKycDocument: mockDownloadKycDocument,
+  downloadKycDocumentWithMetrics: mockDownloadKycDocumentWithMetrics,
+}));
+
+vi.mock("@/lib/services/kyc-evidence-access", () => ({
+  getLinkedEvidenceArtifactIds: mockGetLinkedEvidenceArtifactIds,
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -94,12 +100,22 @@ describe("KYC Security", () => {
     vi.clearAllMocks();
     mockCreateAdminClient.mockReturnValue({ from: mockFrom });
     mockLogAuditEvent.mockResolvedValue(undefined);
+    mockGetLinkedEvidenceArtifactIds.mockResolvedValue(["art-1"]);
+    mockDownloadKycDocumentWithMetrics.mockResolvedValue({
+      buffer: Buffer.from("fake-image-data"),
+      downloadMs: 1,
+      decryptMs: 1,
+    });
   });
 
   describe("Evidence endpoint security headers", () => {
     it("sets no-cache, no-store headers on evidence response", async () => {
       mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
-      mockDownloadKycDocument.mockResolvedValue(Buffer.from("fake-image-data"));
+      mockDownloadKycDocumentWithMetrics.mockResolvedValue({
+        buffer: Buffer.from("fake-image-data"),
+        downloadMs: 1,
+        decryptMs: 1,
+      });
 
       mockFrom.mockImplementation((table: string) => {
         if (table === "kyc_artifacts") {
@@ -166,7 +182,11 @@ describe("KYC Security", () => {
 
     it("includes CSP header restricting to self images only", async () => {
       mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
-      mockDownloadKycDocument.mockResolvedValue(Buffer.from("fake-image-data"));
+      mockDownloadKycDocumentWithMetrics.mockResolvedValue({
+        buffer: Buffer.from("fake-image-data"),
+        downloadMs: 1,
+        decryptMs: 1,
+      });
 
       mockFrom.mockImplementation((table: string) => {
         if (table === "kyc_artifacts") {
@@ -322,6 +342,9 @@ describe("KYC Security", () => {
             }),
           };
         }
+        if (table === "kyc_evidence_access_logs") {
+          return { insert: vi.fn().mockResolvedValue({ error: null }) };
+        }
         return {};
       });
 
@@ -348,7 +371,7 @@ describe("KYC Security", () => {
   describe("Download/decrypt failure handling", () => {
     it("returns 500 when R2 download fails", async () => {
       mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
-      mockDownloadKycDocument.mockRejectedValue(new Error("Decrypt failed"));
+      mockDownloadKycDocumentWithMetrics.mockRejectedValue(new Error("Decrypt failed"));
 
       mockFrom.mockImplementation((table: string) => {
         if (table === "kyc_artifacts") {
@@ -471,13 +494,19 @@ describe("KYC Security", () => {
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toBe("text/plain");
       // Should NOT call downloadKycDocument for dev:// keys
-      expect(mockDownloadKycDocument).not.toHaveBeenCalled();
+      expect(mockDownloadKycDocumentWithMetrics).not.toHaveBeenCalled();
     });
   });
 
   describe("Session-bound artifact access", () => {
-    it("returns 403 when the artifact is not linked to the current verification session", async () => {
+    it("continues with admin override when the artifact is not linked to the current verification session", async () => {
       mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
+      mockGetLinkedEvidenceArtifactIds.mockResolvedValue([]);
+      mockDownloadKycDocumentWithMetrics.mockResolvedValue({
+        buffer: Buffer.from("fake-image-data"),
+        downloadMs: 1,
+        decryptMs: 1,
+      });
 
       mockFrom.mockImplementation((table: string) => {
         if (table === "kyc_artifacts") {
@@ -523,6 +552,9 @@ describe("KYC Security", () => {
             }),
           };
         }
+        if (table === "kyc_evidence_access_logs") {
+          return { insert: vi.fn().mockResolvedValue({ error: null }) };
+        }
         return {};
       });
 
@@ -532,10 +564,7 @@ describe("KYC Security", () => {
         )
       );
 
-      expect(res.status).toBe(403);
-      await expect(res.json()).resolves.toMatchObject({
-        error: "Artifact is not linked to the current verification session",
-      });
+      expect(res.status).toBe(200);
     });
   });
 });

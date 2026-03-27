@@ -1,18 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockGetUser, mockAdminFrom, mockSendOtpSms, mockCheckRateLimit, mockGetClientIp } =
-  vi.hoisted(() => ({
-    mockGetUser: vi.fn(),
-    mockAdminFrom: vi.fn(),
-    mockSendOtpSms: vi.fn(),
-    mockCheckRateLimit: vi.fn(),
-    mockGetClientIp: vi.fn(),
-  }));
+const {
+  mockGetUser,
+  mockServerFrom,
+  mockAdminFrom,
+  mockSendOtpSms,
+  mockCheckRateLimit,
+  mockGetClientIp,
+} = vi.hoisted(() => ({
+  mockGetUser: vi.fn(),
+  mockServerFrom: vi.fn(),
+  mockAdminFrom: vi.fn(),
+  mockSendOtpSms: vi.fn(),
+  mockCheckRateLimit: vi.fn(),
+  mockGetClientIp: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: mockGetUser },
+    from: mockServerFrom,
   }),
 }));
 
@@ -57,6 +65,14 @@ function createOtpRequest(body: Record<string, unknown>): NextRequest {
 describe("POST /api/otp/send safe error envelopes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockServerFrom.mockImplementation(() => {
+      const updateQuery = {
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      };
+      return {
+        update: vi.fn().mockReturnValue(updateQuery),
+      };
+    });
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });

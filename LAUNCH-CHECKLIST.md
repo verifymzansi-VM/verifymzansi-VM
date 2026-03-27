@@ -134,7 +134,9 @@ ext4-backed workspace. Native Windows remains unsupported.
       cross-origin requests (403)
 - [ ] POST `/api/businesses/[id]/boost` rejects cross-origin requests (403)
 - [ ] PUT+DELETE `/api/promotions/[id]` reject cross-origin requests (403)
-- [ ] Admin evidence desk fetches artifacts via POST body (not GET query params)
+- [x] Admin evidence desk fetches artifacts via POST body (not GET query params)
+- [x] Admin Evidence Desk navigation uses clean URL (no stepId/userId query
+      params)
 - [ ] `GET /api/media/serve/kyc/...` returns 400 (key prefix blocked)
 - [ ] `GET /api/promotions?business_id=not-a-uuid` returns 400
 - [ ] No PII (email, ID number, artifact IDs) appears in browser URL bar during

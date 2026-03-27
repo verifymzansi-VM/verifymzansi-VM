@@ -23,6 +23,7 @@ describe("instrumentation register", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockValidateEnv.mockReset();
     _resetInstrumentationForTesting();
     Object.defineProperty(process.env, "NODE_ENV", {
       value: originalNodeEnv,

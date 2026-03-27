@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
+import { clearCachedKycArtifactBlobs } from "@/lib/utils/kyc-artifact-blob-cache";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -145,6 +146,7 @@ async function renderOpenLightbox(
 describe("KycPreviewLightbox", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearCachedKycArtifactBlobs();
   });
 
   it("does not render when open is false", () => {
@@ -331,13 +333,13 @@ describe("KycPreviewLightbox", () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
-      json: () => Promise.resolve({ error: "Decrypt failed" }),
+      json: () => Promise.resolve({ code: "server_error", error: "Decrypt failed" }),
     });
 
     await renderOpenLightbox();
 
     await waitFor(() => {
-      expect(screen.getByText("Decrypt failed")).toBeDefined();
+      expect(screen.getByText(/server error retrieving evidence/i)).toBeDefined();
     });
   });
 

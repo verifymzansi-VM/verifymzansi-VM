@@ -60,3 +60,7 @@ export function setCachedKycArtifactBlob(artifactId: string, blob: Blob): void {
   });
   enforceMaxEntries();
 }
+
+export function clearCachedKycArtifactBlobs(): void {
+  artifactBlobCache.clear();
+}

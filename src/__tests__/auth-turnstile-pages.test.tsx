@@ -214,7 +214,8 @@ describe("auth page Turnstile retry behavior", () => {
     window.history.replaceState({}, "", "/register");
     render(<RegisterPage />);
 
-    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Test User" } });
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Test" } });
+    fireEvent.change(screen.getByLabelText(/surname/i), { target: { value: "User" } });
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "user@example.com" } });
     fireEvent.change(screen.getByLabelText(/sa mobile number/i), {
       target: { value: "0712345678" },

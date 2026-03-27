@@ -411,9 +411,7 @@ export function DashboardKycPanel({
                         variant="ghost"
                         className="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950 w-full justify-start"
                       >
-                        <Link
-                          href={`/admin/verification/evidence?stepId=${item.id}&userId=${item.user_id}`}
-                        >
+                        <Link href="/admin/verification/evidence">
                           <Eye className="h-4 w-4 mr-1.5" />
                           Evidence
                         </Link>

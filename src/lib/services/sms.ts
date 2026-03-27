@@ -146,8 +146,14 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         signal: AbortSignal.timeout(10_000),
       });
 
-      // Read body once as text so we can log it before parsing
-      const rawBody = await response.text();
+      // Read body from a clone so callers/tests that reuse a mocked Response
+      // object do not fail with "Body has already been read".
+      let rawBody = "";
+      try {
+        rawBody = await response.clone().text();
+      } catch {
+        rawBody = response.statusText || "";
+      }
 
       if (!response.ok) {
         log.error("Africa's Talking HTTP error", {

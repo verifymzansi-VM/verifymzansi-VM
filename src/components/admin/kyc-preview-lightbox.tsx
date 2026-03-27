@@ -457,9 +457,7 @@ export function KycPreviewLightbox({
           <DialogFooter className="flex-wrap gap-2">
             {evidenceDeskEnabled && (
               <Button asChild variant="outline" size="sm" className="gap-1">
-                <Link
-                  href={`/admin/verification/evidence?stepId=${step.id}&userId=${step.user_id}`}
-                >
+                <Link href="/admin/verification/evidence">
                   <ExternalLink className="h-3.5 w-3.5" />
                   Full Evidence Desk
                 </Link>
