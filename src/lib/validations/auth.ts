@@ -15,11 +15,16 @@ export const loginSchema = z.object({
  */
 export const registerSchema = z
   .object({
-    displayName: z
+    firstName: z
       .string()
       .min(2, "Name must be at least 2 characters")
       .max(50, "Name is too long")
       .regex(/^[\p{L}\s'-]+$/u, "Name contains invalid characters"),
+    lastName: z
+      .string()
+      .min(2, "Surname must be at least 2 characters")
+      .max(50, "Surname is too long")
+      .regex(/^[\p{L}\s'-]+$/u, "Surname contains invalid characters"),
     email: emailSchema,
     phone: saPhoneSchema,
     password: passwordSchema,

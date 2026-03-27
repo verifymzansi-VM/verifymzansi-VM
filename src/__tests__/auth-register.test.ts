@@ -90,7 +90,8 @@ const validBody = {
   email: "user@example.com",
   password: "StrongP@ss1",
   confirmPassword: "StrongP@ss1",
-  displayName: "Test User",
+  firstName: "Test",
+  lastName: "User",
   phone: "+27821234567",
   acceptTerms: true,
   turnstileToken: "tok-valid",
@@ -147,6 +148,17 @@ describe("POST /api/auth/register", () => {
 
   it("returns 400 for missing required fields", async () => {
     const res = await POST(createRequest({}));
+    expect(res.status).toBe(400);
+  });
+
+  it("requires separate first and last names", async () => {
+    const res = await POST(
+      createRequest({
+        ...validBody,
+        lastName: "",
+      })
+    );
+
     expect(res.status).toBe(400);
   });
 

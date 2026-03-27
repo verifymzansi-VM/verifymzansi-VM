@@ -101,6 +101,7 @@ export async function GET(request: NextRequest) {
 
     const targetUserId = steps[0].user_id;
     const REVIEWABLE_STATES = [
+      "pending",
       "submitted",
       "pending_review",
       "pending_auto",

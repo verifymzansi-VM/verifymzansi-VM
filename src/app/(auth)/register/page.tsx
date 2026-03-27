@@ -39,7 +39,8 @@ export default function RegisterPage() {
   } = useForm<z.input<typeof registerSchema>, unknown, RegisterInput>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      displayName: "",
+      firstName: "",
+      lastName: "",
       email: "",
       phone: "",
       password: "",
@@ -184,22 +185,41 @@ export default function RegisterPage() {
       </div>
 
       <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-        <div className="space-y-2">
-          <Label htmlFor="displayName">Full name</Label>
-          <Input
-            id="displayName"
-            placeholder="Thabo Mokoena"
-            autoComplete="name"
-            autoCapitalize="words"
-            aria-invalid={!!errors.displayName}
-            aria-describedby={errors.displayName ? "displayName-error" : undefined}
-            {...register("displayName")}
-          />
-          {errors.displayName && (
-            <p id="displayName-error" className="inline-form-error" role="alert">
-              {errors.displayName.message}
-            </p>
-          )}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="firstName">Name</Label>
+            <Input
+              id="firstName"
+              placeholder="Thabo"
+              autoComplete="given-name"
+              autoCapitalize="words"
+              aria-invalid={!!errors.firstName}
+              aria-describedby={errors.firstName ? "firstName-error" : undefined}
+              {...register("firstName")}
+            />
+            {errors.firstName && (
+              <p id="firstName-error" className="inline-form-error" role="alert">
+                {errors.firstName.message}
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="lastName">Surname</Label>
+            <Input
+              id="lastName"
+              placeholder="Mokoena"
+              autoComplete="family-name"
+              autoCapitalize="words"
+              aria-invalid={!!errors.lastName}
+              aria-describedby={errors.lastName ? "lastName-error" : undefined}
+              {...register("lastName")}
+            />
+            {errors.lastName && (
+              <p id="lastName-error" className="inline-form-error" role="alert">
+                {errors.lastName.message}
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="space-y-2">

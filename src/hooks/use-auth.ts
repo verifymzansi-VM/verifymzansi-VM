@@ -34,6 +34,38 @@ export function useAuth() {
     return normalizeUserRole(role) ?? role;
   }
 
+  function readSessionDisplayName(userMetadata: unknown, email: string | undefined): string {
+    const metadata =
+      userMetadata && typeof userMetadata === "object"
+        ? (userMetadata as Record<string, unknown>)
+        : null;
+
+    const readName = (...keys: string[]) => {
+      for (const key of keys) {
+        const value = metadata?.[key];
+        if (typeof value === "string" && value.trim().length > 0) {
+          return value.trim();
+        }
+      }
+      return "";
+    };
+
+    const directName = readName("display_name", "full_name", "name");
+    if (directName) {
+      return directName;
+    }
+
+    const combinedName = [readName("given_name"), readName("family_name")]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    if (combinedName) {
+      return combinedName;
+    }
+
+    return email?.split("@")[0] || "User";
+  }
+
   const fetchAccountProfileWithRetry = useCallback(
     async (userId: string) => {
       let lastError: unknown = null;
@@ -87,10 +119,7 @@ export function useAuth() {
         setUser({
           id: authUser.id,
           email: authUser.email || "",
-          displayName:
-            ((authUser.user_metadata?.display_name ?? "") as string) ||
-            authUser.email?.split("@")[0] ||
-            "User",
+          displayName: readSessionDisplayName(authUser.user_metadata, authUser.email),
           role: readSessionRole(authUser.app_metadata?.role),
         });
 

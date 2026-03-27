@@ -120,7 +120,6 @@ export function KycQueueTable({
   // Comparison viewer state
   const [comparisonViewerOpen, setComparisonViewerOpen] = useState(false);
   const [comparisonUserId, setComparisonUserId] = useState<string | null>(null);
-  const [comparisonStepId, setComparisonStepId] = useState<string | null>(null);
   const [comparisonDisplayName, setComparisonDisplayName] = useState("");
 
   const handlePreviewClick = useCallback((step: VerificationStep, artifact: Artifact) => {
@@ -128,9 +127,8 @@ export function KycQueueTable({
     setLightboxArtifact(artifact);
   }, []);
 
-  const handleComparisonClick = useCallback((step: VerificationStep, displayName: string) => {
-    setComparisonStepId(step.id);
-    setComparisonUserId(step.user_id);
+  const handleComparisonClick = useCallback((userId: string, displayName: string) => {
+    setComparisonUserId(userId);
     setComparisonDisplayName(displayName);
     setComparisonViewerOpen(true);
   }, []);
@@ -240,17 +238,51 @@ export function KycQueueTable({
                           </p>
                         </div>
                         {evidenceDeskEnabled && (
-                          <Button
-                            asChild
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
-                            title="View Evidence"
-                          >
-                            <Link href={`/admin/verification/evidence?userId=${group.user_id}`}>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="h-8 bg-brand-blue hover:bg-brand-blue/90"
+                              onClick={() =>
+                                handleComparisonClick(
+                                  group.user_id,
+                                  group.account_display_name || group.user_id
+                                )
+                              }
+                              title="Compare ID and selfie"
+                            >
                               <Eye className="h-4 w-4 mr-1" />
-                              <span className="text-xs">Evidence</span>
-                            </Link>
+                              <span className="text-xs">View Docs</span>
+                            </Button>
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
+                              title="View Evidence"
+                            >
+                              <Link href={`/admin/verification/evidence?userId=${group.user_id}`}>
+                                <Eye className="h-4 w-4 mr-1" />
+                                <span className="text-xs">Evidence</span>
+                              </Link>
+                            </Button>
+                          </div>
+                        )}
+                        {!evidenceDeskEnabled && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-8 bg-brand-blue hover:bg-brand-blue/90"
+                            onClick={() =>
+                              handleComparisonClick(
+                                group.user_id,
+                                group.account_display_name || group.user_id
+                              )
+                            }
+                            title="Compare ID and selfie"
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            <span className="text-xs">View Docs</span>
                           </Button>
                         )}
                       </div>
@@ -307,21 +339,6 @@ export function KycQueueTable({
                               <div className="flex gap-1 flex-shrink-0 flex-wrap">
                                 <Button
                                   size="sm"
-                                  variant="default"
-                                  className="h-8 bg-brand-blue hover:bg-brand-blue/90"
-                                  onClick={() =>
-                                    handleComparisonClick(
-                                      step,
-                                      group.account_display_name || group.user_id
-                                    )
-                                  }
-                                  title="View and compare documents"
-                                >
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  <span className="hidden sm:inline text-xs">View Docs</span>
-                                </Button>
-                                <Button
-                                  size="sm"
                                   variant="ghost"
                                   className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
                                   onClick={() => openReview(step, "approved")}
@@ -365,16 +382,14 @@ export function KycQueueTable({
       </div>
 
       {/* Document Comparison Viewer */}
-      {comparisonUserId && comparisonStepId && (
+      {comparisonUserId && (
         <KycComparisonViewer
           isOpen={comparisonViewerOpen}
           userId={comparisonUserId}
-          stepId={comparisonStepId}
           displayName={comparisonDisplayName}
           onClose={() => {
             setComparisonViewerOpen(false);
             setComparisonUserId(null);
-            setComparisonStepId(null);
           }}
           disableActions={false}
         />

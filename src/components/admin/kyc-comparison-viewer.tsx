@@ -12,16 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Loader2,
-  FileText,
-  AlertTriangle,
-  RefreshCw,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  RotateCcw,
-} from "lucide-react";
+import { Loader2, FileText, AlertTriangle, RefreshCw, X, RotateCcw } from "lucide-react";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
 
 interface Artifact {
@@ -40,7 +31,6 @@ interface Artifact {
 interface DocumentViewerProps {
   isOpen: boolean;
   userId: string;
-  stepId: string;
   displayName: string;
   onClose: () => void;
   onApprove?: () => void;
@@ -57,7 +47,6 @@ interface DocumentViewerProps {
 export function KycComparisonViewer({
   isOpen,
   userId,
-  stepId,
   displayName,
   onClose,
   onApprove,
@@ -68,13 +57,14 @@ export function KycComparisonViewer({
 }: DocumentViewerProps) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
+  const [artifactErrors, setArtifactErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDocIndex, setSelectedDocIndex] = useState(0);
+  const [retryToken, setRetryToken] = useState(0);
 
   // Fetch metadata and load artifacts
   useEffect(() => {
-    if (!isOpen || !userId || !stepId) return;
+    if (!isOpen || !userId) return;
 
     const createdUrls: string[] = [];
 
@@ -83,13 +73,10 @@ export function KycComparisonViewer({
       setError(null);
       setArtifacts([]);
       setBlobUrls({});
+      setArtifactErrors({});
 
       try {
-        // Fetch metadata with GET request using query params
-        const params = new URLSearchParams({
-          stepId,
-          userId,
-        });
+        const params = new URLSearchParams({ userId });
         const metaRes = await fetch(`/api/admin/verification/evidence/metadata?${params}`, {
           method: "GET",
         });
@@ -104,20 +91,19 @@ export function KycComparisonViewer({
         }
 
         const meta = await metaRes.json();
-        const loadedArtifacts: Artifact[] = meta.artifacts || [];
+        const loadedArtifacts: Artifact[] = (meta.artifacts || []).filter(
+          (artifact: Artifact) => artifact.step_type === "id_doc" || artifact.step_type === "selfie"
+        );
 
         if (loadedArtifacts.length === 0) {
-          setError("No documents uploaded yet");
+          setError("No ID document or selfie uploaded yet");
           return;
         }
 
-        // Sort: ID docs first, then selfies, then others
         const sorted = loadedArtifacts.sort((a, b) => {
           const order: Record<string, number> = {
             id_doc: 0,
             selfie: 1,
-            location: 2,
-            phone: 3,
           };
           return (order[a.step_type] ?? 99) - (order[b.step_type] ?? 99);
         });
@@ -142,9 +128,27 @@ export function KycComparisonViewer({
                 ...prev,
                 [artifact.id]: objectUrl,
               }));
+              setArtifactErrors((prev) => {
+                const next = { ...prev };
+                delete next[artifact.id];
+                return next;
+              });
+            } else {
+              const data = await evidenceRes.json().catch(() => null);
+              setArtifactErrors((prev) => ({
+                ...prev,
+                [artifact.id]: getKycEvidenceErrorMessage(
+                  data?.code,
+                  data?.error || "Failed to load document"
+                ),
+              }));
             }
           } catch (e) {
-            console.error(`Failed to load artifact ${artifact.id}:`, e);
+            const message = e instanceof Error ? e.message : "Failed to load document";
+            setArtifactErrors((prev) => ({
+              ...prev,
+              [artifact.id]: message,
+            }));
           }
         }
       } catch (err) {
@@ -160,19 +164,91 @@ export function KycComparisonViewer({
       // Cleanup blob URLs
       createdUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [isOpen, userId, stepId]);
+  }, [isOpen, userId, retryToken]);
 
-  const currentArtifact = artifacts[selectedDocIndex];
-  const currentBlobUrl = currentArtifact ? blobUrls[currentArtifact.id] : null;
+  const idArtifact = artifacts.find((artifact) => artifact.step_type === "id_doc") ?? null;
+  const selfieArtifact = artifacts.find((artifact) => artifact.step_type === "selfie") ?? null;
+  const comparisonArtifacts = [idArtifact, selfieArtifact].filter(
+    (artifact): artifact is Artifact => Boolean(artifact)
+  );
 
   const getStepLabel = (type: string) => {
     const labels: Record<string, string> = {
       id_doc: "ID Document",
       selfie: "Selfie",
-      location: "Location Proof",
-      phone: "Phone",
     };
     return labels[type] || type;
+  };
+
+  const renderArtifactPanel = (artifact: Artifact | null) => {
+    if (!artifact) {
+      return (
+        <Card className="border-dashed">
+          <CardContent className="flex min-h-[24rem] flex-col items-center justify-center gap-3 p-6 text-center">
+            <FileText className="h-10 w-10 text-muted-foreground/70" />
+            <div>
+              <p className="text-sm font-medium text-foreground">Document missing</p>
+              <p className="text-sm text-muted-foreground">
+                The user has not uploaded this document yet.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    const blobUrl = blobUrls[artifact.id];
+    const artifactError = artifactErrors[artifact.id];
+
+    return (
+      <Card className="h-full">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base">{getStepLabel(artifact.step_type)}</CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Uploaded {new Date(artifact.created_at).toLocaleString()}
+              </p>
+            </div>
+            <Badge variant="secondary" className="shrink-0">
+              {(artifact.file_size_bytes / 1024).toFixed(1)} KB
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {artifactError ? (
+            <div className="flex min-h-[24rem] flex-col items-center justify-center gap-3 rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+              <AlertTriangle className="h-8 w-8 text-red-600" />
+              <p className="text-sm font-medium text-red-900">{artifactError}</p>
+            </div>
+          ) : blobUrl ? (
+            <div className="flex min-h-[24rem] items-center justify-center overflow-hidden rounded-lg bg-gray-100">
+              {artifact.content_type?.startsWith("image") ? (
+                <Image
+                  src={blobUrl}
+                  alt={getStepLabel(artifact.step_type)}
+                  width={1200}
+                  height={900}
+                  unoptimized
+                  className="max-h-[32rem] max-w-full object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                  <FileText className="mb-2 h-12 w-12 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    {artifact.content_type || "Document"}
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex min-h-[24rem] items-center justify-center rounded-lg bg-gray-100">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
   };
 
   return (
@@ -182,10 +258,10 @@ export function KycComparisonViewer({
           <div className="flex items-center justify-between w-full gap-4">
             <div className="flex-1 min-w-0">
               <DialogTitle className="text-lg font-semibold">
-                Verification Review: {displayName}
+                Identity Comparison: {displayName}
               </DialogTitle>
               <DialogDescription className="text-sm text-muted-foreground">
-                Compare documents to verify identity authenticity
+                Compare the selfie against the ID document to verify the same person.
               </DialogDescription>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 shrink-0">
@@ -213,8 +289,7 @@ export function KycComparisonViewer({
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setError(null);
-                    setLoading(true);
+                    setRetryToken((value) => value + 1);
                   }}
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
@@ -224,108 +299,18 @@ export function KycComparisonViewer({
             </Card>
           )}
 
-          {!loading && !error && artifacts.length > 0 && (
-            <div className="space-y-6">
-              {/* Document selector tabs */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                {artifacts.map((artifact, idx) => (
-                  <Button
-                    key={artifact.id}
-                    variant={selectedDocIndex === idx ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedDocIndex(idx)}
-                    className="whitespace-nowrap"
-                  >
-                    <div className="h-2 w-2 rounded-full p-0 mr-2 bg-current"></div>
-                    {getStepLabel(artifact.step_type)}
-                  </Button>
-                ))}
+          {!loading && !error && comparisonArtifacts.length > 0 && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className={!selfieArtifact ? "lg:col-span-2" : undefined}>
+                {renderArtifactPanel(idArtifact)}
               </div>
-
-              {/* Document viewer */}
-              {currentArtifact && (
-                <div className="space-y-4">
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-base">
-                            {getStepLabel(currentArtifact.step_type)}
-                          </CardTitle>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Uploaded {new Date(currentArtifact.created_at).toLocaleString()}
-                          </p>
-                        </div>
-                        <Badge variant="secondary" className="shrink-0">
-                          {(currentArtifact.file_size_bytes / 1024).toFixed(1)} KB
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {currentBlobUrl ? (
-                        <div className="bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center max-h-96">
-                          {currentArtifact.content_type?.startsWith("image") ? (
-                            <Image
-                              src={currentBlobUrl}
-                              alt={getStepLabel(currentArtifact.step_type)}
-                              width={1200}
-                              height={900}
-                              unoptimized
-                              className="max-w-full max-h-96 object-contain"
-                            />
-                          ) : (
-                            <div className="flex flex-col items-center justify-center p-8 text-center">
-                              <FileText className="h-12 w-12 text-muted-foreground mb-2" />
-                              <p className="text-sm text-muted-foreground">
-                                {currentArtifact.content_type || "Document"}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="bg-gray-100 rounded-lg h-64 flex items-center justify-center">
-                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Navigation */}
-                  {artifacts.length > 1 && (
-                    <div className="flex items-center justify-between">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setSelectedDocIndex((p) => (p > 0 ? p - 1 : artifacts.length - 1))
-                        }
-                      >
-                        <ChevronLeft className="h-4 w-4 mr-2" />
-                        Previous
-                      </Button>
-                      <span className="text-sm text-muted-foreground">
-                        {selectedDocIndex + 1} of {artifacts.length}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setSelectedDocIndex((p) => (p < artifacts.length - 1 ? p + 1 : 0))
-                        }
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4 ml-2" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
+              {selfieArtifact ? <div>{renderArtifactPanel(selfieArtifact)}</div> : null}
             </div>
           )}
         </div>
 
         {/* Action buttons footer */}
-        {!loading && !error && artifacts.length > 0 && (
+        {!loading && !error && comparisonArtifacts.length > 0 && (
           <div className="border-t bg-muted/30 p-4 flex items-center justify-end gap-2">
             <Button variant="outline" onClick={onClose} disabled={isLoading || disableActions}>
               Cancel

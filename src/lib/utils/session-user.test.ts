@@ -62,6 +62,22 @@ describe("buildSessionUser", () => {
     });
   });
 
+  it("maps Google metadata names when display_name is absent", () => {
+    const mapped = buildSessionUser(
+      createUser({
+        email: "google@example.com",
+        user_metadata: { given_name: "Siphesihle", family_name: "Biyela" },
+      })
+    );
+
+    expect(mapped).toEqual({
+      displayName: "Siphesihle Biyela",
+      email: "google@example.com",
+      initials: "SB",
+      role: "",
+    });
+  });
+
   it("returns null for anonymous users and handles malformed metadata safely", () => {
     const anonymous = buildSessionUser(
       createUser({

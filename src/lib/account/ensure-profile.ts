@@ -28,6 +28,10 @@ export function getDefaultDisplayName(user: {
   const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
   const displayName = normalizeDisplayNameValue(metadata.display_name);
   const fullName = normalizeDisplayNameValue(metadata.full_name);
+  const name = normalizeDisplayNameValue(metadata.name);
+  const givenName = normalizeDisplayNameValue(metadata.given_name);
+  const familyName = normalizeDisplayNameValue(metadata.family_name);
+  const combinedName = normalizeDisplayNameValue([givenName, familyName].filter(Boolean).join(" "));
 
   if (displayName) {
     return displayName;
@@ -35,6 +39,18 @@ export function getDefaultDisplayName(user: {
 
   if (fullName) {
     return fullName;
+  }
+
+  if (name) {
+    return name;
+  }
+
+  if (combinedName) {
+    return combinedName;
+  }
+
+  if (givenName) {
+    return givenName;
   }
 
   if (user.email) {
@@ -64,8 +80,10 @@ export async function ensureAccountProfile(
 
   if (existing) {
     const existingDisplayName = normalizeDisplayNameValue(existing.display_name);
+    const shouldRepairPlaceholder =
+      existingDisplayName === "New Member" && resolvedDisplayName !== "New Member";
 
-    if (existingDisplayName) {
+    if (existingDisplayName && !shouldRepairPlaceholder) {
       return {
         id: existing.id,
         display_name: existingDisplayName,

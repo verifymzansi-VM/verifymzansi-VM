@@ -102,6 +102,20 @@ describe("ensure-profile", () => {
     expect(
       getDefaultDisplayName({
         email: "member@example.com",
+        user_metadata: { name: "  Google Member  " },
+      })
+    ).toBe("Google Member");
+
+    expect(
+      getDefaultDisplayName({
+        email: "member@example.com",
+        user_metadata: { given_name: "Siya", family_name: "Khumalo" },
+      })
+    ).toBe("Siya Khumalo");
+
+    expect(
+      getDefaultDisplayName({
+        email: "member@example.com",
         user_metadata: {},
       })
     ).toBe("member");
@@ -148,6 +162,22 @@ describe("ensure-profile", () => {
     expect(result).toEqual({ id: "profile-1", display_name: "Meta Name" });
     expect(calls.update).toHaveBeenCalledWith({ display_name: "Meta Name" });
     expect(calls.upsert).not.toHaveBeenCalled();
+  });
+
+  it('repairs existing profile when display_name is the placeholder "New Member"', async () => {
+    const { admin, calls } = buildAdminClient({
+      existingProfile: { id: "profile-1", display_name: "New Member" },
+      repairedProfile: { id: "profile-1", display_name: "Google Name" },
+    });
+
+    const result = await ensureAccountProfile(admin as never, {
+      id: "user-1",
+      email: "user@example.com",
+      user_metadata: { name: "Google Name" },
+    });
+
+    expect(result).toEqual({ id: "profile-1", display_name: "Google Name" });
+    expect(calls.update).toHaveBeenCalledWith({ display_name: "Google Name" });
   });
 
   it("creates profile when missing", async () => {

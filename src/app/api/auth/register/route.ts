@@ -123,6 +123,7 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedPhone = normalizeSaPhone(parsedBody.data.phone);
+    const displayName = `${parsedBody.data.firstName} ${parsedBody.data.lastName}`.trim();
     // Phone is NOT canonical at registration time — requires OTP verification.
     // Store as pending_phone so the complete-profile OTP step can pre-fill it.
     const admin = createAdminClient();
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
       options: {
         emailRedirectTo: callbackUrl,
         data: {
-          display_name: parsedBody.data.displayName,
+          display_name: displayName,
           phone: normalizedPhone,
         },
       },
@@ -184,7 +185,7 @@ export async function POST(request: NextRequest) {
         const { error: profileError } = await admin.from(ACCOUNT_PROFILE_WRITE_TABLE).upsert(
           {
             user_id: signUpData.user.id,
-            display_name: parsedBody.data.displayName,
+            display_name: displayName,
             // pending_phone: staged until the user completes OTP verification.
             // Canonical `phone` is only set by /api/otp/verify after hash check.
             pending_phone: normalizedPhone,

@@ -94,7 +94,8 @@ test.describe.serial("Registration Flow", () => {
     await expect(page.getByRole("heading", { name: /create your account/i })).toBeVisible();
 
     // Fill form
-    await page.fill("#displayName", "QA Test User");
+    await page.fill("#firstName", "QA");
+    await page.fill("#lastName", "Test User");
     await page.fill("#email", registeredEmail);
     await page.fill("#phone", "0712345678");
     await page.fill("#password", registeredPassword);
@@ -156,7 +157,8 @@ test.describe.serial("Registration Flow", () => {
 
     await page.goto("/register");
 
-    await page.fill("#displayName", "QA Duplicate");
+    await page.fill("#firstName", "QA");
+    await page.fill("#lastName", "Duplicate");
     await page.fill("#email", registeredEmail);
     await page.fill("#phone", "0712345679");
     await page.fill("#password", registeredPassword);
@@ -198,9 +200,12 @@ test.describe("Registration Validation", () => {
     await page.getByRole("button", { name: /create account/i }).click();
 
     // Check that validation errors appear for required fields
-    await expect(page.locator("text=Name must be at least 2 characters")).toBeVisible({
-      timeout: 3000,
-    });
+    await expect(
+      page.getByRole("alert").filter({ hasText: /^Name must be at least 2 characters$/ })
+    ).toBeVisible({ timeout: 3000 });
+    await expect(
+      page.getByRole("alert").filter({ hasText: /^Surname must be at least 2 characters$/ })
+    ).toBeVisible();
     await expect(page.locator("text=Enter a valid email address")).toBeVisible();
     // Phone error: "Phone number is required" from min(10)
     await expect(page.locator("text=Phone number is required")).toBeVisible();
@@ -214,7 +219,8 @@ test.describe("Registration Validation", () => {
     setupPageListeners(page);
     await page.goto("/register");
 
-    await page.fill("#displayName", "QA Mismatch");
+    await page.fill("#firstName", "QA");
+    await page.fill("#lastName", "Mismatch");
     await page.fill("#email", freshEmail());
     await page.fill("#phone", "0712345678");
     await page.fill("#password", "TestPass1");
@@ -232,7 +238,8 @@ test.describe("Registration Validation", () => {
     setupPageListeners(page);
     await page.goto("/register");
 
-    await page.fill("#displayName", "QA Phone");
+    await page.fill("#firstName", "QA");
+    await page.fill("#lastName", "Phone");
     await page.fill("#email", freshEmail());
     await page.fill("#phone", "1234567890"); // not SA format
     await page.fill("#password", "TestPass1");

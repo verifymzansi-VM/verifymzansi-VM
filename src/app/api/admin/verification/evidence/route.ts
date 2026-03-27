@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
     }
 
     const REVIEWABLE_STATES = [
+      "pending",
       "submitted",
       "pending_review",
       "pending_auto",

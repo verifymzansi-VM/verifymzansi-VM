@@ -65,6 +65,10 @@ vi.mock("next/link", () => ({
 vi.mock("@/components/admin/kyc-inline-preview", () => ({
   KycInlinePreview: () => React.createElement("div", { "data-testid": "kyc-inline-preview" }),
 }));
+vi.mock("@/components/admin/kyc-comparison-viewer", () => ({
+  KycComparisonViewer: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? React.createElement("div", { "data-testid": "comparison-viewer" }) : null,
+}));
 vi.mock("lucide-react", () => ({
   CheckCircle: () => React.createElement("span", null, "✓"),
   XCircle: () => React.createElement("span", null, "✗"),
@@ -213,5 +217,15 @@ describe("KycQueueTable", () => {
   it("hides evidence link when evidenceDeskEnabled is false", () => {
     render(React.createElement(KycQueueTable, { groups: groupedItems }));
     expect(screen.queryAllByTitle("View Evidence")).toHaveLength(0);
+  });
+
+  it("opens side-by-side comparison from the group-level view docs button", async () => {
+    render(React.createElement(KycQueueTable, { groups: groupedItems }));
+
+    fireEvent.click(screen.getAllByTitle("Compare ID and selfie")[0]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("comparison-viewer")).toBeInTheDocument();
+    });
   });
 });

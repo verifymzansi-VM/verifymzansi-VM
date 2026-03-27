@@ -53,7 +53,15 @@ export function buildSessionUser(user: User | null | undefined): SessionUserView
     return null;
   }
 
-  const displayName = readFirstNonEmptyString(user.user_metadata, ["display_name", "full_name"]);
+  const metadataDisplayName = readFirstNonEmptyString(user.user_metadata, [
+    "display_name",
+    "full_name",
+    "name",
+  ]);
+  const givenName = readFirstNonEmptyString(user.user_metadata, ["given_name"]);
+  const familyName = readFirstNonEmptyString(user.user_metadata, ["family_name"]);
+  const displayName =
+    metadataDisplayName || [givenName, familyName].filter(Boolean).join(" ").trim();
   const role = getRoleFromUser(user) || "";
   const email = typeof user.email === "string" ? user.email : "";
 

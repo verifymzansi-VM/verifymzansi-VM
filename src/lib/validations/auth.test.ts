@@ -37,7 +37,8 @@ describe("loginSchema", () => {
 
 describe("registerSchema", () => {
   const valid = {
-    displayName: "Jane Doe",
+    firstName: "Jane",
+    lastName: "Doe",
     email: "jane@example.com",
     phone: "+27812345678",
     password: "Str0ngPass",
@@ -58,12 +59,12 @@ describe("registerSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects short display name", () => {
-    expect(registerSchema.safeParse({ ...valid, displayName: "J" }).success).toBe(false);
+  it("rejects short first name", () => {
+    expect(registerSchema.safeParse({ ...valid, firstName: "J" }).success).toBe(false);
   });
 
-  it("rejects display name with numbers", () => {
-    expect(registerSchema.safeParse({ ...valid, displayName: "Jane123" }).success).toBe(false);
+  it("rejects surname with numbers", () => {
+    expect(registerSchema.safeParse({ ...valid, lastName: "Doe123" }).success).toBe(false);
   });
 
   it("rejects invalid phone", () => {
