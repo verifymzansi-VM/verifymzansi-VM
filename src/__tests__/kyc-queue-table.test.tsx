@@ -364,7 +364,7 @@ describe("KycQueueTable", () => {
   });
 
   it("disables only the clicked view button while metadata is loading", async () => {
-    let resolveFetch: ((value: Response) => void) | null = null;
+    let resolveFetch!: (value: Response) => void;
     vi.mocked(global.fetch).mockImplementationOnce(
       () =>
         new Promise<Response>((resolve) => {
@@ -382,7 +382,7 @@ describe("KycQueueTable", () => {
       expect(viewButtons[1]).not.toBeDisabled();
     });
 
-    resolveFetch?.({
+    resolveFetch({
       ok: true,
       json: async () => ({
         artifacts: [
