@@ -26,6 +26,11 @@ const evidenceBodySchema = z.object({
   artifactId: uuidSchema,
 });
 
+function isMissingArtifactError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /not found|no such key|nosuchkey/i.test(message);
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Auth check — admin/moderator only
@@ -71,7 +76,7 @@ export async function GET(request: NextRequest) {
     // Fetch artifact record
     const { data: artifact, error: artifactErr } = await adminClient
       .from("kyc_artifacts")
-      .select("id, user_id, r2_key, content_type, artifact_kind")
+      .select("id, user_id, r2_key, content_type, artifact_kind, step_type")
       .eq("id", artifactId)
       .single();
 
@@ -163,22 +168,94 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Download and decrypt the document
-    let decryptedBuffer: Buffer;
+    // Download and decrypt the document. If the linked artifact points to a
+    // missing object, fall back to another authorized artifact for the same step.
+    let decryptedBuffer: Buffer | null = null;
     try {
       decryptedBuffer = await downloadKycDocument(artifact.r2_key);
     } catch (downloadErr) {
       const downloadMessage = downloadErr instanceof Error ? downloadErr.message : "unknown error";
-      log.error("Failed to download/decrypt artifact", {
-        error: downloadMessage,
+      const isMissingFile = isMissingArtifactError(downloadErr);
+
+      if (!isMissingFile) {
+        log.error("Failed to download/decrypt artifact", {
+          artifactId: artifact.id,
+          error: downloadMessage,
+        });
+        return NextResponse.json(
+          { error: "Failed to retrieve artifact", code: "server_error" },
+          { status: 500 }
+        );
+      }
+
+      const { data: fallbackArtifacts, error: fallbackQueryError } = await adminClient
+        .from("kyc_artifacts")
+        .select("id, r2_key, created_at")
+        .eq("user_id", artifact.user_id)
+        .eq("step_type", artifact.step_type)
+        .in("id", allowedArtifactIds)
+        .order("created_at", { ascending: false });
+
+      const sameStepCandidates = (fallbackQueryError ? [] : fallbackArtifacts || []).filter(
+        (candidate) => candidate.id !== artifact.id
+      );
+
+      log.warn("Requested KYC artifact missing in storage; attempting same-step fallback", {
+        artifactId: artifact.id,
+        userId: artifact.user_id,
+        stepType: artifact.step_type,
+        candidateCount: sameStepCandidates.length,
       });
-      const isMissingFile = /not found|no such key|nosuchkey/i.test(downloadMessage);
+
+      let recovered = false;
+      for (const candidate of sameStepCandidates) {
+        try {
+          decryptedBuffer = await downloadKycDocument(candidate.r2_key);
+          recovered = true;
+          log.info("Recovered KYC artifact via same-step fallback", {
+            requestedArtifactId: artifact.id,
+            fallbackArtifactId: candidate.id,
+            userId: artifact.user_id,
+          });
+          break;
+        } catch (fallbackErr) {
+          if (!isMissingArtifactError(fallbackErr)) {
+            const fallbackMessage =
+              fallbackErr instanceof Error ? fallbackErr.message : "unknown error";
+            log.error("Fallback artifact retrieval failed", {
+              requestedArtifactId: artifact.id,
+              fallbackArtifactId: candidate.id,
+              error: fallbackMessage,
+            });
+            return NextResponse.json(
+              { error: "Failed to retrieve artifact", code: "server_error" },
+              { status: 500 }
+            );
+          }
+        }
+      }
+
+      if (!recovered) {
+        log.error("All authorized KYC artifact candidates are missing in storage", {
+          artifactId: artifact.id,
+          userId: artifact.user_id,
+          candidateCount: sameStepCandidates.length + 1,
+        });
+        return NextResponse.json(
+          { error: "Artifact file is missing", code: "missing_file" },
+          { status: 404 }
+        );
+      }
+    }
+
+    if (!decryptedBuffer) {
+      log.error("Artifact retrieval completed without a decrypted buffer", {
+        artifactId: artifact.id,
+        userId: artifact.user_id,
+      });
       return NextResponse.json(
-        {
-          error: isMissingFile ? "Artifact file is missing" : "Failed to retrieve artifact",
-          code: isMissingFile ? "missing_file" : "server_error",
-        },
-        { status: isMissingFile ? 404 : 500 }
+        { error: "Failed to retrieve artifact", code: "server_error" },
+        { status: 500 }
       );
     }
 

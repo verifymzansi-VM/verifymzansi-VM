@@ -105,7 +105,12 @@ export function KycComparisonViewer({
             id_doc: 0,
             selfie: 1,
           };
-          return (order[a.step_type] ?? 99) - (order[b.step_type] ?? 99);
+          const stepOrder = (order[a.step_type] ?? 99) - (order[b.step_type] ?? 99);
+          if (stepOrder !== 0) {
+            return stepOrder;
+          }
+
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
 
         setArtifacts(sorted);

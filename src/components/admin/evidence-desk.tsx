@@ -124,6 +124,14 @@ const RISK_COLORS: Record<string, string> = {
   low: "bg-green-100 text-green-800 border-green-200",
 };
 
+function getLatestArtifactForStep(artifacts: Artifact[], stepType: string): Artifact | null {
+  const matches = artifacts
+    .filter((artifact) => artifact.step_type === stepType)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  return matches[0] ?? null;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Main Component                                                     */
 /* ------------------------------------------------------------------ */
@@ -172,11 +180,15 @@ export function EvidenceDeskClient({
 
         // Auto-select first step
         if (data.steps.length > 0) {
-          setSelectedStep(data.steps[0]);
-        }
-        // Auto-select first artifact
-        if (data.artifacts.length > 0) {
+          const initialSelectedStep = data.steps[0];
+          setSelectedStep(initialSelectedStep);
+          setSelectedArtifact(
+            getLatestArtifactForStep(data.artifacts, initialSelectedStep.step_type)
+          );
+        } else if (data.artifacts.length > 0) {
           setSelectedArtifact(data.artifacts[0]);
+        } else {
+          setSelectedArtifact(null);
         }
       } catch (err) {
         toast({
@@ -301,7 +313,13 @@ export function EvidenceDeskClient({
                   metadata.steps.map((s) => (
                     <button
                       key={s.id}
-                      onClick={() => setSelectedStep(s)}
+                      onClick={() => {
+                        setSelectedStep(s);
+                        setComparisonMode(false);
+                        setSelectedArtifact(
+                          getLatestArtifactForStep(metadata.artifacts, s.step_type)
+                        );
+                      }}
                       className={`w-full rounded-md border p-3 text-left text-sm transition-colors hover:bg-warm-50 dark:hover:bg-warm-900 ${
                         selectedStep?.id === s.id
                           ? "border-brand-blue bg-brand-blue/5"
@@ -387,8 +405,8 @@ export function EvidenceDeskClient({
             {/* Artifact selector */}
             {metadata.artifacts.length > 1 &&
               (() => {
-                const idArtifact = metadata.artifacts.find((a) => a.step_type === "id_doc");
-                const selfieArtifact = metadata.artifacts.find((a) => a.step_type === "selfie");
+                const idArtifact = getLatestArtifactForStep(metadata.artifacts, "id_doc");
+                const selfieArtifact = getLatestArtifactForStep(metadata.artifacts, "selfie");
                 const canCompare = !!(idArtifact && selfieArtifact);
 
                 return (
@@ -430,8 +448,8 @@ export function EvidenceDeskClient({
             {/* Evidence viewer */}
             {comparisonMode &&
               (() => {
-                const idArtifact = metadata.artifacts.find((a) => a.step_type === "id_doc");
-                const selfieArtifact = metadata.artifacts.find((a) => a.step_type === "selfie");
+                const idArtifact = getLatestArtifactForStep(metadata.artifacts, "id_doc");
+                const selfieArtifact = getLatestArtifactForStep(metadata.artifacts, "selfie");
 
                 return idArtifact && selfieArtifact ? (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

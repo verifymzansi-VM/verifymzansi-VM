@@ -92,7 +92,7 @@ export function KycInlinePreview({
 
         // Find matching artifact for this step type
         const artifacts: Artifact[] = meta.artifacts || [];
-        const match = artifacts.find((a: Artifact) => a.step_type === stepType) || artifacts[0];
+        const match = artifacts.find((a: Artifact) => a.step_type === stepType);
 
         if (!match) {
           if (!cancelled) setError("No document uploaded");

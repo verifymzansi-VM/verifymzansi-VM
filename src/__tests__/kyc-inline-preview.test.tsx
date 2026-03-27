@@ -144,16 +144,20 @@ describe("KycInlinePreview", () => {
     });
 
     // First call = metadata
-    expect(mockFetch.mock.calls[0][0]).toBe("/api/admin/verification/evidence/metadata");
+    expect(String(mockFetch.mock.calls[0][0])).toContain(
+      "/api/admin/verification/evidence/metadata?"
+    );
+    expect(String(mockFetch.mock.calls[0][0])).toContain("stepId=step-1");
+    expect(String(mockFetch.mock.calls[0][0])).toContain("userId=user-1");
     expect(mockFetch.mock.calls[0][1]).toMatchObject({
-      method: "POST",
-      body: JSON.stringify({ stepId: "step-1", userId: "user-1" }),
+      method: "GET",
     });
     // Second call = blob
-    expect(mockFetch.mock.calls[1][0]).toBe("/api/admin/verification/evidence");
+    expect(String(mockFetch.mock.calls[1][0])).toContain(
+      "/api/admin/verification/evidence?artifactId=art-1"
+    );
     expect(mockFetch.mock.calls[1][1]).toMatchObject({
-      method: "POST",
-      body: JSON.stringify({ artifactId: "art-1" }),
+      method: "GET",
     });
 
     // Should create a blob URL for the thumbnail
@@ -186,6 +190,39 @@ describe("KycInlinePreview", () => {
     await waitFor(() => {
       expect(screen.getByText(/no document/i)).toBeDefined();
     });
+  });
+
+  it("does not fall back to an artifact from a different step type", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          ...MOCK_METADATA_RESPONSE,
+          artifacts: [
+            {
+              ...MOCK_METADATA_RESPONSE.artifacts[0],
+              id: "selfie-1",
+              step_type: "selfie",
+            },
+          ],
+        }),
+    });
+
+    render(
+      <KycInlinePreview
+        stepId="step-1"
+        userId="user-1"
+        stepType="id_doc"
+        onClickPreview={vi.fn()}
+      />
+    );
+
+    await triggerIntersection();
+
+    await waitFor(() => {
+      expect(screen.getByText(/no document/i)).toBeDefined();
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it("shows error state when metadata fetch fails", async () => {

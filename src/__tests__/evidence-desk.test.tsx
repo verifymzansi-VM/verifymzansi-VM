@@ -212,4 +212,48 @@ describe("EvidenceDeskClient", () => {
       expect(screen.getByText(/No artifact selected/i)).toBeDefined();
     });
   });
+
+  it("aligns the selected artifact with the selected step", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...METADATA_RESPONSE,
+        steps: [
+          {
+            ...METADATA_RESPONSE.steps[0],
+            id: "step-location",
+            step_type: "location",
+          },
+          METADATA_RESPONSE.steps[0],
+        ],
+        artifacts: [
+          {
+            ...METADATA_RESPONSE.artifacts[0],
+            id: "art-id",
+            step_type: "id_doc",
+            created_at: "2025-01-01T00:00:00Z",
+          },
+          {
+            ...METADATA_RESPONSE.artifacts[0],
+            id: "art-location",
+            step_type: "location",
+            artifact_kind: "proof_of_address",
+            created_at: "2025-01-02T00:00:00Z",
+          },
+        ],
+      }),
+    } as Response);
+
+    render(<EvidenceDeskClient initialUserId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("evidence-viewer")).toHaveTextContent("Viewing art-location");
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /id doc/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("evidence-viewer")).toHaveTextContent("Viewing art-id");
+    });
+  });
 });
