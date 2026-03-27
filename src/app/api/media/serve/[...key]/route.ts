@@ -39,6 +39,8 @@ function getClient(): S3Client {
 }
 
 // ── Extension → MIME fallback table ─────────────────────────────────────
+// Note: MOV support added to enable playback of legacy .mov files uploaded
+// before video format hardening (2026-03-28). New uploads accept only mp4/webm.
 const MIME_MAP: Record<string, string> = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
@@ -50,9 +52,12 @@ const MIME_MAP: Record<string, string> = {
   mp4: "video/mp4",
   webm: "video/webm",
   ogg: "video/ogg",
+  mov: "video/quicktime",
 };
 
-const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg"]);
+// Supported video extensions for streaming with Range request support.
+// MOV files added to support legacy uploads; new uploads restricted to mp4/webm.
+const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "mov"]);
 
 /**
  * Derive a human-friendly filename from the storage key.
