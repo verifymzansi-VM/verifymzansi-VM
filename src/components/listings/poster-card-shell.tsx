@@ -16,6 +16,8 @@ interface PosterCardShellProps {
   location: string;
   mediaUrl?: string | null;
   posterUrl?: string | null;
+  /** Explicit media type override for cases where URL extension is unavailable (e.g. blob URLs). */
+  isVideo?: boolean;
   mediaAlt?: string;
   /** Small text above title (price, date, etc.) */
   eyebrow?: string | null;
@@ -41,6 +43,7 @@ export function PosterCardShell({
   location,
   mediaUrl,
   posterUrl,
+  isVideo,
   mediaAlt,
   eyebrow,
   statusLabel,
@@ -59,7 +62,7 @@ export function PosterCardShell({
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
-  const hasVideo = isVideoUrl(mediaUrl);
+  const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
 
   return (
     <Link href={href} className={cn("group block h-full", className)}>

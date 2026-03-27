@@ -186,4 +186,15 @@ describe("ListingCard", () => {
     const card = screen.getByTestId("card");
     expect(card).toBeTruthy();
   });
+
+  it("renders video player for blob preview when explicitly marked as video", () => {
+    const blobUrl = "blob:http://localhost:3000/abc-123";
+
+    render(<ListingCard {...defaultProps} imageUrl={blobUrl} isVideo />);
+
+    const videoPlayer = screen.getByTestId("video-card-player");
+    expect(videoPlayer).toBeTruthy();
+    expect(videoPlayer).toHaveAttribute("data-src", blobUrl);
+    expect(screen.queryByAltText("Test Listing")).toBeNull();
+  });
 });

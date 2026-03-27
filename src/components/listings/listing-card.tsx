@@ -12,6 +12,7 @@ interface ListingCardProps {
   negotiable?: boolean;
   imageUrl?: string;
   posterUrl?: string;
+  isVideo?: boolean;
   province: string;
   city: string;
   category: string;
@@ -68,6 +69,7 @@ export const ListingCard = memo(function ListingCard({
   price,
   imageUrl,
   posterUrl,
+  isVideo,
   province,
   city,
   createdAt,
@@ -86,6 +88,7 @@ export const ListingCard = memo(function ListingCard({
       location={`${city}, ${province}`}
       mediaUrl={imageUrl}
       posterUrl={posterUrl}
+      isVideo={isVideo}
       mediaAlt={title}
       eyebrow={price > 0 ? formatZARShort(price) : null}
       eyebrowClassName="font-display text-sm font-bold tracking-[0.01em] text-white sm:text-base"
