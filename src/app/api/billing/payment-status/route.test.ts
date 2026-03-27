@@ -8,10 +8,10 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 function createRequest(url: string): NextRequest {
-  return {
+  const request = new Request(url);
+  return Object.assign(request, {
     nextUrl: new URL(url),
-    url,
-  } as unknown as NextRequest;
+  }) as NextRequest;
 }
 
 describe("GET /api/billing/payment-status", () => {

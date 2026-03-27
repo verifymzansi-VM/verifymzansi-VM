@@ -45,17 +45,22 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 }));
 
 function createMockRequest(body: Record<string, unknown>) {
-  const json = JSON.stringify(body);
-  return {
-    text: async () => json,
-    json: async () => body,
-    url: "https://verifymzansi.com/api/billing/change-plan",
-    headers: new Headers({
+  const url = "https://verifymzansi.com/api/billing/change-plan";
+  const request = new Request(url, {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: {
+      "content-type": "application/json",
       origin: "https://verifymzansi.com",
+      "sec-fetch-site": "same-origin",
       cookie: `vm_csrf=${CSRF_TOKEN}`,
       "x-csrf-token": CSRF_TOKEN,
-    }),
-  } as unknown as NextRequest;
+    },
+  });
+
+  return Object.assign(request, {
+    nextUrl: new URL(url),
+  }) as NextRequest;
 }
 
 describe("POST /api/billing/change-plan", () => {

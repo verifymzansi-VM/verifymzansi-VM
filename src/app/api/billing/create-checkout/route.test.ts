@@ -54,42 +54,47 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 
+function createBillingRequest(
+  body: Record<string, unknown>,
+  options?: { origin?: string; includeCsrf?: boolean; secFetchSite?: string }
+) {
+  const url = "https://verifymzansi.com/api/billing/create-checkout";
+  const includeCsrf = options?.includeCsrf ?? true;
+  const headers = new Headers({
+    "content-type": "application/json",
+    origin: options?.origin ?? "https://verifymzansi.com",
+    "sec-fetch-site": options?.secFetchSite ?? "same-origin",
+  });
+
+  if (includeCsrf) {
+    headers.set("cookie", `vm_csrf=${CSRF_TOKEN}`);
+    headers.set("x-csrf-token", CSRF_TOKEN);
+  }
+
+  const request = new Request(url, {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers,
+  });
+
+  return Object.assign(request, {
+    nextUrl: new URL(url),
+  }) as NextRequest;
+}
+
 function createMockRequest(body: Record<string, unknown>) {
-  const json = JSON.stringify(body);
-  return {
-    text: async () => json,
-    json: async () => body,
-    url: "https://verifymzansi.com/api/billing/create-checkout",
-    headers: new Headers({
-      origin: "https://verifymzansi.com",
-      cookie: `vm_csrf=${CSRF_TOKEN}`,
-      "x-csrf-token": CSRF_TOKEN,
-    }),
-  } as unknown as NextRequest;
+  return createBillingRequest(body);
 }
 
 function createCrossSiteRequest(body: Record<string, unknown>) {
-  const json = JSON.stringify(body);
-  return {
-    text: async () => json,
-    json: async () => body,
-    url: "https://verifymzansi.com/api/billing/create-checkout",
-    headers: new Headers({
-      origin: "https://evil.example",
-      cookie: `vm_csrf=${CSRF_TOKEN}`,
-      "x-csrf-token": CSRF_TOKEN,
-    }),
-  } as unknown as NextRequest;
+  return createBillingRequest(body, {
+    origin: "https://evil.example",
+    secFetchSite: "cross-site",
+  });
 }
 
 function createMissingCsrfRequest(body: Record<string, unknown>) {
-  const json = JSON.stringify(body);
-  return {
-    text: async () => json,
-    json: async () => body,
-    url: "https://verifymzansi.com/api/billing/create-checkout",
-    headers: new Headers({ origin: "https://verifymzansi.com" }),
-  } as unknown as NextRequest;
+  return createBillingRequest(body, { includeCsrf: false });
 }
 
 describe("POST /api/billing/create-checkout", () => {
