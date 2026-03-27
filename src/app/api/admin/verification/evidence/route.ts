@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     // Fetch artifact record
     const { data: artifact, error: artifactErr } = await adminClient
       .from("kyc_artifacts")
-      .select("id, user_id, r2_key, content_type, artifact_kind, step_type")
+      .select("id, user_id, r2_key, content_type, artifact_kind, step_type, status")
       .eq("id", artifactId)
       .single();
 
