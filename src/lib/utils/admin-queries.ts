@@ -5,6 +5,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
+import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import type { MarketplaceArea } from "@/types/enums";
 
 // ── Types ────────────────────────────────────────────────────
@@ -41,6 +42,17 @@ export interface PendingVerification {
   account_verification_status?: string | null;
   /** @deprecated Use account_display_name */
   /** @deprecated Use account_verification_status */
+}
+
+export interface PendingVerificationGroup {
+  user_id: string;
+  account_display_name: string;
+  account_verification_status?: string | null;
+  latest_created_at: string;
+  pending_step_count: number;
+  primary_step_id: string;
+  primary_step_type: string;
+  steps: PendingVerification[];
 }
 
 export interface AuditLogEntry {
@@ -417,12 +429,11 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
   // Get account profiles for each user
 
   const userIds = Array.from(new Set(steps.map((s) => s.user_id))) as string[];
-  const { data: profiles } = await supabase
-    .from(ACCOUNT_PROFILE_WRITE_TABLE)
-    .select("user_id, display_name, account_verification_status")
-    .in("user_id", userIds);
-
-  const profileMap = new Map((profiles || []).map((p) => [p.user_id, p] as const));
+  const profileMap = await getVerificationProfileMap(
+    supabase,
+    userIds,
+    "user_id, display_name, account_verification_status"
+  );
 
   return steps.map((s) => {
     const profile = profileMap.get(s.user_id);
@@ -432,6 +443,157 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
       account_verification_status: readAccountVerificationStatus(profile),
     };
   });
+}
+
+type VerificationProfileRecord = {
+  user_id: string;
+  display_name: string | null;
+  account_verification_status?: string | null;
+  account_status?: string | null;
+  strikes?: number | null;
+};
+
+function normalizeDisplayName(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function getVerificationProfileMap(
+  supabase: ReturnType<typeof createAdminClient>,
+  userIds: string[],
+  fields = "user_id, display_name, account_verification_status"
+): Promise<Map<string, VerificationProfileRecord>> {
+  if (userIds.length === 0) {
+    return new Map();
+  }
+
+  const { data: profiles } = await supabase
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
+    .select(fields)
+    .in("user_id", userIds);
+
+  const profileRows = (profiles || []) as unknown as VerificationProfileRecord[];
+  const profileMap = new Map(profileRows.map((profile) => [profile.user_id, profile] as const));
+
+  const missingProfileUserIds = userIds.filter(
+    (userId) => !normalizeDisplayName(profileMap.get(userId)?.display_name)
+  );
+
+  if (missingProfileUserIds.length === 0) {
+    return profileMap;
+  }
+
+  const repairedUserIds = (
+    await Promise.all(
+      missingProfileUserIds.map(async (userId) => {
+        const { data, error } = await supabase.auth.admin.getUserById(userId);
+        if (error || !data.user) {
+          return null;
+        }
+
+        const repairedProfile = await ensureAccountProfile(supabase, data.user);
+        return repairedProfile ? userId : null;
+      })
+    )
+  ).filter((userId): userId is string => Boolean(userId));
+
+  if (repairedUserIds.length === 0) {
+    return profileMap;
+  }
+
+  const { data: repairedProfiles } = await supabase
+    .from(ACCOUNT_PROFILE_WRITE_TABLE)
+    .select(fields)
+    .in("user_id", repairedUserIds);
+
+  const repairedRows = (repairedProfiles || []) as unknown as VerificationProfileRecord[];
+
+  for (const profile of repairedRows) {
+    profileMap.set(profile.user_id, profile);
+  }
+
+  return profileMap;
+}
+
+const VERIFICATION_STEP_DISPLAY_ORDER: Record<string, number> = {
+  id_doc: 0,
+  selfie: 1,
+  location: 2,
+  phone: 3,
+};
+
+function sortPendingVerificationSteps(a: PendingVerification, b: PendingVerification): number {
+  const orderA = VERIFICATION_STEP_DISPLAY_ORDER[a.step_type] ?? Number.MAX_SAFE_INTEGER;
+  const orderB = VERIFICATION_STEP_DISPLAY_ORDER[b.step_type] ?? Number.MAX_SAFE_INTEGER;
+
+  if (orderA !== orderB) {
+    return orderA - orderB;
+  }
+
+  return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+}
+
+export async function getPendingVerificationGroups(
+  limit = 50
+): Promise<PendingVerificationGroup[]> {
+  const pendingSteps = await getPendingVerifications(limit);
+
+  if (pendingSteps.length === 0) {
+    return [];
+  }
+
+  const groups = new Map<string, PendingVerificationGroup>();
+
+  for (const step of pendingSteps) {
+    const existing = groups.get(step.user_id);
+    if (!existing) {
+      groups.set(step.user_id, {
+        user_id: step.user_id,
+        account_display_name: step.account_display_name || "New Member",
+        account_verification_status: step.account_verification_status || null,
+        latest_created_at: step.created_at,
+        pending_step_count: 1,
+        primary_step_id: step.id,
+        primary_step_type: step.step_type,
+        steps: [step],
+      });
+      continue;
+    }
+
+    existing.steps.push(step);
+    existing.pending_step_count += 1;
+
+    const stepCreatedAt = new Date(step.created_at).getTime();
+    const latestCreatedAt = new Date(existing.latest_created_at).getTime();
+    if (stepCreatedAt >= latestCreatedAt) {
+      existing.latest_created_at = step.created_at;
+    }
+  }
+
+  return Array.from(groups.values())
+    .map((group) => {
+      const sortedSteps = [...group.steps].sort(sortPendingVerificationSteps);
+      const primaryStep = sortedSteps[0] ?? group.steps[0];
+      return {
+        ...group,
+        account_display_name:
+          sortedSteps.find((step) => normalizeDisplayName(step.account_display_name))
+            ?.account_display_name || group.account_display_name,
+        account_verification_status:
+          sortedSteps.find((step) => step.account_verification_status)
+            ?.account_verification_status || group.account_verification_status,
+        primary_step_id: primaryStep.id,
+        primary_step_type: primaryStep.step_type,
+        steps: sortedSteps,
+      };
+    })
+    .sort(
+      (a, b) => new Date(b.latest_created_at).getTime() - new Date(a.latest_created_at).getTime()
+    );
 }
 
 /** Get recent audit log entries */
@@ -543,12 +705,11 @@ export async function getDashboardKycQueue(limit = 50): Promise<DashboardKycItem
 
   const userIds = Array.from(new Set(steps.map((s) => s.user_id))) as string[];
 
-  const { data: profiles } = await supabase
-    .from(ACCOUNT_PROFILE_WRITE_TABLE)
-    .select("user_id, display_name, account_verification_status, account_status, strikes")
-    .in("user_id", userIds);
-
-  const profileMap = new Map((profiles || []).map((p) => [p.user_id, p] as const));
+  const profileMap = await getVerificationProfileMap(
+    supabase,
+    userIds,
+    "user_id, display_name, account_verification_status, account_status, strikes"
+  );
 
   return steps.map((s) => {
     const profile = profileMap.get(s.user_id);

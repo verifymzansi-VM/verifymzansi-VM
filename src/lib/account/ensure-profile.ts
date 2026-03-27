@@ -9,6 +9,15 @@ type MinimalUser = {
 
 const log = createLogger("EnsureProfile");
 
+function normalizeDisplayNameValue(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 /**
  * Derive a display name from a user's metadata or email prefix.
  */
@@ -17,15 +26,15 @@ export function getDefaultDisplayName(user: {
   user_metadata?: unknown;
 }): string {
   const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
-  const displayName = metadata.display_name;
-  const fullName = metadata.full_name;
+  const displayName = normalizeDisplayNameValue(metadata.display_name);
+  const fullName = normalizeDisplayNameValue(metadata.full_name);
 
-  if (typeof displayName === "string" && displayName.trim().length > 0) {
-    return displayName.trim();
+  if (displayName) {
+    return displayName;
   }
 
-  if (typeof fullName === "string" && fullName.trim().length > 0) {
-    return fullName.trim();
+  if (fullName) {
+    return fullName;
   }
 
   if (user.email) {
@@ -45,15 +54,42 @@ export async function ensureAccountProfile(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
   user: MinimalUser
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; display_name: string } | null> {
+  const resolvedDisplayName = getDefaultDisplayName(user);
   const { data: existing } = await admin
     .from(ACCOUNT_PROFILE_TABLE)
-    .select("id")
+    .select("id, display_name")
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (existing) {
-    return existing as { id: string };
+    const existingDisplayName = normalizeDisplayNameValue(existing.display_name);
+
+    if (existingDisplayName) {
+      return {
+        id: existing.id,
+        display_name: existingDisplayName,
+      };
+    }
+
+    const { data: repaired, error: repairError } = await admin
+      .from(ACCOUNT_PROFILE_TABLE)
+      .update({ display_name: resolvedDisplayName })
+      .eq("id", existing.id)
+      .eq("user_id", user.id)
+      .select("id, display_name")
+      .single();
+
+    if (repairError || !repaired) {
+      log.error("Failed to repair account profile display name", {
+        error: repairError?.message,
+        userId: user.id,
+      });
+      return null;
+    }
+
+    log.info("Repaired missing account profile display name", { userId: user.id });
+    return repaired as { id: string; display_name: string };
   }
 
   const { data: created, error: createError } = await admin
@@ -61,13 +97,13 @@ export async function ensureAccountProfile(
     .upsert(
       {
         user_id: user.id,
-        display_name: getDefaultDisplayName(user),
+        display_name: resolvedDisplayName,
         account_verification_status: "incomplete",
         account_status: "active",
       },
       { onConflict: "user_id" }
     )
-    .select("id")
+    .select("id, display_name")
     .single();
 
   if (createError || !created) {
@@ -79,5 +115,22 @@ export async function ensureAccountProfile(
   }
 
   log.info("Auto-created missing account profile", { userId: user.id });
-  return created as { id: string };
+  return created as { id: string; display_name: string };
+}
+
+export function resolveAccountDisplayName(options: {
+  profileDisplayName?: string | null;
+  email?: string | null;
+  user_metadata?: unknown;
+}): string {
+  const profileDisplayName = normalizeDisplayNameValue(options.profileDisplayName);
+
+  if (profileDisplayName) {
+    return profileDisplayName;
+  }
+
+  return getDefaultDisplayName({
+    email: options.email,
+    user_metadata: options.user_metadata,
+  });
 }

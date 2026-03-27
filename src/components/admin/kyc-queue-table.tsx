@@ -20,7 +20,6 @@ import {
   XCircle,
   RotateCcw,
   FileCheck,
-  User,
   Phone,
   Camera,
   MapPin,
@@ -31,6 +30,7 @@ import {
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { KycInlinePreview } from "./kyc-inline-preview";
+import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 
 const KycPreviewLightbox = dynamic(
   () => import("./kyc-preview-lightbox").then((m) => m.KycPreviewLightbox),
@@ -68,7 +68,7 @@ interface Artifact {
 }
 
 interface KycQueueTableProps {
-  steps: VerificationStep[];
+  groups: PendingVerificationGroup[];
   onDecisionComplete?: () => void;
   evidenceDeskEnabled?: boolean;
 }
@@ -99,7 +99,7 @@ const REASON_CODES = [
 ];
 
 export function KycQueueTable({
-  steps,
+  groups,
   onDecisionComplete,
   evidenceDeskEnabled = false,
 }: KycQueueTableProps) {
@@ -121,7 +121,7 @@ export function KycQueueTable({
     setLightboxArtifact(artifact);
   }, []);
 
-  if (!steps.length) {
+  if (!groups.length) {
     return (
       <div className="text-center py-6 text-muted-foreground">
         <FileCheck className="h-8 w-8 mx-auto mb-3 opacity-50" />
@@ -186,104 +186,147 @@ export function KycQueueTable({
   return (
     <>
       <div className="space-y-3">
-        {steps.map((step) => {
-          const StepIcon = STEP_ICONS[step.step_type] || FileCheck;
-          const stepLabel = STEP_LABELS[step.step_type] || step.step_type;
-          const displayName = step.account_display_name ?? step.account_display_name;
+        {groups.map((group) => {
+          const primaryStep =
+            group.steps.find((step) => step.id === group.primary_step_id) || group.steps[0];
+
+          if (!primaryStep) {
+            return null;
+          }
 
           return (
-            <Card key={step.id}>
+            <Card key={group.user_id}>
               <CardContent className="py-4">
-                <div className="flex items-center gap-4">
-                  {/* Inline document thumbnail */}
-                  <KycInlinePreview
-                    stepId={step.id}
-                    userId={step.user_id}
-                    stepType={step.step_type}
-                    onClickPreview={(artifact) => handlePreviewClick(step, artifact)}
-                  />
-                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                    <StepIcon className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">
-                        {displayName || (
-                          <span className="text-muted-foreground">
-                            <User className="h-3 w-3 inline mr-1" />
-                            {step.user_id.slice(0, 8)}...
-                          </span>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <KycInlinePreview
+                      stepId={primaryStep.id}
+                      userId={group.user_id}
+                      stepType={primaryStep.step_type}
+                      onClickPreview={(artifact) => handlePreviewClick(primaryStep, artifact)}
+                    />
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">
+                              {group.account_display_name}
+                            </span>
+                            <Badge variant="secondary" className="text-[10px]">
+                              {group.pending_step_count} pending
+                            </Badge>
+                            {group.account_verification_status ? (
+                              <Badge variant="outline" className="text-[10px] capitalize">
+                                {group.account_verification_status.replace(/_/g, " ")}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Latest submission {formatRelativeTime(group.latest_created_at)}
+                          </p>
+                        </div>
+                        {evidenceDeskEnabled && (
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
+                            title="View Evidence"
+                          >
+                            <Link href={`/admin/verification/evidence?userId=${group.user_id}`}>
+                              <Eye className="h-4 w-4 mr-1" />
+                              <span className="text-xs">Evidence</span>
+                            </Link>
+                          </Button>
                         )}
-                      </span>
-                      <Badge variant="outline" className="text-[10px]">
-                        {stepLabel}
-                      </Badge>
-                      <Badge
-                        variant={step.status === "pending" ? "default" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {step.status}
-                      </Badge>
-                      {step.reviewed_at && step.status === "pending" && (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] border-amber-500 text-amber-600"
-                        >
-                          Resubmission
-                        </Badge>
-                      )}
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {group.steps.map((step) => (
+                          <Badge
+                            key={`${group.user_id}-${step.id}`}
+                            variant="outline"
+                            className="text-[10px]"
+                          >
+                            {STEP_LABELS[step.step_type] || step.step_type}
+                          </Badge>
+                        ))}
+                      </div>
+
+                      <div className="space-y-2">
+                        {group.steps.map((step) => {
+                          const StepIcon = STEP_ICONS[step.step_type] || FileCheck;
+                          const stepLabel = STEP_LABELS[step.step_type] || step.step_type;
+
+                          return (
+                            <div
+                              key={step.id}
+                              className="flex flex-col gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-3 md:flex-row md:items-center md:justify-between"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-muted flex items-center justify-center">
+                                  <StepIcon className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-medium">{stepLabel}</span>
+                                    <Badge
+                                      variant={step.status === "pending" ? "default" : "secondary"}
+                                      className="text-[10px]"
+                                    >
+                                      {step.status}
+                                    </Badge>
+                                    {step.reviewed_at && step.status === "pending" && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] border-amber-500 text-amber-600"
+                                      >
+                                        Resubmission
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Submitted {formatRelativeTime(step.created_at)}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-1 flex-shrink-0 flex-wrap">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
+                                  onClick={() => openReview(step, "approved")}
+                                  title="Approve"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  <span className="hidden sm:inline text-xs">Approve</span>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 text-destructive hover:bg-destructive/10"
+                                  onClick={() => openReview(step, "rejected")}
+                                  title="Reject"
+                                >
+                                  <XCircle className="h-4 w-4 mr-1" />
+                                  <span className="hidden sm:inline text-xs">Reject</span>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                                  onClick={() => openReview(step, "needs_resubmission")}
+                                  title="Resubmit"
+                                >
+                                  <RotateCcw className="h-4 w-4 mr-1" />
+                                  <span className="hidden sm:inline text-xs">Resubmit</span>
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Submitted {formatRelativeTime(step.created_at)}
-                    </p>
-                  </div>
-                  <div className="flex gap-1 flex-shrink-0">
-                    {evidenceDeskEnabled && (
-                      <Button
-                        asChild
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
-                        title="View Evidence"
-                      >
-                        <Link
-                          href={`/admin/verification/evidence?stepId=${step.id}&userId=${step.user_id}`}
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          <span className="hidden sm:inline text-xs">Evidence</span>
-                        </Link>
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
-                      onClick={() => openReview(step, "approved")}
-                      title="Approve"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-1" />
-                      <span className="hidden sm:inline text-xs">Approve</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 text-destructive hover:bg-destructive/10"
-                      onClick={() => openReview(step, "rejected")}
-                      title="Reject"
-                    >
-                      <XCircle className="h-4 w-4 mr-1" />
-                      <span className="hidden sm:inline text-xs">Reject</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
-                      onClick={() => openReview(step, "needs_resubmission")}
-                      title="Resubmit"
-                    >
-                      <RotateCcw className="h-4 w-4 mr-1" />
-                      <span className="hidden sm:inline text-xs">Resubmit</span>
-                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -310,9 +353,7 @@ export function KycQueueTable({
                   <strong>{STEP_LABELS[selectedStep.step_type] || selectedStep.step_type}</strong>{" "}
                   for{" "}
                   <strong>
-                    {selectedStep.account_display_name ||
-                      selectedStep.account_display_name ||
-                      selectedStep.user_id.slice(0, 8) + "..."}
+                    {selectedStep.account_display_name || selectedStep.user_id.slice(0, 8) + "..."}
                   </strong>
                 </>
               )}

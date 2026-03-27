@@ -16,11 +16,22 @@ function createChainableMock(resolvedValue: unknown = { data: [], count: 0 }) {
 }
 
 const mockFrom = vi.fn();
+const mockGetUserById = vi.fn();
+const mockEnsureAccountProfile = vi.fn();
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: mockFrom,
+    auth: {
+      admin: {
+        getUserById: mockGetUserById,
+      },
+    },
   }),
+}));
+
+vi.mock("@/lib/account/ensure-profile", () => ({
+  ensureAccountProfile: (...args: unknown[]) => mockEnsureAccountProfile(...args),
 }));
 
 import {
@@ -28,6 +39,7 @@ import {
   getAreaCardCounts,
   getDashboardKycQueue,
   getExtendedPlatformStats,
+  getPendingVerificationGroups,
   getPendingVerifications,
   getPendingModerationCount,
   getRecentOtpAttempts,
@@ -40,6 +52,8 @@ import {
 describe("admin-queries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetUserById.mockResolvedValue({ data: { user: null }, error: null });
+    mockEnsureAccountProfile.mockResolvedValue(null);
   });
 
   describe("getAdminDashboardStats", () => {
@@ -178,6 +192,130 @@ describe("admin-queries", () => {
       expect(result[0].account_display_name).toBe("Thabo");
       expect(result[0].account_verification_status).toBe("pending_review");
       expect(result[0].account_display_name).toBe("Thabo");
+    });
+  });
+
+  describe("getPendingVerificationGroups", () => {
+    it("groups multiple pending steps under one user", async () => {
+      const steps = [
+        {
+          id: "s1",
+          user_id: "u1",
+          step_type: "selfie",
+          status: "pending",
+          created_at: "2024-01-01T00:00:00.000Z",
+          reviewed_at: null,
+          risk_level: null,
+          risk_score: null,
+          auto_status: null,
+        },
+        {
+          id: "s2",
+          user_id: "u1",
+          step_type: "id_doc",
+          status: "pending",
+          created_at: "2024-01-02T00:00:00.000Z",
+          reviewed_at: null,
+          risk_level: null,
+          risk_score: null,
+          auto_status: null,
+        },
+      ];
+      const profiles = [
+        {
+          user_id: "u1",
+          display_name: "Thabo Tester",
+          account_verification_status: "pending_review",
+        },
+      ];
+
+      let callCount = 0;
+      mockFrom.mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) {
+          return createChainableMock({ data: steps });
+        }
+
+        return createChainableMock({ data: profiles });
+      });
+
+      const result = await getPendingVerificationGroups();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].user_id).toBe("u1");
+      expect(result[0].account_display_name).toBe("Thabo Tester");
+      expect(result[0].pending_step_count).toBe(2);
+      expect(result[0].steps).toHaveLength(2);
+      expect(result[0].steps.map((step) => step.step_type)).toEqual(["id_doc", "selfie"]);
+      expect(result[0].primary_step_type).toBe("id_doc");
+    });
+
+    it("repairs missing display names using ensureAccountProfile fallback", async () => {
+      const steps = [
+        {
+          id: "s1",
+          user_id: "u-repair",
+          step_type: "id_doc",
+          status: "pending",
+          created_at: "2024-01-03T00:00:00.000Z",
+          reviewed_at: null,
+          risk_level: null,
+          risk_score: null,
+          auto_status: null,
+        },
+      ];
+
+      let callCount = 0;
+      mockFrom.mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) {
+          return createChainableMock({ data: steps });
+        }
+
+        if (callCount === 2) {
+          return createChainableMock({
+            data: [
+              {
+                user_id: "u-repair",
+                display_name: "   ",
+                account_verification_status: "pending_review",
+              },
+            ],
+          });
+        }
+
+        return createChainableMock({
+          data: [
+            {
+              user_id: "u-repair",
+              display_name: "Recovered Name",
+              account_verification_status: "pending_review",
+            },
+          ],
+        });
+      });
+
+      mockGetUserById.mockResolvedValue({
+        data: {
+          user: {
+            id: "u-repair",
+            email: "recovered@example.com",
+            user_metadata: { display_name: "Recovered Name" },
+          },
+        },
+        error: null,
+      });
+      mockEnsureAccountProfile.mockResolvedValue({
+        id: "profile-repair",
+        display_name: "Recovered Name",
+      });
+
+      const result = await getPendingVerificationGroups();
+
+      expect(mockGetUserById).toHaveBeenCalledWith("u-repair");
+      expect(mockEnsureAccountProfile).toHaveBeenCalledTimes(1);
+      expect(result).toHaveLength(1);
+      expect(result[0].account_display_name).toBe("Recovered Name");
     });
   });
 

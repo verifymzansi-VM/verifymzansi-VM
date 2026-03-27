@@ -36,18 +36,18 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized", code: "unauthorized" }, { status: 401 });
     }
 
     const role = await verifyStaffActorRoleFromDb(user);
     if (!role) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json({ error: "Forbidden", code: "forbidden" }, { status: 403 });
     }
 
     const rl = checkLocalRateLimit(user.id, "admin:evidence:view");
     if (rl.limited) {
       return NextResponse.json(
-        { error: "Too many requests" },
+        { error: "Too many requests", code: "rate_limited" },
         { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
       );
     }
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (artifactErr || !artifact) {
-      return NextResponse.json({ error: "Artifact not found" }, { status: 404 });
+      return NextResponse.json({ error: "Artifact not found", code: "not_found" }, { status: 404 });
     }
 
     const REVIEWABLE_STATES = [
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
         artifactId,
       });
       return NextResponse.json(
-        { error: "No active verification case for this user" },
+        { error: "No active verification case for this user", code: "no_active_case" },
         { status: 403 }
       );
     }
@@ -116,7 +116,10 @@ export async function GET(request: NextRequest) {
         }
       );
       return NextResponse.json(
-        { error: "Artifact is not linked to the current verification session" },
+        {
+          error: "Artifact is not linked to the current verification session",
+          code: "not_linked",
+        },
         { status: 403 }
       );
     }
@@ -125,7 +128,10 @@ export async function GET(request: NextRequest) {
     const ipHashSecret = process.env.IP_HASH_SECRET;
     if (!ipHashSecret && process.env.NODE_ENV === "production") {
       log.error("IP_HASH_SECRET not configured in production");
-      return NextResponse.json({ error: "Service configuration error" }, { status: 503 });
+      return NextResponse.json(
+        { error: "Service configuration error", code: "server_error" },
+        { status: 503 }
+      );
     }
 
     // Log evidence access
@@ -161,10 +167,18 @@ export async function GET(request: NextRequest) {
     try {
       decryptedBuffer = await downloadKycDocument(artifact.r2_key);
     } catch (downloadErr) {
+      const downloadMessage = downloadErr instanceof Error ? downloadErr.message : "unknown error";
       log.error("Failed to download/decrypt artifact", {
-        error: downloadErr instanceof Error ? downloadErr.message : "unknown error",
+        error: downloadMessage,
       });
-      return NextResponse.json({ error: "Failed to retrieve artifact" }, { status: 500 });
+      const isMissingFile = /not found|no such key|nosuchkey/i.test(downloadMessage);
+      return NextResponse.json(
+        {
+          error: isMissingFile ? "Artifact file is missing" : "Failed to retrieve artifact",
+          code: isMissingFile ? "missing_file" : "server_error",
+        },
+        { status: isMissingFile ? 404 : 500 }
+      );
     }
 
     // Determine content type — stored content_type may be 'application/octet-stream'
@@ -187,7 +201,10 @@ export async function GET(request: NextRequest) {
       error: err instanceof Error ? err.message : "unknown error",
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error", code: "server_error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -239,6 +256,9 @@ export async function POST(request: NextRequest) {
     log.error("POST wrapper error", {
       error: err instanceof Error ? err.message : "unknown error",
     });
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error", code: "server_error" },
+      { status: 500 }
+    );
   }
 }

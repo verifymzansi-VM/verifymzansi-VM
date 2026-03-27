@@ -11,19 +11,12 @@ import { FileCheck, Flag, BarChart3, Clock, AlertCircle, Shield } from "lucide-r
 import { Card, CardContent } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import type { MarketplaceArea } from "@/types/enums";
+import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 
 interface AreaAdminTabsProps {
   area: MarketplaceArea;
   areaLabel: string;
-  pendingVerifications: Array<{
-    id: string;
-    user_id: string;
-    step_type: string;
-    status: string;
-    created_at: string;
-    account_display_name?: string | null;
-    account_verification_status?: string | null;
-  }>;
+  pendingVerifications: PendingVerificationGroup[];
   pendingContent: Array<{
     id: string;
     title?: string;
@@ -185,7 +178,7 @@ export function AreaAdminTabs({
             Account KYC Queue{" "}
             <span className="text-xs text-muted-foreground font-normal">(Global — all areas)</span>
           </h3>
-          <KycQueueTable steps={pendingVerifications} onDecisionComplete={handleRefresh} />
+          <KycQueueTable groups={pendingVerifications} onDecisionComplete={handleRefresh} />
         </div>
 
         {/* Content Publish Queue — Area-scoped */}

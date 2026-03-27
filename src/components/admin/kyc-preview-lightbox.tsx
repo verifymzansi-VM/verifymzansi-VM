@@ -26,6 +26,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import Link from "next/link";
+import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -119,7 +120,7 @@ export function KycPreviewLightbox({
   const [reasonNote, setReasonNote] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const displayName = step.account_display_name ?? step.account_display_name;
+  const displayName = step.account_display_name || step.user_id.slice(0, 8) + "...";
 
   const isImage = artifact.content_type.startsWith("image/");
   const isPdf = artifact.content_type === "application/pdf";
@@ -147,7 +148,9 @@ export function KycPreviewLightbox({
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `HTTP ${res.status}`);
+          throw new Error(
+            getKycEvidenceErrorMessage(data.code, data.error || `HTTP ${res.status}`)
+          );
         }
         const blob = await res.blob();
         if (!cancelled) {
@@ -252,9 +255,7 @@ export function KycPreviewLightbox({
                 Document Preview
               </DialogTitle>
               <DialogDescription className="flex items-center gap-2 mt-1">
-                <span className="font-medium">
-                  {displayName || step.user_id.slice(0, 8) + "..."}
-                </span>
+                <span className="font-medium">{displayName}</span>
                 <Badge variant="outline" className="text-[10px]">
                   {STEP_LABELS[step.step_type] || step.step_type}
                 </Badge>

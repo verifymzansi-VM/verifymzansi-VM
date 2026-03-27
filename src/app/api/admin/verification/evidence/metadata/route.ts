@@ -47,18 +47,18 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized", code: "unauthorized" }, { status: 401 });
     }
 
     const role = await verifyStaffActorRoleFromDb(user);
     if (!role) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json({ error: "Forbidden", code: "forbidden" }, { status: 403 });
     }
 
     const rl = checkLocalRateLimit(user.id, "admin:evidence:metadata");
     if (rl.limited) {
       return NextResponse.json(
-        { error: "Too many requests" },
+        { error: "Too many requests", code: "rate_limited" },
         { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
       );
     }
@@ -93,7 +93,10 @@ export async function GET(request: NextRequest) {
     const { data: steps, error: stepsErr } = await stepsQuery;
 
     if (stepsErr || !steps || steps.length === 0) {
-      return NextResponse.json({ error: "Verification step(s) not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Verification step(s) not found", code: "not_found" },
+        { status: 404 }
+      );
     }
 
     const targetUserId = steps[0].user_id;
@@ -114,12 +117,22 @@ export async function GET(request: NextRequest) {
         targetUserId: userId,
       });
       return NextResponse.json(
-        { error: "No active verification case for this user" },
+        { error: "No active verification case for this user", code: "no_active_case" },
         { status: 403 }
       );
     }
 
     const allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, targetUserId);
+
+    if (allowedArtifactIds.length === 0) {
+      return NextResponse.json(
+        {
+          error: "Evidence is not linked to the current verification session",
+          code: "not_linked",
+        },
+        { status: 403 }
+      );
+    }
 
     // Fetch only artifacts linked to the current verification session.
     let artifacts: Array<Record<string, unknown>> = [];
@@ -206,7 +219,10 @@ export async function GET(request: NextRequest) {
       error: err instanceof Error ? err.message : "unknown error",
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error", code: "server_error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -245,6 +261,9 @@ export async function POST(request: NextRequest) {
     log.error("POST wrapper error", {
       error: err instanceof Error ? err.message : "unknown error",
     });
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error", code: "server_error" },
+      { status: 500 }
+    );
   }
 }

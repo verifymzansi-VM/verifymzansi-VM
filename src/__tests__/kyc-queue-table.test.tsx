@@ -70,7 +70,6 @@ vi.mock("lucide-react", () => ({
   XCircle: () => React.createElement("span", null, "✗"),
   RotateCcw: () => React.createElement("span", null, "↺"),
   FileCheck: () => React.createElement("span", null, "📄"),
-  User: () => React.createElement("span", null, "👤"),
   Phone: () => React.createElement("span", null, "📞"),
   Camera: () => React.createElement("span", null, "📷"),
   MapPin: () => React.createElement("span", null, "📍"),
@@ -88,24 +87,68 @@ vi.mock("lucide-react", () => ({
 
 import { KycQueueTable } from "@/components/admin/kyc-queue-table";
 
-const mockSteps = [
+const now = new Date().toISOString();
+const groupedItems = [
   {
-    id: "step-1",
     user_id: "user-1",
-    step_type: "id_doc",
-    status: "pending",
-    created_at: new Date().toISOString(),
     account_display_name: "John Doe",
     account_verification_status: "pending_review",
+    latest_created_at: now,
+    pending_step_count: 2,
+    primary_step_id: "step-1",
+    primary_step_type: "id_doc",
+    steps: [
+      {
+        id: "step-1",
+        user_id: "user-1",
+        step_type: "id_doc",
+        status: "pending",
+        created_at: now,
+        reviewed_at: null,
+        risk_level: null,
+        risk_score: null,
+        auto_status: null,
+        account_display_name: "John Doe",
+        account_verification_status: "pending_review",
+      },
+      {
+        id: "step-2",
+        user_id: "user-1",
+        step_type: "selfie",
+        status: "pending",
+        created_at: now,
+        reviewed_at: null,
+        risk_level: null,
+        risk_score: null,
+        auto_status: null,
+        account_display_name: "John Doe",
+        account_verification_status: "pending_review",
+      },
+    ],
   },
   {
-    id: "step-2",
     user_id: "user-2",
-    step_type: "selfie",
-    status: "pending",
-    created_at: new Date().toISOString(),
-    account_display_name: null,
+    account_display_name: "New Member",
     account_verification_status: "pending_review",
+    latest_created_at: now,
+    pending_step_count: 1,
+    primary_step_id: "step-3",
+    primary_step_type: "location",
+    steps: [
+      {
+        id: "step-3",
+        user_id: "user-2",
+        step_type: "location",
+        status: "pending",
+        created_at: now,
+        reviewed_at: null,
+        risk_level: null,
+        risk_score: null,
+        auto_status: null,
+        account_display_name: "New Member",
+        account_verification_status: "pending_review",
+      },
+    ],
   },
 ];
 
@@ -116,23 +159,25 @@ describe("KycQueueTable", () => {
   });
 
   it("renders empty state when no steps", () => {
-    render(React.createElement(KycQueueTable, { steps: [] }));
+    render(React.createElement(KycQueueTable, { groups: [] }));
     expect(screen.getByText(/no pending/i)).toBeInTheDocument();
   });
 
-  it("renders step cards for each pending step", () => {
-    render(React.createElement(KycQueueTable, { steps: mockSteps }));
+  it("renders one card per user group", () => {
+    render(React.createElement(KycQueueTable, { groups: groupedItems }));
     expect(screen.getByText("John Doe")).toBeInTheDocument();
+    expect(screen.getByText("New Member")).toBeInTheDocument();
     expect(screen.getAllByTestId("card")).toHaveLength(2);
   });
 
-  it("shows truncated user_id when no display name", () => {
-    render(React.createElement(KycQueueTable, { steps: mockSteps }));
-    expect(screen.getByText(/user-2/)).toBeInTheDocument();
+  it("renders all grouped document chips under one user", () => {
+    render(React.createElement(KycQueueTable, { groups: groupedItems }));
+    expect(screen.getAllByText("ID Document").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Selfie Verification").length).toBeGreaterThan(0);
   });
 
   it("opens approve dialog on approve click", async () => {
-    render(React.createElement(KycQueueTable, { steps: mockSteps }));
+    render(React.createElement(KycQueueTable, { groups: groupedItems }));
     const approveButtons = screen.getAllByTitle("Approve");
     fireEvent.click(approveButtons[0]);
     await waitFor(() => {
@@ -142,7 +187,7 @@ describe("KycQueueTable", () => {
   });
 
   it("opens reject dialog on reject click", async () => {
-    render(React.createElement(KycQueueTable, { steps: mockSteps }));
+    render(React.createElement(KycQueueTable, { groups: groupedItems }));
     const rejectButtons = screen.getAllByTitle("Reject");
     fireEvent.click(rejectButtons[0]);
     await waitFor(() => {
@@ -154,16 +199,19 @@ describe("KycQueueTable", () => {
   it("shows evidence link when evidenceDeskEnabled", () => {
     render(
       React.createElement(KycQueueTable, {
-        steps: mockSteps,
+        groups: groupedItems,
         evidenceDeskEnabled: true,
       })
     );
     const evidenceLinks = screen.getAllByTitle("View Evidence");
     expect(evidenceLinks.length).toBeGreaterThan(0);
+    const links = screen.getAllByRole("link", { name: /evidence/i });
+    expect(links[0]).toHaveAttribute("href", "/admin/verification/evidence?userId=user-1");
+    expect(links[1]).toHaveAttribute("href", "/admin/verification/evidence?userId=user-2");
   });
 
   it("hides evidence link when evidenceDeskEnabled is false", () => {
-    render(React.createElement(KycQueueTable, { steps: mockSteps }));
+    render(React.createElement(KycQueueTable, { groups: groupedItems }));
     expect(screen.queryAllByTitle("View Evidence")).toHaveLength(0);
   });
 });

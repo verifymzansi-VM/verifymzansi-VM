@@ -480,9 +480,7 @@ export function DashboardKycPanel({
                 <>
                   {STEP_LABELS[dialog.step.step_type] || dialog.step.step_type} for{" "}
                   <strong>
-                    {dialog.step.account_display_name ||
-                      dialog.step.account_display_name ||
-                      dialog.step.user_id.slice(0, 8) + "…"}
+                    {dialog.step.account_display_name || dialog.step.user_id.slice(0, 8) + "…"}
                   </strong>
                 </>
               )}

@@ -146,6 +146,7 @@ describe("Evidence Metadata API", () => {
 
       const body = await res.json();
       expect(body.error).toBe("Unauthorized");
+      expect(body.code).toBe("unauthorized");
     });
 
     it("returns 403 for a non-admin/moderator role", async () => {
@@ -160,6 +161,7 @@ describe("Evidence Metadata API", () => {
 
       const body = await res.json();
       expect(body.error).toBe("Forbidden");
+      expect(body.code).toBe("forbidden");
     });
 
     it("returns 403 when role is missing", async () => {
@@ -210,6 +212,38 @@ describe("Evidence Metadata API", () => {
 
       const body = await res.json();
       expect(body.error).toContain("not found");
+      expect(body.code).toBe("not_found");
+    });
+
+    it("returns 403 not_linked when the active verification session has no linked artifacts", async () => {
+      mockAuth({ id: "admin-1", app_metadata: { role: "admin" } });
+
+      mockFrom.mockImplementation((table: string) => {
+        switch (table) {
+          case "verification_steps":
+            return chainStub([MOCK_STEP]);
+          case "verification_sessions":
+            return chainStub({
+              id_artifact_id: null,
+              selfie_artifact_id: null,
+              location_submitted_at: null,
+            });
+          default:
+            return chainStub([]);
+        }
+      });
+
+      const res = await GET(
+        createMockNextRequest(
+          "/api/admin/verification/evidence/metadata?stepId=00000000-0000-0000-0000-000000000010"
+        )
+      );
+
+      expect(res.status).toBe(403);
+
+      const body = await res.json();
+      expect(body.code).toBe("not_linked");
+      expect(body.error).toContain("not linked");
     });
   });
 
@@ -404,10 +438,11 @@ describe("Evidence Metadata API", () => {
           "/api/admin/verification/evidence/metadata?stepId=00000000-0000-0000-0000-000000000010"
         )
       );
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(403);
 
       const body = await res.json();
-      expect(body.artifacts).toEqual([]);
+      expect(body.code).toBe("not_linked");
+      expect(body.error).toContain("not linked");
     });
   });
 });

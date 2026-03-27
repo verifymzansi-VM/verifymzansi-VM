@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Loader2, ImageIcon, FileText, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
 
 interface Artifact {
   id: string;
@@ -83,7 +84,10 @@ export function KycInlinePreview({
           body: JSON.stringify({ stepId, userId }),
         });
         if (!metaRes.ok) {
-          throw new Error("Failed to load metadata");
+          const data = await metaRes.json().catch(() => null);
+          throw new Error(
+            getKycEvidenceErrorMessage(data?.code, data?.error || "Failed to load metadata")
+          );
         }
         const meta = await metaRes.json();
 
@@ -105,7 +109,10 @@ export function KycInlinePreview({
           body: JSON.stringify({ artifactId: match.id }),
         });
         if (!evidenceRes.ok) {
-          throw new Error("Failed to load document");
+          const data = await evidenceRes.json().catch(() => null);
+          throw new Error(
+            getKycEvidenceErrorMessage(data?.code, data?.error || "Failed to load document")
+          );
         }
         const blob = await evidenceRes.blob();
         if (!cancelled) {

@@ -103,8 +103,22 @@ describe("Feature-flag gating: Evidence Desk", () => {
       step_type: "id_doc",
       status: "pending",
       created_at: "2025-01-01T00:00:00Z",
+      reviewed_at: null,
+      risk_level: null,
+      risk_score: null,
+      auto_status: null,
       account_display_name: "Test Account",
       account_verification_status: "pending",
+    };
+    const MOCK_GROUP = {
+      user_id: "seller-1",
+      account_display_name: "Test Account",
+      account_verification_status: "pending",
+      latest_created_at: "2025-01-01T00:00:00Z",
+      pending_step_count: 1,
+      primary_step_id: "step-1",
+      primary_step_type: "id_doc",
+      steps: [MOCK_STEP],
     };
 
     it("hides Evidence button when evidenceDeskEnabled is false", async () => {
@@ -113,7 +127,7 @@ describe("Feature-flag gating: Evidence Desk", () => {
 
       render(
         <KycQueueTable
-          steps={[MOCK_STEP]}
+          groups={[MOCK_GROUP]}
           onDecisionComplete={vi.fn()}
           evidenceDeskEnabled={false}
         />
@@ -127,7 +141,7 @@ describe("Feature-flag gating: Evidence Desk", () => {
 
       render(
         <KycQueueTable
-          steps={[MOCK_STEP]}
+          groups={[MOCK_GROUP]}
           onDecisionComplete={vi.fn()}
           evidenceDeskEnabled={true}
         />

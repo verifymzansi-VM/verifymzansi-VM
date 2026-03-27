@@ -1,5 +1,41 @@
 # VerifyMzansi — Recent Development Log
 
+## Admin KYC Queue Grouping and Evidence Reliability (2026-03-27)
+
+- **Queue UX redesign:** Reworked admin KYC queue rendering from per-step cards
+  to per-user grouped cards so all pending documents for one user are displayed
+  together while keeping approve/reject/resubmit actions step-scoped.
+- **Root-cause name repair:** Hardened profile hydration by updating
+  `ensureAccountProfile()` to repair missing/blank `display_name` values and
+  returning normalized display names instead of only creating missing rows.
+  Added OTP verification pre-check to ensure account profiles are repaired
+  before verification state is promoted.
+- **Admin query fallback repair path:** `getPendingVerifications()` and
+  dashboard queue lookups now repair missing profile names through
+  `auth.admin.getUserById` + `ensureAccountProfile` before rendering results.
+- **Evidence error contract:** Added machine-readable evidence error codes
+  across metadata and evidence proxy routes (`unauthorized`, `forbidden`,
+  `no_active_case`, `not_linked`, `not_found`, `missing_file`, `rate_limited`,
+  `server_error`) and mapped them in admin preview/lightbox components for
+  actionable UI messages with retry.
+- **Intentional security behavior:** Metadata requests with no session-linked
+  artifacts now return explicit `403 not_linked` instead of an empty artifact
+  list so admins can distinguish linkage failures from normal empty states.
+- **Fallback cleanup:** Removed duplicated display-name fallback logic in admin
+  verification queue/lightbox/dashboard surfaces.
+- **Regression coverage added/updated:**
+  - grouped queue rendering and evidence-link behavior,
+  - missing-name repair fallback in grouped query path,
+  - evidence metadata status/code assertions,
+  - inline preview error badge mapping,
+  - profile helper unit tests for create/repair/fallback behavior.
+- **Validation executed:**
+  - Focused Vitest: admin queries, queue table, inline preview, evidence
+    metadata, evidence gating.
+  - Security/auth Vitest: evidence access and KYC security checks.
+  - Playwright: `e2e/kyc-verification.spec.ts` (chromium) passed.
+  - Full `pnpm typecheck` and focused lint on touched files passed.
+
 ## Next.js 16.2.0 Rollback to 16.1.5 (2026-03-20)
 
 - **Reason for rollback:** Production started returning Cloudflare 1101

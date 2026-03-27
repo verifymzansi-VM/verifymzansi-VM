@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { AreaAdminTabs } from "@/components/admin/area-admin-tabs";
 import {
-  getPendingVerifications,
+  getPendingVerificationGroups,
   getPendingContent,
   getAreaReports,
   getRecentActivity,
@@ -30,12 +30,16 @@ export default async function AdminBusinessesPage() {
 
   const [pendingVerifications, pendingContent, reports, activity, actionsToday] = await Promise.all(
     [
-      getPendingVerifications(),
+      getPendingVerificationGroups(),
       getPendingContent("MZANSI_BUSINESS"),
       getAreaReports("MZANSI_BUSINESS"),
       getRecentActivity(20, "MZANSI_BUSINESS"),
       getActionsToday("MZANSI_BUSINESS"),
     ]
+  );
+  const pendingVerificationCount = pendingVerifications.reduce(
+    (count, group) => count + group.steps.length,
+    0
   );
 
   const highSeverityOverdue = reports.filter((r: DashboardReport) => {
@@ -62,7 +66,7 @@ export default async function AdminBusinessesPage() {
         reports={reports}
         activityEntries={activity}
         overviewStats={{
-          pendingVerificationCount: pendingVerifications.length,
+          pendingVerificationCount,
           pendingFlagCount: reports.length,
           highSeverityOverdue,
           pendingContentCount: pendingContent.length,

@@ -18,6 +18,7 @@ describe("Health route", () => {
       checks: {
         config: { status: "ok", errorCount: 0, warningCount: 0 },
         supabase: { status: "ok", detail: "Supabase query probe succeeded" },
+        schema: { status: "ok", detail: "Schema verification passed" },
         audit: { status: "ok", failureCount: 0 },
       },
     });
@@ -41,6 +42,7 @@ describe("Health route", () => {
       checks: {
         config: { status: "degraded", errorCount: 1, warningCount: 0, failedChecks: ["App URL"] },
         supabase: { status: "degraded", detail: "Supabase launch probe failed" },
+        schema: { status: "ok", detail: "Schema verification passed" },
         audit: { status: "ok", failureCount: 0 },
       },
     });

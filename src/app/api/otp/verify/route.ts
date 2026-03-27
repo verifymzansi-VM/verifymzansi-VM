@@ -21,7 +21,7 @@ const LOCKOUT_MS = 15 * 60 * 1000;
 const OTP_PBKDF2_ITERATIONS = 100000;
 
 // Re-exported from shared module
-import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
+import { ensureAccountProfile, getDefaultDisplayName } from "@/lib/account/ensure-profile";
 
 /** Convert a hex string to Uint8Array */
 function fromHex(hex: string): Uint8Array {
@@ -82,11 +82,24 @@ async function finalizePhoneVerification(
   nowIso: string,
   otpLogLookup: { phone: string; otpHash: string }
 ): Promise<{ success: true } | { success: false; error: string; status: number }> {
+  const ensuredProfile = await ensureAccountProfile(adminSupabase, user);
+  if (!ensuredProfile) {
+    return {
+      success: false,
+      error: "Failed to prepare your account profile for phone verification.",
+      status: 500,
+    };
+  }
+
   let { data: profile } = await supabase
     .from(ACCOUNT_PROFILE_WRITE_TABLE)
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
+
+  if (!profile) {
+    profile = { id: ensuredProfile.id };
+  }
 
   if (!profile) {
     const { data: createdProfile, error: createProfileError } = await supabase

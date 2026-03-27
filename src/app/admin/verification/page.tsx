@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { VerificationAlertBanner } from "@/components/admin/verification-alert-banner";
 import { KycQueueClient } from "./kyc-queue-client";
-import { getPendingVerifications } from "@/lib/utils/admin-queries";
+import { getPendingVerificationGroups } from "@/lib/utils/admin-queries";
 import { isStaff } from "@/lib/auth/roles";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 
@@ -22,8 +22,9 @@ export default async function AdminVerificationPage() {
     redirect("/dashboard");
   }
 
-  const pendingSteps = await getPendingVerifications(100);
+  const pendingGroups = await getPendingVerificationGroups(100);
   const evidenceDeskEnabled = await isFeatureEnabled("kyc_evidence_desk");
+  const pendingRequestCount = pendingGroups.reduce((count, group) => count + group.steps.length, 0);
 
   return (
     <div className="space-y-6">
@@ -33,13 +34,13 @@ export default async function AdminVerificationPage() {
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Verification" }]}
       >
         <Badge variant="outline" className="gap-1">
-          {pendingSteps.length} Pending
+          {pendingRequestCount} Pending
         </Badge>
       </PageHeader>
 
-      <VerificationAlertBanner pendingCount={pendingSteps.length} />
+      <VerificationAlertBanner pendingCount={pendingRequestCount} />
 
-      <KycQueueClient initialSteps={pendingSteps} evidenceDeskEnabled={evidenceDeskEnabled} />
+      <KycQueueClient initialGroups={pendingGroups} evidenceDeskEnabled={evidenceDeskEnabled} />
     </div>
   );
 }

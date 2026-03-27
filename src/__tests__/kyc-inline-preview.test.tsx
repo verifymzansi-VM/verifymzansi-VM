@@ -192,6 +192,7 @@ describe("KycInlinePreview", () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
+      json: () => Promise.resolve({ code: "not_linked", error: "Not linked" }),
     });
 
     render(
@@ -206,7 +207,35 @@ describe("KycInlinePreview", () => {
     await triggerIntersection();
 
     await waitFor(() => {
-      expect(screen.getByText(/failed to load metadata/i)).toBeDefined();
+      expect(screen.getByText(/not linked to active session/i)).toBeDefined();
+    });
+  });
+
+  it("shows missing file when the evidence blob cannot be retrieved", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(MOCK_METADATA_RESPONSE),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ code: "missing_file", error: "Artifact file is missing" }),
+      });
+
+    render(
+      <KycInlinePreview
+        stepId="step-1"
+        userId="user-1"
+        stepType="id_doc"
+        onClickPreview={vi.fn()}
+      />
+    );
+
+    await triggerIntersection();
+
+    await waitFor(() => {
+      expect(screen.getByText(/missing file/i)).toBeDefined();
     });
   });
 

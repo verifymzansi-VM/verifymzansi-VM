@@ -2,29 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { KycQueueTable } from "@/components/admin/kyc-queue-table";
-
-interface PendingStep {
-  id: string;
-  user_id: string;
-  step_type: string;
-  status: string;
-  created_at: string;
-  account_display_name?: string | null;
-  account_verification_status?: string | null;
-}
+import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 
 export function KycQueueClient({
-  initialSteps,
+  initialGroups,
   evidenceDeskEnabled = false,
 }: {
-  initialSteps: PendingStep[];
+  initialGroups: PendingVerificationGroup[];
   evidenceDeskEnabled?: boolean;
 }) {
   const router = useRouter();
 
   return (
     <KycQueueTable
-      steps={initialSteps}
+      groups={initialGroups}
       onDecisionComplete={() => router.refresh()}
       evidenceDeskEnabled={evidenceDeskEnabled}
     />
