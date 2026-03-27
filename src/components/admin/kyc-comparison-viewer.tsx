@@ -84,6 +84,10 @@ export function KycComparisonViewer({
 
         if (!metaRes.ok) {
           const data = await metaRes.json().catch(() => ({}));
+          if (data?.code === "not_found" || data?.code === "not_linked") {
+            setError("No ID document or selfie uploaded yet");
+            return;
+          }
           const errorMsg = getKycEvidenceErrorMessage(
             data?.code,
             data?.error || `Metadata error: ${metaRes.status}`

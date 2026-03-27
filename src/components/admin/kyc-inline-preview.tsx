@@ -110,6 +110,10 @@ export function KycInlinePreview({
         });
         if (!metaRes.ok) {
           const data = await metaRes.json().catch(() => null);
+          if (data?.code === "not_found" || data?.code === "not_linked") {
+            if (!cancelled) setError("No document uploaded");
+            return;
+          }
           throw new Error(
             getKycEvidenceErrorMessage(data?.code, data?.error || "Failed to load metadata")
           );
