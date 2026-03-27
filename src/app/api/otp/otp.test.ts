@@ -99,6 +99,9 @@ describe("OTP Routes", () => {
               maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
             }),
           }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
         };
       }
 
@@ -284,6 +287,34 @@ describe("OTP Routes", () => {
           provider_error: "HTTP 401: Generator rejected",
         })
       );
+    });
+
+    it("returns 409 when staging pending_phone fails with unique conflict", async () => {
+      mockUserClient.from.mockImplementation((table: string) => {
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({
+                error: {
+                  code: "23505",
+                  message: "duplicate key value violates unique constraint",
+                },
+              }),
+            }),
+          };
+        }
+
+        return {};
+      });
+
+      const res = await sendOtp(createMockRequest("/api/otp/send", { phone: "+27821234567" }));
+      const data = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(data).toMatchObject({
+        error: "This phone number is already linked to another account.",
+      });
+      expect(smsService.sendOtpSms).not.toHaveBeenCalled();
     });
   });
 

@@ -6,10 +6,11 @@ import { saPhoneSchema } from "@/lib/validations/shared";
 import { sendOtpSms } from "@/lib/services/sms";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
-import { normalizeSaPhone } from "@/lib/utils/phone";
+import { ACCOUNT_PHONE_IN_USE_ERROR, normalizeSaPhone } from "@/lib/utils/phone";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
 const log = createLogger("OTP");
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
@@ -150,6 +151,29 @@ export async function POST(request: NextRequest) {
       return otpSendError("Too many OTP requests. Please wait before trying again.", 429, {
         code: "rate_limited",
         retryAfter: externalLimit.retryAfter ?? 60,
+      });
+    }
+
+    // Keep verification staging aligned with the phone that received this OTP.
+    const { error: stagePendingPhoneError } = await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
+      .update({ pending_phone: phone })
+      .eq("user_id", user.id);
+
+    if (stagePendingPhoneError) {
+      if (stagePendingPhoneError.code === "23505") {
+        return otpSendError(ACCOUNT_PHONE_IN_USE_ERROR, 409);
+      }
+
+      log.error("Failed to stage pending_phone before OTP send", {
+        userId: user.id,
+        phone,
+        error: stagePendingPhoneError.message,
+        code: stagePendingPhoneError.code,
+      });
+
+      return otpSendError("Failed to prepare phone verification. Please try again.", 500, {
+        code: "internal_error",
       });
     }
 
