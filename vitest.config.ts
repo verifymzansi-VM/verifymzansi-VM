@@ -28,6 +28,19 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/lib/**", "src/app/api/**", "src/hooks/**", "src/stores/**"],
+      exclude: [
+        // Playwright E2E infrastructure — imports `server-only`, runs only in E2E context
+        "src/lib/supabase/playwright-stub.ts",
+        "src/lib/supabase/playwright-fixture-store.ts",
+        "src/lib/supabase/playwright-session.ts",
+        "src/lib/supabase/playwright-visual-fixtures.ts",
+        // Next.js server-only runtime — imports `server-only` + `next/headers`, can't run in jsdom
+        "src/lib/supabase/server.ts",
+        // Browser Supabase client — requires real Supabase credentials; always fully mocked in every unit test
+        "src/lib/supabase/client.ts",
+        // Pure TypeScript interface file — no executable code or branches to measure
+        "src/lib/services/kyc-provider-interface.ts",
+      ],
       thresholds: {
         statements: strictCoverage ? 65 : 60,
         branches: strictCoverage ? 60 : 50,
