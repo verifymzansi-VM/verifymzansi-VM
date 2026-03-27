@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ImagePlus, X, Film, FileWarning } from "lucide-react";
+import { ImagePlus, X, Film } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -276,14 +276,6 @@ export function MediaUpload({
             className="hidden"
             aria-label="Upload photos and videos"
           />
-        </div>
-      )}
-
-      {/* All slots filled message */}
-      {remaining <= 0 && (
-        <div className="flex items-center gap-2 text-sm text-amber-600">
-          <FileWarning className="h-4 w-4" />
-          <span>Maximum of {maxFiles} files reached. Remove a file to add more.</span>
         </div>
       )}
     </div>

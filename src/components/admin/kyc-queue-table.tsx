@@ -33,6 +33,7 @@ import dynamic from "next/dynamic";
 import { KycComparisonViewer } from "./kyc-comparison-viewer";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
 import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
+import { OVERRIDE_REASON_CODES } from "@/lib/constants/verification";
 
 const KycPreviewLightbox = dynamic(
   () => import("./kyc-preview-lightbox").then((m) => m.KycPreviewLightbox),
@@ -54,6 +55,7 @@ interface VerificationStep {
   reviewed_at?: string | null;
   account_display_name?: string | null;
   account_verification_status?: string | null;
+  risk_level?: string | null;
 }
 
 interface Artifact {
@@ -114,6 +116,7 @@ export function KycQueueTable({
   );
   const [reasonCode, setReasonCode] = useState("");
   const [reasonNote, setReasonNote] = useState("");
+  const [overrideReasonCode, setOverrideReasonCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -199,6 +202,7 @@ export function KycQueueTable({
     setDecision(d);
     setReasonCode("");
     setReasonNote("");
+    setOverrideReasonCode("");
     setError("");
   }
 
@@ -207,6 +211,7 @@ export function KycQueueTable({
     setDecision(null);
     setReasonCode("");
     setReasonNote("");
+    setOverrideReasonCode("");
     setError("");
   }
 
@@ -215,6 +220,12 @@ export function KycQueueTable({
 
     if (decision !== "approved" && !reasonCode) {
       setError("Please select a reason code.");
+      return;
+    }
+
+    const isHighRisk = selectedStep.risk_level === "high" || selectedStep.risk_level === "critical";
+    if (decision === "approved" && isHighRisk && !overrideReasonCode) {
+      setError("Override reason code is required when approving high-risk steps.");
       return;
     }
 
@@ -230,6 +241,7 @@ export function KycQueueTable({
           decision,
           reasonCode: decision !== "approved" ? reasonCode : undefined,
           reasonNote: reasonNote || undefined,
+          overrideReasonCode: overrideReasonCode || undefined,
         }),
       });
 
@@ -479,7 +491,7 @@ export function KycQueueTable({
           </DialogHeader>
 
           {decision === "approved" ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 This will mark the step as approved. If all 4 verification steps are now approved,
                 the account will be marked as verified.
@@ -488,6 +500,33 @@ export function KycQueueTable({
                 <div className="rounded-md border border-amber-500/30 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-700 dark:text-amber-400">
                   <strong>Note:</strong> This is a resubmission — the step was previously reviewed.
                   Ensure the user has corrected the flagged issue before approving.
+                </div>
+              )}
+              {(selectedStep?.risk_level === "high" || selectedStep?.risk_level === "critical") && (
+                <div className="space-y-2">
+                  <div className="rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-200">
+                    This step has <strong>{selectedStep.risk_level}</strong> risk. An override
+                    reason is required to approve.
+                  </div>
+                  <div>
+                    <Label htmlFor="override-reason-code" className="text-sm font-medium">
+                      Override Reason <span className="text-destructive">*</span>
+                    </Label>
+                    <select
+                      id="override-reason-code"
+                      title="Override reason code"
+                      value={overrideReasonCode}
+                      onChange={(e) => setOverrideReasonCode(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Select override reason…</option>
+                      {OVERRIDE_REASON_CODES.map((code) => (
+                        <option key={code} value={code}>
+                          {code.replace(/_/g, " ")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               )}
             </div>

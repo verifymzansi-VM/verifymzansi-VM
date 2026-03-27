@@ -33,6 +33,7 @@ import {
 import { formatRelativeTime } from "@/lib/utils/format";
 import Link from "next/link";
 import type { DashboardKycItem, VerificationStepCounts } from "@/lib/utils/admin-queries";
+import { OVERRIDE_REASON_CODES } from "@/lib/constants/verification";
 
 const STEP_ICONS: Record<string, React.ElementType> = {
   phone: Phone,
@@ -123,6 +124,7 @@ export function DashboardKycPanel({
   const [dialog, setDialog] = useState<KycDialogState | null>(null);
   const [reasonCode, setReasonCode] = useState("");
   const [reasonNote, setReasonNote] = useState("");
+  const [overrideReasonCode, setOverrideReasonCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -132,6 +134,7 @@ export function DashboardKycPanel({
     setDialog({ step, decision });
     setReasonCode("");
     setReasonNote("");
+    setOverrideReasonCode("");
     setError("");
   }
 
@@ -139,6 +142,7 @@ export function DashboardKycPanel({
     setDialog(null);
     setReasonCode("");
     setReasonNote("");
+    setOverrideReasonCode("");
     setError("");
   }
 
@@ -146,6 +150,12 @@ export function DashboardKycPanel({
     if (!dialog) return;
     if (dialog.decision !== "approved" && !reasonCode) {
       setError("Please select a reason code.");
+      return;
+    }
+
+    const isHighRisk = dialog.step.risk_level === "high" || dialog.step.risk_level === "critical";
+    if (dialog.decision === "approved" && isHighRisk && !overrideReasonCode) {
+      setError("Override reason code is required when approving high-risk steps.");
       return;
     }
 
@@ -161,6 +171,7 @@ export function DashboardKycPanel({
           decision: dialog.decision,
           reasonCode: dialog.decision !== "approved" ? reasonCode : undefined,
           reasonNote: reasonNote || undefined,
+          overrideReasonCode: overrideReasonCode || undefined,
         }),
       });
 
@@ -486,10 +497,39 @@ export function DashboardKycPanel({
           </DialogHeader>
 
           {dialog?.decision === "approved" ? (
-            <p className="text-sm text-muted-foreground">
-              This will mark the step as approved. If all 4 steps (phone, ID document, selfie,
-              location) are approved, the account will be marked as verified.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                This will mark the step as approved. If all 4 steps (phone, ID document, selfie,
+                location) are approved, the account will be marked as verified.
+              </p>
+              {(dialog.step.risk_level === "high" || dialog.step.risk_level === "critical") && (
+                <div className="space-y-2">
+                  <div className="rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-200">
+                    This step has <strong>{dialog.step.risk_level}</strong> risk. An override reason
+                    is required to approve.
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">
+                      Override Reason <span className="text-destructive">*</span>
+                    </Label>
+                    <select
+                      title="Override reason code"
+                      aria-label="Override reason code"
+                      value={overrideReasonCode}
+                      onChange={(e) => setOverrideReasonCode(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Select override reason…</option>
+                      {OVERRIDE_REASON_CODES.map((code) => (
+                        <option key={code} value={code}>
+                          {code.replace(/_/g, " ")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="space-y-4">
               <div>
