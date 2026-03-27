@@ -145,6 +145,7 @@ export function KycPreviewLightbox({
           const params = new URLSearchParams({ artifactId: targetArtifactId });
           const res = await fetch(`/api/admin/verification/evidence?${params}`, {
             method: "GET",
+            cache: "no-store",
           });
 
           if (res.ok) {
@@ -165,10 +166,13 @@ export function KycPreviewLightbox({
         let evidenceResult = await fetchEvidenceById(artifact.id);
 
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
-          const retryMetaParams = new URLSearchParams({ userId: step.user_id });
+          const retryMetaParams = new URLSearchParams({
+            userId: step.user_id,
+            _ts: String(Date.now()),
+          });
           const retryMetaRes = await fetch(
             `/api/admin/verification/evidence/metadata?${retryMetaParams}`,
-            { method: "GET" }
+            { method: "GET", cache: "no-store" }
           );
 
           if (retryMetaRes.ok) {

@@ -80,6 +80,7 @@ export function KycInlinePreview({
         const evidenceParams = new URLSearchParams({ artifactId: targetArtifactId });
         const evidenceRes = await fetch(`/api/admin/verification/evidence?${evidenceParams}`, {
           method: "GET",
+          cache: "no-store",
         });
 
         if (evidenceRes.ok) {
@@ -105,6 +106,7 @@ export function KycInlinePreview({
         const metaParams = new URLSearchParams({ stepId, userId });
         const metaRes = await fetch(`/api/admin/verification/evidence/metadata?${metaParams}`, {
           method: "GET",
+          cache: "no-store",
         });
         if (!metaRes.ok) {
           const data = await metaRes.json().catch(() => null);
@@ -130,10 +132,13 @@ export function KycInlinePreview({
         let evidenceResult = await fetchEvidenceByArtifactId(match.id);
 
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
-          const retryMetaParams = new URLSearchParams({ userId });
+          const retryMetaParams = new URLSearchParams({
+            userId,
+            _ts: String(Date.now()),
+          });
           const retryMetaRes = await fetch(
             `/api/admin/verification/evidence/metadata?${retryMetaParams}`,
-            { method: "GET" }
+            { method: "GET", cache: "no-store" }
           );
 
           if (retryMetaRes.ok) {

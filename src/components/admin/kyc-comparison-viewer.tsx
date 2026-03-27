@@ -79,6 +79,7 @@ export function KycComparisonViewer({
         const params = new URLSearchParams({ userId });
         const metaRes = await fetch(`/api/admin/verification/evidence/metadata?${params}`, {
           method: "GET",
+          cache: "no-store",
         });
 
         if (!metaRes.ok) {
@@ -123,6 +124,7 @@ export function KycComparisonViewer({
               `/api/admin/verification/evidence?artifactId=${artifact.id}`,
               {
                 method: "GET",
+                cache: "no-store",
               }
             );
 
@@ -131,9 +133,10 @@ export function KycComparisonViewer({
 
               if (firstErrorData?.code === "not_found") {
                 const retryMetaRes = await fetch(
-                  `/api/admin/verification/evidence/metadata?userId=${userId}`,
+                  `/api/admin/verification/evidence/metadata?userId=${userId}&_ts=${Date.now()}`,
                   {
                     method: "GET",
+                    cache: "no-store",
                   }
                 );
 
@@ -153,6 +156,7 @@ export function KycComparisonViewer({
                       `/api/admin/verification/evidence?artifactId=${replacement.id}`,
                       {
                         method: "GET",
+                        cache: "no-store",
                       }
                     );
 
