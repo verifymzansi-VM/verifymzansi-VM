@@ -193,7 +193,6 @@ export async function GET(request: NextRequest) {
         .select("id, r2_key, created_at")
         .eq("user_id", artifact.user_id)
         .eq("step_type", artifact.step_type)
-        .in("id", allowedArtifactIds)
         .order("created_at", { ascending: false });
 
       const sameStepCandidates = (fallbackQueryError ? [] : fallbackArtifacts || []).filter(
