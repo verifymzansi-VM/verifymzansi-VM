@@ -4,6 +4,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Loader2, ImageIcon, FileText, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
+import {
+  getCachedKycArtifactBlob,
+  setCachedKycArtifactBlob,
+} from "@/lib/utils/kyc-artifact-blob-cache";
 
 interface Artifact {
   id: string;
@@ -131,6 +135,16 @@ export function KycInlinePreview({
 
         if (!cancelled) setArtifact(match);
 
+        const cachedBlob = getCachedKycArtifactBlob(match.id);
+        if (cachedBlob) {
+          if (!cancelled) {
+            const cachedUrl = URL.createObjectURL(cachedBlob);
+            setBlobUrl(cachedUrl);
+            setLoading(false);
+          }
+          return;
+        }
+
         // 2. Fetch decrypted blob. If artifact ID is stale, refresh metadata and retry once.
         let resolvedArtifact = match;
         let evidenceResult = await fetchEvidenceByArtifactId(match.id);
@@ -166,6 +180,7 @@ export function KycInlinePreview({
         const blob = evidenceResult.blob;
         if (!cancelled) {
           setArtifact(resolvedArtifact);
+          setCachedKycArtifactBlob(resolvedArtifact.id, blob);
           const url = URL.createObjectURL(blob);
           setBlobUrl(url);
         }

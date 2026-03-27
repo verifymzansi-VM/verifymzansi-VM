@@ -27,6 +27,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
+import {
+  getCachedKycArtifactBlob,
+  setCachedKycArtifactBlob,
+} from "@/lib/utils/kyc-artifact-blob-cache";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -141,6 +145,18 @@ export function KycPreviewLightbox({
 
     async function loadBlob() {
       try {
+        const cachedBlob = getCachedKycArtifactBlob(artifact.id);
+        if (cachedBlob) {
+          if (!cancelled) {
+            const cachedUrl = URL.createObjectURL(cachedBlob);
+            setBlobUrl((prev) => {
+              if (prev) URL.revokeObjectURL(prev);
+              return cachedUrl;
+            });
+          }
+          return;
+        }
+
         const fetchEvidenceById = async (targetArtifactId: string) => {
           const res = await fetch(`/api/admin/verification/evidence`, {
             method: "POST",
@@ -149,9 +165,11 @@ export function KycPreviewLightbox({
           });
 
           if (res.ok) {
+            const blob = await res.blob();
+            setCachedKycArtifactBlob(targetArtifactId, blob);
             return {
               ok: true as const,
-              blob: await res.blob(),
+              blob,
             };
           }
 
@@ -183,7 +201,15 @@ export function KycPreviewLightbox({
               )[0];
 
             if (replacement && replacement.id !== artifact.id) {
-              evidenceResult = await fetchEvidenceById(replacement.id);
+              const replacementCachedBlob = getCachedKycArtifactBlob(replacement.id);
+              if (replacementCachedBlob) {
+                evidenceResult = {
+                  ok: true as const,
+                  blob: replacementCachedBlob,
+                };
+              } else {
+                evidenceResult = await fetchEvidenceById(replacement.id);
+              }
             }
           }
         }

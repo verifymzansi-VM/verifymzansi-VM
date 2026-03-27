@@ -14,6 +14,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, FileText, AlertTriangle, RefreshCw, X, RotateCcw } from "lucide-react";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
+import {
+  getCachedKycArtifactBlob,
+  setCachedKycArtifactBlob,
+} from "@/lib/utils/kyc-artifact-blob-cache";
 
 interface Artifact {
   id: string;
@@ -120,96 +124,144 @@ export function KycComparisonViewer({
 
         setArtifacts(sorted);
 
-        // Preload all artifacts
-        for (const artifact of sorted) {
-          try {
-            let resolvedArtifact = artifact;
-            let evidenceRes = await fetch(`/api/admin/verification/evidence`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ artifactId: artifact.id }),
-            });
+        // Preload artifacts in parallel and reuse cached blobs when available.
+        const results = await Promise.all(
+          sorted.map(async (artifact) => {
+            try {
+              let resolvedArtifact = artifact;
 
-            if (!evidenceRes.ok) {
-              const firstErrorData = await evidenceRes.json().catch(() => null);
+              const initialCachedBlob = getCachedKycArtifactBlob(artifact.id);
+              if (initialCachedBlob) {
+                const objectUrl = URL.createObjectURL(initialCachedBlob);
+                createdUrls.push(objectUrl);
+                return {
+                  requestedId: artifact.id,
+                  resolvedArtifact,
+                  objectUrl,
+                  error: null as string | null,
+                };
+              }
 
-              if (firstErrorData?.code === "not_found") {
-                const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ userId }),
-                });
+              let evidenceRes = await fetch(`/api/admin/verification/evidence`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ artifactId: artifact.id }),
+              });
 
-                if (retryMetaRes.ok) {
-                  const retryMeta = await retryMetaRes.json();
-                  const retryArtifacts: Artifact[] = retryMeta.artifacts || [];
-                  const replacement = retryArtifacts
-                    .filter((a: Artifact) => a.step_type === artifact.step_type)
-                    .sort(
-                      (a: Artifact, b: Artifact) =>
-                        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                    )[0];
+              if (!evidenceRes.ok) {
+                const firstErrorData = await evidenceRes.json().catch(() => null);
 
-                  if (replacement && replacement.id !== artifact.id) {
-                    resolvedArtifact = replacement;
-                    evidenceRes = await fetch(`/api/admin/verification/evidence`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ artifactId: replacement.id }),
-                    });
+                if (firstErrorData?.code === "not_found") {
+                  const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ userId }),
+                  });
 
-                    if (evidenceRes.ok) {
-                      setArtifacts((prev) =>
-                        prev.map((existing) =>
-                          existing.id === artifact.id ? replacement : existing
-                        )
-                      );
+                  if (retryMetaRes.ok) {
+                    const retryMeta = await retryMetaRes.json();
+                    const retryArtifacts: Artifact[] = retryMeta.artifacts || [];
+                    const replacement = retryArtifacts
+                      .filter((a: Artifact) => a.step_type === artifact.step_type)
+                      .sort(
+                        (a: Artifact, b: Artifact) =>
+                          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                      )[0];
+
+                    if (replacement && replacement.id !== artifact.id) {
+                      resolvedArtifact = replacement;
+                      const replacementCachedBlob = getCachedKycArtifactBlob(replacement.id);
+
+                      if (replacementCachedBlob) {
+                        const objectUrl = URL.createObjectURL(replacementCachedBlob);
+                        createdUrls.push(objectUrl);
+                        return {
+                          requestedId: artifact.id,
+                          resolvedArtifact,
+                          objectUrl,
+                          error: null as string | null,
+                        };
+                      }
+
+                      evidenceRes = await fetch(`/api/admin/verification/evidence`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ artifactId: replacement.id }),
+                      });
                     }
                   }
+                } else {
+                  return {
+                    requestedId: artifact.id,
+                    resolvedArtifact,
+                    objectUrl: null,
+                    error: getKycEvidenceErrorMessage(
+                      firstErrorData?.code,
+                      firstErrorData?.error || "Failed to load document"
+                    ),
+                  };
                 }
-              } else {
-                setArtifactErrors((prev) => ({
-                  ...prev,
-                  [artifact.id]: getKycEvidenceErrorMessage(
-                    firstErrorData?.code,
-                    firstErrorData?.error || "Failed to load document"
-                  ),
-                }));
-                continue;
               }
-            }
 
-            if (evidenceRes.ok) {
-              const blob = await evidenceRes.blob();
-              const objectUrl = URL.createObjectURL(blob);
-              createdUrls.push(objectUrl);
-              setBlobUrls((prev) => ({
-                ...prev,
-                [resolvedArtifact.id]: objectUrl,
-              }));
-              setArtifactErrors((prev) => {
-                const next = { ...prev };
-                delete next[artifact.id];
-                delete next[resolvedArtifact.id];
-                return next;
-              });
-            } else {
+              if (evidenceRes.ok) {
+                const blob = await evidenceRes.blob();
+                setCachedKycArtifactBlob(resolvedArtifact.id, blob);
+                const objectUrl = URL.createObjectURL(blob);
+                createdUrls.push(objectUrl);
+                return {
+                  requestedId: artifact.id,
+                  resolvedArtifact,
+                  objectUrl,
+                  error: null as string | null,
+                };
+              }
+
               const data = await evidenceRes.json().catch(() => null);
-              setArtifactErrors((prev) => ({
-                ...prev,
-                [resolvedArtifact.id]: getKycEvidenceErrorMessage(
+              return {
+                requestedId: artifact.id,
+                resolvedArtifact,
+                objectUrl: null,
+                error: getKycEvidenceErrorMessage(
                   data?.code,
                   data?.error || "Failed to load document"
                 ),
-              }));
+              };
+            } catch (e) {
+              return {
+                requestedId: artifact.id,
+                resolvedArtifact: artifact,
+                objectUrl: null,
+                error: e instanceof Error ? e.message : "Failed to load document",
+              };
             }
-          } catch (e) {
-            const message = e instanceof Error ? e.message : "Failed to load document";
-            setArtifactErrors((prev) => ({
-              ...prev,
-              [artifact.id]: message,
-            }));
+          })
+        );
+
+        const nextBlobUrls: Record<string, string> = {};
+        const nextArtifactErrors: Record<string, string> = {};
+        const replacementByRequestedId = new Map<string, Artifact>();
+
+        for (const result of results) {
+          if (result.objectUrl) {
+            nextBlobUrls[result.resolvedArtifact.id] = result.objectUrl;
           }
+          if (result.error) {
+            nextArtifactErrors[result.resolvedArtifact.id] = result.error;
+          }
+          if (result.resolvedArtifact.id !== result.requestedId) {
+            replacementByRequestedId.set(result.requestedId, result.resolvedArtifact);
+          }
+        }
+
+        if (Object.keys(nextBlobUrls).length > 0) {
+          setBlobUrls(nextBlobUrls);
+        }
+        setArtifactErrors(nextArtifactErrors);
+
+        if (replacementByRequestedId.size > 0) {
+          setArtifacts((prev) =>
+            prev.map((existing) => replacementByRequestedId.get(existing.id) ?? existing)
+          );
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load documents");
