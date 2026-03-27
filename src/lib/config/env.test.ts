@@ -18,7 +18,7 @@ const VALID_ENV: Record<string, string> = {
   ID_ENCRYPTION_KEY: "b".repeat(64),
   AFRICASTALKING_API_KEY: "test-api-key",
   AFRICASTALKING_USERNAME: "sandbox",
-  AFRICASTALKING_SENDER_ID: "VERIFYMZANS",
+  AFRICASTALKING_SENDER_ID: "verifymzansi",
   OZOW_ENV: "staging",
   OZOW_CLIENT_ID: "test-client-id",
   OZOW_CLIENT_SECRET: "test-client-secret",
@@ -118,7 +118,7 @@ describe("env config", () => {
         vi.stubEnv(key, value);
       }
       vi.stubEnv("NODE_ENV", "production");
-      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
       vi.stubEnv("OZOW_ENV", "production");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
       vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
@@ -140,7 +140,7 @@ describe("env config", () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("VERIFYMZANSI_RUNTIME_MODE", "e2e");
       vi.stubEnv("PLAYWRIGHT_TEST_MODE", "1");
-      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
       vi.stubEnv("OZOW_ENV", "staging");
       vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://127.0.0.1:3000");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
@@ -237,7 +237,7 @@ describe("env config", () => {
         vi.stubEnv(key, value);
       }
       vi.stubEnv("NODE_ENV", "production");
-      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
       vi.stubEnv("OZOW_ENV", "production");
       delete process.env.IP_HASH_SECRET;
       const mod = await import("./env");
@@ -313,7 +313,7 @@ describe("env config", () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("OZOW_ENV", "production");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
-      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
       vi.stubEnv("KYC_ENCRYPTION_KEY", "cafebabe".repeat(8));
       const mod = await import("./env");
 
@@ -329,7 +329,7 @@ describe("env config", () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("OZOW_ENV", "production");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
-      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
       vi.stubEnv("ID_ENCRYPTION_KEY", "cafebabe".repeat(8));
       const mod = await import("./env");
 
@@ -345,7 +345,7 @@ describe("env config", () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("OZOW_ENV", "production");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
-      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
       vi.stubEnv("HMAC_SECRET", "cafebabe".repeat(8));
       const mod = await import("./env");
 
@@ -361,7 +361,7 @@ describe("env config", () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("OZOW_ENV", "production");
       vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
-      vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
       const mod = await import("./env");
 
       // VALID_ENV already has real hex keys (a*64, b*64, a*64 for HMAC)

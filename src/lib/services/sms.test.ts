@@ -20,7 +20,7 @@ describe("sms service", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("AFRICASTALKING_API_KEY", "test-key");
     vi.stubEnv("AFRICASTALKING_USERNAME", "sandbox");
-    vi.stubEnv("AFRICASTALKING_SENDER_ID", "VERIFYMZANS");
+    vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
   });
 
   afterEach(() => {
@@ -145,7 +145,7 @@ describe("sms service", () => {
       const secondBody = new URLSearchParams(
         (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[1][1].body as string
       );
-      expect(firstBody.get("from")).toBe("VERIFYMZANS");
+      expect(firstBody.get("from")).toBe("verifymzansi");
       expect(secondBody.get("from")).toBeNull();
     });
 
@@ -269,7 +269,7 @@ describe("sms service", () => {
     });
 
     it("omits an invalid sender ID instead of sending a broken from value", async () => {
-      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verify_mzansi");
 
       globalThis.fetch = mockFetchResponse({
         SMSMessageData: {

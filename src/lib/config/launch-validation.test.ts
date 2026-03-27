@@ -12,7 +12,7 @@ const BASE_ENV: EnvSource = {
   NEXT_PUBLIC_APP_URL: "https://verifymzansi.com",
   AFRICASTALKING_API_KEY: "africas-talking-key",
   AFRICASTALKING_USERNAME: "verifymzansi",
-  AFRICASTALKING_SENDER_ID: "VERIFYMZANS",
+  AFRICASTALKING_SENDER_ID: "verifymzansi",
   OZOW_ENV: "production",
   OZOW_CLIENT_ID: "client-id-value",
   OZOW_CLIENT_SECRET: "client-secret-value", // secret-scan: allow deterministic fixture
@@ -86,7 +86,7 @@ describe("launch validation", () => {
     const summary = validateLaunchConfiguration(
       {
         ...BASE_ENV,
-        AFRICASTALKING_SENDER_ID: "verifymzansi",
+        AFRICASTALKING_SENDER_ID: "verify_mzansi",
       },
       { mode: "production" }
     );
@@ -95,7 +95,7 @@ describe("launch validation", () => {
     expect(summary.errors).toContainEqual(
       expect.objectContaining({
         name: "Africa's Talking",
-        detail: "AFRICASTALKING_SENDER_ID must be 1-11 alphanumeric characters",
+        detail: "AFRICASTALKING_SENDER_ID must be 1-12 alphanumeric characters",
       })
     );
   });

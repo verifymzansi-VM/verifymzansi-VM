@@ -132,7 +132,7 @@ function hasValue(value?: string): value is string {
 }
 
 function isValidAfricaTalkingSenderId(value?: string): boolean {
-  return hasValue(value) && /^[A-Za-z0-9]{1,11}$/.test(value.trim());
+  return hasValue(value) && /^[A-Za-z0-9]{1,12}$/.test(value.trim());
 }
 
 function isAllowedOzowApiBaseUrl(value: string, mode: LaunchValidationMode): boolean {
@@ -289,7 +289,7 @@ export function validateLaunchConfiguration(
         checks,
         "Africa's Talking",
         "fail",
-        "AFRICASTALKING_SENDER_ID must be 1-11 alphanumeric characters"
+        "AFRICASTALKING_SENDER_ID must be 1-12 alphanumeric characters"
       );
     } else if (afUsername === "sandbox") {
       addCheck(
@@ -313,7 +313,7 @@ export function validateLaunchConfiguration(
       checks,
       "Africa's Talking",
       "warn",
-      "AFRICASTALKING_SENDER_ID should be 1-11 alphanumeric characters for SMS delivery"
+      "AFRICASTALKING_SENDER_ID should be 1-12 alphanumeric characters for SMS delivery"
     );
   } else {
     addCheck(checks, "Africa's Talking", "pass", `user=${afUsername} sender=${afSenderId}`);

@@ -40,7 +40,7 @@ function createBaseProductionEnv(): EnvSource {
     NEXT_PUBLIC_APP_URL: "https://verifymzansi.com",
     AFRICASTALKING_API_KEY: "real-api-key-value",
     AFRICASTALKING_USERNAME: "verifymzansi",
-    AFRICASTALKING_SENDER_ID: "VerifyMZ",
+    AFRICASTALKING_SENDER_ID: "verifymzansi",
     RESEND_API_KEY: "re_abc123def456",
     R2_ACCOUNT_ID: "cloudflare-r2-account-id",
     R2_ACCESS_KEY_ID: "r2-access-key-id-value",
