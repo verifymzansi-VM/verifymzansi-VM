@@ -12,7 +12,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, FileText, AlertTriangle, RefreshCw, X, RotateCcw } from "lucide-react";
+import {
+  Loader2,
+  FileText,
+  AlertTriangle,
+  RefreshCw,
+  X,
+  RotateCcw,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
 import {
   getCachedKycArtifactBlob,
@@ -65,6 +74,10 @@ export function KycComparisonViewer({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
+  const [panelZoom, setPanelZoom] = useState<Record<string, number>>({
+    id_doc: 1,
+    selfie: 1,
+  });
 
   // Fetch metadata and load artifacts
   useEffect(() => {
@@ -78,6 +91,7 @@ export function KycComparisonViewer({
       setArtifacts([]);
       setBlobUrls({});
       setArtifactErrors({});
+      setPanelZoom({ id_doc: 1, selfie: 1 });
 
       try {
         const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
@@ -311,6 +325,8 @@ export function KycComparisonViewer({
 
     const blobUrl = blobUrls[artifact.id];
     const artifactError = artifactErrors[artifact.id];
+    const zoomLevel = panelZoom[artifact.step_type] ?? 1;
+    const canZoom = artifact.content_type?.startsWith("image");
 
     return (
       <Card className="h-full">
@@ -322,9 +338,61 @@ export function KycComparisonViewer({
                 Uploaded {new Date(artifact.created_at).toLocaleString()}
               </p>
             </div>
-            <Badge variant="secondary" className="shrink-0">
-              {(artifact.file_size_bytes / 1024).toFixed(1)} KB
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="shrink-0">
+                {(artifact.file_size_bytes / 1024).toFixed(1)} KB
+              </Badge>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() =>
+                  setPanelZoom((prev) => ({
+                    ...prev,
+                    [artifact.step_type]: Math.max(0.5, (prev[artifact.step_type] ?? 1) - 0.25),
+                  }))
+                }
+                disabled={!canZoom || zoomLevel <= 0.5}
+                aria-label={`Zoom out ${getStepLabel(artifact.step_type)}`}
+                title="Zoom out"
+              >
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <span className="w-10 text-center text-xs text-muted-foreground">
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() =>
+                  setPanelZoom((prev) => ({
+                    ...prev,
+                    [artifact.step_type]: Math.min(3, (prev[artifact.step_type] ?? 1) + 0.25),
+                  }))
+                }
+                disabled={!canZoom || zoomLevel >= 3}
+                aria-label={`Zoom in ${getStepLabel(artifact.step_type)}`}
+                title="Zoom in"
+              >
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setPanelZoom((prev) => ({
+                    ...prev,
+                    [artifact.step_type]: 1,
+                  }))
+                }
+                disabled={!canZoom || zoomLevel === 1}
+                aria-label={`Reset zoom ${getStepLabel(artifact.step_type)}`}
+                title="Reset zoom"
+              >
+                Reset
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -334,16 +402,19 @@ export function KycComparisonViewer({
               <p className="text-sm font-medium text-red-900">{artifactError}</p>
             </div>
           ) : blobUrl ? (
-            <div className="flex min-h-[24rem] items-center justify-center overflow-hidden rounded-lg bg-gray-100">
+            <div className="min-h-[24rem] overflow-auto rounded-lg bg-gray-100">
               {artifact.content_type?.startsWith("image") ? (
-                <Image
-                  src={blobUrl}
-                  alt={getStepLabel(artifact.step_type)}
-                  width={1200}
-                  height={900}
-                  unoptimized
-                  className="max-h-[32rem] max-w-full object-contain"
-                />
+                <div className="flex min-h-[24rem] items-center justify-center p-4">
+                  <Image
+                    src={blobUrl}
+                    alt={getStepLabel(artifact.step_type)}
+                    width={1200}
+                    height={900}
+                    unoptimized
+                    style={{ transform: `scale(${zoomLevel})` }}
+                    className="max-h-[32rem] max-w-full object-contain transition-transform duration-150"
+                  />
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center p-8 text-center">
                   <FileText className="mb-2 h-12 w-12 text-muted-foreground" />

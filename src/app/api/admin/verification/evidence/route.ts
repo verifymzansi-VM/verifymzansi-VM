@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { downloadKycDocument } from "@/lib/services/storage";
+import { downloadKycDocumentWithMetrics } from "@/lib/services/storage";
 import crypto from "crypto";
 import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { getLinkedEvidenceArtifactIds } from "@/lib/services/kyc-evidence-access";
@@ -36,7 +36,18 @@ function isMissingArtifactError(error: unknown): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  const requestStartedAt = Date.now();
+  let authMs = 0;
+  let dbMs = 0;
+  let downloadMs = 0;
+  let decryptMs = 0;
+  let fallbackUsed = false;
+  let cacheHit = false;
+  let responseStatus = 200;
+  let targetUserId: string | null = null;
+
   try {
+    const authStartedAt = Date.now();
     // Auth check — admin/moderator only
     const supabase = await createClient();
     const {
@@ -45,21 +56,25 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
+      responseStatus = 401;
       return NextResponse.json({ error: "Unauthorized", code: "unauthorized" }, { status: 401 });
     }
 
     const role = await verifyStaffActorRoleFromDb(user);
     if (!role) {
+      responseStatus = 403;
       return NextResponse.json({ error: "Forbidden", code: "forbidden" }, { status: 403 });
     }
 
     const rl = checkLocalRateLimit(user.id, "admin:evidence:view");
     if (rl.limited) {
+      responseStatus = 429;
       return NextResponse.json(
         { error: "Too many requests", code: "rate_limited" },
         { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
       );
     }
+    authMs = Date.now() - authStartedAt;
 
     // Get artifact ID from query params
     const parsedQuery = parseAndValidateSearchParams(
@@ -77,6 +92,7 @@ export async function GET(request: NextRequest) {
 
     const adminClient = createAdminClient();
 
+    const dbStartedAt = Date.now();
     // Fetch artifact record
     const { data: artifact, error: artifactErr } = await adminClient
       .from("kyc_artifacts")
@@ -85,8 +101,11 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (artifactErr || !artifact) {
+      dbMs = Date.now() - dbStartedAt;
+      responseStatus = 404;
       return NextResponse.json({ error: "Artifact not found", code: "not_found" }, { status: 404 });
     }
+    targetUserId = artifact.user_id;
 
     const REVIEWABLE_STATES = [
       "pending",
@@ -126,11 +145,13 @@ export async function GET(request: NextRequest) {
         artifactId,
       });
     }
+    dbMs = Date.now() - dbStartedAt;
 
     // Validate IP hashing secret — required in production for privacy-compliant logging
     const ipHashSecret = process.env.IP_HASH_SECRET;
     if (!ipHashSecret && process.env.NODE_ENV === "production") {
       log.error("IP_HASH_SECRET not configured in production");
+      responseStatus = 503;
       return NextResponse.json(
         { error: "Service configuration error", code: "server_error" },
         { status: 503 }
@@ -153,6 +174,7 @@ export async function GET(request: NextRequest) {
 
     // Check for dev:// keys (development mode)
     if (artifact.r2_key.startsWith("dev://")) {
+      cacheHit = true;
       // Return a placeholder in dev mode
       return new NextResponse(Buffer.from("Development mode — no real artifact stored"), {
         status: 200,
@@ -169,7 +191,10 @@ export async function GET(request: NextRequest) {
     // missing object, fall back to another authorized artifact for the same step.
     let decryptedBuffer: Buffer | null = null;
     try {
-      decryptedBuffer = await downloadKycDocument(artifact.r2_key);
+      const result = await downloadKycDocumentWithMetrics(artifact.r2_key);
+      decryptedBuffer = result.buffer;
+      downloadMs += result.downloadMs;
+      decryptMs += result.decryptMs;
     } catch (downloadErr) {
       const downloadMessage = downloadErr instanceof Error ? downloadErr.message : "unknown error";
       const isMissingFile = isMissingArtifactError(downloadErr);
@@ -217,7 +242,11 @@ export async function GET(request: NextRequest) {
 
       for (const candidate of sameStepCandidates) {
         try {
-          decryptedBuffer = await downloadKycDocument(candidate.r2_key);
+          const result = await downloadKycDocumentWithMetrics(candidate.r2_key);
+          decryptedBuffer = result.buffer;
+          downloadMs += result.downloadMs;
+          decryptMs += result.decryptMs;
+          fallbackUsed = true;
           recovered = true;
           log.info("Recovered KYC artifact via same-step fallback", {
             requestedArtifactId: artifact.id,
@@ -298,6 +327,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (err) {
+    responseStatus = 500;
     log.error("Unexpected error", {
       error: err instanceof Error ? err.message : "unknown error",
       stack: err instanceof Error ? err.stack : undefined,
@@ -306,6 +336,18 @@ export async function GET(request: NextRequest) {
       { error: "Internal server error", code: "server_error" },
       { status: 500 }
     );
+  } finally {
+    log.info("Evidence request performance", {
+      totalMs: Date.now() - requestStartedAt,
+      authMs,
+      dbMs,
+      downloadMs,
+      decryptMs,
+      cacheHit,
+      fallbackUsed,
+      status: responseStatus,
+      targetUserId,
+    });
   }
 }
 

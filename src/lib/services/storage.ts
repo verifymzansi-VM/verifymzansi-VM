@@ -485,6 +485,13 @@ export async function uploadKycDocument(
  * @returns Decrypted file buffer
  */
 export async function downloadKycDocument(key: string): Promise<Buffer> {
+  const result = await downloadKycDocumentWithMetrics(key);
+  return result.buffer;
+}
+
+export async function downloadKycDocumentWithMetrics(
+  key: string
+): Promise<{ buffer: Buffer; downloadMs: number; decryptMs: number }> {
   assertSafeStorageKey(key);
   const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
 
@@ -494,6 +501,7 @@ export async function downloadKycDocument(key: string): Promise<Buffer> {
     Key: key,
   });
 
+  const downloadStartedAt = Date.now();
   const response = await client.send(command);
 
   if (!response.Body) {
@@ -502,9 +510,18 @@ export async function downloadKycDocument(key: string): Promise<Buffer> {
 
   // Use the SDK's portable helper to convert stream to byte array
   const encryptedBuffer = Buffer.from(await response.Body.transformToByteArray());
+  const downloadMs = Date.now() - downloadStartedAt;
 
   // Decrypt and return
-  return decryptFile(encryptedBuffer);
+  const decryptStartedAt = Date.now();
+  const buffer = await decryptFile(encryptedBuffer);
+  const decryptMs = Date.now() - decryptStartedAt;
+
+  return {
+    buffer,
+    downloadMs,
+    decryptMs,
+  };
 }
 
 /**

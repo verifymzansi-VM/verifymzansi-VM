@@ -36,7 +36,7 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 }));
 
 vi.mock("@/lib/services/storage", () => ({
-  downloadKycDocument: (...args: unknown[]) => mockDownloadKycDocument(...args),
+  downloadKycDocumentWithMetrics: (...args: unknown[]) => mockDownloadKycDocument(...args),
 }));
 
 vi.mock("@/lib/services/kyc-evidence-access", () => ({
@@ -182,7 +182,11 @@ describe("/api/admin/verification/evidence", () => {
 
     mockDownloadKycDocument
       .mockRejectedValueOnce(new Error("NoSuchKey: missing"))
-      .mockResolvedValueOnce(Buffer.from("fallback-image"));
+      .mockResolvedValueOnce({
+        buffer: Buffer.from("fallback-image"),
+        downloadMs: 10,
+        decryptMs: 15,
+      });
 
     const response = await GET(
       createGetRequest(

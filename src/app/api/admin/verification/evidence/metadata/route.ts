@@ -38,7 +38,19 @@ const evidenceMetadataBodySchema = z
   });
 
 export async function GET(request: NextRequest) {
+  const requestStartedAt = Date.now();
+  let authMs = 0;
+  let stepLookupMs = 0;
+  let linkedArtifactLookupMs = 0;
+  let artifactQueryMs = 0;
+  let providerQueryMs = 0;
+  let relatedQueryMs = 0;
+  let auditMs = 0;
+  let responseStatus = 200;
+  let resolvedUserId: string | null = null;
+
   try {
+    const authStartedAt = Date.now();
     // Auth check — admin/moderator only
     const supabase = await createClient();
     const {
@@ -47,21 +59,25 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
+      responseStatus = 401;
       return NextResponse.json({ error: "Unauthorized", code: "unauthorized" }, { status: 401 });
     }
 
     const role = await verifyStaffActorRoleFromDb(user);
     if (!role) {
+      responseStatus = 403;
       return NextResponse.json({ error: "Forbidden", code: "forbidden" }, { status: 403 });
     }
 
     const rl = checkLocalRateLimit(user.id, "admin:evidence:metadata");
     if (rl.limited) {
+      responseStatus = 429;
       return NextResponse.json(
         { error: "Too many requests", code: "rate_limited" },
         { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
       );
     }
+    authMs = Date.now() - authStartedAt;
 
     const parsedQuery = parseAndValidateSearchParams(
       request.nextUrl.searchParams,
@@ -76,6 +92,8 @@ export async function GET(request: NextRequest) {
     const { stepId, userId } = parsedQuery.data;
 
     const adminClient = createAdminClient();
+
+    const stepLookupStartedAt = Date.now();
 
     // Fetch step(s). Prefer explicit stepId, but fall back to userId when
     // stepId is stale and the caller supplied both values.
@@ -129,6 +147,8 @@ export async function GET(request: NextRequest) {
         });
         steps = [];
       } else {
+        stepLookupMs = Date.now() - stepLookupStartedAt;
+        responseStatus = 404;
         return NextResponse.json(
           { error: "Verification step(s) not found", code: "not_found" },
           { status: 404 }
@@ -150,11 +170,15 @@ export async function GET(request: NextRequest) {
         targetUserId: userId,
       });
     } else {
+      stepLookupMs = Date.now() - stepLookupStartedAt;
+      responseStatus = 404;
       return NextResponse.json(
         { error: "Verification step(s) not found", code: "not_found" },
         { status: 404 }
       );
     }
+    stepLookupMs = Date.now() - stepLookupStartedAt;
+    resolvedUserId = targetUserId;
     const REVIEWABLE_STATES = [
       "pending",
       "submitted",
@@ -170,12 +194,14 @@ export async function GET(request: NextRequest) {
         targetStepId: stepId,
         targetUserId: userId,
       });
+      responseStatus = 403;
       return NextResponse.json(
         { error: "No active verification case for this user", code: "no_active_case" },
         { status: 403 }
       );
     }
 
+    const linkedArtifactLookupStartedAt = Date.now();
     let allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, targetUserId);
 
     if (allowedArtifactIds.length === 0) {
@@ -192,6 +218,7 @@ export async function GET(request: NextRequest) {
         .map((artifact) => String(artifact.id))
         .filter(Boolean);
     }
+    linkedArtifactLookupMs = Date.now() - linkedArtifactLookupStartedAt;
 
     if (allowedArtifactIds.length === 0) {
       log.warn("Evidence metadata has no linked artifacts; returning empty artifact list", {
@@ -201,47 +228,105 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch only artifacts linked to the current verification session.
-    let artifacts: Array<Record<string, unknown>> = [];
-    if (allowedArtifactIds.length > 0) {
-      const { data } = await adminClient
-        .from("kyc_artifacts")
+    // Fetch artifacts and related data. Queries that only depend on targetUserId
+    // are parallelized to reduce overall latency.
+    const artifactQueryStartedAt = Date.now();
+    const artifactsPromise =
+      allowedArtifactIds.length > 0
+        ? adminClient
+            .from("kyc_artifacts")
+            .select(
+              "id, user_id, step_type, artifact_kind, r2_key, content_type, file_size_bytes, sha256, provider_ref, purge_after, status, created_at"
+            )
+            .in("id", allowedArtifactIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null });
+
+    const relatedQueryStartedAt = Date.now();
+    const [riskSignalsResult, accountProfileResult, accessLogResult] = await Promise.all([
+      adminClient
+        .from("kyc_risk_signals")
+        .select("id, user_id, artifact_id, signal_type, signal_key, score, detail, created_at")
+        .eq("user_id", targetUserId)
+        .order("created_at", { ascending: false }),
+      adminClient
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .select(
-          "id, user_id, step_type, artifact_kind, r2_key, content_type, file_size_bytes, sha256, provider_ref, purge_after, status, created_at"
+          "display_name, account_verification_status, account_status, strikes, legal_hold, location_province, location_city"
         )
-        .in("id", allowedArtifactIds)
-        .order("created_at", { ascending: false });
-      artifacts = data || [];
-    }
+        .eq("user_id", targetUserId)
+        .single(),
+      adminClient
+        .from("kyc_evidence_access_logs")
+        .select("id, actor_id, actor_role, artifact_id, ip_hash, accessed_at")
+        .eq("user_id", targetUserId)
+        .order("accessed_at", { ascending: false })
+        .limit(20),
+    ]);
+    relatedQueryMs = Date.now() - relatedQueryStartedAt;
+
+    const artifactsResult = await artifactsPromise;
+    artifactQueryMs = Date.now() - artifactQueryStartedAt;
+    const artifacts = (artifactsResult.data || []) as Array<Record<string, unknown>>;
 
     // Fetch provider results for all artifacts
-    const artifactIds = (artifacts || []).map((a) => a.id);
+    const artifactIds = artifacts.map((a) => a.id);
     let providerResults: unknown[] = [];
     if (artifactIds.length > 0) {
-      const { data } = await adminClient
+      const providerStartedAt = Date.now();
+      const { data, error: providerErr } = await adminClient
         .from("kyc_provider_results")
         .select(
           "id, artifact_id, provider_status, face_match_score, liveness_score, doc_auth_score, provider_ref, created_at"
         )
         .in("artifact_id", artifactIds);
       providerResults = data || [];
+      providerQueryMs = Date.now() - providerStartedAt;
+
+      if (providerErr) {
+        log.warn("Provider result query failed during evidence metadata fetch", {
+          actorId: user.id,
+          targetUserId,
+          error: providerErr.message,
+        });
+      }
     }
 
-    // Fetch risk signals
-    const { data: riskSignals } = await adminClient
-      .from("kyc_risk_signals")
-      .select("id, user_id, artifact_id, signal_type, signal_key, score, detail, created_at")
-      .eq("user_id", targetUserId)
-      .order("created_at", { ascending: false });
+    if (artifactsResult.error) {
+      log.warn("Artifact query failed during evidence metadata fetch", {
+        actorId: user.id,
+        targetUserId,
+        error: artifactsResult.error.message,
+      });
+    }
 
-    // Fetch account profile
-    const { data: accountProfile } = await adminClient
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select(
-        "display_name, account_verification_status, account_status, strikes, legal_hold, location_province, location_city"
-      )
-      .eq("user_id", targetUserId)
-      .single();
+    const riskSignals = riskSignalsResult.data || [];
+    const accountProfile = accountProfileResult.data || null;
+    const accessLog = accessLogResult.data || [];
+
+    if (riskSignalsResult.error) {
+      log.warn("Risk signal query failed during evidence metadata fetch", {
+        actorId: user.id,
+        targetUserId,
+        error: riskSignalsResult.error.message,
+      });
+    }
+
+    if (accountProfileResult.error) {
+      log.warn("Account profile query failed during evidence metadata fetch", {
+        actorId: user.id,
+        targetUserId,
+        error: accountProfileResult.error.message,
+      });
+    }
+
+    if (accessLogResult.error) {
+      log.warn("Evidence access-log query failed during evidence metadata fetch", {
+        actorId: user.id,
+        targetUserId,
+        error: accessLogResult.error.message,
+      });
+    }
 
     const accountProfilePayload = accountProfile
       ? {
@@ -250,15 +335,8 @@ export async function GET(request: NextRequest) {
         }
       : null;
 
-    // Fetch evidence access log (recent 20 entries)
-    const { data: accessLog } = await adminClient
-      .from("kyc_evidence_access_logs")
-      .select("id, actor_id, actor_role, artifact_id, ip_hash, accessed_at")
-      .eq("user_id", targetUserId)
-      .order("accessed_at", { ascending: false })
-      .limit(20);
-
     // Log this evidence view
+    const auditStartedAt = Date.now();
     await logAuditEvent({
       actorId: user.id,
       actorRole: role,
@@ -271,6 +349,36 @@ export async function GET(request: NextRequest) {
         artifact_count: (artifacts || []).length,
       },
     });
+    auditMs = Date.now() - auditStartedAt;
+
+    const totalMs = Date.now() - requestStartedAt;
+    if (totalMs > 1000) {
+      log.warn("Evidence metadata request slow", {
+        totalMs,
+        authMs,
+        stepLookupMs,
+        linkedArtifactLookupMs,
+        artifactQueryMs,
+        providerQueryMs,
+        relatedQueryMs,
+        auditMs,
+        targetUserId,
+        stepId,
+      });
+    } else {
+      log.info("Evidence metadata request performance", {
+        totalMs,
+        authMs,
+        stepLookupMs,
+        linkedArtifactLookupMs,
+        artifactQueryMs,
+        providerQueryMs,
+        relatedQueryMs,
+        auditMs,
+        targetUserId,
+        stepId,
+      });
+    }
 
     return NextResponse.json({
       steps,
@@ -282,6 +390,7 @@ export async function GET(request: NextRequest) {
       accessLog: accessLog || [],
     });
   } catch (err) {
+    responseStatus = 500;
     log.error("Unexpected error", {
       error: err instanceof Error ? err.message : "unknown error",
       stack: err instanceof Error ? err.stack : undefined,
@@ -290,6 +399,19 @@ export async function GET(request: NextRequest) {
       { error: "Internal server error", code: "server_error" },
       { status: 500 }
     );
+  } finally {
+    log.info("Evidence metadata request summary", {
+      status: responseStatus,
+      totalMs: Date.now() - requestStartedAt,
+      authMs,
+      stepLookupMs,
+      linkedArtifactLookupMs,
+      artifactQueryMs,
+      providerQueryMs,
+      relatedQueryMs,
+      auditMs,
+      targetUserId: resolvedUserId,
+    });
   }
 }
 
