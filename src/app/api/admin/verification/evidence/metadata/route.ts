@@ -77,20 +77,47 @@ export async function GET(request: NextRequest) {
 
     const adminClient = createAdminClient();
 
-    // Fetch step(s)
-    let stepsQuery = adminClient
-      .from("verification_steps")
-      .select(
-        "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at"
-      );
+    // Fetch step(s). Prefer explicit stepId, but fall back to userId when
+    // stepId is stale and the caller supplied both values.
+    let steps: Array<Record<string, unknown>> | null = null;
+    let stepsErr: { message?: string } | null = null;
 
     if (stepId) {
-      stepsQuery = stepsQuery.eq("id", stepId);
-    } else if (userId) {
-      stepsQuery = stepsQuery.eq("user_id", userId);
-    }
+      const stepLookup = await adminClient
+        .from("verification_steps")
+        .select(
+          "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at"
+        )
+        .eq("id", stepId);
+      steps = stepLookup.data as Array<Record<string, unknown>> | null;
+      stepsErr = stepLookup.error as { message?: string } | null;
 
-    const { data: steps, error: stepsErr } = await stepsQuery;
+      if ((!steps || steps.length === 0) && userId) {
+        log.warn("Evidence metadata stepId not found; falling back to userId", {
+          actorId: user.id,
+          targetStepId: stepId,
+          targetUserId: userId,
+        });
+
+        const userLookup = await adminClient
+          .from("verification_steps")
+          .select(
+            "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at"
+          )
+          .eq("user_id", userId);
+        steps = userLookup.data as Array<Record<string, unknown>> | null;
+        stepsErr = userLookup.error as { message?: string } | null;
+      }
+    } else {
+      const userLookup = await adminClient
+        .from("verification_steps")
+        .select(
+          "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at"
+        )
+        .eq("user_id", userId as string);
+      steps = userLookup.data as Array<Record<string, unknown>> | null;
+      stepsErr = userLookup.error as { message?: string } | null;
+    }
 
     if (stepsErr || !steps || steps.length === 0) {
       return NextResponse.json(
@@ -99,7 +126,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const targetUserId = steps[0].user_id;
+    const targetUserId = String(steps[0].user_id);
     const REVIEWABLE_STATES = [
       "pending",
       "submitted",
@@ -108,9 +135,7 @@ export async function GET(request: NextRequest) {
       "auto_approved",
       "auto_rejected",
     ];
-    const hasActiveCase = steps.some((s: { status: string }) =>
-      REVIEWABLE_STATES.includes(s.status)
-    );
+    const hasActiveCase = steps.some((s) => REVIEWABLE_STATES.includes(String(s.status)));
     if (!hasActiveCase) {
       log.warn("Evidence metadata access denied: no active review case", {
         actorId: user.id,

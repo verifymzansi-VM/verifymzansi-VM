@@ -22,7 +22,7 @@ export function getKycEvidenceErrorMessage(
     case "not_linked":
       return "Evidence not linked to current verification session";
     case "not_found":
-      return "Evidence file not found in database";
+      return "Evidence record not found";
     case "missing_file":
       return "Evidence file is missing from storage (may have been purged or dropped)";
     case "rate_limited":
