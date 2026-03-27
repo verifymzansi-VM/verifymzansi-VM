@@ -3,6 +3,7 @@ type ProviderResultRow = {
   artifact_id: string;
   user_id: string;
   provider_status: string;
+  updated_at: string | null;
 };
 
 type VerificationArtifactRow = {
@@ -46,7 +47,7 @@ export async function findProviderResultByRef(
 ): Promise<ProviderResultRow | null> {
   const { data, error } = await adminClient
     .from("kyc_provider_results")
-    .select("id, artifact_id, user_id, provider_status")
+    .select("id, artifact_id, user_id, provider_status, updated_at")
     .eq("provider_ref", providerRef)
     .single();
 
