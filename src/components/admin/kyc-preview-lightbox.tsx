@@ -141,17 +141,57 @@ export function KycPreviewLightbox({
 
     async function loadBlob() {
       try {
-        const params = new URLSearchParams({ artifactId: artifact.id });
-        const res = await fetch(`/api/admin/verification/evidence?${params}`, {
-          method: "GET",
-        });
-        if (!res.ok) {
+        const fetchEvidenceById = async (targetArtifactId: string) => {
+          const params = new URLSearchParams({ artifactId: targetArtifactId });
+          const res = await fetch(`/api/admin/verification/evidence?${params}`, {
+            method: "GET",
+          });
+
+          if (res.ok) {
+            return {
+              ok: true as const,
+              blob: await res.blob(),
+            };
+          }
+
           const data = await res.json().catch(() => ({}));
-          throw new Error(
-            getKycEvidenceErrorMessage(data.code, data.error || `HTTP ${res.status}`)
+          return {
+            ok: false as const,
+            code: data.code as string | undefined,
+            message: getKycEvidenceErrorMessage(data.code, data.error || `HTTP ${res.status}`),
+          };
+        };
+
+        let evidenceResult = await fetchEvidenceById(artifact.id);
+
+        if (!evidenceResult.ok && evidenceResult.code === "not_found") {
+          const retryMetaParams = new URLSearchParams({ userId: step.user_id });
+          const retryMetaRes = await fetch(
+            `/api/admin/verification/evidence/metadata?${retryMetaParams}`,
+            { method: "GET" }
           );
+
+          if (retryMetaRes.ok) {
+            const retryMeta = await retryMetaRes.json();
+            const retryArtifacts: Artifact[] = retryMeta.artifacts || [];
+            const replacement = retryArtifacts
+              .filter((candidate: Artifact) => candidate.step_type === artifact.step_type)
+              .sort(
+                (a: Artifact, b: Artifact) =>
+                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              )[0];
+
+            if (replacement && replacement.id !== artifact.id) {
+              evidenceResult = await fetchEvidenceById(replacement.id);
+            }
+          }
         }
-        const blob = await res.blob();
+
+        if (!evidenceResult.ok) {
+          throw new Error(evidenceResult.message || "Failed to load document");
+        }
+
+        const blob = evidenceResult.blob;
         if (!cancelled) {
           const url = URL.createObjectURL(blob);
           setBlobUrl((prev) => {
@@ -173,7 +213,7 @@ export function KycPreviewLightbox({
     return () => {
       cancelled = true;
     };
-  }, [open, artifact.id]);
+  }, [open, artifact.id, artifact.step_type, step.user_id]);
 
   // Revoke blob when lightbox closes
   useEffect(() => {

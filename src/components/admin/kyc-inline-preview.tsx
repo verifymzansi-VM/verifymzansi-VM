@@ -76,6 +76,30 @@ export function KycInlinePreview({
       setLoading(true);
       setError(null);
 
+      async function fetchEvidenceByArtifactId(targetArtifactId: string) {
+        const evidenceParams = new URLSearchParams({ artifactId: targetArtifactId });
+        const evidenceRes = await fetch(`/api/admin/verification/evidence?${evidenceParams}`, {
+          method: "GET",
+        });
+
+        if (evidenceRes.ok) {
+          return {
+            ok: true as const,
+            blob: await evidenceRes.blob(),
+          };
+        }
+
+        const data = await evidenceRes.json().catch(() => null);
+        return {
+          ok: false as const,
+          code: data?.code as string | undefined,
+          errorMessage: getKycEvidenceErrorMessage(
+            data?.code,
+            data?.error || "Failed to load document"
+          ),
+        };
+      }
+
       try {
         // 1. Fetch metadata to get artifact ID (use GET with query params)
         const metaParams = new URLSearchParams({ stepId, userId });
@@ -101,19 +125,41 @@ export function KycInlinePreview({
 
         if (!cancelled) setArtifact(match);
 
-        // 2. Fetch decrypted blob (use GET with query params)
-        const evidenceParams = new URLSearchParams({ artifactId: match.id });
-        const evidenceRes = await fetch(`/api/admin/verification/evidence?${evidenceParams}`, {
-          method: "GET",
-        });
-        if (!evidenceRes.ok) {
-          const data = await evidenceRes.json().catch(() => null);
-          throw new Error(
-            getKycEvidenceErrorMessage(data?.code, data?.error || "Failed to load document")
+        // 2. Fetch decrypted blob. If artifact ID is stale, refresh metadata and retry once.
+        let resolvedArtifact = match;
+        let evidenceResult = await fetchEvidenceByArtifactId(match.id);
+
+        if (!evidenceResult.ok && evidenceResult.code === "not_found") {
+          const retryMetaParams = new URLSearchParams({ userId });
+          const retryMetaRes = await fetch(
+            `/api/admin/verification/evidence/metadata?${retryMetaParams}`,
+            { method: "GET" }
           );
+
+          if (retryMetaRes.ok) {
+            const retryMeta = await retryMetaRes.json();
+            const retryArtifacts: Artifact[] = retryMeta.artifacts || [];
+            const latestForStep = retryArtifacts
+              .filter((a: Artifact) => a.step_type === stepType)
+              .sort(
+                (a: Artifact, b: Artifact) =>
+                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              )[0];
+
+            if (latestForStep && latestForStep.id !== match.id) {
+              resolvedArtifact = latestForStep;
+              evidenceResult = await fetchEvidenceByArtifactId(latestForStep.id);
+            }
+          }
         }
-        const blob = await evidenceRes.blob();
+
+        if (!evidenceResult.ok) {
+          throw new Error(evidenceResult.errorMessage || "Failed to load document");
+        }
+
+        const blob = evidenceResult.blob;
         if (!cancelled) {
+          setArtifact(resolvedArtifact);
           const url = URL.createObjectURL(blob);
           setBlobUrl(url);
         }

@@ -118,12 +118,64 @@ export function KycComparisonViewer({
         // Preload all artifacts
         for (const artifact of sorted) {
           try {
-            const evidenceRes = await fetch(
+            let resolvedArtifact = artifact;
+            let evidenceRes = await fetch(
               `/api/admin/verification/evidence?artifactId=${artifact.id}`,
               {
                 method: "GET",
               }
             );
+
+            if (!evidenceRes.ok) {
+              const firstErrorData = await evidenceRes.json().catch(() => null);
+
+              if (firstErrorData?.code === "not_found") {
+                const retryMetaRes = await fetch(
+                  `/api/admin/verification/evidence/metadata?userId=${userId}`,
+                  {
+                    method: "GET",
+                  }
+                );
+
+                if (retryMetaRes.ok) {
+                  const retryMeta = await retryMetaRes.json();
+                  const retryArtifacts: Artifact[] = retryMeta.artifacts || [];
+                  const replacement = retryArtifacts
+                    .filter((a: Artifact) => a.step_type === artifact.step_type)
+                    .sort(
+                      (a: Artifact, b: Artifact) =>
+                        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                    )[0];
+
+                  if (replacement && replacement.id !== artifact.id) {
+                    resolvedArtifact = replacement;
+                    evidenceRes = await fetch(
+                      `/api/admin/verification/evidence?artifactId=${replacement.id}`,
+                      {
+                        method: "GET",
+                      }
+                    );
+
+                    if (evidenceRes.ok) {
+                      setArtifacts((prev) =>
+                        prev.map((existing) =>
+                          existing.id === artifact.id ? replacement : existing
+                        )
+                      );
+                    }
+                  }
+                }
+              } else {
+                setArtifactErrors((prev) => ({
+                  ...prev,
+                  [artifact.id]: getKycEvidenceErrorMessage(
+                    firstErrorData?.code,
+                    firstErrorData?.error || "Failed to load document"
+                  ),
+                }));
+                continue;
+              }
+            }
 
             if (evidenceRes.ok) {
               const blob = await evidenceRes.blob();
@@ -131,18 +183,19 @@ export function KycComparisonViewer({
               createdUrls.push(objectUrl);
               setBlobUrls((prev) => ({
                 ...prev,
-                [artifact.id]: objectUrl,
+                [resolvedArtifact.id]: objectUrl,
               }));
               setArtifactErrors((prev) => {
                 const next = { ...prev };
                 delete next[artifact.id];
+                delete next[resolvedArtifact.id];
                 return next;
               });
             } else {
               const data = await evidenceRes.json().catch(() => null);
               setArtifactErrors((prev) => ({
                 ...prev,
-                [artifact.id]: getKycEvidenceErrorMessage(
+                [resolvedArtifact.id]: getKycEvidenceErrorMessage(
                   data?.code,
                   data?.error || "Failed to load document"
                 ),
