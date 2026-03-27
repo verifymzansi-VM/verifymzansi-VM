@@ -96,42 +96,35 @@ export async function GET(request: NextRequest) {
       "auto_approved",
       "auto_rejected",
     ];
-    const { count: activeStepCount } = await adminClient
+    const { count: activeStepCount, error: stepCountErr } = await adminClient
       .from("verification_steps")
       .select("id", { count: "exact", head: true })
       .eq("user_id", artifact.user_id)
       .in("status", REVIEWABLE_STATES);
 
-    if (!activeStepCount || activeStepCount === 0) {
-      log.warn("Evidence access denied: no active review case for user", {
+    if (stepCountErr || !activeStepCount || activeStepCount === 0) {
+      // Log for audit purposes but do not block — admin role already verified above.
+      // The step may have been processed since the queue page was SSR'd, or the
+      // verification_sessions linkage table may be out of sync.
+      log.warn("Evidence accessed: no active review step found for user (admin override)", {
         actorId: user.id,
         targetUserId: artifact.user_id,
         artifactId,
+        stepCountErr: stepCountErr?.message,
+        activeStepCount,
       });
-      return NextResponse.json(
-        { error: "No active verification case for this user", code: "no_active_case" },
-        { status: 403 }
-      );
     }
 
     const allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, artifact.user_id);
 
     if (!allowedArtifactIds.includes(artifact.id)) {
-      log.warn(
-        "Evidence access denied: artifact is not linked to the current verification session",
-        {
-          actorId: user.id,
-          targetUserId: artifact.user_id,
-          artifactId,
-        }
-      );
-      return NextResponse.json(
-        {
-          error: "Artifact is not linked to the current verification session",
-          code: "not_linked",
-        },
-        { status: 403 }
-      );
+      // Log for audit purposes but do not block — admin role already verified and
+      // the artifact belongs to the target user (confirmed above).
+      log.warn("Evidence accessed: artifact not in linked session list (admin override)", {
+        actorId: user.id,
+        targetUserId: artifact.user_id,
+        artifactId,
+      });
     }
 
     // Validate IP hashing secret — required in production for privacy-compliant logging
