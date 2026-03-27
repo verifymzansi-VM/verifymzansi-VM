@@ -89,8 +89,13 @@ export function normalizeMediaUrl(url: string | null | undefined): string {
   // Not a recognized media URL — return as-is
   if (key === null) return url;
 
-  // Videos: serve directly from CDN for best playback performance
+  // Videos: serve directly from CDN for best playback performance.
+  // Exception: .mov files route through proxy for correct MIME mapping.
   if (isVideoUrl(url)) {
+    const ext = key.split(".").pop()?.toLowerCase() ?? "";
+    if (ext === "mov") {
+      return `${PROXY_PREFIX}${key}`;
+    }
     return `${MEDIA_BASE}/${key}`;
   }
 
@@ -100,13 +105,22 @@ export function normalizeMediaUrl(url: string | null | undefined): string {
 
 /**
  * Normalize a media URL specifically for video playback.
- * Always returns a direct CDN URL for optimal streaming.
+ * Returns a direct CDN URL for mp4/webm (which R2 stores with correct MIME).
+ * Routes .mov files through the serve proxy so the MIME fallback table
+ * serves them as video/quicktime instead of application/octet-stream.
  */
 export function normalizeVideoUrl(url: string | null | undefined): string {
   if (!url) return "";
 
   const key = extractMediaStorageKey(url);
   if (key === null) return url;
+
+  // Legacy .mov files may have incorrect content-type in R2 metadata;
+  // route through the proxy which applies the correct MIME mapping.
+  const ext = key.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "mov") {
+    return `${PROXY_PREFIX}${key}`;
+  }
 
   return `${MEDIA_BASE}/${key}`;
 }

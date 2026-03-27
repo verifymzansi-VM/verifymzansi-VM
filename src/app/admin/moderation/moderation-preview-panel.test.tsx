@@ -69,7 +69,7 @@ describe("ModerationPreviewPanel", () => {
 
     expect(screen.getByTestId("video-with-poster")).toHaveAttribute(
       "data-src",
-      "https://media.verifymzansi.com/listings/video-2.mov"
+      "/api/media/serve/listings/video-2.mov"
     );
     expect(screen.queryByAltText(/image 1/i)).toBeNull();
   });
