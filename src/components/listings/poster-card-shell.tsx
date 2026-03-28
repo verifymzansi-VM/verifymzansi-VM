@@ -4,7 +4,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
+import {
+  VideoCardPlayer,
+  isVideoUrl,
+  type MediaFitStrategy,
+} from "@/components/ui/video-card-player";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
@@ -35,6 +39,8 @@ interface PosterCardShellProps {
   logoUrl?: string | null;
   /** Short description — 1-line clamp below title */
   description?: string | null;
+  /** Fit strategy for media in constrained frames. */
+  fitStrategy?: MediaFitStrategy;
 }
 
 export function PosterCardShell({
@@ -58,6 +64,7 @@ export function PosterCardShell({
   fallback,
   logoUrl,
   description,
+  fitStrategy = "smart",
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
@@ -81,7 +88,7 @@ export function PosterCardShell({
               alt={mediaAlt || title}
               sizes={mediaSizes}
               mode={hasVideo ? "hover" : "ambient"}
-              fitStrategy="cover"
+              fitStrategy={fitStrategy}
               containerAspectRatio={3 / 5}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
               mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"

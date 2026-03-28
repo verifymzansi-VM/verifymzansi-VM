@@ -210,7 +210,7 @@ describe("ListingCard", () => {
     const videoPlayer = screen.getByTestId("video-card-player");
     expect(videoPlayer).toBeTruthy();
     expect(videoPlayer).toHaveAttribute("data-src", blobUrl);
-    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "cover");
+    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "smart");
     expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
     expect(screen.queryByAltText("Test Listing")).toBeNull();
   });

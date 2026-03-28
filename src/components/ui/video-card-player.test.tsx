@@ -156,4 +156,24 @@ describe("VideoCardPlayer", () => {
     expect(screen.getByAltText("Clip")).toHaveAttribute("data-media-fit", "smart");
     expect(screen.getByAltText("Clip")).toHaveClass("object-contain");
   });
+
+  it("applies smart-fit to video elements after metadata establishes an extreme aspect ratio", () => {
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        alt="Clip"
+        mode="ambient"
+        fitStrategy="smart"
+      />
+    );
+
+    const video = document.querySelector("video") as HTMLVideoElement;
+    Object.defineProperty(video, "videoWidth", { configurable: true, value: 600 });
+    Object.defineProperty(video, "videoHeight", { configurable: true, value: 1800 });
+
+    fireEvent(video, new Event("loadedmetadata"));
+
+    expect(video).toHaveAttribute("data-media-fit", "smart");
+    expect(video).toHaveClass("object-contain");
+  });
 });
