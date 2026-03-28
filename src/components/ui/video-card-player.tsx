@@ -10,7 +10,7 @@ import { useVideoVisibility } from "@/hooks/use-video-visibility";
 import { useVideoHover } from "@/hooks/use-video-hover";
 
 const DEFAULT_MEDIA_FIT = "object-cover";
-const DEFAULT_CONTAINER_ASPECT_RATIO = 4 / 5;
+const DEFAULT_CONTAINER_ASPECT_RATIO = 5 / 4;
 const SMART_FIT_CROP_THRESHOLD = 0.2;
 
 export type MediaFitStrategy = "cover" | "smart";

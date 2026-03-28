@@ -95,7 +95,7 @@ export function Lightbox({ isOpen, onClose, imageUrl, posterUrl, title }: Lightb
         onClick={(e) => e.stopPropagation()}
         role="presentation"
       >
-        <div className="relative w-full max-w-4xl mx-auto aspect-[4/5] sm:aspect-video rounded-xl overflow-hidden bg-black shadow-2xl">
+        <div className="relative w-full max-w-4xl mx-auto aspect-[5/4] sm:aspect-video rounded-xl overflow-hidden bg-black shadow-2xl">
           {normalizedImageUrl ? (
             isVideo ? (
               <VideoCardPlayer

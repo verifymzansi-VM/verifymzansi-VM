@@ -409,7 +409,7 @@ export function PromotionsExplorer() {
               {Array.from({ length: 8 }).map((_, index) => (
                 <div
                   key={index}
-                  className="aspect-[4/5] rounded-[1.75rem] bg-muted animate-pulse"
+                  className="aspect-[5/4] rounded-[1.75rem] bg-muted animate-pulse"
                 />
               ))}
             </div>
