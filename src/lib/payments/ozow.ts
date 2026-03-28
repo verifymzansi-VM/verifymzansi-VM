@@ -367,7 +367,7 @@ export async function createOzowHostedPayment(
         baseUrlHost,
       });
     }
-    const token = await getOzowAccessToken("payment");
+    const token = await getOzowAccessToken("payments");
 
     const requestBody = {
       siteCode,

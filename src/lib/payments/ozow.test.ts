@@ -73,7 +73,7 @@ describe("ozow payments", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0][0]).toContain("/v1/token");
-    expect(String((fetchMock.mock.calls[0][1] as RequestInit).body)).toContain("scope=payment");
+    expect(String((fetchMock.mock.calls[0][1] as RequestInit).body)).toContain("scope=payments");
     expect(fetchMock.mock.calls[1][0]).toContain("/payments");
     expect(fetchMock.mock.calls[2][0]).toContain("/payments");
   });
