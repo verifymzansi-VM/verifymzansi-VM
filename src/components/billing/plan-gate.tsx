@@ -893,5 +893,9 @@ export function usePlanMaxVideos(area: MarketplaceArea): number {
 }
 
 export function usePlanCoverVideoAllowed(area: MarketplaceArea): boolean {
-  return usePlanEntitlements(area).coverVideoAllowed;
+  const entitlements = usePlanEntitlements(area);
+  // Unified Mzansi Business uses its normal video allowance for the cover slot.
+  return area === "MZANSI_BUSINESS"
+    ? entitlements.videoAllowed || entitlements.coverVideoAllowed
+    : entitlements.coverVideoAllowed;
 }

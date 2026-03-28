@@ -140,6 +140,101 @@ describe("PATCH /api/businesses/[id]", () => {
     );
   });
 
+  it("allows starter-tier Mzansi Business updates to keep a cover video", async () => {
+    const updateSpy = vi.fn().mockReturnThis();
+    const eqSpy = vi.fn().mockReturnThis();
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "businesses") {
+          return {
+            select: vi.fn((fields: string) => {
+              if (fields === "id") {
+                return {
+                  eq: vi.fn().mockReturnThis(),
+                  neq: vi.fn().mockReturnThis(),
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+                };
+              }
+
+              return {
+                eq: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    id: BUSINESS_ID,
+                    owner_id: USER_ID,
+                    status: "live",
+                    cover_video: "https://media.verifymzansi.com/business/existing-cover.mp4",
+                  },
+                }),
+              };
+            }),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: BUSINESS_ID,
+                owner_id: USER_ID,
+                status: "live",
+                cover_video: "https://media.verifymzansi.com/business/existing-cover.mp4",
+              },
+            }),
+            update: updateSpy,
+          };
+        }
+        if (table === "entitlements") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { tier: "starter" } }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }),
+    });
+
+    updateSpy.mockImplementation(() => ({
+      eq: eqSpy,
+    }));
+    eqSpy.mockImplementation(() => ({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    }));
+
+    const res = await PATCH(
+      createRequest({
+        business_name: "Mzansi Online",
+        slug: "mzansi-online",
+        business_type: "online_only",
+        category: "electronics_tech",
+        description: "Updated business profile",
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+        cover_video: "https://media.verifymzansi.com/business/cover-video.mp4",
+        business_details: {
+          type: "online_only",
+          primary_order_channel: "website",
+          order_url: "https://orders.example.com",
+          delivery_regions: ["Nationwide"],
+          support_response_time: "Within 2 hours",
+        },
+      }),
+      { params: Promise.resolve({ id: BUSINESS_ID }) }
+    );
+
+    expect(res.status).toBe(200);
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cover_video: "https://media.verifymzansi.com/business/cover-video.mp4",
+      })
+    );
+  });
+
   it("returns 400 when the business id param is malformed", async () => {
     const res = await PATCH(createRequest({}), {
       params: Promise.resolve({ id: "not-a-uuid" }),

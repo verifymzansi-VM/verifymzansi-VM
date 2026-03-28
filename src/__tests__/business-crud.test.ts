@@ -212,7 +212,13 @@ describe("POST /api/businesses", () => {
     expect(res.status).toBe(403);
   });
 
-  it("blocks cover video uploads when the plan does not allow them", async () => {
+  it("allows Mzansi Business cover video uploads on the starter plan", async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({
+        single: vi.fn().mockResolvedValue({ data: { id: "business-2" }, error: null }),
+      }),
+    });
+
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
@@ -241,8 +247,9 @@ describe("POST /api/businesses", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "business-2" } }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
             neq: vi.fn().mockReturnThis(),
+            insert: insertSpy,
           };
         }
         return {
@@ -259,10 +266,12 @@ describe("POST /api/businesses", () => {
         cover_video: "https://media.verifymzansi.com/business/cover-video.mp4",
       })
     );
-    expect(res.status).toBe(422);
-    await expect(res.json()).resolves.toMatchObject({
-      error: "Cover video is not available on your current plan.",
-    });
+    expect(res.status).toBe(201);
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cover_video: "https://media.verifymzansi.com/business/cover-video.mp4",
+      })
+    );
   });
 
   it("returns 409 when the requested slug is already in use", async () => {
@@ -516,11 +525,11 @@ describe("POST /api/businesses", () => {
     const res = await POST(
       createRequest({
         ...VALID_BODY,
-        cover_video: "https://media.verifymzansi.com/business/cover-video.mp4",
+        cover_video: "https://example.com/business/cover-video.mp4",
       })
     );
 
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(400);
     expect(freePostInsert).not.toHaveBeenCalled();
   });
 

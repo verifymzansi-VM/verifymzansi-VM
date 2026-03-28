@@ -227,6 +227,7 @@ export async function POST(request: NextRequest) {
             videoAllowed: FREE_POST_CONFIG.videoAllowed,
             coverVideoAllowed: false,
           };
+    const coverVideoAllowed = ent.coverVideoAllowed || ent.videoAllowed;
 
     if ((data.gallery_photos?.length ?? 0) > ent.maxPhotos) {
       return NextResponse.json(
@@ -235,7 +236,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (data.cover_video && !ent.coverVideoAllowed) {
+    if (data.cover_video && !coverVideoAllowed) {
       return NextResponse.json(
         { error: "Cover video is not available on your current plan." },
         { status: 422 }
