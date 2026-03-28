@@ -34,6 +34,20 @@ const baseItem: ModerationItem = {
   videos: [],
 };
 
+const baseBusinessItem: ModerationItem = {
+  id: "business-1",
+  title: "Nomsa Beauty Studio",
+  business_name: "Nomsa Beauty Studio",
+  business_type: "mall_store",
+  status: "pending_moderation",
+  created_at: "2026-03-28T10:00:00.000Z",
+  category: "health_beauty",
+  owner_id: "user-2",
+  area: "MZANSI_BUSINESS",
+  areaLabel: "Mzansi Business",
+  itemType: "Business",
+};
+
 describe("ModerationPreviewPanel", () => {
   it("renders listing videos with a dedicated video player and video thumbnail poster", () => {
     render(
@@ -92,5 +106,83 @@ describe("ModerationPreviewPanel", () => {
       "data-poster-url",
       "/api/media/serve/listings/photo-1.jpg"
     );
+  });
+
+  it("renders a rich business moderation view with location, contacts, and typed details", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseBusinessItem,
+          description: "Full-service beauty studio for hair, nails, and makeup.",
+          location_city: "Johannesburg",
+          location_province: "Gauteng",
+          store_number: "L42",
+          phone: "011 555 0101",
+          whatsapp: "0720000000",
+          email: "hello@nomsa.co.za",
+          website: "https://nomsa.co.za",
+          services_offered: ["Hair styling", "Nail care"],
+          payment_methods_accepted: ["cash", "card"],
+          delivery_options: ["in_store_pickup"],
+          business_details: {
+            type: "mall_store",
+            mall_name: "Maponya Mall",
+            floor_or_wing: "Upper Level",
+            nearest_entrance: "Entrance 3",
+          },
+        }}
+      />
+    );
+
+    expect(screen.getByText("Nomsa Beauty Studio")).toBeInTheDocument();
+    expect(screen.getByText("Mall Store")).toBeInTheDocument();
+    expect(screen.getByText("Health, Beauty & Wellness")).toBeInTheDocument();
+    expect(screen.getByText("Johannesburg, Gauteng")).toBeInTheDocument();
+    expect(screen.getByText("011 555 0101")).toBeInTheDocument();
+    expect(screen.getByText("Hair styling")).toBeInTheDocument();
+    expect(screen.getByText("Maponya Mall")).toBeInTheDocument();
+    expect(screen.getByText("Upper Level")).toBeInTheDocument();
+  });
+
+  it("shows a compact empty state when a business has no media", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseBusinessItem,
+          cover_photo: null,
+          cover_video: null,
+          gallery_photos: [],
+          logo_url: null,
+        }}
+      />
+    );
+
+    expect(screen.getByTestId("business-media-empty-state")).toBeInTheDocument();
+    expect(screen.getByText("No business media submitted")).toBeInTheDocument();
+  });
+
+  it("renders mobile service business-specific review details", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseBusinessItem,
+          business_type: "mobile_service",
+          category: "trade_maintenance",
+          service_areas: { areas: ["Soweto", "Roodepoort"] },
+          business_details: {
+            type: "mobile_service",
+            travel_radius_km: 25,
+            emergency_callouts: true,
+          },
+        }}
+      />
+    );
+
+    expect(screen.getByText("Mobile Service")).toBeInTheDocument();
+    expect(screen.getByText("Trade & Maintenance")).toBeInTheDocument();
+    expect(screen.getByText("25 km")).toBeInTheDocument();
+    expect(screen.getByText("Available")).toBeInTheDocument();
+    expect(screen.getByText("Soweto")).toBeInTheDocument();
+    expect(screen.getByText("Roodepoort")).toBeInTheDocument();
   });
 });

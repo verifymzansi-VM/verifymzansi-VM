@@ -114,6 +114,14 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
     );
   }
 
+  function getThumbnailUrl(item: ModerationItem) {
+    if (item.photos?.[0]) return normalizeMediaUrl(item.photos[0]);
+    if (item.cover_photo) return normalizeMediaUrl(item.cover_photo);
+    if (item.gallery_photos?.[0]) return normalizeMediaUrl(item.gallery_photos[0]);
+    if (item.logo_url) return normalizeMediaUrl(item.logo_url);
+    return null;
+  }
+
   return (
     <>
       {/* Area Filter */}
@@ -143,11 +151,11 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
             <CardContent className="py-4">
               <div className="flex items-center gap-4">
                 {/* Thumbnail preview */}
-                {item.photos && item.photos.length > 0 ? (
+                {getThumbnailUrl(item) ? (
                   <div className="relative h-14 w-14 flex-shrink-0 rounded-md overflow-hidden bg-muted">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={normalizeMediaUrl(item.photos[0])}
+                      src={getThumbnailUrl(item)!}
                       alt={`${item.title} thumbnail`}
                       className="h-full w-full object-cover"
                     />

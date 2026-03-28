@@ -35,7 +35,9 @@ export default async function AdminModerationPage() {
         .limit(50),
       admin
         .from("businesses")
-        .select("id, business_name, business_type, status, created_at, owner_id")
+        .select(
+          "id, business_name, business_type, status, created_at, owner_id, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, payment_methods_accepted, delivery_options, service_areas, business_details"
+        )
         .eq("status", "pending_moderation")
         .order("created_at", { ascending: true })
         .limit(50),

@@ -125,6 +125,11 @@ describe("AdminModerationPage", () => {
     expect(screen.getByText("Business:Nomsa Beauty Studio")).toBeInTheDocument();
     expect(screen.getByText("Promotion:Weekend Sale")).toBeInTheDocument();
     expect(listingQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"));
+    expect(businessQuery?.select).toHaveBeenCalledWith(expect.stringContaining("business_details"));
+    expect(businessQuery?.select).toHaveBeenCalledWith(expect.stringContaining("cover_photo"));
+    expect(businessQuery?.select).toHaveBeenCalledWith(
+      expect.stringContaining("payment_methods_accepted")
+    );
     expect(promotionQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"));
   });
 });
