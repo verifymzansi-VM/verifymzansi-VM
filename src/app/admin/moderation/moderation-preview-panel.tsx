@@ -454,126 +454,161 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_132px]">
-            {allMedia.length > 0 ? (
-              <div className="space-y-2">
-                <div className="relative group rounded-lg overflow-hidden bg-warm-100 dark:bg-warm-800">
-                  <div className="aspect-video relative">
-                    {isVideo ? (
-                      <VideoWithPoster
-                        key={activeUrl}
-                        src={activeUrl}
-                        posterUrl={posterUrl}
-                        controls
-                        playsInline
-                        className="w-full h-full object-contain bg-black rounded-lg"
-                        wrapperClassName="w-full h-full"
-                      />
-                    ) : (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={activeUrl}
-                        alt={`${item.title ?? item.business_name ?? "Business"} - image ${activeIndex + 1}`}
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
-                    )}
-
-                    {allMedia.length > 1 && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => goTo(activeIndex - 1)}
-                          disabled={activeIndex === 0}
-                          className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0 hover:bg-black/60"
-                          aria-label="Previous image"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => goTo(activeIndex + 1)}
-                          disabled={activeIndex === allMedia.length - 1}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0 hover:bg-black/60"
-                          aria-label="Next image"
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
-                      </>
-                    )}
+          {allMedia.length === 0 && !logoUrl ? (
+            <div
+              className="rounded-xl border border-dashed bg-muted/20 p-4"
+              data-testid="business-media-empty-state"
+            >
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-background p-2 shadow-sm">
+                  <Store className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">No business visuals submitted</p>
+                    <p className="text-sm text-muted-foreground">
+                      There are no photos, promo video, or logo for this business yet.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline" className="text-[10px]">
+                      No cover photo
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      No promo video
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      No gallery photos
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      No logo
+                    </Badge>
                   </div>
                 </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_132px]">
+              {allMedia.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="relative group rounded-lg overflow-hidden bg-warm-100 dark:bg-warm-800">
+                    <div className="aspect-video relative">
+                      {isVideo ? (
+                        <VideoWithPoster
+                          key={activeUrl}
+                          src={activeUrl}
+                          posterUrl={posterUrl}
+                          controls
+                          playsInline
+                          className="w-full h-full object-contain bg-black rounded-lg"
+                          wrapperClassName="w-full h-full"
+                        />
+                      ) : (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={activeUrl}
+                          alt={`${item.title ?? item.business_name ?? "Business"} - image ${activeIndex + 1}`}
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      )}
 
-                {allMedia.length > 1 && (
-                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-                    {allMedia.map((media, index) => (
-                      <button
-                        key={`${media.url}-${index}`}
-                        type="button"
-                        onClick={() => setActiveIndex(index)}
-                        className={cn(
-                          "relative flex-shrink-0 w-14 h-14 rounded-md overflow-hidden border-2 transition-all",
-                          index === activeIndex
-                            ? "border-brand-green ring-1 ring-brand-green/20"
-                            : "border-transparent opacity-60 hover:opacity-100"
-                        )}
-                      >
-                        {media.isVideo ? (
-                          <VideoThumbnailThumb firstPhoto={posterUrl} />
-                        ) : (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={media.url}
-                            alt={`Thumbnail ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        )}
-                      </button>
-                    ))}
+                      {allMedia.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => goTo(activeIndex - 1)}
+                            disabled={activeIndex === 0}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0 hover:bg-black/60"
+                            aria-label="Previous image"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => goTo(activeIndex + 1)}
+                            disabled={activeIndex === allMedia.length - 1}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0 hover:bg-black/60"
+                            aria-label="Next image"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {allMedia.length > 1 && (
+                    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                      {allMedia.map((media, index) => (
+                        <button
+                          key={`${media.url}-${index}`}
+                          type="button"
+                          onClick={() => setActiveIndex(index)}
+                          className={cn(
+                            "relative flex-shrink-0 w-14 h-14 rounded-md overflow-hidden border-2 transition-all",
+                            index === activeIndex
+                              ? "border-brand-green ring-1 ring-brand-green/20"
+                              : "border-transparent opacity-60 hover:opacity-100"
+                          )}
+                        >
+                          {media.isVideo ? (
+                            <VideoThumbnailThumb firstPhoto={posterUrl} />
+                          ) : (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={media.url}
+                              alt={`Thumbnail ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="self-start rounded-xl border border-dashed bg-muted/30 px-4 py-6">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-background p-2 shadow-sm">
+                      <Store className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">No business media submitted</p>
+                      <p className="text-sm text-muted-foreground">
+                        Moderation can continue with the profile details below.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div
+                className="self-start rounded-xl border bg-muted/20 p-3"
+                data-testid="business-logo-panel"
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Brand logo
+                </p>
+                {logoUrl ? (
+                  <div className="mt-3 rounded-lg border bg-background p-3">
+                    <div className="relative aspect-square overflow-hidden rounded-md">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={logoUrl}
+                        alt={`${item.business_name ?? item.title ?? "Business"} logo`}
+                        className="absolute inset-0 h-full w-full object-contain"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-lg border border-dashed bg-background px-3 py-6 text-center">
+                    <Store className="mx-auto h-5 w-5 text-muted-foreground" />
+                    <p className="mt-2 text-xs text-muted-foreground">No logo submitted</p>
                   </div>
                 )}
               </div>
-            ) : (
-              <div
-                className="rounded-xl border border-dashed bg-muted/30 px-4 py-6"
-                data-testid="business-media-empty-state"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="rounded-full bg-background p-2 shadow-sm">
-                    <Store className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">No business media submitted</p>
-                    <p className="text-sm text-muted-foreground">
-                      Moderation can continue with the profile details below.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="rounded-xl border bg-muted/20 p-3" data-testid="business-logo-panel">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Brand logo
-              </p>
-              {logoUrl ? (
-                <div className="mt-3 rounded-lg border bg-background p-3">
-                  <div className="relative aspect-square overflow-hidden rounded-md">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={logoUrl}
-                      alt={`${item.business_name ?? item.title ?? "Business"} logo`}
-                      className="absolute inset-0 h-full w-full object-contain"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-3 rounded-lg border border-dashed bg-background px-3 py-6 text-center">
-                  <Store className="mx-auto h-5 w-5 text-muted-foreground" />
-                  <p className="mt-2 text-xs text-muted-foreground">No logo submitted</p>
-                </div>
-              )}
             </div>
-          </div>
+          )}
         </div>
 
         <div className="space-y-3">

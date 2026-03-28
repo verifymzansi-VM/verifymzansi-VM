@@ -171,8 +171,10 @@ describe("ModerationPreviewPanel", () => {
     );
 
     expect(screen.getByTestId("business-media-empty-state")).toBeInTheDocument();
-    expect(screen.getByText("No business media submitted")).toBeInTheDocument();
-    expect(screen.getByText("No logo submitted")).toBeInTheDocument();
+    expect(screen.getByText("No business visuals submitted")).toBeInTheDocument();
+    expect(screen.getByText("No cover photo")).toBeInTheDocument();
+    expect(screen.getByText("No logo")).toBeInTheDocument();
+    expect(screen.queryByTestId("business-logo-panel")).not.toBeInTheDocument();
   });
 
   it("renders mobile service business-specific review details", () => {
