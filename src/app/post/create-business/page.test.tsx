@@ -285,6 +285,34 @@ describe("CreateBusinessPage", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it("submits successfully without any media uploads", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    });
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    const submitCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(submitCall[0]).toBe("/api/businesses");
+
+    const payload = JSON.parse(submitCall[1].body as string);
+    expect(payload.logo_url).toBeUndefined();
+    expect(payload.cover_photo).toBeUndefined();
+    expect(payload.gallery_photos).toBeUndefined();
+    expect(payload.cover_video).toBeUndefined();
+    expect(payload.video_thumbnail).toBeUndefined();
+  });
+
   it("renders subtype-specific details in the shared review preview", async () => {
     render(<CreateBusinessPage />);
 
