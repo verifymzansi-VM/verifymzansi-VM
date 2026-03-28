@@ -81,7 +81,7 @@ export function PosterCardShell({
               alt={mediaAlt || title}
               sizes={mediaSizes}
               mode={hasVideo ? "hover" : "ambient"}
-              fitStrategy="smart"
+              fitStrategy="cover"
               containerAspectRatio={3 / 5}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
               mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
