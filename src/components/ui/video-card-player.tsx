@@ -56,7 +56,7 @@ function getForegroundMediaClassName(
   mediaClassName?: string
 ) {
   return cn(
-    usesSmartFit ? "object-contain p-3 sm:p-4" : baseFitClassName,
+    usesSmartFit ? "object-contain" : baseFitClassName,
     usesSmartFit && "drop-shadow-[0_20px_50px_rgba(15,23,42,0.4)]",
     mediaClassName
   );
@@ -101,11 +101,11 @@ function SmartFitBackdrop({
         alt=""
         aria-hidden="true"
         fill
-        className="absolute inset-0 scale-110 object-cover blur-2xl brightness-[0.45] saturate-[0.85]"
+        className="absolute inset-0 scale-110 object-cover blur-2xl brightness-90 saturate-150"
         sizes={sizes}
         priority={priority}
       />
-      <div className="absolute inset-0 bg-black/30" />
+      <div className="absolute inset-0 bg-black/10" />
     </>
   );
 }
