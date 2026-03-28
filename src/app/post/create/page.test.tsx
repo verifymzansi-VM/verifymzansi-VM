@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CreatePostPage from "./page";
 
-const { mockCreateClient, mockResolveAccountVerification, mockFetch, mockRedirect } = vi.hoisted(
-  () => {
+const { mockCreateClient, mockResolveAccountVerification, mockFetch, mockRedirect, mockPush } =
+  vi.hoisted(() => {
     class RedirectError extends Error {
       digest = "NEXT_REDIRECT";
       constructor(public url: string) {
@@ -14,12 +14,12 @@ const { mockCreateClient, mockResolveAccountVerification, mockFetch, mockRedirec
       mockCreateClient: vi.fn(),
       mockResolveAccountVerification: vi.fn(),
       mockFetch: vi.fn(),
+      mockPush: vi.fn(),
       mockRedirect: vi.fn((url: string) => {
         throw new RedirectError(url);
       }),
     };
-  }
-);
+  });
 
 vi.mock("next/link", () => ({
   default: ({
@@ -39,6 +39,7 @@ vi.mock("next/link", () => ({
 
 vi.mock("next/navigation", () => ({
   redirect: mockRedirect,
+  useRouter: () => ({ push: mockPush }),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -68,11 +69,12 @@ vi.mock("@/components/layout/page-header", () => ({
 
 describe("CreatePostPage", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.stubGlobal("fetch", mockFetch);
     mockFetch.mockResolvedValue({
-      ok: false,
-      status: 401,
-      json: vi.fn().mockResolvedValue({ error: "Unauthorized" }),
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ accountVerificationStatus: "incomplete" }),
     });
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -89,7 +91,7 @@ describe("CreatePostPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders exactly three category cards with the current category selection UI", async () => {
+  it("renders the current category cards with the current category selection UI", async () => {
     render(await CreatePostPage());
 
     expect(screen.getAllByText("Mzansi Market").length).toBeGreaterThan(0);
@@ -99,25 +101,18 @@ describe("CreatePostPage", () => {
     expect(screen.getByText("Sell, buy, or rent a single item.")).toBeInTheDocument();
     expect(screen.getByText("Create your full business profile.")).toBeInTheDocument();
     expect(screen.getByText("Promote something time-sensitive.")).toBeInTheDocument();
-    expect(screen.getAllByRole("link")).toHaveLength(3);
+    expect(screen.getByRole("button", { name: /Mzansi Market/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Mzansi Business/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Promotions & Events/i })).toBeInTheDocument();
   });
 
   it("sends verified users directly to the create forms", async () => {
     render(await CreatePostPage());
 
+    fireEvent.click(screen.getByRole("button", { name: /Mzansi Market/i }));
+
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
-        "href",
-        "/post/create-listing"
-      );
-      expect(screen.getByRole("link", { name: /Mzansi Business/i })).toHaveAttribute(
-        "href",
-        "/post/create-business"
-      );
-      expect(screen.getByRole("link", { name: /Promotions & Events/i })).toHaveAttribute(
-        "href",
-        "/post/create-promotion"
-      );
+      expect(mockPush).toHaveBeenCalledWith("/post/create-listing");
     });
   });
 
@@ -130,15 +125,12 @@ describe("CreatePostPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Verification required before posting")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: /Mzansi Market/i }).getAttribute("href")).toContain(
-        "/verification?returnUrl=%2Fpost%2Fcreate-listing"
-      );
-      expect(screen.getByRole("link", { name: /Mzansi Business/i }).getAttribute("href")).toContain(
-        "/verification?returnUrl=%2Fpost%2Fcreate-business"
-      );
-      expect(
-        screen.getByRole("link", { name: /Promotions & Events/i }).getAttribute("href")
-      ).toContain("/verification?returnUrl=%2Fpost%2Fcreate-promotion");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Mzansi Market/i }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/verification?returnUrl=%2Fpost%2Fcreate-listing");
     });
   });
 
@@ -151,10 +143,7 @@ describe("CreatePostPage", () => {
 
     await waitFor(() => {
       expect(screen.queryByText("Verification required before posting")).not.toBeInTheDocument();
-      expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
-        "href",
-        "/post/create-listing"
-      );
+      expect(screen.getByRole("button", { name: /Mzansi Market/i })).toBeInTheDocument();
     });
   });
 
@@ -162,10 +151,26 @@ describe("CreatePostPage", () => {
     render(await CreatePostPage());
 
     expect(screen.queryByText("Checking access")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Mzansi Market/i })).toHaveAttribute(
-      "href",
-      "/post/create-listing"
-    );
+    expect(screen.getByRole("button", { name: /Mzansi Market/i })).toBeInTheDocument();
+  });
+
+  it("shows pending loading feedback and blocks repeated category clicks", async () => {
+    render(await CreatePostPage());
+
+    const marketButton = screen.getByRole("button", { name: /Mzansi Market/i });
+    const businessButton = screen.getByRole("button", { name: /Mzansi Business/i });
+
+    fireEvent.click(marketButton);
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith("/post/create-listing");
+    expect(marketButton).toBeDisabled();
+    expect(marketButton).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    expect(businessButton).toBeDisabled();
+
+    fireEvent.click(businessButton);
+    expect(mockPush).toHaveBeenCalledTimes(1);
   });
 
   it("redirects unauthenticated users to login with returnUrl", async () => {

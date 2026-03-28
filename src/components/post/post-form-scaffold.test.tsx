@@ -58,4 +58,23 @@ describe("PostFormFooter", () => {
 
     expect(handleSubmit).toHaveBeenCalledTimes(1);
   });
+
+  it("shows an accessible loading state while submitting", () => {
+    const { container } = render(
+      <form noValidate>
+        <PostFormFooter
+          currentStep={2}
+          totalSteps={3}
+          isSubmitting
+          submittingLabel="Uploading media..."
+        />
+      </form>
+    );
+
+    const submitButton = screen.getByRole("button", { name: /Uploading media/i });
+
+    expect(submitButton).toBeDisabled();
+    expect(submitButton).toHaveAttribute("aria-busy", "true");
+    expect(container.querySelector("svg")).toBeInTheDocument();
+  });
 });

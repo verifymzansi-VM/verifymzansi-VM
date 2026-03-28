@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Building2, Megaphone, ShieldAlert, ShoppingBag } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, Building2, Loader2, Megaphone, ShieldAlert, ShoppingBag } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -79,9 +79,11 @@ export function PostCreateClient({
   initialVerificationStatus,
   isAuthenticated,
 }: PostCreateClientProps) {
+  const router = useRouter();
   const [resolvedVerificationStatus, setResolvedVerificationStatus] =
     useState<AccountVerificationStatus | null>(null);
   const [hasConfirmedAuth, setHasConfirmedAuth] = useState(isAuthenticated);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
   const verificationStatus = resolvedVerificationStatus ?? initialVerificationStatus;
   const canPost = verificationStatus === "verified";
 
@@ -145,6 +147,14 @@ export function PostCreateClient({
     };
   }, [initialVerificationStatus, isAuthenticated, resolvedVerificationStatus]);
 
+  function handleCategoryClick(optionHref: string) {
+    if (pendingHref) return;
+
+    const href = buildPostCategoryHref(optionHref, verificationStatus);
+    setPendingHref(href);
+    router.push(href);
+  }
+
   return (
     <div className="space-y-4">
       {hasConfirmedAuth && !canPost && (
@@ -161,10 +171,25 @@ export function PostCreateClient({
         {POST_OPTIONS.map((option) => {
           const Icon = option.icon;
           const href = buildPostCategoryHref(option.href, verificationStatus);
+          const isPending = pendingHref === href;
+          const isDisabled = pendingHref !== null;
 
           return (
-            <Link key={option.href} href={href}>
-              <Card className="h-full cursor-pointer transition-all hover:border-brand-green/40 hover:shadow-lg">
+            <button
+              key={option.href}
+              type="button"
+              onClick={() => handleCategoryClick(option.href)}
+              disabled={isDisabled}
+              aria-busy={isPending}
+              className="group block h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/50 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-100"
+            >
+              <Card
+                className={`h-full transition-all duration-300 ${
+                  isPending
+                    ? "border-brand-green/50 bg-brand-green/5 shadow-lg shadow-brand-green/10"
+                    : "cursor-pointer hover:border-brand-green/40 hover:shadow-lg"
+                } ${isDisabled && !isPending ? "opacity-75" : ""}`}
+              >
                 <CardContent className="flex h-full flex-col gap-4 p-5">
                   <div className="flex items-center justify-between gap-3">
                     <div className={`rounded-xl p-3 ${option.iconBg}`}>
@@ -189,13 +214,26 @@ export function PostCreateClient({
                     ))}
                   </ul>
 
-                  <div className="mt-auto flex items-center gap-1 text-sm font-medium text-brand-green">
-                    Get Started
-                    <ArrowRight className="h-4 w-4" />
+                  <div
+                    className={`mt-auto flex items-center gap-1 text-sm font-medium ${
+                      isPending ? "text-brand-green" : "text-brand-green"
+                    }`}
+                  >
+                    {isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        Get Started
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
-            </Link>
+            </button>
           );
         })}
       </div>

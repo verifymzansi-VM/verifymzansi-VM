@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, type LucideIcon } from "lucide-react";
+import { CheckCircle2, Loader2, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -188,9 +188,17 @@ export function PostFormFooter({
           type={submitType}
           onClick={submitType === "button" ? onSubmitClick : undefined}
           disabled={submitDisabled || isSubmitting}
-          className="min-w-36"
+          aria-busy={isSubmitting}
+          className="min-w-36 gap-2"
         >
-          {isSubmitting ? submittingLabel : submitLabel}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              <span>{submittingLabel}</span>
+            </>
+          ) : (
+            submitLabel
+          )}
         </Button>
       ) : (
         <Button key="next-action" type="button" onClick={onNext} disabled={nextDisabled}>
