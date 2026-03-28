@@ -108,7 +108,11 @@ async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<
   const clientId = env("OZOW_CLIENT_ID");
   const clientSecret = env("OZOW_CLIENT_SECRET");
   if (!clientId || !clientSecret) {
-    throw new Error("Ozow credentials are not configured");
+    const missing = [!clientId && "OZOW_CLIENT_ID", !clientSecret && "OZOW_CLIENT_SECRET"]
+      .filter(Boolean)
+      .join(", ");
+    log.error("Ozow credentials missing", { missing });
+    throw new Error(`Ozow credentials are not configured (missing: ${missing})`);
   }
 
   const response = await fetch(`${getOzowBaseUrl()}/v1/token`, {
@@ -125,8 +129,15 @@ async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<
 
   if (!response.ok) {
     const body = await response.text();
-    log.error("Ozow token request failed", { status: response.status, body });
-    throw new Error("Failed to authenticate with Ozow");
+    log.error("Ozow token request failed", {
+      status: response.status,
+      ozowEnv: env("OZOW_ENV") || "staging",
+      baseUrl: getOzowBaseUrl(),
+      body,
+    });
+    throw new Error(
+      `Failed to authenticate with Ozow (HTTP ${response.status}: ${body.slice(0, 200)})`
+    );
   }
 
   const payload = (await response.json()) as Record<string, unknown>;
@@ -205,6 +216,7 @@ export async function createOzowHostedPayment(
   const token = await getOzowAccessToken("payment");
   const siteCode = env("OZOW_SITE_CODE");
   if (!siteCode) {
+    log.error("OZOW_SITE_CODE is missing");
     throw new Error("OZOW_SITE_CODE is not configured");
   }
 

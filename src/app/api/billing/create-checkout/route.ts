@@ -194,10 +194,23 @@ export async function POST(request: NextRequest) {
       checkoutUrl = checkout.checkoutUrl;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create checkout session";
-      log.error("Failed to create hosted checkout", { error: message });
-      if (/configured|authenticate/i.test(message)) {
+      log.error("Failed to create hosted checkout", {
+        error: message,
+        planId,
+        userId: user.id,
+      });
+      if (/not configured/i.test(message)) {
         return NextResponse.json(
-          { error: "Billing is not yet configured. Please try again later." },
+          { error: "Payment processing is not yet configured. Please try again later." },
+          { status: 503 }
+        );
+      }
+      if (/authenticate/i.test(message)) {
+        return NextResponse.json(
+          {
+            error:
+              "Payment provider authentication failed. This is a temporary issue — please try again in a few minutes.",
+          },
           { status: 503 }
         );
       }
