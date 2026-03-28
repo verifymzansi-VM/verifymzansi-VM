@@ -157,9 +157,9 @@ describe("ListingCard", () => {
     expect(screen.getByText("R150")).toBeTruthy();
   });
 
-  it("should render location info", () => {
+  it("should not render location info on the card overlay", () => {
     render(<ListingCard {...defaultProps} />);
-    expect(screen.getByText(/Johannesburg/)).toBeTruthy();
+    expect(screen.queryByText(/Johannesburg/)).toBeNull();
   });
 
   it("shows only the simplified overlay metadata", () => {
