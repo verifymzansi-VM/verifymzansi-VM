@@ -2,6 +2,16 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { ShowroomHero } from "./showroom-hero";
 
+const { videoCardPlayerMock } = vi.hoisted(() => ({
+  videoCardPlayerMock: vi.fn(
+    ({ alt, muteControlVisibility }: { alt?: string; muteControlVisibility?: string }) => (
+      <div data-testid="showroom-media" data-mute-control={muteControlVisibility}>
+        {alt}
+      </div>
+    )
+  ),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -19,7 +29,7 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@/components/ui/video-card-player", () => ({
-  VideoCardPlayer: ({ alt }: { alt?: string }) => <div data-testid="showroom-media">{alt}</div>,
+  VideoCardPlayer: videoCardPlayerMock,
 }));
 
 describe("ShowroomHero", () => {
@@ -102,5 +112,25 @@ describe("ShowroomHero", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Welcome to VerifyMzansi Showroom").length).toBeGreaterThan(0);
     });
+  });
+
+  it("keeps the mute control visible on showroom media", () => {
+    render(
+      <ShowroomHero
+        slides={[
+          {
+            id: "listing-1",
+            type: "listing",
+            title: "Verified Phone",
+            description: "Great condition",
+            location: "Cape Town",
+            mediaUrl: "https://example.com/video.mp4",
+            posterUrl: "https://example.com/poster.jpg",
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByTestId("showroom-media")).toHaveAttribute("data-mute-control", "always");
   });
 });

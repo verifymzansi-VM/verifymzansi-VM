@@ -5,6 +5,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen } from "@testing-library/react";
 
+const videoCardPlayerMock = vi.fn(
+  ({
+    src,
+    fitStrategy,
+    muteControlVisibility,
+  }: {
+    src: string;
+    fitStrategy?: string;
+    muteControlVisibility?: string;
+  }) => (
+    <div
+      data-testid="video-card-player"
+      data-src={src}
+      data-fit-strategy={fitStrategy}
+      data-mute-control={muteControlVisibility}
+    />
+  )
+);
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
     <a href={href} {...props}>
@@ -63,7 +82,7 @@ vi.mock("@/lib/utils/format", () => ({
 }));
 
 vi.mock("@/components/ui/video-card-player", () => ({
-  VideoCardPlayer: ({ src }: { src: string }) => <div data-testid="video-card-player">{src}</div>,
+  VideoCardPlayer: videoCardPlayerMock,
   isVideoUrl: (url: string | null | undefined) => Boolean(url?.endsWith(".mp4")),
 }));
 
@@ -150,5 +169,20 @@ describe("PromotionCard", () => {
       "src",
       "https://example.com/logo.jpg"
     );
+  });
+
+  it("uses the shared smart-fit video player for motion promotions", () => {
+    render(
+      <PromotionCard
+        {...defaultProps}
+        imageUrl="https://example.com/promo.mp4"
+        posterUrl="https://example.com/promo.jpg"
+      />
+    );
+
+    const videoPlayer = screen.getByTestId("video-card-player");
+    expect(videoPlayer).toHaveAttribute("data-src", "https://example.com/promo.mp4");
+    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "smart");
+    expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
   });
 });

@@ -86,6 +86,7 @@ export async function HomeMzansiMarketShowcase() {
                   city={l.location_city ?? "South Africa"}
                   provinceCode={provinceCode(l.location_province ?? "ZA")}
                   boosted={isBoosted}
+                  logoUrl={l.logo_url}
                 />
               </div>
             );

@@ -5,6 +5,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen } from "@testing-library/react";
 
+const videoCardPlayerMock = vi.fn(
+  ({
+    src,
+    fitStrategy,
+    muteControlVisibility,
+  }: {
+    src: string;
+    fitStrategy?: string;
+    muteControlVisibility?: string;
+  }) => (
+    <div
+      data-testid="video-card-player"
+      data-src={src}
+      data-fit-strategy={fitStrategy}
+      data-mute-control={muteControlVisibility}
+    />
+  )
+);
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
     <a href={href} {...props}>
@@ -44,9 +63,7 @@ vi.mock("@/components/ui/card", () => ({
 }));
 
 vi.mock("@/components/ui/video-card-player", () => ({
-  VideoCardPlayer: ({ src }: { src: string }) => (
-    <div data-testid="video-card-player" data-src={src} />
-  ),
+  VideoCardPlayer: videoCardPlayerMock,
   isVideoUrl: (url: string | null | undefined) => Boolean(url?.endsWith(".mp4")),
 }));
 
@@ -102,6 +119,8 @@ describe("BusinessCard", () => {
       "data-src",
       "https://example.com/cover.mp4"
     );
+    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-fit-strategy", "smart");
+    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mute-control", "always");
   });
 
   it("links directly to the business detail page", () => {

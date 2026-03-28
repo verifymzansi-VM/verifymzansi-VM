@@ -14,9 +14,6 @@ import {
   ShieldCheck,
   Volume2,
   VolumeX,
-  Play,
-  Pause,
-  Square,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -171,44 +168,10 @@ function MediaRender({
   posterUrl?: string;
 }) {
   const [isMuted, setIsMuted] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isStopped, setIsStopped] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   const isVideo = isVideoUrl(src);
-  const { videoRef, reducedMotion: _reducedMotion } = useVideoVisibility(
-    isVideo && !isStopped ? src : undefined
-  );
-
-  const togglePlayPause = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!videoRef.current) return;
-
-    if (isStopped) {
-      setIsStopped(false);
-      videoRef.current.currentTime = 0;
-      videoRef.current.play().catch(() => {});
-      return;
-    }
-
-    if (videoRef.current.paused) {
-      videoRef.current.play().catch(() => {});
-    } else {
-      videoRef.current.pause();
-    }
-  };
-
-  const handleStop = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!videoRef.current) return;
-    videoRef.current.pause();
-    videoRef.current.currentTime = 0;
-    setIsStopped(true);
-    setIsPlaying(false);
-    setVideoReady(false);
-  };
+  const { videoRef, reducedMotion } = useVideoVisibility(isVideo ? src : undefined);
 
   const toggleMute = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -224,19 +187,10 @@ function MediaRender({
     const el = videoRef.current;
     if (!el) return;
 
-    const onPlay = () => {
-      setIsPlaying(true);
-      setIsStopped(false);
-    };
-    const onPause = () => setIsPlaying(false);
     const onPlaying = () => setVideoReady(true);
 
-    el.addEventListener("play", onPlay);
-    el.addEventListener("pause", onPause);
     el.addEventListener("playing", onPlaying);
     return () => {
-      el.removeEventListener("play", onPlay);
-      el.removeEventListener("pause", onPause);
       el.removeEventListener("playing", onPlaying);
     };
   }, [videoRef]);
@@ -247,8 +201,7 @@ function MediaRender({
   };
 
   if (isVideo) {
-    // Show poster when video hasn't started playing yet, when stopped, or on error
-    const showPoster = posterUrl && (isStopped || !videoReady || hasError);
+    const showPoster = posterUrl && (!videoReady || hasError || reducedMotion);
 
     return (
       <div className="relative h-full w-full group/video">
@@ -265,13 +218,11 @@ function MediaRender({
         )}
         {/* Gradient fallback when no poster available */}
         {!posterUrl && !videoReady && (
-          <div className="absolute inset-0 z-[1] bg-gradient-to-br from-warm-300 to-warm-400 dark:from-warm-700 dark:to-warm-800 flex items-center justify-center">
-            <Play className="h-12 w-12 text-white/50" />
-          </div>
+          <div className="absolute inset-0 z-[1] bg-gradient-to-br from-warm-300 to-warm-400 dark:from-warm-700 dark:to-warm-800" />
         )}
 
         {/* Video element */}
-        {!isStopped && !hasError && (
+        {!hasError && (
           <video
             ref={videoRef}
             loop
@@ -288,80 +239,19 @@ function MediaRender({
           />
         )}
 
-        {/* Mobile controls (always visible) */}
-        <div className="absolute inset-0 z-10 flex sm:hidden flex-col justify-between p-3 bg-black/20">
-          <div className="flex justify-end w-full">
-            <button
-              onClick={toggleMute}
-              className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
-              aria-label={isMuted ? "Unmute" : "Mute"}
-            >
-              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-            </button>
-          </div>
-          <div className="flex items-center justify-center flex-1 gap-3">
-            <button
-              onClick={togglePlayPause}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
-              aria-label={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? (
-                <Pause className="h-5 w-5 fill-white" />
-              ) : (
-                <Play className="h-5 w-5 fill-white" />
-              )}
-            </button>
-            {!isStopped && (
+        {!reducedMotion && !hasError && (
+          <div className="absolute inset-0 z-10 p-3">
+            <div className="flex justify-end w-full">
               <button
-                onClick={handleStop}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
-                aria-label="Stop"
+                onClick={toggleMute}
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70"
+                aria-label={isMuted ? "Unmute" : "Mute"}
               >
-                <Square className="h-4 w-4 fill-white" />
+                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
               </button>
-            )}
+            </div>
           </div>
-        </div>
-
-        {/* Desktop controls (hover to show, always visible when paused/stopped) */}
-        <div
-          className={cn(
-            "absolute inset-0 z-10 hidden sm:flex flex-col justify-between p-3 bg-black/20 transition-opacity",
-            isPlaying ? "opacity-0 group-hover/video:opacity-100" : "opacity-100"
-          )}
-        >
-          <div className="flex justify-end w-full">
-            <button
-              onClick={toggleMute}
-              className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
-              aria-label={isMuted ? "Unmute" : "Mute"}
-            >
-              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-            </button>
-          </div>
-          <div className="flex items-center justify-center flex-1 gap-3">
-            <button
-              onClick={togglePlayPause}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
-              aria-label={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? (
-                <Pause className="h-5 w-5 fill-white" />
-              ) : (
-                <Play className="h-5 w-5 fill-white" />
-              )}
-            </button>
-            {!isStopped && (
-              <button
-                onClick={handleStop}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
-                aria-label="Stop"
-              >
-                <Square className="h-4 w-4 fill-white" />
-              </button>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     );
   }

@@ -5,8 +5,16 @@ import Image from "next/image";
 import { Volume2, VolumeX, Maximize2, Play, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { useHoverCapability } from "@/hooks/use-hover-capability";
 import { useVideoVisibility } from "@/hooks/use-video-visibility";
 import { useVideoHover } from "@/hooks/use-video-hover";
+
+const DEFAULT_MEDIA_FIT = "object-cover";
+const DEFAULT_CONTAINER_ASPECT_RATIO = 3 / 5;
+const SMART_FIT_CROP_THRESHOLD = 0.2;
+
+export type MediaFitStrategy = "cover" | "smart";
+export type MuteControlVisibility = "auto" | "always" | "hidden";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -20,6 +28,106 @@ export function isVideoUrl(url: string | null | undefined): boolean {
       .split("?")[0]
       .toLowerCase()
       .match(/\.(mp4|webm|ogg)$/) != null
+  );
+}
+
+function getCropRatio(mediaAspectRatio: number, containerAspectRatio: number) {
+  if (!mediaAspectRatio || !containerAspectRatio) return 0;
+
+  if (mediaAspectRatio > containerAspectRatio) {
+    return 1 - containerAspectRatio / mediaAspectRatio;
+  }
+
+  return 1 - mediaAspectRatio / containerAspectRatio;
+}
+
+function shouldUseSmartFit(
+  fitStrategy: MediaFitStrategy,
+  mediaAspectRatio: number | null,
+  containerAspectRatio: number
+) {
+  if (fitStrategy !== "smart" || !mediaAspectRatio) return false;
+  return getCropRatio(mediaAspectRatio, containerAspectRatio) > SMART_FIT_CROP_THRESHOLD;
+}
+
+function getForegroundMediaClassName(
+  baseFitClassName: string,
+  usesSmartFit: boolean,
+  mediaClassName?: string
+) {
+  return cn(
+    usesSmartFit ? "object-contain p-3 sm:p-4" : baseFitClassName,
+    usesSmartFit && "drop-shadow-[0_20px_50px_rgba(15,23,42,0.4)]",
+    mediaClassName
+  );
+}
+
+function getAnimatedMediaClassName(
+  baseFitClassName: string,
+  usesSmartFit: boolean,
+  hoverScale: boolean,
+  mediaClassName?: string
+) {
+  return cn(
+    getForegroundMediaClassName(baseFitClassName, usesSmartFit, mediaClassName),
+    hoverScale && !usesSmartFit
+      ? "transition-transform duration-500 group-hover:scale-110"
+      : "transition-transform duration-500"
+  );
+}
+
+function SmartFitBackdrop({
+  src,
+  sizes,
+  priority,
+}: {
+  src?: string;
+  sizes: string;
+  priority: boolean;
+}) {
+  if (!src) {
+    return (
+      <>
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950" />
+        <div className="absolute inset-0 bg-black/35" />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Image
+        src={src}
+        alt=""
+        aria-hidden="true"
+        fill
+        className="absolute inset-0 scale-110 object-cover blur-2xl brightness-[0.45] saturate-[0.85]"
+        sizes={sizes}
+        priority={priority}
+      />
+      <div className="absolute inset-0 bg-black/30" />
+    </>
+  );
+}
+
+function MuteButton({
+  isMuted,
+  onToggle,
+}: {
+  isMuted: boolean;
+  onToggle: (event: React.SyntheticEvent) => void;
+}) {
+  return (
+    <div className="absolute right-3 top-3 z-[8]">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70"
+        aria-label={isMuted ? "Unmute" : "Mute"}
+      >
+        {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+      </button>
+    </div>
   );
 }
 
@@ -52,28 +160,18 @@ export interface VideoCardPlayerProps {
   mode?: "interactive" | "ambient" | "hover";
   /** Marks the fallback image as priority */
   priority?: boolean;
+  /** Fit strategy for media in constrained frames. */
+  fitStrategy?: MediaFitStrategy;
+  /** Aspect ratio of the media frame when using smart fit. */
+  containerAspectRatio?: number;
+  /** Controls whether the mute toggle should stay visible. */
+  muteControlVisibility?: MuteControlVisibility;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-/**
- * Reusable auto-play video thumbnail for card components.
- *
- * Encapsulates:
- * - Video URL detection via extension
- * - Lazy-loading via IntersectionObserver (`useVideoVisibility`)
- * - Poster fade-out when video is ready
- * - Mute toggle (top-right)
- * - Fullscreen activation (centre)
- * - Error fallback with retry UI
- * - `prefers-reduced-motion` support (via hook)
- * - Accessible labels on all interactive controls
- *
- * If the `src` is **not** a video URL the component delegates to
- * Next.js `<Image>` with the same sizing props.
- */
 export function VideoCardPlayer({
   src,
   posterUrl,
@@ -82,20 +180,25 @@ export function VideoCardPlayer({
   className,
   mediaClassName,
   hoverScale = true,
-  mediaFitClassName = "object-cover",
+  mediaFitClassName = DEFAULT_MEDIA_FIT,
   mode = "interactive",
   priority = false,
+  fitStrategy = "cover",
+  containerAspectRatio = DEFAULT_CONTAINER_ASPECT_RATIO,
+  muteControlVisibility = "auto",
 }: VideoCardPlayerProps) {
   const isVideo = isVideoUrl(src);
   const normalizedSrc = src ? normalizeMediaUrl(src) : undefined;
   const normalizedPoster = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
-  const mediaKey = `${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}|${mode}`;
+  const canHover = useHoverCapability();
+  const effectiveMode = mode === "hover" && !canHover ? "ambient" : mode;
+  const mediaKey = `${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}|${effectiveMode}`;
 
-  if (mode === "hover") {
+  if (effectiveMode === "hover" && isVideo) {
     return (
       <HoverVideoPlayer
         key={mediaKey}
-        normalizedSrc={isVideo ? normalizedSrc : undefined}
+        normalizedSrc={normalizedSrc}
         normalizedPoster={normalizedPoster}
         alt={alt}
         sizes={sizes}
@@ -104,6 +207,9 @@ export function VideoCardPlayer({
         hoverScale={hoverScale}
         mediaFitClassName={mediaFitClassName}
         priority={priority}
+        fitStrategy={fitStrategy}
+        containerAspectRatio={containerAspectRatio}
+        muteControlVisibility={muteControlVisibility}
       />
     );
   }
@@ -120,8 +226,12 @@ export function VideoCardPlayer({
       mediaClassName={mediaClassName}
       hoverScale={hoverScale}
       mediaFitClassName={mediaFitClassName}
-      mode={mode}
+      mode={effectiveMode === "hover" ? "ambient" : effectiveMode}
       priority={priority}
+      canHover={canHover}
+      fitStrategy={fitStrategy}
+      containerAspectRatio={containerAspectRatio}
+      muteControlVisibility={muteControlVisibility}
     />
   );
 }
@@ -138,6 +248,10 @@ interface VideoCardPlayerInnerProps {
   mediaFitClassName: string;
   mode: "interactive" | "ambient";
   priority: boolean;
+  canHover: boolean;
+  fitStrategy: MediaFitStrategy;
+  containerAspectRatio: number;
+  muteControlVisibility: MuteControlVisibility;
 }
 
 function VideoCardPlayerInner({
@@ -152,23 +266,62 @@ function VideoCardPlayerInner({
   mediaFitClassName,
   mode,
   priority,
+  canHover,
+  fitStrategy,
+  containerAspectRatio,
+  muteControlVisibility,
 }: VideoCardPlayerInnerProps) {
   const { videoRef, reducedMotion } = useVideoVisibility(isVideo ? normalizedSrc : undefined);
-
   const [isMuted, setIsMuted] = useState(true);
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
 
-  // Track when video has rendered its first frame
+  const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
+  const backgroundMediaSrc = normalizedPoster || normalizedSrc;
+  const animatedMediaClassName = getAnimatedMediaClassName(
+    mediaFitClassName,
+    usesSmartFit,
+    hoverScale,
+    mediaClassName
+  );
+  const foregroundMediaClassName = getForegroundMediaClassName(
+    mediaFitClassName,
+    usesSmartFit,
+    mediaClassName
+  );
+  const showMuteControl =
+    isVideo &&
+    muteControlVisibility !== "hidden" &&
+    !hasError &&
+    !reducedMotion &&
+    (muteControlVisibility === "always" || mode === "interactive");
+
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
+
     const onPlaying = () => setVideoReady(true);
+    const onLoadedMetadata = () => {
+      if (el.videoWidth > 0 && el.videoHeight > 0) {
+        setMediaAspectRatio(el.videoWidth / el.videoHeight);
+      }
+    };
+
     el.addEventListener("playing", onPlaying);
-    return () => el.removeEventListener("playing", onPlaying);
+    el.addEventListener("loadedmetadata", onLoadedMetadata);
+    return () => {
+      el.removeEventListener("playing", onPlaying);
+      el.removeEventListener("loadedmetadata", onLoadedMetadata);
+    };
   }, [videoRef]);
 
-  /* ── Callbacks ──────────────────────────────────────────── */
+  const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget;
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      setMediaAspectRatio(image.naturalWidth / image.naturalHeight);
+    }
+  }, []);
 
   const handleVideoClick = useCallback(
     (e: React.MouseEvent | React.KeyboardEvent) => {
@@ -176,9 +329,14 @@ function VideoCardPlayerInner({
       e.stopPropagation();
       if (!videoRef.current) return;
 
-      if (videoRef.current.paused) videoRef.current.play();
-      setIsMuted(false);
+      if (videoRef.current.paused) {
+        videoRef.current.play().catch(() => {
+          /* autoplay may still be blocked */
+        });
+      }
+
       videoRef.current.muted = false;
+      setIsMuted(false);
 
       try {
         if (videoRef.current.requestFullscreen) {
@@ -211,10 +369,13 @@ function VideoCardPlayerInner({
     (e: React.SyntheticEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      if (videoRef.current) {
-        videoRef.current.muted = !videoRef.current.muted;
-        setIsMuted(videoRef.current.muted);
-      }
+      setIsMuted((current) => {
+        const nextMuted = !current;
+        if (videoRef.current) {
+          videoRef.current.muted = nextMuted;
+        }
+        return nextMuted;
+      });
     },
     [videoRef]
   );
@@ -229,106 +390,137 @@ function VideoCardPlayerInner({
       e.stopPropagation();
       setHasError(false);
       setVideoReady(false);
-      // Force reload by resetting src
+
       const el = videoRef.current;
       if (el && normalizedSrc) {
         el.src = "";
         el.src = normalizedSrc;
-        el.play().catch(() => {});
+        el.play().catch(() => {
+          /* autoplay may be blocked */
+        });
       }
     },
     [videoRef, normalizedSrc]
   );
 
-  /* ── Non-video: plain Image ─────────────────────────────── */
-
   if (!isVideo) {
     if (!normalizedSrc) return null;
+
+    if (usesSmartFit) {
+      return (
+        <div
+          className={cn("relative h-full w-full", className)}
+          data-media-fit={usesSmartFit ? "smart" : "cover"}
+        >
+          <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
+          <Image
+            src={normalizedSrc}
+            alt={alt}
+            fill
+            className={foregroundMediaClassName}
+            sizes={sizes}
+            priority={priority}
+            onLoad={handleImageLoad}
+            data-media-fit="smart"
+          />
+        </div>
+      );
+    }
+
     return (
       <Image
         src={normalizedSrc}
         alt={alt}
         fill
-        className={cn(
-          mediaFitClassName,
-          hoverScale && "transition-transform duration-500 group-hover:scale-110",
-          mediaClassName
-        )}
+        className={animatedMediaClassName}
         sizes={sizes}
         priority={priority}
+        onLoad={handleImageLoad}
+        data-media-fit="cover"
       />
     );
   }
 
-  /* ── Video ──────────────────────────────────────────────── */
-
-  const scaleClass = hoverScale
-    ? "transition-all duration-500 group-hover:scale-110"
-    : "transition-all duration-500";
-
   if (mode === "ambient") {
     return (
-      <div className={cn("relative h-full w-full", className)}>
+      <div
+        className={cn("relative h-full w-full", className)}
+        data-media-fit={usesSmartFit ? "smart" : "cover"}
+      >
+        {usesSmartFit ? (
+          <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
+        ) : null}
+
         {normalizedPoster ? (
           <Image
             src={normalizedPoster}
             alt={alt || "Video cover"}
             fill
             className={cn(
-              "absolute inset-0 z-[1] transition-opacity duration-300",
-              mediaFitClassName,
+              "absolute inset-0 z-[2] transition-opacity duration-300",
+              foregroundMediaClassName,
               videoReady && !hasError && !reducedMotion ? "opacity-0" : "opacity-100"
             )}
             sizes={sizes}
             priority={priority}
+            onLoad={handleImageLoad}
+            data-media-fit={usesSmartFit ? "smart" : "cover"}
           />
         ) : !videoReady || hasError || reducedMotion ? (
-          <div className="absolute inset-0 z-[1] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
+          <div className="absolute inset-0 z-[2] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
         ) : null}
 
         <video
           ref={videoRef}
           preload="none"
           loop
-          muted
+          muted={isMuted}
           playsInline
           aria-label={alt ? `${alt} video` : "Video preview"}
           onError={handleError}
           className={cn(
-            "relative z-[2] h-full w-full",
-            mediaFitClassName,
-            scaleClass,
-            mediaClassName,
+            "relative z-[3] h-full w-full transition-opacity duration-300",
+            foregroundMediaClassName,
             hasError || reducedMotion || !videoReady ? "opacity-0" : "opacity-100"
           )}
+          data-media-fit={usesSmartFit ? "smart" : "cover"}
         />
+
+        {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
       </div>
     );
   }
 
   return (
-    <div className={cn("relative h-full w-full group/video", className)}>
-      {/* Poster / cover image — prevents blank space before video loads */}
+    <div
+      className={cn("relative h-full w-full group/video", className)}
+      data-media-fit={usesSmartFit ? "smart" : "cover"}
+    >
+      {usesSmartFit ? (
+        <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
+      ) : null}
+
       {normalizedPoster ? (
         <Image
           src={normalizedPoster}
           alt={alt || "Video cover"}
           fill
           className={cn(
-            "absolute inset-0 z-[1] transition-opacity duration-300",
-            mediaFitClassName,
+            "absolute inset-0 z-[2] transition-opacity duration-300",
+            foregroundMediaClassName,
             videoReady && !hasError ? "opacity-0" : "opacity-100"
           )}
           sizes={sizes}
           priority={priority}
+          onLoad={handleImageLoad}
+          data-media-fit={usesSmartFit ? "smart" : "cover"}
         />
       ) : !videoReady || hasError ? (
-        <div className="absolute inset-0 z-[1] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800 flex items-center justify-center">
+        <div className="absolute inset-0 z-[2] flex items-center justify-center bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800">
           <Play className="h-10 w-10 text-white/60" />
         </div>
       ) : null}
 
-      {/* Video element */}
       <video
         ref={videoRef}
         preload="none"
@@ -338,20 +530,18 @@ function VideoCardPlayerInner({
         aria-label={alt ? `${alt} video` : "Video preview"}
         onError={handleError}
         className={cn(
-          "h-full w-full",
-          mediaFitClassName,
-          scaleClass,
-          !videoReady || hasError ? "opacity-0" : "opacity-100",
-          "z-[2] relative"
+          "relative z-[3] h-full w-full transition-opacity duration-300",
+          foregroundMediaClassName,
+          !videoReady || hasError ? "opacity-0" : "opacity-100"
         )}
+        data-media-fit={usesSmartFit ? "smart" : "cover"}
       />
 
-      {/* Error overlay */}
       {hasError && (
         <div
           role="button"
           tabIndex={0}
-          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-sm cursor-pointer"
+          className="absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-sm"
           onClick={handleRetry}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") handleRetry(e);
@@ -363,12 +553,13 @@ function VideoCardPlayerInner({
         </div>
       )}
 
-      {/* Reduced-motion notice — show a static play button instead of auto-playing */}
+      {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
+
       {reducedMotion && !hasError && (
         <div
           role="button"
           tabIndex={0}
-          className="absolute inset-0 z-10 flex items-center justify-center cursor-pointer"
+          className="absolute inset-0 z-10 flex cursor-pointer items-center justify-center"
           onClick={handleVideoClick}
           onKeyDown={handleVideoKeyDown}
           aria-label="Play video"
@@ -379,36 +570,10 @@ function VideoCardPlayerInner({
         </div>
       )}
 
-      {/* Interactive overlay — mute + fullscreen (hidden during error) */}
-      {!hasError && !reducedMotion && (
-        <>
-          {/* Mobile: always visible controls */}
-          <div className="absolute inset-0 z-10 flex sm:hidden flex-col justify-between p-2 bg-black/20">
-            <div className="flex justify-end w-full">
-              <button
-                type="button"
-                onClick={toggleMute}
-                className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
-                aria-label={isMuted ? "Unmute" : "Mute"}
-              >
-                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              </button>
-            </div>
-            <div className="flex items-center justify-center flex-1">
-              <button
-                type="button"
-                onClick={handleVideoClick}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
-                aria-label="Enter fullscreen"
-              >
-                <Maximize2 className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Desktop: show on hover */}
+      {!hasError && !reducedMotion ? (
+        canHover ? (
           <div
-            className="absolute inset-0 z-10 hidden sm:group-hover/video:flex flex-col justify-between p-2 bg-black/20"
+            className="absolute inset-0 z-10 hidden cursor-pointer flex-col justify-between bg-black/18 p-2 opacity-0 transition-opacity duration-300 group-hover/video:flex group-hover/video:opacity-100"
             onClick={handleVideoClick}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -420,41 +585,49 @@ function VideoCardPlayerInner({
             tabIndex={0}
             aria-label="Toggle video playback"
           >
-            <div className="flex justify-end w-full">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleMute(e);
-                }}
-                className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm transition-colors"
-                aria-label={isMuted ? "Unmute" : "Mute"}
-              >
-                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              </button>
-            </div>
+            <div />
             <div className="flex items-center justify-center flex-1">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110">
                 <Maximize2 className="h-5 w-5" />
               </div>
             </div>
           </div>
-
-          {/* Play indicator (visible when NOT hovered, desktop only) */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-100 group-hover:opacity-0 transition-opacity duration-300 z-[5]">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white shadow-lg backdrop-blur-sm">
-              <Play className="h-5 w-5 fill-white pr-0.5" />
+        ) : (
+          <div className="absolute inset-0 z-10 flex flex-col justify-between bg-black/16 p-2">
+            <div />
+            <div className="flex items-center justify-center flex-1">
+              <button
+                type="button"
+                onClick={handleVideoClick}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
+                aria-label="Enter fullscreen"
+              >
+                <Maximize2 className="h-5 w-5" />
+              </button>
             </div>
           </div>
-        </>
-      )}
+        )
+      ) : null}
+
+      {!hasError && !reducedMotion ? (
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-0 z-[5] flex items-center justify-center transition-opacity duration-300",
+            canHover ? "opacity-100 group-hover/video:opacity-0" : "opacity-100"
+          )}
+        >
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white shadow-lg backdrop-blur-sm">
+            {canHover ? (
+              <Play className="h-5 w-5 fill-white pr-0.5" />
+            ) : (
+              <Maximize2 className="h-5 w-5" />
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/*  Hover Video Player (separated to isolate useVideoHover refs)      */
-/* ------------------------------------------------------------------ */
 
 interface HoverVideoPlayerProps {
   normalizedSrc?: string;
@@ -466,6 +639,9 @@ interface HoverVideoPlayerProps {
   hoverScale: boolean;
   mediaFitClassName: string;
   priority: boolean;
+  fitStrategy: MediaFitStrategy;
+  containerAspectRatio: number;
+  muteControlVisibility: MuteControlVisibility;
 }
 
 function HoverVideoPlayer({
@@ -478,89 +654,164 @@ function HoverVideoPlayer({
   hoverScale,
   mediaFitClassName,
   priority,
+  fitStrategy,
+  containerAspectRatio,
+  muteControlVisibility,
 }: HoverVideoPlayerProps) {
   const { videoRef, containerRef, reducedMotion, isHovering } = useVideoHover(normalizedSrc);
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
+
+  const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
+  const backgroundMediaSrc = normalizedPoster || normalizedSrc;
+  const animatedMediaClassName = getAnimatedMediaClassName(
+    mediaFitClassName,
+    usesSmartFit,
+    hoverScale,
+    mediaClassName
+  );
+  const foregroundMediaClassName = getForegroundMediaClassName(
+    mediaFitClassName,
+    usesSmartFit,
+    mediaClassName
+  );
+  const showMuteControl =
+    muteControlVisibility !== "hidden" &&
+    !hasError &&
+    !reducedMotion &&
+    muteControlVisibility === "always";
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
+
     const onPlaying = () => setVideoReady(true);
+    const onLoadedMetadata = () => {
+      if (el.videoWidth > 0 && el.videoHeight > 0) {
+        setMediaAspectRatio(el.videoWidth / el.videoHeight);
+      }
+    };
+
     el.addEventListener("playing", onPlaying);
-    return () => el.removeEventListener("playing", onPlaying);
+    el.addEventListener("loadedmetadata", onLoadedMetadata);
+    return () => {
+      el.removeEventListener("playing", onPlaying);
+      el.removeEventListener("loadedmetadata", onLoadedMetadata);
+    };
   }, [videoRef]);
 
   const handleError = useCallback(() => {
     setHasError(true);
   }, []);
 
-  const scaleClass = hoverScale
-    ? "transition-all duration-500 group-hover:scale-110"
-    : "transition-all duration-500";
+  const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget;
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      setMediaAspectRatio(image.naturalWidth / image.naturalHeight);
+    }
+  }, []);
+
+  const toggleMute = useCallback(
+    (e: React.SyntheticEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsMuted((current) => {
+        const nextMuted = !current;
+        if (videoRef.current) {
+          videoRef.current.muted = nextMuted;
+        }
+        return nextMuted;
+      });
+    },
+    [videoRef]
+  );
 
   if (!normalizedSrc) {
     if (!normalizedPoster) return null;
+
+    if (usesSmartFit) {
+      return (
+        <div
+          className={cn("relative h-full w-full", className)}
+          data-media-fit={usesSmartFit ? "smart" : "cover"}
+        >
+          <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
+          <Image
+            src={normalizedPoster}
+            alt={alt}
+            fill
+            className={foregroundMediaClassName}
+            sizes={sizes}
+            priority={priority}
+            onLoad={handleImageLoad}
+            data-media-fit="smart"
+          />
+        </div>
+      );
+    }
+
     return (
       <Image
         src={normalizedPoster}
         alt={alt}
         fill
-        className={cn(
-          mediaFitClassName,
-          hoverScale && "transition-transform duration-500 group-hover:scale-110",
-          mediaClassName
-        )}
+        className={animatedMediaClassName}
         sizes={sizes}
         priority={priority}
+        onLoad={handleImageLoad}
+        data-media-fit="cover"
       />
     );
   }
 
   return (
-    <div ref={containerRef} className={cn("relative h-full w-full", className)}>
+    <div
+      ref={containerRef}
+      className={cn("relative h-full w-full", className)}
+      data-media-fit={usesSmartFit ? "smart" : "cover"}
+    >
+      {usesSmartFit ? (
+        <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
+      ) : null}
+
       {normalizedPoster ? (
         <Image
           src={normalizedPoster}
           alt={alt || "Video cover"}
           fill
           className={cn(
-            "absolute inset-0 z-[1] transition-opacity duration-300",
-            mediaFitClassName,
+            "absolute inset-0 z-[2] transition-opacity duration-300",
+            foregroundMediaClassName,
             isHovering && videoReady && !hasError && !reducedMotion ? "opacity-0" : "opacity-100"
           )}
           sizes={sizes}
           priority={priority}
+          onLoad={handleImageLoad}
+          data-media-fit={usesSmartFit ? "smart" : "cover"}
         />
       ) : !(isHovering && videoReady) || hasError || reducedMotion ? (
-        <div className="absolute inset-0 z-[1] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
+        <div className="absolute inset-0 z-[2] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
       ) : null}
 
       <video
         ref={videoRef}
         preload="none"
         loop
-        muted
+        muted={isMuted}
         playsInline
         aria-label={alt ? `${alt} video` : "Video preview"}
         onError={handleError}
         className={cn(
-          "relative z-[2] h-full w-full",
-          mediaFitClassName,
-          scaleClass,
-          mediaClassName,
+          "relative z-[3] h-full w-full transition-opacity duration-300",
+          usesSmartFit ? foregroundMediaClassName : animatedMediaClassName,
           hasError || reducedMotion || !videoReady || !isHovering ? "opacity-0" : "opacity-100"
         )}
+        data-media-fit={usesSmartFit ? "smart" : "cover"}
       />
 
-      {/* Small play icon hint — visible when NOT hovering */}
-      {!isHovering && !hasError && (
-        <div className="absolute inset-0 z-[3] flex items-center justify-center pointer-events-none">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white/80 backdrop-blur-sm">
-            <Play className="h-4 w-4 fill-white" />
-          </div>
-        </div>
-      )}
+      {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
     </div>
   );
 }

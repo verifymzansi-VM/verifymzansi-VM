@@ -5,6 +5,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen } from "@testing-library/react";
 
+const videoCardPlayerMock = vi.fn(
+  ({
+    src,
+    fitStrategy,
+    muteControlVisibility,
+  }: {
+    src: string;
+    fitStrategy?: string;
+    muteControlVisibility?: string;
+  }) => (
+    <div
+      data-testid="video-card-player"
+      data-src={src}
+      data-fit-strategy={fitStrategy}
+      data-mute-control={muteControlVisibility}
+    />
+  )
+);
+
 // Mock dependencies
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
@@ -86,11 +105,7 @@ vi.mock("@/hooks/use-reduced-motion", () => ({
 }));
 
 vi.mock("@/components/ui/video-card-player", () => ({
-  VideoCardPlayer: ({ src, alt }: { src: string; alt?: string }) => (
-    <div data-testid="video-card-player" data-src={src}>
-      {alt}
-    </div>
-  ),
+  VideoCardPlayer: videoCardPlayerMock,
   isVideoUrl: (url: string | null | undefined) => {
     if (!url) return false;
     return (
@@ -195,6 +210,8 @@ describe("ListingCard", () => {
     const videoPlayer = screen.getByTestId("video-card-player");
     expect(videoPlayer).toBeTruthy();
     expect(videoPlayer).toHaveAttribute("data-src", blobUrl);
+    expect(videoPlayer).toHaveAttribute("data-fit-strategy", "smart");
+    expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
     expect(screen.queryByAltText("Test Listing")).toBeNull();
   });
 });

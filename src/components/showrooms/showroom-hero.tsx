@@ -157,6 +157,7 @@ export function ShowroomHero({
             alt={activeSlide.title}
             sizes="100vw"
             mode="ambient"
+            muteControlVisibility="always"
             priority
             mediaClassName="scale-[1.01]"
           />
