@@ -174,6 +174,36 @@ describe("ozow payments", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("falls back to the mock checkout flow when the Ozow client is unknown outside production", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: async () =>
+        JSON.stringify({
+          code: "NotFound",
+          title: "Not Found",
+          detail: "Consumer could not be found for client id client-id",
+        }),
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { createOzowHostedPayment, resetOzowTokenCacheForTesting } = await import("./ozow");
+    resetOzowTokenCacheForTesting();
+
+    const result = await createOzowHostedPayment({
+      paymentId: "payment-1",
+      amountCents: 2500,
+      itemName: "Growth Plan",
+      returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
+      cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
+    });
+
+    expect(result.providerPaymentId).toBe("mock-payment-1");
+    expect(result.redirectUrl).toContain("/api/mock-ozow");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("verifies webhook signatures using the shared secret", async () => {
     const { verifyOzowWebhookSignature } = await import("./ozow");
     const body = JSON.stringify({ eventType: "transaction.complete" });

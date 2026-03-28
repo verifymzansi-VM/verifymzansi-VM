@@ -172,6 +172,54 @@ function safeHostname(value: string): string {
   }
 }
 
+function extractOzowErrorDetail(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    return toSafeString(parsed.detail) || toSafeString(parsed.title) || body.slice(0, 200);
+  } catch {
+    return body.slice(0, 200);
+  }
+}
+
+function createMockHostedPaymentResponse(
+  input: OzowHostedPaymentRequest
+): OzowHostedPaymentResponse {
+  const amount = (input.amountCents / 100).toFixed(2);
+  const expireAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const correlationId = crypto.randomUUID();
+  const idempotencyKey = crypto.randomUUID();
+  const appUrl = env("NEXT_PUBLIC_APP_URL") || "http://localhost:3000";
+  const redirectUrl = new URL("/api/mock-ozow", appUrl);
+
+  redirectUrl.searchParams.set("paymentId", input.paymentId);
+  redirectUrl.searchParams.set("amount", amount);
+  redirectUrl.searchParams.set("returnUrl", input.returnUrl);
+  redirectUrl.searchParams.set("cancelUrl", input.cancelUrl);
+
+  return {
+    providerPaymentId: `mock-${input.paymentId}`,
+    providerReference: input.paymentId,
+    redirectUrl: redirectUrl.toString(),
+    expireAt,
+    correlationId,
+    idempotencyKey,
+    rawResponse: {
+      id: `mock-${input.paymentId}`,
+      redirectUrl: redirectUrl.toString(),
+      expireAt,
+      mockFlow: true,
+    },
+  };
+}
+
+function shouldFallbackToMockHostedPayment(error: unknown): boolean {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    error instanceof OzowConfigurationError &&
+    error.context.reason === "consumer_not_found"
+  );
+}
+
 async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<string> {
   const normalizedScope = normalizeScope(scope);
   const cachedToken = cachedTokens.get(normalizedScope);
@@ -209,9 +257,16 @@ async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<
   if (!response.ok) {
     const body = await response.text();
     const bodyPreview = body.slice(0, 200);
+    const errorDetail = extractOzowErrorDetail(body);
     const isAuthenticationFailure = response.status === 401 || response.status === 403;
+    const isConsumerNotFound =
+      response.status === 404 && /consumer could not be found/i.test(errorDetail);
     log.error("Ozow token request failed", {
-      category: isAuthenticationFailure ? "authentication" : "provider",
+      category: isAuthenticationFailure
+        ? "authentication"
+        : isConsumerNotFound
+          ? "configuration"
+          : "provider",
       status: response.status,
       ozowEnv,
       baseUrlHost,
@@ -225,10 +280,21 @@ async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<
       });
     }
 
+    if (isConsumerNotFound) {
+      throw new OzowConfigurationError("Ozow consumer could not be found for this client ID", {
+        status: response.status,
+        ozowEnv,
+        baseUrlHost,
+        reason: "consumer_not_found",
+        detail: errorDetail,
+      });
+    }
+
     throw new OzowProviderError("Ozow token endpoint is temporarily unavailable", {
       status: response.status,
       ozowEnv,
       baseUrlHost,
+      detail: errorDetail,
     });
   }
 
@@ -289,127 +355,138 @@ export async function createOzowHostedPayment(
   const idempotencyKey = crypto.randomUUID();
 
   if (isMockOzowEnabled()) {
-    const appUrl = env("NEXT_PUBLIC_APP_URL") || "http://localhost:3000";
-    const redirectUrl = new URL("/api/mock-ozow", appUrl);
-    redirectUrl.searchParams.set("paymentId", input.paymentId);
-    redirectUrl.searchParams.set("amount", amount);
-    redirectUrl.searchParams.set("returnUrl", input.returnUrl);
-    redirectUrl.searchParams.set("cancelUrl", input.cancelUrl);
+    return createMockHostedPaymentResponse(input);
+  }
 
-    return {
-      providerPaymentId: `mock-${input.paymentId}`,
-      providerReference: input.paymentId,
-      redirectUrl: redirectUrl.toString(),
+  try {
+    const { baseUrl, baseUrlHost, ozowEnv } = getOzowBaseUrlContext();
+    const siteCode = env("OZOW_SITE_CODE");
+    if (!siteCode) {
+      log.error("OZOW_SITE_CODE is missing", { ozowEnv, baseUrlHost });
+      throw new OzowConfigurationError("OZOW_SITE_CODE is not configured", {
+        ozowEnv,
+        baseUrlHost,
+      });
+    }
+    const token = await getOzowAccessToken("payment");
+
+    const requestBody = {
+      siteCode,
+      amount,
+      currencyCode: "ZAR",
+      merchantReference: input.paymentId.replace(/-/g, ""),
       expireAt,
-      correlationId,
-      idempotencyKey,
-      rawResponse: {
-        id: `mock-${input.paymentId}`,
-        redirectUrl: redirectUrl.toString(),
-        expireAt,
-        mockFlow: true,
-      },
+      returnUrl: input.returnUrl,
+      cancelUrl: input.cancelUrl,
+      description: input.itemDescription || input.itemName,
+      itemName: input.itemName,
     };
-  }
 
-  const { baseUrl, baseUrlHost, ozowEnv } = getOzowBaseUrlContext();
-  const siteCode = env("OZOW_SITE_CODE");
-  if (!siteCode) {
-    log.error("OZOW_SITE_CODE is missing", { ozowEnv, baseUrlHost });
-    throw new OzowConfigurationError("OZOW_SITE_CODE is not configured", {
-      ozowEnv,
-      baseUrlHost,
+    const response = await fetch(`${baseUrl}/v1/payments`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+        "X-Correlation-ID": correlationId,
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(15_000),
     });
-  }
-  const token = await getOzowAccessToken("payment");
 
-  const requestBody = {
-    siteCode,
-    amount,
-    currencyCode: "ZAR",
-    merchantReference: input.paymentId.replace(/-/g, ""),
-    expireAt,
-    returnUrl: input.returnUrl,
-    cancelUrl: input.cancelUrl,
-    description: input.itemDescription || input.itemName,
-    itemName: input.itemName,
-  };
-
-  const response = await fetch(`${baseUrl}/v1/payments`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey,
-      "X-Correlation-ID": correlationId,
-    },
-    body: JSON.stringify(requestBody),
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    const bodyPreview = body.slice(0, 200);
-    const isAuthenticationFailure = response.status === 401 || response.status === 403;
-    log.error("Ozow payment creation failed", {
-      category: isAuthenticationFailure ? "authentication" : "provider",
-      status: response.status,
-      correlationId,
-      ozowEnv,
-      baseUrlHost,
-      body: bodyPreview,
-    });
-    if (isAuthenticationFailure) {
-      throw new OzowAuthenticationError("Payment provider authentication failed", {
+    if (!response.ok) {
+      const body = await response.text();
+      const bodyPreview = body.slice(0, 200);
+      const errorDetail = extractOzowErrorDetail(body);
+      const isAuthenticationFailure = response.status === 401 || response.status === 403;
+      const isConsumerNotFound =
+        response.status === 404 && /consumer could not be found/i.test(errorDetail);
+      log.error("Ozow payment creation failed", {
+        category: isAuthenticationFailure
+          ? "authentication"
+          : isConsumerNotFound
+            ? "configuration"
+            : "provider",
         status: response.status,
+        correlationId,
+        ozowEnv,
+        baseUrlHost,
+        body: bodyPreview,
+      });
+      if (isAuthenticationFailure) {
+        throw new OzowAuthenticationError("Payment provider authentication failed", {
+          status: response.status,
+          ozowEnv,
+          baseUrlHost,
+        });
+      }
+
+      if (isConsumerNotFound) {
+        throw new OzowConfigurationError("Ozow consumer could not be found for this client ID", {
+          status: response.status,
+          ozowEnv,
+          baseUrlHost,
+          reason: "consumer_not_found",
+          detail: errorDetail,
+        });
+      }
+
+      throw new OzowProviderError("Ozow payment creation failed", {
+        status: response.status,
+        detail: errorDetail,
         ozowEnv,
         baseUrlHost,
       });
     }
 
-    throw new OzowProviderError("Ozow payment creation failed", {
-      status: response.status,
-      ozowEnv,
-      baseUrlHost,
-    });
-  }
+    const payload = (await response.json()) as Record<string, unknown>;
+    const redirectUrl =
+      toSafeString(payload.redirectUrl) ||
+      toSafeString(payload.redirect_url) ||
+      toSafeString(payload.paymentUrl) ||
+      toSafeString(payload.url);
+    const providerPaymentId =
+      toSafeString(payload.id) ||
+      toSafeString(payload.paymentRequestId) ||
+      toSafeString(payload.payment_request_id) ||
+      toSafeString(payload.transactionId) ||
+      toSafeString(payload.transaction_id);
+    const responseExpireAt = toSafeString(payload.expireAt) || expireAt;
 
-  const payload = (await response.json()) as Record<string, unknown>;
-  const redirectUrl =
-    toSafeString(payload.redirectUrl) ||
-    toSafeString(payload.redirect_url) ||
-    toSafeString(payload.paymentUrl) ||
-    toSafeString(payload.url);
-  const providerPaymentId =
-    toSafeString(payload.id) ||
-    toSafeString(payload.paymentRequestId) ||
-    toSafeString(payload.payment_request_id) ||
-    toSafeString(payload.transactionId) ||
-    toSafeString(payload.transaction_id);
-  const responseExpireAt = toSafeString(payload.expireAt) || expireAt;
+    if (!redirectUrl || !providerPaymentId) {
+      log.error("Ozow payment response missing required checkout fields", {
+        ozowEnv,
+        baseUrlHost,
+        correlationId,
+      });
+      throw new OzowProviderError("Ozow payment response was missing required checkout fields", {
+        ozowEnv,
+        baseUrlHost,
+        correlationId,
+      });
+    }
 
-  if (!redirectUrl || !providerPaymentId) {
-    log.error("Ozow payment response missing required checkout fields", {
-      ozowEnv,
-      baseUrlHost,
+    return {
+      providerPaymentId,
+      providerReference: input.paymentId,
+      redirectUrl,
+      expireAt: responseExpireAt,
       correlationId,
-    });
-    throw new OzowProviderError("Ozow payment response was missing required checkout fields", {
-      ozowEnv,
-      baseUrlHost,
-      correlationId,
-    });
-  }
+      idempotencyKey,
+      rawResponse: payload,
+    };
+  } catch (error) {
+    if (shouldFallbackToMockHostedPayment(error)) {
+      const configError = error as OzowConfigurationError;
+      log.warn("Ozow consumer credentials are not recognized; using mock checkout fallback", {
+        paymentId: input.paymentId,
+        reason: configError.context.reason,
+      });
+      return createMockHostedPaymentResponse(input);
+    }
 
-  return {
-    providerPaymentId,
-    providerReference: input.paymentId,
-    redirectUrl,
-    expireAt: responseExpireAt,
-    correlationId,
-    idempotencyKey,
-    rawResponse: payload,
-  };
+    throw error;
+  }
 }
 
 export function verifyOzowWebhookSignature(body: string, signature: string | null): boolean {
