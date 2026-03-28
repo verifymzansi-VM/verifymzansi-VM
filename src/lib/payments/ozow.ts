@@ -5,6 +5,45 @@ import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("Ozow");
 
+export class OzowConfigurationError extends Error {
+  readonly code = "ozow_configuration_error" as const;
+
+  constructor(
+    message: string,
+    public readonly context: Record<string, unknown> = {}
+  ) {
+    super(message);
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = "OzowConfigurationError";
+  }
+}
+
+export class OzowAuthenticationError extends Error {
+  readonly code = "ozow_authentication_error" as const;
+
+  constructor(
+    message: string,
+    public readonly context: Record<string, unknown> = {}
+  ) {
+    super(message);
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = "OzowAuthenticationError";
+  }
+}
+
+export class OzowProviderError extends Error {
+  readonly code = "ozow_provider_error" as const;
+
+  constructor(
+    message: string,
+    public readonly context: Record<string, unknown> = {}
+  ) {
+    super(message);
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = "OzowProviderError";
+  }
+}
+
 type CachedToken = {
   accessToken: string;
   expiresAt: number;
@@ -51,14 +90,41 @@ export function validateOzowBaseUrl(
   return parsed.toString().replace(/\/$/, "");
 }
 
-function getOzowBaseUrl(): string {
-  const ozowEnv = env("OZOW_ENV") === "production" ? "production" : "staging";
+function getOzowEnvironment(): "staging" | "production" {
+  return env("OZOW_ENV") === "production" ? "production" : "staging";
+}
+
+function getOzowBaseUrlContext(): {
+  baseUrl: string;
+  baseUrlHost: string;
+  ozowEnv: "staging" | "production";
+} {
+  const ozowEnv = getOzowEnvironment();
   const configuredBaseUrl = env("OZOW_API_BASE_URL");
+
   if (configuredBaseUrl) {
-    return validateOzowBaseUrl(configuredBaseUrl, ozowEnv);
+    try {
+      const baseUrl = validateOzowBaseUrl(configuredBaseUrl, ozowEnv);
+      return {
+        baseUrl,
+        baseUrlHost: new URL(baseUrl).hostname,
+        ozowEnv,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid Ozow base URL";
+      throw new OzowConfigurationError(message, {
+        configuredBaseUrlHost: safeHostname(configuredBaseUrl),
+        ozowEnv,
+      });
+    }
   }
 
-  return ozowEnv === "production" ? "https://one.ozow.com" : "https://stagingone.ozow.com";
+  const baseUrl = ozowEnv === "production" ? "https://one.ozow.com" : "https://stagingone.ozow.com";
+  return {
+    baseUrl,
+    baseUrlHost: new URL(baseUrl).hostname,
+    ozowEnv,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -98,6 +164,14 @@ function normalizeScope(scope: string): string {
     .join(" ");
 }
 
+function safeHostname(value: string): string {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return "invalid-url";
+  }
+}
+
 async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<string> {
   const normalizedScope = normalizeScope(scope);
   const cachedToken = cachedTokens.get(normalizedScope);
@@ -105,17 +179,22 @@ async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<
     return cachedToken.accessToken;
   }
 
+  const { baseUrl, baseUrlHost, ozowEnv } = getOzowBaseUrlContext();
   const clientId = env("OZOW_CLIENT_ID");
   const clientSecret = env("OZOW_CLIENT_SECRET");
   if (!clientId || !clientSecret) {
     const missing = [!clientId && "OZOW_CLIENT_ID", !clientSecret && "OZOW_CLIENT_SECRET"]
       .filter(Boolean)
       .join(", ");
-    log.error("Ozow credentials missing", { missing });
-    throw new Error(`Ozow credentials are not configured (missing: ${missing})`);
+    log.error("Ozow credentials missing", { missing, ozowEnv, baseUrlHost });
+    throw new OzowConfigurationError("Ozow credentials are not configured", {
+      missing,
+      ozowEnv,
+      baseUrlHost,
+    });
   }
 
-  const response = await fetch(`${getOzowBaseUrl()}/v1/token`, {
+  const response = await fetch(`${baseUrl}/v1/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -129,15 +208,28 @@ async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<
 
   if (!response.ok) {
     const body = await response.text();
+    const bodyPreview = body.slice(0, 200);
+    const isAuthenticationFailure = response.status === 401 || response.status === 403;
     log.error("Ozow token request failed", {
+      category: isAuthenticationFailure ? "authentication" : "provider",
       status: response.status,
-      ozowEnv: env("OZOW_ENV") || "staging",
-      baseUrl: getOzowBaseUrl(),
-      body,
+      ozowEnv,
+      baseUrlHost,
+      body: bodyPreview,
     });
-    throw new Error(
-      `Failed to authenticate with Ozow (HTTP ${response.status}: ${body.slice(0, 200)})`
-    );
+    if (isAuthenticationFailure) {
+      throw new OzowAuthenticationError("Payment provider authentication failed", {
+        status: response.status,
+        ozowEnv,
+        baseUrlHost,
+      });
+    }
+
+    throw new OzowProviderError("Ozow token endpoint is temporarily unavailable", {
+      status: response.status,
+      ozowEnv,
+      baseUrlHost,
+    });
   }
 
   const payload = (await response.json()) as Record<string, unknown>;
@@ -150,7 +242,14 @@ async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<
         : 3600;
 
   if (!accessToken) {
-    throw new Error("Ozow token response did not include an access token");
+    log.error("Ozow token response missing access token", {
+      ozowEnv,
+      baseUrlHost,
+    });
+    throw new OzowProviderError("Ozow token response did not include an access token", {
+      ozowEnv,
+      baseUrlHost,
+    });
   }
 
   cachedTokens.set(normalizedScope, {
@@ -213,12 +312,16 @@ export async function createOzowHostedPayment(
     };
   }
 
-  const token = await getOzowAccessToken("payment");
+  const { baseUrl, baseUrlHost, ozowEnv } = getOzowBaseUrlContext();
   const siteCode = env("OZOW_SITE_CODE");
   if (!siteCode) {
-    log.error("OZOW_SITE_CODE is missing");
-    throw new Error("OZOW_SITE_CODE is not configured");
+    log.error("OZOW_SITE_CODE is missing", { ozowEnv, baseUrlHost });
+    throw new OzowConfigurationError("OZOW_SITE_CODE is not configured", {
+      ozowEnv,
+      baseUrlHost,
+    });
   }
+  const token = await getOzowAccessToken("payment");
 
   const requestBody = {
     siteCode,
@@ -232,7 +335,7 @@ export async function createOzowHostedPayment(
     itemName: input.itemName,
   };
 
-  const response = await fetch(`${getOzowBaseUrl()}/v1/payments`, {
+  const response = await fetch(`${baseUrl}/v1/payments`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -246,12 +349,29 @@ export async function createOzowHostedPayment(
 
   if (!response.ok) {
     const body = await response.text();
+    const bodyPreview = body.slice(0, 200);
+    const isAuthenticationFailure = response.status === 401 || response.status === 403;
     log.error("Ozow payment creation failed", {
+      category: isAuthenticationFailure ? "authentication" : "provider",
       status: response.status,
       correlationId,
-      body,
+      ozowEnv,
+      baseUrlHost,
+      body: bodyPreview,
     });
-    throw new Error("Failed to create Ozow payment");
+    if (isAuthenticationFailure) {
+      throw new OzowAuthenticationError("Payment provider authentication failed", {
+        status: response.status,
+        ozowEnv,
+        baseUrlHost,
+      });
+    }
+
+    throw new OzowProviderError("Ozow payment creation failed", {
+      status: response.status,
+      ozowEnv,
+      baseUrlHost,
+    });
   }
 
   const payload = (await response.json()) as Record<string, unknown>;
@@ -269,7 +389,16 @@ export async function createOzowHostedPayment(
   const responseExpireAt = toSafeString(payload.expireAt) || expireAt;
 
   if (!redirectUrl || !providerPaymentId) {
-    throw new Error("Ozow payment response was missing required checkout fields");
+    log.error("Ozow payment response missing required checkout fields", {
+      ozowEnv,
+      baseUrlHost,
+      correlationId,
+    });
+    throw new OzowProviderError("Ozow payment response was missing required checkout fields", {
+      ozowEnv,
+      baseUrlHost,
+      correlationId,
+    });
   }
 
   return {

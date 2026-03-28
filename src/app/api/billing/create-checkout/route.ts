@@ -7,6 +7,11 @@ import { createLogger } from "@/lib/utils/logger";
 import { env } from "@/lib/config/env";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createHostedCheckout } from "@/lib/payments/checkout";
+import {
+  OzowAuthenticationError,
+  OzowConfigurationError,
+  OzowProviderError,
+} from "@/lib/payments/ozow";
 import { z } from "zod";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
@@ -194,22 +199,40 @@ export async function POST(request: NextRequest) {
       checkoutUrl = checkout.checkoutUrl;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create checkout session";
+      const errorCode =
+        error instanceof OzowConfigurationError
+          ? error.code
+          : error instanceof OzowAuthenticationError
+            ? error.code
+            : error instanceof OzowProviderError
+              ? error.code
+              : undefined;
       log.error("Failed to create hosted checkout", {
         error: message,
+        errorCode,
         planId,
         userId: user.id,
       });
-      if (/not configured/i.test(message)) {
+      if (error instanceof OzowConfigurationError) {
         return NextResponse.json(
           { error: "Payment processing is not yet configured. Please try again later." },
           { status: 503 }
         );
       }
-      if (/authenticate/i.test(message)) {
+      if (error instanceof OzowAuthenticationError) {
         return NextResponse.json(
           {
             error:
               "Payment provider authentication failed. This is a temporary issue — please try again in a few minutes.",
+          },
+          { status: 503 }
+        );
+      }
+      if (error instanceof OzowProviderError) {
+        return NextResponse.json(
+          {
+            error:
+              "Payment provider is temporarily unavailable. Please try again in a few minutes.",
           },
           { status: 503 }
         );

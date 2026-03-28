@@ -2,8 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST as createCheckout } from "@/app/api/billing/create-checkout/route";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createHostedCheckout } from "@/lib/payments/checkout";
 import { type NextRequest } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import {
+  OzowAuthenticationError,
+  OzowConfigurationError,
+  OzowProviderError,
+} from "@/lib/payments/ozow";
 
 const CSRF_TOKEN = "a".repeat(64);
 
@@ -270,5 +276,54 @@ describe("POST /api/billing/create-checkout", () => {
     expect(data.checkoutUrl).toBeDefined();
     expect(data.checkoutUrl).toContain("ozow");
     expect(data.paymentId).toBe("pay-001");
+  });
+
+  it("returns 503 when Ozow credentials are missing", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    vi.mocked(createHostedCheckout).mockRejectedValueOnce(
+      new OzowConfigurationError("Ozow credentials are not configured")
+    );
+
+    const req = createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" });
+    const res = await createCheckout(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(data.error).toBe("Payment processing is not yet configured. Please try again later.");
+  });
+
+  it("returns 503 when Ozow authentication fails", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    vi.mocked(createHostedCheckout).mockRejectedValueOnce(
+      new OzowAuthenticationError("Payment provider authentication failed")
+    );
+
+    const req = createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" });
+    const res = await createCheckout(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(data.error).toBe(
+      "Payment provider authentication failed. This is a temporary issue — please try again in a few minutes."
+    );
+  });
+
+  it("returns 503 when Ozow is temporarily unavailable", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    vi.mocked(createHostedCheckout).mockRejectedValueOnce(
+      new OzowProviderError("Ozow payment creation failed")
+    );
+
+    const req = createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" });
+    const res = await createCheckout(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(data.error).toBe(
+      "Payment provider is temporarily unavailable. Please try again in a few minutes."
+    );
   });
 });

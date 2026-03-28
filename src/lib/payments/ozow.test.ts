@@ -116,6 +116,64 @@ describe("ozow payments", () => {
     expect(body.merchantReference).toBe("payment1");
   });
 
+  it("throws a configuration error when the Ozow client secret is missing", async () => {
+    const originalClientSecret = envMap.OZOW_CLIENT_SECRET;
+    envMap.OZOW_CLIENT_SECRET = "";
+
+    try {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { createOzowHostedPayment, resetOzowTokenCacheForTesting } = await import("./ozow");
+      resetOzowTokenCacheForTesting();
+
+      await expect(
+        createOzowHostedPayment({
+          paymentId: "payment-1",
+          amountCents: 2500,
+          itemName: "Growth Plan",
+          returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
+          cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
+        })
+      ).rejects.toMatchObject({
+        name: "OzowConfigurationError",
+        code: "ozow_configuration_error",
+      });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      envMap.OZOW_CLIENT_SECRET = originalClientSecret;
+    }
+  });
+
+  it("throws an authentication error when the Ozow token endpoint rejects the client", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      text: async () => "invalid client credentials",
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { createOzowHostedPayment, resetOzowTokenCacheForTesting } = await import("./ozow");
+    resetOzowTokenCacheForTesting();
+
+    await expect(
+      createOzowHostedPayment({
+        paymentId: "payment-1",
+        amountCents: 2500,
+        itemName: "Growth Plan",
+        returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
+        cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
+      })
+    ).rejects.toMatchObject({
+      name: "OzowAuthenticationError",
+      code: "ozow_authentication_error",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("verifies webhook signatures using the shared secret", async () => {
     const { verifyOzowWebhookSignature } = await import("./ozow");
     const body = JSON.stringify({ eventType: "transaction.complete" });

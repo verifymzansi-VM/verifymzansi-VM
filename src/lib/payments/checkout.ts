@@ -1,6 +1,11 @@
 import crypto from "crypto";
 import { createLogger } from "@/lib/utils/logger";
-import { createOzowHostedPayment } from "./ozow";
+import {
+  createOzowHostedPayment,
+  OzowAuthenticationError,
+  OzowConfigurationError,
+  OzowProviderError,
+} from "./ozow";
 import type { MarketplaceArea } from "@/types/enums";
 
 const log = createLogger("PaymentCheckout");
@@ -39,6 +44,18 @@ export interface PaymentCheckoutInput {
 export interface PaymentCheckoutResult {
   paymentId: string;
   checkoutUrl: string;
+}
+
+function getOzowFailureCode(error: unknown): string | undefined {
+  if (
+    error instanceof OzowConfigurationError ||
+    error instanceof OzowAuthenticationError ||
+    error instanceof OzowProviderError
+  ) {
+    return error.code;
+  }
+
+  return undefined;
 }
 
 export async function createHostedCheckout(
@@ -126,6 +143,7 @@ export async function createHostedCheckout(
       checkoutUrl: ozowPayment.redirectUrl,
     };
   } catch (error) {
+    const errorCode = getOzowFailureCode(error);
     if (!paymentMarkedFailed) {
       await input.admin
         .from("payments")
@@ -134,6 +152,7 @@ export async function createHostedCheckout(
           provider_data: {
             ...providerData,
             last_error: error instanceof Error ? error.message : "Unknown checkout error",
+            ...(errorCode ? { last_error_code: errorCode } : {}),
           },
         })
         .eq("id", paymentId)

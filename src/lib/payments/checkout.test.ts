@@ -1,11 +1,18 @@
 import crypto from "crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHostedCheckout } from "./checkout";
-import { createOzowHostedPayment } from "./ozow";
+import { createOzowHostedPayment, OzowAuthenticationError } from "./ozow";
+import type * as OzowModuleTypes from "./ozow";
 
-vi.mock("./ozow", () => ({
-  createOzowHostedPayment: vi.fn(),
-}));
+type OzowModule = typeof OzowModuleTypes;
+
+vi.mock("./ozow", async () => {
+  const actual = await vi.importActual<OzowModule>("./ozow");
+  return {
+    ...actual,
+    createOzowHostedPayment: vi.fn(),
+  };
+});
 
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({
@@ -211,6 +218,37 @@ describe("createHostedCheckout", () => {
         status: "failed",
         provider_data: expect.objectContaining({
           last_error: "provider offline",
+        }),
+      })
+    );
+  });
+
+  it("stores an Ozow error code when checkout fails with a typed provider error", async () => {
+    vi.mocked(createOzowHostedPayment).mockRejectedValue(
+      new OzowAuthenticationError("Payment provider authentication failed")
+    );
+    const mock = createMockAdminClient();
+
+    await expect(
+      createHostedCheckout({
+        admin: mock.client as never,
+        userId: "user-1",
+        area: "MZANSI_MARKET",
+        amountCents: 25000,
+        itemName: "Growth Plan",
+        returnUrl: "https://verifymzansi.com/billing/success?payment=__PAYMENT_ID__",
+        cancelUrl: "https://verifymzansi.com/billing/cancel?payment=__PAYMENT_ID__",
+        providerData: { type: "subscription", plan_id: "plan-1" },
+      })
+    ).rejects.toThrow("Payment provider authentication failed");
+
+    expect(mock.spies.updatePayloads).toHaveLength(1);
+    expect(mock.spies.updatePayloads[0]).toEqual(
+      expect.objectContaining({
+        status: "failed",
+        provider_data: expect.objectContaining({
+          last_error: "Payment provider authentication failed",
+          last_error_code: "ozow_authentication_error",
         }),
       })
     );
