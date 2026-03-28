@@ -168,4 +168,15 @@ describe("BusinessDiscoveryBar", () => {
       expect(setFilter).toHaveBeenCalledWith("query", "coffee");
     });
   });
+
+  it("enables the interactive filters after hydration", async () => {
+    render(<BusinessDiscoveryBar />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Search")).toBeEnabled();
+      expect(screen.getByLabelText("Category")).toBeEnabled();
+      expect(screen.getByLabelText("Business type")).toBeEnabled();
+      expect(screen.getByLabelText("Province")).toBeEnabled();
+    });
+  });
 });

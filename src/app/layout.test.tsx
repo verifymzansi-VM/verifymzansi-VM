@@ -36,13 +36,11 @@ describe("RootLayout", () => {
 
     const scriptIndex = markup.indexOf("var __name=globalThis.__name;");
     const skipLinkIndex = markup.indexOf('href="#main-content"');
-    const mainIndex = markup.indexOf('id="main-content"');
 
     expect(markup).toContain('nonce="nonce-123"');
     expect(markup).toContain("globalThis.__name");
     expect(scriptIndex).toBeGreaterThan(-1);
     expect(scriptIndex).toBeLessThan(skipLinkIndex);
-    expect(scriptIndex).toBeLessThan(mainIndex);
     expect(markup).toContain("Marketplace");
   });
 });

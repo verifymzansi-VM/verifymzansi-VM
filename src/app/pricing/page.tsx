@@ -1,18 +1,9 @@
-import { Check, Sparkles, ArrowRight } from "lucide-react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
-import {
-  FREE_POST_CONFIG,
-  isActiveMarketplaceArea,
-  PLANS,
-  type PlanDefinition,
-} from "@/lib/constants/pricing";
+import { FREE_POST_CONFIG, getActivePlansByArea } from "@/lib/constants/pricing";
+import { PricingPlanGrid } from "@/components/billing/plan-grid";
 
 export const metadata = {
   title: "Pricing",
@@ -20,92 +11,8 @@ export const metadata = {
     "Choose the plan that fits your promotion, visibility, and growth goals on VerifyMzansi. Free and premium options for products, businesses, and campaigns.",
 };
 
-function featureList(plan: PlanDefinition): string[] {
-  const f = plan.features;
-  const items: string[] = [];
-  if (f.maxListings !== undefined) items.push(`Up to ${f.maxListings} listings`);
-  if (f.maxStorefronts !== undefined)
-    items.push(`${f.maxStorefronts} storefront${f.maxStorefronts === 1 ? "" : "s"}`);
-  if (f.maxProfiles !== undefined)
-    items.push(`${f.maxProfiles} business profile${f.maxProfiles === 1 ? "" : "s"}`);
-  if (f.maxBusinesses !== undefined)
-    items.push(`${f.maxBusinesses} business${f.maxBusinesses === 1 ? "" : "es"}`);
-  items.push(`${f.maxPhotos} photos per post`);
-  items.push(`${f.maxPostsPerMonth} posts / 30 days`);
-  if (f.videoAllowed) items.push("Video uploads");
-  if (f.boostAllowed) items.push("Boost listings");
-  if (f.featuredAllowed) items.push("Featured placement");
-  if (f.urgentAllowed) items.push("Urgent badge");
-  if (f.coverVideoAllowed) items.push("Cover video");
-  return items;
-}
-
-function PlanGrid({ plans }: { plans: PlanDefinition[] }) {
-  return (
-    <div
-      className={`grid grid-cols-1 md:grid-cols-2 ${plans.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-6`}
-    >
-      {plans.map((plan) => (
-        <Card
-          key={`${plan.area}-${plan.tier}`}
-          className={plan.tier === "growth" ? "border-brand-green shadow-lg relative" : ""}
-        >
-          {plan.tier === "growth" && (
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-              <Badge className="bg-brand-green text-white gap-1">
-                <Sparkles className="h-3 w-3" />
-                Most Popular
-              </Badge>
-            </div>
-          )}
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">{plan.name}</CardTitle>
-            <div className="pt-1">
-              {plan.priceCents === 0 ? (
-                <span className="text-3xl font-bold font-display">Free</span>
-              ) : (
-                <div>
-                  <span className="text-3xl font-bold font-display">
-                    R{(plan.priceCents / 100).toLocaleString("en-ZA")}
-                  </span>
-                  <span className="text-muted-foreground text-sm">/ 30 days</span>
-                </div>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {featureList(plan).map((feature) => (
-                <li key={feature} className="flex items-start gap-2 text-sm">
-                  <Check className="h-4 w-4 text-brand-green flex-shrink-0 mt-0.5" />
-                  {feature}
-                </li>
-              ))}
-            </ul>
-            <div className="mt-6">
-              <Button
-                asChild
-                className="w-full gap-2"
-                variant={plan.tier === "growth" ? "default" : "outline"}
-              >
-                <Link href={plan.priceCents === 0 ? "/post/create" : "/billing"}>
-                  {plan.priceCents === 0 ? "Create Free Post" : "Choose Plan"}
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
 export default function PricingPage() {
-  const activePlans = PLANS.filter((plan: PlanDefinition) => isActiveMarketplaceArea(plan.area));
-  const marketPlans = activePlans.filter((p: PlanDefinition) => p.area === "MZANSI_MARKET");
-  const businessPlans = activePlans.filter((p: PlanDefinition) => p.area === "MZANSI_BUSINESS");
-  const promotionPlans = activePlans.filter((p: PlanDefinition) => p.area === "PROMOTIONS_EVENTS");
+  const { marketPlans, businessPlans, promotionPlans } = getActivePlansByArea();
 
   const allPlans = [...marketPlans, ...businessPlans, ...promotionPlans];
   const jsonLd = {
@@ -138,7 +45,7 @@ export default function PricingPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
       />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1 scroll-mt-24">
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Pricing"
@@ -171,16 +78,16 @@ export default function PricingPage() {
             </div>
 
             <TabsContent value="market" className="mt-0">
-              <PlanGrid plans={marketPlans} />
+              <PricingPlanGrid plans={marketPlans} />
             </TabsContent>
 
             <TabsContent value="business" className="mt-0">
-              <PlanGrid plans={businessPlans} />
+              <PricingPlanGrid plans={businessPlans} />
             </TabsContent>
 
             {promotionPlans.length > 0 && (
               <TabsContent value="promotions" className="mt-0">
-                <PlanGrid plans={promotionPlans} />
+                <PricingPlanGrid plans={promotionPlans} />
               </TabsContent>
             )}
           </Tabs>

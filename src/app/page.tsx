@@ -102,7 +102,7 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
       />
 
-      <main className="flex-1 pb-24 md:pb-0">
+      <main id="main-content" className="flex-1 pb-24 md:pb-0 scroll-mt-24">
         {/* ═══ Hero Banner (rotating promotions + search) ═══ */}
         <Suspense fallback={<HeroBannerSkeleton />}>
           <HeroBannerWithData />

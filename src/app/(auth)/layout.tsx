@@ -40,11 +40,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             </span>
           </div>
         </div>
-        <div className="grain-overlay" />
       </div>
 
       {/* Right — auth form */}
-      <div className="flex flex-1 items-center justify-center p-6 sm:p-8 lg:p-10">
+      <main
+        id="main-content"
+        className="flex flex-1 items-center justify-center p-6 sm:p-8 lg:p-10 scroll-mt-24"
+      >
         <div className="w-full max-w-md space-y-4">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
@@ -58,7 +60,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
           {children}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

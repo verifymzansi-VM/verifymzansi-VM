@@ -1,4 +1,5 @@
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import { getStablePlanId } from "@/lib/constants/plan-ids";
 
 export const ACTIVE_MARKETPLACE_AREAS = [
   "MZANSI_MARKET",
@@ -60,6 +61,11 @@ export interface PlanDefinition {
     urgentAllowed: boolean;
     coverVideoAllowed: boolean;
   };
+}
+
+export interface PlanFeatureItem {
+  text: string;
+  included: boolean;
 }
 
 export const PLANS: PlanDefinition[] = [
@@ -428,6 +434,71 @@ export const FREE_POST_CONFIG = {
   videoAllowed: true,
   maxAllowed: 1, // 1 post per area
 } as const;
+
+export function formatPlanPrice(priceCents: number): string {
+  return `R${(priceCents / 100).toLocaleString("en-ZA")}`;
+}
+
+export function getPlanCheckoutId(plan: Pick<PlanDefinition, "area" | "tier">): string {
+  return getStablePlanId(plan.area, plan.tier);
+}
+
+export function getPlanCheckoutHref(plan: Pick<PlanDefinition, "area" | "tier">): string {
+  return `/billing/checkout?plan=${getPlanCheckoutId(plan)}`;
+}
+
+export function getPlanFeatureItems(
+  plan: PlanDefinition,
+  options?: { includeDisabled?: boolean }
+): PlanFeatureItem[] {
+  const features = plan.features;
+  const includeDisabled = options?.includeDisabled ?? false;
+  const items: PlanFeatureItem[] = [];
+
+  const push = (text: string, included = true) => {
+    if (included || includeDisabled) {
+      items.push({ text, included });
+    }
+  };
+
+  if (features.maxListings !== undefined) push(`Up to ${features.maxListings} listings`);
+  if (features.maxStorefronts !== undefined) push(`${features.maxStorefronts} storefronts`);
+  if (features.maxProfiles !== undefined) push(`${features.maxProfiles} profiles`);
+  if (features.maxBusinesses !== undefined) {
+    push(`${features.maxBusinesses} business${features.maxBusinesses === 1 ? "" : "es"}`);
+  }
+  if (features.maxPromotions !== undefined) push(`${features.maxPromotions} promotions`);
+
+  push(`${features.maxPhotos} photos per post`);
+  push(`${features.maxPostsPerMonth} posts / 30 days`);
+  push(
+    features.maxVideos !== undefined
+      ? `${features.maxVideos} video tour${features.maxVideos === 1 ? "" : "s"}`
+      : "Video uploads",
+    features.videoAllowed
+  );
+  push("Boost listings", features.boostAllowed);
+  push("Featured placement", features.featuredAllowed);
+  push("Urgent badge", features.urgentAllowed);
+  push("Cover video", features.coverVideoAllowed);
+
+  return items;
+}
+
+export function getActivePlans(): PlanDefinition[] {
+  return PLANS.filter((plan) => isActiveMarketplaceArea(plan.area));
+}
+
+export function getActivePlansByArea() {
+  const activePlans = getActivePlans();
+
+  return {
+    activePlans,
+    marketPlans: activePlans.filter((plan) => plan.area === "MZANSI_MARKET"),
+    businessPlans: activePlans.filter((plan) => plan.area === "MZANSI_BUSINESS"),
+    promotionPlans: activePlans.filter((plan) => plan.area === "PROMOTIONS_EVENTS"),
+  };
+}
 
 /**
  * Get plans for a specific marketplace area.

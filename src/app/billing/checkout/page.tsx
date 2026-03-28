@@ -43,7 +43,7 @@ function CheckoutContent() {
 
         // Redirect to the hosted checkout
         if (data.checkoutUrl) {
-          window.location.href = data.checkoutUrl;
+          window.location.assign(data.checkoutUrl);
         } else {
           setError("No checkout URL received");
         }
@@ -56,7 +56,7 @@ function CheckoutContent() {
   }, [planId, router, isValidPlan]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <main id="main-content" className="flex min-h-screen items-center justify-center scroll-mt-24">
       <div className="text-center space-y-4">
         <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
           {error ? (
@@ -83,7 +83,7 @@ function CheckoutContent() {
           </Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }
 

@@ -3,19 +3,17 @@
 import { useState, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { useToast } from "@/hooks/use-toast";
-import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
 interface SubscribeButtonProps {
-  area: MarketplaceArea;
-  tier: PlanTier;
+  planId: string;
+  planName: string;
   priceCents: number;
   isPopular?: boolean;
 }
 
-export function SubscribeButton({ area, tier, priceCents, isPopular }: SubscribeButtonProps) {
+export function SubscribeButton({ planId, planName, priceCents, isPopular }: SubscribeButtonProps) {
   const [loading, setLoading] = useState(false);
   const pendingRef = useRef(false);
   const { toast } = useToast();
@@ -28,28 +26,10 @@ export function SubscribeButton({ area, tier, priceCents, isPopular }: Subscribe
 
     setLoading(true);
     try {
-      const supabase = createClient();
-      const { data: dbPlan } = await supabase
-        .from("plans")
-        .select("id")
-        .eq("area", area)
-        .eq("tier", tier)
-        .eq("active", true)
-        .single();
-
-      if (!dbPlan) {
-        toast({
-          title: "Plan not found",
-          description: "This plan is not currently available. Please try again later.",
-          variant: "destructive",
-        });
-        return;
-      }
-
       const res = await fetch("/api/billing/create-checkout", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ planId: dbPlan.id, area }),
+        body: JSON.stringify({ planId }),
       });
 
       const data = await res.json();
@@ -64,7 +44,7 @@ export function SubscribeButton({ area, tier, priceCents, isPopular }: Subscribe
       }
 
       if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
+        window.location.assign(data.checkoutUrl);
       } else {
         toast({
           title: "Checkout error",
@@ -75,7 +55,7 @@ export function SubscribeButton({ area, tier, priceCents, isPopular }: Subscribe
     } catch {
       toast({
         title: "Something went wrong",
-        description: "Could not connect to payment service. Please try again.",
+        description: `Could not start checkout for ${planName}. Please try again.`,
         variant: "destructive",
       });
     } finally {
@@ -83,9 +63,6 @@ export function SubscribeButton({ area, tier, priceCents, isPopular }: Subscribe
       pendingRef.current = false;
     }
   }
-
-  const tierLabel = `${tier.charAt(0).toUpperCase()}${tier.slice(1)}`;
-  const label = priceCents === 0 ? "Current Plan" : `Choose ${tierLabel}`;
 
   if (priceCents === 0) {
     return (
@@ -105,11 +82,11 @@ export function SubscribeButton({ area, tier, priceCents, isPopular }: Subscribe
     >
       {loading ? (
         <>
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-          Processing...
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Processing…
         </>
       ) : (
-        label
+        `Choose ${planName}`
       )}
     </Button>
   );

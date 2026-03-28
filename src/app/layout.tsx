@@ -145,7 +145,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           disableTransitionOnChange
           nonce={nonce}
         >
-          <div id="main-content">{children}</div>
+          {children}
           <Toaster />
           <PwaInstallPrompt />
           <ServiceWorkerRegistrar />

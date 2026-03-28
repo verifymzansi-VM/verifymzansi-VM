@@ -86,6 +86,10 @@ describe("Active-area pricing parity", () => {
         )
       )
     ).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /Choose /i })[0]).toHaveAttribute(
+      "href",
+      expect.stringContaining("/billing/checkout?plan=")
+    );
   });
 
   it("billing page free-post copy matches the runtime free-post configuration", () => {

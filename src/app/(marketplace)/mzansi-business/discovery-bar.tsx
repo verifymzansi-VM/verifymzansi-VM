@@ -1,28 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef } from "react";
 import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useMarketplaceStore } from "@/stores";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 
-function subscribeToHydrationState() {
-  return () => {};
-}
-
 export function BusinessDiscoveryBar() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const isInteractive = useSyncExternalStore(
-    subscribeToHydrationState,
-    () => true,
-    () => false
-  );
+  const isInteractive = useHydrated();
   const debouncedSetQuery = useDebouncedCallback(
     (value: string) => setFilter("query", value || undefined),
     300

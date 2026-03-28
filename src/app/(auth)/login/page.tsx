@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -16,10 +16,7 @@ import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
-
-function subscribeToHydrationState() {
-  return () => {};
-}
+import { useHydrated } from "@/hooks/use-hydrated";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -35,11 +32,7 @@ export default function LoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isInteractive = useSyncExternalStore(
-    subscribeToHydrationState,
-    () => true,
-    () => false
-  );
+  const isInteractive = useHydrated();
   const router = useRouter();
   const { toast } = useToast();
 

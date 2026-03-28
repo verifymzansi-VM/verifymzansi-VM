@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
 import { shouldBypassTurnstileInNonProduction } from "@/lib/turnstile-mode";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 /**
  * Cloudflare Turnstile CAPTCHA widget.
@@ -145,10 +146,11 @@ export function TurnstileWidget({
   const onErrorRef = useLatestRef(onError);
   const onLoadRef = useLatestRef(onLoad);
   const onUnavailableRef = useLatestRef(onUnavailable);
+  const isHydrated = useHydrated();
   const runtimeConfig = getPublicRuntimeConfig();
   const { mode, siteKey } = getTurnstileClientState(runtimeConfig);
   const shouldBypassConfiguredTurnstile =
-    typeof window !== "undefined" &&
+    isHydrated &&
     mode === "configured" &&
     shouldBypassTurnstileInNonProduction({
       currentHost: window.location.hostname,
