@@ -18,8 +18,11 @@ interface ListingDetailClientProps {
   photoCount?: number;
 }
 
-function isVideoUrl(url: string): boolean {
-  return /\.(mp4|webm|ogg)(\?.*)?$/i.test(url);
+type MediaKind = "photo" | "video";
+
+interface MediaItem {
+  kind: MediaKind;
+  url: string;
 }
 
 /** Small thumbnail placeholder for videos in the thumbnail strip */
@@ -52,28 +55,36 @@ export function ListingDetailClient({
   videoThumbnail,
   photoCount,
 }: ListingDetailClientProps) {
-  const allMedia = [...normalizeMediaUrls(photos), ...normalizeMediaUrls(videos)].filter(Boolean);
+  const normalizedPhotos = normalizeMediaUrls(photos).filter(Boolean);
+  const normalizedVideos = normalizeMediaUrls(videos).filter(Boolean);
+  const sourceOrderedMedia: MediaItem[] =
+    photoCount != null
+      ? [...normalizedPhotos, ...normalizedVideos].map((url, index) => ({
+          url,
+          kind: index < photoCount ? "photo" : "video",
+        }))
+      : [
+          ...normalizedPhotos.map((url) => ({ url, kind: "photo" as const })),
+          ...normalizedVideos.map((url) => ({ url, kind: "video" as const })),
+        ];
+  const orderedMedia = [
+    ...sourceOrderedMedia.filter((item) => item.kind === "video"),
+    ...sourceOrderedMedia.filter((item) => item.kind === "photo"),
+  ];
   const [activeIndex, setActiveIndex] = useState(0);
   const [copied, setCopied] = useState(false);
 
   // Use videoThumbnail if available, then fall back to first photo
   const firstPhotoUrl =
     (videoThumbnail ? normalizeMediaUrls([videoThumbnail])[0] : undefined) ||
-    normalizeMediaUrls(photos.filter(Boolean))[0] ||
+    normalizedPhotos[0] ||
     undefined;
-
-  // When photoCount is provided, determine video by position; otherwise fall back to extension check
-  const resolvedPhotoCount = photoCount ?? normalizeMediaUrls(photos).filter(Boolean).length;
-  function isMediaVideo(index: number, url: string): boolean {
-    if (photoCount != null) return index >= resolvedPhotoCount;
-    return isVideoUrl(url);
-  }
-
-  const activeUrl = allMedia[activeIndex] || "";
-  const isVideo = isMediaVideo(activeIndex, activeUrl);
+  const activeMedia = orderedMedia[activeIndex];
+  const activeUrl = activeMedia?.url || "";
+  const isVideo = activeMedia?.kind === "video";
 
   function goTo(index: number) {
-    if (index >= 0 && index < allMedia.length) {
+    if (index >= 0 && index < orderedMedia.length) {
       setActiveIndex(index);
     }
   }
@@ -89,7 +100,7 @@ export function ListingDetailClient({
     }
   }
 
-  if (allMedia.length === 0) {
+  if (orderedMedia.length === 0) {
     return (
       <div className="aspect-video rounded-xl bg-muted flex items-center justify-center">
         <p className="text-muted-foreground">No images</p>
@@ -115,7 +126,7 @@ export function ListingDetailClient({
           ) : (
             <Image
               src={activeUrl}
-              alt={`${title} - image ${activeIndex + 1}`}
+              alt={`${title} - ${activeMedia?.kind ?? "photo"} ${activeIndex + 1}`}
               fill
               className="object-cover transition-transform duration-500"
               sizes="(max-width: 1024px) 100vw, 66vw"
@@ -124,7 +135,7 @@ export function ListingDetailClient({
           )}
 
           {/* Navigation arrows */}
-          {allMedia.length > 1 && (
+          {orderedMedia.length > 1 && (
             <>
               <button
                 type="button"
@@ -138,7 +149,7 @@ export function ListingDetailClient({
               <button
                 type="button"
                 onClick={() => goTo(activeIndex + 1)}
-                disabled={activeIndex === allMedia.length - 1}
+                disabled={activeIndex === orderedMedia.length - 1}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0 hover:bg-black/60"
                 aria-label="Next image"
               >
@@ -148,25 +159,25 @@ export function ListingDetailClient({
           )}
 
           {/* Image counter */}
-          {allMedia.length > 1 && (
+          {orderedMedia.length > 1 && (
             <div className="absolute bottom-3 right-3 bg-black/50 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm">
-              {activeIndex + 1} / {allMedia.length}
+              {activeIndex + 1} / {orderedMedia.length}
             </div>
           )}
         </div>
       </div>
 
       {/* ── Thumbnail Strip ─────────────────────────────── */}
-      {allMedia.length > 1 && (
+      {orderedMedia.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          {allMedia.map((url, i) => {
-            const isVid = isMediaVideo(i, url);
+          {orderedMedia.map((item, i) => {
+            const isVid = item.kind === "video";
             return (
               <button
                 key={i}
                 type="button"
                 onClick={() => setActiveIndex(i)}
-                aria-label={`View image ${i + 1} of ${allMedia.length}`}
+                aria-label={`View ${item.kind} ${i + 1} of ${orderedMedia.length}`}
                 className={cn(
                   "relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 transition-all duration-200",
                   i === activeIndex
@@ -178,7 +189,7 @@ export function ListingDetailClient({
                   <VideoThumbnailThumb firstPhoto={firstPhotoUrl} />
                 ) : (
                   <Image
-                    src={url}
+                    src={item.url}
                     alt={`Thumbnail ${i + 1}`}
                     fill
                     className="object-cover"

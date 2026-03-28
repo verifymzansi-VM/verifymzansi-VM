@@ -107,6 +107,8 @@ export function PromotionDetailContent({
   const leadVideo = videos[0];
   const leadPhoto = photos[0];
   const leadPoster = promotion.video_thumbnail || leadPhoto || undefined;
+  const remainingVideos = leadVideo ? videos.slice(1) : videos;
+  const remainingPhotos = leadVideo ? photos : photos.slice(1);
   const contactMethods = promotion.contact_methods ?? [];
   const isEvent = promotion.promotion_type === "event";
   const eventState = isEvent ? getEventState(promotion.start_date, promotion.end_date) : null;
@@ -152,28 +154,9 @@ export function PromotionDetailContent({
               </div>
             </div>
 
-            {(leadVideo ? photos.length > 0 : photos.length > 1) && (
-              <div className="grid grid-cols-4 gap-2">
-                {(leadVideo ? photos : photos.slice(1)).slice(0, 4).map((photo, index) => (
-                  <div
-                    key={index}
-                    className="relative aspect-square overflow-hidden rounded-lg bg-warm-100 dark:bg-warm-800"
-                  >
-                    <Image
-                      src={normalizeMediaUrl(photo)}
-                      alt={`${promotion.title} photo ${index + 2}`}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 640px) 25vw, 16vw"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {(leadVideo ? videos.length > 1 : videos.length > 0) && (
+            {remainingVideos.length > 0 && (
               <div className="grid grid-cols-1 gap-2">
-                {(leadVideo ? videos.slice(1) : videos).map((videoUrl, index) => (
+                {remainingVideos.map((videoUrl, index) => (
                   <div
                     key={index}
                     className="relative aspect-video overflow-hidden rounded-lg bg-black"
@@ -188,6 +171,25 @@ export function PromotionDetailContent({
                     >
                       <track kind="captions" />
                     </video>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {remainingPhotos.length > 0 && (
+              <div className="grid grid-cols-4 gap-2">
+                {remainingPhotos.slice(0, 4).map((photo, index) => (
+                  <div
+                    key={index}
+                    className="relative aspect-square overflow-hidden rounded-lg bg-warm-100 dark:bg-warm-800"
+                  >
+                    <Image
+                      src={normalizeMediaUrl(photo)}
+                      alt={`${promotion.title} photo ${index + (leadVideo ? 1 : 2)}`}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 640px) 25vw, 16vw"
+                    />
                   </div>
                 ))}
               </div>

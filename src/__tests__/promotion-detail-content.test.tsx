@@ -99,4 +99,48 @@ describe("PromotionDetailContent", () => {
     expect(screen.getByText("WhatsApp")).toBeTruthy();
     expect(screen.getByText("Contact Form")).toBeTruthy();
   });
+
+  it("renders remaining videos before photos when a lead video exists", () => {
+    const { container } = render(
+      <PromotionDetailContent
+        promotion={{
+          id: "promo-2",
+          owner_id: "seller-1",
+          business_id: null,
+          title: "Weekend Event",
+          description: "A promotion with mixed media.",
+          promotion_type: "event",
+          category: "Live Music",
+          category_key: "events_entertainment",
+          photos: ["https://example.com/photo-1.jpg", "https://example.com/photo-2.jpg"],
+          videos: ["https://example.com/video-1.mp4", "https://example.com/video-2.mp4"],
+          video_thumbnail: "https://example.com/video-thumb.jpg",
+          price_cents: null,
+          price_negotiable: false,
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
+          contact_methods: [],
+          start_date: null,
+          end_date: null,
+          boost_until: null,
+          featured_until: null,
+          view_count: 1,
+          created_at: "2026-03-08T00:00:00.000Z",
+        }}
+        advertiserProfile={null}
+        linkedBusiness={null}
+      />
+    );
+
+    const videos = Array.from(container.querySelectorAll("video"));
+    expect(videos).toHaveLength(2);
+    expect(videos[0]).toHaveAttribute("src", "https://example.com/video-1.mp4");
+    expect(videos[1]).toHaveAttribute("src", "https://example.com/video-2.mp4");
+
+    const secondVideo = videos[1];
+    const photo = screen.getByAltText("Weekend Event photo 2");
+    expect(secondVideo.compareDocumentPosition(photo) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
 });
