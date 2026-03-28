@@ -184,6 +184,7 @@ export function PostFormFooter({
 
       {isLastStep ? (
         <Button
+          key="submit-action"
           type={submitType}
           onClick={submitType === "button" ? onSubmitClick : undefined}
           disabled={submitDisabled || isSubmitting}
@@ -192,7 +193,7 @@ export function PostFormFooter({
           {isSubmitting ? submittingLabel : submitLabel}
         </Button>
       ) : (
-        <Button type="button" onClick={onNext} disabled={nextDisabled}>
+        <Button key="next-action" type="button" onClick={onNext} disabled={nextDisabled}>
           Next
         </Button>
       )}

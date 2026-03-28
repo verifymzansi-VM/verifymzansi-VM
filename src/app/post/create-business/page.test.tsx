@@ -220,6 +220,25 @@ describe("CreateBusinessPage", () => {
     expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
   });
 
+  it("does not submit while advancing into the media review step", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    });
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
+    expect(screen.getByText("Business logo (optional)")).toBeInTheDocument();
+    expect(screen.getByText("Cover photo (optional)")).toBeInTheDocument();
+    expect(screen.getByText(/Profile photos \(up to 5\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Promo video \(optional\)/i)).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it("renders subtype-specific details in the shared review preview", async () => {
     render(<CreateBusinessPage />);
 
