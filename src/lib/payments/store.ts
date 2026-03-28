@@ -103,6 +103,21 @@ export async function getPaymentById(
   return (data as PaymentRow | null) ?? null;
 }
 
+export async function getPaymentByProviderReference(
+  supabase: PaymentStoreClient,
+  providerReference: string
+): Promise<PaymentRow | null> {
+  const { data } = await supabase
+    .from("payments")
+    .select(
+      "id, area, status, provider, provider_payment_id, provider_reference, provider_data, amount_cents, user_id"
+    )
+    .eq("provider_reference", providerReference)
+    .maybeSingle();
+
+  return (data as PaymentRow | null) ?? null;
+}
+
 export async function markPaymentFailed(
   supabase: PaymentStoreClient,
   payment: PaymentRow,

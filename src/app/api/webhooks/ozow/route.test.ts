@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
+import { Webhook } from "svix";
 
 const mockCreateAdminClient = vi.fn();
 const mockFulfillPayment = vi.fn();
@@ -29,7 +30,7 @@ vi.mock("@/lib/utils/logger", () => ({
 vi.mock("@/lib/config/env", () => ({
   env: vi.fn((key: string) => {
     const envMap: Record<string, string> = {
-      OZOW_WEBHOOK_SECRET: "webhook-secret",
+      OZOW_WEBHOOK_SECRET: "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw",
     };
     return envMap[key] ?? "";
   }),
@@ -46,21 +47,34 @@ vi.mock("@/lib/services/email", () => ({
 
 import { POST } from "./route";
 
-function createSignedRequest(body: Record<string, unknown>, signature = "bad-signature") {
+const webhookSecret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+
+function createSvixHeaders(body: Record<string, unknown>, signature?: string) {
+  const raw = JSON.stringify(body);
+  const webhook = new Webhook(webhookSecret);
+  const timestamp = new Date();
+  const webhookId = "msg_test_123";
+
+  return {
+    "Content-Type": "application/json",
+    "svix-id": webhookId,
+    "svix-timestamp": Math.floor(timestamp.getTime() / 1000).toString(),
+    "svix-signature": signature ?? webhook.sign(webhookId, timestamp, raw),
+  };
+}
+
+function createSignedRequest(body: Record<string, unknown>, signature?: string) {
   return new NextRequest("http://localhost/api/webhooks/ozow", {
     method: "POST",
     body: JSON.stringify(body),
-    headers: {
-      "Content-Type": "application/json",
-      "X-Ozow-Signature": signature,
-    },
+    headers: createSvixHeaders(body, signature),
   });
 }
 
 describe("POST /api/webhooks/ozow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.OZOW_WEBHOOK_SECRET = "webhook-secret";
+    process.env.OZOW_WEBHOOK_SECRET = webhookSecret;
     (process.env as Record<string, string | undefined>).NODE_ENV = "development";
     mockGetUserById.mockResolvedValue({
       data: {
@@ -81,7 +95,11 @@ describe("POST /api/webhooks/ozow", () => {
     const response = await POST(
       createSignedRequest({
         eventType: "transaction.complete",
-        data: { merchantReference: "payment-1", amount: "25.00", currencyCode: "ZAR" },
+        data: {
+          merchantReference: "payment-1",
+          status: "successful",
+          amount: { value: 25, currency: "ZAR" },
+        },
       })
     );
 
@@ -90,9 +108,11 @@ describe("POST /api/webhooks/ozow", () => {
   });
 
   it("returns 400 for malformed JSON payloads", async () => {
-    const crypto = await import("crypto");
     const raw = '{"eventType":"transaction.complete",';
-    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
+    const webhook = new Webhook(webhookSecret);
+    const timestamp = new Date();
+    const webhookId = "msg_bad_json";
+    const signature = webhook.sign(webhookId, timestamp, raw);
 
     const response = await POST(
       new NextRequest("http://localhost/api/webhooks/ozow", {
@@ -100,7 +120,9 @@ describe("POST /api/webhooks/ozow", () => {
         body: raw,
         headers: {
           "Content-Type": "application/json",
-          "X-Ozow-Signature": signature,
+          "svix-id": webhookId,
+          "svix-timestamp": Math.floor(timestamp.getTime() / 1000).toString(),
+          "svix-signature": signature,
         },
       })
     );
@@ -111,23 +133,31 @@ describe("POST /api/webhooks/ozow", () => {
 
   it("rejects invalid signatures", async () => {
     const response = await POST(
-      createSignedRequest({
-        eventType: "transaction.complete",
-        data: { merchantReference: "payment-1", amount: "25.00", currencyCode: "ZAR" },
-      })
+      createSignedRequest(
+        {
+          eventType: "transaction.complete",
+          data: {
+            merchantReference: "payment-1",
+            status: "successful",
+            amount: { value: 25, currency: "ZAR" },
+          },
+        },
+        "v1,bad-signature"
+      )
     );
 
     expect(response.status).toBe(401);
   });
 
   it("ignores unknown payments after successful verification", async () => {
-    const crypto = await import("crypto");
     const body = {
       eventType: "transaction.complete",
-      data: { merchantReference: "payment-1", amount: "25.00", currencyCode: "ZAR" },
+      data: {
+        merchantReference: "payment-1",
+        status: "successful",
+        amount: { value: 25, currency: "ZAR" },
+      },
     };
-    const raw = JSON.stringify(body);
-    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
 
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -139,7 +169,7 @@ describe("POST /api/webhooks/ozow", () => {
       }),
     });
 
-    const response = await POST(createSignedRequest(body, signature));
+    const response = await POST(createSignedRequest(body));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -148,18 +178,15 @@ describe("POST /api/webhooks/ozow", () => {
   });
 
   it("returns duplicate when payment is already complete for the same provider transaction", async () => {
-    const crypto = await import("crypto");
     const body = {
       eventType: "transaction.complete",
       data: {
         merchantReference: "payment-1",
-        transactionReference: "ozow-tx-1",
-        amount: "25.00",
-        currencyCode: "ZAR",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: 25, currency: "ZAR" },
       },
     };
-    const raw = JSON.stringify(body);
-    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
 
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -184,7 +211,7 @@ describe("POST /api/webhooks/ozow", () => {
       auth: { admin: { getUserById: mockGetUserById } },
     });
 
-    const response = await POST(createSignedRequest(body, signature));
+    const response = await POST(createSignedRequest(body));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ success: true, duplicate: true });
@@ -192,18 +219,15 @@ describe("POST /api/webhooks/ozow", () => {
   });
 
   it("passes promotion payment area and metadata into fulfillment after a verified completion webhook", async () => {
-    const crypto = await import("crypto");
     const body = {
       eventType: "transaction.complete",
       data: {
         merchantReference: "payment-1",
-        transactionReference: "ozow-tx-1",
-        amount: "25.00",
-        currencyCode: "ZAR",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: 25, currency: "ZAR" },
       },
     };
-    const raw = JSON.stringify(body);
-    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
 
     const paymentRecord = {
       id: "payment-1",
@@ -297,7 +321,7 @@ describe("POST /api/webhooks/ozow", () => {
     });
     mockFulfillPayment.mockResolvedValue(undefined);
 
-    const response = await POST(createSignedRequest(body, signature));
+    const response = await POST(createSignedRequest(body));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -325,18 +349,15 @@ describe("POST /api/webhooks/ozow", () => {
   });
 
   it("rejects currency mismatches before fulfillment", async () => {
-    const crypto = await import("crypto");
     const body = {
       eventType: "transaction.complete",
       data: {
         merchantReference: "payment-1",
-        transactionReference: "ozow-tx-1",
-        amount: "25.00",
-        currencyCode: "USD",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: 25, currency: "USD" },
       },
     };
-    const raw = JSON.stringify(body);
-    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
 
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -360,7 +381,7 @@ describe("POST /api/webhooks/ozow", () => {
       }),
     });
 
-    const response = await POST(createSignedRequest(body, signature));
+    const response = await POST(createSignedRequest(body));
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: "Currency mismatch" });
@@ -368,18 +389,15 @@ describe("POST /api/webhooks/ozow", () => {
   });
 
   it("rejects amount mismatches before fulfillment", async () => {
-    const crypto = await import("crypto");
     const body = {
       eventType: "transaction.complete",
       data: {
         merchantReference: "payment-1",
-        transactionReference: "ozow-tx-1",
-        amount: "24.00",
-        currencyCode: "ZAR",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: 24, currency: "ZAR" },
       },
     };
-    const raw = JSON.stringify(body);
-    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
 
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -403,26 +421,23 @@ describe("POST /api/webhooks/ozow", () => {
       }),
     });
 
-    const response = await POST(createSignedRequest(body, signature));
+    const response = await POST(createSignedRequest(body));
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: "Amount mismatch" });
     expect(mockFulfillPayment).not.toHaveBeenCalled();
   });
 
-  it("marks failed Ozow events without attempting fulfillment", async () => {
-    const crypto = await import("crypto");
+  it("marks failed Ozow transaction completions without attempting fulfillment", async () => {
     const body = {
-      eventType: "transaction.failed",
+      eventType: "transaction.complete",
       data: {
         merchantReference: "payment-1",
-        transactionReference: "ozow-tx-1",
-        amount: "25.00",
-        currencyCode: "ZAR",
+        id: "ozow-tx-1",
+        status: "error",
+        amount: { value: 25, currency: "ZAR" },
       },
     };
-    const raw = JSON.stringify(body);
-    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
 
     const updateEqProvider = vi.fn().mockResolvedValue({ error: null });
     const updateEqId = vi.fn().mockReturnValue({ eq: updateEqProvider });
@@ -457,7 +472,7 @@ describe("POST /api/webhooks/ozow", () => {
       auth: { admin: { getUserById: mockGetUserById } },
     });
 
-    const response = await POST(createSignedRequest(body, signature));
+    const response = await POST(createSignedRequest(body));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
@@ -471,18 +486,15 @@ describe("POST /api/webhooks/ozow", () => {
   });
 
   it("rolls back processing when fulfillment fails after claim", async () => {
-    const crypto = await import("crypto");
     const body = {
       eventType: "transaction.complete",
       data: {
         merchantReference: "payment-1",
-        transactionReference: "ozow-tx-1",
-        amount: "25.00",
-        currencyCode: "ZAR",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: 25, currency: "ZAR" },
       },
     };
-    const raw = JSON.stringify(body);
-    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
 
     const paymentRecord = {
       id: "payment-1",
@@ -558,7 +570,7 @@ describe("POST /api/webhooks/ozow", () => {
     mockFulfillPayment.mockRejectedValue(new Error("fulfillment blew up"));
     mockRollbackPayment.mockResolvedValue(undefined);
 
-    const response = await POST(createSignedRequest(body, signature));
+    const response = await POST(createSignedRequest(body));
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: "Payment fulfillment failed" });
@@ -566,18 +578,15 @@ describe("POST /api/webhooks/ozow", () => {
   });
 
   it("finalizes a previously-fulfilled processing payment without rerunning fulfillment", async () => {
-    const crypto = await import("crypto");
     const body = {
       eventType: "transaction.complete",
       data: {
         merchantReference: "payment-1",
-        transactionReference: "ozow-tx-1",
-        amount: "25.00",
-        currencyCode: "ZAR",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: 25, currency: "ZAR" },
       },
     };
-    const raw = JSON.stringify(body);
-    const signature = crypto.createHmac("sha256", "webhook-secret").update(raw).digest("hex");
 
     const processingPayment = {
       id: "payment-1",
@@ -640,7 +649,7 @@ describe("POST /api/webhooks/ozow", () => {
       }),
     });
 
-    const response = await POST(createSignedRequest(body, signature));
+    const response = await POST(createSignedRequest(body));
     const data = await response.json();
 
     expect(response.status).toBe(200);

@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Webhook } from "svix";
 
 const envMap: Record<string, string> = {
   OZOW_ENV: "staging",
   OZOW_CLIENT_ID: "client-id",
   OZOW_CLIENT_SECRET: "client-secret",
   OZOW_SITE_CODE: "site-code",
-  OZOW_WEBHOOK_SECRET: "webhook-secret",
+  OZOW_WEBHOOK_SECRET: "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw",
   NEXT_PUBLIC_APP_URL: "http://localhost:3000",
   NODE_ENV: "test",
 };
@@ -111,9 +112,9 @@ describe("ozow payments", () => {
     expect(headers["Idempotency-Key"]).toBeTruthy();
     expect(headers["X-Correlation-ID"]).toBeTruthy();
     expect(body.siteCode).toBe("site-code");
-    expect(body.amount).toBe("25.00");
-    expect(body.currencyCode).toBe("ZAR");
-    expect(body.merchantReference).toBe("payment1");
+    expect(body.region).toBe("ZA");
+    expect(body.amount).toEqual({ currency: "ZAR", value: 25 });
+    expect(body.merchantReference).toBe("payment-1");
   });
 
   it("throws a configuration error when the Ozow client secret is missing", async () => {
@@ -204,29 +205,44 @@ describe("ozow payments", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("verifies webhook signatures using the shared secret", async () => {
+  it("verifies Svix webhook signatures using the shared secret", async () => {
     const { verifyOzowWebhookSignature } = await import("./ozow");
     const body = JSON.stringify({ eventType: "transaction.complete" });
-    const crypto = await import("crypto");
-    const signature = crypto
-      .createHmac("sha256", envMap.OZOW_WEBHOOK_SECRET)
-      .update(body)
-      .digest("hex");
+    const webhook = new Webhook(envMap.OZOW_WEBHOOK_SECRET);
+    const signatureId = "msg_123";
+    const timestamp = new Date();
+    const headers = new Headers({
+      "svix-id": signatureId,
+      "svix-timestamp": Math.floor(timestamp.getTime() / 1000).toString(),
+      "svix-signature": webhook.sign(signatureId, timestamp, body),
+    });
 
-    expect(verifyOzowWebhookSignature(body, signature)).toBe(true);
-    expect(verifyOzowWebhookSignature(body, "bad-signature")).toBe(false);
+    expect(verifyOzowWebhookSignature(body, headers)).toBe(true);
+    expect(
+      verifyOzowWebhookSignature(
+        body,
+        new Headers({
+          "svix-id": signatureId,
+          "svix-timestamp": headers.get("svix-timestamp") ?? "",
+          "svix-signature": "v1,bad-signature",
+        })
+      )
+    ).toBe(false);
   });
 
-  it("normalizes transactionReference webhooks into providerPaymentId", async () => {
+  it("normalizes full transaction webhooks into payment fields", async () => {
     const { normalizeOzowWebhook } = await import("./ozow");
 
     const payload = normalizeOzowWebhook({
       eventType: "transaction.complete",
       data: {
+        id: "ozow-tx-1",
         merchantReference: "payment-1",
-        transactionReference: "ozow-tx-1",
-        amount: "25.00",
-        currencyCode: "ZAR",
+        status: "successful",
+        amount: {
+          currency: "ZAR",
+          value: 25,
+        },
       },
     });
 
@@ -236,6 +252,7 @@ describe("ozow payments", () => {
         providerPaymentId: "ozow-tx-1",
         amount: "25.00",
         currencyCode: "ZAR",
+        status: "successful",
       })
     );
   });

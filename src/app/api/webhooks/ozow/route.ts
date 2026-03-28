@@ -7,6 +7,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import {
   finalizeCompletedPayment,
   getPaymentById,
+  getPaymentByProviderReference,
   hasFulfillmentCompletion,
   markPaymentFailed,
   persistFulfillmentCompletion,
@@ -143,6 +144,14 @@ function toAmountString(amountCents: number): string {
   return (amountCents / 100).toFixed(2);
 }
 
+function isFailedTransactionStatus(status: string | null): boolean {
+  return status?.toLowerCase() === "error";
+}
+
+function isSuccessfulTransactionStatus(status: string | null): boolean {
+  return status?.toLowerCase() === "successful";
+}
+
 /**
  * Parse a decimal amount string (e.g. "1000.00") to integer cents
  * without using floating-point multiplication.
@@ -175,7 +184,6 @@ export async function POST(request: NextRequest) {
     }
 
     const rawBody = await request.text();
-    const signature = request.headers.get("x-ozow-signature");
     const webhookSecret = process.env.OZOW_WEBHOOK_SECRET;
     const isProduction = process.env.NODE_ENV === "production";
 
@@ -190,7 +198,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Webhook secret not configured" }, { status: 503 });
     }
 
-    if (!verifyOzowWebhookSignature(rawBody, signature)) {
+    if (!verifyOzowWebhookSignature(rawBody, request.headers)) {
       log.warn("Invalid Ozow webhook signature");
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
     }
@@ -205,9 +213,14 @@ export async function POST(request: NextRequest) {
     if (!payload?.merchantReference) {
       return NextResponse.json({ error: "Missing merchantReference" }, { status: 400 });
     }
+    if (payload.eventType?.toLowerCase() === "transaction.complete" && !payload.status) {
+      return NextResponse.json({ error: "Missing transaction status" }, { status: 400 });
+    }
 
     const supabase = createAdminClient() as unknown as PaymentStoreClient;
-    const payment = await getPaymentById(supabase, payload.merchantReference);
+    const payment =
+      (await getPaymentByProviderReference(supabase, payload.merchantReference)) ||
+      (await getPaymentById(supabase, payload.merchantReference));
 
     if (!payment) {
       log.warn("Ozow webhook payment not found", { merchantReference: payload.merchantReference });
@@ -246,6 +259,7 @@ export async function POST(request: NextRequest) {
     }
 
     const eventType = payload.eventType?.toLowerCase() || "";
+    const status = payload.status?.toLowerCase() || "";
     if (
       payment.status === "complete" &&
       payment.provider_payment_id === payload.providerPaymentId
@@ -253,7 +267,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, duplicate: true });
     }
 
-    if (eventType.includes("cancel") || eventType.includes("fail")) {
+    if (eventType === "transaction.complete" && isFailedTransactionStatus(status)) {
       if (payment.status === "failed") {
         return NextResponse.json({ success: true, duplicate: true });
       }
@@ -281,6 +295,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (eventType && eventType !== "transaction.complete") {
+      return NextResponse.json({ success: true, ignored: true });
+    }
+
+    if (eventType === "transaction.complete" && !isSuccessfulTransactionStatus(status)) {
       return NextResponse.json({ success: true, ignored: true });
     }
 

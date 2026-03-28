@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { Webhook } from "svix";
 import { env } from "@/lib/config/env";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
@@ -51,6 +52,7 @@ type CachedToken = {
 };
 
 const cachedTokens = new Map<string, CachedToken>();
+const OZOW_WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
 
 const OZOW_ALLOWED_HOSTS = {
   production: new Set(["one.ozow.com"]),
@@ -142,18 +144,15 @@ function toSafeString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
 
-function createTimingSafeMatch(expected: string, received: string): boolean {
-  // Pad shorter string to equal length to avoid leaking length info,
-  // then use crypto.timingSafeEqual for constant-time comparison.
-  const a = Buffer.from(expected, "utf8");
-  const b = Buffer.from(received, "utf8");
-  if (a.length !== b.length) {
-    // Compare expected against itself so we still spend constant time,
-    // then return false — prevents timing side-channel on length mismatch.
-    crypto.timingSafeEqual(a, a);
+function timingSafeEqualStrings(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left, "utf8");
+  const rightBuffer = Buffer.from(right, "utf8");
+
+  if (leftBuffer.length !== rightBuffer.length) {
     return false;
   }
-  return crypto.timingSafeEqual(a, b);
+
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function normalizeScope(scope: string): string {
@@ -349,7 +348,7 @@ export interface OzowHostedPaymentResponse {
 export async function createOzowHostedPayment(
   input: OzowHostedPaymentRequest
 ): Promise<OzowHostedPaymentResponse> {
-  const amount = (input.amountCents / 100).toFixed(2);
+  const amount = input.amountCents / 100;
   const expireAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   const correlationId = crypto.randomUUID();
   const idempotencyKey = crypto.randomUUID();
@@ -372,14 +371,14 @@ export async function createOzowHostedPayment(
 
     const requestBody = {
       siteCode,
-      amount,
-      currencyCode: "ZAR",
-      merchantReference: input.paymentId.replace(/-/g, ""),
+      region: "ZA",
+      amount: {
+        currency: "ZAR",
+        value: amount,
+      },
+      merchantReference: input.paymentId,
       expireAt,
       returnUrl: input.returnUrl,
-      cancelUrl: input.cancelUrl,
-      description: input.itemDescription || input.itemName,
-      itemName: input.itemName,
     };
 
     const response = await fetch(`${baseUrl}/v1/payments`, {
@@ -440,18 +439,19 @@ export async function createOzowHostedPayment(
     }
 
     const payload = (await response.json()) as Record<string, unknown>;
+    const paymentResponse = isRecord(payload.payment) ? payload.payment : payload;
     const redirectUrl =
-      toSafeString(payload.redirectUrl) ||
-      toSafeString(payload.redirect_url) ||
-      toSafeString(payload.paymentUrl) ||
-      toSafeString(payload.url);
+      toSafeString(paymentResponse.redirectUrl) ||
+      toSafeString(paymentResponse.redirect_url) ||
+      toSafeString(paymentResponse.paymentUrl) ||
+      toSafeString(paymentResponse.url);
     const providerPaymentId =
-      toSafeString(payload.id) ||
-      toSafeString(payload.paymentRequestId) ||
-      toSafeString(payload.payment_request_id) ||
-      toSafeString(payload.transactionId) ||
-      toSafeString(payload.transaction_id);
-    const responseExpireAt = toSafeString(payload.expireAt) || expireAt;
+      toSafeString(paymentResponse.id) ||
+      toSafeString(paymentResponse.paymentRequestId) ||
+      toSafeString(paymentResponse.payment_request_id) ||
+      toSafeString(paymentResponse.transactionId) ||
+      toSafeString(paymentResponse.transaction_id);
+    const responseExpireAt = toSafeString(paymentResponse.expireAt) || expireAt;
 
     if (!redirectUrl || !providerPaymentId) {
       log.error("Ozow payment response missing required checkout fields", {
@@ -489,29 +489,56 @@ export async function createOzowHostedPayment(
   }
 }
 
-export function verifyOzowWebhookSignature(body: string, signature: string | null): boolean {
+export function verifyOzowWebhookSignature(body: string, headers: Pick<Headers, "get">): boolean {
   const secret = env("OZOW_WEBHOOK_SECRET");
   if (!secret) {
     return false;
   }
-  if (!signature) {
+
+  const webhookId = headers.get("svix-id");
+  const webhookTimestamp = headers.get("svix-timestamp");
+  const webhookSignature = headers.get("svix-signature");
+
+  if (!webhookId || !webhookTimestamp || !webhookSignature) {
     return false;
   }
 
-  const digest = crypto.createHmac("sha256", secret).update(body).digest();
-  const expectedHex = digest.toString("hex");
-  const expectedBase64 = digest.toString("base64");
+  try {
+    const timestampSeconds = Number.parseInt(webhookTimestamp, 10);
+    if (!Number.isFinite(timestampSeconds)) {
+      return false;
+    }
 
-  return (
-    createTimingSafeMatch(expectedHex, signature) ||
-    createTimingSafeMatch(expectedBase64, signature)
-  );
+    const currentTimeSeconds = Math.floor(Date.now() / 1000);
+    if (
+      currentTimeSeconds - timestampSeconds > OZOW_WEBHOOK_TOLERANCE_SECONDS ||
+      timestampSeconds > currentTimeSeconds + OZOW_WEBHOOK_TOLERANCE_SECONDS
+    ) {
+      return false;
+    }
+
+    const expectedSignature = new Webhook(secret)
+      .sign(webhookId, new Date(timestampSeconds * 1000), body)
+      .split(",")[1];
+
+    return webhookSignature.split(" ").some((versionedSignature) => {
+      const [version, signature] = versionedSignature.split(",", 2);
+      return (
+        version === "v1" &&
+        Boolean(signature) &&
+        timingSafeEqualStrings(signature, expectedSignature)
+      );
+    });
+  } catch {
+    return false;
+  }
 }
 
 export interface NormalizedOzowWebhook {
   eventType: string | null;
   merchantReference: string | null;
   providerPaymentId: string | null;
+  status: string | null;
   amount: string | null;
   currencyCode: string | null;
   rawPayload: Record<string, unknown>;
@@ -523,30 +550,39 @@ export function normalizeOzowWebhook(body: unknown): NormalizedOzowWebhook | nul
   }
 
   const data = isRecord(body.data) ? body.data : body;
-  const eventType = toSafeString(body.eventType) || toSafeString(body.event_type);
+  const transaction = isRecord(data.transaction) ? data.transaction : data;
+  const amountObject = isRecord(transaction.amount) ? transaction.amount : null;
+  const eventType =
+    toSafeString(body.eventType) || toSafeString(body.event_type) || toSafeString(body.type);
   const merchantReference =
-    toSafeString(data.merchantReference) || toSafeString(data.merchant_reference);
+    toSafeString(transaction.merchantReference) || toSafeString(transaction.merchant_reference);
   const providerPaymentId =
-    toSafeString(data.transactionReference) ||
-    toSafeString(data.transaction_reference) ||
-    toSafeString(data.transactionId) ||
-    toSafeString(data.transaction_id) ||
-    toSafeString(data.paymentRequestId) ||
-    toSafeString(data.payment_request_id) ||
-    toSafeString(data.id);
+    toSafeString(transaction.transactionReference) ||
+    toSafeString(transaction.transaction_reference) ||
+    toSafeString(transaction.transactionId) ||
+    toSafeString(transaction.transaction_id) ||
+    toSafeString(transaction.paymentRequestId) ||
+    toSafeString(transaction.payment_request_id) ||
+    toSafeString(transaction.id);
+  const status = toSafeString(transaction.status) || toSafeString(data.status);
+  const amountValue = amountObject?.value;
   const amount =
-    typeof data.amount === "number"
-      ? data.amount.toFixed(2)
-      : toSafeString(data.amount) || toSafeString(data.amountValue);
+    typeof amountValue === "number"
+      ? amountValue.toFixed(2)
+      : typeof transaction.amount === "number"
+        ? transaction.amount.toFixed(2)
+        : toSafeString(transaction.amount) || toSafeString(transaction.amountValue);
   const currencyCode =
-    toSafeString(data.currencyCode) ||
-    toSafeString(data.currency_code) ||
-    toSafeString(data.currency);
+    toSafeString(amountObject?.currency) ||
+    toSafeString(transaction.currencyCode) ||
+    toSafeString(transaction.currency_code) ||
+    toSafeString(transaction.currency);
 
   return {
     eventType,
     merchantReference,
     providerPaymentId,
+    status,
     amount,
     currencyCode,
     rawPayload: body,

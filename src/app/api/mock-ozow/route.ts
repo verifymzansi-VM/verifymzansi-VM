@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { Webhook } from "svix";
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { createLogger } from "@/lib/utils/logger";
@@ -113,17 +114,24 @@ export async function GET(request: Request) {
       eventType: "transaction.complete",
       data: {
         id: `mock-${paymentId}`,
-        transactionId: `mock-${paymentId}`,
         merchantReference: paymentId,
-        amount: amount ?? undefined,
-        currencyCode: "ZAR",
+        amount:
+          typeof amount === "number"
+            ? {
+                currency: "ZAR",
+                value: amount,
+              }
+            : undefined,
+        status: "successful",
       },
     };
     const body = JSON.stringify(payload);
     const webhookUrl = new URL("/api/webhooks/ozow", request.url).toString();
     const secret = process.env.OZOW_WEBHOOK_SECRET;
+    const signatureTimestamp = new Date();
+    const signatureId = crypto.randomUUID();
     const signature = secret
-      ? crypto.createHmac("sha256", secret).update(body).digest("hex")
+      ? new Webhook(secret).sign(signatureId, signatureTimestamp, body)
       : undefined;
 
     await fetch(webhookUrl, {
@@ -131,7 +139,13 @@ export async function GET(request: Request) {
       body,
       headers: {
         "Content-Type": "application/json",
-        ...(signature ? { "X-Ozow-Signature": signature } : {}),
+        ...(signature
+          ? {
+              "svix-id": signatureId,
+              "svix-timestamp": Math.floor(signatureTimestamp.getTime() / 1000).toString(),
+              "svix-signature": signature,
+            }
+          : {}),
       },
     }).catch((error: unknown) => {
       log.error("Mock Ozow webhook failed", {
