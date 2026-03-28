@@ -146,7 +146,6 @@ export function PromotionDetailContent({
                 />
               )}
               <div className="absolute left-3 top-3 flex gap-1">
-                {/* Featured/Boosted badge text hidden – feature & boost logic preserved */}
                 <Badge variant="secondary">
                   {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] || "Ads"}
                 </Badge>

@@ -38,14 +38,6 @@ function getListingStatus(
   urgent?: boolean,
   createdAt?: string
 ) {
-  if (featured) {
-    // Featured badge text hidden – feature logic preserved
-  }
-
-  if (boosted) {
-    // Boosted badge text hidden – boost logic preserved
-  }
-
   if (urgent) {
     return {
       label: "Urgent",

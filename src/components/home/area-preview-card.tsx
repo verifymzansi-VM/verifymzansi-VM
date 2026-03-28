@@ -89,9 +89,6 @@ export function AreaPreviewCard({
         {/* Bottom gradient for text readability */}
         <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
 
-        {/* Boost badge */}
-        {/* Boosted badge text hidden – boost logic preserved */}
-
         {/* Price badge */}
         {price != null && price > 0 && (
           <div className="absolute top-2.5 right-2.5 z-10">
