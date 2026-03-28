@@ -64,7 +64,7 @@ export function PosterCardShell({
   fallback,
   logoUrl,
   description,
-  fitStrategy = "smart",
+  fitStrategy = "cover",
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
