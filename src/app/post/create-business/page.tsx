@@ -351,6 +351,18 @@ function CreateBusinessContent() {
     setDeliveryOptions(getNormalizedDeliveryOptions(deliveryAvailable));
   }
 
+  function clearOnlineOnlyDeliveryDetails() {
+    setBusinessDetails((current) => {
+      if (businessType !== "online_only" || !current || current.type !== "online_only") {
+        return current;
+      }
+
+      const { delivery_regions: _deliveryRegions, ...rest } = current;
+      return rest as BusinessDetails;
+    });
+    clearErrors("business_details.delivery_regions");
+  }
+
   function validateStep(targetStep: number) {
     const errors: Record<string, string> = {};
     const businessValidationErrors = validateBusinessForm({
@@ -538,13 +550,14 @@ function CreateBusinessContent() {
       const normalizedBusinessDetails = businessType
         ? coerceBusinessDetails(businessType, businessDetails)
         : undefined;
+      const deliveryAvailable = deliveryOptions.length > 0;
       const finalBusinessDetails =
         normalizedBusinessDetails?.type === "mall_store"
           ? { ...normalizedBusinessDetails, mall_photos: mallPhotoUrls }
           : normalizedBusinessDetails
-            ? sanitizeBusinessDetailsForSubmission(normalizedBusinessDetails)
+            ? sanitizeBusinessDetailsForSubmission(normalizedBusinessDetails, deliveryAvailable)
             : undefined;
-      const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryOptions.length > 0);
+      const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryAvailable);
       const body = {
         business_name: businessName.trim(),
         slug: (slug || generateSlug(businessName)).trim(),
@@ -612,13 +625,14 @@ function CreateBusinessContent() {
     const previewBusinessDetails = businessType
       ? coerceBusinessDetails(businessType, businessDetails)
       : businessDetails;
+    const deliveryAvailable = deliveryOptions.length > 0;
     const previewMallDetails =
       previewBusinessDetails?.type === "mall_store"
         ? { ...previewBusinessDetails, mall_photos: mallPhotoPreviewUrls }
         : previewBusinessDetails
-          ? sanitizeBusinessDetailsForSubmission(previewBusinessDetails)
+          ? sanitizeBusinessDetailsForSubmission(previewBusinessDetails, deliveryAvailable)
           : previewBusinessDetails;
-    const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryOptions.length > 0);
+    const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryAvailable);
 
     return (
       <div className="rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
@@ -792,6 +806,13 @@ function CreateBusinessContent() {
                             return { ...next, [name]: value } as BusinessDetails;
                           });
                           clearErrors(`business_details.${name}`);
+                        }}
+                        deliveryAvailable={deliveryOptions.length > 0}
+                        onDeliveryAvailableChange={(nextDeliveryAvailable) => {
+                          setDeliveryAvailable(nextDeliveryAvailable);
+                          if (!nextDeliveryAvailable) {
+                            clearOnlineOnlyDeliveryDetails();
+                          }
                         }}
                         storeNumber={storeNumber}
                         onStoreNumberChange={(value) => {
@@ -1414,29 +1435,31 @@ function CreateBusinessContent() {
                           </div>
                         </div>
 
-                        <div className="space-y-3">
-                          <Label className="flex items-center gap-2">
-                            <Store className="h-4 w-4 text-muted-foreground" />
-                            Delivery Service
-                          </Label>
-                          <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
-                            <input
-                              id="delivery-available"
-                              type="checkbox"
-                              aria-label="Delivery available"
-                              checked={deliveryOptions.length > 0}
-                              onChange={(event) => setDeliveryAvailable(event.target.checked)}
-                              className="mt-0.5 rounded"
-                            />
-                            <span className="space-y-1">
-                              <span className="block font-medium">Delivery available</span>
-                              <span className="block text-xs text-muted-foreground">
-                                Only indicate whether you offer delivery. No delivery-region or
-                                shipping-detail fields are required.
+                        {businessType !== "online_only" && (
+                          <div className="space-y-3">
+                            <Label className="flex items-center gap-2">
+                              <Store className="h-4 w-4 text-muted-foreground" />
+                              Delivery Service
+                            </Label>
+                            <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
+                              <input
+                                id="delivery-available"
+                                type="checkbox"
+                                aria-label="Delivery available"
+                                checked={deliveryOptions.length > 0}
+                                onChange={(event) => setDeliveryAvailable(event.target.checked)}
+                                className="mt-0.5 rounded"
+                              />
+                              <span className="space-y-1">
+                                <span className="block font-medium">Delivery available</span>
+                                <span className="block text-xs text-muted-foreground">
+                                  Only indicate whether you offer delivery. No delivery-region or
+                                  shipping-detail fields are required.
+                                </span>
                               </span>
-                            </span>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </details>
 

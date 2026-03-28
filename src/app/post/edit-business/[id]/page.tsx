@@ -310,6 +310,18 @@ export default function EditBusinessPage() {
     setDeliveryOptions(getNormalizedDeliveryOptions(deliveryAvailable));
   }
 
+  function clearOnlineOnlyDeliveryDetails() {
+    setBusinessDetails((current) => {
+      if (businessType !== "online_only" || current.type !== "online_only") {
+        return current;
+      }
+
+      const { delivery_regions: _deliveryRegions, ...rest } = current;
+      return rest as BusinessDetails;
+    });
+    clearErrors("business_details.delivery_regions");
+  }
+
   async function uploadMedia(files: File[], area: UploadArea): Promise<string[]> {
     if (files.length === 0) return [];
     try {
@@ -471,11 +483,12 @@ export default function EditBusinessPage() {
             }
           : undefined;
       const normalizedBusinessDetails = coerceBusinessDetails(businessType, businessDetails);
+      const deliveryAvailable = deliveryOptions.length > 0;
       const finalBusinessDetails =
         normalizedBusinessDetails.type === "mall_store"
           ? { ...normalizedBusinessDetails, mall_photos: finalMallPhotos }
-          : sanitizeBusinessDetailsForSubmission(normalizedBusinessDetails);
-      const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryOptions.length > 0);
+          : sanitizeBusinessDetailsForSubmission(normalizedBusinessDetails, deliveryAvailable);
+      const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryAvailable);
 
       const body = {
         business_name: businessName,
@@ -718,6 +731,13 @@ export default function EditBusinessPage() {
                     (current) => ({ ...current, [name]: value }) as BusinessDetails
                   );
                   clearErrors(`business_details.${name}`);
+                }}
+                deliveryAvailable={deliveryOptions.length > 0}
+                onDeliveryAvailableChange={(nextDeliveryAvailable) => {
+                  setDeliveryAvailable(nextDeliveryAvailable);
+                  if (!nextDeliveryAvailable) {
+                    clearOnlineOnlyDeliveryDetails();
+                  }
                 }}
                 storeNumber={storeNumber}
                 onStoreNumberChange={(value) => {
@@ -1242,28 +1262,30 @@ export default function EditBusinessPage() {
               </div>
 
               {/* Delivery Service */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-muted-foreground" /> Delivery Service
-                </Label>
-                <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
-                  <input
-                    id="edit-delivery-available"
-                    type="checkbox"
-                    aria-label="Delivery available"
-                    checked={deliveryOptions.length > 0}
-                    onChange={(event) => setDeliveryAvailable(event.target.checked)}
-                    className="mt-0.5 rounded"
-                  />
-                  <span className="space-y-1">
-                    <span className="block font-medium">Delivery available</span>
-                    <span className="block text-xs text-muted-foreground">
-                      Only indicate whether this business offers delivery. Detailed delivery regions
-                      or shipping options are no longer collected here.
+              {businessType !== "online_only" && (
+                <div className="space-y-3">
+                  <Label className="flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-muted-foreground" /> Delivery Service
+                  </Label>
+                  <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
+                    <input
+                      id="edit-delivery-available"
+                      type="checkbox"
+                      aria-label="Delivery available"
+                      checked={deliveryOptions.length > 0}
+                      onChange={(event) => setDeliveryAvailable(event.target.checked)}
+                      className="mt-0.5 rounded"
+                    />
+                    <span className="space-y-1">
+                      <span className="block font-medium">Delivery available</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Only indicate whether this business offers delivery. Detailed delivery
+                        regions or shipping options are no longer collected here.
+                      </span>
                     </span>
-                  </span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Actions */}
               <div className="flex justify-between pt-4">

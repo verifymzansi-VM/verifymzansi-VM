@@ -218,8 +218,13 @@ describe("EditBusinessPage", () => {
       expect(screen.getByDisplayValue("https://orders.example.com")).toBeInTheDocument();
     });
 
-    expect(screen.queryByText(/^Delivery regions$/i)).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/Delivery available/i)).toBeChecked();
+    expect(screen.getByLabelText(/Yes, this business offers delivery/i)).toBeChecked();
+    expect(screen.getByLabelText(/Delivery areas/i)).toHaveValue("Nationwide");
+    expect(screen.queryByText(/^Delivery Service$/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/No, delivery is not available/i));
+
+    expect(screen.queryByLabelText(/Delivery areas/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
@@ -230,7 +235,7 @@ describe("EditBusinessPage", () => {
     const secondCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1];
     const payload = JSON.parse(secondCall[1].body as string);
 
-    expect(payload.delivery_options).toEqual(["delivery"]);
+    expect(payload.delivery_options).toEqual([]);
     expect(payload.business_details).toEqual({
       type: "online_only",
       primary_order_channel: "website",

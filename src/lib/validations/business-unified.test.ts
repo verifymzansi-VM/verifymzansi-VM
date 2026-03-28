@@ -114,6 +114,23 @@ describe("businessSchema", () => {
     ).toBe(true);
   });
 
+  it("accepts online-only businesses with optional delivery region details", () => {
+    expect(
+      businessSchema.safeParse({
+        ...base,
+        business_type: "online_only",
+        business_details: {
+          type: "online_only",
+          primary_order_channel: "website",
+          order_url: "https://orders.example.com",
+          delivery_regions: ["Johannesburg", "Pretoria"],
+          support_response_time: "Within 2 hours",
+        },
+        delivery_options: ["delivery"],
+      }).success
+    ).toBe(true);
+  });
+
   it("requires market schedule details for market stalls", () => {
     expect(
       businessSchema.safeParse({

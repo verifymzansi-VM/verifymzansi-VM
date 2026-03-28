@@ -219,6 +219,13 @@ export const BUSINESS_DETAILS_SECTIONS: Record<BusinessType, BusinessDetailsSect
         placeholder: "https://...",
       },
       {
+        name: "delivery_regions",
+        label: "Delivery areas",
+        kind: "list",
+        placeholder: "e.g. Johannesburg, Pretoria, Nationwide",
+        description: "Separate delivery areas with commas so customers know where you can deliver.",
+      },
+      {
         name: "support_response_time",
         label: "Support response time",
         kind: "text",
@@ -296,6 +303,7 @@ export function getDefaultBusinessDetails(type: BusinessType): BusinessDetails {
         type,
         primary_order_channel: undefined,
         order_url: "",
+        delivery_regions: [],
         support_response_time: "",
       };
     case "market_stall":
@@ -333,13 +341,28 @@ export function getNormalizedDeliveryOptions(deliveryAvailable: boolean): string
   return deliveryAvailable ? ["delivery"] : [];
 }
 
-export function sanitizeBusinessDetailsForSubmission(details: BusinessDetails): BusinessDetails {
+export function sanitizeBusinessDetailsForSubmission(
+  details: BusinessDetails,
+  deliveryAvailable?: boolean
+): BusinessDetails {
   if (details.type !== "online_only") {
     return details;
   }
 
-  const { delivery_regions: _legacyDeliveryRegions, ...rest } = details;
-  return rest as BusinessDetails;
+  const normalizedRegions = Array.isArray(details.delivery_regions)
+    ? details.delivery_regions.map((region) => region.trim()).filter(Boolean)
+    : [];
+  const shouldKeepDeliveryRegions = deliveryAvailable ?? normalizedRegions.length > 0;
+
+  if (!shouldKeepDeliveryRegions || normalizedRegions.length === 0) {
+    const { delivery_regions: _legacyDeliveryRegions, ...rest } = details;
+    return rest as BusinessDetails;
+  }
+
+  return {
+    ...details,
+    delivery_regions: normalizedRegions,
+  };
 }
 
 export function parseCommaSeparatedList(value: string): string[] {

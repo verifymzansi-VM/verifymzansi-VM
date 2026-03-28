@@ -16,6 +16,8 @@ interface BusinessTypeDetailsFieldsProps {
   businessType: BusinessType;
   businessDetails: BusinessDetails;
   onBusinessDetailsChange: (name: string, value: unknown) => void;
+  deliveryAvailable?: boolean;
+  onDeliveryAvailableChange?: (deliveryAvailable: boolean) => void;
   storeNumber: string;
   onStoreNumberChange: (value: string) => void;
   serviceAreasInput: string;
@@ -37,6 +39,8 @@ export function BusinessTypeDetailsFields({
   businessType,
   businessDetails,
   onBusinessDetailsChange,
+  deliveryAvailable = false,
+  onDeliveryAvailableChange,
   storeNumber,
   onStoreNumberChange,
   serviceAreasInput,
@@ -47,6 +51,10 @@ export function BusinessTypeDetailsFields({
   selectClassName,
 }: BusinessTypeDetailsFieldsProps) {
   const section = BUSINESS_DETAILS_SECTIONS[businessType];
+  const visibleFields = section.fields.filter(
+    (field) =>
+      businessType !== "online_only" || field.name !== "delivery_regions" || deliveryAvailable
+  );
 
   return (
     <div className="space-y-4 rounded-xl border bg-muted/40 p-4">
@@ -54,6 +62,57 @@ export function BusinessTypeDetailsFields({
         <h3 className="text-sm font-medium">{section.title}</h3>
         <p className="text-xs text-muted-foreground">{section.description}</p>
       </div>
+
+      {businessType === "online_only" && onDeliveryAvailableChange && (
+        <div className="space-y-3 rounded-lg border bg-background p-4">
+          <div className="space-y-1">
+            <Label className="text-sm font-medium">Does this business provide delivery?</Label>
+            <p className="text-xs text-muted-foreground">
+              Choose Yes only if this online business delivers orders to customers.
+            </p>
+          </div>
+          <div
+            className="flex flex-col gap-3 sm:flex-row"
+            role="radiogroup"
+            aria-label="Delivery availability"
+          >
+            <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
+              <input
+                id="online-delivery-yes"
+                type="radio"
+                name="online-delivery-available"
+                aria-label="Yes, this business offers delivery"
+                checked={deliveryAvailable}
+                onChange={() => onDeliveryAvailableChange(true)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block font-medium">Yes, this business offers delivery</span>
+                <span className="block text-xs text-muted-foreground">
+                  Customers can place orders and have them delivered.
+                </span>
+              </span>
+            </div>
+            <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
+              <input
+                id="online-delivery-no"
+                type="radio"
+                name="online-delivery-available"
+                aria-label="No, delivery is not available"
+                checked={!deliveryAvailable}
+                onChange={() => onDeliveryAvailableChange(false)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block font-medium">No, delivery is not available</span>
+                <span className="block text-xs text-muted-foreground">
+                  Hide delivery fields and save this business without delivery coverage details.
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {businessType === "mall_store" && (
         <div className="grid grid-cols-1 gap-4">
@@ -115,7 +174,7 @@ export function BusinessTypeDetailsFields({
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {section.fields.map((field) => {
+        {visibleFields.map((field) => {
           const path = `business_details.${field.name}`;
           const error = fieldErrors[path];
           const value = (businessDetails as unknown as Record<string, unknown>)[field.name];

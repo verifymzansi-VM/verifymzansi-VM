@@ -99,6 +99,7 @@ const onlineOnlyDetailsSchema = z.object({
     "other",
   ]),
   order_url: z.string().url("Enter a valid order URL."),
+  delivery_regions: z.array(z.string().trim().min(1)).optional(),
   support_response_time: optionalText(120),
 });
 

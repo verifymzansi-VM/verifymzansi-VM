@@ -106,6 +106,15 @@ describe("CreateBusinessPage", () => {
     });
   }
 
+  function fillOnlineOnlyStepOneDetails() {
+    fireEvent.change(screen.getByLabelText(/Primary order channel/i), {
+      target: { value: "website" },
+    });
+    fireEvent.change(screen.getByLabelText(/Order URL/i), {
+      target: { value: "https://orders.example.com" },
+    });
+  }
+
   async function completeStandaloneStepOne() {
     await selectBusinessType(/Standalone Shop/i);
     fillCoreBusinessFields();
@@ -208,18 +217,32 @@ describe("CreateBusinessPage", () => {
       slug: "mzansi-online",
       category: "electronics_tech",
     });
-    fireEvent.change(screen.getByLabelText(/Primary order channel/i), {
-      target: { value: "website" },
-    });
-    fireEvent.change(screen.getByLabelText(/Order URL/i), {
-      target: { value: "https://orders.example.com" },
-    });
+    fillOnlineOnlyStepOneDetails();
 
-    expect(screen.queryByText(/^Delivery regions$/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/No, delivery is not available/i)).toBeChecked();
+    expect(screen.queryByLabelText(/Delivery areas/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(screen.getByText(/Step 2 of 3/i)).toBeInTheDocument();
+  });
+
+  it("reveals online-only delivery areas only after delivery is enabled", async () => {
+    render(<CreateBusinessPage />);
+
+    await selectBusinessType(/Online Only/i);
+    fillCoreBusinessFields({
+      businessName: "Mzansi Online",
+      slug: "mzansi-online",
+      category: "electronics_tech",
+    });
+    fillOnlineOnlyStepOneDetails();
+
+    expect(screen.queryByLabelText(/Delivery areas/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/Yes, this business offers delivery/i));
+
+    expect(screen.getByLabelText(/Delivery areas/i)).toBeInTheDocument();
   });
 
   it("step 2 no longer renders the business type details block", async () => {
@@ -360,5 +383,48 @@ describe("CreateBusinessPage", () => {
       );
     });
     expect(mockPush).toHaveBeenCalledWith("/dashboard/businesses?created=true");
+  });
+
+  it("submits online-only delivery areas only when delivery is enabled and hides the duplicate step-3 prompt", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    });
+
+    render(<CreateBusinessPage />);
+
+    await selectBusinessType(/Online Only/i);
+    fillCoreBusinessFields({
+      businessName: "Mzansi Online",
+      slug: "mzansi-online",
+      category: "electronics_tech",
+    });
+    fillOnlineOnlyStepOneDetails();
+    fireEvent.click(screen.getByLabelText(/Yes, this business offers delivery/i));
+    fireEvent.change(screen.getByLabelText(/Delivery areas/i), {
+      target: { value: "Johannesburg, Pretoria" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    completeLocationStep();
+
+    expect(screen.queryByText(/^Delivery Service$/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    const submitCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    const payload = JSON.parse(submitCall[1].body as string);
+
+    expect(payload.delivery_options).toEqual(["delivery"]);
+    expect(payload.business_details).toMatchObject({
+      type: "online_only",
+      primary_order_channel: "website",
+      order_url: "https://orders.example.com",
+      delivery_regions: ["Johannesburg", "Pretoria"],
+    });
   });
 });
