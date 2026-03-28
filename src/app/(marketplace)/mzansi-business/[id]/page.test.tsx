@@ -67,17 +67,20 @@ function buildClient(
   business: Record<string, unknown>,
   options?: {
     promotions?: Array<Record<string, unknown>>;
+    user?: { id: string } | null;
   }
 ) {
   return {
+    auth: {
+      getUser: async () => ({ data: { user: options?.user ?? null } }),
+    },
     from: (table: string) => {
       if (table === "businesses") {
         return {
           select: () => ({
             eq: () => ({
-              eq: () => ({
-                single: async () => ({ data: business }),
-              }),
+              maybeSingle: async () => ({ data: business }),
+              single: async () => ({ data: business }),
             }),
           }),
         };
@@ -118,7 +121,7 @@ function buildClient(
 }
 
 describe("BusinessDetailPage", () => {
-  it("shows home business privacy-safe details only", async () => {
+  it("shows live business details publicly", async () => {
     mockCreateClient.mockResolvedValue(
       buildClient({
         id: "business-1",
@@ -161,63 +164,111 @@ describe("BusinessDetailPage", () => {
 
     expect(screen.getByText("Service suburb")).toBeInTheDocument();
     expect(screen.getByText("Noordwyk")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Share/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Report/i })).toBeInTheDocument();
     expect(screen.queryByText("Open Map Directions")).not.toBeInTheDocument();
+  });
+
+  it("renders owner preview for a pending business and hides public actions", async () => {
+    mockCreateClient.mockResolvedValue(
+      buildClient(
+        {
+          id: "business-2",
+          owner_id: "owner-1",
+          business_name: "Mzansi Online",
+          description: "Shop online.",
+          status: "pending_moderation",
+          business_type: "online_only",
+          category: "electronics_tech",
+          cover_photo: null,
+          logo_url: null,
+          cover_video: null,
+          video_thumbnail: null,
+          gallery_photos: [],
+          social_links: {},
+          operating_hours: {},
+          services_offered: [],
+          payment_methods_accepted: [],
+          delivery_options: ["delivery"],
+          service_areas: null,
+          location_city: "Johannesburg",
+          location_province: "Gauteng",
+          phone: null,
+          whatsapp: null,
+          email: null,
+          website: null,
+          store_number: null,
+          map_directions: null,
+          business_details: {
+            type: "online_only",
+            primary_order_channel: "website",
+            order_url: "https://orders.example.com",
+            support_response_time: "Within 2 hours",
+          },
+        },
+        { user: { id: "owner-1" } }
+      )
+    );
+
+    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-2" }) }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Owner preview");
+    expect(screen.getByRole("alert")).toHaveTextContent(/pending moderation/i);
+    expect(screen.queryByRole("button", { name: /Share/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Report/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Primary order channel")).toBeInTheDocument();
+  });
+
+  it("returns notFound for a pending business when the viewer is not the owner", async () => {
+    mockCreateClient.mockResolvedValue(
+      buildClient(
+        {
+          id: "business-3",
+          owner_id: "owner-1",
+          business_name: "Nomsa Socials",
+          description: "Find us online.",
+          status: "draft",
+          business_type: "standalone_shop",
+          category: "fashion_accessories",
+          cover_photo: null,
+          logo_url: null,
+          cover_video: null,
+          video_thumbnail: null,
+          gallery_photos: [],
+          social_links: { tiktok: "https://www.tiktok.com/@nomsa" },
+          operating_hours: {},
+          services_offered: [],
+          payment_methods_accepted: [],
+          delivery_options: [],
+          service_areas: null,
+          location_city: "Johannesburg",
+          location_province: "Gauteng",
+          phone: null,
+          whatsapp: null,
+          email: null,
+          website: "https://nomsa.example.com",
+          store_number: null,
+          map_directions: null,
+          business_details: {
+            type: "standalone_shop",
+            street_address: "24 Vilakazi Street",
+            suburb: "Orlando West",
+          },
+        },
+        { user: { id: "someone-else" } }
+      )
+    );
+
+    await expect(
+      BusinessDetailPage({ params: Promise.resolve({ id: "business-3" }) })
+    ).rejects.toThrow("notFound");
   });
 
   it("renders online ordering details", async () => {
     mockCreateClient.mockResolvedValue(
       buildClient({
-        id: "business-2",
-        owner_id: "owner-1",
-        business_name: "Mzansi Online",
-        description: "Shop online.",
-        status: "live",
-        business_type: "online_only",
-        category: "electronics_tech",
-        cover_photo: null,
-        logo_url: null,
-        cover_video: null,
-        video_thumbnail: null,
-        gallery_photos: [],
-        social_links: {},
-        operating_hours: {},
-        services_offered: [],
-        payment_methods_accepted: [],
-        delivery_options: ["delivery"],
-        service_areas: null,
-        location_city: "Johannesburg",
-        location_province: "Gauteng",
-        phone: null,
-        whatsapp: null,
-        email: null,
-        website: null,
-        store_number: null,
-        map_directions: null,
-        business_details: {
-          type: "online_only",
-          primary_order_channel: "website",
-          order_url: "https://orders.example.com",
-          support_response_time: "Within 2 hours",
-        },
-      })
-    );
-
-    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-2" }) }));
-
-    expect(screen.getByText("Primary order channel")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Order Online/i })).toHaveAttribute(
-      "href",
-      "https://orders.example.com"
-    );
-    expect(screen.getByText("Delivery")).toBeInTheDocument();
-    expect(screen.getByText("Available")).toBeInTheDocument();
-    expect(screen.getByText("Within 2 hours")).toBeInTheDocument();
-  });
-
-  it("maps legacy online delivery regions to a simple delivery available indicator", async () => {
-    mockCreateClient.mockResolvedValue(
-      buildClient({
-        id: "business-legacy",
+        id: "business-4",
         owner_id: "owner-1",
         business_name: "Legacy Online",
         description: "Legacy online listing.",
@@ -252,19 +303,23 @@ describe("BusinessDetailPage", () => {
       })
     );
 
-    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-legacy" }) }));
+    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-4" }) }));
 
     expect(screen.getByText("Delivery")).toBeInTheDocument();
     expect(screen.getByText("Available")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Order Online/i })).toHaveAttribute(
+      "href",
+      "https://legacy-orders.example.com"
+    );
     expect(screen.queryByText("Nationwide")).not.toBeInTheDocument();
   });
 
   it("renders website-only and TikTok links in the online section", async () => {
     mockCreateClient.mockResolvedValue(
       buildClient({
-        id: "business-3",
+        id: "business-5",
         owner_id: "owner-1",
-        business_name: "Nomsa Socials",
+        business_name: "Nomsa Market Kitchen",
         description: "Find us online.",
         status: "live",
         business_type: "standalone_shop",
@@ -296,7 +351,7 @@ describe("BusinessDetailPage", () => {
       })
     );
 
-    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-3" }) }));
+    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-5" }) }));
 
     expect(screen.getByTitle("Website")).toHaveAttribute("href", "https://nomsa.example.com");
     expect(screen.getByTitle("TikTok")).toHaveAttribute("href", "https://www.tiktok.com/@nomsa");
@@ -305,7 +360,7 @@ describe("BusinessDetailPage", () => {
   it("renders the linked mall name for mall stores", async () => {
     mockCreateClient.mockResolvedValue(
       buildClient({
-        id: "business-4",
+        id: "business-6",
         owner_id: "owner-1",
         business_name: "Mall Style",
         description: "A mall store.",
@@ -344,7 +399,7 @@ describe("BusinessDetailPage", () => {
       })
     );
 
-    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-4" }) }));
+    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-6" }) }));
 
     expect(screen.getByText("Mall")).toBeInTheDocument();
     expect(screen.getByText("Maponya Mall")).toBeInTheDocument();
@@ -354,7 +409,7 @@ describe("BusinessDetailPage", () => {
     mockCreateClient.mockResolvedValue(
       buildClient(
         {
-          id: "business-5",
+          id: "business-7",
           owner_id: "owner-1",
           business_name: "Nomsa Market Kitchen",
           description: "Fresh food and weekly events.",
@@ -412,7 +467,7 @@ describe("BusinessDetailPage", () => {
       )
     );
 
-    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-5" }) }));
+    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-7" }) }));
 
     expect(screen.getByText("Promotions & Offers")).toBeInTheDocument();
     expect(screen.getByText("Promotion")).toBeInTheDocument();
