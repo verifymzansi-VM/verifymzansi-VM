@@ -202,7 +202,7 @@ export const BUSINESS_DETAILS_SECTIONS: Record<BusinessType, BusinessDetailsSect
   },
   online_only: {
     title: "Online Business Details",
-    description: "Tell customers where to order and how delivery/support works.",
+    description: "Tell customers where to order and how support works.",
     fields: [
       {
         name: "primary_order_channel",
@@ -217,13 +217,6 @@ export const BUSINESS_DETAILS_SECTIONS: Record<BusinessType, BusinessDetailsSect
         kind: "url",
         required: true,
         placeholder: "https://...",
-      },
-      {
-        name: "delivery_regions",
-        label: "Delivery regions",
-        kind: "list",
-        required: true,
-        placeholder: "e.g. Gauteng, Western Cape, Nationwide",
       },
       {
         name: "support_response_time",
@@ -303,7 +296,6 @@ export function getDefaultBusinessDetails(type: BusinessType): BusinessDetails {
         type,
         primary_order_channel: undefined,
         order_url: "",
-        delivery_regions: [],
         support_response_time: "",
       };
     case "market_stall":
@@ -318,6 +310,36 @@ export function coerceBusinessDetails(type: BusinessType, value: unknown): Busin
   if (raw.type !== type) return defaults;
 
   return { ...defaults, ...raw } as BusinessDetails;
+}
+
+const DELIVERY_AVAILABLE_OPTIONS = new Set(["delivery", "nationwide"]);
+
+export function hasBusinessDeliveryAvailable(
+  deliveryOptions?: string[] | null,
+  businessDetails?: BusinessDetails | null
+): boolean {
+  if ((deliveryOptions ?? []).some((option) => DELIVERY_AVAILABLE_OPTIONS.has(option))) {
+    return true;
+  }
+
+  return (
+    businessDetails?.type === "online_only" &&
+    Array.isArray(businessDetails.delivery_regions) &&
+    businessDetails.delivery_regions.length > 0
+  );
+}
+
+export function getNormalizedDeliveryOptions(deliveryAvailable: boolean): string[] {
+  return deliveryAvailable ? ["delivery"] : [];
+}
+
+export function sanitizeBusinessDetailsForSubmission(details: BusinessDetails): BusinessDetails {
+  if (details.type !== "online_only") {
+    return details;
+  }
+
+  const { delivery_regions: _legacyDeliveryRegions, ...rest } = details;
+  return rest as BusinessDetails;
 }
 
 export function parseCommaSeparatedList(value: string): string[] {

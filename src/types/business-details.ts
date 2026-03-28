@@ -50,7 +50,7 @@ export interface OnlineOnlyBusinessDetails {
   type: "online_only";
   primary_order_channel?: PrimaryOrderChannel;
   order_url?: string;
-  delivery_regions: string[];
+  delivery_regions?: string[];
   support_response_time?: string;
 }
 

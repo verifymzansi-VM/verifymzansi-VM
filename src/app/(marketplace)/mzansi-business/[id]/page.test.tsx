@@ -183,7 +183,7 @@ describe("BusinessDetailPage", () => {
         operating_hours: {},
         services_offered: [],
         payment_methods_accepted: [],
-        delivery_options: [],
+        delivery_options: ["delivery"],
         service_areas: null,
         location_city: "Johannesburg",
         location_province: "Gauteng",
@@ -197,7 +197,6 @@ describe("BusinessDetailPage", () => {
           type: "online_only",
           primary_order_channel: "website",
           order_url: "https://orders.example.com",
-          delivery_regions: ["Nationwide", "Gauteng"],
           support_response_time: "Within 2 hours",
         },
       })
@@ -210,8 +209,54 @@ describe("BusinessDetailPage", () => {
       "href",
       "https://orders.example.com"
     );
-    expect(screen.getByText("Nationwide")).toBeInTheDocument();
+    expect(screen.getByText("Delivery")).toBeInTheDocument();
+    expect(screen.getByText("Available")).toBeInTheDocument();
     expect(screen.getByText("Within 2 hours")).toBeInTheDocument();
+  });
+
+  it("maps legacy online delivery regions to a simple delivery available indicator", async () => {
+    mockCreateClient.mockResolvedValue(
+      buildClient({
+        id: "business-legacy",
+        owner_id: "owner-1",
+        business_name: "Legacy Online",
+        description: "Legacy online listing.",
+        status: "live",
+        business_type: "online_only",
+        category: "electronics_tech",
+        cover_photo: null,
+        logo_url: null,
+        cover_video: null,
+        video_thumbnail: null,
+        gallery_photos: [],
+        social_links: {},
+        operating_hours: {},
+        services_offered: [],
+        payment_methods_accepted: [],
+        delivery_options: [],
+        service_areas: null,
+        location_city: "Johannesburg",
+        location_province: "Gauteng",
+        phone: null,
+        whatsapp: null,
+        email: null,
+        website: null,
+        store_number: null,
+        map_directions: null,
+        business_details: {
+          type: "online_only",
+          primary_order_channel: "website",
+          order_url: "https://legacy-orders.example.com",
+          delivery_regions: ["Nationwide", "Gauteng"],
+        },
+      })
+    );
+
+    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-legacy" }) }));
+
+    expect(screen.getByText("Delivery")).toBeInTheDocument();
+    expect(screen.getByText("Available")).toBeInTheDocument();
+    expect(screen.queryByText("Nationwide")).not.toBeInTheDocument();
   });
 
   it("renders website-only and TikTok links in the online section", async () => {

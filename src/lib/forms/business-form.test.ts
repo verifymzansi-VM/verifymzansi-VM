@@ -56,4 +56,29 @@ describe("business-form helpers", () => {
       "business_details.suburb": "Suburb is required.",
     });
   });
+
+  it("does not require delivery region details for online-only businesses", () => {
+    expect(
+      validateBusinessForm({
+        businessType: "online_only",
+        businessDetails: {
+          type: "online_only",
+          primary_order_channel: "website",
+          order_url: "https://orders.example.com",
+          support_response_time: "",
+        },
+        storeNumber: "",
+        serviceAreasInput: "",
+        mapDirections: "",
+        phone: "",
+        whatsapp: "",
+        email: "",
+        website: "",
+        socialFacebook: "",
+        socialInstagram: "",
+        socialTwitter: "",
+        socialTiktok: "",
+      })
+    ).toEqual({});
+  });
 });

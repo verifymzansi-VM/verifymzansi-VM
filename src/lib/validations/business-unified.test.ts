@@ -98,7 +98,7 @@ describe("businessSchema", () => {
     }
   });
 
-  it("requires order channel, url, and regions for online-only businesses", () => {
+  it("accepts online-only businesses without delivery region details", () => {
     expect(
       businessSchema.safeParse({
         ...base,
@@ -107,9 +107,9 @@ describe("businessSchema", () => {
           type: "online_only",
           primary_order_channel: "website",
           order_url: "https://orders.example.com",
-          delivery_regions: ["Nationwide"],
           support_response_time: "Within 2 hours",
         },
+        delivery_options: ["delivery"],
       }).success
     ).toBe(true);
   });

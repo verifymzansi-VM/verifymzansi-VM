@@ -199,6 +199,29 @@ describe("CreateBusinessPage", () => {
     expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
   });
 
+  it("allows online-only businesses to continue without delivery-region details", async () => {
+    render(<CreateBusinessPage />);
+
+    await selectBusinessType(/Online Only/i);
+    fillCoreBusinessFields({
+      businessName: "Mzansi Online",
+      slug: "mzansi-online",
+      category: "electronics_tech",
+    });
+    fireEvent.change(screen.getByLabelText(/Primary order channel/i), {
+      target: { value: "website" },
+    });
+    fireEvent.change(screen.getByLabelText(/Order URL/i), {
+      target: { value: "https://orders.example.com" },
+    });
+
+    expect(screen.queryByText(/^Delivery regions$/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText(/Step 2 of 3/i)).toBeInTheDocument();
+  });
+
   it("step 2 no longer renders the business type details block", async () => {
     render(<CreateBusinessPage />);
 

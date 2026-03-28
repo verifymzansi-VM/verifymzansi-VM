@@ -123,7 +123,7 @@ describe("ModerationPreviewPanel", () => {
           website: "https://nomsa.co.za",
           services_offered: ["Hair styling", "Nail care"],
           payment_methods_accepted: ["cash", "card"],
-          delivery_options: ["in_store_pickup"],
+          delivery_options: ["delivery"],
           cover_photo: "https://bucket.r2.cloudflarestorage.com/businesses/cover.jpg",
           cover_video: "https://bucket.r2.cloudflarestorage.com/businesses/video.mp4",
           gallery_photos: [
@@ -155,6 +155,8 @@ describe("ModerationPreviewPanel", () => {
     expect(screen.getByText("2 gallery photos")).toBeInTheDocument();
     expect(screen.getByTestId("business-logo-panel")).toBeInTheDocument();
     expect(screen.getByAltText("Nomsa Beauty Studio logo")).toBeInTheDocument();
+    expect(screen.getByText("Delivery")).toBeInTheDocument();
+    expect(screen.getByText("Available")).toBeInTheDocument();
   });
 
   it("shows a compact empty state when a business has no media", () => {

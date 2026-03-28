@@ -40,6 +40,7 @@ import {
 } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import {
+  hasBusinessDeliveryAvailable,
   PRIMARY_ORDER_CHANNEL_LABELS,
   WALK_IN_POLICY_LABELS,
 } from "@/lib/forms/business-type-details";
@@ -456,16 +457,6 @@ function BusinessDetailsCard({
                 Order Online
               </a>
             </Button>
-            <div className="space-y-1">
-              <p className="text-muted-foreground">Delivery regions</p>
-              <div className="flex flex-wrap gap-2">
-                {businessDetails.delivery_regions.map((region) => (
-                  <Badge key={region} variant="secondary">
-                    {region}
-                  </Badge>
-                ))}
-              </div>
-            </div>
             {businessDetails.support_response_time && (
               <div className="flex items-start justify-between gap-4">
                 <span className="text-muted-foreground">Support response time</span>
@@ -553,6 +544,10 @@ export function BusinessDetailContent({
       ? businessDetails
       : null;
   const mallPhotos = mallDetails?.mall_photos ?? [];
+  const deliveryAvailable = hasBusinessDeliveryAvailable(
+    business.delivery_options,
+    business.business_details
+  );
 
   return (
     <>
@@ -708,7 +703,7 @@ export function BusinessDetailContent({
           )}
 
           {((business.payment_methods_accepted && business.payment_methods_accepted.length > 0) ||
-            (business.delivery_options && business.delivery_options.length > 0)) && (
+            deliveryAvailable) && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {business.payment_methods_accepted &&
                 business.payment_methods_accepted.length > 0 && (
@@ -731,22 +726,16 @@ export function BusinessDetailContent({
                   </Card>
                 )}
 
-              {business.delivery_options && business.delivery_options.length > 0 && (
+              {deliveryAvailable && (
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
                       <Truck className="h-4 w-4 text-muted-foreground" />
-                      Delivery Options
+                      Delivery
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {business.delivery_options.map((option) => (
-                        <Badge key={option} variant="outline" className="capitalize">
-                          {option.replace(/_/g, " ")}
-                        </Badge>
-                      ))}
-                    </div>
+                    <Badge variant="outline">Available</Badge>
                   </CardContent>
                 </Card>
               )}

@@ -163,4 +163,79 @@ describe("EditBusinessPage", () => {
       customer_pickup_allowed: false,
     });
   });
+
+  it("collapses legacy online delivery details into simple delivery availability on save", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
+    (global.fetch as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          business: {
+            id: "business-2",
+            status: "live",
+            business_type: "online_only",
+            business_name: "Mzansi Online",
+            slug: "mzansi-online",
+            description: "Online store.",
+            category: "electronics_tech",
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+            store_number: null,
+            map_directions: null,
+            phone: "",
+            whatsapp: "",
+            email: "hello@orders.example.com",
+            website: "",
+            logo_url: "",
+            cover_photo: "",
+            cover_video: "",
+            video_thumbnail: "",
+            gallery_photos: [],
+            services_offered: [],
+            payment_methods_accepted: [],
+            delivery_options: [],
+            social_links: {},
+            operating_hours: {},
+            service_areas: null,
+            business_details: {
+              type: "online_only",
+              primary_order_channel: "website",
+              order_url: "https://orders.example.com",
+              delivery_regions: ["Nationwide"],
+              support_response_time: "Within 2 hours",
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+
+    render(<EditBusinessPage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("https://orders.example.com")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/^Delivery regions$/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Delivery available/i)).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    const secondCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1];
+    const payload = JSON.parse(secondCall[1].body as string);
+
+    expect(payload.delivery_options).toEqual(["delivery"]);
+    expect(payload.business_details).toEqual({
+      type: "online_only",
+      primary_order_channel: "website",
+      order_url: "https://orders.example.com",
+      support_response_time: "Within 2 hours",
+    });
+  });
 });

@@ -88,20 +88,17 @@ const mobileServiceDetailsSchema = z.object({
 
 const onlineOnlyDetailsSchema = z.object({
   type: z.literal("online_only"),
-  primary_order_channel: z
-    .enum([
-      "website",
-      "whatsapp",
-      "instagram",
-      "facebook",
-      "marketplace",
-      "phone",
-      "email",
-      "other",
-    ])
-    .optional(),
+  primary_order_channel: z.enum([
+    "website",
+    "whatsapp",
+    "instagram",
+    "facebook",
+    "marketplace",
+    "phone",
+    "email",
+    "other",
+  ]),
   order_url: z.string().url("Enter a valid order URL."),
-  delivery_regions: z.array(z.string().trim().min(1)).min(1, "Add at least one delivery region."),
   support_response_time: optionalText(120),
 });
 
@@ -225,7 +222,7 @@ export const businessSchema = z
       mall_store: ["mall_name"],
       standalone_shop: ["street_address", "suburb"],
       home_business: ["service_suburb"],
-      online_only: ["primary_order_channel", "order_url", "delivery_regions"],
+      online_only: ["primary_order_channel", "order_url"],
       market_stall: ["market_name", "trading_days", "trading_hours"],
     };
 

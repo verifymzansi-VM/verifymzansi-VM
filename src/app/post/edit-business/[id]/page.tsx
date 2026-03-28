@@ -40,7 +40,10 @@ import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-err
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
 import {
   coerceBusinessDetails,
+  getNormalizedDeliveryOptions,
   getDefaultBusinessDetails,
+  hasBusinessDeliveryAvailable,
+  sanitizeBusinessDetailsForSubmission,
 } from "@/lib/forms/business-type-details";
 import { BusinessTypeDetailsFields } from "@/components/business/business-type-details-fields";
 import type { BusinessDetails } from "@/types/business-details";
@@ -56,13 +59,6 @@ const PAYMENT_METHOD_OPTIONS = [
   { value: "snapscan", label: "SnapScan" },
   { value: "capitec_pay", label: "Capitec Pay" },
   { value: "other", label: "Other" },
-];
-
-const DELIVERY_OPTION_LIST = [
-  { value: "in_store", label: "In-Store / Walk-in" },
-  { value: "delivery", label: "Delivery" },
-  { value: "collection", label: "Collection" },
-  { value: "nationwide", label: "Nationwide Shipping" },
 ];
 
 export default function EditBusinessPage() {
@@ -205,7 +201,11 @@ export default function EditBusinessPage() {
         );
         setServices(b.services_offered || []);
         setPaymentMethods(b.payment_methods_accepted || []);
-        setDeliveryOptions(b.delivery_options || []);
+        setDeliveryOptions(
+          getNormalizedDeliveryOptions(
+            hasBusinessDeliveryAvailable(b.delivery_options, b.business_details)
+          )
+        );
 
         // Operating hours
         const hours = b.operating_hours || {};
@@ -306,10 +306,8 @@ export default function EditBusinessPage() {
     );
   }
 
-  function toggleDeliveryOption(option: string) {
-    setDeliveryOptions((prev) =>
-      prev.includes(option) ? prev.filter((o) => o !== option) : [...prev, option]
-    );
+  function setDeliveryAvailable(deliveryAvailable: boolean) {
+    setDeliveryOptions(getNormalizedDeliveryOptions(deliveryAvailable));
   }
 
   async function uploadMedia(files: File[], area: UploadArea): Promise<string[]> {
@@ -476,7 +474,8 @@ export default function EditBusinessPage() {
       const finalBusinessDetails =
         normalizedBusinessDetails.type === "mall_store"
           ? { ...normalizedBusinessDetails, mall_photos: finalMallPhotos }
-          : normalizedBusinessDetails;
+          : sanitizeBusinessDetailsForSubmission(normalizedBusinessDetails);
+      const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryOptions.length > 0);
 
       const body = {
         business_name: businessName,
@@ -502,7 +501,7 @@ export default function EditBusinessPage() {
         business_details: finalBusinessDetails,
         operating_hours: operatingHours,
         payment_methods_accepted: paymentMethods,
-        delivery_options: deliveryOptions,
+        delivery_options: normalizedDeliveryOptions,
         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
       };
 
@@ -1242,26 +1241,27 @@ export default function EditBusinessPage() {
                 </div>
               </div>
 
-              {/* Delivery Options */}
+              {/* Delivery Service */}
               <div className="space-y-3">
                 <Label className="flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-muted-foreground" /> Delivery Options
+                  <Truck className="h-4 w-4 text-muted-foreground" /> Delivery Service
                 </Label>
-                <div className="flex flex-wrap gap-3">
-                  {DELIVERY_OPTION_LIST.map((option) => (
-                    <label
-                      key={option.value}
-                      className="flex items-center gap-2 text-sm cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={deliveryOptions.includes(option.value)}
-                        onChange={() => toggleDeliveryOption(option.value)}
-                        className="rounded"
-                      />
-                      {option.label}
-                    </label>
-                  ))}
+                <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
+                  <input
+                    id="edit-delivery-available"
+                    type="checkbox"
+                    aria-label="Delivery available"
+                    checked={deliveryOptions.length > 0}
+                    onChange={(event) => setDeliveryAvailable(event.target.checked)}
+                    className="mt-0.5 rounded"
+                  />
+                  <span className="space-y-1">
+                    <span className="block font-medium">Delivery available</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Only indicate whether this business offers delivery. Detailed delivery regions
+                      or shipping options are no longer collected here.
+                    </span>
+                  </span>
                 </div>
               </div>
 

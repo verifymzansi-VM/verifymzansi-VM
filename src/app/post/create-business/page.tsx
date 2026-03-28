@@ -49,7 +49,9 @@ import {
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
 import {
   coerceBusinessDetails,
+  getNormalizedDeliveryOptions,
   getDefaultBusinessDetails,
+  sanitizeBusinessDetailsForSubmission,
 } from "@/lib/forms/business-type-details";
 import { BusinessTypeDetailsFields } from "@/components/business/business-type-details-fields";
 import type { BusinessDetails } from "@/types/business-details";
@@ -70,13 +72,6 @@ const PAYMENT_METHOD_OPTIONS = [
   { value: "snapscan", label: "SnapScan" },
   { value: "capitec_pay", label: "Capitec Pay" },
   { value: "other", label: "Other" },
-];
-
-const DELIVERY_OPTIONS = [
-  { value: "in_store", label: "In-store / Walk-in" },
-  { value: "delivery", label: "Delivery" },
-  { value: "collection", label: "Collection" },
-  { value: "nationwide", label: "Nationwide Shipping" },
 ];
 
 const FIELD_IDS: Record<string, string> = {
@@ -352,10 +347,8 @@ function CreateBusinessContent() {
     );
   }
 
-  function toggleDeliveryOption(option: string) {
-    setDeliveryOptions((current) =>
-      current.includes(option) ? current.filter((item) => item !== option) : [...current, option]
-    );
+  function setDeliveryAvailable(deliveryAvailable: boolean) {
+    setDeliveryOptions(getNormalizedDeliveryOptions(deliveryAvailable));
   }
 
   function validateStep(targetStep: number) {
@@ -548,7 +541,10 @@ function CreateBusinessContent() {
       const finalBusinessDetails =
         normalizedBusinessDetails?.type === "mall_store"
           ? { ...normalizedBusinessDetails, mall_photos: mallPhotoUrls }
-          : normalizedBusinessDetails;
+          : normalizedBusinessDetails
+            ? sanitizeBusinessDetailsForSubmission(normalizedBusinessDetails)
+            : undefined;
+      const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryOptions.length > 0);
       const body = {
         business_name: businessName.trim(),
         slug: (slug || generateSlug(businessName)).trim(),
@@ -573,7 +569,8 @@ function CreateBusinessContent() {
         business_details: finalBusinessDetails,
         operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
         payment_methods_accepted: paymentMethods.length > 0 ? paymentMethods : undefined,
-        delivery_options: deliveryOptions.length > 0 ? deliveryOptions : undefined,
+        delivery_options:
+          normalizedDeliveryOptions.length > 0 ? normalizedDeliveryOptions : undefined,
         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
       };
       const res = await fetch("/api/businesses", {
@@ -618,7 +615,10 @@ function CreateBusinessContent() {
     const previewMallDetails =
       previewBusinessDetails?.type === "mall_store"
         ? { ...previewBusinessDetails, mall_photos: mallPhotoPreviewUrls }
-        : previewBusinessDetails;
+        : previewBusinessDetails
+          ? sanitizeBusinessDetailsForSubmission(previewBusinessDetails)
+          : previewBusinessDetails;
+    const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryOptions.length > 0);
 
     return (
       <div className="rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
@@ -648,7 +648,7 @@ function CreateBusinessContent() {
             },
             services_offered: services,
             payment_methods_accepted: paymentMethods,
-            delivery_options: deliveryOptions,
+            delivery_options: normalizedDeliveryOptions,
             service_areas: serviceAreas.length > 0 ? { areas: serviceAreas } : null,
             location_city: city || null,
             location_province: province || null,
@@ -1417,23 +1417,24 @@ function CreateBusinessContent() {
                         <div className="space-y-3">
                           <Label className="flex items-center gap-2">
                             <Store className="h-4 w-4 text-muted-foreground" />
-                            Delivery Options
+                            Delivery Service
                           </Label>
-                          <div className="flex flex-wrap gap-3">
-                            {DELIVERY_OPTIONS.map((option) => (
-                              <label
-                                key={option.value}
-                                className="flex cursor-pointer items-center gap-2 text-sm"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={deliveryOptions.includes(option.value)}
-                                  onChange={() => toggleDeliveryOption(option.value)}
-                                  className="rounded"
-                                />
-                                {option.label}
-                              </label>
-                            ))}
+                          <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
+                            <input
+                              id="delivery-available"
+                              type="checkbox"
+                              aria-label="Delivery available"
+                              checked={deliveryOptions.length > 0}
+                              onChange={(event) => setDeliveryAvailable(event.target.checked)}
+                              className="mt-0.5 rounded"
+                            />
+                            <span className="space-y-1">
+                              <span className="block font-medium">Delivery available</span>
+                              <span className="block text-xs text-muted-foreground">
+                                Only indicate whether you offer delivery. No delivery-region or
+                                shipping-detail fields are required.
+                              </span>
+                            </span>
                           </div>
                         </div>
                       </div>

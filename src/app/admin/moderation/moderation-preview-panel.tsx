@@ -28,6 +28,7 @@ import { formatZAR, formatRelativeTime } from "@/lib/utils/format";
 import { normalizeMediaUrl, normalizeVideoUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import {
+  hasBusinessDeliveryAvailable,
   PRIMARY_ORDER_CHANNEL_LABELS,
   WALK_IN_POLICY_LABELS,
 } from "@/lib/forms/business-type-details";
@@ -310,9 +311,6 @@ function BusinessDetailsSection({ item }: { item: ModerationItem }) {
           });
         }
         if (details.order_url) detailRows.push({ label: "Order URL", value: details.order_url });
-        if (details.delivery_regions.length > 0) {
-          detailBadges.push({ label: "Delivery regions", values: details.delivery_regions });
-        }
         if (details.support_response_time) {
           detailRows.push({
             label: "Support response time",
@@ -408,7 +406,10 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
   );
   const services = item.services_offered?.filter(Boolean) ?? [];
   const paymentMethods = item.payment_methods_accepted?.filter(Boolean) ?? [];
-  const deliveryOptions = item.delivery_options?.filter(Boolean) ?? [];
+  const deliveryAvailable = hasBusinessDeliveryAvailable(
+    item.delivery_options,
+    item.business_details
+  );
   const socialLinks = Object.entries(item.social_links ?? {}).filter(
     ([, value]) => typeof value === "string" && value.trim().length > 0
   );
@@ -755,7 +756,7 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
           </>
         )}
 
-        {(paymentMethods.length > 0 || deliveryOptions.length > 0) && (
+        {(paymentMethods.length > 0 || deliveryAvailable) && (
           <>
             <Separator />
             <div className="grid gap-4 sm:grid-cols-2">
@@ -774,19 +775,13 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
                   </div>
                 </div>
               )}
-              {deliveryOptions.length > 0 && (
+              {deliveryAvailable && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold flex items-center gap-1.5">
                     <Truck className="h-3.5 w-3.5" />
-                    Delivery options
+                    Delivery
                   </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {deliveryOptions.map((option) => (
-                      <Badge key={option} variant="outline" className="capitalize">
-                        {formatEnumLabel(option)}
-                      </Badge>
-                    ))}
-                  </div>
+                  <Badge variant="outline">Available</Badge>
                 </div>
               )}
             </div>
