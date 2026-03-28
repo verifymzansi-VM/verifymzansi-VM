@@ -23,8 +23,8 @@ export function BusinessPreviewCard({
   posterUrl,
   logoUrl,
   title,
-  city,
-  provinceCode,
+  city: _city,
+  provinceCode: _provinceCode,
   boosted: _boosted,
   featured: _featured,
 }: BusinessPreviewCardProps) {
@@ -32,7 +32,6 @@ export function BusinessPreviewCard({
     <PosterCardShell
       href={href}
       title={title}
-      location={`${city}, ${provinceCode}`}
       mediaUrl={imageUrl}
       posterUrl={posterUrl}
       mediaAlt={title}

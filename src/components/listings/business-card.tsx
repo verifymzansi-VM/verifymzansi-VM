@@ -32,8 +32,8 @@ export function BusinessCard({
   videoThumbnail,
   logoUrl,
   galleryPhotos,
-  province,
-  city,
+  province: _province,
+  city: _city,
   trustLevel = 0,
   boostUntil: _boostUntil,
   featuredUntil: _featuredUntil,
@@ -49,7 +49,6 @@ export function BusinessCard({
       href={`/mzansi-business/${id}`}
       title={businessName}
       description={description}
-      location={`${city}, ${province}`}
       mediaUrl={displayCover}
       posterUrl={posterUrl}
       mediaAlt={businessName}

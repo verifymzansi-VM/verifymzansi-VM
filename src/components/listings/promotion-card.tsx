@@ -70,8 +70,8 @@ export const PromotionCard = memo(function PromotionCard({
   price,
   imageUrl,
   posterUrl,
-  province,
-  city,
+  province: _province,
+  city: _city,
   promotionType,
   ownerTrustLevel = 0,
   boosted,
@@ -87,7 +87,6 @@ export const PromotionCard = memo(function PromotionCard({
     <PosterCardShell
       href={`/promotion/${id}`}
       title={title}
-      location={`${city}, ${province}`}
       mediaUrl={imageUrl}
       posterUrl={posterUrl}
       mediaAlt={title}
@@ -95,8 +94,8 @@ export const PromotionCard = memo(function PromotionCard({
       logoUrl={logoUrl}
       eyebrowClassName={
         price != null && price > 0
-          ? "font-display text-sm font-bold tracking-[0.01em] text-white sm:text-base"
-          : "text-[10px] font-semibold uppercase tracking-[0.18em] text-white/84"
+          ? undefined
+          : "text-sm font-semibold uppercase tracking-[0.18em] text-white/84 sm:text-base"
       }
       statusLabel={status?.label}
       statusClassName={status?.className}

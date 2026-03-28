@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   VideoCardPlayer,
@@ -17,7 +16,6 @@ import type { ReactNode } from "react";
 interface PosterCardShellProps {
   href: string;
   title: string;
-  location: string;
   mediaUrl?: string | null;
   posterUrl?: string | null;
   /** Explicit media type override for cases where URL extension is unavailable (e.g. blob URLs). */
@@ -46,7 +44,6 @@ interface PosterCardShellProps {
 export function PosterCardShell({
   href,
   title,
-  location,
   mediaUrl,
   posterUrl,
   isVideo,
@@ -101,81 +98,79 @@ export function PosterCardShell({
             <div className="absolute inset-0 bg-gradient-to-br from-warm-300 via-warm-200 to-warm-100 dark:from-warm-800 dark:via-warm-700 dark:to-warm-900" />
           )}
 
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/28 to-black/8" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/18 via-transparent to-transparent" />
-          <div className="absolute inset-0 ring-1 ring-inset ring-white/12" />
+          <div className="pointer-events-none absolute inset-0 transition-opacity duration-500 group-hover:opacity-0">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/28 to-black/8" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/18 via-transparent to-transparent" />
+            <div className="absolute inset-0 ring-1 ring-inset ring-white/12" />
 
-          {/* Status badge / ribbon */}
-          {statusLabel ? (
-            statusVariant === "ribbon" ? (
-              <div className="absolute left-3 top-3 z-10">
-                <span
+            {/* Status badge / ribbon */}
+            {statusLabel ? (
+              statusVariant === "ribbon" ? (
+                <div className="absolute left-3 top-3 z-10">
+                  <span
+                    className={cn(
+                      "inline-flex min-h-[1.1rem] items-center rounded-full px-2.5 py-1 text-[8px] font-black uppercase leading-none tracking-[0.12em] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.92)] backdrop-blur-md",
+                      statusClassName
+                    )}
+                  >
+                    {statusLabel}
+                  </span>
+                </div>
+              ) : (
+                <div className="absolute left-3 top-3 z-10">
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] shadow-sm backdrop-blur-md",
+                      statusClassName
+                    )}
+                  >
+                    {statusLabel}
+                  </span>
+                </div>
+              )
+            ) : null}
+
+            {/* Business logo — bottom-right */}
+            {normalizedLogoUrl ? (
+              <div className="absolute bottom-3 right-3 z-20">
+                <div className="h-10 w-10 overflow-hidden rounded-full border border-white/20 ring-2 ring-black/25 shadow-lg backdrop-blur-md">
+                  <Image
+                    src={normalizedLogoUrl}
+                    alt="Business logo"
+                    width={36}
+                    height={36}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {/* Bottom content overlay */}
+            <div
+              className={cn(
+                "absolute inset-x-0 bottom-0 z-10 space-y-1 p-3 pr-14 sm:p-4 sm:pr-16",
+                contentClassName
+              )}
+            >
+              {eyebrow ? (
+                <p
                   className={cn(
-                    "inline-flex min-h-[1.1rem] items-center rounded-full px-2.5 py-1 text-[8px] font-black uppercase leading-none tracking-[0.12em] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.92)] backdrop-blur-md",
-                    statusClassName
+                    "text-xs font-bold tracking-[0.01em] text-white/90 sm:text-sm",
+                    eyebrowClassName
                   )}
                 >
-                  {statusLabel}
-                </span>
-              </div>
-            ) : (
-              <div className="absolute left-3 top-3 z-10">
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] shadow-sm backdrop-blur-md",
-                    statusClassName
-                  )}
-                >
-                  {statusLabel}
-                </span>
-              </div>
-            )
-          ) : null}
-
-          {/* Business logo — bottom-right */}
-          {normalizedLogoUrl ? (
-            <div className="absolute bottom-[74px] right-3 z-20 sm:bottom-[84px]">
-              <div className="h-9 w-9 overflow-hidden rounded-full border border-white/20 ring-2 ring-black/25 shadow-lg backdrop-blur-md">
-                <Image
-                  src={normalizedLogoUrl}
-                  alt="Business logo"
-                  width={36}
-                  height={36}
-                  className="h-full w-full object-cover"
-                />
-              </div>
+                  {eyebrow}
+                </p>
+              ) : null}
+              <h3 className="font-display text-[11px] font-semibold leading-tight text-white drop-shadow-[0_3px_14px_rgba(15,23,42,0.55)] line-clamp-2 sm:text-xs">
+                {title}
+              </h3>
+              {description ? (
+                <p className="text-[10px] leading-snug text-white/72 line-clamp-2 sm:text-[11px]">
+                  {description}
+                </p>
+              ) : null}
             </div>
-          ) : null}
-
-          {/* Bottom content overlay */}
-          <div
-            className={cn(
-              "absolute inset-x-0 bottom-0 z-10 space-y-1.5 p-3 sm:p-4",
-              contentClassName
-            )}
-          >
-            {eyebrow ? (
-              <p
-                className={cn(
-                  "text-xs font-semibold tracking-[0.01em] text-white/90 sm:text-sm",
-                  eyebrowClassName
-                )}
-              >
-                {eyebrow}
-              </p>
-            ) : null}
-            <h3 className="font-display text-sm font-semibold leading-tight text-white drop-shadow-[0_3px_14px_rgba(15,23,42,0.55)] line-clamp-2 sm:text-base">
-              {title}
-            </h3>
-            {description ? (
-              <p className="text-[11px] leading-snug text-white/72 line-clamp-2 sm:text-xs">
-                {description}
-              </p>
-            ) : null}
-            <p className="flex items-center gap-1.5 text-[11px] font-medium text-white/80 line-clamp-1 sm:text-xs">
-              <MapPin className="h-3 w-3 flex-shrink-0" />
-              <span className="truncate">{location}</span>
-            </p>
           </div>
         </div>
       </Card>
