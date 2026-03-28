@@ -124,6 +124,13 @@ describe("ModerationPreviewPanel", () => {
           services_offered: ["Hair styling", "Nail care"],
           payment_methods_accepted: ["cash", "card"],
           delivery_options: ["in_store_pickup"],
+          cover_photo: "https://bucket.r2.cloudflarestorage.com/businesses/cover.jpg",
+          cover_video: "https://bucket.r2.cloudflarestorage.com/businesses/video.mp4",
+          gallery_photos: [
+            "https://bucket.r2.cloudflarestorage.com/businesses/gallery-1.jpg",
+            "https://bucket.r2.cloudflarestorage.com/businesses/gallery-2.jpg",
+          ],
+          logo_url: "https://bucket.r2.cloudflarestorage.com/businesses/logo.jpg",
           business_details: {
             type: "mall_store",
             mall_name: "Maponya Mall",
@@ -142,6 +149,12 @@ describe("ModerationPreviewPanel", () => {
     expect(screen.getByText("Hair styling")).toBeInTheDocument();
     expect(screen.getByText("Maponya Mall")).toBeInTheDocument();
     expect(screen.getByText("Upper Level")).toBeInTheDocument();
+    expect(screen.getByText("Business media")).toBeInTheDocument();
+    expect(screen.getByText("Cover photo")).toBeInTheDocument();
+    expect(screen.getByText("Promo video")).toBeInTheDocument();
+    expect(screen.getByText("2 gallery photos")).toBeInTheDocument();
+    expect(screen.getByTestId("business-logo-panel")).toBeInTheDocument();
+    expect(screen.getByAltText("Nomsa Beauty Studio logo")).toBeInTheDocument();
   });
 
   it("shows a compact empty state when a business has no media", () => {
@@ -159,6 +172,7 @@ describe("ModerationPreviewPanel", () => {
 
     expect(screen.getByTestId("business-media-empty-state")).toBeInTheDocument();
     expect(screen.getByText("No business media submitted")).toBeInTheDocument();
+    expect(screen.getByText("No logo submitted")).toBeInTheDocument();
   });
 
   it("renders mobile service business-specific review details", () => {
