@@ -14,7 +14,7 @@ test.describe("Billing payment round-trip", () => {
         response.request().method() === "POST",
       { timeout: 15000 }
     );
-    await page.getByRole("button", { name: "Choose Growth" }).first().click();
+    await page.getByRole("button", { name: /choose mzansi market growth/i }).click();
     const checkoutResponse = await checkoutResponsePromise;
     expect(checkoutResponse.ok()).toBeTruthy();
     await page.waitForURL("**/billing/success?payment=*", { timeout: 30000 });
