@@ -53,6 +53,7 @@ type CachedToken = {
 
 const cachedTokens = new Map<string, CachedToken>();
 const OZOW_WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
+const OZOW_REFERENCE_FIELD_MAX_LENGTH = 14;
 
 const OZOW_ALLOWED_HOSTS = {
   production: new Set(["one.ozow.com"]),
@@ -197,7 +198,7 @@ function createMockHostedPaymentResponse(
 
   return {
     providerPaymentId: `mock-${input.paymentId}`,
-    providerReference: input.paymentId,
+    providerReference: input.merchantReference,
     redirectUrl: redirectUrl.toString(),
     expireAt,
     correlationId,
@@ -328,6 +329,7 @@ async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<
 
 export interface OzowHostedPaymentRequest {
   paymentId: string;
+  merchantReference: string;
   amountCents: number;
   itemName: string;
   itemDescription?: string;
@@ -345,6 +347,14 @@ export interface OzowHostedPaymentResponse {
   rawResponse: Record<string, unknown>;
 }
 
+export function toOzowMerchantReference(paymentId: string): string {
+  return paymentId.replace(/[^A-Za-z0-9_]/g, "");
+}
+
+export function toOzowReferenceField(value: string): string {
+  return value.replace(/[^A-Za-z0-9 -]/g, "").slice(0, OZOW_REFERENCE_FIELD_MAX_LENGTH);
+}
+
 export async function createOzowHostedPayment(
   input: OzowHostedPaymentRequest
 ): Promise<OzowHostedPaymentResponse> {
@@ -352,6 +362,7 @@ export async function createOzowHostedPayment(
   const expireAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   const correlationId = crypto.randomUUID();
   const idempotencyKey = crypto.randomUUID();
+  const referenceField = toOzowReferenceField(input.merchantReference);
 
   if (isMockOzowEnabled()) {
     return createMockHostedPaymentResponse(input);
@@ -376,7 +387,9 @@ export async function createOzowHostedPayment(
         currency: "ZAR",
         value: amount,
       },
-      merchantReference: input.paymentId,
+      merchantReference: input.merchantReference,
+      beneficiaryReference: referenceField,
+      payerReference: referenceField,
       expireAt,
       returnUrl: input.returnUrl,
     };
@@ -468,7 +481,7 @@ export async function createOzowHostedPayment(
 
     return {
       providerPaymentId,
-      providerReference: input.paymentId,
+      providerReference: input.merchantReference,
       redirectUrl,
       expireAt: responseExpireAt,
       correlationId,

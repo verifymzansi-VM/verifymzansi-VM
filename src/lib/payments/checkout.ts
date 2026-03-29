@@ -5,6 +5,7 @@ import {
   OzowAuthenticationError,
   OzowConfigurationError,
   OzowProviderError,
+  toOzowMerchantReference,
 } from "./ozow";
 import type { MarketplaceArea } from "@/types/enums";
 
@@ -62,11 +63,13 @@ export async function createHostedCheckout(
   input: PaymentCheckoutInput
 ): Promise<PaymentCheckoutResult> {
   const paymentId = crypto.randomUUID();
+  const providerReference = toOzowMerchantReference(paymentId);
   const returnUrl = input.returnUrl.replace("__PAYMENT_ID__", paymentId);
   const cancelUrl = input.cancelUrl.replace("__PAYMENT_ID__", paymentId);
   const providerData = {
     ...input.providerData,
     created_at: new Date().toISOString(),
+    merchant_reference: providerReference,
   };
 
   const { data: payment, error: insertError } = await input.admin
@@ -78,7 +81,7 @@ export async function createHostedCheckout(
       amount_cents: input.amountCents,
       status: "pending",
       provider: "ozow",
-      provider_reference: paymentId,
+      provider_reference: providerReference,
       provider_data: providerData,
     })
     .select("id")
@@ -94,6 +97,7 @@ export async function createHostedCheckout(
   try {
     const ozowPayment = await createOzowHostedPayment({
       paymentId,
+      merchantReference: providerReference,
       amountCents: input.amountCents,
       itemName: input.itemName,
       itemDescription: input.itemDescription,
@@ -105,6 +109,7 @@ export async function createHostedCheckout(
       .from("payments")
       .update({
         provider_payment_id: ozowPayment.providerPaymentId,
+        provider_reference: ozowPayment.providerReference,
         provider_data: {
           ...providerData,
           expire_at: ozowPayment.expireAt,

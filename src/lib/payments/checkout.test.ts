@@ -73,7 +73,7 @@ describe("createHostedCheckout", () => {
   it("creates a pending payment, then stores provider checkout details", async () => {
     vi.mocked(createOzowHostedPayment).mockResolvedValue({
       providerPaymentId: "ozow-payment-1",
-      providerReference: "11111111-1111-4111-8111-111111111111",
+      providerReference: "11111111111141118111111111111111",
       redirectUrl: "https://pay.ozow.test/checkout/1",
       expireAt: "2026-03-26T10:30:00.000Z",
       correlationId: "corr-1",
@@ -104,10 +104,11 @@ describe("createHostedCheckout", () => {
         id: "11111111-1111-4111-8111-111111111111",
         user_id: "user-1",
         amount_cents: 25000,
-        provider_reference: "11111111-1111-4111-8111-111111111111",
+        provider_reference: "11111111111141118111111111111111",
         provider_data: expect.objectContaining({
           type: "subscription",
           plan_id: "plan-1",
+          merchant_reference: "11111111111141118111111111111111",
           created_at: expect.any(String),
         }),
       })
@@ -115,6 +116,7 @@ describe("createHostedCheckout", () => {
     expect(vi.mocked(createOzowHostedPayment)).toHaveBeenCalledWith(
       expect.objectContaining({
         paymentId: "11111111-1111-4111-8111-111111111111",
+        merchantReference: "11111111111141118111111111111111",
         returnUrl:
           "https://verifymzansi.com/billing/success?payment=11111111-1111-4111-8111-111111111111",
         cancelUrl:
@@ -125,6 +127,7 @@ describe("createHostedCheckout", () => {
     expect(mock.spies.updatePayloads[0]).toEqual(
       expect.objectContaining({
         provider_payment_id: "ozow-payment-1",
+        provider_reference: "11111111111141118111111111111111",
         provider_data: expect.objectContaining({
           checkout_url: "https://pay.ozow.test/checkout/1",
           expire_at: "2026-03-26T10:30:00.000Z",
@@ -160,7 +163,7 @@ describe("createHostedCheckout", () => {
   it("marks the payment as failed once when provider detail persistence fails", async () => {
     vi.mocked(createOzowHostedPayment).mockResolvedValue({
       providerPaymentId: "ozow-payment-1",
-      providerReference: "11111111-1111-4111-8111-111111111111",
+      providerReference: "11111111111141118111111111111111",
       redirectUrl: "https://pay.ozow.test/checkout/1",
       expireAt: "2026-03-26T10:30:00.000Z",
       correlationId: "corr-1",

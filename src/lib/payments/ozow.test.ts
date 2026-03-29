@@ -57,6 +57,7 @@ describe("ozow payments", () => {
 
     await createOzowHostedPayment({
       paymentId: "payment-1",
+      merchantReference: "payment1",
       amountCents: 2500,
       itemName: "Growth Plan",
       returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
@@ -65,6 +66,7 @@ describe("ozow payments", () => {
 
     await createOzowHostedPayment({
       paymentId: "payment-2",
+      merchantReference: "payment2",
       amountCents: 1500,
       itemName: "Boost Listing",
       returnUrl: "https://verifymzansi.com/billing/success?payment=payment-2",
@@ -97,6 +99,7 @@ describe("ozow payments", () => {
 
     await createOzowHostedPayment({
       paymentId: "payment-1",
+      merchantReference: "payment1",
       amountCents: 2500,
       itemName: "Growth Plan",
       itemDescription: "Growth plan upgrade",
@@ -114,7 +117,9 @@ describe("ozow payments", () => {
     expect(body.siteCode).toBe("site-code");
     expect(body.region).toBe("ZA");
     expect(body.amount).toEqual({ currency: "ZAR", value: 25 });
-    expect(body.merchantReference).toBe("payment-1");
+    expect(body.merchantReference).toBe("payment1");
+    expect(body.beneficiaryReference).toBe("payment1");
+    expect(body.payerReference).toBe("payment1");
   });
 
   it("throws a configuration error when the Ozow client secret is missing", async () => {
@@ -131,6 +136,7 @@ describe("ozow payments", () => {
       await expect(
         createOzowHostedPayment({
           paymentId: "payment-1",
+          merchantReference: "payment1",
           amountCents: 2500,
           itemName: "Growth Plan",
           returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
@@ -162,6 +168,7 @@ describe("ozow payments", () => {
     await expect(
       createOzowHostedPayment({
         paymentId: "payment-1",
+        merchantReference: "payment1",
         amountCents: 2500,
         itemName: "Growth Plan",
         returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
@@ -194,6 +201,7 @@ describe("ozow payments", () => {
 
     const result = await createOzowHostedPayment({
       paymentId: "payment-1",
+      merchantReference: "payment1",
       amountCents: 2500,
       itemName: "Growth Plan",
       returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
@@ -201,6 +209,7 @@ describe("ozow payments", () => {
     });
 
     expect(result.providerPaymentId).toBe("mock-payment-1");
+    expect(result.providerReference).toBe("payment1");
     expect(result.redirectUrl).toContain("/api/mock-ozow");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -277,5 +286,16 @@ describe("ozow payments", () => {
     expect(() => validateOzowBaseUrl("http://one.ozow.com", "staging")).toThrow(
       "approved Ozow HTTPS host"
     );
+  });
+
+  it("normalizes merchant references to Ozow-safe characters", async () => {
+    const { toOzowMerchantReference, toOzowReferenceField } = await import("./ozow");
+
+    expect(toOzowMerchantReference("11111111-1111-4111-8111-111111111111")).toBe(
+      "11111111111141118111111111111111"
+    );
+    expect(toOzowMerchantReference("payment-1")).toBe("payment1");
+    expect(toOzowReferenceField("11111111111141118111111111111111")).toBe("11111111111141");
+    expect(toOzowReferenceField("payment_1 two")).toBe("payment1 two");
   });
 });
