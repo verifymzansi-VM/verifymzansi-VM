@@ -202,10 +202,6 @@ if (isWSL()) {
   console.log(`✓ Running on ${platform} — Cloudflare build should work.`);
 }
 
-// Cloudflare's build cache can restore a stale src/proxy.ts from older builds.
-// Remove it so Next/OpenNext sees only the active Edge middleware entrypoint.
-const staleProxy = path.join(__dirname, "..", "src", "proxy.ts");
-if (fs.existsSync(staleProxy)) {
-  fs.rmSync(staleProxy);
-  console.log("✓ Removed stale src/proxy.ts (restored from build cache).");
-}
+// Keep both src/middleware.ts and src/proxy.ts in the repo.
+// Different Next/OpenNext runtime combinations may honor one entrypoint name
+// before the other, and the shared handler keeps behavior aligned.
