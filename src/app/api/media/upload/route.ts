@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { uploadToR2, generateStorageKey } from "@/lib/services/storage";
+import { uploadToR2, generateStorageKey, deleteFromR2 } from "@/lib/services/storage";
 import { createLogger } from "@/lib/utils/logger";
 import { UPLOAD_AREAS } from "@/types/enums";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
@@ -9,7 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { stripExifFromJpeg } from "@/lib/utils/exif-strip";
+import { stripExifFromJpeg, stripMetadataFromPng } from "@/lib/utils/exif-strip";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 import { parseAndValidateFormData } from "@/lib/utils/api";
 import { z } from "zod";
@@ -21,6 +21,18 @@ const VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
 const MAX_FILES = 10;
+
+/** Map of allowed file extensions to their expected MIME types */
+const EXTENSION_MIME_MAP: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  avif: "image/avif",
+  mp4: "video/mp4",
+  webm: "video/webm",
+};
 const mediaUploadMetadataSchema = z.object({
   area: z.enum(UPLOAD_AREAS).default("listing"),
 });
@@ -147,6 +159,14 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // Cross-validate file extension against declared MIME type
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      const expectedMime = EXTENSION_MIME_MAP[ext];
+      if (!expectedMime || expectedMime !== file.type) {
+        errors.push(`"${file.name}": file extension does not match declared type`);
+        continue;
+      }
+
       // Validate magic bytes to prevent MIME spoofing (stored XSS)
       const headerSlice = file.slice(0, 12);
       const headerBytes = new Uint8Array(await headerSlice.arrayBuffer());
@@ -190,10 +210,13 @@ export async function POST(request: NextRequest) {
       const key = generateStorageKey(`media/${area}`, user.id, file.name);
 
       try {
-        // Strip EXIF metadata from JPEG images to prevent GPS/PII leaks (POPIA)
+        // Strip metadata from images to prevent GPS/PII leaks (POPIA)
         let uploadFile: File | Blob = file;
         if (file.type === "image/jpeg") {
           const stripped = stripExifFromJpeg(fileBuffer);
+          uploadFile = new Blob([toArrayBuffer(stripped)], { type: file.type });
+        } else if (file.type === "image/png") {
+          const stripped = stripMetadataFromPng(fileBuffer);
           uploadFile = new Blob([toArrayBuffer(stripped)], { type: file.type });
         }
 
@@ -217,11 +240,22 @@ export async function POST(request: NextRequest) {
         });
 
         if (trackErr) {
-          log.error("Failed to track media upload — file exists in R2 without DB record", {
+          log.error("Failed to track media upload — cleaning up orphaned R2 object", {
             key,
             error: trackErr.message,
             userId: user.id,
           });
+          // Remove the R2 object to prevent orphans without DB records
+          try {
+            await deleteFromR2(bucket, key);
+          } catch (cleanupErr) {
+            log.error("Failed to clean up orphaned R2 object", {
+              key,
+              error: cleanupErr instanceof Error ? cleanupErr.message : "Unknown",
+            });
+          }
+          errors.push(`"${file.name}": upload tracking failed`);
+          continue;
         }
       } catch (err) {
         log.error(`Failed to upload ${file.name}`, { error: err });

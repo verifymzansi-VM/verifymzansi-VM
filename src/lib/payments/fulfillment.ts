@@ -25,10 +25,10 @@ function computeVatInclusiveBreakdown(totalCents: number): {
 }
 
 function buildInvoiceNumber(payment: PaymentRecordShape): string {
-  const date = new Date(payment.created_at || Date.now())
-    .toISOString()
-    .slice(0, 10)
-    .replace(/-/g, "");
+  // Use SAST (UTC+2) for invoice dates — South African business requirement
+  const utcMs = payment.created_at ? new Date(payment.created_at).getTime() : Date.now();
+  const sastMs = utcMs + 2 * 60 * 60 * 1000;
+  const date = new Date(sastMs).toISOString().slice(0, 10).replace(/-/g, "");
   return `INV-${date}-${payment.id.slice(0, 8).toUpperCase()}`;
 }
 
@@ -139,13 +139,23 @@ export async function fulfillPayment(
     }
 
     if (plan?.tier && plan?.area) {
+      // Check account status before creating active entitlements
+      const { data: accountProfile } = await supabase
+        .from("account_profiles")
+        .select("account_status")
+        .eq("user_id", payment.user_id)
+        .maybeSingle();
+
+      const entitlementStatus =
+        accountProfile?.account_status === "restricted" ? "pending_verification" : "active";
+
       const { error } = await supabase.from("entitlements").upsert(
         {
           user_id: payment.user_id,
           area: plan.area,
           tier: plan.tier,
           type: "subscription",
-          status: "active",
+          status: entitlementStatus,
           started_at: new Date(baseTime).toISOString(),
           expires_at: new Date(baseTime + 30 * 24 * 60 * 60 * 1000).toISOString(),
         },

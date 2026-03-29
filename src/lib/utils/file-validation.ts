@@ -27,6 +27,8 @@ const MAGIC_SIGNATURES: Array<{
   { mime: "video/mp4", bytes: [0x66, 0x74, 0x79, 0x70], offset: 4 },
   // WebM: bytes 0-3 = 0x1A45DFA3 (EBML header, covers WebM/Matroska)
   { mime: "video/webm", bytes: [0x1a, 0x45, 0xdf, 0xa3] },
+  // ZIP: PK\x03\x04
+  { mime: "application/zip", bytes: [0x50, 0x4b, 0x03, 0x04] },
 ];
 
 /** WebP secondary signature at offset 8 */

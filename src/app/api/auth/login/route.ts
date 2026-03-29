@@ -167,6 +167,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (error) {
+      // Record failed attempt for ALL auth errors including email-not-confirmed
+      // to prevent lockout bypass via unconfirmed accounts.
+      recordFailedLogin(parsedBody.data.email);
+      recordDistributedFailedLogin(parsedBody.data.email).catch(() => {});
+
       if (isEmailNotConfirmed) {
         log.info("Login failed: email not confirmed", { email: parsedBody.data.email });
         return NextResponse.json(
@@ -180,8 +185,6 @@ export async function POST(request: NextRequest) {
 
       // Return the same generic error for all auth failures to avoid leaking
       // whether an account exists or is merely awaiting confirmation.
-      recordFailedLogin(parsedBody.data.email);
-      recordDistributedFailedLogin(parsedBody.data.email).catch(() => {});
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 

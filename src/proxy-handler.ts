@@ -254,7 +254,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     "/api/admin",
     "/api/otp",
   ];
-  const protectedPrefixes = protectedPrefixesAll.filter((p) => p !== "/api/otp");
+  const protectedPrefixes = protectedPrefixesAll;
 
   // Recover legacy signup links that land on "/?code=..." instead of the
   // dedicated auth callback route. Keep this scoped to the root path so

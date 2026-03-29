@@ -52,6 +52,7 @@ type CachedToken = {
 };
 
 const cachedTokens = new Map<string, CachedToken>();
+const pendingTokenFetches = new Map<string, Promise<string>>();
 const OZOW_WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
 const OZOW_REFERENCE_FIELD_MAX_LENGTH = 14;
 
@@ -227,6 +228,24 @@ async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<
     return cachedToken.accessToken;
   }
 
+  // Coalesce concurrent requests for the same scope into a single fetch
+  const pendingKey = forceRefresh ? `${normalizedScope}:force` : normalizedScope;
+  const pending = pendingTokenFetches.get(pendingKey);
+  if (pending) {
+    return pending;
+  }
+
+  const fetchPromise = fetchOzowAccessToken(normalizedScope);
+  pendingTokenFetches.set(pendingKey, fetchPromise);
+
+  try {
+    return await fetchPromise;
+  } finally {
+    pendingTokenFetches.delete(pendingKey);
+  }
+}
+
+async function fetchOzowAccessToken(normalizedScope: string): Promise<string> {
   const { baseUrl, baseUrlHost, ozowEnv } = getOzowBaseUrlContext();
   const clientId = env("OZOW_CLIENT_ID");
   const clientSecret = env("OZOW_CLIENT_SECRET");

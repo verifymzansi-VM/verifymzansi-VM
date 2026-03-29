@@ -63,13 +63,14 @@ async function verifyOtp(otp: string, storedHash: string): Promise<boolean> {
   );
   const otpHashHex = toHex(new Uint8Array(derivedBits));
 
-  // Timing-safe comparison
-  if (hash.length !== otpHashHex.length) return false;
+  // Constant-time comparison — no early exit on length mismatch to avoid
+  // leaking whether a valid hash exists via timing side-channel.
   const a = fromHex(hash);
   const b = fromHex(otpHashHex);
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a[i] ^ b[i];
+  const len = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length; // non-zero if lengths differ
+  for (let i = 0; i < len; i++) {
+    diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
   }
   return diff === 0;
 }
@@ -417,11 +418,25 @@ export async function POST(request: NextRequest) {
     // Find matching OTP by verifying hash
     if (!(await verifyOtp(otp, challenge.otp_hash))) {
       // Atomic increment to avoid read-modify-write race (#39)
-      const { data: rpcResult } = await adminSupabase.rpc("increment_otp_attempt", {
-        challenge_id: challenge.id,
-        max_attempts: MAX_VERIFY_ATTEMPTS,
-        lockout_duration: "15 minutes",
-      });
+      const { data: rpcResult, error: rpcError } = await adminSupabase.rpc(
+        "increment_otp_attempt",
+        {
+          challenge_id: challenge.id,
+          max_attempts: MAX_VERIFY_ATTEMPTS,
+          lockout_duration: "15 minutes",
+        }
+      );
+
+      if (rpcError) {
+        log.error("Failed to increment OTP attempt counter", {
+          challengeId: challenge.id,
+          error: rpcError.message,
+        });
+        return NextResponse.json(
+          { error: "Verification temporarily unavailable. Please try again." },
+          { status: 503 }
+        );
+      }
 
       const locked =
         rpcResult?.[0]?.new_locked_until != null && new Date(rpcResult[0].new_locked_until) > now;

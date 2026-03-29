@@ -705,3 +705,52 @@ export async function sendAccountEnforcementEmail(params: {
 
   return sendEmail({ to: params.email, subject, html, text });
 }
+
+/**
+ * Notify user that their password was changed successfully.
+ * Allows them to take action if the change was not initiated by them.
+ */
+export async function sendPasswordChangeNotification(email: string): Promise<SendEmailResult> {
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const subject = "VerifyMzansi — Your password was changed";
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #ef4444; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
+          .button { display: inline-block; background: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">Password Changed</h1>
+          </div>
+          <div class="content">
+            <p>Hi,</p>
+            <p>Your VerifyMzansi account password was just changed.</p>
+            <p>If you made this change, no further action is needed.</p>
+            <p><strong>If you did not change your password</strong>, please reset it immediately:</p>
+            <p style="text-align: center;">
+              <a href="${appUrl}/forgot-password" class="button">Reset Password</a>
+            </p>
+            <p>Best regards,<br>The VerifyMzansi Team</p>
+          </div>
+          <div class="footer">
+            <p>Questions? Email us at support@verifymzansi.com</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `Hi,\n\nYour VerifyMzansi account password was just changed.\n\nIf you made this change, no further action is needed.\n\nIf you did not change your password, reset it immediately: ${appUrl}/forgot-password\n\nBest regards,\nThe VerifyMzansi Team`;
+
+  return sendEmail({ to: email, subject, html, text });
+}

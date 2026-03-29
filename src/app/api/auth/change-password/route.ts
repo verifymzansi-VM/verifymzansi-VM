@@ -6,6 +6,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { sendPasswordChangeNotification } from "@/lib/services/email";
 
 const log = createLogger("ChangePassword");
 
@@ -83,6 +84,14 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Non-blocking notification so users can spot unauthorized changes
+    void sendPasswordChangeNotification(user.email).catch((err) => {
+      log.warn("Failed to send password change notification", {
+        userId: user.id,
+        error: err instanceof Error ? err.message : "Unknown",
+      });
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -56,18 +56,14 @@ export async function createClient(): Promise<SupabaseClient> {
         } catch (e) {
           // The `set` method was called from a Server Component.
           // This can be ignored if you have middleware refreshing sessions.
-          if (process.env.NODE_ENV === "development") {
-            logger.warn(`Cookie set failed for "${name}"`, { error: String(e) });
-          }
+          logger.warn(`Cookie set failed for "${name}"`, { error: String(e) });
         }
       },
       remove(name: string, options: CookieOptions) {
         try {
           cookieStore.set({ name, value: "", ...options });
         } catch (e) {
-          if (process.env.NODE_ENV === "development") {
-            logger.warn(`Cookie remove failed for "${name}"`, { error: String(e) });
-          }
+          logger.warn(`Cookie remove failed for "${name}"`, { error: String(e) });
         }
       },
     },

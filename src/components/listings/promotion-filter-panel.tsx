@@ -1,6 +1,7 @@
 "use client";
 
 import { Building2, Calendar, X } from "lucide-react";
+import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +60,8 @@ export function PromotionFilterPanel({
   className,
   mode = "desktop",
 }: PromotionFilterPanelProps) {
+  const reactId = useId();
+  const id = (name: string) => `${reactId}-${name}`;
   const hasActiveFilters = Boolean(
     filters.query ||
     filters.type ||
@@ -85,11 +88,9 @@ export function PromotionFilterPanel({
 
       <div className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor={mode === "mobile" ? "promotion-category-mobile" : "promotion-category"}>
-            Category
-          </Label>
+          <Label htmlFor={id("category")}>Category</Label>
           <select
-            id={mode === "mobile" ? "promotion-category-mobile" : "promotion-category"}
+            id={id("category")}
             aria-label="Promotion category"
             className={selectClassName}
             value={filters.category || ""}
@@ -108,11 +109,9 @@ export function PromotionFilterPanel({
 
         <div className={cn("gap-3", mode === "mobile" ? "grid grid-cols-2" : "space-y-4")}>
           <div className="space-y-1.5">
-            <Label htmlFor={mode === "mobile" ? "promotion-province-mobile" : "promotion-province"}>
-              Province
-            </Label>
+            <Label htmlFor={id("province")}>Province</Label>
             <select
-              id={mode === "mobile" ? "promotion-province-mobile" : "promotion-province"}
+              id={id("province")}
               aria-label="Province"
               className={selectClassName}
               value={filters.province || ""}
@@ -128,11 +127,9 @@ export function PromotionFilterPanel({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor={mode === "mobile" ? "promotion-city-mobile" : "promotion-city"}>
-              City
-            </Label>
+            <Label htmlFor={id("city")}>City</Label>
             <select
-              id={mode === "mobile" ? "promotion-city-mobile" : "promotion-city"}
+              id={id("city")}
               aria-label="City"
               className={selectClassName}
               value={filters.city || ""}
@@ -151,13 +148,9 @@ export function PromotionFilterPanel({
 
         {filters.type === "event" && (
           <div className="space-y-1.5">
-            <Label
-              htmlFor={mode === "mobile" ? "promotion-event-state-mobile" : "promotion-event-state"}
-            >
-              Event state
-            </Label>
+            <Label htmlFor={id("event-state")}>Event state</Label>
             <select
-              id={mode === "mobile" ? "promotion-event-state-mobile" : "promotion-event-state"}
+              id={id("event-state")}
               aria-label="Event state"
               className={selectClassName}
               value={filters.eventState || ""}

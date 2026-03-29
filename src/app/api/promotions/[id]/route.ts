@@ -41,6 +41,13 @@ type PromotionOwnerRow = {
   owner_id?: string | null;
   seller_id?: string | null;
   title?: string | null;
+  description?: string | null;
+  promotion_type?: string | null;
+  category?: string | null;
+  category_key?: string | null;
+  price_cents?: number | null;
+  location_province?: string | null;
+  location_city?: string | null;
   photos?: string[] | null;
   videos?: string[] | null;
   video_thumbnail?: string | null;

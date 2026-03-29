@@ -148,16 +148,16 @@ export async function toggleFeatureFlag(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = createAdminClient();
-    const { error, count } = await supabase
+    const { error, data } = await supabase
       .from("feature_flags")
       .update({ enabled, mode: enabled ? "on" : "off" })
       .eq("key", key)
-      .select("key", { count: "exact", head: true });
+      .select("key");
 
     if (error) {
       return { success: false, error: error.message };
     }
-    if (count === 0) {
+    if (!data || data.length === 0) {
       return { success: false, error: `Flag "${key}" does not exist` };
     }
 
