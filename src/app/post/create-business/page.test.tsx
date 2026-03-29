@@ -54,7 +54,27 @@ vi.mock("@/components/billing/plan-gate", () => ({
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
-  MediaUpload: ({ label }: { label: string }) => <div>{label}</div>,
+  MediaUpload: ({ label, onChange }: { label: string; onChange?: (files: File[]) => void }) => {
+    const normalizedLabel = label.toLowerCase();
+    const isThumbnail = normalizedLabel.includes("thumbnail");
+    const isVideo = normalizedLabel.includes("video") && !isThumbnail;
+    const createFile = (name: string, type: string) => new File(["mock"], name, { type });
+    const files =
+      normalizedLabel.includes("profile photos") || normalizedLabel.includes("mall photos")
+        ? [createFile("photo-1.png", "image/png"), createFile("photo-2.png", "image/png")]
+        : [
+            createFile(
+              isVideo ? "clip.mp4" : isThumbnail ? "thumb.png" : "image.png",
+              isVideo ? "video/mp4" : "image/png"
+            ),
+          ];
+
+    return (
+      <button type="button" onClick={() => onChange?.(files)}>
+        {label}
+      </button>
+    );
+  },
 }));
 
 vi.mock("@/lib/constants/sa-provinces", () => ({
@@ -72,6 +92,8 @@ describe("CreateBusinessPage", () => {
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
     (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(new URLSearchParams());
+    global.URL.createObjectURL = vi.fn(() => "blob:business-media-preview");
+    global.URL.revokeObjectURL = vi.fn();
     global.fetch = vi.fn() as unknown as typeof fetch;
   });
 
@@ -128,6 +150,14 @@ describe("CreateBusinessPage", () => {
       target: { value: "Johannesburg" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  }
+
+  function jsonResponse(body: unknown, init?: { ok?: boolean; status?: number }) {
+    return {
+      ok: init?.ok ?? true,
+      status: init?.status ?? 200,
+      json: async () => body,
+    };
   }
 
   it.each([
@@ -311,6 +341,133 @@ describe("CreateBusinessPage", () => {
     expect(payload.gallery_photos).toBeUndefined();
     expect(payload.cover_video).toBeUndefined();
     expect(payload.video_thumbnail).toBeUndefined();
+  });
+
+  it("submits selected business media only after uploads succeed", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(
+        jsonResponse({ urls: ["https://media.verifymzansi.com/media/business_logo/user/logo.png"] })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          urls: ["https://media.verifymzansi.com/media/business_cover/user/cover.png"],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          urls: [
+            "https://media.verifymzansi.com/media/business_gallery/user/photo-1.png",
+            "https://media.verifymzansi.com/media/business_gallery/user/photo-2.png",
+          ],
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ success: true }));
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: "Business logo (optional)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cover photo (optional)" }));
+    fireEvent.click(screen.getByRole("button", { name: /Profile photos \(up to 5\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(4);
+    });
+
+    const submitCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[3];
+    expect(submitCall[0]).toBe("/api/businesses");
+
+    const payload = JSON.parse(submitCall[1].body as string);
+    expect(payload.logo_url).toBe(
+      "https://media.verifymzansi.com/media/business_logo/user/logo.png"
+    );
+    expect(payload.cover_photo).toBe(
+      "https://media.verifymzansi.com/media/business_cover/user/cover.png"
+    );
+    expect(payload.gallery_photos).toEqual([
+      "https://media.verifymzansi.com/media/business_gallery/user/photo-1.png",
+      "https://media.verifymzansi.com/media/business_gallery/user/photo-2.png",
+    ]);
+  });
+
+  it("blocks submission when a selected image upload fails", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      jsonResponse({ error: "Failed to upload media" }, { ok: false, status: 500 })
+    );
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: "Business logo (optional)" }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    expect(
+      await screen.findByText("Business logo upload failed. Retry the selected image.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Selected business media could not be uploaded. Retry the highlighted files and try again."
+      )
+    ).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("blocks submission when profile photo upload returns partial success", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      jsonResponse(
+        {
+          urls: ["https://media.verifymzansi.com/media/business_gallery/user/photo-1.png"],
+          errors: ['"photo-2.png": upload failed'],
+        },
+        { ok: true, status: 207 }
+      )
+    );
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Profile photos \(up to 5\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    expect(
+      await screen.findByText(
+        "One or more profile photos failed to upload. Retry the selected files."
+      )
+    ).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks submission when a selected promo video upload fails", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          uploadUrl: "https://upload.example.com/business-video",
+          publicUrl: "https://media.verifymzansi.com/media/business_cover/user/video.mp4",
+        })
+      )
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+
+    render(<CreateBusinessPage />);
+
+    await completeStandaloneStepOne();
+    completeLocationStep();
+
+    fireEvent.click(screen.getByRole("button", { name: /Promo video \(optional\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    expect(
+      await screen.findByText("Promo video upload failed. Retry the selected file.")
+    ).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("renders subtype-specific details in the shared review preview", async () => {

@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { UploadArea, BusinessType } from "@/types/enums";
+import type { BusinessType } from "@/types/enums";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
@@ -37,6 +37,11 @@ import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provi
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { usePlanCoverVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
+import {
+  getBusinessMediaUploadErrorState,
+  uploadRequiredBusinessMedia,
+  uploadRequiredBusinessVideo,
+} from "@/app/post/_lib/business-media-upload";
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
 import {
   coerceBusinessDetails,
@@ -322,61 +327,11 @@ export default function EditBusinessPage() {
     clearErrors("business_details.delivery_regions");
   }
 
-  async function uploadMedia(files: File[], area: UploadArea): Promise<string[]> {
-    if (files.length === 0) return [];
-    try {
-      const uploadData = new FormData();
-      uploadData.append("area", area);
-      files.forEach((f) => uploadData.append("files", f));
-      const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-      if (!uploadRes.ok) throw new Error("Upload failed");
-      const uploadJson = await uploadRes.json();
-      return uploadJson.urls || [];
-    } catch (error: unknown) {
-      toast({
-        title: "Some media failed to upload",
-        description: `${normalizeCreatePostRuntimeError(error, "One or more files could not be uploaded.")} Your changes will be saved without the failed files. You can re-upload them later.`,
-        variant: "destructive",
-      });
-      return [];
-    }
-  }
-
-  async function uploadVideoPresigned(file: File, area: string): Promise<string | null> {
-    try {
-      const urlRes = await fetch("/api/media/upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type,
-          size: file.size,
-          area,
-        }),
-      });
-      if (!urlRes.ok) throw new Error("Failed to get video upload URL");
-      const { uploadUrl, publicUrl } = await urlRes.json();
-      const putRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!putRes.ok) throw new Error("Failed to upload video");
-      return publicUrl;
-    } catch (error: unknown) {
-      toast({
-        title: "Video upload was skipped",
-        description: `${normalizeCreatePostRuntimeError(error, "Video upload could not be completed.")} You can add the video later.`,
-        variant: "destructive",
-      });
-      return null;
-    }
-  }
-
   async function handleSubmit() {
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
     setError(null);
+    clearErrors();
 
     try {
       const validationErrors = validateBusinessForm({
@@ -408,23 +363,47 @@ export default function EditBusinessPage() {
         setSubmitProgress(null);
         return;
       }
-      setFieldErrors({});
 
       // Upload all new media in parallel
       const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrl, thumbUrls] =
         await Promise.all([
-          uploadMedia(newLogoFile, "business_logo"),
-          uploadMedia(newCoverFile, "business_cover"),
-          removeGallery ? Promise.resolve([]) : uploadMedia(newGalleryFiles, "business_gallery"),
+          uploadRequiredBusinessMedia({
+            files: newLogoFile,
+            area: "business_logo",
+            field: "logo_url",
+          }),
+          uploadRequiredBusinessMedia({
+            files: newCoverFile,
+            area: "business_cover",
+            field: "cover_photo",
+          }),
+          removeGallery
+            ? Promise.resolve([])
+            : uploadRequiredBusinessMedia({
+                files: newGalleryFiles,
+                area: "business_gallery",
+                field: "gallery_photos",
+              }),
           removeMallPhotos
             ? Promise.resolve([])
-            : uploadMedia(newMallPhotoFiles, "business_gallery"),
+            : uploadRequiredBusinessMedia({
+                files: newMallPhotoFiles,
+                area: "business_gallery",
+                field: "gallery_photos",
+              }),
           removeVideo
             ? Promise.resolve(null)
             : newPromoVideoFile.length > 0
-              ? uploadVideoPresigned(newPromoVideoFile[0], "business_cover")
+              ? uploadRequiredBusinessVideo({
+                  file: newPromoVideoFile[0],
+                  area: "business_cover",
+                })
               : Promise.resolve(null),
-          uploadMedia(newVideoThumbnailFile, "business_cover"),
+          uploadRequiredBusinessMedia({
+            files: newVideoThumbnailFile,
+            area: "business_cover",
+            field: "video_thumbnail",
+          }),
         ]);
 
       let finalLogoUrl = existingLogo;
@@ -543,6 +522,13 @@ export default function EditBusinessPage() {
       });
       router.push("/dashboard/businesses?updated=true");
     } catch (error: unknown) {
+      const uploadFailure = getBusinessMediaUploadErrorState(error);
+      if (uploadFailure) {
+        setFieldErrors((current) => ({ ...current, ...uploadFailure.fieldErrors }));
+        setError(uploadFailure.formError);
+        return;
+      }
+
       setError(normalizeCreatePostRuntimeError(error, "Something went wrong. Please try again."));
     } finally {
       setIsSubmitting(false);
@@ -1018,20 +1004,36 @@ export default function EditBusinessPage() {
               <div className="space-y-4">
                 <Label className="text-sm font-medium">Upload New Media</Label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <MediaUpload
-                    label="Replace Logo"
-                    maxFiles={1}
-                    files={newLogoFile}
-                    onChange={setNewLogoFile}
-                    accept="image/*"
-                  />
-                  <MediaUpload
-                    label="Replace Cover Photo"
-                    maxFiles={1}
-                    files={newCoverFile}
-                    onChange={setNewCoverFile}
-                    accept="image/*"
-                  />
+                  <div className="space-y-2">
+                    <MediaUpload
+                      label="Replace Logo"
+                      maxFiles={1}
+                      files={newLogoFile}
+                      onChange={(files) => {
+                        setNewLogoFile(files);
+                        clearErrors("logo_url");
+                      }}
+                      accept="image/*"
+                    />
+                    {fieldErrors.logo_url && (
+                      <p className="inline-form-error">{fieldErrors.logo_url}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <MediaUpload
+                      label="Replace Cover Photo"
+                      maxFiles={1}
+                      files={newCoverFile}
+                      onChange={(files) => {
+                        setNewCoverFile(files);
+                        clearErrors("cover_photo");
+                      }}
+                      accept="image/*"
+                    />
+                    {fieldErrors.cover_photo && (
+                      <p className="inline-form-error">{fieldErrors.cover_photo}</p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Gallery Photos */}
@@ -1044,7 +1046,10 @@ export default function EditBusinessPage() {
                     }
                     maxFiles={maxPhotos}
                     files={newGalleryFiles}
-                    onChange={setNewGalleryFiles}
+                    onChange={(files) => {
+                      setNewGalleryFiles(files);
+                      clearErrors("gallery_photos");
+                    }}
                     accept="image/*"
                   />
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -1095,6 +1100,9 @@ export default function EditBusinessPage() {
                       </div>
                     </div>
                   )}
+                  {fieldErrors.gallery_photos && (
+                    <p className="inline-form-error">{fieldErrors.gallery_photos}</p>
+                  )}
                 </div>
 
                 {businessType === "mall_store" && (
@@ -1130,6 +1138,7 @@ export default function EditBusinessPage() {
                     onChange={(files) => {
                       setNewPromoVideoFile(files);
                       if (files.length === 0) setNewVideoThumbnailFile([]);
+                      clearErrors("cover_video", "video_thumbnail");
                     }}
                     accept="video/*"
                     disabled={!coverVideoAllowed}
@@ -1138,17 +1147,28 @@ export default function EditBusinessPage() {
                     <Film className="h-3 w-3" />
                     Auto-plays muted on your profile. Max 50 MB.
                   </p>
+                  {fieldErrors.cover_video && (
+                    <p className="inline-form-error">{fieldErrors.cover_video}</p>
+                  )}
                 </div>
 
                 {/* Video Thumbnail */}
                 {(newPromoVideoFile.length > 0 || (existingCoverVideo && !removeVideo)) && (
-                  <MediaUpload
-                    label="Video Thumbnail (1 max) — Poster shown before video loads"
-                    maxFiles={1}
-                    files={newVideoThumbnailFile}
-                    onChange={setNewVideoThumbnailFile}
-                    accept="image/*"
-                  />
+                  <div className="space-y-2">
+                    <MediaUpload
+                      label="Video Thumbnail (1 max) — Poster shown before video loads"
+                      maxFiles={1}
+                      files={newVideoThumbnailFile}
+                      onChange={(files) => {
+                        setNewVideoThumbnailFile(files);
+                        clearErrors("video_thumbnail");
+                      }}
+                      accept="image/*"
+                    />
+                    {fieldErrors.video_thumbnail && (
+                      <p className="inline-form-error">{fieldErrors.video_thumbnail}</p>
+                    )}
+                  </div>
                 )}
               </div>
 

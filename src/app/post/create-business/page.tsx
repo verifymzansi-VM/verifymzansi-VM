@@ -35,7 +35,7 @@ import {
 } from "@/components/billing/plan-gate";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
-import type { BusinessCategory, BusinessType, UploadArea } from "@/types/enums";
+import type { BusinessCategory, BusinessType } from "@/types/enums";
 import { cn } from "@/lib/utils";
 import {
   PostFormFooter,
@@ -46,6 +46,11 @@ import {
   normalizeCreatePostError,
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
+import {
+  getBusinessMediaUploadErrorState,
+  uploadRequiredBusinessMedia,
+  uploadRequiredBusinessVideo,
+} from "@/app/post/_lib/business-media-upload";
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
 import {
   coerceBusinessDetails,
@@ -92,8 +97,11 @@ const FIELD_IDS: Record<string, string> = {
   socialInstagram: "socialInstagram",
   socialTwitter: "socialTwitter",
   socialTiktok: "socialTiktok",
+  logo_url: "business-logo",
+  cover_photo: "business-cover-photo",
   gallery_photos: "business-gallery",
   cover_video: "business-cover-video",
+  video_thumbnail: "business-video-thumbnail",
 };
 
 const STEP_CONTACT_FIELDS = ["phone", "whatsapp", "email", "website"] as const;
@@ -114,8 +122,11 @@ function getFieldId(key: string): string | undefined {
 
 function getStepForFieldKey(key: string): number {
   if (
+    key === "logo_url" ||
+    key === "cover_photo" ||
     key === "gallery_photos" ||
     key === "cover_video" ||
+    key === "video_thumbnail" ||
     STEP_SOCIAL_FIELDS.includes(key as (typeof STEP_SOCIAL_FIELDS)[number])
   ) {
     return 2;
@@ -426,57 +437,6 @@ function CreateBusinessContent() {
     return errors;
   }
 
-  async function uploadMedia(files: File[], area: UploadArea): Promise<string[]> {
-    if (files.length === 0) return [];
-    try {
-      const uploadData = new FormData();
-      uploadData.append("area", area);
-      files.forEach((file) => uploadData.append("files", file));
-      const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
-      if (!uploadRes.ok) throw new Error("Upload failed");
-      const uploadJson = await uploadRes.json();
-      return uploadJson.urls || [];
-    } catch (error: unknown) {
-      toast({
-        title: "Some media was skipped",
-        description: `${normalizeCreatePostRuntimeError(error, "One or more files could not be uploaded.")} You can add the failed files later after your business is created.`,
-        variant: "destructive",
-      });
-      return [];
-    }
-  }
-
-  async function uploadVideoPresigned(file: File, area: string): Promise<string | null> {
-    try {
-      const urlRes = await fetch("/api/media/upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type,
-          size: file.size,
-          area,
-        }),
-      });
-      if (!urlRes.ok) throw new Error("Failed to get video upload URL");
-      const { uploadUrl, publicUrl } = await urlRes.json();
-      const putRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!putRes.ok) throw new Error("Failed to upload video");
-      return publicUrl;
-    } catch (error: unknown) {
-      toast({
-        title: "Video upload was skipped",
-        description: `${normalizeCreatePostRuntimeError(error, "Video upload could not be completed.")} You can add the video later after your business is created.`,
-        variant: "destructive",
-      });
-      return null;
-    }
-  }
-
   function goNext() {
     const errors = validateStep(step);
     if (Object.keys(errors).length > 0) {
@@ -514,19 +474,42 @@ function CreateBusinessContent() {
     setSubmitProgress("Uploading media...");
     try {
       const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrl] = await Promise.all([
-        uploadMedia(logoFile, "business_logo"),
-        uploadMedia(coverFile, "business_cover"),
-        uploadMedia(galleryFiles, "business_gallery"),
-        uploadMedia(mallPhotoFiles, "business_gallery"),
+        uploadRequiredBusinessMedia({
+          files: logoFile,
+          area: "business_logo",
+          field: "logo_url",
+        }),
+        uploadRequiredBusinessMedia({
+          files: coverFile,
+          area: "business_cover",
+          field: "cover_photo",
+        }),
+        uploadRequiredBusinessMedia({
+          files: galleryFiles,
+          area: "business_gallery",
+          field: "gallery_photos",
+        }),
+        uploadRequiredBusinessMedia({
+          files: mallPhotoFiles,
+          area: "business_gallery",
+          field: "gallery_photos",
+        }),
         promoVideoFile.length > 0
-          ? uploadVideoPresigned(promoVideoFile[0], "business_cover")
+          ? uploadRequiredBusinessVideo({
+              file: promoVideoFile[0],
+              area: "business_cover",
+            })
           : Promise.resolve(null),
       ]);
       const finalCoverPhoto = coverUrls[0] || null;
       const finalCoverVideo = videoUrl;
       let finalVideoThumbnail: string | null = null;
       if (finalCoverVideo && videoThumbnailFile.length > 0) {
-        const thumbUrls = await uploadMedia(videoThumbnailFile, "business_cover");
+        const thumbUrls = await uploadRequiredBusinessMedia({
+          files: videoThumbnailFile,
+          area: "business_cover",
+          field: "video_thumbnail",
+        });
         finalVideoThumbnail = thumbUrls[0] || null;
       }
 
@@ -604,6 +587,15 @@ function CreateBusinessContent() {
       toast({ title: "Business submitted for review.", variant: "success" });
       router.push("/dashboard/businesses?created=true");
     } catch (error: unknown) {
+      const uploadFailure = getBusinessMediaUploadErrorState(error);
+      if (uploadFailure) {
+        setStep(2);
+        setFieldErrors((current) => ({ ...current, ...uploadFailure.fieldErrors }));
+        setFormError(uploadFailure.formError);
+        focusFirstError(uploadFailure.fieldErrors, 2);
+        return;
+      }
+
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
@@ -1114,27 +1106,39 @@ function CreateBusinessContent() {
                 {step === 2 && (
                   <div className="space-y-5">
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                      <div className="space-y-2">
+                      <div id="business-logo" tabIndex={-1} className="space-y-2 rounded-lg">
                         <MediaUpload
                           label="Business logo (optional)"
                           maxFiles={1}
                           files={logoFile}
-                          onChange={setLogoFile}
+                          onChange={(files) => {
+                            setLogoFile(files);
+                            clearErrors("logo_url");
+                          }}
                           accept="image/*"
                         />
+                        {fieldErrors.logo_url && (
+                          <p className="inline-form-error">{fieldErrors.logo_url}</p>
+                        )}
                         <p className="text-xs text-muted-foreground">
                           Square icon (96×96) shown beside your business name on cards and search
                           results.
                         </p>
                       </div>
-                      <div className="space-y-2">
+                      <div id="business-cover-photo" tabIndex={-1} className="space-y-2 rounded-lg">
                         <MediaUpload
                           label="Cover photo (optional)"
                           maxFiles={1}
                           files={coverFile}
-                          onChange={setCoverFile}
+                          onChange={(files) => {
+                            setCoverFile(files);
+                            clearErrors("cover_photo");
+                          }}
                           accept="image/*"
                         />
+                        {fieldErrors.cover_photo && (
+                          <p className="inline-form-error">{fieldErrors.cover_photo}</p>
+                        )}
                         <p className="text-xs text-muted-foreground">
                           Wide banner displayed at the top of your business page. Recommended size:
                           1200×400.
@@ -1287,7 +1291,7 @@ function CreateBusinessContent() {
                         onChange={(files) => {
                           setPromoVideoFile(files);
                           if (files.length === 0) setVideoThumbnailFile([]);
-                          clearErrors("cover_video");
+                          clearErrors("cover_video", "video_thumbnail");
                         }}
                         accept="video/*"
                         disabled={!coverVideoAllowed}
@@ -1302,13 +1306,25 @@ function CreateBusinessContent() {
                     </div>
 
                     {promoVideoFile.length > 0 && (
-                      <MediaUpload
-                        label="Video thumbnail (optional)"
-                        maxFiles={1}
-                        files={videoThumbnailFile}
-                        onChange={setVideoThumbnailFile}
-                        accept="image/*"
-                      />
+                      <div
+                        id="business-video-thumbnail"
+                        tabIndex={-1}
+                        className="space-y-2 rounded-lg"
+                      >
+                        <MediaUpload
+                          label="Video thumbnail (optional)"
+                          maxFiles={1}
+                          files={videoThumbnailFile}
+                          onChange={(files) => {
+                            setVideoThumbnailFile(files);
+                            clearErrors("video_thumbnail");
+                          }}
+                          accept="image/*"
+                        />
+                        {fieldErrors.video_thumbnail && (
+                          <p className="inline-form-error">{fieldErrors.video_thumbnail}</p>
+                        )}
+                      </div>
                     )}
 
                     <details className="rounded-xl border bg-muted/30 p-4">

@@ -58,7 +58,26 @@ vi.mock("@/components/business/business-detail-content", () => ({
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
-  MediaUpload: ({ label }: { label: string }) => <div>{label}</div>,
+  MediaUpload: ({ label, onChange }: { label: string; onChange?: (files: File[]) => void }) => {
+    const normalizedLabel = label.toLowerCase();
+    const isThumbnail = normalizedLabel.includes("thumbnail");
+    const isVideo = normalizedLabel.includes("video") && !isThumbnail;
+    const createFile = (name: string, type: string) => new File(["mock"], name, { type });
+    const files = normalizedLabel.includes("profile photos")
+      ? [createFile("photo-1.png", "image/png"), createFile("photo-2.png", "image/png")]
+      : [
+          createFile(
+            isVideo ? "clip.mp4" : isThumbnail ? "thumb.png" : "image.png",
+            isVideo ? "video/mp4" : "image/png"
+          ),
+        ];
+
+    return (
+      <button type="button" onClick={() => onChange?.(files)}>
+        {label}
+      </button>
+    );
+  },
 }));
 
 vi.mock("@/components/billing/plan-gate", () => ({
@@ -81,6 +100,8 @@ describe("EditBusinessPage", () => {
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ id: "business-1" });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
+    global.URL.createObjectURL = vi.fn(() => "blob:business-media-preview");
+    global.URL.revokeObjectURL = vi.fn();
 
     global.fetch = vi
       .fn()
@@ -129,6 +150,14 @@ describe("EditBusinessPage", () => {
         json: async () => ({ success: true }),
       }) as unknown as typeof fetch;
   });
+
+  function jsonResponse(body: unknown, init?: { ok?: boolean; status?: number }) {
+    return {
+      ok: init?.ok ?? true,
+      status: init?.status ?? 200,
+      json: async () => body,
+    };
+  }
 
   it("hydrates the saved type-specific details and sends business_details on save", async () => {
     render(<EditBusinessPage />);
@@ -242,5 +271,146 @@ describe("EditBusinessPage", () => {
       order_url: "https://orders.example.com",
       support_response_time: "Within 2 hours",
     });
+  });
+
+  it("blocks saving when replacement gallery photos upload only partially succeeds", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
+    (global.fetch as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          business: {
+            id: "business-1",
+            status: "live",
+            business_type: "home_business",
+            business_name: "Nomsa Home Studio",
+            slug: "nomsa-home-studio",
+            description: "A home-based studio.",
+            category: "health_beauty",
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+            store_number: null,
+            map_directions: "",
+            phone: "",
+            whatsapp: "",
+            email: "",
+            website: "",
+            logo_url: "",
+            cover_photo: "",
+            cover_video: "",
+            video_thumbnail: "",
+            gallery_photos: [],
+            services_offered: [],
+            payment_methods_accepted: [],
+            delivery_options: [],
+            social_links: {},
+            operating_hours: {},
+            service_areas: null,
+            business_details: {
+              type: "home_business",
+              service_suburb: "Noordwyk",
+              appointment_required: true,
+              customer_pickup_allowed: false,
+              visitor_notes: "",
+            },
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            urls: ["https://media.verifymzansi.com/media/business_gallery/user/photo-1.png"],
+            errors: ['"photo-2.png": upload failed'],
+          },
+          { ok: true, status: 207 }
+        )
+      );
+
+    render(<EditBusinessPage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Noordwyk")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Profile Photos \(up to 5\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    expect(
+      await screen.findByText(
+        "One or more profile photos failed to upload. Retry the selected files."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Selected business media could not be uploaded. Retry the highlighted files and try again."
+      )
+    ).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("blocks saving when a replacement promo video upload fails", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
+    (global.fetch as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          business: {
+            id: "business-1",
+            status: "live",
+            business_type: "home_business",
+            business_name: "Nomsa Home Studio",
+            slug: "nomsa-home-studio",
+            description: "A home-based studio.",
+            category: "health_beauty",
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+            store_number: null,
+            map_directions: "",
+            phone: "",
+            whatsapp: "",
+            email: "",
+            website: "",
+            logo_url: "",
+            cover_photo: "",
+            cover_video: "",
+            video_thumbnail: "",
+            gallery_photos: [],
+            services_offered: [],
+            payment_methods_accepted: [],
+            delivery_options: [],
+            social_links: {},
+            operating_hours: {},
+            service_areas: null,
+            business_details: {
+              type: "home_business",
+              service_suburb: "Noordwyk",
+              appointment_required: true,
+              customer_pickup_allowed: false,
+              visitor_notes: "",
+            },
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          uploadUrl: "https://upload.example.com/business-video",
+          publicUrl: "https://media.verifymzansi.com/media/business_cover/user/video.mp4",
+        })
+      )
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+
+    render(<EditBusinessPage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Noordwyk")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Promo \/ Intro Video \(1 max\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    expect(
+      await screen.findByText("Promo video upload failed. Retry the selected file.")
+    ).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });
