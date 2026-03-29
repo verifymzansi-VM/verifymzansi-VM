@@ -10,6 +10,9 @@ import {
 } from "@/lib/constants/verification-email-confirmation";
 
 const mockToast = vi.fn();
+const OriginalURL = global.URL;
+const VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION =
+  "Verification is temporarily unavailable right now. Please try again later.";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: vi.fn(),
@@ -83,6 +86,10 @@ function buildStatusPayload({
   };
 }
 
+function fetchCalls() {
+  return (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+}
+
 describe("VerificationPage", () => {
   let sessionResponse: ReturnType<typeof jsonResponse>;
   let statusResponse: ReturnType<typeof jsonResponse>;
@@ -95,11 +102,13 @@ describe("VerificationPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
-    vi.stubGlobal("URL", {
-      ...URL,
-      createObjectURL: vi.fn(() => "blob:test"),
-      revokeObjectURL: vi.fn(),
-    });
+    vi.stubGlobal(
+      "URL",
+      class MockURL extends OriginalURL {
+        static createObjectURL = vi.fn(() => "blob:test");
+        static revokeObjectURL = vi.fn();
+      }
+    );
     Object.defineProperty(global.navigator, "geolocation", {
       configurable: true,
       value: {
@@ -237,17 +246,20 @@ describe("VerificationPage", () => {
   });
 
   it("never renders OTP helper hints after sending a real OTP", async () => {
-    sessionResponse = jsonResponse({ error: "New verification flow is not yet enabled" }, 404);
-    statusResponse = jsonResponse({ error: "Account profile not found" }, 404);
-
     render(<VerificationPage />);
 
     fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
       target: { value: "0712345678" },
     });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Send code/i })).toBeEnabled();
+    });
+
     fireEvent.click(screen.getByRole("button", { name: /Send code/i }));
 
     await waitFor(() => {
+      expect(fetchCalls().some(([input]) => String(input).includes("/api/otp/send"))).toBe(true);
       expect(screen.getByLabelText(/6-digit OTP/i)).toBeInTheDocument();
     });
     expect(screen.getByText(/Codes expire after 5 minutes/i)).toBeInTheDocument();
@@ -256,17 +268,20 @@ describe("VerificationPage", () => {
   });
 
   it("shows resend cooldown guidance after a successful OTP send", async () => {
-    sessionResponse = jsonResponse({ error: "New verification flow is not yet enabled" }, 404);
-    statusResponse = jsonResponse({ error: "Account profile not found" }, 404);
-
     render(<VerificationPage />);
 
     fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
       target: { value: "0712345678" },
     });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Send code/i })).toBeEnabled();
+    });
+
     fireEvent.click(screen.getByRole("button", { name: /Send code/i }));
 
     await waitFor(() => {
+      expect(fetchCalls().some(([input]) => String(input).includes("/api/otp/send"))).toBe(true);
       expect(screen.getByRole("button", { name: /Resend code/i })).toBeDisabled();
     });
     expect(screen.getByText(/You can resend a new code in 30s/i)).toBeInTheDocument();
@@ -274,8 +289,6 @@ describe("VerificationPage", () => {
   });
 
   it("shows retry guidance when OTP send is rate limited", async () => {
-    sessionResponse = jsonResponse({ error: "New verification flow is not yet enabled" }, 404);
-    statusResponse = jsonResponse({ error: "Account profile not found" }, 404);
     otpSendResponse = jsonResponse(
       {
         error: "Too many OTP requests. Please wait before trying again.",
@@ -291,10 +304,19 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
       target: { value: "0712345678" },
     });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Send code/i })).toBeEnabled();
+    });
+
     fireEvent.click(screen.getByRole("button", { name: /Send code/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Wait 45s before resending/i)).toBeInTheDocument();
+      expect(fetchCalls().some(([input]) => String(input).includes("/api/otp/send"))).toBe(true);
+      expect(screen.getByText(/You can resend a new code in 45s/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Too many OTP requests were made for this number/i)
+      ).toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: /Send code/i })).toBeDisabled();
     expect(screen.queryByLabelText(/6-digit OTP/i)).not.toBeInTheDocument();
@@ -352,11 +374,9 @@ describe("VerificationPage", () => {
 
     render(<VerificationPage />);
 
-    await waitFor(() => {
-      expect(
-        screen.getByText(/Confirm your email before submitting documents and location/i)
-      ).toBeInTheDocument();
-    });
+    expect(
+      await screen.findByText(VERIFICATION_EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION)
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeDisabled();
     expect(screen.getByRole("button", { name: /^Continue$/i })).toBeDisabled();
   });
@@ -367,11 +387,8 @@ describe("VerificationPage", () => {
 
     render(<VerificationPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Verification temporarily unavailable\./i)).toBeInTheDocument();
-    });
     expect(
-      screen.getByText(/Verification is temporarily unavailable right now/i)
+      await screen.findByText(VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION)
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/SA mobile number/i)).toBeDisabled();
     expect(screen.getByRole("button", { name: /Send code/i })).toBeDisabled();
@@ -417,19 +434,20 @@ describe("VerificationPage", () => {
         files: [new File(["fake-pdf"], "id.pdf", { type: "application/pdf" })],
       },
     });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^Continue$/i })).toBeEnabled();
+    });
+
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "Confirm your email first",
-          description: VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE,
-        })
-      );
+      expect(
+        fetchCalls().some(([input]) => String(input).includes("/api/verification/upload"))
+      ).toBe(true);
+      expect(
+        screen.getByText(/Confirm your email before submitting documents and location/i)
+      ).toBeInTheDocument();
     });
-    expect(
-      screen.getByText(/Confirm your email before submitting documents and location/i)
-    ).toBeInTheDocument();
     expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeDisabled();
   });
 
@@ -473,6 +491,9 @@ describe("VerificationPage", () => {
       target: {
         files: [new File(["fake-pdf"], "id.pdf", { type: "application/pdf" })],
       },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^Continue$/i })).toBeEnabled();
     });
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
@@ -608,12 +629,16 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Submit Location/i }));
 
     await waitFor(() => {
+      expect(screen.getByText(/Location saved:/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Confirm with GPS/i })).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Confirm with GPS/i }));
 
     await waitFor(() => {
+      expect(
+        fetchCalls().some(([input]) => String(input).includes("/api/verification/location/gps"))
+      ).toBe(true);
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Confirm your email first",

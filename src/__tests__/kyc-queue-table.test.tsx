@@ -326,11 +326,19 @@ describe("KycQueueTable", () => {
     fireEvent.click(screen.getAllByTitle("View")[0]);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/admin/verification/evidence/metadata", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stepId: "step-1", userId: "user-1" }),
-      });
+      expect(global.fetch).toHaveBeenCalled();
+    });
+
+    const [requestUrl, requestInit] = vi.mocked(global.fetch).mock.calls[0] ?? [];
+
+    expect(requestUrl).toBe("/api/admin/verification/evidence/metadata");
+    expect(requestInit?.method).toBe("POST");
+    expect(new Headers(requestInit?.headers as HeadersInit).get("Content-Type")).toBe(
+      "application/json"
+    );
+    expect(requestInit?.body).toBe(JSON.stringify({ stepId: "step-1", userId: "user-1" }));
+
+    await waitFor(() => {
       expect(screen.getByTestId("kyc-preview-lightbox")).toHaveAttribute(
         "data-artifact-id",
         "artifact-newest"
