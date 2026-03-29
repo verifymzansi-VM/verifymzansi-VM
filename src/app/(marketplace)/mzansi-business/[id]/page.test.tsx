@@ -68,6 +68,7 @@ function buildClient(
   options?: {
     promotions?: Array<Record<string, unknown>>;
     user?: { id: string } | null;
+    onBusinessSelect?: (fields: string) => void;
   }
 ) {
   return {
@@ -77,12 +78,15 @@ function buildClient(
     from: (table: string) => {
       if (table === "businesses") {
         return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({ data: business }),
-              single: async () => ({ data: business }),
-            }),
-          }),
+          select: (fields: string) => {
+            options?.onBusinessSelect?.(fields);
+            return {
+              eq: () => ({
+                maybeSingle: async () => ({ data: business }),
+                single: async () => ({ data: business }),
+              }),
+            };
+          },
         };
       }
       if (table === ACCOUNT_PROFILE_TABLE) {
@@ -168,6 +172,57 @@ describe("BusinessDetailPage", () => {
     expect(screen.getByRole("button", { name: /Share/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Report/i })).toBeInTheDocument();
     expect(screen.queryByText("Open Map Directions")).not.toBeInTheDocument();
+  });
+
+  it("loads detail records without hard-coding the removed seller_id column", async () => {
+    const businessSelectSpy = vi.fn((fields: string) => {
+      expect(fields).not.toContain("seller_id");
+      expect(fields).toContain("owner_id");
+    });
+
+    mockCreateClient.mockResolvedValue(
+      buildClient(
+        {
+          id: "business-compat-1",
+          owner_id: "owner-1",
+          business_name: "Compat Business",
+          description: "Detail page should work on the owner_id schema.",
+          status: "live",
+          business_type: "standalone_shop",
+          category: "professional_services",
+          cover_photo: null,
+          logo_url: null,
+          cover_video: null,
+          video_thumbnail: null,
+          gallery_photos: [],
+          social_links: {},
+          operating_hours: {},
+          services_offered: [],
+          payment_methods_accepted: [],
+          delivery_options: [],
+          service_areas: null,
+          location_city: "Johannesburg",
+          location_province: "Gauteng",
+          phone: null,
+          whatsapp: null,
+          email: null,
+          website: null,
+          store_number: null,
+          map_directions: null,
+          business_details: {
+            type: "standalone_shop",
+            street_address: "24 Vilakazi Street",
+            suburb: "Orlando West",
+          },
+        },
+        { onBusinessSelect: businessSelectSpy }
+      )
+    );
+
+    render(await BusinessDetailPage({ params: Promise.resolve({ id: "business-compat-1" }) }));
+
+    expect(businessSelectSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText("Compat Business").length).toBeGreaterThan(0);
   });
 
   it("renders owner preview for a pending business and hides public actions", async () => {

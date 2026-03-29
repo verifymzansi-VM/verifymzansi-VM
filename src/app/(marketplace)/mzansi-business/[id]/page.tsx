@@ -13,9 +13,11 @@ import {
 } from "@/components/business/business-detail-content";
 import {
   ACCOUNT_PROFILE_TABLE,
+  getOwnerColumn,
   normalizeOwnerRecord,
   readAccountVerificationStatus,
   readOwnerId,
+  withOwnerColumn,
 } from "@/lib/account/compat";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 
@@ -34,7 +36,7 @@ interface LoadedBusinessDetail {
 }
 
 const BUSINESS_DETAIL_SELECT = `
-  id, owner_id, seller_id, business_type, business_name, slug, description, category,
+  id, owner_id, business_type, business_name, slug, description, category,
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
   location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
@@ -46,9 +48,10 @@ const BUSINESS_PROMOTION_SELECT =
 
 async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | null> {
   const supabase = await createClient();
+  const ownerColumn = await getOwnerColumn(supabase, "businesses");
   const { data: rawBusiness, error } = await supabase
     .from("businesses")
-    .select(BUSINESS_DETAIL_SELECT)
+    .select(withOwnerColumn(BUSINESS_DETAIL_SELECT, ownerColumn))
     .eq("id", id)
     .maybeSingle();
 

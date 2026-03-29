@@ -17,7 +17,7 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: vi.fn().mockReturnValue(null),
 }));
 
-import { PATCH } from "./route";
+import { GET, PATCH } from "./route";
 
 const USER_ID = "00000000-0000-0000-0000-000000000111";
 const BUSINESS_ID = "00000000-0000-0000-0000-000000000222";
@@ -407,5 +407,122 @@ describe("PATCH /api/businesses/[id]", () => {
       error: "Business slug already in use",
       details: { slug: "This URL slug is already taken." },
     });
+  });
+});
+
+describe("GET /api/businesses/[id]", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("loads a business without querying the removed seller_id column", async () => {
+    const businessSelectSpy = vi.fn((fields: string) => {
+      if (fields.includes("seller_id")) {
+        throw new Error("seller_id should not be selected for businesses");
+      }
+
+      if (fields === "id, owner_id") {
+        return {
+          limit: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+
+      return {
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: BUSINESS_ID,
+            owner_id: USER_ID,
+            status: "live",
+            business_name: "Compat Business",
+            business_type: "standalone_shop",
+            category: "professional_services",
+            description: "Owner-column compatible business detail response.",
+            logo_url: null,
+            cover_photo: null,
+            cover_video: null,
+            video_thumbnail: null,
+            gallery_photos: [],
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+            store_number: null,
+            map_directions: null,
+            phone: null,
+            whatsapp: null,
+            email: null,
+            website: null,
+            social_links: {},
+            services_offered: [],
+            service_areas: null,
+            business_details: null,
+            operating_hours: {},
+            payment_methods_accepted: [],
+            delivery_options: [],
+            boost_until: null,
+            featured_until: null,
+            published_at: null,
+            area: "MZANSI_BUSINESS",
+            created_at: "2026-03-29T00:00:00.000Z",
+            updated_at: "2026-03-29T00:00:00.000Z",
+          },
+          error: null,
+        }),
+      };
+    });
+
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+      from: vi.fn((table: string) => {
+        if (table === "businesses") {
+          return {
+            select: businessSelectSpy,
+          };
+        }
+
+        if (table === "promotions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  order: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockResolvedValue({ data: [] }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "listing_views") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+
+        throw new Error(`Unexpected admin table ${table}`);
+      }),
+    });
+
+    const response = await GET({} as NextRequest, {
+      params: Promise.resolve({ id: BUSINESS_ID }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      business: expect.objectContaining({
+        id: BUSINESS_ID,
+        business_name: "Compat Business",
+      }),
+      promotions: [],
+    });
+    expect(businessSelectSpy).toHaveBeenCalled();
   });
 });
