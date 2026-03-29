@@ -63,10 +63,18 @@ describe("HomePage", () => {
     const ui = await HomePage();
     render(ui);
 
-    expect(screen.getByTestId("hero-banner-with-data")).toBeInTheDocument();
-    expect(screen.getByTestId("market-showcase")).toBeInTheDocument();
-    expect(screen.getByTestId("business-showcase")).toBeInTheDocument();
-    expect(screen.getByTestId("promotions-showcase")).toBeInTheDocument();
+    const hero = screen.getByTestId("hero-banner-with-data");
+    const market = screen.getByTestId("market-showcase");
+    const business = screen.getByTestId("business-showcase");
+    const promotions = screen.getByTestId("promotions-showcase");
+
+    expect(hero).toBeInTheDocument();
+    expect(market).toBeInTheDocument();
+    expect(business).toBeInTheDocument();
+    expect(promotions).toBeInTheDocument();
+    expect(hero.compareDocumentPosition(market)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(market.compareDocumentPosition(business)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(business.compareDocumentPosition(promotions)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
       screen.getByRole("heading", {
         level: 2,

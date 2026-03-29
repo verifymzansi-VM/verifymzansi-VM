@@ -320,7 +320,7 @@ export function PromotionsExplorer() {
     : promotions;
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-5 max-w-7xl">
+    <div className="container mx-auto max-w-7xl space-y-4 px-4 py-4 sm:space-y-5 sm:py-6">
       <PageHeader
         title="Promotions & Events"
         description="Deals, promotions, launches, and events from verified South African businesses and members."
@@ -384,7 +384,7 @@ export function PromotionsExplorer() {
           )}
 
           {/* ── Results Count + CTA ── */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
               {loading ? (
                 "Loading promotions..."
@@ -405,7 +405,7 @@ export function PromotionsExplorer() {
 
           {/* ── Grid / Loading / Error / Empty ── */}
           {loading ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 8 }).map((_, index) => (
                 <div
                   key={index}
@@ -438,7 +438,7 @@ export function PromotionsExplorer() {
             </Card>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
                 {gridPromotions.map((promotion, index) => {
                   const accountProfile = accountProfileMap.get(promotion.owner_id);
                   const businessName = promotion.business_id
@@ -639,7 +639,7 @@ function PromotionTypeBar({
           >
             Promotion Types
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="max-w-2xl text-xs text-muted-foreground sm:text-sm">
             Pick a lane fast, then refine by category, location, or event timing.
           </p>
         </div>

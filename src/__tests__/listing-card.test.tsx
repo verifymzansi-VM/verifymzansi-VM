@@ -10,16 +10,19 @@ const videoCardPlayerMock = vi.fn(
     src,
     fitStrategy,
     muteControlVisibility,
+    touchPreviewBehavior,
   }: {
     src: string;
     fitStrategy?: string;
     muteControlVisibility?: string;
+    touchPreviewBehavior?: string;
   }) => (
     <div
       data-testid="video-card-player"
       data-src={src}
       data-fit-strategy={fitStrategy}
       data-mute-control={muteControlVisibility}
+      data-touch-preview={touchPreviewBehavior}
     />
   )
 );
@@ -212,6 +215,7 @@ describe("ListingCard", () => {
     expect(videoPlayer).toHaveAttribute("data-src", blobUrl);
     expect(videoPlayer).toHaveAttribute("data-fit-strategy", "cover");
     expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
+    expect(videoPlayer).toHaveAttribute("data-touch-preview", "poster");
     expect(screen.queryByAltText("Test Listing")).toBeNull();
   });
 });

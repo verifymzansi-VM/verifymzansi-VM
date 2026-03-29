@@ -10,16 +10,19 @@ const videoCardPlayerMock = vi.fn(
     src,
     fitStrategy,
     muteControlVisibility,
+    touchPreviewBehavior,
   }: {
     src: string;
     fitStrategy?: string;
     muteControlVisibility?: string;
+    touchPreviewBehavior?: string;
   }) => (
     <div
       data-testid="video-card-player"
       data-src={src}
       data-fit-strategy={fitStrategy}
       data-mute-control={muteControlVisibility}
+      data-touch-preview={touchPreviewBehavior}
     />
   )
 );
@@ -120,6 +123,7 @@ describe("BusinessCard", () => {
     );
     expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-fit-strategy", "cover");
     expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mute-control", "always");
+    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-touch-preview", "poster");
   });
 
   it("links directly to the business detail page", () => {

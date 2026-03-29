@@ -87,7 +87,7 @@ export default async function EventsPage() {
     .select(
       withOwnerColumn(
         `id, owner_id, business_id, title, description, promotion_type, category,
-       photos, videos, price_cents, price_negotiable, location_province, location_city,
+       photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, boost_until, featured_until, view_count, created_at`,
         promotionOwnerColumn
       )
@@ -161,7 +161,7 @@ export default async function EventsPage() {
   const monthGroups = groupByMonth(upcoming);
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-6 max-w-7xl">
+    <div className="container mx-auto max-w-7xl space-y-5 px-4 py-4 sm:space-y-6 sm:py-6">
       <PageHeader
         title="Events"
         description="Upcoming events from verified businesses."
@@ -180,16 +180,16 @@ export default async function EventsPage() {
       {upcoming.length > 0 ? (
         <>
           {monthGroups.map((group) => (
-            <section key={group.label} className="space-y-4">
+            <section key={group.label} className="space-y-3 sm:space-y-4">
               <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-purple-500" />
-                <h2 className="text-xl font-display font-semibold">{group.label}</h2>
-                <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                <Calendar className="h-5 w-5 text-red-500" />
+                <h2 className="font-display text-lg font-semibold sm:text-xl">{group.label}</h2>
+                <Badge className="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200">
                   {group.events.length}
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
                 {group.events.map((event, index) => {
                   const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
                   const businessName = event.business_id
@@ -217,8 +217,13 @@ export default async function EventsPage() {
                         price={event.price_cents as number | null}
                         negotiable={event.price_negotiable as boolean}
                         imageUrl={
+                          (event.videos as string[] | null)?.[0] ||
+                          (event.photos as string[] | null)?.[0]
+                        }
+                        posterUrl={
+                          (event.video_thumbnail as string | null) ||
                           (event.photos as string[] | null)?.[0] ||
-                          (event.videos as string[] | null)?.[0]
+                          undefined
                         }
                         province={event.location_province as string}
                         city={event.location_city as string}
@@ -268,7 +273,7 @@ export default async function EventsPage() {
               title: event.title ?? "Untitled event",
               price: event.price_cents ?? null,
               negotiable: event.price_negotiable as boolean,
-              imageUrl: photos?.[0] || videos?.[0],
+              imageUrl: videos?.[0] || photos?.[0],
               posterUrl: videos?.[0]
                 ? (event.video_thumbnail as string | null) || photos?.[0] || undefined
                 : undefined,

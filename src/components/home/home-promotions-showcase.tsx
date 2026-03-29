@@ -101,16 +101,27 @@ export async function HomePromotionsShowcase() {
   return (
     <section className="py-4 sm:py-6 bg-gradient-to-b from-red-50/30 to-white dark:from-red-950/10 dark:to-warm-950">
       <div className="container-page space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Megaphone className="h-6 w-6 text-red-500" />
-            <h2 className="font-display text-xl sm:text-2xl font-bold">Promotions & Events</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-red-600/75 dark:text-red-300/80">
+              Step 3
+            </p>
+            <div className="flex items-center gap-2">
+              <Megaphone className="h-6 w-6 text-red-500" />
+              <h2 className="font-display text-xl sm:text-2xl font-bold">
+                Finish with Promotions & Events
+              </h2>
+            </div>
+            <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
+              Surface launches, deals, and time-sensitive updates after the marketplace journey is
+              set.
+            </p>
           </div>
           <Button
             asChild
             variant="ghost"
             size="sm"
-            className="gap-1 text-red-600 hover:text-red-700"
+            className="gap-1 rounded-full border border-red-200/70 bg-white/80 px-4 text-red-600 shadow-sm hover:text-red-700 dark:bg-warm-950/40"
           >
             <Link href="/promotions">
               View All
@@ -123,7 +134,7 @@ export async function HomePromotionsShowcase() {
           {promotions.map((promo) => (
             <div
               key={promo.id}
-              className="min-w-[240px] max-w-[264px] sm:min-w-[264px] sm:max-w-[264px]"
+              className="min-w-[84vw] max-w-[84vw] sm:min-w-[320px] sm:max-w-[320px] lg:min-w-[264px] lg:max-w-[264px]"
             >
               <PromotionCard
                 id={promo.id}

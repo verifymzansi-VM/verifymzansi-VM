@@ -7,6 +7,7 @@ import {
   VideoCardPlayer,
   isVideoUrl,
   type MediaFitStrategy,
+  type TouchPreviewBehavior,
 } from "@/components/ui/video-card-player";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,8 @@ interface PosterCardShellProps {
   description?: string | null;
   /** Fit strategy for media in constrained frames. */
   fitStrategy?: MediaFitStrategy;
+  /** Fallback preview behavior for touch devices when the card normally uses hover previews. */
+  touchPreviewBehavior?: TouchPreviewBehavior;
 }
 
 export function PosterCardShell({
@@ -62,6 +65,7 @@ export function PosterCardShell({
   logoUrl,
   description,
   fitStrategy = "cover",
+  touchPreviewBehavior = "poster",
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
@@ -72,7 +76,7 @@ export function PosterCardShell({
     <Link href={href} className={cn("group block h-full", className)}>
       <Card
         className={cn(
-          "relative h-full overflow-hidden rounded-[1.75rem] border-white/10 bg-warm-100 text-white shadow-[0_16px_48px_-24px_rgba(15,23,42,0.75)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_64px_-28px_rgba(15,23,42,0.9)]",
+          "relative h-full overflow-hidden rounded-[1.5rem] border-white/10 bg-warm-100 text-white shadow-[0_16px_48px_-24px_rgba(15,23,42,0.75)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_64px_-28px_rgba(15,23,42,0.9)] sm:rounded-[1.75rem]",
           accentClassName
         )}
         trustLevel={trustLevel}
@@ -85,6 +89,7 @@ export function PosterCardShell({
               alt={mediaAlt || title}
               sizes={mediaSizes}
               mode={hasVideo ? "hover" : "ambient"}
+              touchPreviewBehavior={hasVideo ? touchPreviewBehavior : "ambient"}
               fitStrategy={fitStrategy}
               containerAspectRatio={5 / 4}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
@@ -99,9 +104,8 @@ export function PosterCardShell({
           )}
 
           <div className="pointer-events-none absolute inset-0 transition-opacity duration-500 group-hover:opacity-0">
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/28 to-black/8" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/18 via-transparent to-transparent" />
-            <div className="absolute inset-0 ring-1 ring-inset ring-white/12" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/18 to-black/6 sm:from-black/90 sm:via-black/28 sm:to-black/8" />
+            <div className="absolute inset-0 ring-1 ring-inset ring-white/10 sm:ring-white/12" />
 
             {/* Status badge / ribbon */}
             {statusLabel ? (
@@ -109,7 +113,7 @@ export function PosterCardShell({
                 <div className="absolute left-3 top-3 z-10">
                   <span
                     className={cn(
-                      "inline-flex min-h-[1.1rem] items-center rounded-full px-2.5 py-1 text-[8px] font-black uppercase leading-none tracking-[0.12em] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.92)] backdrop-blur-md",
+                      "inline-flex min-h-[1.4rem] items-center rounded-full px-2.5 py-1 text-[9px] font-black uppercase leading-none tracking-[0.16em] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.92)] backdrop-blur-md sm:min-h-[1.1rem] sm:text-[8px]",
                       statusClassName
                     )}
                   >
@@ -120,7 +124,7 @@ export function PosterCardShell({
                 <div className="absolute left-3 top-3 z-10">
                   <span
                     className={cn(
-                      "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] shadow-sm backdrop-blur-md",
+                      "inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] shadow-sm backdrop-blur-md sm:px-2.5 sm:text-[10px]",
                       statusClassName
                     )}
                   >
@@ -133,7 +137,7 @@ export function PosterCardShell({
             {/* Business logo — bottom-right */}
             {normalizedLogoUrl ? (
               <div className="absolute bottom-3 right-3 z-20">
-                <div className="h-10 w-10 overflow-hidden rounded-full border border-white/20 ring-2 ring-black/25 shadow-lg backdrop-blur-md">
+                <div className="h-11 w-11 overflow-hidden rounded-full border border-white/20 ring-2 ring-black/25 shadow-lg backdrop-blur-md sm:h-10 sm:w-10">
                   <Image
                     src={normalizedLogoUrl}
                     alt="Business logo"
@@ -148,25 +152,25 @@ export function PosterCardShell({
             {/* Bottom content overlay */}
             <div
               className={cn(
-                "absolute inset-x-0 bottom-0 z-10 space-y-1 p-3 pr-14 sm:p-4 sm:pr-16",
+                "absolute inset-x-0 bottom-0 z-10 space-y-1.5 p-4 pr-16 sm:space-y-1 sm:p-4 sm:pr-16",
                 contentClassName
               )}
             >
               {eyebrow ? (
                 <p
                   className={cn(
-                    "text-xs font-bold tracking-[0.01em] text-white/90 sm:text-sm",
+                    "text-sm font-semibold tracking-[0.01em] text-white/92 sm:text-sm",
                     eyebrowClassName
                   )}
                 >
                   {eyebrow}
                 </p>
               ) : null}
-              <h3 className="font-display text-[11px] font-semibold leading-tight text-white drop-shadow-[0_3px_14px_rgba(15,23,42,0.55)] line-clamp-2 sm:text-xs">
+              <h3 className="font-display text-base font-semibold leading-tight text-white drop-shadow-[0_3px_14px_rgba(15,23,42,0.55)] line-clamp-2 sm:text-sm lg:text-[15px]">
                 {title}
               </h3>
               {description ? (
-                <p className="text-[10px] leading-snug text-white/72 line-clamp-2 sm:text-[11px]">
+                <p className="text-sm leading-snug text-white/78 line-clamp-2 sm:text-[11px]">
                   {description}
                 </p>
               ) : null}

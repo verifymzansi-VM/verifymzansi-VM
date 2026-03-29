@@ -246,7 +246,7 @@ export function ShowroomHero({
           )}
         >
           <div className="space-y-2 px-4 py-3 sm:px-6 sm:py-4 lg:px-8 lg:py-5">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-start gap-2 sm:items-center">
               <span
                 className={cn(
                   "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide sm:px-3 sm:py-1 sm:text-[11px] sm:tracking-[0.16em]",
@@ -261,7 +261,7 @@ export function ShowroomHero({
                 {activeSlide.location}
               </span>
               {activeSlide.price != null ? (
-                <span className="ml-auto text-sm font-bold text-brand-green-600 dark:text-brand-green-400 sm:text-base">
+                <span className="w-full text-base font-bold text-brand-green-600 dark:text-brand-green-400 sm:ml-auto sm:w-auto sm:text-base">
                   {formatPrice(activeSlide.price)}
                 </span>
               ) : null}
@@ -269,10 +269,10 @@ export function ShowroomHero({
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div className="min-w-0 flex-1">
-                <h2 className="truncate font-display text-base font-bold leading-tight text-foreground sm:text-xl lg:text-2xl">
+                <h2 className="line-clamp-2 font-display text-lg font-bold leading-tight text-foreground sm:line-clamp-1 sm:text-xl lg:text-2xl">
                   {activeSlide.title}
                 </h2>
-                <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground sm:text-sm lg:text-base">
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground sm:line-clamp-1 sm:text-sm lg:text-base">
                   {activeSlide.description}
                 </p>
               </div>
@@ -281,7 +281,7 @@ export function ShowroomHero({
                 href={activeHref}
                 className={cn(
                   buttonVariants({ size: "sm" }),
-                  "h-8 shrink-0 rounded-full bg-brand-green px-3 text-xs font-bold text-white hover:bg-brand-green-600 sm:h-10 sm:px-5 sm:text-sm"
+                  "h-10 w-full justify-center rounded-full bg-brand-green px-4 text-sm font-bold text-white hover:bg-brand-green-600 sm:h-10 sm:w-auto sm:shrink-0 sm:px-5 sm:text-sm"
                 )}
               >
                 {activeCta}

@@ -118,6 +118,26 @@ describe("VideoCardPlayer", () => {
     expect(screen.getByRole("button", { name: /unmute/i })).toBeTruthy();
   });
 
+  it("supports poster-first touch fallbacks for hover previews", () => {
+    useHoverCapabilityMock.mockReturnValue(false);
+
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="hover"
+        touchPreviewBehavior="poster"
+        muteControlVisibility="always"
+      />
+    );
+
+    expect(useVideoHoverMock).not.toHaveBeenCalled();
+    expect(useVideoVisibilityMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /play video/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /unmute/i })).toBeNull();
+  });
+
   it("renders a play/pause toggle for ambient videos when requested", () => {
     render(
       <VideoCardPlayer
