@@ -12,6 +12,7 @@ import {
   OVERRIDE_REASON_CODES,
   DECISION_NOTE_TEMPLATES,
 } from "@/lib/constants/verification";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface EvidenceStep {
   id: string;
@@ -87,7 +88,7 @@ export function EvidenceDecisionControls({
 
       const res = await fetch("/api/admin/verification/decide", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));

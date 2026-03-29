@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/headers", () => ({
   headers: vi.fn().mockResolvedValue({
-    get: vi.fn().mockReturnValue("nonce-123"),
+    get: vi.fn((name: string) => {
+      if (name === "x-nonce") return "nonce-123";
+      if (name === "x-csrf-token") return "a".repeat(64);
+      return null;
+    }),
   }),
 }));
 
@@ -38,6 +42,7 @@ describe("RootLayout", () => {
     const skipLinkIndex = markup.indexOf('href="#main-content"');
 
     expect(markup).toContain('nonce="nonce-123"');
+    expect(markup).toContain(`<meta name="csrf-token" content="${"a".repeat(64)}"/>`);
     expect(markup).toContain("globalThis.__name");
     expect(scriptIndex).toBeGreaterThan(-1);
     expect(scriptIndex).toBeLessThan(skipLinkIndex);

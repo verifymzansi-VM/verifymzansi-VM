@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ToggleLeft } from "lucide-react";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 type FlagMode = "off" | "on" | "percent" | "allowlist";
 
@@ -68,7 +69,7 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
     try {
       const response = await fetch("/api/admin/feature-flags/toggle", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           key,
           mode,
@@ -124,7 +125,7 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
     try {
       const response = await fetch("/api/admin/feature-flags/toggle", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ key, enabled }),
       });
 

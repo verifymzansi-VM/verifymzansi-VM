@@ -27,6 +27,7 @@ import {
   getCachedKycArtifactBlob,
   setCachedKycArtifactBlob,
 } from "@/lib/utils/kyc-artifact-blob-cache";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface Artifact {
   id: string;
@@ -96,7 +97,7 @@ export function KycComparisonViewer({
       try {
         const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ userId }),
         });
 
@@ -158,7 +159,7 @@ export function KycComparisonViewer({
 
               let evidenceRes = await fetch(`/api/admin/verification/evidence`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({ artifactId: artifact.id }),
               });
 
@@ -168,7 +169,7 @@ export function KycComparisonViewer({
                 if (firstErrorData?.code === "not_found") {
                   const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                     body: JSON.stringify({ userId }),
                   });
 
@@ -199,7 +200,7 @@ export function KycComparisonViewer({
 
                       evidenceRes = await fetch(`/api/admin/verification/evidence`, {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                         body: JSON.stringify({ artifactId: replacement.id }),
                       });
                     }

@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { AlertTriangle, Shield, EyeOff, Ban, XCircle, Flag, Loader2 } from "lucide-react";
 import { calculateSlaState, slaSortPriority } from "@/lib/utils/sla";
 import type { ReportSeverity } from "@/types/enums";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface ReportItem {
   id: string;
@@ -108,7 +109,7 @@ export function FlaggingQueueTable({
     try {
       const res = await fetch("/api/admin/flagging/action", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           reportId: selectedReport.id,
           action,

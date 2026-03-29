@@ -14,6 +14,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Check, CheckCircle, Loader2, XCircle } from "lucide-react";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface DsarActionButtonsProps {
   requestId: string;
@@ -35,7 +36,7 @@ export function DsarActionButtons({ requestId, status }: DsarActionButtonsProps)
     try {
       const res = await fetch("/api/admin/dsar/decide", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ requestId, decision }),
       });
 
@@ -61,7 +62,7 @@ export function DsarActionButtons({ requestId, status }: DsarActionButtonsProps)
     try {
       const res = await fetch("/api/admin/dsar/complete", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           requestId,
           notes: completionNotes.trim() || undefined,

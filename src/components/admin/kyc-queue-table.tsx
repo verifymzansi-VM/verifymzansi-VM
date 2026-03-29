@@ -34,6 +34,7 @@ import { KycComparisonViewer } from "./kyc-comparison-viewer";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
 import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 import { OVERRIDE_REASON_CODES } from "@/lib/constants/verification";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 const KycPreviewLightbox = dynamic(
   () => import("./kyc-preview-lightbox").then((m) => m.KycPreviewLightbox),
@@ -155,7 +156,7 @@ export function KycQueueTable({
       try {
         const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ stepId: step.id, userId: step.user_id }),
         });
 
@@ -235,7 +236,7 @@ export function KycQueueTable({
     try {
       const res = await fetch("/api/admin/verification/decide", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           stepId: selectedStep.id,
           decision,

@@ -16,6 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { CheckCircle, XCircle, Package, Loader2 } from "lucide-react";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface ContentItem {
   id: string;
@@ -90,7 +91,7 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
     try {
       const res = await fetch("/api/admin/content/decide", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           itemId: selectedItem.id,
           area,

@@ -8,6 +8,7 @@ import {
   getCachedKycArtifactBlob,
   setCachedKycArtifactBlob,
 } from "@/lib/utils/kyc-artifact-blob-cache";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface Artifact {
   id: string;
@@ -83,7 +84,7 @@ export function KycInlinePreview({
       async function fetchEvidenceByArtifactId(targetArtifactId: string) {
         const evidenceRes = await fetch(`/api/admin/verification/evidence`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ artifactId: targetArtifactId }),
         });
 
@@ -109,7 +110,7 @@ export function KycInlinePreview({
         // 1. Fetch metadata to get artifact ID (use GET with query params)
         const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ stepId, userId }),
         });
         if (!metaRes.ok) {
@@ -152,7 +153,7 @@ export function KycInlinePreview({
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
           const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({ userId }),
           });
 

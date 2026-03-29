@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/post/create-listing",
@@ -23,6 +23,16 @@ vi.mock("@/lib/supabase/client", () => ({
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
   toast: vi.fn(),
+}));
+
+const mockWithCsrfHeaders = vi.fn((headers?: HeadersInit) => {
+  const nextHeaders = new Headers(headers);
+  nextHeaders.set("x-csrf-token", "a".repeat(64));
+  return nextHeaders;
+});
+
+vi.mock("@/lib/utils/csrf", () => ({
+  withCsrfHeaders: (headers?: HeadersInit) => mockWithCsrfHeaders(headers),
 }));
 
 vi.mock("@/lib/constants/pricing", () => ({
@@ -72,6 +82,7 @@ vi.mock("@/lib/constants/pricing", () => ({
     videoAllowed: true,
     maxAllowed: 1,
   },
+  getPlanCheckoutId: (plan: { tier: string; area: string }) => `${plan.area}-${plan.tier}`,
 }));
 
 vi.mock("@/lib/services/entitlements", () => ({
@@ -103,6 +114,13 @@ const { PlanGate } = await import("@/components/billing/plan-gate");
 describe("PlanGate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ checkoutUrl: "https://checkout.example.test" }),
+      })
+    );
     mockGetUser.mockResolvedValue({
       data: { user: { id: "u1" } },
       error: null,
@@ -228,6 +246,106 @@ describe("PlanGate", () => {
         "href",
         "/dashboard/complete-profile?returnUrl=%2Fpost%2Fcreate-listing"
       );
+    });
+  });
+
+  it("starts checkout with CSRF headers when choosing a paid plan", async () => {
+    const originalLocation = window.location;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { href: "http://localhost/post/create-listing" },
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { id: "sp-1", created_at: new Date().toISOString() },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  gt: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockReturnValue({
+                        maybeSingle: vi.fn().mockResolvedValue({
+                          data: null,
+                          error: null,
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "listings") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              neq: vi.fn().mockResolvedValue({ count: 1, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "free_posts_used") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { id: "used-1" }, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    render(
+      <PlanGate area={"MZANSI_MARKET" as never}>
+        <div>Protected Content</div>
+      </PlanGate>
+    );
+
+    await screen.findByRole("button", { name: /choose starter/i });
+    fireEvent.click(screen.getByRole("button", { name: /choose starter/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    const [url, requestInit] = vi.mocked(global.fetch).mock.calls[0] ?? [];
+
+    expect(url).toBe("/api/billing/create-checkout");
+    expect(requestInit).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers),
+      })
+    );
+    expect(JSON.parse(String(requestInit?.body))).toMatchObject({
+      planId: expect.any(String),
+    });
+    expect(mockWithCsrfHeaders).toHaveBeenCalledWith({ "Content-Type": "application/json" });
+    expect(window.location.href).toBe("https://checkout.example.test");
+
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalLocation,
     });
   });
 });

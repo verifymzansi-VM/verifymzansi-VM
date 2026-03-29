@@ -22,6 +22,7 @@ import {
 import { EvidenceViewer } from "./evidence-viewer";
 import { EvidenceMetadataPanel } from "./evidence-metadata-panel";
 import { EvidenceDecisionControls } from "./evidence-decision-controls";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -165,7 +166,7 @@ export function EvidenceDeskClient({
       try {
         const res = await fetch(`/api/admin/verification/evidence/metadata`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({
             ...(queryStepId ? { stepId: queryStepId } : {}),
             ...(queryUserId ? { userId: queryUserId } : {}),

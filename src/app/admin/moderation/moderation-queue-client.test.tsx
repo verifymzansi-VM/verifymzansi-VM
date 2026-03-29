@@ -4,6 +4,11 @@ import { ModerationQueueClient } from "./moderation-queue-client";
 import type { ModerationItem } from "./moderation-preview-panel";
 
 const mockRefresh = vi.fn();
+const mockWithCsrfHeaders = vi.fn((headers?: HeadersInit) => {
+  const nextHeaders = new Headers(headers);
+  nextHeaders.set("x-csrf-token", "a".repeat(64));
+  return nextHeaders;
+});
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mockRefresh }),
@@ -11,6 +16,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/utils/media-url", () => ({
   normalizeMediaUrl: (value: string) => value,
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  withCsrfHeaders: (headers?: HeadersInit) => mockWithCsrfHeaders(headers),
 }));
 
 vi.mock("./moderation-preview-panel", () => ({
@@ -98,7 +107,7 @@ describe("ModerationQueueClient", () => {
         "/api/admin/content/decide",
         expect.objectContaining({
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: expect.any(Headers),
           body: JSON.stringify({
             itemId: "promotion-1",
             area: "PROMOTIONS_EVENTS",
@@ -110,6 +119,9 @@ describe("ModerationQueueClient", () => {
     });
 
     expect(mockRefresh).toHaveBeenCalledTimes(1);
+    expect(mockWithCsrfHeaders).toHaveBeenNthCalledWith(1, {
+      "Content-Type": "application/json",
+    });
 
     fireEvent.click(screen.getAllByRole("button", { name: /reject/i })[1]);
     fireEvent.change(screen.getByLabelText(/rejection reason/i), {
@@ -123,7 +135,7 @@ describe("ModerationQueueClient", () => {
         "/api/admin/content/decide",
         expect.objectContaining({
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: expect.any(Headers),
           body: JSON.stringify({
             itemId: "business-1",
             area: "MZANSI_BUSINESS",
@@ -135,5 +147,8 @@ describe("ModerationQueueClient", () => {
     });
 
     expect(mockRefresh).toHaveBeenCalledTimes(2);
+    expect(mockWithCsrfHeaders).toHaveBeenNthCalledWith(2, {
+      "Content-Type": "application/json",
+    });
   });
 });

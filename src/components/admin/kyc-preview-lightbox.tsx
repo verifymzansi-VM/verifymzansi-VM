@@ -31,6 +31,7 @@ import {
   getCachedKycArtifactBlob,
   setCachedKycArtifactBlob,
 } from "@/lib/utils/kyc-artifact-blob-cache";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -160,7 +161,7 @@ export function KycPreviewLightbox({
         const fetchEvidenceById = async (targetArtifactId: string) => {
           const res = await fetch(`/api/admin/verification/evidence`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({ artifactId: targetArtifactId }),
           });
 
@@ -186,7 +187,7 @@ export function KycPreviewLightbox({
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
           const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({ userId: step.user_id }),
           });
 
@@ -281,7 +282,7 @@ export function KycPreviewLightbox({
     try {
       const res = await fetch("/api/admin/verification/decide", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           stepId: step.id,
           decision,

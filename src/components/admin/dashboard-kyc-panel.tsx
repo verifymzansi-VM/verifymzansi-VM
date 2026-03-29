@@ -34,6 +34,7 @@ import { formatRelativeTime } from "@/lib/utils/format";
 import Link from "next/link";
 import type { DashboardKycItem, VerificationStepCounts } from "@/lib/utils/admin-queries";
 import { OVERRIDE_REASON_CODES } from "@/lib/constants/verification";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 const STEP_ICONS: Record<string, React.ElementType> = {
   phone: Phone,
@@ -165,7 +166,7 @@ export function DashboardKycPanel({
     try {
       const res = await fetch("/api/admin/verification/decide", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           stepId: dialog.step.id,
           decision: dialog.decision,

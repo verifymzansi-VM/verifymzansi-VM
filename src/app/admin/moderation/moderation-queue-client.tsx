@@ -26,6 +26,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { CheckCircle, XCircle, Package, Loader2, Eye } from "lucide-react";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { ModerationPreviewPanel, type ModerationItem } from "./moderation-preview-panel";
 
 interface ModerationQueueClientProps {
@@ -81,7 +82,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
     try {
       const res = await fetch("/api/admin/content/decide", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           itemId: selectedItem.id,
           area: selectedItem.area,
