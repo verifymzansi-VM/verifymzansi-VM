@@ -31,7 +31,10 @@ function createDeterministicEnv() {
     AFRICASTALKING_API_KEY: "playwright-africas-talking-key",
     AFRICASTALKING_USERNAME: "sandbox",
     AFRICASTALKING_SENDER_ID: "verifymzansi",
-    OZOW_WEBHOOK_SECRET: "playwright-ozow-webhook-secret", // secret-scan: allow deterministic fixture
+    // Svix expects webhook secrets in `whsec_<base64>` form; keeping this
+    // deterministic lets the mock Ozow flow sign and verify webhooks in CI.
+    OZOW_WEBHOOK_SECRET:
+      "whsec_cGxheXdyaWdodC1vem93LXdlYmhvb2stc2VjcmV0LTMyaGFycw==", // secret-scan: allow deterministic fixture
     RESEND_API_KEY: "re_playwright_1234567890",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key",
     TURNSTILE_SECRET_KEY: "dummy_secret_key", // secret-scan: allow deterministic fixture
