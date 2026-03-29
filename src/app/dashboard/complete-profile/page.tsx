@@ -18,7 +18,7 @@ import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 /** Step 1: enter phone and request OTP. Step 2: enter OTP code to verify. */
-type Step = "phone" | "otp";
+type Step = "phone" | "otp" | "verified";
 
 const OTP_RESEND_COOLDOWN_SECONDS = 30;
 
@@ -80,6 +80,10 @@ export default function CompleteProfilePage() {
 
   function getReturnUrl(): string {
     return sanitizeReturnUrl(new URLSearchParams(window.location.search).get("returnUrl"));
+  }
+
+  function getContinueLabel(): string {
+    return getReturnUrl() === "/dashboard" ? "Continue to dashboard" : "Continue";
   }
 
   /**
@@ -181,8 +185,9 @@ export default function CompleteProfilePage() {
         return;
       }
 
+      setOtpCode("");
+      setStep("verified");
       toast({ title: "Phone number verified!", variant: "success" });
-      router.push(getReturnUrl());
     } catch {
       toast({
         title: "Verification failed",
@@ -215,7 +220,11 @@ export default function CompleteProfilePage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Phone className="h-5 w-5" />
-            {step === "phone" ? "Add Your Phone Number" : "Enter Verification Code"}
+            {step === "phone"
+              ? "Add Your Phone Number"
+              : step === "otp"
+                ? "Enter Verification Code"
+                : "Phone Number Verified"}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -256,7 +265,7 @@ export default function CompleteProfilePage() {
                 </Button>
               </form>
             </>
-          ) : (
+          ) : step === "otp" ? (
             <>
               <p className="mb-4 text-sm text-muted-foreground">
                 A 6-digit code was sent to <strong>{formatPhone(phone)}</strong>. Enter it below.
@@ -309,6 +318,26 @@ export default function CompleteProfilePage() {
                 </div>
               </form>
             </>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-brand-green/30 bg-brand-green-50 p-4 text-sm text-brand-green-950">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-brand-green" />
+                  <div className="space-y-1">
+                    <p className="font-semibold">This phone number is verified.</p>
+                    <p>
+                      <strong>{formatPhone(phone)}</strong> has been verified successfully and is
+                      now linked to this account.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <Button type="button" className="gap-2" onClick={() => router.push(getReturnUrl())}>
+                <ArrowRight className="h-4 w-4" />
+                {getContinueLabel()}
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>

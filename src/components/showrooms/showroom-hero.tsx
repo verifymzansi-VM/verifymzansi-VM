@@ -31,7 +31,7 @@ const ENTITY_CONFIG = {
   },
   listing: {
     Icon: ShieldCheck,
-    badgeColor: "bg-brand-green/90 text-white border border-white/10",
+    badgeColor: "bg-brand-green text-white border border-white/10",
     badge: "Mzansi Market",
     href: "/listing/",
     cta: "View Listing",

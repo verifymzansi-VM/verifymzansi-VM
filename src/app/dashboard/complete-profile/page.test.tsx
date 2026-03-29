@@ -156,7 +156,7 @@ describe("CompleteProfilePage", () => {
     });
   });
 
-  it("calls /api/otp/verify and redirects on success", async () => {
+  it("shows the verified phone state and continues on success", async () => {
     const user = userEvent.setup();
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) } as Response);
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) } as Response);
@@ -176,7 +176,17 @@ describe("CompleteProfilePage", () => {
         "/api/otp/verify",
         expect.objectContaining({ method: "POST" })
       );
-      expect(mockPush).toHaveBeenCalled();
+      expect(screen.getByText("This phone number is verified.")).toBeInTheDocument();
+      expect(screen.getByText("0711234567")).toBeInTheDocument();
+      expect(screen.getByText(/linked to this account/i)).toBeInTheDocument();
+    });
+
+    expect(mockPush).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /Continue to dashboard/i }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/dashboard");
     });
   });
 

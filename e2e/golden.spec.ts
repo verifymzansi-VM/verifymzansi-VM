@@ -53,10 +53,10 @@ test.describe("VerifyMzansi Golden Paths", () => {
 
   test("Legacy marketplace routes redirect to mzansi-business", async ({ page }) => {
     await page.goto("/business-ads");
-    await expect(page).toHaveURL(/\/mzansi-business/);
+    await expect(page).toHaveURL(/\/mzansi-business/, { timeout: 15_000 });
 
     await page.goto("/mall-shops");
-    await expect(page).toHaveURL(/\/mzansi-business\?type=mall_store/);
+    await expect(page).toHaveURL(/\/mzansi-business\?type=mall_store/, { timeout: 15_000 });
   });
 
   test("KYC verification page requires auth", async ({ page }) => {

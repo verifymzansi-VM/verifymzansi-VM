@@ -45,7 +45,7 @@ vi.mock("./promo-video-slide", () => ({
 }));
 
 describe("HeroBanner", () => {
-  it("renders text-only category links instead of the search bar", () => {
+  it("does not render the legacy category strip or search controls", () => {
     render(
       <HeroBanner
         latestListings={[
@@ -60,19 +60,9 @@ describe("HeroBanner", () => {
       />
     );
 
-    expect(screen.getByRole("navigation", { name: "Marketplace categories" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Mzansi Market" })).toHaveAttribute(
-      "href",
-      "/mzansi-market"
-    );
-    expect(screen.getByRole("link", { name: "Mzansi Business" })).toHaveAttribute(
-      "href",
-      "/mzansi-business"
-    );
-    expect(screen.getByRole("link", { name: "Promotions & Events" })).toHaveAttribute(
-      "href",
-      "/promotions"
-    );
+    expect(
+      screen.queryByRole("navigation", { name: "Marketplace categories" })
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Search" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Search area")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Search listings")).not.toBeInTheDocument();
