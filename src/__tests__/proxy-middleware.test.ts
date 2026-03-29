@@ -14,7 +14,7 @@ vi.mock("@supabase/ssr", () => ({
   }),
 }));
 
-import { middleware } from "@/middleware";
+import { proxy } from "@/proxy";
 import { routeRequest } from "@/proxy-handler";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
@@ -109,7 +109,7 @@ describe("middleware security headers", () => {
   });
 
   it("adds the full security header set to successful responses", async () => {
-    const res = await middleware(createMockRequest("/"));
+    const res = await proxy(createMockRequest("/"));
     const csp = res.headers.get("Content-Security-Policy");
     const setCookie = res.headers.get("set-cookie");
 
@@ -125,7 +125,7 @@ describe("middleware security headers", () => {
   });
 
   it("uses a development-friendly CSP without x-nonce in development", async () => {
-    const res = await middleware(createMockRequest("/"));
+    const res = await proxy(createMockRequest("/"));
     const csp = res.headers.get("Content-Security-Policy");
 
     expect(csp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
@@ -136,7 +136,7 @@ describe("middleware security headers", () => {
   it("uses strict nonce CSP in production", async () => {
     vi.stubEnv("NODE_ENV", "production");
 
-    const res = await middleware(createMockRequest("/", { hostname: "verifymzansi.com" }));
+    const res = await proxy(createMockRequest("/", { hostname: "verifymzansi.com" }));
     const csp = res.headers.get("Content-Security-Policy");
     const nonce = res.headers.get("x-nonce");
 
@@ -147,7 +147,7 @@ describe("middleware security headers", () => {
   });
 
   it("keeps basic security headers on redirects", async () => {
-    const res = await middleware(createMockRequest("/dashboard"));
+    const res = await proxy(createMockRequest("/dashboard"));
 
     expect(res.status).toBe(307);
     expect(res.headers.get("Content-Security-Policy")).toBeNull();
@@ -156,7 +156,7 @@ describe("middleware security headers", () => {
   });
 
   it("clears stale Playwright session cookies outside stub mode", async () => {
-    const res = await middleware(
+    const res = await proxy(
       createMockRequest("/", { cookieHeader: "vmz_pw_session=persona%3Aold" })
     );
     const setCookie = res.headers.get("set-cookie") ?? "";

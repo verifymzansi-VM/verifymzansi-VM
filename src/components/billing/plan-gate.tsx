@@ -30,6 +30,7 @@ import {
   PLANS,
   TRIAL_CONFIG,
   FREE_POST_CONFIG,
+  getPlanCheckoutId,
   type PlanDefinition,
 } from "@/lib/constants/pricing";
 import { getEntitlements } from "@/lib/services/entitlements";
@@ -381,25 +382,11 @@ export function PlanGate({ area, children }: PlanGateProps) {
     setSubscribing(key);
     setCheckoutError(null);
     try {
-      // First fetch the plan ID from the plans table
-      const supabase = createClient();
-      const { data: dbPlan } = await supabase
-        .from("plans")
-        .select("id")
-        .eq("area", plan.area)
-        .eq("tier", plan.tier)
-        .eq("active", true)
-        .single();
-
-      if (!dbPlan) {
-        throw new Error("Plan not available");
-      }
-
       // Use the checkout API
       const res = await fetch("/api/billing/create-checkout", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ planId: dbPlan.id, area: plan.area }),
+        body: JSON.stringify({ planId: getPlanCheckoutId(plan) }),
       });
       const data = await res.json();
       if (data.checkoutUrl) {

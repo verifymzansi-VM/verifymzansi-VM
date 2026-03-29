@@ -99,7 +99,7 @@ export default async function BillingCancelPage({
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
 
-      <main className="flex flex-1 items-center justify-center py-4">
+      <main id="main-content" className="flex flex-1 items-center justify-center py-4 scroll-mt-24">
         <div className="container-page max-w-md space-y-4 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             {copy.icon}

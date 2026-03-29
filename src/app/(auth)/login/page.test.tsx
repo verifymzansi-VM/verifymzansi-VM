@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LoginPage from "./page";
 
@@ -77,5 +77,14 @@ describe("LoginPage", () => {
     expect(
       screen.getByRole("button", { name: /^Resend confirmation email$/i })
     ).toBeInTheDocument();
+  });
+
+  it("enables the email and password fields after hydration", async () => {
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Email")).toBeEnabled();
+      expect(screen.getByLabelText("Password")).toBeEnabled();
+    });
   });
 });
