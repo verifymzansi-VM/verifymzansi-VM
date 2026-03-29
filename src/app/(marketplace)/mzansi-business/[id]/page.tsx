@@ -35,6 +35,11 @@ interface LoadedBusinessDetail {
   isOwnerPreview: boolean;
 }
 
+type BusinessDetailOwnerRecord = BusinessDetailRecord & {
+  owner_id?: string | null;
+  seller_id?: string | null;
+};
+
 const BUSINESS_DETAIL_SELECT = `
   id, owner_id, business_type, business_name, slug, description, category,
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
@@ -59,7 +64,9 @@ async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | nu
     return null;
   }
 
-  const business = normalizeOwnerRecord(rawBusiness) as BusinessDetailRecord;
+  const business = normalizeOwnerRecord(
+    rawBusiness as unknown as BusinessDetailOwnerRecord
+  ) as BusinessDetailRecord;
   const isOwnerPreview = business.status !== "live";
 
   if (isOwnerPreview) {

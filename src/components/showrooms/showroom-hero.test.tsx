@@ -133,4 +133,37 @@ describe("ShowroomHero", () => {
 
     expect(screen.getByTestId("showroom-media")).toHaveAttribute("data-mute-control", "always");
   });
+
+  it("uses shared slide indicators without desktop arrow buttons", async () => {
+    render(
+      <ShowroomHero
+        slides={[
+          {
+            id: "listing-1",
+            type: "listing",
+            title: "Verified Phone",
+            description: "Great condition",
+            location: "Cape Town",
+            mediaUrl: "https://example.com/photo-1.jpg",
+          },
+          {
+            id: "listing-2",
+            type: "listing",
+            title: "Verified Laptop",
+            description: "Lightly used",
+            location: "Durban",
+            mediaUrl: "https://example.com/photo-2.jpg",
+          },
+        ]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /go to slide 1/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /go to slide 2/i })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("button", { name: /previous slide/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /next slide/i })).not.toBeInTheDocument();
+  });
 });

@@ -90,7 +90,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
-    const normalizedBusiness = normalizeOwnerRecord(business as BusinessOwnerRow);
+    const normalizedBusiness = normalizeOwnerRecord(business as unknown as BusinessOwnerRow);
 
     // Fetch user once — reused for both ownership and contact redaction checks
     let currentUser: { id: string } | null = null;
