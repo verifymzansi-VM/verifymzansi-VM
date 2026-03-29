@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import {
   Menu,
   X,
@@ -25,6 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { BrandLogo } from "../shared/brand-logo";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { NotificationBell } from "@/components/notification-bell";
@@ -84,30 +85,7 @@ function HeaderInner({
     : "U";
   const hasAdminAccess = auth.isModerator; // isModerator already includes admin role
 
-  // Close mobile menu on Escape key
-  const handleEscape = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape" && mobileOpen) setMobileOpen(false);
-    },
-    [mobileOpen]
-  );
-
-  useEffect(() => {
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [handleEscape]);
-
-  // Lock body scroll when mobile menu is open
-  useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [mobileOpen]);
+  // Sheet component automatically handles Escape key and body scroll locking!
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -254,7 +232,6 @@ function HeaderInner({
           className="relative z-[120] justify-self-end rounded-md p-2 lg:hidden touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           onClick={() => setMobileOpen((prev) => !prev)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          aria-controls="mobile-nav-menu"
           aria-expanded={mobileOpen ? "true" : "false"}
           data-testid="mobile-menu-toggle"
         >
@@ -269,107 +246,108 @@ function HeaderInner({
         </div>
       </div>
 
-      {/* Mobile Menu */}
-      {mobileOpen && (
-        <nav
-          id="mobile-nav-menu"
-          aria-label="Mobile navigation"
-          className="lg:hidden border-t bg-background animate-fade-in-up"
+      {/* Mobile Menu (Bottom Sheet) */}
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-xl px-4 pt-6 pb-safe h-[85vh] overflow-hidden flex flex-col"
         >
-          <div className="container-page space-y-4 py-4 pb-safe">
-            <div className="flex flex-col gap-2">
-              {isAuthenticated ? (
-                <>
-                  {/* Mobile user info */}
-                  <div className="flex items-center gap-3 px-1 py-2">
-                    <Avatar className="h-9 w-9 border-2 border-brand-gold">
-                      <AvatarFallback className="bg-brand-gold text-amber-950 text-xs font-bold">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col flex-1">
-                      <span className="text-sm font-semibold">
-                        {finalDisplayName || "My Account"}
-                      </span>
-                      {email && <span className="text-xs text-muted-foreground">{email}</span>}
-                    </div>
-                    <NotificationBell userId={auth.user?.id} />
+          <SheetHeader className="mb-4 text-left Shrink-0">
+            <SheetTitle>Menu</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto pr-2 pb-6 flex flex-col gap-2">
+            {isAuthenticated ? (
+              <>
+                {/* Mobile user info */}
+                <div className="flex items-center gap-3 px-1 py-2 mb-2">
+                  <Avatar className="h-10 w-10 border-2 border-brand-gold">
+                    <AvatarFallback className="bg-brand-gold text-amber-950 text-xs font-bold">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col flex-1">
+                    <span className="text-sm font-semibold">
+                      {finalDisplayName || "My Account"}
+                    </span>
+                    {email && <span className="text-xs text-muted-foreground">{email}</span>}
                   </div>
+                  <NotificationBell userId={auth.user?.id} />
+                </div>
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-2 py-3 text-base font-medium"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <LayoutDashboard className="h-5 w-5" />
+                  Dashboard
+                </Link>
+                <Link
+                  href="/dashboard/settings"
+                  className="flex items-center gap-2 py-3 text-base font-medium"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <Settings className="h-5 w-5" />
+                  Settings
+                </Link>
+                {hasAdminAccess && (
                   <Link
-                    href="/dashboard"
-                    className="flex items-center gap-2 py-2 text-sm font-medium"
+                    href="/admin"
+                    className="flex items-center gap-2 py-3 text-base font-medium"
                     onClick={() => setMobileOpen(false)}
                   >
-                    <LayoutDashboard className="h-4 w-4" />
-                    Dashboard
+                    <ShieldAlert className="h-5 w-5" />
+                    Admin
                   </Link>
-                  <Link
-                    href="/dashboard/settings"
-                    className="flex items-center gap-2 py-2 text-sm font-medium"
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    <Settings className="h-4 w-4" />
-                    Settings
-                  </Link>
-                  {hasAdminAccess && (
-                    <Link
-                      href="/admin"
-                      className="flex items-center gap-2 py-2 text-sm font-medium"
-                      onClick={() => setMobileOpen(false)}
-                    >
-                      <ShieldAlert className="h-4 w-4" />
-                      Admin
-                    </Link>
-                  )}
-                  <Button asChild variant="trust-verified" className="w-full">
+                )}
+                <div className="mt-4 flex flex-col gap-3">
+                  <Button asChild variant="trust-verified" size="lg" className="w-full">
                     <Link href="/post/create" onClick={() => setMobileOpen(false)}>
                       + Post
                     </Link>
                   </Button>
-                  <Button asChild variant="outline" className="w-full">
+                  <Button asChild variant="outline" size="lg" className="w-full">
                     <Link href="/advertise" onClick={() => setMobileOpen(false)}>
                       Advertise
                     </Link>
                   </Button>
-                  <button
-                    className="flex items-center gap-2 py-2 text-sm font-medium text-destructive disabled:opacity-50"
-                    disabled={signingOut}
-                    onClick={() => {
-                      setMobileOpen(false);
-                      handleSignOut();
-                    }}
-                  >
-                    {signingOut ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <LogOut className="h-4 w-4" />
-                    )}
-                    {signingOut ? "Signing out…" : "Sign Out"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href="/advertise" onClick={() => setMobileOpen(false)}>
-                      Advertise
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href="/login" onClick={() => setMobileOpen(false)}>
-                      Sign In
-                    </Link>
-                  </Button>
-                  <Button asChild variant="trust-verified" className="w-full">
-                    <Link href="/register" onClick={() => setMobileOpen(false)}>
-                      Register
-                    </Link>
-                  </Button>
-                </>
-              )}
-            </div>
+                </div>
+                <button
+                  className="flex items-center gap-2 py-3 mt-4 text-base font-medium text-destructive disabled:opacity-50"
+                  disabled={signingOut}
+                  onClick={() => {
+                    handleSignOut();
+                  }}
+                >
+                  {signingOut ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <LogOut className="h-5 w-5" />
+                  )}
+                  {signingOut ? "Signing out…" : "Sign Out"}
+                </button>
+              </>
+            ) : (
+              <div className="flex flex-col gap-3 pt-2">
+                <Button asChild variant="trust-verified" size="lg" className="w-full">
+                  <Link href="/register" onClick={() => setMobileOpen(false)}>
+                    Register
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="w-full">
+                  <Link href="/login" onClick={() => setMobileOpen(false)}>
+                    Sign In
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="w-full mt-2">
+                  <Link href="/advertise" onClick={() => setMobileOpen(false)}>
+                    Advertise with us
+                  </Link>
+                </Button>
+              </div>
+            )}
           </div>
-        </nav>
-      )}
+        </SheetContent>
+      </Sheet>
     </header>
   );
 }

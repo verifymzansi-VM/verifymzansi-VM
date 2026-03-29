@@ -25,11 +25,11 @@ const buttonVariants = cva(
           "bg-brand-gold text-brand-gold-950 hover:bg-brand-gold-500 hover:shadow-md hover:shadow-brand-gold/30 active:bg-brand-gold-600",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        xl: "h-12 rounded-lg px-10 text-base",
-        icon: "h-10 w-10",
+        default: "h-11 md:h-10 px-4 py-2",
+        sm: "h-10 md:h-9 rounded-md px-3",
+        lg: "h-12 md:h-11 rounded-md px-8",
+        xl: "h-14 md:h-12 rounded-lg px-10 text-base",
+        icon: "h-11 w-11 md:h-10 md:w-10",
       },
     },
     defaultVariants: {
