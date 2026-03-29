@@ -3,19 +3,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import {
-  MapPin,
-  Building2,
-  Megaphone,
-  ArrowRight,
-  ShieldCheck,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { MapPin, Building2, Megaphone, ArrowRight, ShieldCheck } from "lucide-react";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { buttonVariants } from "@/components/ui/button";
+import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import { useVideoVisibility } from "@/hooks/use-video-visibility";
 import { PromoVideoSlide } from "./promo-video-slide";
 
 // Map types to their appropriate icon and styling
@@ -54,6 +47,7 @@ interface HeroBusiness {
   business_name: string;
   description?: string;
   location_city?: string;
+  logo_url?: string | null;
   cover_video?: string | null;
   cover_photo?: string | null;
   video_thumbnail?: string | null;
@@ -64,6 +58,7 @@ interface HeroListing {
   title: string;
   description?: string;
   location_city?: string;
+  logo_url?: string | null;
   videos?: string[];
   photos?: string[];
   price_cents?: number | null;
@@ -89,6 +84,7 @@ interface HeroSlide {
   location: string;
   mediaUrl: string;
   posterUrl?: string;
+  logoUrl?: string;
   promotions: HeroPromotion[];
   price: number | null;
 }
@@ -97,17 +93,6 @@ interface HeroBannerProps {
   topBusinesses?: HeroBusiness[];
   latestListings?: HeroListing[];
   latestPromotions?: HeroPromotionRecord[];
-}
-
-/** Check if a URL points to a video file (by extension). */
-function isVideoUrl(url: string | undefined): boolean {
-  if (!url) return false;
-  return (
-    url
-      .split("?")[0]
-      .toLowerCase()
-      .match(/\.(mp4|webm|ogg)$/) != null
-  );
 }
 
 /** Extract a location string from various possible shapes. */
@@ -124,122 +109,6 @@ function extractLocation(loc: unknown): string {
   return "South Africa";
 }
 
-/**
- * Renders media (video or image) for a hero slide.
- * Extracted to module scope so React doesn't unmount/remount on every render.
- */
-function MediaRender({
-  src,
-  alt,
-  className,
-  posterUrl,
-}: {
-  src: string;
-  alt?: string;
-  className: string;
-  posterUrl?: string;
-}) {
-  const [isMuted, setIsMuted] = useState(true);
-  const [videoReady, setVideoReady] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const isVideo = isVideoUrl(src);
-  const { videoRef, reducedMotion } = useVideoVisibility(isVideo ? src : undefined);
-
-  const toggleMute = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
-  };
-
-  // Sync isPlaying state with video events
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-
-    const onPlaying = () => setVideoReady(true);
-
-    el.addEventListener("playing", onPlaying);
-    return () => {
-      el.removeEventListener("playing", onPlaying);
-    };
-  }, [videoRef]);
-
-  const handleVideoError = () => {
-    setHasError(true);
-    setVideoReady(false);
-  };
-
-  if (isVideo) {
-    const showPoster = posterUrl && (!videoReady || hasError || reducedMotion);
-
-    return (
-      <div className="relative h-full w-full group/video">
-        {/* Poster / cover image — prevents blank space */}
-        {showPoster && (
-          <Image
-            src={posterUrl}
-            alt={alt || "Video cover"}
-            fill
-            className="object-cover absolute inset-0 w-full h-full z-[1]"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 80vw, 800px"
-            priority
-          />
-        )}
-        {/* Gradient fallback when no poster available */}
-        {!posterUrl && !videoReady && (
-          <div className="absolute inset-0 z-[1] bg-gradient-to-br from-warm-300 to-warm-400 dark:from-warm-700 dark:to-warm-800" />
-        )}
-
-        {/* Video element */}
-        {!hasError && (
-          <video
-            ref={videoRef}
-            loop
-            muted={isMuted}
-            playsInline
-            preload="none"
-            aria-label={alt ? `${alt} video` : "Hero banner video"}
-            onError={handleVideoError}
-            className={cn(
-              "object-cover absolute inset-0 w-full h-full",
-              showPoster || (!posterUrl && !videoReady) ? "opacity-0" : "opacity-100",
-              "transition-opacity duration-300 z-[2]"
-            )}
-          />
-        )}
-
-        {!reducedMotion && !hasError && (
-          <div className="absolute inset-0 z-10 p-3">
-            <div className="flex justify-end w-full">
-              <button
-                onClick={toggleMute}
-                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70"
-                aria-label={isMuted ? "Unmute" : "Mute"}
-              >
-                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <Image
-      src={src}
-      alt={alt || "Media thumbnail"}
-      className={className}
-      width={800}
-      height={600}
-      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 80vw, 800px"
-    />
-  );
-}
-
 export function HeroBanner({
   topBusinesses = [],
   latestListings = [],
@@ -247,12 +116,14 @@ export function HeroBanner({
 }: HeroBannerProps) {
   const [current, setCurrent] = useState(0);
   const [fading, setFading] = useState(false);
+  const [isActiveVideoPaused, setIsActiveVideoPaused] = useState(false);
 
   const goTo = useCallback(
     (index: number) => {
       if (index === current) return;
       setFading(true);
       setTimeout(() => {
+        setIsActiveVideoPaused(false);
         setCurrent(index);
         setFading(false);
       }, 280);
@@ -280,6 +151,7 @@ export function HeroBanner({
             usesVideo && (b.video_thumbnail || b.cover_photo)
               ? normalizeMediaUrl(b.video_thumbnail || b.cover_photo || "")
               : undefined,
+          logoUrl: b.logo_url ? normalizeMediaUrl(b.logo_url) : undefined,
           promotions: [],
           price: null,
         };
@@ -301,6 +173,7 @@ export function HeroBanner({
                 : "/images/fallbacks/hero-listing.svg"
           ),
           posterUrl: usesVideo && posterSrc ? normalizeMediaUrl(posterSrc) : undefined,
+          logoUrl: l.logo_url ? normalizeMediaUrl(l.logo_url) : undefined,
           promotions: [],
           price: l.price_cents ? l.price_cents / 100 : null,
         };
@@ -375,14 +248,16 @@ export function HeroBanner({
   }, [current, goTo, slides.length]);
 
   useEffect(() => {
-    if (slides.length <= 1) return;
+    if (slides.length <= 1 || isActiveVideoPaused) return;
     const isPromo = slides[current]?.type === "promo";
     const interval = isPromo ? 20000 : 8000;
     const id = setInterval(() => nextRef.current(), interval);
     return () => clearInterval(id);
-  }, [slides.length, current, slides]);
+  }, [slides.length, current, slides, isActiveVideoPaused]);
 
   const activeSlide = slides[current] || null;
+  const activeSlideIsVideo = activeSlide ? isVideoUrl(activeSlide.mediaUrl) : false;
+  const activeLogoUrl = activeSlide?.logoUrl ?? null;
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-ZA", {
@@ -410,16 +285,56 @@ export function HeroBanner({
                 {activeSlide.type === "promo" ? (
                   <PromoVideoSlide />
                 ) : (
-                  <MediaRender
+                  <VideoCardPlayer
                     src={activeSlide.mediaUrl}
-                    alt={activeSlide.title}
-                    className="w-full h-full object-cover"
                     posterUrl={activeSlide.posterUrl}
+                    alt={activeSlide.title}
+                    sizes="100vw"
+                    mode="ambient"
+                    muteControlVisibility="always"
+                    showPlaybackControl={activeSlideIsVideo}
+                    onPlaybackStateChange={(isPlaying) => setIsActiveVideoPaused(!isPlaying)}
+                    priority
+                    mediaClassName="scale-[1.01]"
                   />
                 )}
               </div>
             </>
           )}
+
+          {activeSlide ? (
+            <div
+              className={cn(
+                "pointer-events-none absolute bottom-3 right-3 z-20 transition-opacity duration-500 sm:bottom-5 sm:right-5",
+                fading ? "opacity-0" : "opacity-100"
+              )}
+            >
+              <div
+                className="flex min-h-[44px] items-center rounded-full border border-white/12 bg-black/45 px-2.5 py-1.5 shadow-[0_18px_36px_-22px_rgba(15,23,42,0.92)] backdrop-blur-md"
+                data-testid="showroom-logo-tag"
+              >
+                {activeLogoUrl ? (
+                  <div className="relative h-8 w-[72px] sm:h-9 sm:w-[88px]">
+                    <Image
+                      src={activeLogoUrl}
+                      alt={`${activeSlide.title} logo tag`}
+                      fill
+                      sizes="(max-width: 640px) 72px, 88px"
+                      className="object-contain"
+                      unoptimized
+                    />
+                  </div>
+                ) : (
+                  <BrandLogo
+                    size="sm"
+                    tone="inverse"
+                    className="w-[92px] sm:w-[108px]"
+                    imageClassName="drop-shadow-none"
+                  />
+                )}
+              </div>
+            </div>
+          ) : null}
 
           {/* Slide navigation dots + arrows */}
           <div className="absolute bottom-2.5 sm:bottom-6 right-3 sm:right-0 sm:left-0 sm:container-page z-30 flex items-center justify-end pointer-events-none">

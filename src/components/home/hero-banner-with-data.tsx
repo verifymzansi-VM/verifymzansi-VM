@@ -30,7 +30,7 @@ export async function HeroBannerWithData() {
       supabase
         .from("businesses")
         .select(
-          "id, business_name, cover_photo, cover_video, video_thumbnail, description, location_city"
+          "id, business_name, logo_url, cover_photo, cover_video, video_thumbnail, description, location_city"
         )
         .eq("status", "live")
         .order("boost_until", { ascending: false, nullsFirst: false })
@@ -39,7 +39,7 @@ export async function HeroBannerWithData() {
       supabase
         .from("listings")
         .select(
-          "id, title, description, price_cents, photos, videos, video_thumbnail, location_city, category"
+          "id, title, description, price_cents, photos, videos, video_thumbnail, logo_url, location_city, category"
         )
         .eq("status", "live")
         .eq("area", "MZANSI_MARKET")

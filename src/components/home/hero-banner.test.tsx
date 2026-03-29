@@ -6,6 +6,28 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { HeroBanner } from "./hero-banner";
 
+const { videoCardPlayerMock } = vi.hoisted(() => ({
+  videoCardPlayerMock: vi.fn(
+    ({
+      alt,
+      muteControlVisibility,
+      showPlaybackControl,
+    }: {
+      alt?: string;
+      muteControlVisibility?: string;
+      showPlaybackControl?: boolean;
+    }) => (
+      <div
+        data-testid="hero-media"
+        data-mute-control={muteControlVisibility}
+        data-playback-control={showPlaybackControl ? "true" : "false"}
+      >
+        <span>{alt}</span>
+      </div>
+    )
+  ),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -38,6 +60,12 @@ vi.mock("next/image", () => ({
 
 vi.mock("@/hooks/use-video-visibility", () => ({
   useVideoVisibility: () => ({ videoRef: { current: null }, reducedMotion: false }),
+}));
+
+vi.mock("@/components/ui/video-card-player", () => ({
+  VideoCardPlayer: videoCardPlayerMock,
+  isVideoUrl: (url: string | null | undefined) =>
+    url?.split("?")[0].toLowerCase().endsWith(".mp4") ?? false,
 }));
 
 vi.mock("./promo-video-slide", () => ({
@@ -94,5 +122,44 @@ describe("HeroBanner", () => {
     expect(screen.getByRole("button", { name: /go to slide 2/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /previous slide/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /next slide/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps the mute control visible and shows playback control for video slides", () => {
+    render(
+      <HeroBanner
+        latestListings={[
+          {
+            id: "listing-1",
+            title: "Honda Fit",
+            description: "Clean hatchback",
+            location_city: "Johannesburg",
+            videos: ["https://example.com/honda-fit.mp4"],
+            video_thumbnail: "/images/fallbacks/hero-listing.svg",
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByTestId("hero-media")).toHaveAttribute("data-mute-control", "always");
+    expect(screen.getByTestId("hero-media")).toHaveAttribute("data-playback-control", "true");
+  });
+
+  it("renders the home hero logo tag fallback when no slide logo is provided", () => {
+    render(
+      <HeroBanner
+        latestListings={[
+          {
+            id: "listing-1",
+            title: "Honda Fit",
+            description: "Clean hatchback",
+            location_city: "Johannesburg",
+            photos: ["/images/fallbacks/hero-listing.svg"],
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByTestId("showroom-logo-tag")).toBeInTheDocument();
+    expect(screen.getByAltText("VerifyMzansi logo")).toBeInTheDocument();
   });
 });
