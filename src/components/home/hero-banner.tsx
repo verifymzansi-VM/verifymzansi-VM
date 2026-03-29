@@ -8,8 +8,6 @@ import {
   Building2,
   Megaphone,
   ArrowRight,
-  ChevronRight,
-  ChevronLeft,
   ShieldCheck,
   Volume2,
   VolumeX,
@@ -420,71 +418,6 @@ export function HeroBanner({
                   />
                 )}
               </div>
-
-              {/* Desktop (sm+): subtle gradient for overlay readability */}
-              {activeSlide.type !== "promo" && (
-                <div className="hidden sm:block absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none z-10" />
-              )}
-
-              {/* Desktop (sm+): glassmorphism info overlay */}
-              {activeSlide.type !== "promo" && (
-                <div className="hidden sm:flex absolute inset-0 z-20 container-page items-end pb-6 lg:pb-8">
-                  <div
-                    className={`max-w-lg lg:max-w-xl bg-black/35 backdrop-blur-xl rounded-2xl border border-white/15 p-5 lg:p-6 space-y-2.5 transition-all duration-700 transform ${fading ? "opacity-0 translate-y-6" : "opacity-100 translate-y-0"}`}
-                  >
-                    {activeSlide.promotions && activeSlide.promotions.length > 0 && (
-                      <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-red-500/90 text-white text-xs font-bold animate-pulse">
-                        <span role="img" aria-label="Hot deal">
-                          🔥
-                        </span>{" "}
-                        {activeSlide.promotions[0].title}
-                      </div>
-                    )}
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badgeColor || "bg-gray-500 text-white"}`}
-                      >
-                        {(() => {
-                          const Icon =
-                            ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon ||
-                            Building2;
-                          return <Icon className="h-3 w-3" />;
-                        })()}
-                        {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badge}
-                      </span>
-                      {activeSlide.location && (
-                        <span className="flex items-center gap-1 text-white/80 text-xs">
-                          <MapPin className="h-3 w-3 text-brand-green-400" /> {activeSlide.location}
-                        </span>
-                      )}
-                      {activeSlide.price !== null && (
-                        <span className="text-brand-gold-400 text-sm font-bold">
-                          {formatPrice(activeSlide.price)}
-                        </span>
-                      )}
-                    </div>
-
-                    <h2 className="font-display text-2xl lg:text-3xl font-bold text-white leading-tight">
-                      {activeSlide.title}
-                    </h2>
-                    <p className="text-sm text-white/70 leading-snug line-clamp-2">
-                      {activeSlide.description}
-                    </p>
-
-                    <Link
-                      href={`${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.href}${activeSlide.id}`}
-                      className={cn(
-                        buttonVariants({ size: "sm" }),
-                        "h-10 px-5 text-sm bg-brand-green hover:bg-brand-green-600 text-white font-bold gap-2 rounded-full mt-1"
-                      )}
-                    >
-                      {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.cta || "View"}
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                  </div>
-                </div>
-              )}
             </>
           )}
 
@@ -505,64 +438,55 @@ export function HeroBanner({
                   />
                 ))}
               </div>
-              <div className="hidden sm:flex gap-1 sm:gap-1.5 pointer-events-auto">
-                <button
-                  type="button"
-                  onClick={prev}
-                  aria-label="Previous slide"
-                  className="rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md border border-white/10 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-white transition-all"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={next}
-                  aria-label="Next slide"
-                  className="rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md border border-white/10 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-white transition-all"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* === Mobile ONLY: clean info strip below the image === */}
+        {/* === Shared info strip below the image === */}
         {activeSlide && activeSlide.type !== "promo" && (
           <div
-            className={`sm:hidden bg-white dark:bg-warm-900 border-b border-warm-100 dark:border-warm-800 transition-opacity duration-500 ${fading ? "opacity-0" : "opacity-100"}`}
+            className={`bg-white dark:bg-warm-900 border-b border-warm-100 dark:border-warm-800 transition-opacity duration-500 ${fading ? "opacity-0" : "opacity-100"}`}
           >
-            <div className="px-4 py-3 space-y-1.5">
+            <div className="px-4 py-3 space-y-2 sm:px-6 sm:py-4 lg:px-8 lg:py-5">
+              {activeSlide.promotions && activeSlide.promotions.length > 0 && (
+                <div className="inline-flex items-center gap-2 rounded-full bg-red-500/90 px-2.5 py-1 text-xs font-bold text-white">
+                  <span role="img" aria-label="Hot deal">
+                    🔥
+                  </span>
+                  {activeSlide.promotions[0].title}
+                </div>
+              )}
+
               <div className="flex items-center flex-wrap gap-2">
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badgeColor || "bg-gray-500 text-white"}`}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide sm:px-3 sm:py-1 sm:text-[11px] sm:tracking-[0.16em] ${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badgeColor || "bg-gray-500 text-white"}`}
                 >
                   {(() => {
                     const Icon =
                       ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.Icon ||
                       Building2;
-                    return <Icon className="h-2.5 w-2.5" />;
+                    return <Icon className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />;
                   })()}
                   {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badge}
                 </span>
                 {activeSlide.location && (
-                  <span className="flex items-center gap-1 text-muted-foreground text-xs">
+                  <span className="flex items-center gap-1 text-muted-foreground text-xs sm:text-sm">
                     <MapPin className="h-3 w-3" /> {activeSlide.location}
                   </span>
                 )}
                 {activeSlide.price !== null && (
-                  <span className="text-brand-green-600 dark:text-brand-green-400 text-sm font-bold ml-auto">
+                  <span className="text-brand-green-600 dark:text-brand-green-400 text-sm font-bold ml-auto sm:text-base">
                     {formatPrice(activeSlide.price)}
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div className="min-w-0 flex-1">
-                  <h2 className="font-display text-base font-bold text-foreground leading-tight truncate">
+                  <h2 className="font-display text-base font-bold text-foreground leading-tight truncate sm:text-xl lg:text-2xl">
                     {activeSlide.title}
                   </h2>
-                  <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                  <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground sm:text-sm lg:text-base">
                     {activeSlide.description}
                   </p>
                 </div>
@@ -570,11 +494,11 @@ export function HeroBanner({
                   href={`${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.href}${activeSlide.id}`}
                   className={cn(
                     buttonVariants({ size: "sm" }),
-                    "shrink-0 h-8 px-3 text-xs bg-brand-green hover:bg-brand-green-600 text-white font-bold gap-1 rounded-full"
+                    "shrink-0 h-8 px-3 text-xs bg-brand-green hover:bg-brand-green-600 text-white font-bold gap-1 rounded-full sm:h-10 sm:px-5 sm:text-sm sm:gap-2"
                   )}
                 >
                   {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.cta || "View"}
-                  <ArrowRight className="h-3 w-3" />
+                  <ArrowRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                 </Link>
               </div>
             </div>

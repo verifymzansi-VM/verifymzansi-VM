@@ -67,4 +67,32 @@ describe("HeroBanner", () => {
     expect(screen.queryByLabelText("Search area")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Search listings")).not.toBeInTheDocument();
   });
+
+  it("uses shared slide indicators without desktop arrow buttons", () => {
+    render(
+      <HeroBanner
+        latestListings={[
+          {
+            id: "listing-1",
+            title: "Honda Fit",
+            description: "Clean hatchback",
+            location_city: "Johannesburg",
+            photos: ["/images/fallbacks/hero-listing.svg"],
+          },
+          {
+            id: "listing-2",
+            title: "Toyota Starlet",
+            description: "Fuel saver",
+            location_city: "Durban",
+            photos: ["/images/fallbacks/hero-listing.svg"],
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /go to slide 1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /go to slide 2/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /previous slide/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /next slide/i })).not.toBeInTheDocument();
+  });
 });
