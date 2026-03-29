@@ -28,6 +28,7 @@ const wranglerTomlPath = path.join(repoRoot, "wrangler.toml");
 const openNextEntryPath = path.join(repoRoot, "workers", "open-next-entry.mjs");
 const envLocalPath = path.join(repoRoot, ".env.local");
 const envProductionLocalPath = path.join(repoRoot, ".env.production.local");
+const legacyProxyPath = path.join(repoRoot, "src", "proxy.ts");
 
 const blockedProductionVars = [
   "BYPASS_OTP_CODE",
@@ -137,6 +138,15 @@ function writeProductionEnvOverride() {
   }
 }
 
+function removeLegacyProxyEntrypoint() {
+  if (!fs.existsSync(legacyProxyPath)) {
+    return;
+  }
+
+  fs.rmSync(legacyProxyPath, { force: true });
+  console.log("✓ Removed stale src/proxy.ts so Next.js only uses src/middleware.ts.");
+}
+
 function isWSL() {
   if (os.platform() !== "linux") return false;
   try {
@@ -164,6 +174,7 @@ if (validateOnly) {
 }
 
 writeProductionEnvOverride();
+removeLegacyProxyEntrypoint();
 
 if (platform === "win32") {
   console.error(`
@@ -201,7 +212,3 @@ if (isWSL()) {
 } else {
   console.log(`✓ Running on ${platform} — Cloudflare build should work.`);
 }
-
-// Keep both src/middleware.ts and src/proxy.ts in the repo.
-// Different Next/OpenNext runtime combinations may honor one entrypoint name
-// before the other, and the shared handler keeps behavior aligned.

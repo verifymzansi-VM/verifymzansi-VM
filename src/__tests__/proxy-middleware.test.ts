@@ -15,7 +15,6 @@ vi.mock("@supabase/ssr", () => ({
 }));
 
 import { middleware } from "@/middleware";
-import { proxy } from "@/proxy";
 import { routeRequest } from "@/proxy-handler";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 
@@ -96,7 +95,7 @@ describe("middleware — missing Supabase env", () => {
   });
 });
 
-describe("proxy security headers", () => {
+describe("middleware security headers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.PLAYWRIGHT_SUPABASE_MODE;
@@ -122,17 +121,6 @@ describe("proxy security headers", () => {
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
     expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
-    expect(setCookie).toContain("vm_csrf=");
-  });
-
-  it("adds the same security headers through the proxy entrypoint", async () => {
-    const res = await proxy(createMockRequest("/"));
-    const csp = res.headers.get("Content-Security-Policy");
-    const setCookie = res.headers.get("set-cookie");
-
-    expect(res.status).toBe(200);
-    expect(csp).toContain("default-src 'self'");
-    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(setCookie).toContain("vm_csrf=");
   });
 
