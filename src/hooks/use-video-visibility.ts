@@ -11,9 +11,10 @@ import { useReducedMotion } from "./use-reduced-motion";
  *   loaded (so poster-frame extraction works), but auto-play is skipped.
  *
  * @param videoSrc  The video URL. Pass `undefined` when the media is not a video.
+ * @param shouldAutoplay When false, the video still lazy-loads but will not auto-play.
  * @returns `{ videoRef, reducedMotion }` — attach `videoRef` to the `<video>` element.
  */
-export function useVideoVisibility(videoSrc?: string) {
+export function useVideoVisibility(videoSrc?: string, shouldAutoplay = true) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const reducedMotion = useReducedMotion();
 
@@ -28,11 +29,13 @@ export function useVideoVisibility(videoSrc?: string) {
           if (!el.src) {
             el.src = videoSrc;
           }
-          // Skip auto-play when user prefers reduced motion
-          if (!reducedMotion) {
+          // Skip auto-play when user prefers reduced motion or playback is intentionally paused
+          if (!reducedMotion && shouldAutoplay) {
             el.play().catch(() => {
               /* autoplay may be blocked */
             });
+          } else {
+            el.pause();
           }
         } else {
           el.pause();
@@ -43,7 +46,7 @@ export function useVideoVisibility(videoSrc?: string) {
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [videoSrc, reducedMotion]);
+  }, [videoSrc, reducedMotion, shouldAutoplay]);
 
   return { videoRef, reducedMotion };
 }

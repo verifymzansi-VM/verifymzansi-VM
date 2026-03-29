@@ -74,6 +74,7 @@ export default async function MzansiMarketPage() {
         : l.photos && l.photos.length > 0
           ? normalizeMediaUrl(l.photos[0])
           : undefined,
+      logoUrl: l.logo_url ? normalizeMediaUrl(l.logo_url) : undefined,
       price: l.price_cents ? l.price_cents / 100 : null,
       promotions: [],
     }));

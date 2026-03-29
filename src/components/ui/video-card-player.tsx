@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { Volume2, VolumeX, Maximize2, Play, AlertTriangle } from "lucide-react";
+import { Volume2, VolumeX, Maximize2, Play, Pause, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useHoverCapability } from "@/hooks/use-hover-capability";
@@ -166,6 +166,10 @@ export interface VideoCardPlayerProps {
   containerAspectRatio?: number;
   /** Controls whether the mute toggle should stay visible. */
   muteControlVisibility?: MuteControlVisibility;
+  /** Shows a persistent play/pause toggle for ambient video previews. */
+  showPlaybackControl?: boolean;
+  /** Notifies callers when the ambient playback control changes state. */
+  onPlaybackStateChange?: (isPlaying: boolean) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -186,13 +190,15 @@ export function VideoCardPlayer({
   fitStrategy = "cover",
   containerAspectRatio = DEFAULT_CONTAINER_ASPECT_RATIO,
   muteControlVisibility = "auto",
+  showPlaybackControl = false,
+  onPlaybackStateChange,
 }: VideoCardPlayerProps) {
   const isVideo = isVideoUrl(src);
   const normalizedSrc = src ? normalizeMediaUrl(src) : undefined;
   const normalizedPoster = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const canHover = useHoverCapability();
   const effectiveMode = mode === "hover" && !canHover ? "ambient" : mode;
-  const mediaKey = `${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}|${effectiveMode}`;
+  const mediaKey = `${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}|${effectiveMode}|${showPlaybackControl ? "controls" : "no-controls"}`;
 
   if (effectiveMode === "hover" && isVideo) {
     return (
@@ -232,8 +238,25 @@ export function VideoCardPlayer({
       fitStrategy={fitStrategy}
       containerAspectRatio={containerAspectRatio}
       muteControlVisibility={muteControlVisibility}
+      showPlaybackControl={showPlaybackControl}
+      onPlaybackStateChange={onPlaybackStateChange}
     />
   );
+}
+
+function getInitialAmbientPlaybackPaused(
+  mode: "interactive" | "ambient",
+  showPlaybackControl: boolean
+) {
+  if (mode !== "ambient" || !showPlaybackControl || typeof window === "undefined") {
+    return false;
+  }
+
+  if (typeof window.matchMedia !== "function") {
+    return false;
+  }
+
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 interface VideoCardPlayerInnerProps {
@@ -252,6 +275,8 @@ interface VideoCardPlayerInnerProps {
   fitStrategy: MediaFitStrategy;
   containerAspectRatio: number;
   muteControlVisibility: MuteControlVisibility;
+  showPlaybackControl: boolean;
+  onPlaybackStateChange?: (isPlaying: boolean) => void;
 }
 
 function VideoCardPlayerInner({
@@ -270,8 +295,18 @@ function VideoCardPlayerInner({
   fitStrategy,
   containerAspectRatio,
   muteControlVisibility,
+  showPlaybackControl,
+  onPlaybackStateChange,
 }: VideoCardPlayerInnerProps) {
-  const { videoRef, reducedMotion } = useVideoVisibility(isVideo ? normalizedSrc : undefined);
+  const [isPlaybackPaused, setIsPlaybackPaused] = useState(() =>
+    getInitialAmbientPlaybackPaused(mode, showPlaybackControl)
+  );
+  const [hasActivatedPlayback, setHasActivatedPlayback] = useState(false);
+  const shouldAutoplay = !isPlaybackPaused;
+  const { videoRef, reducedMotion } = useVideoVisibility(
+    isVideo ? normalizedSrc : undefined,
+    shouldAutoplay
+  );
   const [isMuted, setIsMuted] = useState(true);
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -296,12 +331,15 @@ function VideoCardPlayerInner({
     !hasError &&
     !reducedMotion &&
     (muteControlVisibility === "always" || mode === "interactive");
+  const showPlaybackToggle = isVideo && mode === "ambient" && showPlaybackControl && !hasError;
+  const canDisplayVideo = !reducedMotion || hasActivatedPlayback;
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
 
     const onPlaying = () => setVideoReady(true);
+    const onPlay = () => setHasActivatedPlayback(true);
     const onLoadedMetadata = () => {
       if (el.videoWidth > 0 && el.videoHeight > 0) {
         setMediaAspectRatio(el.videoWidth / el.videoHeight);
@@ -309,9 +347,11 @@ function VideoCardPlayerInner({
     };
 
     el.addEventListener("playing", onPlaying);
+    el.addEventListener("play", onPlay);
     el.addEventListener("loadedmetadata", onLoadedMetadata);
     return () => {
       el.removeEventListener("playing", onPlaying);
+      el.removeEventListener("play", onPlay);
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
     };
   }, [videoRef]);
@@ -378,6 +418,34 @@ function VideoCardPlayerInner({
       });
     },
     [videoRef]
+  );
+
+  const togglePlayback = useCallback(
+    (event: React.SyntheticEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const el = videoRef.current;
+      if (!el) return;
+
+      if (isPlaybackPaused) {
+        if (!el.src && normalizedSrc) {
+          el.src = normalizedSrc;
+        }
+        el.play().catch(() => {
+          /* autoplay may be blocked */
+        });
+        setIsPlaybackPaused(false);
+        setHasActivatedPlayback(true);
+        onPlaybackStateChange?.(true);
+        return;
+      }
+
+      el.pause();
+      setIsPlaybackPaused(true);
+      onPlaybackStateChange?.(false);
+    },
+    [isPlaybackPaused, normalizedSrc, onPlaybackStateChange, videoRef]
   );
 
   const handleError = useCallback(() => {
@@ -459,7 +527,7 @@ function VideoCardPlayerInner({
             className={cn(
               "absolute inset-0 z-[2] transition-opacity duration-300",
               foregroundMediaClassName,
-              videoReady && !hasError && !reducedMotion ? "opacity-0" : "opacity-100"
+              videoReady && !hasError && canDisplayVideo ? "opacity-0" : "opacity-100"
             )}
             sizes={sizes}
             priority={priority}
@@ -481,12 +549,28 @@ function VideoCardPlayerInner({
           className={cn(
             "relative z-[3] h-full w-full transition-opacity duration-300",
             foregroundMediaClassName,
-            hasError || reducedMotion || !videoReady ? "opacity-0" : "opacity-100"
+            hasError || !videoReady || !canDisplayVideo ? "opacity-0" : "opacity-100"
           )}
           data-media-fit={usesSmartFit ? "smart" : "cover"}
         />
 
         {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
+        {showPlaybackToggle ? (
+          <div className="absolute bottom-3 left-3 z-[8]">
+            <button
+              type="button"
+              onClick={togglePlayback}
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70"
+              aria-label={isPlaybackPaused ? "Play video" : "Pause video"}
+            >
+              {isPlaybackPaused ? (
+                <Play className="h-4 w-4 fill-white" />
+              ) : (
+                <Pause className="h-4 w-4 fill-white" />
+              )}
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   }

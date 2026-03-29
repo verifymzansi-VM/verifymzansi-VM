@@ -40,6 +40,7 @@ const { VideoCardPlayer } = await import("./video-card-player");
 
 describe("VideoCardPlayer", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     useHoverCapabilityMock.mockReturnValue(true);
     useVideoVisibilityMock.mockReturnValue({
@@ -52,6 +53,8 @@ describe("VideoCardPlayer", () => {
       reducedMotion: false,
       isHovering: false,
     });
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
   });
 
   it("renders ambient video previews muted with a persistent mute control", () => {
@@ -115,6 +118,43 @@ describe("VideoCardPlayer", () => {
     expect(screen.getByRole("button", { name: /unmute/i })).toBeTruthy();
   });
 
+  it("renders a play/pause toggle for ambient videos when requested", () => {
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        showPlaybackControl
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /pause video/i })).toBeTruthy();
+  });
+
+  it("notifies callers when the ambient playback control pauses and resumes video", () => {
+    const onPlaybackStateChange = vi.fn();
+
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        showPlaybackControl
+        onPlaybackStateChange={onPlaybackStateChange}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /pause video/i }));
+    expect(onPlaybackStateChange).toHaveBeenCalledWith(false);
+    expect(screen.getByRole("button", { name: /play video/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /play video/i }));
+    expect(onPlaybackStateChange).toHaveBeenCalledWith(true);
+    expect(screen.getByRole("button", { name: /pause video/i })).toBeTruthy();
+  });
+
   it("switches extreme images to smart-fit presentation", () => {
     render(
       <VideoCardPlayer
@@ -175,5 +215,38 @@ describe("VideoCardPlayer", () => {
 
     expect(video).toHaveAttribute("data-media-fit", "smart");
     expect(video).toHaveClass("object-contain");
+  });
+
+  it("keeps the playback toggle accessible for reduced-motion users and starts paused", () => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === "(prefers-reduced-motion: reduce)",
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    useVideoVisibilityMock.mockReturnValue({
+      videoRef: { current: null },
+      reducedMotion: true,
+    });
+
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        showPlaybackControl
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /play video/i })).toBeTruthy();
   });
 });

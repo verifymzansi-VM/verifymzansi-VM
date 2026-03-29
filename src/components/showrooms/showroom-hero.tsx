@@ -1,11 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useCallback, useRef, useMemo, type TouchEvent } from "react";
 import Link from "next/link";
 import { MapPin, Building2, ArrowRight, ShieldCheck } from "lucide-react";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { buttonVariants } from "@/components/ui/button";
-import { VideoCardPlayer } from "@/components/ui/video-card-player";
+import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { cn } from "@/lib/utils";
+import { normalizeMediaUrl } from "@/lib/utils/media-url";
 
 const ENTITY_CONFIG = {
   storefront: {
@@ -39,6 +42,7 @@ export interface ShowroomSlide {
   location: string;
   mediaUrl: string;
   posterUrl?: string;
+  logoUrl?: string;
   price?: number | null;
   promotions?: Record<string, unknown>[];
   hrefOverride?: string;
@@ -61,6 +65,7 @@ export function ShowroomHero({
 }: ShowroomHeroProps) {
   const [current, setCurrent] = useState(0);
   const [fading, setFading] = useState(false);
+  const [isActiveVideoPaused, setIsActiveVideoPaused] = useState(false);
   const touchStartX = useRef(0);
 
   const slides = useMemo<ShowroomSlide[]>(() => {
@@ -89,6 +94,7 @@ export function ShowroomHero({
       if (index === current) return;
       setFading(true);
       setTimeout(() => {
+        setIsActiveVideoPaused(false);
         setCurrent(index);
         setFading(false);
       }, 240);
@@ -112,10 +118,10 @@ export function ShowroomHero({
   }, [next]);
 
   useEffect(() => {
-    if (slides.length <= 1) return;
+    if (slides.length <= 1 || isActiveVideoPaused) return;
     const id = setInterval(() => nextRef.current(), 8000);
     return () => clearInterval(id);
-  }, [slides.length]);
+  }, [isActiveVideoPaused, slides.length]);
 
   const handleTouchStart = useCallback((event: TouchEvent) => {
     touchStartX.current = event.changedTouches[0].clientX;
@@ -148,6 +154,8 @@ export function ShowroomHero({
   const activeCta = activeSlide.ctaLabelOverride || activeConfig.cta;
   const activeBadge = activeSlide.badgeLabelOverride || activeConfig.badge;
   const ActiveIcon = activeConfig.Icon;
+  const activeSlideIsVideo = isVideoUrl(activeSlide.mediaUrl);
+  const activeLogoUrl = activeSlide.logoUrl ? normalizeMediaUrl(activeSlide.logoUrl) : null;
 
   return (
     <section className="w-full">
@@ -170,13 +178,47 @@ export function ShowroomHero({
               sizes="100vw"
               mode="ambient"
               muteControlVisibility="always"
+              showPlaybackControl={activeSlideIsVideo}
+              onPlaybackStateChange={(isPlaying) => setIsActiveVideoPaused(!isPlaying)}
               priority
               mediaClassName="scale-[1.01]"
             />
           </div>
 
+          <div
+            className={cn(
+              "pointer-events-none absolute bottom-3 right-3 z-20 transition-opacity duration-500 sm:bottom-5 sm:right-5",
+              fading ? "opacity-0" : "opacity-100"
+            )}
+          >
+            <div
+              className="flex min-h-[44px] items-center rounded-full border border-white/12 bg-black/45 px-2.5 py-1.5 shadow-[0_18px_36px_-22px_rgba(15,23,42,0.92)] backdrop-blur-md"
+              data-testid="showroom-logo-tag"
+            >
+              {activeLogoUrl ? (
+                <div className="relative h-8 w-[72px] sm:h-9 sm:w-[88px]">
+                  <Image
+                    src={activeLogoUrl}
+                    alt={`${activeSlide.title} logo tag`}
+                    fill
+                    sizes="(max-width: 640px) 72px, 88px"
+                    className="object-contain"
+                    unoptimized
+                  />
+                </div>
+              ) : (
+                <BrandLogo
+                  size="sm"
+                  tone="inverse"
+                  className="w-[92px] sm:w-[108px]"
+                  imageClassName="drop-shadow-none"
+                />
+              )}
+            </div>
+          </div>
+
           {slides.length > 1 ? (
-            <div className="absolute bottom-2.5 right-3 z-20 flex items-center justify-end sm:bottom-6 sm:right-0 sm:left-0 sm:container-page">
+            <div className="absolute bottom-2.5 left-0 right-0 z-20 flex items-center justify-center sm:bottom-5">
               <div className="flex gap-1.5">
                 {slides.map((_, index) => (
                   <button
