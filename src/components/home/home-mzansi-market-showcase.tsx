@@ -51,22 +51,15 @@ export async function HomeMzansiMarketShowcase() {
       <div className="container-page space-y-4 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-green-700/80 dark:text-brand-green-300/80">
-              Step 1
-            </p>
             <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl text-brand-green-900 dark:text-brand-green-100">
-              Start with Mzansi Market
+              Latest on Mzansi Market
             </h2>
             <p className="text-muted-foreground text-sm sm:text-base max-w-2xl">
-              Browse the latest deals from verified sellers with one standout card at a time on
-              mobile.
+              Deals on vehicles, property, electronics & more from verified sellers.
             </p>
           </div>
-          <Link
-            href="/mzansi-market"
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-brand-green/20 bg-white/80 px-4 py-2 text-sm font-semibold text-brand-green shadow-sm transition-colors hover:border-brand-green/35 hover:text-brand-green/80 dark:bg-warm-950/40"
-          >
-            <span className="inline-flex items-center gap-1.5">
+          <Link href="/mzansi-market" className="shrink-0">
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-green hover:text-brand-green/80 transition-colors">
               View All Listings
               <ArrowRight className="h-4 w-4" />
             </span>
@@ -82,7 +75,7 @@ export async function HomeMzansiMarketShowcase() {
             return (
               <div
                 key={l.id}
-                className="min-w-[84vw] max-w-[84vw] sm:min-w-[320px] sm:max-w-[320px] lg:min-w-[264px] lg:max-w-[264px]"
+                className="min-w-[240px] max-w-[264px] sm:min-w-[264px] sm:max-w-[264px]"
               >
                 <MarketPreviewCard
                   href={`/listing/${l.id}`}

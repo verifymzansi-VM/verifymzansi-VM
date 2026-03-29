@@ -96,7 +96,6 @@ export const ListingCardList = memo(function ListingCardList({
                   alt={title}
                   sizes="160px"
                   mode="hover"
-                  touchPreviewBehavior="poster"
                   mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
                 />
               ) : (

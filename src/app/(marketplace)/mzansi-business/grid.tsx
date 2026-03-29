@@ -223,7 +223,7 @@ export function MzansiBusinessGrid() {
 
   return (
     <div className="space-y-6" data-testid="mzansi-business-grid-ready">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
           <span className="font-medium text-foreground">{totalCount}</span> business
           {totalCount !== 1 ? "es" : ""} found
@@ -236,7 +236,7 @@ export function MzansiBusinessGrid() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
         {businesses.map((business, index) => (
           <div
             key={business.id}

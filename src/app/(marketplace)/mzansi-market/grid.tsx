@@ -88,13 +88,7 @@ export function MzansiMarketGrid() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<GridFetchError | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-      return window.matchMedia("(max-width: 767px)").matches ? "list" : "grid";
-    }
-
-    return "grid";
-  });
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [, startTransition] = useTransition();
   const fetchGenRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -320,7 +314,7 @@ export function MzansiMarketGrid() {
 
   return (
     <div className="space-y-6" data-testid="mzansi-market-grid-ready">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
           <span className="font-medium text-foreground">{totalCount}</span> listing
           {totalCount !== 1 ? "s" : ""} found
@@ -333,7 +327,7 @@ export function MzansiMarketGrid() {
         </p>
 
         {/* View mode toggle */}
-        <div className="flex items-center self-start rounded-lg border border-border p-0.5 gap-0.5">
+        <div className="flex items-center rounded-lg border border-border p-0.5 gap-0.5">
           <button
             type="button"
             onClick={() => setViewMode("grid")}
@@ -362,7 +356,7 @@ export function MzansiMarketGrid() {
       </div>
 
       {viewMode === "grid" ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {listings.map((listing, index) => {
             const videoUrl = listing.videos?.[0];
             const displayUrl = videoUrl || listing.photos?.[0];

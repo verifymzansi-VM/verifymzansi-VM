@@ -45,22 +45,15 @@ export async function HomeBusinessShowcase() {
       <div className="container-page space-y-4 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-blue/75 dark:text-brand-blue/80">
-              Step 2
-            </p>
             <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl text-blue-900 dark:text-blue-100">
-              Then explore Mzansi Business
+              Mzansi Business
             </h2>
             <p className="text-muted-foreground text-sm sm:text-base max-w-2xl">
-              Move into trusted businesses and services with roomier mobile cards that keep the
-              focus on the brand.
+              Verified SA businesses — shops, services & more.
             </p>
           </div>
-          <Link
-            href="/mzansi-business"
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-brand-blue/20 bg-white/80 px-4 py-2 text-sm font-semibold text-brand-blue shadow-sm transition-colors hover:border-brand-blue/35 hover:text-brand-blue/80 dark:bg-warm-950/40"
-          >
-            <span className="inline-flex items-center gap-1.5">
+          <Link href="/mzansi-business" className="shrink-0">
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-blue hover:text-brand-blue/80 transition-colors">
               Browse All Businesses
               <ArrowRight className="h-4 w-4" />
             </span>
@@ -71,7 +64,7 @@ export async function HomeBusinessShowcase() {
           {items.map((b) => (
             <div
               key={b.id}
-              className="min-w-[84vw] max-w-[84vw] sm:min-w-[320px] sm:max-w-[320px] lg:min-w-[264px] lg:max-w-[264px]"
+              className="min-w-[240px] max-w-[264px] sm:min-w-[264px] sm:max-w-[264px]"
             >
               <BusinessPreviewCard
                 href={`/mzansi-business/${b.id}`}

@@ -372,7 +372,7 @@ export function HeroBanner({
                 </div>
               )}
 
-              <div className="flex flex-wrap items-start gap-2 sm:items-center">
+              <div className="flex items-center flex-wrap gap-2">
                 <span
                   className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide sm:px-3 sm:py-1 sm:text-[11px] sm:tracking-[0.16em] ${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.badgeColor || "bg-gray-500 text-white"}`}
                 >
@@ -390,7 +390,7 @@ export function HeroBanner({
                   </span>
                 )}
                 {activeSlide.price !== null && (
-                  <span className="w-full text-base font-bold text-brand-green-600 dark:text-brand-green-400 sm:ml-auto sm:w-auto">
+                  <span className="text-brand-green-600 dark:text-brand-green-400 text-sm font-bold ml-auto sm:text-base">
                     {formatPrice(activeSlide.price)}
                   </span>
                 )}
@@ -398,10 +398,10 @@ export function HeroBanner({
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div className="min-w-0 flex-1">
-                  <h2 className="font-display text-lg font-bold leading-tight text-foreground line-clamp-2 sm:line-clamp-1 sm:text-xl lg:text-2xl">
+                  <h2 className="font-display text-base font-bold text-foreground leading-tight truncate sm:text-xl lg:text-2xl">
                     {activeSlide.title}
                   </h2>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground sm:line-clamp-1 sm:text-sm lg:text-base">
+                  <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground sm:text-sm lg:text-base">
                     {activeSlide.description}
                   </p>
                 </div>
@@ -409,7 +409,7 @@ export function HeroBanner({
                   href={`${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.href}${activeSlide.id}`}
                   className={cn(
                     buttonVariants({ size: "sm" }),
-                    "h-10 w-full justify-center rounded-full bg-brand-green px-4 text-sm font-bold text-white gap-1 hover:bg-brand-green-600 sm:h-10 sm:w-auto sm:shrink-0 sm:px-5 sm:text-sm sm:gap-2"
+                    "shrink-0 h-8 px-3 text-xs bg-brand-green hover:bg-brand-green-600 text-white font-bold gap-1 rounded-full sm:h-10 sm:px-5 sm:text-sm sm:gap-2"
                   )}
                 >
                   {ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.cta || "View"}
