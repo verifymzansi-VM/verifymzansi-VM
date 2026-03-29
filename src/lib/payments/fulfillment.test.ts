@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fulfillPayment } from "./fulfillment";
 import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 import { logAuditEvent } from "@/lib/services/audit";
+import { getStablePlanId } from "@/lib/constants/plan-ids";
 
 vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: vi.fn().mockResolvedValue(undefined),
@@ -10,6 +11,7 @@ vi.mock("@/lib/services/audit", () => ({
 function createMockAdminClient(options?: {
   existingInvoice?: boolean;
   previousEntitlementStatus?: "active" | "cancelled" | null;
+  planRows?: Array<Record<string, unknown>>;
 }) {
   const invoiceInsert = vi.fn().mockResolvedValue({ error: null });
   const entitlementsUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -21,11 +23,24 @@ function createMockAdminClient(options?: {
 
   const from = vi.fn((table: string) => {
     if (table === "plans") {
+      const rows = options?.planRows ?? [{ id: "plan-1", tier: "growth", area: "MZANSI_MARKET" }];
       return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: { tier: "growth", area: "MZANSI_MARKET" },
+        select: vi.fn().mockReturnValue({
+          eq(column: string, value: unknown) {
+            const filters: Array<[string, unknown]> = [[column, value]];
+            const chain = {
+              eq(nextColumn: string, nextValue: unknown) {
+                filters.push([nextColumn, nextValue]);
+                return chain;
+              },
+              maybeSingle: vi.fn().mockImplementation(async () => ({
+                data:
+                  rows.find((row) => filters.every(([key, expected]) => row[key] === expected)) ??
+                  null,
+              })),
+            };
+            return chain;
+          },
         }),
       };
     }
@@ -168,6 +183,7 @@ describe("fulfillPayment invoice creation", () => {
     const mock = createMockAdminClient({
       existingInvoice: false,
       previousEntitlementStatus: "active",
+      planRows: [{ id: "plan-2", tier: "growth", area: "MZANSI_MARKET", active: true }],
     });
 
     await fulfillPayment(mock.client as never, {
@@ -190,6 +206,45 @@ describe("fulfillPayment invoice creation", () => {
 
     expect(mock.spies.entitlementsUpsert).toHaveBeenCalledOnce();
     expect(mock.spies.entitlementsUpdate).toHaveBeenCalledOnce();
+  });
+
+  it("falls back from stable frontend plan tokens to the canonical database row", async () => {
+    const mock = createMockAdminClient({
+      planRows: [
+        {
+          id: "db-plan-growth",
+          area: "MZANSI_MARKET",
+          tier: "growth",
+          name: "Mzansi Market Growth",
+          price_cents: 25000,
+          active: true,
+        },
+      ],
+    });
+
+    await fulfillPayment(mock.client as never, {
+      id: "pay-stable-token",
+      user_id: "user-1",
+      area: "MZANSI_MARKET",
+      amount_cents: 25000,
+      status: "processing",
+      provider: "ozow",
+      provider_payment_id: "ozow-stable-token",
+      provider_reference: "pay-stable-token",
+      provider_data: {
+        type: "subscription",
+        plan_id: getStablePlanId("MZANSI_MARKET", "growth"),
+      },
+      created_at: "2026-03-26T10:00:00.000Z",
+    });
+
+    expect(mock.spies.entitlementsUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        area: "MZANSI_MARKET",
+        tier: "growth",
+      }),
+      { onConflict: "user_id,area,type" }
+    );
   });
 
   it("supports nested provider metadata for listing boosts", async () => {

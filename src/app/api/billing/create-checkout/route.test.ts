@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createHostedCheckout } from "@/lib/payments/checkout";
 import { type NextRequest } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { getStablePlanId } from "@/lib/constants/plan-ids";
 import {
   OzowAuthenticationError,
   OzowConfigurationError,
@@ -103,6 +104,40 @@ function createMissingCsrfRequest(body: Record<string, unknown>) {
   return createBillingRequest(body, { includeCsrf: false });
 }
 
+function createPlansTableMock(
+  rows: Array<Record<string, unknown>>,
+  options?: { requireDirectIdMiss?: boolean }
+) {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq(column: string, value: unknown) {
+        const filters: Array<[string, unknown]> = [[column, value]];
+        const chain = {
+          eq(nextColumn: string, nextValue: unknown) {
+            filters.push([nextColumn, nextValue]);
+            return chain;
+          },
+          maybeSingle: vi.fn().mockImplementation(async () => {
+            const directIdLookup =
+              filters.length === 1 &&
+              filters[0]?.[0] === "id" &&
+              typeof filters[0]?.[1] === "string";
+
+            if (directIdLookup && options?.requireDirectIdMiss) {
+              return { data: null, error: null };
+            }
+
+            const match =
+              rows.find((row) => filters.every(([key, expected]) => row[key] === expected)) ?? null;
+            return { data: match, error: null };
+          }),
+        };
+        return chain;
+      },
+    }),
+  };
+}
+
 describe("POST /api/billing/create-checkout", () => {
   const mockSupabase = {
     from: vi.fn(),
@@ -118,6 +153,51 @@ describe("POST /api/billing/create-checkout", () => {
     vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
     vi.mocked(createAdminClient).mockReturnValue(mockAdmin as never);
     mockSupabase.from.mockImplementation((table: string) => mockAdmin.from(table));
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "profile-1", display_name: "Test Account" },
+          }),
+        };
+      }
+      if (table === "plans") {
+        return createPlansTableMock([
+          {
+            id: "550e8400-e29b-41d4-a716-446655440000",
+            name: "Mzansi Market Growth",
+            area: "MZANSI_MARKET",
+            tier: "growth",
+            price_cents: 25000,
+            active: true,
+          },
+        ]);
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }
+      if (table === "payments") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      return undefined;
+    });
   });
 
   it("returns 401 if user is not authenticated", async () => {
@@ -221,20 +301,16 @@ describe("POST /api/billing/create-checkout", () => {
         };
       }
       if (table === "plans") {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: {
-              id: "550e8400-e29b-41d4-a716-446655440000",
-              name: "Mzansi Market Growth",
-              area: "MZANSI_MARKET",
-              tier: "growth",
-              price_cents: 25000,
-              active: true,
-            },
-          }),
-        };
+        return createPlansTableMock([
+          {
+            id: "550e8400-e29b-41d4-a716-446655440000",
+            name: "Mzansi Market Growth",
+            area: "MZANSI_MARKET",
+            tier: "growth",
+            price_cents: 25000,
+            active: true,
+          },
+        ]);
       }
       if (table === "entitlements") {
         return {
@@ -276,6 +352,86 @@ describe("POST /api/billing/create-checkout", () => {
     expect(data.checkoutUrl).toBeDefined();
     expect(data.checkoutUrl).toContain("ozow");
     expect(data.paymentId).toBe("pay-001");
+    expect(vi.mocked(createHostedCheckout)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerData: expect.objectContaining({
+          plan_id: "550e8400-e29b-41d4-a716-446655440000",
+        }),
+      })
+    );
+  });
+
+  it("resolves stable frontend plan tokens to the canonical database plan id", async () => {
+    const canonicalPlanId = "d76308c6-1e2c-4035-b4f9-7ae40c62125d";
+    const stablePlanToken = getStablePlanId("MZANSI_MARKET", "growth");
+
+    mockSupabase.auth.getUser.mockResolvedValue({
+      data: { user: { id: "user-1", email: "member@test.com" } },
+    });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "profile-1", display_name: "Test Account" },
+          }),
+        };
+      }
+      if (table === "plans") {
+        return createPlansTableMock(
+          [
+            {
+              id: canonicalPlanId,
+              name: "Mzansi Market Growth",
+              area: "MZANSI_MARKET",
+              tier: "growth",
+              price_cents: 25000,
+              active: true,
+            },
+          ],
+          { requireDirectIdMiss: true }
+        );
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }
+      if (table === "payments") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+    });
+
+    const req = createMockRequest({ planId: stablePlanToken });
+    const res = await createCheckout(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(vi.mocked(createHostedCheckout)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerData: expect.objectContaining({
+          plan_id: canonicalPlanId,
+          plan_tier: "growth",
+          area: "MZANSI_MARKET",
+        }),
+      })
+    );
   });
 
   it("returns 503 when Ozow credentials are missing", async () => {

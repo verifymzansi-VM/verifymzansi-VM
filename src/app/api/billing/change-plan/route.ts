@@ -10,6 +10,7 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createHostedCheckout } from "@/lib/payments/checkout";
 import { env } from "@/lib/config/env";
+import { resolveBillingPlanSelection } from "@/lib/billing/plan-resolver";
 
 const log = createLogger("BillingChangePlan");
 
@@ -96,12 +97,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: newPlan, error: planError } = await admin
-      .from("plans")
-      .select("id, name, area, tier, price_cents, active")
-      .eq("id", newPlanId)
-      .eq("active", true)
-      .maybeSingle();
+    const { plan: newPlan, error: planError } = await resolveBillingPlanSelection(
+      admin as never,
+      newPlanId,
+      { requireActive: true }
+    );
 
     if (planError) {
       log.error("Failed to load target plan", {

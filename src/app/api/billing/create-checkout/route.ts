@@ -16,6 +16,7 @@ import { z } from "zod";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { resolveBillingPlanSelection } from "@/lib/billing/plan-resolver";
 
 const log = createLogger("Checkout");
 
@@ -101,12 +102,21 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Fetch plan ───────────────────────────────────────────
-    const { data: plan } = await supabase
-      .from("plans")
-      .select("*")
-      .eq("id", planId)
-      .eq("active", true)
-      .maybeSingle();
+    const { plan, error: planError } = await resolveBillingPlanSelection(
+      supabase as never,
+      planId,
+      { requireActive: true }
+    );
+
+    if (planError) {
+      log.error("Failed to load checkout plan", {
+        planId,
+        userId: user.id,
+        error: planError.message,
+        code: planError.code,
+      });
+      return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });
+    }
 
     if (!plan) {
       return NextResponse.json({ error: "Plan not found or inactive" }, { status: 404 });

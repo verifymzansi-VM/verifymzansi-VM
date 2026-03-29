@@ -7,6 +7,7 @@ import {
 import { createLogger } from "@/lib/utils/logger";
 import { getPaymentMetadata, type PaymentRecordShape } from "./types";
 import { getOwnerColumn, type OwnerColumn } from "@/lib/account/compat";
+import { resolveBillingPlanSelection } from "@/lib/billing/plan-resolver";
 
 const log = createLogger("PaymentFulfillment");
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
@@ -131,11 +132,11 @@ export async function fulfillPayment(
 
   const planId = typeof meta.plan_id === "string" ? meta.plan_id : null;
   if (planId) {
-    const { data: plan } = await supabase
-      .from("plans")
-      .select("tier, area")
-      .eq("id", planId)
-      .maybeSingle();
+    const { plan, error: planError } = await resolveBillingPlanSelection(supabase as never, planId);
+
+    if (planError) {
+      throw new Error(`Plan lookup failed: ${planError.message}`);
+    }
 
     if (plan?.tier && plan?.area) {
       const { error } = await supabase.from("entitlements").upsert(
@@ -216,7 +217,7 @@ export async function fulfillPayment(
             metadata: {
               reason: "plan_change",
               paymentId: payment.id,
-              replaced_by_plan_id: planId,
+              replaced_by_plan_id: plan.id,
             },
           });
         }

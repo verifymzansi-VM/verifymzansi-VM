@@ -13,6 +13,8 @@ import {
   PLANS,
   type PlanDefinition,
 } from "@/lib/constants/pricing";
+import { getStablePlanId } from "@/lib/constants/plan-ids";
+import { getActivePlanSelectionFromToken } from "@/lib/billing/plan-resolver";
 import { getEntitlements } from "@/lib/services/entitlements";
 
 vi.mock("next/navigation", () => ({
@@ -34,6 +36,7 @@ vi.mock("@/components/billing/subscribe-button", () => ({
 }));
 
 type DbPlanRow = {
+  id: string;
   area: PlanDefinition["area"];
   tier: PlanDefinition["tier"];
   name: string;
@@ -59,7 +62,7 @@ beforeAll(async () => {
 
   const { data, error } = await supabase
     .from("plans")
-    .select("area, tier, name, price_cents, billing_frequency, features, active")
+    .select("id, area, tier, name, price_cents, billing_frequency, features, active")
     .in("area", [...ACTIVE_MARKETPLACE_AREAS])
     .eq("active", true);
 
@@ -129,7 +132,13 @@ describe("Active-area pricing parity", () => {
 
     for (const runtimePlan of activePlans) {
       const dbPlan = dbPlanMap.get(`${runtimePlan.area}:${runtimePlan.tier}`);
+      const stableToken = getStablePlanId(runtimePlan.area, runtimePlan.tier);
       expect(dbPlan).toBeDefined();
+      expect(getActivePlanSelectionFromToken(stableToken)).toMatchObject({
+        area: runtimePlan.area,
+        tier: runtimePlan.tier,
+      });
+      expect(dbPlan?.id).toEqual(expect.any(String));
       expect(dbPlan?.name).toBe(runtimePlan.name);
       expect(dbPlan?.price_cents).toBe(runtimePlan.priceCents);
       expect(dbPlan?.billing_frequency).toBe(runtimePlan.billingFrequency);
