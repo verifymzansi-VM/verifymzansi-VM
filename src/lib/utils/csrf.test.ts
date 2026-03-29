@@ -18,9 +18,18 @@ describe("csrf utilities", () => {
     document.cookie = `${CSRF_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
   });
 
-  it("prefers the meta tag token when reading from the document", () => {
+  it("prefers the readable cookie token when the meta tag is stale", () => {
     document.head.innerHTML = `<meta name="csrf-token" content="${"a".repeat(64)}" />`;
     document.cookie = `${CSRF_COOKIE_NAME}=${"b".repeat(64)}`;
+
+    expect(getCsrfTokenFromDocumentCookie()).toBe("b".repeat(64));
+    expect(document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content).toBe(
+      "b".repeat(64)
+    );
+  });
+
+  it("falls back to the meta tag token when the readable cookie is missing", () => {
+    document.head.innerHTML = `<meta name="csrf-token" content="${"a".repeat(64)}" />`;
 
     expect(getCsrfTokenFromDocumentCookie()).toBe("a".repeat(64));
   });
@@ -78,5 +87,14 @@ describe("csrf utilities", () => {
 
     expect(headers.get(CSRF_HEADER_NAME)).toBe("a".repeat(64));
     expect(headers.get("Content-Type")).toBe("application/json");
+  });
+
+  it("adds the CSRF header from the current cookie when the meta tag is stale", () => {
+    document.head.innerHTML = `<meta name="csrf-token" content="${"a".repeat(64)}" />`;
+    document.cookie = `${CSRF_COOKIE_NAME}=${"b".repeat(64)}`;
+
+    const headers = withCsrfHeaders({ "Content-Type": "application/json" });
+
+    expect(headers.get(CSRF_HEADER_NAME)).toBe("b".repeat(64));
   });
 });
