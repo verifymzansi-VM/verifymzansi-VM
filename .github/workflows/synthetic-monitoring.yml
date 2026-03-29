@@ -18,7 +18,7 @@ jobs:
           fi
         env:
           PROD_URL: ${{ secrets.PRODUCTION_APP_URL }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: steps.check-url.outputs.skip != 'true'
       - uses: pnpm/action-setup@v4
         if: steps.check-url.outputs.skip != 'true'
