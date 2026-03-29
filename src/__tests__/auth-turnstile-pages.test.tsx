@@ -5,19 +5,25 @@ import React, { useEffect } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const { mockPush, mockRefresh, mockToast, mockTurnstileRetry, turnstileLifecycle } = vi.hoisted(
-  () => ({
-    mockPush: vi.fn(),
-    mockRefresh: vi.fn(),
-    mockToast: vi.fn(),
-    mockTurnstileRetry: vi.fn(),
-    turnstileLifecycle: {
-      mounts: 0,
-      unmounts: 0,
-      retryTokens: [] as number[],
-    },
-  })
-);
+const {
+  mockPush,
+  mockRefresh,
+  mockToast,
+  mockTurnstileRetry,
+  mockEnsureCsrfTokenReady,
+  turnstileLifecycle,
+} = vi.hoisted(() => ({
+  mockPush: vi.fn(),
+  mockRefresh: vi.fn(),
+  mockToast: vi.fn(),
+  mockTurnstileRetry: vi.fn(),
+  mockEnsureCsrfTokenReady: vi.fn(),
+  turnstileLifecycle: {
+    mounts: 0,
+    unmounts: 0,
+    retryTokens: [] as number[],
+  },
+}));
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
@@ -32,6 +38,15 @@ vi.mock("next/navigation", () => ({
     push: mockPush,
     refresh: mockRefresh,
   }),
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  ensureCsrfTokenReady: mockEnsureCsrfTokenReady,
+  withCsrfHeaders: (headers?: HeadersInit) => {
+    const nextHeaders = new Headers(headers);
+    nextHeaders.set("x-csrf-token", "a".repeat(64));
+    return nextHeaders;
+  },
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -115,6 +130,8 @@ describe("auth page Turnstile retry behavior", () => {
     mockRefresh.mockReset();
     mockToast.mockReset();
     mockTurnstileRetry.mockReset();
+    mockEnsureCsrfTokenReady.mockReset();
+    mockEnsureCsrfTokenReady.mockResolvedValue("a".repeat(64));
     turnstileLifecycle.mounts = 0;
     turnstileLifecycle.unmounts = 0;
     turnstileLifecycle.retryTokens = [];
@@ -240,5 +257,119 @@ describe("auth page Turnstile retry behavior", () => {
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Registration failed", variant: "destructive" })
     );
+  });
+
+  it("bootstraps CSRF before posting the login form", async () => {
+    const callOrder: string[] = [];
+    mockEnsureCsrfTokenReady.mockImplementation(async () => {
+      callOrder.push("csrf");
+      return "a".repeat(64);
+    });
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      callOrder.push("fetch");
+      return {
+        ok: true,
+        json: async () => ({ success: true }),
+      };
+    });
+
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "user@example.com" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "Password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Success" }));
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    expect(callOrder).toEqual(["csrf", "fetch"]);
+    expect(mockEnsureCsrfTokenReady).toHaveBeenCalledTimes(1);
+    expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.headers).toEqual(
+      expect.any(Headers)
+    );
+    expect(
+      ((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.headers as Headers).get(
+        "x-csrf-token"
+      )
+    ).toBe("a".repeat(64));
+  });
+
+  it("bootstraps CSRF before posting the register form", async () => {
+    const callOrder: string[] = [];
+    mockEnsureCsrfTokenReady.mockImplementation(async () => {
+      callOrder.push("csrf");
+      return "a".repeat(64);
+    });
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      callOrder.push("fetch");
+      return {
+        ok: true,
+        json: async () => ({ success: true }),
+      };
+    });
+
+    window.history.replaceState({}, "", "/register");
+    render(<RegisterPage />);
+
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Test" } });
+    fireEvent.change(screen.getByLabelText(/surname/i), { target: { value: "User" } });
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "user@example.com" } });
+    fireEvent.change(screen.getByLabelText(/sa mobile number/i), {
+      target: { value: "0712345678" },
+    });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "Password123" } });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), {
+      target: { value: "Password123" },
+    });
+    fireEvent.click(screen.getByLabelText(/i agree to the/i));
+    fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Success" }));
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    expect(callOrder).toEqual(["csrf", "fetch"]);
+    expect(mockEnsureCsrfTokenReady).toHaveBeenCalledTimes(1);
+    expect(
+      ((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.headers as Headers).get(
+        "x-csrf-token"
+      )
+    ).toBe("a".repeat(64));
+  });
+
+  it("bootstraps CSRF before resending a confirmation email", async () => {
+    const callOrder: string[] = [];
+    mockEnsureCsrfTokenReady.mockImplementation(async () => {
+      callOrder.push("csrf");
+      return "a".repeat(64);
+    });
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      callOrder.push("fetch");
+      return {
+        ok: true,
+        json: async () => ({ success: true, message: "sent" }),
+      };
+    });
+
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "user@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Success" }));
+    fireEvent.click(screen.getAllByRole("button", { name: /resend confirmation email/i })[0]);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    expect(callOrder).toEqual(["csrf", "fetch"]);
+    expect(mockEnsureCsrfTokenReady).toHaveBeenCalledTimes(1);
+    expect(
+      ((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.headers as Headers).get(
+        "x-csrf-token"
+      )
+    ).toBe("a".repeat(64));
   });
 });

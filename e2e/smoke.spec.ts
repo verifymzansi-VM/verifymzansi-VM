@@ -112,6 +112,52 @@ test.describe("Platform Smoke", () => {
     expect(payload.status).toBeTruthy();
   });
 
+  test("@smoke Google OAuth recovers when the page starts without a CSRF token", async ({
+    page,
+  }) => {
+    await page.goto("/login");
+
+    const clearedState = await page.evaluate(() => {
+      document.cookie = "vm_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+      document.querySelector('meta[name="csrf-token"]')?.remove();
+      return {
+        cookie: document.cookie.includes("vm_csrf="),
+        meta: Boolean(document.querySelector('meta[name="csrf-token"]')),
+      };
+    });
+    expect(clearedState).toEqual({ cookie: false, meta: false });
+
+    const oauthRequestPromise = page.waitForRequest(
+      (request) => request.url().includes("/api/auth/oauth/google") && request.method() === "POST"
+    );
+
+    await page.route("**/api/auth/oauth/google", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ url: "#oauth-ok" }),
+      });
+    });
+
+    await page.getByRole("button", { name: /continue with google/i }).click();
+
+    const oauthRequest = await oauthRequestPromise;
+
+    expect(oauthRequest.headers()["x-csrf-token"]).toMatch(/^[a-f0-9]{64}$/i);
+    await expect
+      .poll(() =>
+        page.evaluate(() => ({
+          hasCookie: document.cookie.includes("vm_csrf="),
+          meta: document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") ?? null,
+        }))
+      )
+      .toMatchObject({
+        meta: expect.stringMatching(/^[a-f0-9]{64}$/i),
+      });
+    await expect(page).toHaveURL(/#oauth-ok/);
+    await expect(page.getByText(/invalid csrf token/i)).toHaveCount(0);
+  });
+
   test("@smoke webhook endpoints handle malformed payloads without 5xx", async ({ request }) => {
     const ozow = await request.post("/api/webhooks/ozow", {
       data: {

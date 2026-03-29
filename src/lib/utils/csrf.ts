@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import type { Logger } from "@/lib/utils/logger";
 
 export const CSRF_COOKIE_NAME = "vm_csrf";
@@ -6,6 +6,7 @@ export const CSRF_HEADER_NAME = "x-csrf-token";
 
 const CSRF_TOKEN_RE = /^[a-f0-9]{64}$/i;
 const CSRF_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 12;
+let csrfBootstrapPromise: Promise<string | null> | null = null;
 
 interface HeaderLike {
   get(name: string): string | null;
@@ -27,6 +28,22 @@ interface CsrfRequestLike {
 
 function isValidToken(token: string | null | undefined): token is string {
   return typeof token === "string" && CSRF_TOKEN_RE.test(token);
+}
+
+function ensureCsrfMetaTag(token: string): void {
+  if (typeof document === "undefined") return;
+
+  const head = document.head ?? document.querySelector("head");
+  if (!head) return;
+
+  let meta = head.querySelector<HTMLMetaElement>('meta[name="csrf-token"]');
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.name = "csrf-token";
+    head.appendChild(meta);
+  }
+
+  meta.content = token;
 }
 
 function parseCookieHeader(
@@ -77,9 +94,16 @@ export function generateCsrfToken(): string {
   return `${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "")}`;
 }
 
-export function ensureCsrfCookie(request: NextRequest, response: NextResponse): string {
-  const existingToken = getCookieToken(request);
-  const token = existingToken ?? generateCsrfToken();
+function resolveCsrfToken(request: CsrfRequestLike): string {
+  return getCookieToken(request) ?? generateCsrfToken();
+}
+
+export function ensureCsrfCookie(
+  request: CsrfRequestLike,
+  response: NextResponse,
+  explicitToken?: string
+): string {
+  const token = explicitToken ?? resolveCsrfToken(request);
 
   response.cookies.set({
     name: CSRF_COOKIE_NAME,
@@ -119,14 +143,59 @@ export function getCsrfTokenFromDocumentCookie(cookieSource?: string): string | 
     // The cookie is the authoritative token for the server-side comparison.
     // If the layout's meta tag is stale after a client-side navigation or a
     // regenerated cookie, repair it so future reads stay in sync.
-    if (meta && meta.content !== cookieToken) {
-      meta.content = cookieToken;
-    }
+    ensureCsrfMetaTag(cookieToken);
     return cookieToken;
   }
 
   const metaToken = meta?.content ?? null;
   return isValidToken(metaToken) ? metaToken : null;
+}
+
+export async function ensureCsrfTokenReady(): Promise<string | null> {
+  const existingToken = getCsrfTokenFromDocumentCookie();
+  if (existingToken) {
+    return existingToken;
+  }
+
+  if (typeof window === "undefined" || typeof fetch !== "function") {
+    return null;
+  }
+
+  if (!csrfBootstrapPromise) {
+    csrfBootstrapPromise = (async () => {
+      try {
+        const response = await fetch("/api/csrf", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          return null;
+        }
+
+        const payload = (await response.json().catch(() => null)) as { token?: unknown } | null;
+        const responseToken = typeof payload?.token === "string" ? payload.token : null;
+        const currentToken = getCsrfTokenFromDocumentCookie();
+        const token = currentToken ?? (isValidToken(responseToken) ? responseToken : null);
+
+        if (token) {
+          ensureCsrfMetaTag(token);
+        }
+
+        return token;
+      } catch {
+        return null;
+      } finally {
+        csrfBootstrapPromise = null;
+      }
+    })();
+  }
+
+  return csrfBootstrapPromise;
 }
 
 export function withCsrfHeaders(headers?: HeadersInit): Headers {

@@ -1,11 +1,12 @@
 /**
  * @vitest-environment jsdom
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import {
   CSRF_COOKIE_NAME,
   CSRF_HEADER_NAME,
+  ensureCsrfTokenReady,
   enforceCsrfToken,
   ensureCsrfCookie,
   getCsrfTokenFromDocumentCookie,
@@ -16,6 +17,11 @@ describe("csrf utilities", () => {
   beforeEach(() => {
     document.head.innerHTML = "";
     document.cookie = `${CSRF_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("prefers the readable cookie token when the meta tag is stale", () => {
@@ -96,5 +102,62 @@ describe("csrf utilities", () => {
     const headers = withCsrfHeaders({ "Content-Type": "application/json" });
 
     expect(headers.get(CSRF_HEADER_NAME)).toBe("b".repeat(64));
+  });
+
+  it("returns the existing CSRF token without calling the bootstrap route", async () => {
+    document.cookie = `${CSRF_COOKIE_NAME}=${"a".repeat(64)}`;
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(ensureCsrfTokenReady()).resolves.toBe("a".repeat(64));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("fetches a CSRF token once and repairs the meta tag", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ token: "c".repeat(64) }),
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const [firstToken, secondToken] = await Promise.all([
+      ensureCsrfTokenReady(),
+      ensureCsrfTokenReady(),
+    ]);
+
+    expect(firstToken).toBe("c".repeat(64));
+    expect(secondToken).toBe("c".repeat(64));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content).toBe(
+      "c".repeat(64)
+    );
+  });
+
+  it("returns null when the bootstrap route fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: "unavailable" }),
+      })
+    );
+
+    await expect(ensureCsrfTokenReady()).resolves.toBeNull();
+    expect(document.querySelector('meta[name="csrf-token"]')).toBeNull();
+  });
+
+  it("repairs the meta tag from the fetched token before adding CSRF headers", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ token: "d".repeat(64) }),
+      })
+    );
+
+    await ensureCsrfTokenReady();
+    const headers = withCsrfHeaders({ "Content-Type": "application/json" });
+
+    expect(headers.get(CSRF_HEADER_NAME)).toBe("d".repeat(64));
   });
 });

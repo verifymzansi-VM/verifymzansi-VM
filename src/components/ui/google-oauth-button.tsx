@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface GoogleOAuthButtonProps {
   mode: "login" | "register";
@@ -32,6 +32,17 @@ export function GoogleOAuthButton({ mode }: GoogleOAuthButtonProps) {
         typeof window !== "undefined"
           ? new URLSearchParams(window.location.search).get("returnUrl")
           : null;
+      const csrfToken = await ensureCsrfTokenReady();
+
+      if (!csrfToken) {
+        toast({
+          title: "Security check failed",
+          description: "Please refresh the page and try again.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
 
       const response = await fetch("/api/auth/oauth/google", {
         method: "POST",

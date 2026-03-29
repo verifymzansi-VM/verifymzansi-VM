@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -193,9 +194,19 @@ export default function LoginPage() {
     }
     setResendingEmail(true);
     try {
+      const csrfToken = await ensureCsrfTokenReady();
+      if (!csrfToken) {
+        toast({
+          title: "Security check failed",
+          description: "Please refresh the page and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const res = await fetch("/api/auth/resend-confirmation", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ email, turnstileToken }),
       });
       const data = await res.json().catch(() => ({}));
@@ -231,9 +242,19 @@ export default function LoginPage() {
 
   async function onSubmit(data: LoginInput) {
     try {
+      const csrfToken = await ensureCsrfTokenReady();
+      if (!csrfToken) {
+        toast({
+          title: "Security check failed",
+          description: "Please refresh the page and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const response = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data),
       });
 

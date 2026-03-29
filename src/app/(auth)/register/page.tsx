@@ -16,6 +16,7 @@ import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -133,9 +134,19 @@ export default function RegisterPage() {
 
   async function onSubmit(data: RegisterInput) {
     try {
+      const csrfToken = await ensureCsrfTokenReady();
+      if (!csrfToken) {
+        toast({
+          title: "Security check failed",
+          description: "Please refresh the page and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const response = await fetch("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data),
       });
 
