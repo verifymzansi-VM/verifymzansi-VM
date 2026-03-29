@@ -17,6 +17,7 @@ import { parseAndValidateJsonRequest, parseAndValidateSearchParams } from "@/lib
 import { optionalUuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const log = createLogger("EvidenceMetadata");
 const evidenceMetadataQuerySchema = z
@@ -425,6 +426,10 @@ export async function POST(request: NextRequest) {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) {
       return originBlock;
+    }
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) {
+      return csrfBlock;
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, evidenceMetadataBodySchema, {

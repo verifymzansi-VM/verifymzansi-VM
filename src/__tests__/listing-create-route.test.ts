@@ -358,6 +358,7 @@ describe("POST /api/listings", () => {
     });
 
     mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: true }),
       from: vi.fn((table: string) => {
         if (table === "account_profiles") {
           return {

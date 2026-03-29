@@ -692,7 +692,7 @@ function CreatePromotionContent() {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="start_date">
-                          {isEvent ? "Start Date (optional)" : "Start Date (optional)"}
+                          {isEvent ? "Start Date" : "Start Date (optional)"}
                         </Label>
                         <Input
                           id="start_date"
@@ -710,7 +710,7 @@ function CreatePromotionContent() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="end_date">
-                          {isEvent ? "End Date (optional)" : "End Date (optional)"}
+                          {isEvent ? "End Date" : "End Date (optional)"}
                         </Label>
                         <Input
                           id="end_date"

@@ -94,6 +94,7 @@ export async function POST(request: Request) {
       status: decision,
       reviewed_by: user.id,
       reviewed_at: new Date().toISOString(),
+      decided_at: new Date().toISOString(),
     };
 
     if (decision !== "approved") {

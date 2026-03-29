@@ -6,6 +6,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { getEntitlements } from "@/lib/services/entitlements";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { parseJsonRequest, parseAndValidateRouteParams } from "@/lib/utils/api";
@@ -52,6 +53,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // ── CSRF protection ───────────────────────────────────────
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const parsedParams = parseAndValidateRouteParams(await params, listingIdParamsSchema, {
       validationErrorMessage: "Invalid listing ID",
@@ -141,10 +144,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    // Prevent editing rejected listings (require resubmission flow)
+    // Prevent editing rejected, expired, or sold listings
     if (listing.status === "rejected") {
       return NextResponse.json(
         { error: "Cannot edit a rejected listing. Use the resubmission flow." },
+        { status: 409 }
+      );
+    }
+    if (listing.status === "expired" || listing.status === "sold") {
+      return NextResponse.json(
+        { error: `Cannot edit a ${listing.status} listing.` },
         { status: 409 }
       );
     }

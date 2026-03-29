@@ -664,26 +664,24 @@ export async function POST(request: NextRequest) {
     }
 
     if (hasPaidPlan && tier && !postingLimitBypassEnabled) {
-      // Paid plan — check listing count against plan limits
-      const countQuery = applyOwnerFilter(
-        supabase
-          .from("listings")
-          .select("id", { count: "exact", head: true })
-          .neq("status", "rejected"),
-        ownerColumn,
-        user.id
-      );
+      // Paid plan — atomic listing-count guard to prevent TOCTOU race (#25)
+      const ent = getEntitlements(tier as PlanTier, AREA);
 
-      const { count } = await countQuery;
+      if (ent.maxAllowed !== -1) {
+        const admin = getAdmin();
+        const { data: underLimit } = await admin.rpc("check_listing_limit", {
+          p_user_id: user.id,
+          p_area: AREA,
+          p_max_allowed: ent.maxAllowed,
+        });
 
-      const currentCount = count ?? 0;
-      const check = canCreateListing(currentCount, tier as PlanTier, AREA);
-
-      if (!check.allowed) {
-        return NextResponse.json(
-          { error: "Listing limit reached", reason: check.reason },
-          { status: 403 }
-        );
+        if (!underLimit) {
+          const check = canCreateListing(ent.maxAllowed, tier as PlanTier, AREA);
+          return NextResponse.json(
+            { error: "Listing limit reached", reason: check.reason },
+            { status: 403 }
+          );
+        }
       }
     }
 

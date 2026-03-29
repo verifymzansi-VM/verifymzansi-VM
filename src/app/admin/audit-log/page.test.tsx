@@ -50,23 +50,35 @@ describe("AdminAuditLogPage", () => {
   });
 
   it("reads audit logs through the admin client after auth gating", async () => {
-    mockAdminFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        order: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: "log-1",
-                action: "dsar_completed",
-                actor_id: "admin-1",
-                target_type: "dsar_case",
-                metadata: { requestId: "req-1" },
-                created_at: "2026-03-17T10:00:00.000Z",
-              },
-            ],
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "audit_logs") {
+        return {
+          select: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: "log-1",
+                    action: "dsar_completed",
+                    actor_id: "admin-1",
+                    target_type: "dsar_case",
+                    metadata: { requestId: "req-1" },
+                    created_at: "2026-03-17T10:00:00.000Z",
+                  },
+                ],
+              }),
+            }),
+          }),
+        };
+      }
+      // account_profiles lookup for actor names
+      return {
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({
+            data: [{ user_id: "admin-1", display_name: "Admin User" }],
           }),
         }),
-      }),
+      };
     });
 
     render(await AdminAuditLogPage());
@@ -74,16 +86,25 @@ describe("AdminAuditLogPage", () => {
     expect(mockSessionFrom).not.toHaveBeenCalled();
     expect(mockAdminFrom).toHaveBeenCalledWith("audit_logs");
     expect(screen.getByText("dsar_completed")).toBeInTheDocument();
-    expect(screen.getByText(/admin-1/i)).toBeInTheDocument();
+    expect(screen.getByText(/Admin User/i)).toBeInTheDocument();
   });
 
   it("shows the empty state when there are no audit entries", async () => {
-    mockAdminFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        order: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ data: [] }),
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "audit_logs") {
+        return {
+          select: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({ data: [] }),
+            }),
+          }),
+        };
+      }
+      return {
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({ data: [] }),
         }),
-      }),
+      };
     });
 
     render(await AdminAuditLogPage());

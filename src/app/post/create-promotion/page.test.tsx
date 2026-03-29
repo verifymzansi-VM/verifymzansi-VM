@@ -171,10 +171,10 @@ describe("CreatePromotionPage", () => {
     fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
       target: { value: "Johannesburg" },
     });
-    fireEvent.change(screen.getByLabelText(/Start Date \(optional\)/i), {
+    fireEvent.change(screen.getByLabelText(/Start Date$/i), {
       target: { value: "2099-03-10" },
     });
-    fireEvent.change(screen.getByLabelText(/End Date \(optional\)/i), {
+    fireEvent.change(screen.getByLabelText(/End Date$/i), {
       target: { value: "2099-03-12" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));

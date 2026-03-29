@@ -9,6 +9,7 @@ const {
   mockDownloadKycDocument,
   mockGetLinkedEvidenceArtifactIds,
   mockEnforceSameOriginMutation,
+  mockEnforceCsrfToken,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -17,6 +18,7 @@ const {
   mockDownloadKycDocument: vi.fn(),
   mockGetLinkedEvidenceArtifactIds: vi.fn(),
   mockEnforceSameOriginMutation: vi.fn<(request: unknown, log?: unknown) => null>(() => null),
+  mockEnforceCsrfToken: vi.fn<(request: unknown, log?: unknown) => null>(() => null),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -50,6 +52,10 @@ vi.mock("@/lib/utils/logger", () => ({
 vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: (request: unknown, log?: unknown) =>
     mockEnforceSameOriginMutation(request, log),
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: (request: unknown, log?: unknown) => mockEnforceCsrfToken(request, log),
 }));
 
 import { GET, POST } from "./route";

@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     // ── Rate limit ──────────────────────────────────────────
     const ip = getClientIp(request);
     const rateCheck = await checkRateLimit({
-      key: ip,
+      key: `${user.id}:${ip}`,
       action: "billing:checkout",
       degradedMode: "block",
     });

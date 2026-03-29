@@ -24,6 +24,11 @@ import { toast } from "@/hooks/use-toast";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { isPostingLimitBypassEnabled } from "../../lib/utils/posting-limit-bypass";
+import {
+  getOwnerColumn,
+  OWNER_COMPAT_TABLES,
+  type OwnerCompatibleTable,
+} from "@/lib/account/compat";
 
 const logger = createLogger("PlanGate");
 import {
@@ -305,10 +310,13 @@ export function PlanGate({ area, children }: PlanGateProps) {
 
         // Count existing items for this area
         const table = AREA_COUNT_TABLES[area];
+        const ownerCol = (OWNER_COMPAT_TABLES as readonly string[]).includes(table)
+          ? await getOwnerColumn(supabase, table as OwnerCompatibleTable)
+          : "owner_id";
         const { count } = await supabase
           .from(table)
           .select("id", { count: "exact", head: true })
-          .eq("owner_id", user.id)
+          .eq(ownerCol, user.id)
           .neq("status", "rejected");
 
         const currentCount = count ?? 0;

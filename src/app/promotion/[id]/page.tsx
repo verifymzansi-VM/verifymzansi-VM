@@ -69,16 +69,20 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
       ).data
     : null;
 
+  const locationName = [promotion.location_city, promotion.location_province]
+    .filter(Boolean)
+    .join(", ");
+
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "Event",
+    "@type": promotion.promotion_type === "event" ? "Event" : "Product",
     name: promotion.title,
     description: promotion.description?.slice(0, 300),
     ...(promotion.photos?.[0] && { image: promotion.photos[0] }),
     ...(promotion.start_date && { startDate: promotion.start_date }),
     ...(promotion.end_date && { endDate: promotion.end_date }),
-    ...(promotion.location && {
-      location: { "@type": "Place", name: promotion.location },
+    ...(locationName && {
+      location: { "@type": "Place", name: locationName },
     }),
     ...(promotion.price_cents && {
       offers: {

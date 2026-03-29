@@ -10,6 +10,9 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoiste
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: () => ({ limited: false }),
+}));
 
 import { POST } from "@/app/api/content/resubmit/route";
 

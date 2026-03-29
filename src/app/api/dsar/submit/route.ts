@@ -6,6 +6,7 @@ import { sendDsarSubmissionEmail } from "@/lib/services/email";
 import { dsarRequestSchema } from "@/lib/validations/verification";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { createLogger } from "@/lib/utils/logger";
+import { maskIdNumber } from "@/lib/utils/mask";
 import { getClientIp, checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Mask the ID number for safe persistence (show only last 4 digits)
-    const maskedId = idNumber ? `*********${idNumber.slice(-4)}` : undefined;
+    const maskedId = idNumber ? maskIdNumber(idNumber) : undefined;
 
     // ── Turnstile CAPTCHA verification ───────────────────
     if (process.env.TURNSTILE_SECRET_KEY) {

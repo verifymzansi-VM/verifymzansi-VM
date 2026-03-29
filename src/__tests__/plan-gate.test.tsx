@@ -103,6 +103,11 @@ vi.mock("@/types/enums", async (importOriginal) => {
   return { ...actual };
 });
 
+vi.mock("@/lib/account/compat", () => ({
+  getOwnerColumn: vi.fn().mockResolvedValue("owner_id"),
+  OWNER_COMPAT_TABLES: ["listings", "businesses", "promotions", "leads", "contact_events"],
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => (
     <a href={href}>{children}</a>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, CreditCard, AlertCircle } from "lucide-react";
@@ -10,6 +10,7 @@ function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const planId = searchParams.get("plan");
+  const checkoutInitiated = useRef(false);
 
   // Derive validation error eagerly — avoids setState in effect
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -25,6 +26,10 @@ function CheckoutContent() {
     }
 
     if (!isValidPlan) return;
+
+    // Prevent duplicate checkout creation from React strict-mode double-mount
+    if (checkoutInitiated.current) return;
+    checkoutInitiated.current = true;
 
     async function createCheckout() {
       try {

@@ -83,9 +83,13 @@ export async function POST(request: NextRequest) {
         email: parsedBody.data.email,
         ip,
       });
+      const retrySeconds = lockout.retryAfter ?? 3600;
+      const retryMinutes = Math.ceil(retrySeconds / 60);
       return NextResponse.json(
-        { error: "Account temporarily locked due to too many failed attempts. Try again later." },
-        { status: 429, headers: { "Retry-After": String(lockout.retryAfter ?? 3600) } }
+        {
+          error: `Account temporarily locked due to too many failed attempts. Try again in ${retryMinutes} minute${retryMinutes === 1 ? "" : "s"}.`,
+        },
+        { status: 429, headers: { "Retry-After": String(retrySeconds) } }
       );
     }
     // Cross-isolate distributed lockout (survives worker restarts)
@@ -95,9 +99,13 @@ export async function POST(request: NextRequest) {
         email: parsedBody.data.email,
         ip,
       });
+      const distRetrySeconds = distLockout.retryAfter ?? 3600;
+      const distRetryMinutes = Math.ceil(distRetrySeconds / 60);
       return NextResponse.json(
-        { error: "Account temporarily locked due to too many failed attempts. Try again later." },
-        { status: 429, headers: { "Retry-After": String(distLockout.retryAfter ?? 3600) } }
+        {
+          error: `Account temporarily locked due to too many failed attempts. Try again in ${distRetryMinutes} minute${distRetryMinutes === 1 ? "" : "s"}.`,
+        },
+        { status: 429, headers: { "Retry-After": String(distRetrySeconds) } }
       );
     }
 

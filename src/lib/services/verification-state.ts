@@ -35,9 +35,10 @@ export function buildVerificationSessionResumePatch<T extends Record<string, unk
   userId: string,
   patch: T
 ): T & { user_id: string; finalized_at: null } {
+  // Spread patch first; trusted fields after to prevent caller override (#49)
   return {
+    ...patch,
     user_id: userId,
     finalized_at: null,
-    ...patch,
   };
 }

@@ -665,6 +665,24 @@ export default function EditPromotionPage() {
                 />
               </div>
 
+              {!isSubmitting &&
+                (totalImages === 0 ||
+                  title.length < 5 ||
+                  description.length < 20 ||
+                  !province ||
+                  !city) && (
+                  <p className="text-xs text-destructive text-right">
+                    {totalImages === 0
+                      ? "At least one photo is required."
+                      : title.length < 5
+                        ? "Title must be at least 5 characters."
+                        : description.length < 20
+                          ? "Description must be at least 20 characters."
+                          : !province || !city
+                            ? "Province and city are required."
+                            : null}
+                  </p>
+                )}
               <div className="flex justify-between">
                 <Button variant="outline" asChild className="gap-1">
                   <Link href="/dashboard/promotions">

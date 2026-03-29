@@ -75,10 +75,10 @@ export async function POST(request: NextRequest) {
         log.error("IP_HASH_SECRET not configured");
         return NextResponse.json({ error: "Service configuration error" }, { status: 503 });
       }
-      // In development, use a dev-only fallback
+      log.warn("IP_HASH_SECRET not set — using random per-startup key (dev only)");
     }
     const ipHash = crypto
-      .createHmac("sha256", hmacKey || "dev-only-fallback-not-for-production")
+      .createHmac("sha256", hmacKey || crypto.randomBytes(32).toString("hex"))
       .update(sourceIp)
       .digest("hex");
 

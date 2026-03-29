@@ -93,9 +93,11 @@ interface AuditLogEntry {
   metadata?: Record<string, unknown>;
 }
 
-/** Counter for monitoring audit write failures (POPIA compliance). */
+/** Counter for monitoring audit write failures (POPIA compliance).
+ * NOTE: Resets on cold start in serverless — structured log severity:"critical"
+ * is the primary alerting signal for monitoring systems. */
 let auditFailureCount = 0;
-const _AUDIT_FAILURE_ALERT_THRESHOLD = 5;
+const AUDIT_FAILURE_ALERT_THRESHOLD = 5;
 
 /** Return the current count of audit write failures for monitoring. */
 export function getAuditFailureCount(): number {
@@ -139,6 +141,7 @@ export async function logAuditEvent(entry: AuditLogEntry): Promise<void> {
         targetId: entry.targetId,
         dbError: error.message,
         failureCount: auditFailureCount,
+        thresholdBreached: auditFailureCount >= AUDIT_FAILURE_ALERT_THRESHOLD,
       });
     }
   } catch (err) {
@@ -148,6 +151,7 @@ export async function logAuditEvent(entry: AuditLogEntry): Promise<void> {
       action: entry.action,
       error: err instanceof Error ? err.message : "Unknown error",
       failureCount: auditFailureCount,
+      thresholdBreached: auditFailureCount >= AUDIT_FAILURE_ALERT_THRESHOLD,
     });
   }
 }

@@ -48,6 +48,7 @@ export async function HomePromotionsShowcase() {
     .from("promotions")
     .select("*")
     .eq("status", "live")
+    .or(`end_date.is.null,end_date.gte.${now}`)
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })

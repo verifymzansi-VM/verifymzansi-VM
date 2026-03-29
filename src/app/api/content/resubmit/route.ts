@@ -68,14 +68,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rl = checkLocalRateLimit(user.id, "content:resubmit");
-    if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
-
     const bodyResult = await parseAndValidateJsonRequest(request, resubmitSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
@@ -86,6 +78,16 @@ export async function POST(request: Request) {
     }
 
     const { itemId, area } = bodyResult.data;
+
+    // Rate-limit resubmits per user+item to prevent unchanged-content spam (#46)
+    const rl = checkLocalRateLimit(`${user.id}:${itemId}`, "content:resubmit", 1);
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Please edit your content before resubmitting. Try again shortly." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     const config = tableMap[area];
     if (!config) {
       return NextResponse.json({ error: "Invalid area" }, { status: 400 });

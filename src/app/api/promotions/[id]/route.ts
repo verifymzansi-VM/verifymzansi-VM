@@ -192,7 +192,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         .from("promotions")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, photos, videos, video_thumbnail, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged",
+            "id, owner_id, status, title, description, promotion_type, category, category_key, business_id, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged",
             ownerColumn
           )
         )
@@ -279,6 +279,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
 
+    // Only re-trigger moderation when substantive content fields change (#33)
+    const contentChanged =
+      existing.title !== data.title ||
+      existing.description !== data.description ||
+      existing.promotion_type !== data.promotion_type ||
+      existing.category !== (data.category || null) ||
+      existing.category_key !== categoryKey ||
+      existing.price_cents !== priceCents ||
+      existing.location_province !== data.province ||
+      existing.location_city !== data.city ||
+      JSON.stringify(existing.photos) !== JSON.stringify(data.images) ||
+      JSON.stringify(existing.videos) !== JSON.stringify(data.videos) ||
+      (existing.video_thumbnail ?? null) !== (data.video_thumbnail || null);
+
     const updateQuery = applyOwnerFilter(
       supabase
         .from("promotions")
@@ -312,8 +326,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           social_authorization_version: socialAuthorizationWriteResult.social_authorization_version,
           social_monetization_acknowledged:
             socialAuthorizationWriteResult.social_monetization_acknowledged,
-          // Re-trigger moderation on edit so changed content is reviewed
-          status: "pending_moderation",
+          ...(contentChanged ? { status: "pending_moderation" } : {}),
         })
         .eq("id", id),
       ownerColumn,

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { ScrollText } from "lucide-react";
 import { isAdmin } from "@/lib/auth/roles";
+import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import type { AuditLogEntry } from "@/lib/utils/admin-queries";
 
 export const metadata = {
@@ -31,6 +32,19 @@ export default async function AdminAuditLogPage() {
     .select("*")
     .order("created_at", { ascending: false })
     .limit(100);
+
+  // Resolve actor display names
+  const actorIds = [...new Set((logs ?? []).map((e: AuditLogEntry) => e.actor_id).filter(Boolean))];
+  const actorMap = new Map<string, string>();
+  if (actorIds.length > 0) {
+    const { data: profiles } = await admin
+      .from(ACCOUNT_PROFILE_TABLE)
+      .select("user_id, display_name")
+      .in("user_id", actorIds);
+    for (const p of profiles ?? []) {
+      if (p.display_name) actorMap.set(p.user_id, p.display_name);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -64,7 +78,8 @@ export default async function AdminAuditLogPage() {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {entry.actor_id} &middot; {formatRelativeTime(entry.created_at)}
+                      {actorMap.get(entry.actor_id) || entry.actor_id.slice(0, 8)} &middot;{" "}
+                      {formatRelativeTime(entry.created_at)}
                     </p>
                     {entry.metadata && (
                       <p className="text-xs text-muted-foreground truncate">

@@ -17,7 +17,7 @@ import { sendSms } from "@/lib/services/sms";
 
 const log = createLogger("OTPVerify");
 const MAX_VERIFY_ATTEMPTS = 5;
-const LOCKOUT_MS = 15 * 60 * 1000;
+const _LOCKOUT_MS = 15 * 60 * 1000;
 const OTP_PBKDF2_ITERATIONS = 100000;
 
 // Re-exported from shared module
@@ -416,28 +416,21 @@ export async function POST(request: NextRequest) {
 
     // Find matching OTP by verifying hash
     if (!(await verifyOtp(otp, challenge.otp_hash))) {
-      const attemptCount = (challenge.attempt_count || 0) + 1;
-      const lockUntil =
-        attemptCount >= MAX_VERIFY_ATTEMPTS
-          ? new Date(Date.now() + LOCKOUT_MS).toISOString()
-          : null;
+      // Atomic increment to avoid read-modify-write race (#39)
+      const { data: rpcResult } = await adminSupabase.rpc("increment_otp_attempt", {
+        challenge_id: challenge.id,
+        max_attempts: MAX_VERIFY_ATTEMPTS,
+        lockout_duration: "15 minutes",
+      });
 
-      await adminSupabase
-        .from("otp_challenges")
-        .update({
-          attempt_count: attemptCount,
-          ...(lockUntil ? { locked_until: lockUntil } : {}),
-        })
-        .eq("id", challenge.id)
-        .is("verified_at", null);
+      const locked =
+        rpcResult?.[0]?.new_locked_until != null && new Date(rpcResult[0].new_locked_until) > now;
 
       return NextResponse.json(
         {
-          error: lockUntil
-            ? "Too many attempts. Please wait 15 minutes."
-            : "Invalid or expired OTP",
+          error: locked ? "Too many attempts. Please wait 15 minutes." : "Invalid or expired OTP",
         },
-        { status: lockUntil ? 429 : 400 }
+        { status: locked ? 429 : 400 }
       );
     }
 
