@@ -55,11 +55,20 @@ export function CinematicLayout({
   deliveryAvailable,
 }: CinematicLayoutProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hasVideo = Boolean(business.cover_video);
+  const ctaConfig = CATEGORY_CTA_CONFIG[business.category as BusinessCategory];
+  const opHours = business.operating_hours;
   const [isMuted, setIsMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
-  const ctaConfig = CATEGORY_CTA_CONFIG[business.category as BusinessCategory];
-  const hasVideo = Boolean(business.cover_video);
-  const opHours = business.operating_hours;
+  const [activeHero, setActiveHero] = useState<"video" | "cover-photo" | "gallery-photo">(
+    hasVideo ? "video" : business.cover_photo ? "cover-photo" : "gallery-photo"
+  );
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+
+  const activePhotoUrl =
+    activeHero === "cover-photo"
+      ? business.cover_photo
+      : galleryPhotos[activePhotoIndex] || business.cover_photo;
 
   function toggleMute() {
     if (videoRef.current) {
@@ -80,7 +89,7 @@ export function CinematicLayout({
       {/* ═══ HERO: Full-bleed video/cover ═══ */}
       <div className="relative -mx-4 overflow-hidden rounded-2xl sm:-mx-0">
         <div className="relative aspect-[16/9] overflow-hidden bg-black md:aspect-[21/9]">
-          {hasVideo ? (
+          {activeHero === "video" && hasVideo ? (
             <>
               <video
                 ref={videoRef}
@@ -126,9 +135,9 @@ export function CinematicLayout({
                 {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
               </button>
             </>
-          ) : business.cover_photo ? (
+          ) : activePhotoUrl ? (
             <Image
-              src={normalizeMediaUrl(business.cover_photo)}
+              src={normalizeMediaUrl(activePhotoUrl)}
               alt={`${business.business_name} Cover`}
               fill
               className="object-cover"
@@ -162,10 +171,48 @@ export function CinematicLayout({
         {galleryPhotos.length > 0 && (
           <div className="-mx-4 sm:-mx-0">
             <div className="flex gap-3 overflow-x-auto px-4 pb-2 pt-1 snap-x snap-mandatory scrollbar-hide sm:px-0">
+              {hasVideo && (
+                <button
+                  type="button"
+                  onClick={() => setActiveHero("video")}
+                  className={`relative flex-none w-32 h-32 rounded-2xl overflow-hidden snap-center shadow-md border-2 ${
+                    activeHero === "video" ? "border-brand-blue" : "border-transparent"
+                  }`}
+                  aria-label="View profile video"
+                >
+                  {business.video_thumbnail || business.cover_photo ? (
+                    <Image
+                      src={normalizeMediaUrl(business.video_thumbnail || business.cover_photo!)}
+                      alt={`${business.business_name} video thumbnail`}
+                      fill
+                      className="object-cover"
+                      sizes="128px"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-black text-white text-xs">
+                      Video
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/30" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Play className="h-5 w-5 text-white fill-white" />
+                  </div>
+                </button>
+              )}
               {galleryPhotos.map((url, i) => (
-                <div
+                <button
                   key={i}
-                  className="relative flex-none w-32 h-32 rounded-2xl overflow-hidden snap-center shadow-md ring-2 ring-white/20"
+                  type="button"
+                  onClick={() => {
+                    setActivePhotoIndex(i);
+                    setActiveHero("gallery-photo");
+                  }}
+                  className={`relative flex-none w-32 h-32 rounded-2xl overflow-hidden snap-center shadow-md border-2 ${
+                    activeHero !== "video" && activePhotoUrl === url
+                      ? "border-brand-blue"
+                      : "border-transparent"
+                  }`}
+                  aria-label={`View photo ${i + 1}`}
                 >
                   <Image
                     src={normalizeMediaUrl(url)}
@@ -174,7 +221,7 @@ export function CinematicLayout({
                     className="object-cover"
                     sizes="128px"
                   />
-                </div>
+                </button>
               ))}
             </div>
           </div>

@@ -39,12 +39,7 @@ describe("OperatingHoursCard", () => {
 
 describe("ManagedByCard", () => {
   it("shows owner display name", () => {
-    render(
-      <ManagedByCard
-        ownerProfile={{ display_name: "John Doe", avatar_url: null }}
-        trustLevel={null}
-      />
-    );
+    render(<ManagedByCard ownerProfile={{ display_name: "John Doe" }} trustLevel={null} />);
     expect(screen.getByText("John Doe")).toBeInTheDocument();
   });
 
@@ -54,12 +49,7 @@ describe("ManagedByCard", () => {
   });
 
   it("renders trust badge when trust level is set", () => {
-    render(
-      <ManagedByCard
-        ownerProfile={{ display_name: "Owner", avatar_url: null }}
-        trustLevel="verified"
-      />
-    );
+    render(<ManagedByCard ownerProfile={{ display_name: "Owner" }} trustLevel={3} />);
     expect(screen.getByTestId("trust-badge")).toBeInTheDocument();
   });
 });

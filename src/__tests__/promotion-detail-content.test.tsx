@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
@@ -133,14 +133,57 @@ describe("PromotionDetailContent", () => {
     );
 
     const videos = Array.from(container.querySelectorAll("video"));
-    expect(videos).toHaveLength(2);
+    expect(videos).toHaveLength(3);
     expect(videos[0]).toHaveAttribute("src", "https://example.com/video-1.mp4");
-    expect(videos[1]).toHaveAttribute("src", "https://example.com/video-2.mp4");
+    const secondVideo = videos.find(
+      (video) => video.getAttribute("src") === "https://example.com/video-2.mp4"
+    );
+    expect(secondVideo).toBeTruthy();
 
-    const secondVideo = videos[1];
     const photo = screen.getByAltText("Weekend Event photo 2");
-    expect(secondVideo.compareDocumentPosition(photo) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+    expect(secondVideo!.compareDocumentPosition(photo) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
+  });
+
+  it("swaps hero to a photo when its thumbnail is clicked", () => {
+    const { container } = render(
+      <PromotionDetailContent
+        promotion={{
+          id: "promo-3",
+          owner_id: "seller-1",
+          business_id: null,
+          title: "Photo Switch Event",
+          description: "Tap photo thumbnail to view it in the main screen.",
+          promotion_type: "event",
+          category: "Live Music",
+          category_key: "events_entertainment",
+          photos: ["https://example.com/photo-1.jpg", "https://example.com/photo-2.jpg"],
+          videos: ["https://example.com/video-1.mp4"],
+          video_thumbnail: "https://example.com/video-thumb.jpg",
+          price_cents: null,
+          price_negotiable: false,
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
+          contact_methods: [],
+          start_date: null,
+          end_date: null,
+          boost_until: null,
+          featured_until: null,
+          view_count: 1,
+          created_at: "2026-03-08T00:00:00.000Z",
+        }}
+        advertiserProfile={null}
+        linkedBusiness={null}
+      />
+    );
+
+    expect(container.querySelector("video[controls]")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "View photo 2" }));
+    expect(container.querySelector("video[controls]")).toBeNull();
+    const images = Array.from(container.querySelectorAll("img"));
+    expect(
+      images.some((img) => img.getAttribute("src") === "https://example.com/photo-2.jpg")
+    ).toBe(true);
   });
 });

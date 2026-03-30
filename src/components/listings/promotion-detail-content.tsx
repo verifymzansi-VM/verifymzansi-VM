@@ -60,6 +60,13 @@ export interface LinkedBusinessRecord {
   logo_url: string | null;
 }
 
+type PromotionMediaItem = {
+  kind: "video" | "photo";
+  url: string;
+  poster?: string;
+  photoNumber?: number;
+};
+
 function getEventState(startDate: string | null, endDate: string | null) {
   const now = new Date();
   const startsAt = startDate ? new Date(startDate) : null;
@@ -140,11 +147,44 @@ export function PromotionDetailContent({
 }) {
   const photos = promotion.photos ?? [];
   const videos = promotion.videos ?? [];
-  const leadVideo = videos[0];
-  const leadPhoto = photos[0];
+  const leadVideo = videos[0] ?? null;
+  const leadPhoto = photos[0] ?? null;
   const leadPoster = promotion.video_thumbnail || leadPhoto || undefined;
-  const remainingVideos = leadVideo ? videos.slice(1) : videos;
-  const remainingPhotos = leadVideo ? photos : photos.slice(1);
+  const mediaItems: PromotionMediaItem[] = leadVideo
+    ? [
+        { kind: "video", url: leadVideo, poster: leadPoster },
+        ...videos.slice(1).map((url) => ({
+          kind: "video" as const,
+          url,
+          poster: leadPoster,
+        })),
+        ...photos.map((url, index) => ({
+          kind: "photo" as const,
+          url,
+          photoNumber: index + 1,
+        })),
+      ]
+    : leadPhoto
+      ? [
+          { kind: "photo", url: leadPhoto, photoNumber: 1 },
+          ...videos.map((url) => ({
+            kind: "video" as const,
+            url,
+            poster: leadPoster,
+          })),
+          ...photos.slice(1).map((url, index) => ({
+            kind: "photo" as const,
+            url,
+            photoNumber: index + 2,
+          })),
+        ]
+      : videos.map((url) => ({
+          kind: "video" as const,
+          url,
+          poster: leadPoster,
+        }));
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const activeMedia = mediaItems[activeMediaIndex] ?? null;
   const contactMethods = promotion.contact_methods ?? [];
   const isEvent = promotion.promotion_type === "event";
   const eventState = isEvent ? getEventState(promotion.start_date, promotion.end_date) : null;
@@ -174,23 +214,23 @@ export function PromotionDetailContent({
   return (
     <article className="space-y-6">
       {/* ═══ HERO: Video-first full-bleed media ═══ */}
-      {(photos.length > 0 || videos.length > 0) && (
+      {activeMedia && (
         <div className="-mx-4 overflow-hidden rounded-2xl sm:-mx-0">
           <div className="relative aspect-[16/9] overflow-hidden bg-black md:aspect-[2/1]">
-            {leadVideo ? (
+            {activeMedia.kind === "video" ? (
               <video
-                src={normalizeMediaUrl(leadVideo)}
+                src={normalizeMediaUrl(activeMedia.url)}
                 controls
                 playsInline
                 preload="metadata"
-                poster={leadPoster ? normalizeMediaUrl(leadPoster) : undefined}
+                poster={activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined}
                 className="h-full w-full bg-black object-contain"
               >
                 <track kind="captions" />
               </video>
             ) : (
               <Image
-                src={normalizeMediaUrl(leadPhoto || "/images/placeholder.png")}
+                src={normalizeMediaUrl(activeMedia.url)}
                 alt={promotion.title}
                 fill
                 className="object-cover"
@@ -227,39 +267,56 @@ export function PromotionDetailContent({
       )}
 
       {/* Remaining media gallery */}
-      {(remainingVideos.length > 0 || remainingPhotos.length > 0) && (
+      {mediaItems.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-hide">
-          {remainingVideos.map((videoUrl, index) => (
-            <div
-              key={`v-${index}`}
-              className="relative flex-none w-48 aspect-video overflow-hidden rounded-xl bg-black snap-center"
-            >
-              <video
-                src={normalizeMediaUrl(videoUrl)}
-                controls
-                playsInline
-                preload="metadata"
-                poster={leadPoster ? normalizeMediaUrl(leadPoster) : undefined}
-                className="h-full w-full object-contain"
+          {mediaItems.map((item, index) => {
+            const isActive = activeMediaIndex === index;
+
+            if (item.kind === "video") {
+              return (
+                <button
+                  key={`v-${index}`}
+                  type="button"
+                  onClick={() => setActiveMediaIndex(index)}
+                  className={`relative flex-none w-48 aspect-video overflow-hidden rounded-xl bg-black snap-center border-2 ${
+                    isActive ? "border-brand-blue" : "border-transparent"
+                  }`}
+                  aria-label={`View video ${index + 1}`}
+                >
+                  <video
+                    src={normalizeMediaUrl(item.url)}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    poster={item.poster ? normalizeMediaUrl(item.poster) : undefined}
+                    className="h-full w-full object-contain"
+                  >
+                    <track kind="captions" />
+                  </video>
+                </button>
+              );
+            }
+
+            return (
+              <button
+                key={`p-${index}`}
+                type="button"
+                onClick={() => setActiveMediaIndex(index)}
+                className={`relative flex-none w-32 aspect-square overflow-hidden rounded-xl snap-center border-2 ${
+                  isActive ? "border-brand-blue" : "border-transparent"
+                }`}
+                aria-label={`View photo ${item.photoNumber ?? index + 1}`}
               >
-                <track kind="captions" />
-              </video>
-            </div>
-          ))}
-          {remainingPhotos.map((photo, index) => (
-            <div
-              key={`p-${index}`}
-              className="relative flex-none w-32 aspect-square overflow-hidden rounded-xl snap-center"
-            >
-              <Image
-                src={normalizeMediaUrl(photo)}
-                alt={`${promotion.title} photo ${index + 2}`}
-                fill
-                className="object-cover"
-                sizes="128px"
-              />
-            </div>
-          ))}
+                <Image
+                  src={normalizeMediaUrl(item.url)}
+                  alt={`${promotion.title} photo ${item.photoNumber ?? index + 1}`}
+                  fill
+                  className="object-cover"
+                  sizes="128px"
+                />
+              </button>
+            );
+          })}
         </div>
       )}
 

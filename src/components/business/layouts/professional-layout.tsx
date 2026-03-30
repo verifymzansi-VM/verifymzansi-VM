@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
-import { Store } from "lucide-react";
+import { Play, Store } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { BusinessPromoVideo } from "@/components/listings/business-promo-video";
 import { PromotionCard } from "@/components/listings/promotion-card";
@@ -57,6 +58,24 @@ export function ProfessionalLayout({
   const ctaConfig = CATEGORY_CTA_CONFIG[business.category as BusinessCategory];
   const hasVideo = Boolean(business.cover_video);
   const opHours = business.operating_hours;
+  const mediaItems = [
+    ...(hasVideo
+      ? [
+          {
+            kind: "video" as const,
+            url: business.cover_video!,
+            poster: business.video_thumbnail || business.cover_photo || undefined,
+          },
+        ]
+      : []),
+    ...galleryPhotos.map((url, index) => ({
+      kind: "photo" as const,
+      url,
+      photoNumber: index + 1,
+    })),
+  ];
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const activeMedia = mediaItems[activeMediaIndex] ?? null;
 
   return (
     <>
@@ -124,43 +143,79 @@ export function ProfessionalLayout({
             deliveryAvailable={deliveryAvailable}
           />
 
-          {/* Video in a dedicated card */}
-          {hasVideo && (
+          {/* Media showcase */}
+          {activeMedia && (
             <Card>
               <CardContent className="p-4">
-                <h3 className="mb-3 font-display text-lg font-bold">Business Video</h3>
-                <BusinessPromoVideo
-                  videoUrl={normalizeMediaUrl(business.cover_video!)}
-                  thumbnailUrl={
-                    business.video_thumbnail
-                      ? normalizeMediaUrl(business.video_thumbnail)
-                      : undefined
-                  }
-                  businessName={business.business_name}
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Gallery */}
-          {galleryPhotos.length > 0 && (
-            <Card>
-              <CardContent className="p-4">
-                <h3 className="mb-3 font-display text-lg font-bold">
-                  {ctaConfig?.galleryHeading ?? "Gallery"}
-                </h3>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {galleryPhotos.map((url, i) => (
-                    <div key={i} className="relative aspect-square overflow-hidden rounded-lg">
+                <h3 className="mb-3 font-display text-lg font-bold">Media Showcase</h3>
+                <div className="space-y-3">
+                  <div className="relative aspect-[16/9] overflow-hidden rounded-xl bg-black">
+                    {activeMedia.kind === "video" ? (
+                      <BusinessPromoVideo
+                        videoUrl={normalizeMediaUrl(activeMedia.url)}
+                        thumbnailUrl={
+                          activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined
+                        }
+                        businessName={business.business_name}
+                      />
+                    ) : (
                       <Image
-                        src={normalizeMediaUrl(url)}
-                        alt={`${business.business_name} photo ${i + 1}`}
+                        src={normalizeMediaUrl(activeMedia.url)}
+                        alt={`${business.business_name} photo ${activeMedia.photoNumber ?? 1}`}
                         fill
                         className="object-cover"
-                        sizes="(min-width: 640px) 25vw, 33vw"
+                        sizes="100vw"
                       />
-                    </div>
-                  ))}
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                    {mediaItems.map((item, i) => (
+                      <button
+                        key={`${item.kind}-${i}`}
+                        type="button"
+                        onClick={() => setActiveMediaIndex(i)}
+                        className={`relative aspect-square overflow-hidden rounded-lg border-2 ${
+                          activeMediaIndex === i ? "border-brand-blue" : "border-transparent"
+                        }`}
+                        aria-label={
+                          item.kind === "video"
+                            ? "View profile video"
+                            : `View photo ${item.photoNumber ?? i + 1}`
+                        }
+                      >
+                        {item.kind === "video" ? (
+                          <>
+                            {item.poster || business.cover_photo ? (
+                              <Image
+                                src={normalizeMediaUrl(item.poster || business.cover_photo!)}
+                                alt={`${business.business_name} video thumbnail`}
+                                fill
+                                className="object-cover"
+                                sizes="160px"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-black text-white text-xs">
+                                Video
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/30" />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <Play className="h-5 w-5 text-white fill-white" />
+                            </div>
+                          </>
+                        ) : (
+                          <Image
+                            src={normalizeMediaUrl(item.url)}
+                            alt={`${business.business_name} photo ${item.photoNumber ?? i + 1}`}
+                            fill
+                            className="object-cover"
+                            sizes="160px"
+                          />
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </CardContent>
             </Card>

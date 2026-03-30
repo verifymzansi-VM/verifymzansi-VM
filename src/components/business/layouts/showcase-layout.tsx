@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
-import { Store } from "lucide-react";
+import { Play, Store } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { BusinessPromoVideo } from "@/components/listings/business-promo-video";
 import { PromotionCard } from "@/components/listings/promotion-card";
@@ -57,6 +58,24 @@ export function ShowcaseLayout({
   const ctaConfig = CATEGORY_CTA_CONFIG[business.category as BusinessCategory];
   const hasVideo = Boolean(business.cover_video);
   const opHours = business.operating_hours;
+  const mediaItems = [
+    ...(hasVideo
+      ? [
+          {
+            kind: "video" as const,
+            url: business.cover_video!,
+            poster: business.video_thumbnail || business.cover_photo || undefined,
+          },
+        ]
+      : []),
+    ...galleryPhotos.map((url, index) => ({
+      kind: "photo" as const,
+      url,
+      photoNumber: index + 1,
+    })),
+  ];
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const activeMedia = mediaItems[activeMediaIndex] ?? null;
 
   return (
     <>
@@ -93,41 +112,79 @@ export function ShowcaseLayout({
       {/* ═══ CONTENT ═══ */}
       <div className="space-y-6">
         {/* Gallery grid: video as first tile, then photos */}
-        {(hasVideo || galleryPhotos.length > 0) && (
+        {activeMedia && (
           <div>
             <h2 className="mb-3 font-display text-lg font-bold">
               {ctaConfig?.galleryHeading ?? "Gallery"}
             </h2>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-              {/* Video as first large tile */}
-              {hasVideo && (
-                <div className="col-span-2 md:col-span-1 md:row-span-2">
+            <div className="space-y-3">
+              <div className="relative aspect-[16/9] overflow-hidden rounded-2xl bg-black">
+                {activeMedia.kind === "video" ? (
                   <BusinessPromoVideo
-                    videoUrl={normalizeMediaUrl(business.cover_video!)}
+                    videoUrl={normalizeMediaUrl(activeMedia.url)}
                     thumbnailUrl={
-                      business.video_thumbnail
-                        ? normalizeMediaUrl(business.video_thumbnail)
-                        : undefined
+                      activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined
                     }
                     businessName={business.business_name}
                   />
-                </div>
-              )}
-              {/* Gallery photos fill remaining space */}
-              {galleryPhotos.map((url, i) => (
-                <div
-                  key={i}
-                  className="relative aspect-square overflow-hidden rounded-xl shadow-sm"
-                >
+                ) : (
                   <Image
-                    src={normalizeMediaUrl(url)}
-                    alt={`${business.business_name} photo ${i + 1}`}
+                    src={normalizeMediaUrl(activeMedia.url)}
+                    alt={`${business.business_name} photo ${activeMedia.photoNumber ?? 1}`}
                     fill
-                    className="object-cover transition-transform hover:scale-105"
-                    sizes="(min-width: 768px) 33vw, 50vw"
+                    className="object-cover"
+                    sizes="100vw"
                   />
-                </div>
-              ))}
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                {mediaItems.map((item, i) => (
+                  <button
+                    key={`${item.kind}-${i}`}
+                    type="button"
+                    onClick={() => setActiveMediaIndex(i)}
+                    className={`relative aspect-square overflow-hidden rounded-xl border-2 ${
+                      activeMediaIndex === i ? "border-brand-blue" : "border-transparent"
+                    }`}
+                    aria-label={
+                      item.kind === "video"
+                        ? "View profile video"
+                        : `View photo ${item.photoNumber ?? i + 1}`
+                    }
+                  >
+                    {item.kind === "video" ? (
+                      <>
+                        {item.poster || business.cover_photo ? (
+                          <Image
+                            src={normalizeMediaUrl(item.poster || business.cover_photo!)}
+                            alt={`${business.business_name} video thumbnail`}
+                            fill
+                            className="object-cover"
+                            sizes="160px"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-black text-white text-xs">
+                            Video
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/30" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Play className="h-5 w-5 text-white fill-white" />
+                        </div>
+                      </>
+                    ) : (
+                      <Image
+                        src={normalizeMediaUrl(item.url)}
+                        alt={`${business.business_name} photo ${item.photoNumber ?? i + 1}`}
+                        fill
+                        className="object-cover"
+                        sizes="160px"
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
