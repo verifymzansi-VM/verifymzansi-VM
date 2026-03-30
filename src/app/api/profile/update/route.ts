@@ -8,6 +8,12 @@ import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import {
+  checkCooldown,
+  PHONE_CHANGE_COOLDOWN_MS,
+  phoneCooldown,
+  phoneReverificationRequired,
+} from "@/lib/account/identity-policy";
 
 const log = createLogger("ProfileUpdate");
 
@@ -52,17 +58,72 @@ export async function POST(request: NextRequest) {
       return parsedBody.response;
     }
 
+    // ── Fetch current profile for policy enforcement ─────────────────
+    const { data: currentProfile, error: profileFetchError } = await supabase
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
+      .select(
+        "legal_name_locked_at, location_verified_at, account_verification_status, phone, contact_last_phone_change_at"
+      )
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (profileFetchError) {
+      log.error("Failed to fetch profile for policy check", {
+        userId: user.id,
+        error: profileFetchError.message,
+      });
+      return internalApiError();
+    }
+
+    // ── Phone-change policy enforcement ───────────────────────────────
+    // Only enforced when the user already has a canonical (OTP-verified) phone.
+    // First-time phone setup via OTP is always permitted.
+    if (parsedBody.data.phone !== undefined && currentProfile?.phone) {
+      // Must be fully verified before changing a canonical phone
+      if (currentProfile.account_verification_status !== "verified") {
+        const policyErr = phoneReverificationRequired();
+        return NextResponse.json(
+          { error: policyErr.message, code: policyErr.code },
+          { status: 403 }
+        );
+      }
+      // 15-day cooldown since last successful phone change
+      const cooldownUntil = checkCooldown(
+        currentProfile.contact_last_phone_change_at,
+        PHONE_CHANGE_COOLDOWN_MS
+      );
+      if (cooldownUntil) {
+        const policyErr = phoneCooldown(cooldownUntil);
+        return NextResponse.json(
+          { error: policyErr.message, code: policyErr.code, retryAfter: policyErr.retryAfter },
+          { status: 429 }
+        );
+      }
+    }
+
     let normalizedPhone: string | null = null;
     if (parsedBody.data.phone && parsedBody.data.phone !== "") {
       normalizedPhone = normalizeSaPhone(parsedBody.data.phone);
     }
 
+    // ── Build update payload (skip locked fields) ─────────────────────
+    // Locked fields are silently excluded so a user saving only their bio
+    // is never blocked by locks set on other fields.  The DB trigger
+    // provides defence-in-depth against direct bypass attempts.
     const updatePayload: Record<string, unknown> = {
-      display_name: parsedBody.data.displayName,
       bio: parsedBody.data.bio || null,
-      location_province: parsedBody.data.province || null,
-      location_city: parsedBody.data.city || null,
     };
+
+    // display_name: writable only before legal name is locked from verified ID
+    if (!currentProfile?.legal_name_locked_at) {
+      updatePayload.display_name = parsedBody.data.displayName;
+    }
+
+    // location: writable only before location is verified
+    if (!currentProfile?.location_verified_at) {
+      updatePayload.location_province = parsedBody.data.province || null;
+      updatePayload.location_city = parsedBody.data.city || null;
+    }
 
     if (typeof parsedBody.data.avatarUrl === "string") {
       updatePayload.avatar_url = parsedBody.data.avatarUrl || null;
@@ -85,6 +146,16 @@ export async function POST(request: NextRequest) {
     if (updateError) {
       if (updateError.code === "23505") {
         return NextResponse.json({ error: ACCOUNT_PHONE_IN_USE_ERROR }, { status: 409 });
+      }
+      // DB trigger fired — identity lock bypass attempt
+      if (updateError.code === "P0001") {
+        return NextResponse.json(
+          {
+            error: "One or more fields cannot be changed after identity verification.",
+            code: "POLICY_VIOLATION",
+          },
+          { status: 403 }
+        );
       }
       log.error("Profile update failed", { userId: user.id, error: updateError.message });
       return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });

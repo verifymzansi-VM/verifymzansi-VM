@@ -98,6 +98,10 @@ describe("POST /api/profile/update", () => {
 
     mockCreateClient.mockResolvedValue({
       from: vi.fn().mockReturnValue({
+        // Profile pre-fetch: select().eq().maybeSingle() → no profile (no locks apply)
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
@@ -164,5 +168,106 @@ describe("POST /api/profile/update", () => {
       success: true,
       profile: expect.objectContaining({ display_name: "Nomsa" }),
     });
+  });
+
+  it("returns 403 when phone is changed but account is not verified", async () => {
+    const from = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: {
+          legal_name_locked_at: null,
+          location_verified_at: null,
+          account_verification_status: "pending_review",
+          phone: "+27821234567",
+          contact_last_phone_change_at: null,
+        },
+        error: null,
+      }),
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({ single: vi.fn() }),
+        }),
+      }),
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+    });
+
+    const res = await POST(createRequest({ displayName: "Nomsa", phone: "+27829876543" }));
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ code: "PHONE_REVERIFICATION_REQUIRED" });
+  });
+
+  it("returns 429 when phone is changed within the 15-day cooldown window", async () => {
+    // Set last change to 5 days ago — still within the 15-day window
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+
+    const from = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: {
+          legal_name_locked_at: null,
+          location_verified_at: null,
+          account_verification_status: "verified",
+          phone: "+27821234567",
+          contact_last_phone_change_at: fiveDaysAgo,
+        },
+        error: null,
+      }),
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({ single: vi.fn() }),
+        }),
+      }),
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+    });
+
+    const res = await POST(createRequest({ displayName: "Nomsa", phone: "+27829876543" }));
+
+    expect(res.status).toBe(429);
+    await expect(res.json()).resolves.toMatchObject({ code: "PHONE_COOLDOWN" });
+  });
+
+  it("returns 403 POLICY_VIOLATION when the DB trigger rejects a locked field change", async () => {
+    const updateSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "P0001", message: "identity lock violation" },
+    });
+
+    const from = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({ single: updateSingle }),
+        }),
+      }),
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+    });
+
+    const res = await POST(createRequest({ displayName: "Tampered Name" }));
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ code: "POLICY_VIOLATION" });
   });
 });

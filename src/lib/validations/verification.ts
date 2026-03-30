@@ -15,6 +15,16 @@ export const verificationOtpSchema = z.object({
 /** Zod schema for the ID-document upload step (SA ID number + document URL). */
 export const verificationIdDocSchema = z.object({
   idNumber: saIdSchema,
+  firstName: z
+    .string()
+    .trim()
+    .min(1, "First name as shown on your ID is required")
+    .max(100, "First name cannot exceed 100 characters"),
+  lastName: z
+    .string()
+    .trim()
+    .min(1, "Surname as shown on your ID is required")
+    .max(100, "Surname cannot exceed 100 characters"),
   idDocumentUrl: z.string().url("Upload your ID document"),
   idDocumentType: z.enum(["sa_id"]),
 });
@@ -83,6 +93,10 @@ export const fileUploadSchema = z.object({
   }),
   idNumber: z.string().max(13).optional(),
   idDocumentType: z.enum(["sa_id"]).optional(),
+  /** First name as printed on the ID document (required for id_document uploads). */
+  firstName: z.string().trim().max(100).optional(),
+  /** Surname as printed on the ID document (required for id_document uploads). */
+  lastName: z.string().trim().max(100).optional(),
 });
 
 /**

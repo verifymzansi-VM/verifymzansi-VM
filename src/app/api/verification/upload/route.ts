@@ -186,6 +186,16 @@ export async function POST(request: NextRequest) {
     }
 
     const { docType, idNumber } = metaParsed.data;
+    const firstName = metaParsed.data.firstName?.trim() || undefined;
+    const lastName = metaParsed.data.lastName?.trim() || undefined;
+
+    // firstName and lastName are required for id_document uploads
+    if (docType === "id_document" && (!firstName || !lastName)) {
+      return jsonError(
+        { error: "First name and surname as shown on your ID are required." },
+        { status: 400 }
+      );
+    }
 
     // ── Validate file type and size ──────────────────────────
     const allowPdf = docType === "id_document" || docType === "proof_of_address";
@@ -470,6 +480,10 @@ export async function POST(request: NextRequest) {
       if (engineResult.idNumberHmac) {
         stepData.id_number_hmac = engineResult.idNumberHmac;
       }
+
+      // Persist legal name from ID document for later propagation on approval
+      if (firstName) stepData.first_name = firstName;
+      if (lastName) stepData.last_name = lastName;
     }
 
     // CAS guard: only overwrite an existing step if it is still in a

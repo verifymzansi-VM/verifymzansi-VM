@@ -16,6 +16,8 @@ import {
   Camera,
   LogOut,
   Trash2,
+  Lock,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +34,12 @@ import { summarizeVerification } from "@/lib/account/verification-summary";
 import { profileUpdateSchema } from "@/lib/validations/profile";
 import { ACCOUNT_PHONE_IN_USE_ERROR, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
+import {
+  checkCooldown,
+  PHONE_CHANGE_COOLDOWN_MS,
+  EMAIL_CHANGE_COOLDOWN_MS,
+} from "@/lib/account/identity-policy";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import type { AccountVerificationStatus } from "@/types/enums";
 
 type TabValue = "profile" | "security" | "account";
@@ -58,6 +66,13 @@ export default function ProfilePage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [activeTab, setActiveTab] = useState<TabValue>("profile");
+  const [isNameLocked, setIsNameLocked] = useState(false);
+  const [isLocationLocked, setIsLocationLocked] = useState(false);
+  const [phoneCooldownUntil, setPhoneCooldownUntil] = useState<Date | null>(null);
+  const [emailCooldownUntil, setEmailCooldownUntil] = useState<Date | null>(null);
+  const [newEmail, setNewEmail] = useState("");
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [isChangingEmail, setIsChangingEmail] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const router = useRouter();
@@ -111,7 +126,7 @@ export default function ProfilePage() {
         supabase
           .from(ACCOUNT_PROFILE_TABLE)
           .select(
-            "display_name, bio, location_province, location_city, phone, account_verification_status, avatar_url"
+            "display_name, bio, location_province, location_city, phone, account_verification_status, avatar_url, legal_name_locked_at, location_verified_at, contact_last_phone_change_at, contact_last_email_change_at"
           )
           .eq("user_id", user.id)
           .maybeSingle(),
@@ -134,6 +149,14 @@ export default function ProfilePage() {
         setCity(profile.location_city || "");
         setPhone(sanitizeSaPhoneInput(profile.phone || ""));
         setAvatarUrl(profile.avatar_url || null);
+        setIsNameLocked(!!profile.legal_name_locked_at);
+        setIsLocationLocked(!!profile.location_verified_at);
+        setPhoneCooldownUntil(
+          checkCooldown(profile.contact_last_phone_change_at ?? null, PHONE_CHANGE_COOLDOWN_MS)
+        );
+        setEmailCooldownUntil(
+          checkCooldown(profile.contact_last_email_change_at ?? null, EMAIL_CHANGE_COOLDOWN_MS)
+        );
       }
       setVerificationStatus(verificationSummary.accountVerificationStatus);
       setIsLoading(false);
@@ -218,7 +241,7 @@ export default function ProfilePage() {
     try {
       const res = await fetch("/api/profile/update", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(result.data),
       });
 
@@ -229,6 +252,22 @@ export default function ProfilePage() {
           toast({
             title: "Phone number already in use",
             description: ACCOUNT_PHONE_IN_USE_ERROR,
+            variant: "destructive",
+          });
+          return;
+        }
+        if (res.status === 403 && data.code === "PHONE_REVERIFICATION_REQUIRED") {
+          toast({
+            title: "Verification required",
+            description: data.error,
+            variant: "destructive",
+          });
+          return;
+        }
+        if (res.status === 429 && data.code === "PHONE_COOLDOWN") {
+          toast({
+            title: "Phone change unavailable",
+            description: data.error,
             variant: "destructive",
           });
           return;
@@ -288,7 +327,7 @@ export default function ProfilePage() {
     try {
       const res = await fetch("/api/auth/change-password", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ currentPassword, newPassword, confirmNewPassword }),
       });
 
@@ -316,6 +355,40 @@ export default function ProfilePage() {
       toast({ title: "Something went wrong", variant: "destructive" });
     } finally {
       setIsChangingPassword(false);
+    }
+  }
+
+  async function handleEmailChange(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newEmail) return;
+    setIsChangingEmail(true);
+    try {
+      const res = await fetch("/api/account/email/change", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ newEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({
+          title: "Email change failed",
+          description: data.error || "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setShowEmailForm(false);
+      setNewEmail("");
+      setEmailCooldownUntil(new Date(Date.now() + EMAIL_CHANGE_COOLDOWN_MS));
+      toast({
+        title: "Confirmation sent",
+        description: "Check your new email address to complete the change.",
+        variant: "success",
+      });
+    } catch {
+      toast({ title: "Something went wrong", variant: "destructive" });
+    } finally {
+      setIsChangingEmail(false);
     }
   }
 
@@ -424,16 +497,32 @@ export default function ProfilePage() {
               {/* Profile form */}
               <form noValidate onSubmit={handleSave} className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="displayName">Display Name *</Label>
+                  <Label htmlFor="displayName" className="flex items-center gap-1.5">
+                    Display Name *
+                    {isNameLocked && (
+                      <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label="Locked" />
+                    )}
+                  </Label>
                   <Input
                     id="displayName"
                     value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value.slice(0, 50))}
+                    onChange={
+                      isNameLocked ? undefined : (e) => setDisplayName(e.target.value.slice(0, 50))
+                    }
+                    readOnly={isNameLocked}
+                    disabled={isNameLocked}
                     placeholder="Your public display name"
                     maxLength={50}
                     required
+                    className={isNameLocked ? "bg-muted cursor-not-allowed" : undefined}
                   />
-                  <p className="text-xs text-muted-foreground">{displayName.length}/50</p>
+                  {isNameLocked ? (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Lock className="h-3 w-3" /> Set from your verified ID — cannot be changed.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">{displayName.length}/50</p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -456,57 +545,98 @@ export default function ProfilePage() {
                     type="tel"
                     inputMode="tel"
                     value={phone}
-                    onChange={(e) => setPhone(sanitizeSaPhoneInput(e.target.value))}
+                    onChange={
+                      phoneCooldownUntil
+                        ? undefined
+                        : (e) => setPhone(sanitizeSaPhoneInput(e.target.value))
+                    }
+                    readOnly={!!phoneCooldownUntil}
+                    disabled={!!phoneCooldownUntil}
                     placeholder="082 000 0000"
                     autoComplete="tel"
                     pattern="^(\+27|0)[6-8][0-9]{8}$"
                     title="Enter a valid SA mobile number (e.g. 071 234 5678)"
+                    className={phoneCooldownUntil ? "bg-muted cursor-not-allowed" : undefined}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    SA mobile: 0XX XXX XXXX or +27XX XXX XXXX
-                  </p>
+                  {phoneCooldownUntil ? (
+                    <p className="text-xs text-amber-600 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Phone changes unlock on{" "}
+                      {phoneCooldownUntil.toLocaleDateString("en-ZA", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                      .
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      SA mobile: 0XX XXX XXXX or +27XX XXX XXXX
+                    </p>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="province">Province</Label>
-                    <select
-                      id="province"
-                      title="Select province"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      value={province}
-                      onChange={(e) => {
-                        setProvince(e.target.value);
-                        setCity("");
-                      }}
-                    >
-                      <option value="">Select province</option>
-                      {provinces.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
+                {isLocationLocked ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="flex items-center gap-1.5">
+                        Province <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Label>
+                      <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground cursor-not-allowed">
+                        {province || "—"}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="flex items-center gap-1.5">
+                        City <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Label>
+                      <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground cursor-not-allowed">
+                        {city || "—"}
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="city">City</Label>
-                    <select
-                      id="city"
-                      title="Select city"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      disabled={!province}
-                    >
-                      <option value="">Select city</option>
-                      {cities.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="province">Province</Label>
+                      <select
+                        id="province"
+                        title="Select province"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        value={province}
+                        onChange={(e) => {
+                          setProvince(e.target.value);
+                          setCity("");
+                        }}
+                      >
+                        <option value="">Select province</option>
+                        {provinces.map((p) => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="city">City</Label>
+                      <select
+                        id="city"
+                        title="Select city"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        disabled={!province}
+                      >
+                        <option value="">Select city</option>
+                        {cities.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <Button type="submit" size="sm" className="w-full gap-2" disabled={isSaving}>
                   {isSaving ? (
@@ -668,11 +798,73 @@ export default function ProfilePage() {
           <Card>
             <CardContent className="pt-6 space-y-4">
               {/* Email */}
-              <div className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-muted-foreground">Email</p>
-                  <p className="text-sm truncate">{email}</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-muted-foreground">Email</p>
+                    <p className="text-sm truncate">{email}</p>
+                  </div>
+                  {!showEmailForm &&
+                    (emailCooldownUntil ? (
+                      <div className="text-right shrink-0 ml-3">
+                        <p className="text-xs text-muted-foreground">Change available</p>
+                        <p className="text-xs font-medium">
+                          {emailCooldownUntil.toLocaleDateString("en-ZA", {
+                            day: "numeric",
+                            month: "short",
+                          })}
+                        </p>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowEmailForm(true)}
+                        className="gap-1.5 ml-3 shrink-0"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        Change
+                      </Button>
+                    ))}
                 </div>
+                {showEmailForm && (
+                  <form noValidate onSubmit={handleEmailChange} className="space-y-2">
+                    <Input
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder="New email address"
+                      autoComplete="email"
+                      required
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        type="submit"
+                        size="sm"
+                        className="flex-1 gap-2"
+                        disabled={isChangingEmail}
+                      >
+                        {isChangingEmail ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Mail className="h-4 w-4" />
+                        )}
+                        Send Confirmation
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setShowEmailForm(false);
+                          setNewEmail("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                )}
               </div>
 
               {/* Verification status */}

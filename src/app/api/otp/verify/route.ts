@@ -169,8 +169,8 @@ async function finalizePhoneVerification(
   if (profile) {
     const { error: profileUpdateError } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      // Promote pending_phone to canonical phone and clear the staging column.
-      .update({ ...accountPhoneFields, pending_phone: null })
+      // Promote pending_phone to canonical phone, clear staging, and stamp cooldown.
+      .update({ ...accountPhoneFields, pending_phone: null, contact_last_phone_change_at: nowIso })
       .eq("id", profile.id);
 
     if (profileUpdateError) {
@@ -189,8 +189,12 @@ async function finalizePhoneVerification(
 
       const { error: adminProfileUpdateError } = await adminSupabase
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        // Promote pending_phone to canonical phone and clear the staging column.
-        .update({ ...accountPhoneFields, pending_phone: null })
+        // Promote pending_phone to canonical phone, clear staging, and stamp cooldown.
+        .update({
+          ...accountPhoneFields,
+          pending_phone: null,
+          contact_last_phone_change_at: nowIso,
+        })
         .eq("id", profile.id)
         .eq("user_id", user.id);
 

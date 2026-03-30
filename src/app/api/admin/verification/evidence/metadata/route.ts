@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
       const stepLookup = await adminClient
         .from("verification_steps")
         .select(
-          "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at"
+          "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at, first_name, last_name"
         )
         .eq("id", stepId);
       steps = stepLookup.data as Array<Record<string, unknown>> | null;
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
         const userLookup = await adminClient
           .from("verification_steps")
           .select(
-            "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at"
+            "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at, first_name, last_name"
           )
           .eq("user_id", userId);
         steps = userLookup.data as Array<Record<string, unknown>> | null;
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
       const userLookup = await adminClient
         .from("verification_steps")
         .select(
-          "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at"
+          "id, user_id, step_type, status, risk_score, risk_level, auto_status, reviewed_by, reviewed_at, decided_at, rejection_reason, created_at, updated_at, first_name, last_name"
         )
         .eq("user_id", userId as string);
       steps = userLookup.data as Array<Record<string, unknown>> | null;

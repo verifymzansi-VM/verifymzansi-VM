@@ -382,6 +382,19 @@ describe("POST /api/admin/verification/decide", () => {
                 }),
               };
             }
+            // If selecting first_name / last_name, it's the legal-name propagation fetch
+            if (typeof args[0] === "string" && args[0].includes("first_name")) {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({
+                      data: { first_name: "Test", last_name: "Member" },
+                      error: null,
+                    }),
+                  }),
+                }),
+              };
+            }
             // If selecting step_type, status, it's the all-steps check
             return {
               eq: vi.fn().mockResolvedValue({
@@ -584,6 +597,19 @@ describe("POST /api/admin/verification/decide", () => {
               return {
                 eq: vi.fn().mockReturnValue({
                   single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
+                }),
+              };
+            }
+            // Legal-name propagation fetch
+            if (typeof args[0] === "string" && args[0].includes("first_name")) {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({
+                      data: { first_name: "Test", last_name: "Member" },
+                      error: null,
+                    }),
+                  }),
                 }),
               };
             }
@@ -794,6 +820,19 @@ describe("POST /api/admin/verification/decide", () => {
               return {
                 eq: vi.fn().mockReturnValue({
                   single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
+                }),
+              };
+            }
+            // Legal-name propagation fetch
+            if (typeof args[0] === "string" && args[0].includes("first_name")) {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({
+                      data: { first_name: "Test", last_name: "Member" },
+                      error: null,
+                    }),
+                  }),
                 }),
               };
             }

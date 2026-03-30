@@ -22,6 +22,8 @@ interface EvidenceStep {
   reviewed_at: string | null;
   created_at: string;
   metadata: Record<string, unknown> | null;
+  first_name: string | null;
+  last_name: string | null;
 }
 
 interface Artifact {
@@ -90,6 +92,12 @@ export function EvidenceMetadataPanel({
           <CardContent className="space-y-2 text-xs">
             <Row label="Step ID" value={step.id} mono />
             <Row label="Type" value={step.step_type.replace("_", " ")} />
+            {step.step_type === "id_doc" && step.first_name && (
+              <Row label="First Name" value={step.first_name} />
+            )}
+            {step.step_type === "id_doc" && step.last_name && (
+              <Row label="Surname" value={step.last_name} />
+            )}
             <Row label="Status" value={step.status} />
             <Row label="Submitted" value={formatDate(step.created_at)} dateTime={step.created_at} />
             {step.risk_level && <Row label="Risk Level" value={step.risk_level} />}

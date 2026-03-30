@@ -48,8 +48,14 @@ export interface AccountProfile {
   account_verification_status: AccountVerificationStatus;
   phone: string | null;
   pending_phone: string | null;
+  pending_email: string | null;
   avatar_url: string | null;
   masked_phone_public: string | null;
+  legal_first_name: string | null;
+  legal_last_name: string | null;
+  legal_name_locked_at: string | null;
+  contact_last_phone_change_at: string | null;
+  contact_last_email_change_at: string | null;
   location_province: string | null;
   location_city: string | null;
   location_verified_at: string | null;
@@ -71,6 +77,8 @@ export interface VerificationStep {
   step_type: VerificationStepType;
   status: VerificationStatus;
   full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   id_number_encrypted: string | null;
   id_number_iv: string | null;
   id_number_tag: string | null;
@@ -507,4 +515,17 @@ export interface FeatureFlag {
   updated_reason: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/* ── Contact Change History ──────────────────────────────── */
+export interface ContactChangeHistory {
+  id: string;
+  user_id: string;
+  change_type: "phone" | "email";
+  old_value_hash: string | null;
+  new_value_hash: string | null;
+  requested_at: string;
+  applied_at: string | null;
+  source: "user" | "admin" | "system";
+  created_at: string;
 }

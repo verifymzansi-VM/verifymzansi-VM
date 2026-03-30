@@ -175,11 +175,42 @@ export async function POST(request: Request) {
       );
 
       if (allApproved) {
+        // ── Propagate legal name from id_doc step → seller_profiles ──
+        const idDocStep = (allSteps || []).find(
+          (s) => s.step_type === "id_doc" && s.status === "approved"
+        );
+
+        const legalNamePatch: Record<string, unknown> = {
+          account_verification_status: "verified",
+        };
+
+        if (idDocStep) {
+          // Fetch first_name / last_name from the id_doc verification step
+          const { data: idDocDetail } = await admin
+            .from("verification_steps")
+            .select("first_name, last_name")
+            .eq("user_id", step.user_id)
+            .eq("step_type", "id_doc")
+            .single();
+
+          if (idDocDetail?.first_name && idDocDetail?.last_name) {
+            const fullLegalName = `${idDocDetail.first_name} ${idDocDetail.last_name}`;
+            legalNamePatch.legal_first_name = idDocDetail.first_name;
+            legalNamePatch.legal_last_name = idDocDetail.last_name;
+            legalNamePatch.display_name = fullLegalName;
+            legalNamePatch.legal_name_locked_at = new Date().toISOString();
+
+            log.info("Propagating legal name from verified ID to profile", {
+              userId: step.user_id,
+              legalFirstName: idDocDetail.first_name,
+              legalLastName: idDocDetail.last_name,
+            });
+          }
+        }
+
         await admin
           .from(ACCOUNT_PROFILE_WRITE_TABLE)
-          .update({
-            account_verification_status: "verified",
-          })
+          .update(legalNamePatch)
           .eq("user_id", step.user_id);
 
         // Set purge_after = NOW + 30 days on all KYC artifacts for this user
