@@ -9,9 +9,8 @@ import { useHoverCapability } from "@/hooks/use-hover-capability";
 import { useVideoVisibility } from "@/hooks/use-video-visibility";
 import { useVideoHover } from "@/hooks/use-video-hover";
 
-const DEFAULT_MEDIA_FIT = "object-cover";
+const DEFAULT_MEDIA_FIT = "object-fill";
 const DEFAULT_CONTAINER_ASPECT_RATIO = 5 / 4;
-const SMART_FIT_CROP_THRESHOLD = 0.2;
 
 export type MediaFitStrategy = "cover" | "smart";
 export type MuteControlVisibility = "auto" | "always" | "hidden";
@@ -31,23 +30,12 @@ export function isVideoUrl(url: string | null | undefined): boolean {
   );
 }
 
-function getCropRatio(mediaAspectRatio: number, containerAspectRatio: number) {
-  if (!mediaAspectRatio || !containerAspectRatio) return 0;
-
-  if (mediaAspectRatio > containerAspectRatio) {
-    return 1 - containerAspectRatio / mediaAspectRatio;
-  }
-
-  return 1 - mediaAspectRatio / containerAspectRatio;
-}
-
 function shouldUseSmartFit(
-  fitStrategy: MediaFitStrategy,
-  mediaAspectRatio: number | null,
-  containerAspectRatio: number
+  _fitStrategy: MediaFitStrategy,
+  _mediaAspectRatio: number | null,
+  _containerAspectRatio: number
 ) {
-  if (fitStrategy !== "smart" || !mediaAspectRatio) return false;
-  return getCropRatio(mediaAspectRatio, containerAspectRatio) > SMART_FIT_CROP_THRESHOLD;
+  return false;
 }
 
 function getForegroundMediaClassName(
@@ -187,7 +175,7 @@ export function VideoCardPlayer({
   mediaFitClassName = DEFAULT_MEDIA_FIT,
   mode = "interactive",
   priority = false,
-  fitStrategy = "cover",
+  fitStrategy = "smart",
   containerAspectRatio = DEFAULT_CONTAINER_ASPECT_RATIO,
   muteControlVisibility = "auto",
   showPlaybackControl = false,
@@ -313,7 +301,7 @@ function VideoCardPlayerInner({
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
 
   const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
-  const backgroundMediaSrc = normalizedPoster || normalizedSrc;
+  const backgroundMediaSrc = normalizedPoster || (isVideo ? undefined : normalizedSrc);
   const animatedMediaClassName = getAnimatedMediaClassName(
     mediaFitClassName,
     usesSmartFit,
@@ -749,7 +737,7 @@ function HoverVideoPlayer({
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
 
   const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
-  const backgroundMediaSrc = normalizedPoster || normalizedSrc;
+  const backgroundMediaSrc = normalizedPoster; // Hover player implies it's a video
   const animatedMediaClassName = getAnimatedMediaClassName(
     mediaFitClassName,
     usesSmartFit,
