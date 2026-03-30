@@ -4,9 +4,19 @@ import CreateListingPage from "./page";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
+type MockAuthState = {
+  user: { id: string; email?: string | null } | null;
+  profile: Record<string, unknown> | null;
+  isLoading: boolean;
+};
+
 const { listingCardSpy, useAuthMock } = vi.hoisted(() => ({
   listingCardSpy: vi.fn(),
-  useAuthMock: vi.fn(() => ({ user: null, profile: null, isLoading: false })),
+  useAuthMock: vi.fn<() => MockAuthState>(() => ({
+    user: null,
+    profile: null,
+    isLoading: false,
+  })),
 }));
 
 vi.mock("next/navigation", () => ({

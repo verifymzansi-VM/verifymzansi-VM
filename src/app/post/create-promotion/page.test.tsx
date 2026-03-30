@@ -4,8 +4,14 @@ import CreatePromotionPage from "./page";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
+type MockAuthState = {
+  user: { id: string; email?: string | null } | null;
+  profile: Record<string, unknown> | null;
+  isLoading: boolean;
+};
+
 const { useAuthMock } = vi.hoisted(() => ({
-  useAuthMock: vi.fn(() => ({ user: null, profile: null, isLoading: false })),
+  useAuthMock: vi.fn<() => MockAuthState>(() => ({ user: null, profile: null, isLoading: false })),
 }));
 
 vi.mock("next/navigation", () => ({
