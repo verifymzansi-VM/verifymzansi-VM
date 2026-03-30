@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Header } from "@/components/layout/header";
-import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -202,44 +200,38 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
   const breadcrumbs = getBreadcrumbs(isOwnerPreview, business.business_name);
 
   return (
-    <div className="flex min-h-screen flex-col bg-muted/30">
-      <Header />
+    <div className="bg-muted/30">
+      <div className="container-page space-y-5 py-4">
+        <PageHeader
+          title={business.business_name}
+          description={
+            isOwnerPreview
+              ? "Previewing a business profile that is still pending moderation."
+              : "Verified business profile."
+          }
+          breadcrumbs={breadcrumbs}
+        />
 
-      <main className="flex-1">
-        <div className="container-page space-y-5 py-4">
-          <PageHeader
-            title={business.business_name}
-            description={
-              isOwnerPreview
-                ? "Previewing a business profile that is still pending moderation."
-                : "Verified business profile."
-            }
-            breadcrumbs={breadcrumbs}
-          />
+        {isOwnerPreview && (
+          <Alert variant="warning">
+            <div className="space-y-2">
+              <Badge variant="secondary" className="w-fit">
+                Owner preview
+              </Badge>
+              <AlertTitle>{getPreviewLabel(business.status)}</AlertTitle>
+              <AlertDescription>{getPreviewDescription(business.status)}</AlertDescription>
+            </div>
+          </Alert>
+        )}
 
-          {isOwnerPreview && (
-            <Alert variant="warning">
-              <div className="space-y-2">
-                <Badge variant="secondary" className="w-fit">
-                  Owner preview
-                </Badge>
-                <AlertTitle>{getPreviewLabel(business.status)}</AlertTitle>
-                <AlertDescription>{getPreviewDescription(business.status)}</AlertDescription>
-              </div>
-            </Alert>
-          )}
-
-          <BusinessLayoutRouter
-            business={business}
-            trustLevel={trustLevel}
-            ownerProfile={ownerProfile}
-            promotions={promotions}
-            showPublicActions={!isOwnerPreview}
-          />
-        </div>
-      </main>
-
-      <Footer />
+        <BusinessLayoutRouter
+          business={business}
+          trustLevel={trustLevel}
+          ownerProfile={ownerProfile}
+          promotions={promotions}
+          showPublicActions={!isOwnerPreview}
+        />
+      </div>
     </div>
   );
 }
