@@ -77,7 +77,7 @@ export function PosterCardShell({
         )}
         trustLevel={trustLevel}
       >
-        <div className="relative aspect-square h-full w-full overflow-hidden">
+        <div className="relative aspect-[5/4] h-full w-full overflow-hidden">
           {normalizedMediaUrl ? (
             <VideoCardPlayer
               src={normalizedMediaUrl}
@@ -86,7 +86,7 @@ export function PosterCardShell({
               sizes={mediaSizes}
               mode={hasVideo ? "hover" : "ambient"}
               fitStrategy={fitStrategy}
-              containerAspectRatio={1}
+              containerAspectRatio={5 / 4}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
               mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
             />

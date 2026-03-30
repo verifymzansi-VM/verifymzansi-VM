@@ -143,7 +143,7 @@ export function AutoScrollRail({
       ref={containerRef}
       aria-label={railLabel}
       className={cn(
-        "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-3 px-3 sm:-mx-0 sm:px-0 sm:gap-4",
+        "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-4 px-4 sm:-mx-0 sm:px-0 sm:gap-4",
         className
       )}
       tabIndex={0}
