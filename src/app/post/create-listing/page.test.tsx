@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreateListingPage from "./page";
 import { useRouter } from "next/navigation";
@@ -133,10 +133,12 @@ describe("CreateListingPage", () => {
   it("renders the shared guide and step labels", () => {
     render(<CreateListingPage />);
 
+    const stepNav = screen.getByRole("navigation", { name: "Mzansi Market creation steps" });
+
     expect(screen.getByText("Quick guide")).toBeInTheDocument();
-    expect(screen.getByText("Details")).toBeInTheDocument();
-    expect(screen.getByText("Pricing & Reach")).toBeInTheDocument();
-    expect(screen.getByText("Media & Review")).toBeInTheDocument();
+    expect(within(stepNav).getAllByText("Details").length).toBeGreaterThan(0);
+    expect(within(stepNav).getAllByText("Pricing & Reach").length).toBeGreaterThan(0);
+    expect(within(stepNav).getAllByText("Media & Review").length).toBeGreaterThan(0);
   });
 
   it("shows inline validation instead of only using toast errors", () => {

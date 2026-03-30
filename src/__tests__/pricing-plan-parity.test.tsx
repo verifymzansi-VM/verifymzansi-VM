@@ -76,9 +76,14 @@ beforeAll(async () => {
 describe("Active-area pricing parity", () => {
   it("pricing and billing pages render only the three active marketplace surfaces", () => {
     render(<PricingPage />);
-    expect(screen.getAllByText("Mzansi Market").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Mzansi Business").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Promotions & Events").length).toBeGreaterThan(0);
+    const tabLabels = screen
+      .getAllByRole("tab")
+      .map((tab) => tab.textContent?.replace(/\s+/g, " ").trim());
+
+    expect(tabLabels).toHaveLength(3);
+    expect(tabLabels).toEqual(
+      expect.arrayContaining(["Mzansi Market", "Mzansi Business", "Promotions & Events"])
+    );
     expect(screen.queryByText("Mall Shops")).not.toBeInTheDocument();
     expect(screen.queryByText("Business Ads")).not.toBeInTheDocument();
     expect(
