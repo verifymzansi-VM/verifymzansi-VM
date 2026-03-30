@@ -4,74 +4,76 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const {
+  mockGetUser,
+  mockServerFrom,
+  mockAdminFrom,
+  mockAdminRpc,
+  mockSendSms,
+  mockCheckRateLimit,
+  mockGetClientIp,
+} = vi.hoisted(() => ({
+  mockGetUser: vi.fn(),
+  mockServerFrom: vi.fn(),
+  mockAdminFrom: vi.fn(),
+  mockAdminRpc: vi.fn(),
+  mockSendSms: vi.fn(),
+  mockCheckRateLimit: vi.fn(),
+  mockGetClientIp: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({
+    auth: { getUser: mockGetUser },
+    from: mockServerFrom,
+  }),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({ from: mockAdminFrom, rpc: mockAdminRpc }),
+}));
+
+vi.mock("@/lib/services/sms", () => ({
+  sendSms: mockSendSms,
+}));
+
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  }),
+}));
+
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: mockCheckRateLimit,
+  getClientIp: mockGetClientIp,
+}));
+
+vi.mock("@/lib/utils/mutation-origin", () => ({
+  enforceSameOriginMutation: vi.fn().mockReturnValue(null),
+}));
+
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn().mockReturnValue(null),
+}));
+
+vi.mock("@/lib/account/ensure-profile", () => ({
+  ensureAccountProfile: vi.fn().mockResolvedValue({ id: "profile-1" }),
+  getDefaultDisplayName: vi.fn().mockReturnValue("Test User"),
+}));
+
+vi.mock("@/lib/account/compat", () => ({
+  ACCOUNT_PROFILE_WRITE_TABLE: "account_profiles",
+}));
+
 // ─── 1. OTP timing-safe comparison ─────────────────────────────────────────
 
 describe("OTP verifyOtp — timing-safe comparison", () => {
   // We test the `verifyOtp` function indirectly via the route, but the
   // core logic is pure crypto — we can unit-test it by extracting the
   // comparison logic.  Instead we verify the route-level behavior.
-
-  const {
-    mockGetUser,
-    mockServerFrom,
-    mockAdminFrom,
-    mockAdminRpc,
-    mockSendSms,
-    mockCheckRateLimit,
-    mockGetClientIp,
-  } = vi.hoisted(() => ({
-    mockGetUser: vi.fn(),
-    mockServerFrom: vi.fn(),
-    mockAdminFrom: vi.fn(),
-    mockAdminRpc: vi.fn(),
-    mockSendSms: vi.fn(),
-    mockCheckRateLimit: vi.fn(),
-    mockGetClientIp: vi.fn(),
-  }));
-
-  vi.mock("@/lib/supabase/server", () => ({
-    createClient: async () => ({
-      auth: { getUser: mockGetUser },
-      from: mockServerFrom,
-    }),
-  }));
-
-  vi.mock("@/lib/supabase/admin", () => ({
-    createAdminClient: () => ({ from: mockAdminFrom, rpc: mockAdminRpc }),
-  }));
-
-  vi.mock("@/lib/services/sms", () => ({
-    sendSms: mockSendSms,
-  }));
-
-  vi.mock("@/lib/utils/logger", () => ({
-    createLogger: () => ({
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-    }),
-  }));
-
-  vi.mock("@/lib/utils/rate-limit", () => ({
-    checkRateLimit: mockCheckRateLimit,
-    getClientIp: mockGetClientIp,
-  }));
-
-  // The route calls enforceSameOriginMutation and enforceCsrfToken
-  vi.mock("@/lib/utils/mutation-origin", () => ({
-    enforceSameOriginMutation: vi.fn().mockReturnValue(null),
-  }));
-  vi.mock("@/lib/utils/csrf", () => ({
-    enforceCsrfToken: vi.fn().mockReturnValue(null),
-  }));
-  vi.mock("@/lib/account/ensure-profile", () => ({
-    ensureAccountProfile: vi.fn().mockResolvedValue({ id: "profile-1" }),
-    getDefaultDisplayName: vi.fn().mockReturnValue("Test User"),
-  }));
-  vi.mock("@/lib/account/compat", () => ({
-    ACCOUNT_PROFILE_WRITE_TABLE: "account_profiles",
-  }));
 
   beforeEach(() => {
     vi.clearAllMocks();

@@ -193,6 +193,7 @@ export const businessSchema = z
       .optional()
       .default([]),
     social_links: z.record(z.string(), z.string().url()).optional(),
+    layout_template: z.enum(["cinematic", "showcase", "professional"]).nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.business_type === "mall_store" && !data.store_number?.trim()) {

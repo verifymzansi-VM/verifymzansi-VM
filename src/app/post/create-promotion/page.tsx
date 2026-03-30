@@ -36,6 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
+import { DevicePreviewShell } from "@/components/business/shared/device-preview-shell";
 import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
 import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
 const SELECT_CLASS =
@@ -792,59 +793,61 @@ function CreatePromotionContent() {
                         Preview
                       </div>
 
-                      <PromotionDetailContent
-                        promotion={{
-                          id: "preview-promotion",
-                          owner_id: "preview-seller",
-                          business_id: businessId || null,
-                          title: title || "Your promotion title",
-                          description:
-                            description || "Your promotion description will appear here.",
-                          promotion_type: promotionType,
-                          category: category || null,
-                          category_key: categoryKey || null,
-                          photos: photoPreviewUrls,
-                          videos: previewVideoUrls,
-                          video_thumbnail: videoThumbnailUrl,
-                          price_cents: priceZar
-                            ? Math.round(parseFloat(priceZar || "0") * 100)
-                            : null,
-                          price_negotiable: negotiable,
-                          location_province: province,
-                          location_city: city,
-                          contact_methods: contactMethods,
-                          start_date: startDate || null,
-                          end_date: endDate || null,
-                          boost_until: null,
-                          featured_until: null,
-                          view_count: null,
-                          created_at: new Date().toISOString(),
-                        }}
-                        advertiserProfile={{
-                          display_name: "You",
-                          account_verification_status: null,
-                          phone: null,
-                          masked_phone_public: null,
-                        }}
-                        linkedBusiness={
-                          businessId
-                            ? (() => {
-                                const linkedBusiness = myBusinesses.find(
-                                  (item) => item.id === businessId
-                                );
-                                return linkedBusiness
-                                  ? {
-                                      id: linkedBusiness.id,
-                                      business_name: linkedBusiness.business_name,
-                                      logo_url: null,
-                                    }
-                                  : null;
-                              })()
-                            : null
-                        }
-                        showContactActions={false}
-                        showContactSummary
-                      />
+                      <DevicePreviewShell>
+                        <PromotionDetailContent
+                          promotion={{
+                            id: "preview-promotion",
+                            owner_id: "preview-seller",
+                            business_id: businessId || null,
+                            title: title || "Your promotion title",
+                            description:
+                              description || "Your promotion description will appear here.",
+                            promotion_type: promotionType,
+                            category: category || null,
+                            category_key: categoryKey || null,
+                            photos: photoPreviewUrls,
+                            videos: previewVideoUrls,
+                            video_thumbnail: videoThumbnailUrl,
+                            price_cents: priceZar
+                              ? Math.round(parseFloat(priceZar || "0") * 100)
+                              : null,
+                            price_negotiable: negotiable,
+                            location_province: province,
+                            location_city: city,
+                            contact_methods: contactMethods,
+                            start_date: startDate || null,
+                            end_date: endDate || null,
+                            boost_until: null,
+                            featured_until: null,
+                            view_count: null,
+                            created_at: new Date().toISOString(),
+                          }}
+                          advertiserProfile={{
+                            display_name: "You",
+                            account_verification_status: null,
+                            phone: null,
+                            masked_phone_public: null,
+                          }}
+                          linkedBusiness={
+                            businessId
+                              ? (() => {
+                                  const linkedBusiness = myBusinesses.find(
+                                    (item) => item.id === businessId
+                                  );
+                                  return linkedBusiness
+                                    ? {
+                                        id: linkedBusiness.id,
+                                        business_name: linkedBusiness.business_name,
+                                        logo_url: null,
+                                      }
+                                    : null;
+                                })()
+                              : null
+                          }
+                          showContactActions={false}
+                          showContactSummary
+                        />
+                      </DevicePreviewShell>
                     </div>
                   </div>
                 )}

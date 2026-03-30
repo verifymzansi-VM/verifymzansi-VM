@@ -39,7 +39,7 @@ const BUSINESS_DETAIL_SELECT = `
   cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city,
   store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
-  delivery_options, boost_until, featured_until, published_at, status, area, created_at,
+  delivery_options, layout_template, boost_until, featured_until, published_at, status, area, created_at,
   updated_at
 `;
 type BusinessOwnerRow = {
@@ -324,6 +324,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           operating_hours: data.operating_hours,
           payment_methods_accepted: data.payment_methods_accepted,
           delivery_options: data.delivery_options,
+          layout_template: data.layout_template || null,
           // Re-trigger moderation only for live businesses so changed content is reviewed.
           // Draft and rejected businesses keep their current status.
           ...(existing.status === "live" ? { status: "pending_moderation" as const } : {}),

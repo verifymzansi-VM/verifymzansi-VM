@@ -23,6 +23,27 @@ interface BusinessCardProps {
   serviceAreas?: Record<string, unknown> | null;
 }
 
+function getBusinessStatus(
+  boostUntil?: string | null,
+  featuredUntil?: string | null
+): { label: string; className: string } | null {
+  const now = new Date();
+  if (featuredUntil && new Date(featuredUntil) > now) {
+    return { label: "Featured", className: "bg-amber-400 text-amber-950" };
+  }
+  if (boostUntil && new Date(boostUntil) > now) {
+    return { label: "Boosted", className: "bg-brand-blue text-white" };
+  }
+  return null;
+}
+
+function buildBusinessDescription(description?: string, city?: string): string | null {
+  if (description && city) return `${city} · ${description}`;
+  if (city) return city;
+  if (description) return description;
+  return null;
+}
+
 export function BusinessCard({
   id,
   businessName,
@@ -33,28 +54,31 @@ export function BusinessCard({
   logoUrl,
   galleryPhotos,
   province: _province,
-  city: _city,
+  city,
   trustLevel = 0,
-  boostUntil: _boostUntil,
-  featuredUntil: _featuredUntil,
+  boostUntil,
+  featuredUntil,
 }: BusinessCardProps) {
   const displayCover =
     coverVideo ||
     coverPhoto ||
     (galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos[0] : null);
   const posterUrl = videoThumbnail || coverPhoto || galleryPhotos?.[0] || undefined;
+  const status = getBusinessStatus(boostUntil, featuredUntil);
+  const cardDescription = buildBusinessDescription(description, city);
 
   return (
     <PosterCardShell
       href={`/mzansi-business/${id}`}
       title={businessName}
-      description={description}
+      description={cardDescription}
       mediaUrl={displayCover}
       posterUrl={posterUrl}
       mediaAlt={businessName}
       logoUrl={logoUrl}
-      statusLabel={null}
-      statusClassName={undefined}
+      statusLabel={status?.label ?? null}
+      statusClassName={status?.className}
+      statusVariant="ribbon"
       accentClassName="hover:border-brand-blue/55"
       trustLevel={trustLevel}
       fallback={

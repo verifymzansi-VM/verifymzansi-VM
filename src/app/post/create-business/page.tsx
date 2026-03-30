@@ -60,7 +60,12 @@ import {
 } from "@/lib/forms/business-type-details";
 import { BusinessTypeDetailsFields } from "@/components/business/business-type-details-fields";
 import type { BusinessDetails } from "@/types/business-details";
-import { BusinessDetailContent } from "@/components/business/business-detail-content";
+import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
+import { BusinessLayoutRouter } from "@/components/business/layouts/business-layout-router";
+import { DevicePreviewShell } from "@/components/business/shared/device-preview-shell";
+import { LayoutChooser } from "@/components/business/shared/layout-chooser";
+import { resolveBusinessLayout } from "@/lib/business/category-layout-map";
+import type { LayoutTemplate } from "@/lib/business/layout-templates";
 
 const SELECT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
@@ -224,6 +229,7 @@ function CreateBusinessContent() {
   const cities = province ? getCitiesForProvince(province) : [];
   const maxPhotos = usePlanMaxPhotos("MZANSI_BUSINESS");
   const coverVideoAllowed = usePlanCoverVideoAllowed("MZANSI_BUSINESS");
+  const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplate | null>(null);
 
   // Stable blob URLs for logo/cover previews — revoked on change
   const logoPreviewUrl = useMemo(
@@ -568,6 +574,7 @@ function CreateBusinessContent() {
         delivery_options:
           normalizedDeliveryOptions.length > 0 ? normalizedDeliveryOptions : undefined,
         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
+        layout_template: layoutTemplate || undefined,
       };
       const res = await fetch("/api/businesses", {
         method: "POST",
@@ -626,52 +633,71 @@ function CreateBusinessContent() {
           : previewBusinessDetails;
     const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryAvailable);
 
+    const effectiveCategory = (category || "general_other") as BusinessCategory;
+    const effectiveLayout = resolveBusinessLayout(layoutTemplate, effectiveCategory);
+
+    const previewBusiness = {
+      id: "preview-business",
+      owner_id: "preview-seller",
+      business_name: businessName || "Your business name",
+      description: description || "Your business description will appear here.",
+      status: "preview",
+      business_type: businessType || selectedType?.value || "standalone_shop",
+      category: category || "general_other",
+      cover_photo: coverPreviewUrl,
+      logo_url: logoPreviewUrl,
+      cover_video: promoVideoPreviewUrl,
+      video_thumbnail: videoThumbnailPreviewUrl,
+      gallery_photos: galleryPreviewUrls,
+      social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
+      operating_hours: {
+        ...(hoursMonFri ? { Mon_Fri: hoursMonFri } : {}),
+        ...(hoursSat ? { Sat: hoursSat } : {}),
+        ...(hoursSun ? { Sun: hoursSun } : {}),
+      },
+      services_offered: services,
+      payment_methods_accepted: paymentMethods,
+      delivery_options: normalizedDeliveryOptions,
+      service_areas: serviceAreas.length > 0 ? { areas: serviceAreas } : null,
+      location_city: city || null,
+      location_province: province || null,
+      phone: phone || null,
+      whatsapp: whatsapp || null,
+      email: email || null,
+      website: website || null,
+      store_number: storeNumber || null,
+      map_directions: mapDirections || null,
+      business_details: previewMallDetails,
+      layout_template: layoutTemplate,
+    };
+
     return (
-      <div className="rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Building2 className="h-4 w-4" />
-          Business review
-        </div>
-        <BusinessDetailContent
-          business={{
-            id: "preview-business",
-            owner_id: "preview-seller",
-            business_name: businessName || "Your business name",
-            description: description || "Your business description will appear here.",
-            status: "preview",
-            business_type: businessType || selectedType?.value || "standalone_shop",
-            category: category || "general_other",
-            cover_photo: coverPreviewUrl,
-            logo_url: logoPreviewUrl,
-            cover_video: promoVideoPreviewUrl,
-            video_thumbnail: videoThumbnailPreviewUrl,
-            gallery_photos: galleryPreviewUrls,
-            social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
-            operating_hours: {
-              ...(hoursMonFri ? { Mon_Fri: hoursMonFri } : {}),
-              ...(hoursSat ? { Sat: hoursSat } : {}),
-              ...(hoursSun ? { Sun: hoursSun } : {}),
-            },
-            services_offered: services,
-            payment_methods_accepted: paymentMethods,
-            delivery_options: normalizedDeliveryOptions,
-            service_areas: serviceAreas.length > 0 ? { areas: serviceAreas } : null,
-            location_city: city || null,
-            location_province: province || null,
-            phone: phone || null,
-            whatsapp: whatsapp || null,
-            email: email || null,
-            website: website || null,
-            store_number: storeNumber || null,
-            map_directions: mapDirections || null,
-            business_details: previewMallDetails,
-          }}
-          trustLevel={null}
-          ownerProfile={{ display_name: "You" }}
-          promotions={[]}
-          showPromotions={false}
-          showPublicActions={false}
+      <div className="space-y-6">
+        {/* Layout chooser */}
+        <LayoutChooser
+          selected={effectiveLayout}
+          onChange={(id) => setLayoutTemplate(id)}
+          category={category ? (category as BusinessCategory) : undefined}
         />
+
+        {/* Device preview with layout router */}
+        <div className="rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Building2 className="h-4 w-4" />
+            Preview how your profile will look
+          </div>
+          <DevicePreviewShell>
+            <BusinessLayoutRouter
+              business={previewBusiness as BusinessDetailRecord}
+              trustLevel={null}
+              ownerProfile={{ display_name: "You" }}
+              promotions={[]}
+              showPromotions={false}
+              showPublicActions={false}
+              layoutOverride={effectiveLayout}
+            />
+          </DevicePreviewShell>
+        </div>
       </div>
     );
   }

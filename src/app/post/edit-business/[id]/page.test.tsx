@@ -41,6 +41,20 @@ vi.mock("@/components/layout/page-header", () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
 
+vi.mock("@/components/business/layouts/business-layout-router", () => ({
+  BusinessLayoutRouter: ({ business }: { business: { business_name: string } }) => (
+    <div data-testid="layout-router">{business.business_name}</div>
+  ),
+}));
+
+vi.mock("@/components/business/shared/device-preview-shell", () => ({
+  DevicePreviewShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("@/components/business/shared/layout-chooser", () => ({
+  LayoutChooser: () => <div>Layout Chooser</div>,
+}));
+
 vi.mock("@/components/business/business-detail-content", () => ({
   BusinessDetailContent: ({
     business,
@@ -55,6 +69,7 @@ vi.mock("@/components/business/business-detail-content", () => ({
       ) : null}
     </div>
   ),
+  BusinessDetailsCard: () => <div>Business Details Card</div>,
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
@@ -168,7 +183,7 @@ describe("EditBusinessPage", () => {
 
     expect(screen.getByText("Home Business")).toBeInTheDocument();
     expect(screen.getByText("Business preview")).toBeInTheDocument();
-    expect(screen.getByText("Business Detail Preview")).toBeInTheDocument();
+    expect(screen.getByTestId("layout-router")).toBeInTheDocument();
     expect(screen.getByText("Nomsa Home Studio")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));

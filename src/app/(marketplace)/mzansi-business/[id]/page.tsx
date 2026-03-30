@@ -7,10 +7,10 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
-  BusinessDetailContent,
   type BusinessDetailRecord,
   type BusinessPromotionRecord,
 } from "@/components/business/business-detail-content";
+import { BusinessLayoutRouter } from "@/components/business/layouts/business-layout-router";
 import {
   ACCOUNT_PROFILE_TABLE,
   getOwnerColumn,
@@ -45,7 +45,8 @@ const BUSINESS_DETAIL_SELECT = `
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
   location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
-  delivery_options, boost_until, featured_until, published_at, status, area, created_at, updated_at
+  delivery_options, boost_until, featured_until, published_at, status, area, layout_template,
+  created_at, updated_at
 `;
 
 const BUSINESS_PROMOTION_SELECT =
@@ -193,7 +194,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
             </Alert>
           )}
 
-          <BusinessDetailContent
+          <BusinessLayoutRouter
             business={business}
             trustLevel={trustLevel}
             ownerProfile={ownerProfile}

@@ -307,6 +307,7 @@ export async function POST(request: NextRequest) {
       operating_hours: data.operating_hours,
       payment_methods_accepted: data.payment_methods_accepted,
       delivery_options: data.delivery_options,
+      layout_template: data.layout_template || null,
       status: "pending_moderation" as const,
     };
 

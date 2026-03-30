@@ -80,6 +80,7 @@ export interface BusinessDetailRecord {
   store_number: string | null;
   map_directions: string | null;
   business_details: BusinessDetails | null;
+  layout_template?: string | null;
 }
 
 export interface BusinessOwnerRecord {
@@ -263,7 +264,7 @@ function ContactCard({
   );
 }
 
-function BusinessDetailsCard({
+export function BusinessDetailsCard({
   business,
   businessType,
   businessDetails,

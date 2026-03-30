@@ -43,6 +43,7 @@ vi.mock("next/image", () => ({
     fill: _fill,
     sizes: _sizes,
     priority: _priority,
+    unoptimized: _unoptimized,
     ...props
   }: Record<string, unknown> & { src: string; alt: string }) => (
     // eslint-disable-next-line @next/next/no-img-element
@@ -334,7 +335,9 @@ describe("ShowroomHero", () => {
     });
 
     expect(screen.getByRole("heading", { name: "Verified Laptop" })).toBeInTheDocument();
-    vi.runOnlyPendingTimers();
+    await act(async () => {
+      vi.runOnlyPendingTimers();
+    });
     vi.useRealTimers();
   });
 
@@ -377,7 +380,9 @@ describe("ShowroomHero", () => {
     });
 
     expect(screen.getByRole("heading", { name: "Verified Phone" })).toBeInTheDocument();
-    vi.runOnlyPendingTimers();
+    await act(async () => {
+      vi.runOnlyPendingTimers();
+    });
     vi.useRealTimers();
   });
 });

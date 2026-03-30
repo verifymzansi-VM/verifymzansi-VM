@@ -31,12 +31,44 @@ interface PromotionCardProps {
   priority?: boolean;
 }
 
+/* ── Urgency helper ─────────────────────────────────────────────── */
+
+function getUrgencyLabel(endDate?: string | null): string | null {
+  if (!endDate) return null;
+  const now = new Date();
+  const end = new Date(endDate);
+  const diffMs = end.getTime() - now.getTime();
+  if (diffMs < 0) return null; // already ended
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return "Ends today!";
+  if (diffDays === 1) return "Ends tomorrow!";
+  if (diffDays <= 3) return `${diffDays} days left`;
+  return null;
+}
+
+/* ── Status badge ───────────────────────────────────────────────── */
+
 function getPromotionStatus(
-  _featured: boolean | undefined,
-  _boosted: boolean | undefined,
+  featured: boolean | undefined,
+  boosted: boolean | undefined,
   promotionType: PromotionType
 ) {
+  // Featured / boosted get a premium badge variant
+  if (featured) {
+    return {
+      label: "Featured",
+      className: "bg-amber-400 text-amber-950",
+    };
+  }
+
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
+
+  if (boosted) {
+    return {
+      label: `${typePresentation.cardTagLabel} ★`,
+      className: typePresentation.cardTagClassName,
+    };
+  }
 
   return {
     label: typePresentation.cardTagLabel,
@@ -44,17 +76,23 @@ function getPromotionStatus(
   };
 }
 
+/* ── Eyebrow (price / event date) ───────────────────────────────── */
+
 function formatPromotionEyebrow(
   price: number | null,
+  negotiable: boolean | undefined,
   promotionType: PromotionType,
   startDate?: string | null
 ) {
   if (price != null && price > 0) {
-    return formatZARShort(price);
+    const formatted = formatZARShort(price);
+    return negotiable ? `${formatted} · Neg` : formatted;
   }
 
   if (promotionType === "event" && startDate) {
+    // "SAT 15 MAR" — includes day-of-week for better scannability
     return new Intl.DateTimeFormat("en-ZA", {
+      weekday: "short",
       day: "numeric",
       month: "short",
     })
@@ -65,25 +103,45 @@ function formatPromotionEyebrow(
   return null;
 }
 
+/* ── Card description line ──────────────────────────────────────── */
+
+function buildDescription(businessName?: string, urgency?: string | null): string | null {
+  if (businessName && urgency) return `${businessName} · ${urgency}`;
+  if (urgency) return urgency;
+  if (businessName) return businessName;
+  return null;
+}
+
+/* ── Component ──────────────────────────────────────────────────── */
+
 export const PromotionCard = memo(function PromotionCard({
   id,
   title,
   price,
+  negotiable,
   imageUrl,
   posterUrl,
   province: _province,
   city: _city,
   promotionType,
+  createdAt: _createdAt,
   ownerTrustLevel = 0,
+  ownerName: _ownerName,
+  viewCount: _viewCount,
+  categoryLabel: _categoryLabel,
   boosted,
   featured,
   startDate,
+  endDate,
+  businessName,
   logoUrl,
   priority,
 }: PromotionCardProps) {
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
   const status = getPromotionStatus(featured, boosted, promotionType);
-  const eyebrow = formatPromotionEyebrow(price, promotionType, startDate);
+  const eyebrow = formatPromotionEyebrow(price, negotiable, promotionType, startDate);
+  const urgency = getUrgencyLabel(endDate);
+  const description = buildDescription(businessName, urgency);
 
   return (
     <PosterCardShell
@@ -93,6 +151,7 @@ export const PromotionCard = memo(function PromotionCard({
       posterUrl={posterUrl}
       mediaAlt={title}
       eyebrow={eyebrow}
+      description={description}
       logoUrl={logoUrl}
       eyebrowClassName={
         price != null && price > 0

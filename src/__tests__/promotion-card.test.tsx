@@ -120,7 +120,7 @@ describe("PromotionCard", () => {
       />
     );
 
-    expect(screen.getByText("10 MAR")).toBeTruthy();
+    expect(screen.getByText("TUE, 10 MAR")).toBeTruthy();
     expect(screen.getByText("Event")).toBeTruthy();
     expect(screen.getByText("Event")).toHaveClass("bg-red-500");
     expect(screen.getByTestId("card")).toHaveClass("hover:border-red-600/60");
@@ -143,7 +143,7 @@ describe("PromotionCard", () => {
       />
     );
 
-    expect(screen.getByText("Deal")).toBeTruthy();
+    expect(screen.getByText("Featured")).toBeTruthy();
     expect(screen.queryByText(/Food & Dining/i)).toBeNull();
     expect(screen.getByTestId("card")).toHaveClass("hover:border-blue-600/60");
   });
@@ -158,8 +158,8 @@ describe("PromotionCard", () => {
   it("keeps the type ribbon visible when the card is boosted", () => {
     render(<PromotionCard {...defaultProps} promotionType="event" boosted />);
 
-    expect(screen.getByText("Event")).toBeTruthy();
-    expect(screen.getByText("Event")).toHaveClass("bg-red-500");
+    expect(screen.getByText("Event ★")).toBeTruthy();
+    expect(screen.getByText("Event ★")).toHaveClass("bg-red-500");
   });
 
   it("renders the linked business logo when provided", () => {

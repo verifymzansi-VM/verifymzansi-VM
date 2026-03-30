@@ -24,7 +24,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { BusinessType } from "@/types/enums";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
@@ -52,7 +51,13 @@ import {
 } from "@/lib/forms/business-type-details";
 import { BusinessTypeDetailsFields } from "@/components/business/business-type-details-fields";
 import type { BusinessDetails } from "@/types/business-details";
-import { BusinessDetailContent } from "@/components/business/business-detail-content";
+import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
+import { BusinessLayoutRouter } from "@/components/business/layouts/business-layout-router";
+import { DevicePreviewShell } from "@/components/business/shared/device-preview-shell";
+import { LayoutChooser } from "@/components/business/shared/layout-chooser";
+import { resolveBusinessLayout } from "@/lib/business/category-layout-map";
+import type { LayoutTemplate } from "@/lib/business/layout-templates";
+import type { BusinessCategory, BusinessType } from "@/types/enums";
 
 const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow";
@@ -118,6 +123,7 @@ export default function EditBusinessPage() {
   const [services, setServices] = useState<string[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [deliveryOptions, setDeliveryOptions] = useState<string[]>([]);
+  const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplate | null>(null);
 
   // Media — existing URLs
   const [existingLogo, setExistingLogo] = useState("");
@@ -224,6 +230,9 @@ export default function EditBusinessPage() {
         setSocialInstagram(social.instagram || "");
         setSocialTwitter(social.twitter || "");
         setSocialTiktok(social.tiktok || "");
+
+        // Layout template
+        setLayoutTemplate(b.layout_template || null);
 
         // Service areas
         if (b.service_areas?.areas) {
@@ -495,6 +504,7 @@ export default function EditBusinessPage() {
         payment_methods_accepted: paymentMethods,
         delivery_options: normalizedDeliveryOptions,
         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
+        layout_template: layoutTemplate || undefined,
       };
 
       const res = await fetch(`/api/businesses/${businessId}`, {
@@ -1214,51 +1224,68 @@ export default function EditBusinessPage() {
                 )}
               </div>
 
-              <div className="space-y-3 rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
+              <div className="space-y-6 rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
                 <div className="text-sm font-medium text-muted-foreground">Business preview</div>
-                <BusinessDetailContent
-                  business={{
-                    id: businessId,
-                    owner_id: "preview-seller",
-                    business_name: businessName || "Your business name",
-                    description: description || "Your business description will appear here.",
-                    status: "preview",
-                    business_type: businessType,
-                    category: category || "general_other",
-                    cover_photo: previewCoverPhotoUrl ?? existingCoverPhoto ?? null,
-                    logo_url: previewLogoUrl ?? existingLogo ?? null,
-                    cover_video: previewCoverVideo,
-                    video_thumbnail: previewVideoThumbnail,
-                    gallery_photos: previewGalleryPhotos,
-                    social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
-                    operating_hours: {
-                      ...(hoursMonFri ? { Mon_Fri: hoursMonFri } : {}),
-                      ...(hoursSat ? { Sat: hoursSat } : {}),
-                      ...(hoursSun ? { Sun: hoursSun } : {}),
-                    },
-                    services_offered: services,
-                    payment_methods_accepted: paymentMethods,
-                    delivery_options: deliveryOptions,
-                    service_areas:
-                      businessType === "mobile_service" && serviceAreasInput
-                        ? { areas: parseServiceAreas(serviceAreasInput) }
-                        : null,
-                    location_city: city || null,
-                    location_province: province || null,
-                    phone: phone || null,
-                    whatsapp: whatsapp || null,
-                    email: email || null,
-                    website: website || null,
-                    store_number: storeNumber || null,
-                    map_directions: mapDirections || null,
-                    business_details: previewMallDetails,
-                  }}
-                  trustLevel={null}
-                  ownerProfile={{ display_name: "You" }}
-                  promotions={[]}
-                  showPromotions={false}
-                  showPublicActions={false}
+                <LayoutChooser
+                  selected={resolveBusinessLayout(
+                    layoutTemplate,
+                    (category || "general_other") as BusinessCategory
+                  )}
+                  onChange={(id) => setLayoutTemplate(id)}
+                  category={category ? (category as BusinessCategory) : undefined}
                 />
+                <DevicePreviewShell>
+                  <BusinessLayoutRouter
+                    business={
+                      {
+                        id: businessId,
+                        owner_id: "preview-seller",
+                        business_name: businessName || "Your business name",
+                        description: description || "Your business description will appear here.",
+                        status: "preview",
+                        business_type: businessType,
+                        category: category || "general_other",
+                        cover_photo: previewCoverPhotoUrl ?? existingCoverPhoto ?? null,
+                        logo_url: previewLogoUrl ?? existingLogo ?? null,
+                        cover_video: previewCoverVideo,
+                        video_thumbnail: previewVideoThumbnail,
+                        gallery_photos: previewGalleryPhotos,
+                        social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
+                        operating_hours: {
+                          ...(hoursMonFri ? { Mon_Fri: hoursMonFri } : {}),
+                          ...(hoursSat ? { Sat: hoursSat } : {}),
+                          ...(hoursSun ? { Sun: hoursSun } : {}),
+                        },
+                        services_offered: services,
+                        payment_methods_accepted: paymentMethods,
+                        delivery_options: deliveryOptions,
+                        service_areas:
+                          businessType === "mobile_service" && serviceAreasInput
+                            ? { areas: parseServiceAreas(serviceAreasInput) }
+                            : null,
+                        location_city: city || null,
+                        location_province: province || null,
+                        phone: phone || null,
+                        whatsapp: whatsapp || null,
+                        email: email || null,
+                        website: website || null,
+                        store_number: storeNumber || null,
+                        map_directions: mapDirections || null,
+                        business_details: previewMallDetails,
+                        layout_template: layoutTemplate,
+                      } as BusinessDetailRecord
+                    }
+                    trustLevel={null}
+                    ownerProfile={{ display_name: "You" }}
+                    promotions={[]}
+                    showPromotions={false}
+                    showPublicActions={false}
+                    layoutOverride={resolveBusinessLayout(
+                      layoutTemplate,
+                      (category || "general_other") as BusinessCategory
+                    )}
+                  />
+                </DevicePreviewShell>
               </div>
 
               {/* Payment Methods */}

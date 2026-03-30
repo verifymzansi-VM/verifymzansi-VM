@@ -93,7 +93,8 @@ describe("BusinessCard", () => {
     );
 
     expect(screen.getByText("Nomsa Fashion")).toBeTruthy();
-    expect(screen.getByText(/Tailored clothing/i)).toBeTruthy();
+    expect(screen.getByText(/Johannesburg · Tailored clothing/i)).toBeTruthy();
+    expect(screen.getByText("Featured")).toBeTruthy();
   });
 
   it("shows the business logo when provided", () => {

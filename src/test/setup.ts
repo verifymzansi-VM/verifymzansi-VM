@@ -29,3 +29,31 @@ if (typeof globalThis.IntersectionObserver === "undefined") {
 if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = vi.fn();
 }
+
+if (typeof window !== "undefined") {
+  Object.defineProperty(window, "scrollTo", {
+    value: vi.fn(),
+    writable: true,
+    configurable: true,
+  });
+}
+
+if (typeof HTMLMediaElement !== "undefined") {
+  Object.defineProperty(HTMLMediaElement.prototype, "play", {
+    value: vi.fn().mockResolvedValue(undefined),
+    writable: true,
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLMediaElement.prototype, "pause", {
+    value: vi.fn(),
+    writable: true,
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLMediaElement.prototype, "load", {
+    value: vi.fn(),
+    writable: true,
+    configurable: true,
+  });
+}

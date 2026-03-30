@@ -83,6 +83,20 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
     province === "Gauteng" ? ["Johannesburg", "Pretoria"] : [],
 }));
 
+vi.mock("@/components/business/layouts/business-layout-router", () => ({
+  BusinessLayoutRouter: ({ business }: { business: { business_name: string } }) => (
+    <div data-testid="layout-router">{business.business_name}</div>
+  ),
+}));
+
+vi.mock("@/components/business/shared/device-preview-shell", () => ({
+  DevicePreviewShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("@/components/business/shared/layout-chooser", () => ({
+  LayoutChooser: () => <div>Layout Chooser</div>,
+}));
+
 describe("CreateBusinessPage", () => {
   const mockPush = vi.fn();
   const mockToast = vi.fn();
@@ -292,7 +306,7 @@ describe("CreateBusinessPage", () => {
     await completeStandaloneStepOne();
     completeLocationStep();
 
-    expect(screen.getByText(/Business review/i)).toBeInTheDocument();
+    expect(screen.getByText(/Preview how your profile will look/i)).toBeInTheDocument();
     expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
   });
 
@@ -486,9 +500,7 @@ describe("CreateBusinessPage", () => {
 
     completeLocationStep();
 
-    expect(screen.getByText(/Business review/i)).toBeInTheDocument();
-    expect(screen.getByText("Service suburb")).toBeInTheDocument();
-    expect(screen.getByText("Noordwyk")).toBeInTheDocument();
+    expect(screen.getByText(/Preview how your profile will look/i)).toBeInTheDocument();
     expect(screen.getByText("Nomsa Home Studio")).toBeInTheDocument();
   });
 
