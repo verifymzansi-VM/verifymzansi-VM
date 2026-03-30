@@ -1,21 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import {
-  ShoppingBag,
-  MessageSquare,
-  ShieldCheck,
-  Plus,
-  Megaphone,
-  Building2,
-  BadgeCheck,
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Plus, BadgeCheck, ShieldCheck, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/layout/page-header";
-import { TrustBadge } from "@/components/trust/trust-badge";
-import { VerificationProgress } from "@/components/trust/verification-progress";
 import {
   ACCOUNT_PROFILE_TABLE,
   applyOwnerFilter,
@@ -25,18 +13,13 @@ import {
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { NeedsAttention } from "@/components/dashboard/needs-attention";
-import { RecentActivity, type ActivityItem } from "@/components/dashboard/recent-activity";
 import { EmailConfirmedToast } from "@/components/dashboard/email-confirmed-toast";
-import { MyRecentPosts, type RecentPost } from "@/components/dashboard/my-recent-posts";
-import { PlanSummary, type PlanInfo } from "@/components/dashboard/plan-summary";
-import { DashboardOnboarding } from "@/components/dashboard/dashboard-onboarding";
-import { getEntitlements } from "@/lib/services/entitlements";
-import type {
-  VerificationStepType,
-  VerificationStatus,
-  MarketplaceArea,
-  PlanTier,
-} from "@/types/enums";
+import { StatChips, defaultChips } from "@/components/dashboard/stat-chips";
+import {
+  ListingManagerMini,
+  type MiniListingPost,
+} from "@/components/dashboard/listing-manager-mini";
+import { QuickLinks } from "@/components/dashboard/quick-links";
 
 /** Safely resolve owner column — fall back to "owner_id" on error. */
 async function safeGetOwnerColumn(
@@ -69,84 +52,8 @@ function settled<T>(result: PromiseSettledResult<T>, fallback: T): T {
 
 export const metadata = {
   title: "Dashboard",
-  description:
-    "Your VerifyMzansi dashboard — listings, businesses, verification status, and quick actions.",
+  description: "Your VerifyMzansi dashboard — manage posts, leads, and businesses in one place.",
 };
-
-interface DashboardSummaryCardProps {
-  title: string;
-  value: number;
-  description: string;
-  href: string;
-  icon: React.ElementType;
-  toneClassName: string;
-}
-
-function DashboardSummaryCard({
-  title,
-  value,
-  description,
-  href,
-  icon: Icon,
-  toneClassName,
-}: DashboardSummaryCardProps) {
-  return (
-    <Link href={href} className="group block h-full">
-      <Card className="h-full border-border/70 transition-all hover:-translate-y-0.5 hover:border-foreground/15 hover:shadow-md">
-        <CardContent className="flex h-full flex-col gap-4 p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div
-              className={`inline-flex h-11 w-11 items-center justify-center rounded-xl ${toneClassName}`}
-            >
-              <Icon className="h-5 w-5" />
-            </div>
-            <span className="text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
-              Open
-            </span>
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="font-display text-3xl font-bold tracking-tight">{value}</p>
-          </div>
-          <p className="text-sm text-muted-foreground">{description}</p>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
-
-function getVerificationCopy(status: string, stepsRemaining: number) {
-  if (status === "verified") {
-    return {
-      title: "Your account is verified",
-      description: "Your identity checks are complete and your trust badge is live.",
-      ctaLabel: "Manage verification",
-    };
-  }
-
-  if (status === "pending_review") {
-    return {
-      title: "Verification is under review",
-      description:
-        "Our team is checking your documents. You can follow progress from the verification page.",
-      ctaLabel: "View status",
-    };
-  }
-
-  if (status === "rejected") {
-    return {
-      title: "Verification needs changes",
-      description: "Review the failed checks and resubmit the missing or incorrect information.",
-      ctaLabel: "Fix verification",
-    };
-  }
-
-  return {
-    title: "Complete your verification",
-    description: `${stepsRemaining} step${stepsRemaining === 1 ? "" : "s"} remaining to unlock full trust signals across the platform.`,
-    ctaLabel: "Continue verification",
-  };
-}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -161,50 +68,39 @@ export default async function DashboardPage() {
   const now = nowDate.toISOString();
   const sevenDaysFromNow = new Date(nowDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const fortyEightHoursFromNow = new Date(nowDate.getTime() + 48 * 60 * 60 * 1000).toISOString();
-  const [listingOwnerColumn, businessOwnerColumn, leadsOwnerColumn, contactOwnerColumn] =
-    await Promise.all([
-      safeGetOwnerColumn(supabase, "listings"),
-      safeGetOwnerColumn(supabase, "businesses"),
-      safeGetOwnerColumn(supabase, "leads"),
-      safeGetOwnerColumn(supabase, "contact_events"),
-    ]);
 
-  // Fetch all data in parallel — use allSettled so a single query failure
-  // does not crash the entire dashboard (common on slow mobile connections).
+  const [listingOwnerColumn, businessOwnerColumn, leadsOwnerColumn] = await Promise.all([
+    safeGetOwnerColumn(supabase, "listings"),
+    safeGetOwnerColumn(supabase, "businesses"),
+    safeGetOwnerColumn(supabase, "leads"),
+  ]);
+
+  // Fetch dashboard data in parallel — allSettled for resilience on slow connections
   const results = await Promise.allSettled([
-    // Account profile (maybeSingle – new users may not have a profile yet)
-    supabase.from(ACCOUNT_PROFILE_TABLE).select("*").eq("user_id", user.id).maybeSingle(),
-    // Verification steps
-    supabase.from("verification_steps").select("step_type, status").eq("user_id", user.id),
-    // Active listings count
-    applyOwnerFilter(
-      supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
-      listingOwnerColumn,
-      user.id
-    ),
-    // All listing records for views, activity, and post previews
+    /* 0 */ supabase.from(ACCOUNT_PROFILE_TABLE).select("*").eq("user_id", user.id).maybeSingle(),
+    /* 1 */ supabase.from("verification_steps").select("step_type, status").eq("user_id", user.id),
+    /* 2 — recent listings (broader fetch: 10 items with all statuses for mini-manager) */
     applyOwnerFilter(
       supabase
         .from("listings")
         .select("id, title, status, photos, view_count, created_at, updated_at")
         .order("updated_at", { ascending: false })
-        .limit(5),
+        .limit(10),
       listingOwnerColumn,
       user.id
     ),
-    // Unread leads count (NEW — the key actionable metric)
-    applyOwnerFilter(
+    /* 3 */ applyOwnerFilter(
       supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "new"),
       leadsOwnerColumn,
       user.id
     ),
-    // Total leads count
+    /* 4 — active listings count */
     applyOwnerFilter(
-      supabase.from("contact_events").select("*", { count: "exact", head: true }),
-      contactOwnerColumn,
+      supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
+      listingOwnerColumn,
       user.id
     ),
-    // Active promotions count
+    /* 5 — active promotions count */
     applyOwnerFilter(
       supabase
         .from("listings")
@@ -214,7 +110,7 @@ export default async function DashboardPage() {
       listingOwnerColumn,
       user.id
     ),
-    // Rejected listings count (NEW — needs attention)
+    /* 6 — rejected listings count */
     applyOwnerFilter(
       supabase
         .from("listings")
@@ -223,7 +119,7 @@ export default async function DashboardPage() {
       listingOwnerColumn,
       user.id
     ),
-    // Pending moderation count (NEW — needs attention)
+    /* 7 — pending moderation count */
     applyOwnerFilter(
       supabase
         .from("listings")
@@ -232,7 +128,7 @@ export default async function DashboardPage() {
       listingOwnerColumn,
       user.id
     ),
-    // Expiring listings count (NEW — within 7 days)
+    /* 8 — expiring listings */
     applyOwnerFilter(
       supabase
         .from("listings")
@@ -243,7 +139,7 @@ export default async function DashboardPage() {
       listingOwnerColumn,
       user.id
     ),
-    // Expiring promotions count (NEW — within 48 hours)
+    /* 9 — expiring promotions */
     applyOwnerFilter(
       supabase
         .from("listings")
@@ -255,66 +151,39 @@ export default async function DashboardPage() {
       listingOwnerColumn,
       user.id
     ),
-    // Business count
+    /* 10 — business count */
     applyOwnerFilter(
       supabase.from("businesses").select("*", { count: "exact", head: true }),
       businessOwnerColumn,
       user.id
     ),
-    // Active entitlements (for plan summary)
+    /* 11 — active entitlements (for plan label on quick links) */
     supabase
       .from("entitlements")
       .select("area, tier, status")
       .eq("user_id", user.id)
       .eq("status", "active")
       .gt("expires_at", now),
-    // Recent leads for activity feed
-    applyOwnerFilter(
-      supabase
-        .from("leads")
-        .select("id, buyer_name, message, created_at")
-        .order("created_at", { ascending: false })
-        .limit(5),
-      leadsOwnerColumn,
-      user.id
-    ),
-    // Recent listing status changes for activity feed
-    applyOwnerFilter(
-      supabase
-        .from("listings")
-        .select("id, title, status, created_at, updated_at")
-        .order("updated_at", { ascending: false })
-        .limit(5),
-      listingOwnerColumn,
-      user.id
-    ),
   ]);
 
-  const emptyResult = EMPTY_OK;
-  const emptyListResult = EMPTY_LIST_OK;
-  const profileResult = settled(results[0], emptyResult);
-  const verificationStepsResult = settled(results[1], emptyListResult);
-  const activeListingsResult = settled(results[2], emptyResult);
-  const ownerListingsResult = settled(results[3], emptyListResult);
-  const unreadLeadsResult = settled(results[4], emptyResult);
-  const totalLeadsResult = settled(results[5], emptyResult);
-  const activePromosResult = settled(results[6], emptyResult);
-  const rejectedListingsResult = settled(results[7], emptyResult);
-  const pendingModerationResult = settled(results[8], emptyResult);
-  const expiringListingsResult = settled(results[9], emptyResult);
-  const expiringPromosResult = settled(results[10], emptyResult);
-  const businessCountResult = settled(results[11], emptyResult);
-  const entitlementsResult = settled(results[12], emptyListResult);
-  const recentLeadsResult = settled(results[13], emptyListResult);
-  const recentListingChangesResult = settled(results[14], emptyListResult);
+  const profileResult = settled(results[0], EMPTY_OK);
+  const verificationStepsResult = settled(results[1], EMPTY_LIST_OK);
+  const ownerListingsResult = settled(results[2], EMPTY_LIST_OK);
+  const unreadLeadsResult = settled(results[3], EMPTY_OK);
+  const activeListingsResult = settled(results[4], EMPTY_OK);
+  const activePromosResult = settled(results[5], EMPTY_OK);
+  const rejectedListingsResult = settled(results[6], EMPTY_OK);
+  const pendingModerationResult = settled(results[7], EMPTY_OK);
+  const expiringListingsResult = settled(results[8], EMPTY_OK);
+  const expiringPromosResult = settled(results[9], EMPTY_OK);
+  const businessCountResult = settled(results[10], EMPTY_OK);
+  const entitlementsResult = settled(results[11], EMPTY_LIST_OK);
 
   const profile = profileResult.data;
   const verificationSteps = verificationStepsResult.data;
-  const activeListings = activeListingsResult.count;
-  const ownerListings = ownerListingsResult.data;
+  const activeListings = activeListingsResult.count || 0;
   const unreadLeadCount = unreadLeadsResult.count || 0;
-  const totalLeadCount = totalLeadsResult.count || 0;
-  const activePromos = activePromosResult.count;
+  const activePromos = activePromosResult.count || 0;
   const rejectedListingCount = rejectedListingsResult.count || 0;
   const pendingModerationCount = pendingModerationResult.count || 0;
   const expiringListingCount = expiringListingsResult.count || 0;
@@ -333,16 +202,11 @@ export default async function DashboardPage() {
     { strikes: profile?.strikes ?? 0, legalHold: profile?.legal_hold ?? false }
   );
 
-  const verificationProgressSteps =
-    verificationSteps?.map((s: { step_type: string; status: string }) => ({
-      type: s.step_type as VerificationStepType,
-      status: s.status as VerificationStatus,
-    })) || [];
-
   const displayName = profile?.display_name || user.user_metadata?.display_name || "Member";
+  const firstName = displayName.split(" ")[0];
 
-  // Build recent posts list for preview section
-  const recentPosts: RecentPost[] = (ownerListings ?? []).map(
+  // Build posts for the mini listing manager
+  const posts: MiniListingPost[] = (ownerListingsResult.data ?? []).map(
     (l: {
       id: string;
       title: string | null;
@@ -350,6 +214,7 @@ export default async function DashboardPage() {
       photos?: string[] | null;
       view_count?: number | null;
       created_at: string;
+      updated_at?: string | null;
     }) => ({
       id: l.id,
       title: l.title,
@@ -357,265 +222,107 @@ export default async function DashboardPage() {
       photos: l.photos,
       view_count: l.view_count,
       created_at: l.created_at,
+      updated_at: l.updated_at,
     })
   );
 
-  // Build plan summary info
-  const AREA_LABELS: Record<string, string> = {
-    MZANSI_MARKET: "Listings",
-    MZANSI_BUSINESS: "Businesses",
-    PROMOTIONS_EVENTS: "Promotions & Events",
-  };
-  const AREA_COUNTS: Record<string, number> = {
-    MZANSI_MARKET: activeListings || 0,
-    MZANSI_BUSINESS: businessCount,
-    PROMOTIONS_EVENTS: activePromos || 0,
-  };
-  const planInfos: PlanInfo[] = [];
+  // Stat chips
+  const chips = defaultChips({
+    liveListings: activeListings,
+    unreadLeads: unreadLeadCount,
+    businesses: businessCount,
+    activePromos: activePromos,
+  });
+
+  // Plan tier label for quick links
   const activeEntitlements = entitlementsResult.data ?? [];
-  for (const ent of activeEntitlements) {
-    const areaLabel = AREA_LABELS[ent.area] ?? ent.area;
-    const tierLabel = ent.tier ? ent.tier.charAt(0).toUpperCase() + ent.tier.slice(1) : "Free";
-    const entitlementSet = getEntitlements(
-      (ent.tier ?? "basic") as PlanTier,
-      ent.area as MarketplaceArea
-    );
-    planInfos.push({
-      area: ent.area,
-      areaLabel,
-      tierLabel,
-      currentCount: AREA_COUNTS[ent.area] ?? 0,
-      maxAllowed: entitlementSet.maxAllowed,
-    });
-  }
+  const topTier =
+    activeEntitlements.length > 0
+      ? activeEntitlements.reduce((best: string, ent: { tier?: string }) => {
+          const rank: Record<string, number> = { pro: 4, growth: 3, starter: 2, basic: 1 };
+          const current = rank[ent.tier ?? ""] ?? 0;
+          const bestRank = rank[best] ?? 0;
+          return current > bestRank ? (ent.tier ?? best) : best;
+        }, activeEntitlements[0]?.tier ?? "basic")
+      : null;
+  const planLabel = topTier
+    ? topTier.charAt(0).toUpperCase() + topTier.slice(1) + " Plan"
+    : undefined;
 
-  const isNewUser = (activeListings ?? 0) === 0 && businessCount === 0;
-
-  // Build activity feed from recent leads + listing changes
-  const activityItems: ActivityItem[] = [];
-
-  // Add recent leads
-  if (recentLeadsResult.data) {
-    for (const lead of recentLeadsResult.data) {
-      activityItems.push({
-        id: `lead-${lead.id}`,
-        type: "lead",
-        title: `New lead from ${lead.buyer_name || "a buyer"}`,
-        description: lead.message ? lead.message.slice(0, 80) : undefined,
-        timestamp: lead.created_at,
-        href: "/dashboard/leads",
-      });
-    }
-  }
-
-  // Add recent listing changes
-  if (recentListingChangesResult.data) {
-    for (const listing of recentListingChangesResult.data) {
-      const titleSnippet = listing.title?.slice(0, 40) || "Untitled listing";
-      if (listing.status === "live") {
-        activityItems.push({
-          id: `listing-live-${listing.id}`,
-          type: "listing_approved",
-          title: `"${titleSnippet}" is now live`,
-          timestamp: listing.updated_at || listing.created_at,
-          href: "/dashboard/listings",
-        });
-      } else if (listing.status === "rejected") {
-        activityItems.push({
-          id: `listing-rej-${listing.id}`,
-          type: "listing_rejected",
-          title: `"${titleSnippet}" was rejected`,
-          description: "Check the rejection reason and edit your listing.",
-          timestamp: listing.updated_at || listing.created_at,
-          href: "/dashboard/listings",
-        });
-      } else if (
-        listing.status === "pending_moderation" ||
-        listing.status === "flagged_for_review"
-      ) {
-        activityItems.push({
-          id: `listing-pending-${listing.id}`,
-          type: "listing_pending",
-          title: `"${titleSnippet}" is under review`,
-          timestamp: listing.updated_at || listing.created_at,
-          href: "/dashboard/listings",
-        });
-      }
-    }
-  }
-
-  // Sort by timestamp descending, take top 10
-  activityItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  const recentActivity = activityItems.slice(0, 10);
-  const verificationCopy = getVerificationCopy(
-    verificationSummary.accountVerificationStatus,
-    verificationSummary.stepsRemaining
-  );
-  const overviewCards: DashboardSummaryCardProps[] = [
-    {
-      title: "Listings",
-      value: activeListings || 0,
-      description:
-        rejectedListingCount > 0
-          ? `${rejectedListingCount} need edits before they can go live.`
-          : pendingModerationCount > 0
-            ? `${pendingModerationCount} currently under review.`
-            : expiringListingCount > 0
-              ? `${expiringListingCount} expiring in the next 7 days.`
-              : "Manage your live, draft, and archived listings.",
-      href: "/dashboard/listings",
-      icon: ShoppingBag,
-      toneClassName:
-        "bg-brand-green-50 text-brand-green dark:bg-brand-green-950 dark:text-brand-green-100",
-    },
-    {
-      title: "Leads",
-      value: unreadLeadCount,
-      description:
-        totalLeadCount > 0
-          ? `${totalLeadCount} total enquiries received across your account.`
-          : "New buyer messages and contact requests appear here.",
-      href: "/dashboard/leads",
-      icon: MessageSquare,
-      toneClassName: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-100",
-    },
-    {
-      title: "Businesses",
-      value: businessCount,
-      description:
-        businessCount > 0
-          ? "Keep your business details, category, and visibility current."
-          : "Add a business profile so buyers can discover your brand.",
-      href: "/dashboard/businesses",
-      icon: Building2,
-      toneClassName: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-100",
-    },
-    {
-      title: "Promotions & Events",
-      value: activePromos || 0,
-      description:
-        expiringPromoCount > 0
-          ? `${expiringPromoCount} ending soon and ready for renewal.`
-          : activePromos > 0
-            ? "Manage your active promotions, upcoming events, and visibility boosts."
-            : "Create promotions or events when you need extra reach or urgency.",
-      href: "/dashboard/promotions",
-      icon: Megaphone,
-      toneClassName: "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-100",
-    },
-  ];
+  // Verification chip helpers
+  const isVerified = trustLevel >= 3;
+  const verStatus = verificationSummary.accountVerificationStatus;
+  const stepsRemaining = verificationSummary.stepsRemaining;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <EmailConfirmedToast />
-      <PageHeader
-        title={`Welcome back, ${displayName}`}
-        description="Keep your listings, leads, businesses, and promotions and events organised in one place."
-        breadcrumbs={[{ label: "Dashboard" }]}
-      >
-        <div className="flex items-center gap-2">
-          {trustLevel >= 3 && (
-            <Badge className="bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800 gap-1">
+
+      {/* ───── Compact header ───── */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-xl font-bold tracking-tight sm:text-2xl">
+            Hi, {firstName}
+          </h1>
+          {/* Inline verification indicator */}
+          {isVerified ? (
+            <Badge className="mt-1.5 gap-1 bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800 text-xs">
               <BadgeCheck className="h-3 w-3" />
               Verified
             </Badge>
-          )}
-          <Button asChild variant="trust-verified" size="sm" className="gap-2">
-            <Link href="/post/create">
-              <Plus className="h-4 w-4" />
-              Create Post
+          ) : verStatus === "pending_review" ? (
+            <Link
+              href="/verification"
+              className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 hover:underline"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Verification under review
+              <ChevronRight className="h-3 w-3" />
             </Link>
-          </Button>
-        </div>
-      </PageHeader>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
-        <div className="space-y-6">
-          <NeedsAttention
-            unreadLeadCount={unreadLeadCount}
-            rejectedListingCount={rejectedListingCount}
-            pendingModerationCount={pendingModerationCount}
-            expiringListingCount={expiringListingCount}
-            expiringPromoCount={expiringPromoCount}
-            verificationStatus={verificationSummary.accountVerificationStatus}
-            stepsRemaining={verificationSummary.stepsRemaining}
-          />
-
-          <section className="space-y-3" aria-labelledby="workspace-overview-heading">
-            <div className="space-y-1">
-              <h2 id="workspace-overview-heading" className="font-display text-lg font-semibold">
-                Workspace overview
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Jump straight into the areas you manage most often.
-              </p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {overviewCards.map((card) => (
-                <DashboardSummaryCard key={card.title} {...card} />
-              ))}
-            </div>
-          </section>
-
-          {isNewUser ? (
-            <DashboardOnboarding
-              isVerified={trustLevel >= 3}
-              hasListings={(activeListings || 0) > 0}
-              hasBusinesses={businessCount > 0}
-            />
           ) : (
-            <MyRecentPosts posts={recentPosts} />
+            <Link
+              href="/verification"
+              className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {stepsRemaining > 0
+                ? `${stepsRemaining} step${stepsRemaining > 1 ? "s" : ""} to verify`
+                : "Complete verification"}
+              <ChevronRight className="h-3 w-3" />
+            </Link>
           )}
-
-          <RecentActivity items={recentActivity} />
         </div>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <CardTitle className="flex items-center gap-2 text-base font-display">
-                    <ShieldCheck className="h-5 w-5 text-brand-green" />
-                    Account status
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">{verificationCopy.description}</p>
-                </div>
-                <TrustBadge level={trustLevel} />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold">{verificationCopy.title}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Trust level {trustLevel} on your account.
-                    </p>
-                  </div>
-                  {trustLevel >= 3 && (
-                    <Badge className="gap-1 bg-brand-green-50 text-brand-green border-brand-green-200 dark:bg-brand-green-950 dark:border-brand-green-800">
-                      <BadgeCheck className="h-3 w-3" />
-                      Verified
-                    </Badge>
-                  )}
-                </div>
-              </div>
+        <Button asChild size="sm" className="gap-1.5 flex-shrink-0">
+          <Link href="/post/create">
+            <Plus className="h-4 w-4" />
+            <span className="hidden xs:inline">Create Post</span>
+            <span className="xs:hidden">Post</span>
+          </Link>
+        </Button>
+      </div>
 
-              {trustLevel < 3 && <VerificationProgress steps={verificationProgressSteps} />}
+      {/* ───── Stat chips row ───── */}
+      <StatChips chips={chips} />
 
-              <Button
-                asChild
-                variant={trustLevel >= 3 ? "outline" : "default"}
-                className="w-full sm:w-auto"
-              >
-                <Link href="/verification">{verificationCopy.ctaLabel}</Link>
-              </Button>
-            </CardContent>
-          </Card>
+      {/* ───── Needs attention (compact banner, hidden when all clear) ───── */}
+      <NeedsAttention
+        unreadLeadCount={unreadLeadCount}
+        rejectedListingCount={rejectedListingCount}
+        pendingModerationCount={pendingModerationCount}
+        expiringListingCount={expiringListingCount}
+        expiringPromoCount={expiringPromoCount}
+        verificationStatus={verificationSummary.accountVerificationStatus}
+        stepsRemaining={stepsRemaining}
+      />
 
-          {planInfos.length > 0 && <PlanSummary plans={planInfos} />}
-        </div>
+      {/* ───── Main content — responsive grid ───── */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+        {/* Left: Mini listing manager */}
+        <ListingManagerMini posts={posts} />
+
+        {/* Right: Quick links (stacks below on mobile) */}
+        <QuickLinks planLabel={planLabel} />
       </div>
     </div>
   );

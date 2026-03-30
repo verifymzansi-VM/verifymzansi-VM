@@ -6,12 +6,9 @@ import {
   LayoutDashboard,
   ShoppingBag,
   MessageSquare,
-  Bell,
-  ShieldCheck,
-  CreditCard,
   Building2,
   Megaphone,
-  User,
+  Settings,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,17 +22,18 @@ interface NavItem {
   label: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
+const PRIMARY_NAV: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/dashboard/listings", icon: ShoppingBag, label: "Listings" },
+  { href: "/dashboard/listings", icon: ShoppingBag, label: "My Posts" },
   { href: "/dashboard/leads", icon: MessageSquare, label: "Leads" },
-  { href: "/dashboard/communication", icon: Bell, label: "Communication" },
-  { href: "/dashboard/businesses", icon: Building2, label: "Businesses" },
-  { href: "/dashboard/promotions", icon: Megaphone, label: "Promotions & Events" },
-  { href: "/verification", icon: ShieldCheck, label: "Verification" },
-  { href: "/billing", icon: CreditCard, label: "Billing" },
-  { href: "/dashboard/profile", icon: User, label: "Profile" },
 ];
+
+const SECONDARY_NAV: NavItem[] = [
+  { href: "/dashboard/businesses", icon: Building2, label: "Businesses" },
+  { href: "/dashboard/promotions", icon: Megaphone, label: "Promotions" },
+];
+
+const TERTIARY_NAV: NavItem[] = [{ href: "/dashboard/profile", icon: Settings, label: "Settings" }];
 
 export interface DashboardSidebarBadges {
   unreadLeads?: number;
@@ -58,53 +56,57 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
     if (href === "/dashboard/leads" && (badges.unreadLeads ?? 0) > 0) {
       return { count: badges.unreadLeads!, variant: "destructive" };
     }
-    if (href === "/dashboard/communication" && (badges.unreadNotifications ?? 0) > 0) {
-      return { count: badges.unreadNotifications!, variant: "pending" };
-    }
     if (href === "/dashboard/listings") {
       const total = (badges.rejectedListings ?? 0) + (badges.pendingModeration ?? 0);
       if (total > 0) return { count: total, variant: "destructive" };
     }
-    if (href === "/verification" && badges.incompleteVerification && !badges.pendingReview) {
-      return { count: 1, variant: "destructive" };
-    }
     return null;
   }
 
-  return (
-    <aside className="hidden md:flex md:w-60 lg:w-64 flex-col border-r bg-background py-4 px-3">
-      <nav aria-label="Dashboard" className="space-y-1 flex-1">
-        {NAV_ITEMS.map((item) => {
-          const isActive =
-            item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href);
-          const Icon = item.icon;
-          const badge = getBadge(item.href);
+  function renderNavItem(item: NavItem) {
+    const isActive =
+      item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href);
+    const Icon = item.icon;
+    const badge = getBadge(item.href);
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={isActive ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-brand-green-50 text-brand-green dark:bg-brand-green-950"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="flex-1">{item.label}</span>
-              {badge && (
-                <Badge
-                  variant={badge.variant}
-                  className="h-5 min-w-[20px] px-1.5 text-[10px] font-bold"
-                >
-                  {badge.count > 99 ? "99+" : badge.count}
-                </Badge>
-              )}
-            </Link>
-          );
-        })}
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        aria-current={isActive ? "page" : undefined}
+        className={cn(
+          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          isActive
+            ? "bg-brand-green-50 text-brand-green dark:bg-brand-green-950"
+            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+        )}
+      >
+        <Icon className="h-4 w-4" />
+        <span className="flex-1">{item.label}</span>
+        {badge && (
+          <Badge variant={badge.variant} className="h-5 min-w-[20px] px-1.5 text-[10px] font-bold">
+            {badge.count > 99 ? "99+" : badge.count}
+          </Badge>
+        )}
+      </Link>
+    );
+  }
+
+  return (
+    <aside className="hidden md:flex md:w-56 lg:w-60 flex-col border-r bg-background py-4 px-3">
+      <nav aria-label="Dashboard" className="flex-1 space-y-1">
+        {/* Primary */}
+        {PRIMARY_NAV.map(renderNavItem)}
+
+        <Separator className="my-2" />
+
+        {/* Secondary */}
+        {SECONDARY_NAV.map(renderNavItem)}
+
+        <Separator className="my-2" />
+
+        {/* Tertiary */}
+        {TERTIARY_NAV.map(renderNavItem)}
       </nav>
 
       <Separator className="my-3" />

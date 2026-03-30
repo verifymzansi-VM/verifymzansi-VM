@@ -49,38 +49,17 @@ vi.mock("@/components/dashboard/needs-attention", () => ({
   }) => <div>{`needs:${verificationStatus}:${stepsRemaining}`}</div>,
 }));
 
-vi.mock("@/components/trust/trust-badge", () => ({
-  TrustBadge: ({ level }: { level: number }) => <div>{`trust:${level}`}</div>,
+vi.mock("@/components/dashboard/stat-chips", () => ({
+  StatChips: () => <div>stat-chips</div>,
+  defaultChips: () => [],
 }));
 
-vi.mock("@/components/trust/verification-progress", () => ({
-  VerificationProgress: ({ steps }: { steps: Array<{ type: string; status: string }> }) => (
-    <div>{`progress:${steps.length}`}</div>
-  ),
+vi.mock("@/components/dashboard/listing-manager-mini", () => ({
+  ListingManagerMini: () => <div>listing-manager-mini</div>,
 }));
 
-vi.mock("@/components/dashboard/recent-activity", () => ({
-  RecentActivity: () => <div>recent-activity</div>,
-}));
-
-vi.mock("@/components/dashboard/my-recent-posts", () => ({
-  MyRecentPosts: () => <div>recent-posts</div>,
-}));
-
-vi.mock("@/components/dashboard/dashboard-onboarding", () => ({
-  DashboardOnboarding: ({
-    isVerified,
-    hasListings,
-    hasBusinesses,
-  }: {
-    isVerified: boolean;
-    hasListings: boolean;
-    hasBusinesses: boolean;
-  }) => <div>{`onboarding:${isVerified}:${hasListings}:${hasBusinesses}`}</div>,
-}));
-
-vi.mock("@/components/dashboard/plan-summary", () => ({
-  PlanSummary: () => <div>plan-summary</div>,
+vi.mock("@/components/dashboard/quick-links", () => ({
+  QuickLinks: () => <div>quick-links</div>,
 }));
 
 vi.mock("@/components/dashboard/email-confirmed-toast", () => ({
@@ -171,11 +150,8 @@ describe("DashboardPage", () => {
     render(ui);
 
     expect(screen.getByText("needs:verified:0")).toBeInTheDocument();
-    expect(screen.getByText("trust:3")).toBeInTheDocument();
-    expect(screen.getByText(/Workspace overview/i)).toBeInTheDocument();
-    expect(screen.getByText(/Manage verification/i)).toBeInTheDocument();
-    expect(screen.getByText("Promotions & Events")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Create Post/i })).toHaveAttribute(
+    expect(screen.getAllByText(/Verified/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("link", { name: /Create Post|Post/i })).toHaveAttribute(
       "href",
       "/post/create"
     );
@@ -194,7 +170,6 @@ describe("DashboardPage", () => {
     render(ui);
 
     expect(screen.getByText("needs:incomplete:2")).toBeInTheDocument();
-    expect(screen.getByText(/Continue verification/i)).toBeInTheDocument();
-    expect(screen.getByText("onboarding:false:false:false")).toBeInTheDocument();
+    expect(screen.getByText(/2 steps to verify/i)).toBeInTheDocument();
   });
 });

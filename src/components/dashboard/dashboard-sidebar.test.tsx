@@ -10,7 +10,7 @@ describe("DashboardSidebar", () => {
   it("labels the promotions area consistently", () => {
     render(<DashboardSidebar onSignOut={vi.fn()} />);
 
-    expect(screen.getByRole("link", { name: /Promotions & Events/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Promotions/i })).toHaveAttribute(
       "href",
       "/dashboard/promotions"
     );
