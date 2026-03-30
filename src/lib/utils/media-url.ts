@@ -76,7 +76,7 @@ export function extractMediaStorageKey(url: string): string | null {
 
 /**
  * Rewrite a media URL for optimal delivery:
- * - Videos → direct CDN URL (avoids server proxy, enables native Range requests)
+ * - Videos → local proxy route (reliable MIME types, Range request support)
  * - Images → local proxy route (benefits from ETag/304 caching)
  *
  * Returns the original string unchanged if it doesn't match any known pattern.
@@ -95,10 +95,9 @@ export function normalizeMediaUrl(url: string | null | undefined): string {
     return `${PROXY_PREFIX}${key}`;
   }
 
-  // Images: serve directly from CDN domain for edge-cached delivery.
-  // The CDN (media.verifymzansi.com) is backed by R2 with Cloudflare edge
-  // caching, making it significantly faster than the API proxy route.
-  return `${MEDIA_BASE}/${key}`;
+  // Images: serve through local media proxy for ETag/304 caching.
+  // The proxy streams from R2 with consistent headers.
+  return `${PROXY_PREFIX}${key}`;
 }
 
 /**
