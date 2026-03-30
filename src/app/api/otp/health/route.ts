@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
+import { createLogger } from "@/lib/utils/logger";
+
+const logger = createLogger("OtpHealth");
 
 /**
  * OTP pipeline health check — verifies env vars, DB table,
@@ -11,6 +14,7 @@ import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
  * Does NOT expose secret values.
  */
 export async function GET() {
+  const requestId = crypto.randomUUID();
   // ── Auth guard: require admin/moderator ───────────────────────
   const supabase = await createClient();
   const {
@@ -112,17 +116,32 @@ export async function GET() {
     }
 
     const allOk = Object.values(checks).every((c) => c.ok);
+    const failedCheckNames = Object.entries(checks)
+      .filter(([, check]) => !check.ok)
+      .map(([name]) => name);
+
+    if (!allOk) {
+      logger.warn("OTP health checks reported unhealthy status", {
+        requestId,
+        failedChecks: failedCheckNames,
+      });
+    }
 
     return NextResponse.json(
-      { status: allOk ? "healthy" : "unhealthy", checks },
+      {
+        requestId,
+        status: allOk ? "healthy" : "unhealthy",
+        detail: allOk ? "All checks passed" : "One or more subsystem checks failed",
+      },
       { status: allOk ? 200 : 503 }
     );
   } catch {
+    logger.error("OTP health endpoint failed", { requestId });
     return NextResponse.json(
       {
+        requestId,
         status: "error",
         detail: "Internal error",
-        checks,
       },
       { status: 500 }
     );

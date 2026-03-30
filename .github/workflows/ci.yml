@@ -22,7 +22,7 @@ jobs:
       - run: pnpm run lint
       - run: pnpm run typecheck
       - run: pnpm run db:check-invariants
-      - run: pnpm run secret-scan
+      - run: pnpm run secret-scan:strict
       - run: pnpm run licenses:check
       - run: pnpm run security:audit
 
