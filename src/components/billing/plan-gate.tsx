@@ -135,7 +135,7 @@ function InlinePlanGrid({
 }) {
   return (
     <div
-      className={`grid grid-cols-2 ${
+      className={`grid grid-cols-1 sm:grid-cols-2 ${
         plans.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"
       } gap-3 max-w-4xl mx-auto`}
     >
@@ -440,7 +440,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           <p className="text-muted-foreground max-w-md mx-auto">
             Sign in to choose a plan or use your free post on VerifyMzansi.
           </p>
-          <div className="flex gap-3 justify-center">
+          <div className="flex flex-wrap gap-3 justify-center">
             <Button asChild variant="outline">
               <Link href="/login">Sign in</Link>
             </Button>

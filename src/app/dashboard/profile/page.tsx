@@ -358,7 +358,7 @@ export default function ProfilePage() {
       {/* Compact header — no breadcrumbs on mobile */}
       <div>
         <h1 className="text-xl font-display font-bold">My Profile</h1>
-        <p className="text-sm text-muted-foreground hidden sm:block">
+        <p className="text-sm text-muted-foreground">
           Manage your details, security, and account settings.
         </p>
       </div>
@@ -367,15 +367,15 @@ export default function ProfilePage() {
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="w-full grid grid-cols-3">
           <TabsTrigger value="profile" className="gap-1.5 text-xs sm:text-sm">
-            <User className="h-3.5 w-3.5 hidden sm:inline" />
+            <User className="h-3.5 w-3.5" />
             Profile
           </TabsTrigger>
           <TabsTrigger value="security" className="gap-1.5 text-xs sm:text-sm">
-            <ShieldCheck className="h-3.5 w-3.5 hidden sm:inline" />
+            <ShieldCheck className="h-3.5 w-3.5" />
             Security
           </TabsTrigger>
           <TabsTrigger value="account" className="gap-1.5 text-xs sm:text-sm">
-            <Mail className="h-3.5 w-3.5 hidden sm:inline" />
+            <Mail className="h-3.5 w-3.5" />
             Account
           </TabsTrigger>
         </TabsList>

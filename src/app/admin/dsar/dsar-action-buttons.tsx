@@ -92,7 +92,7 @@ export function DsarActionButtons({ requestId, status }: DsarActionButtonsProps)
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <div className="flex gap-1 flex-shrink-0">
+      <div className="flex flex-wrap gap-1 flex-shrink-0">
         {status === "submitted" ? (
           <>
             <Button

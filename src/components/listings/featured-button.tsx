@@ -28,7 +28,7 @@ export function FeaturedButton({
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-9 w-9"
         disabled
         title="Already featured"
         aria-label="Already featured"
@@ -43,7 +43,7 @@ export function FeaturedButton({
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-9 w-9"
         disabled
         title={`Upgrade to Pro to feature this ${itemTypeLabel}`}
         aria-label={`Upgrade to Pro to feature this ${itemTypeLabel}`}
@@ -89,7 +89,7 @@ export function FeaturedButton({
     <Button
       variant="ghost"
       size="icon"
-      className="h-8 w-8 transition-colors hover:text-brand-gold"
+      className="h-9 w-9 transition-colors hover:text-brand-gold"
       onClick={handleFeatured}
       disabled={loading}
       title={`Feature this ${itemTypeLabel} (R25 for 7 days)`}

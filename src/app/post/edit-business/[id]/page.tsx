@@ -752,6 +752,7 @@ export default function EditBusinessPage() {
                   </Label>
                   <Input
                     id="phone"
+                    inputMode="tel"
                     autoComplete="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
@@ -764,6 +765,7 @@ export default function EditBusinessPage() {
                   </Label>
                   <Input
                     id="whatsapp"
+                    inputMode="tel"
                     autoComplete="tel"
                     value={whatsapp}
                     onChange={(e) => setWhatsapp(e.target.value)}
@@ -777,6 +779,7 @@ export default function EditBusinessPage() {
                   <Input
                     id="email"
                     type="email"
+                    inputMode="email"
                     autoComplete="email"
                     spellCheck={false}
                     autoCapitalize="none"

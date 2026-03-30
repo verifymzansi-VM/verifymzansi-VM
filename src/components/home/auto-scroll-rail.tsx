@@ -139,20 +139,27 @@ export function AutoScrollRail({
   }, [pauseAfterInteractionMs]);
 
   return (
-    <div
-      ref={containerRef}
-      aria-label={railLabel}
-      className={cn(
-        "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-4 px-4 sm:-mx-0 sm:px-0 sm:gap-4",
-        className
-      )}
-      tabIndex={0}
-    >
-      {items.map((item, index) => (
-        <div key={index} className={cn("snap-start shrink-0", itemClassName)}>
-          {item}
-        </div>
-      ))}
+    <div className="relative">
+      <div
+        ref={containerRef}
+        aria-label={railLabel}
+        className={cn(
+          "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-4 px-4 sm:-mx-0 sm:px-0 sm:gap-4",
+          className
+        )}
+        tabIndex={0}
+      >
+        {items.map((item, index) => (
+          <div key={index} className={cn("snap-start shrink-0", itemClassName)}>
+            {item}
+          </div>
+        ))}
+      </div>
+      {/* Trailing fade to hint more content is scrollable */}
+      <div
+        className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-background to-transparent sm:hidden"
+        aria-hidden="true"
+      />
     </div>
   );
 }

@@ -93,7 +93,7 @@ export function VerificationCard({ pendingVerifications, stepCounts }: Verificat
       <div className="px-4 py-3 space-y-3">
         {/* Step breakdown */}
         {stepCounts && (
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               { label: "Phone", value: stepCounts.phone },
               { label: "ID Doc", value: stepCounts.id_doc },
@@ -194,7 +194,7 @@ export function AreaDashboardCard({ area, stats, flagCount }: AreaDashboardCardP
 
       <div className="px-4 py-3 space-y-3">
         {/* Stats row */}
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
             { label: "Total posted", value: stats.totalPosted, icon: Zap },
             { label: "Live", value: stats.liveCount, icon: Eye },

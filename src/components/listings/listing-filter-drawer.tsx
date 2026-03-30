@@ -291,7 +291,7 @@ export function ListingFilterDrawer() {
           </div>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 border-t bg-background p-4">
+        <div className="fixed bottom-0 left-0 right-0 border-t bg-background p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-4">
           <Button className="w-full" size="lg" onClick={handleApply}>
             Show results
           </Button>

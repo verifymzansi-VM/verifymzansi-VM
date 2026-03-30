@@ -983,6 +983,7 @@ function CreateBusinessContent() {
                         </Label>
                         <Input
                           id="phone"
+                          inputMode="tel"
                           autoComplete="tel"
                           value={phone}
                           onChange={(event) => {
@@ -1004,6 +1005,7 @@ function CreateBusinessContent() {
                         </Label>
                         <Input
                           id="whatsapp"
+                          inputMode="tel"
                           autoComplete="tel"
                           value={whatsapp}
                           onChange={(event) => {
@@ -1026,6 +1028,7 @@ function CreateBusinessContent() {
                         <Input
                           id="email"
                           type="email"
+                          inputMode="email"
                           autoComplete="email"
                           value={email}
                           onChange={(event) => {

@@ -29,7 +29,7 @@ export function BoostButton({
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-9 w-9"
         disabled
         title="Already boosted"
         aria-label="Already boosted"
@@ -44,7 +44,7 @@ export function BoostButton({
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-9 w-9"
         disabled
         title={`Upgrade to Growth or Pro to boost this ${itemTypeLabel}`}
         aria-label={`Upgrade to Growth or Pro to boost this ${itemTypeLabel}`}
@@ -90,7 +90,7 @@ export function BoostButton({
     <Button
       variant="ghost"
       size="icon"
-      className="h-8 w-8 transition-colors hover:text-brand-blue"
+      className="h-9 w-9 transition-colors hover:text-brand-blue"
       onClick={handleBoost}
       disabled={loading}
       title={`Boost this ${itemTypeLabel} (R15 for 7 days)`}

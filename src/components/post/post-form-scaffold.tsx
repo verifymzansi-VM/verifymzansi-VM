@@ -120,6 +120,13 @@ export function PostFormScaffold({
                 );
               })}
             </ol>
+            {/* Mobile: show current step label below circles */}
+            <p className="sm:hidden text-center text-xs font-semibold mt-2 text-foreground">
+              {steps[currentStep].label}
+              <span className="block text-[10px] font-normal text-muted-foreground">
+                {steps[currentStep].description}
+              </span>
+            </p>
           </nav>
 
           {error && (

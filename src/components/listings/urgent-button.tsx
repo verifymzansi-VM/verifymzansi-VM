@@ -20,7 +20,7 @@ export function UrgentButton({ listingId, isUrgent, canMarkUrgent }: UrgentButto
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-9 w-9"
         disabled
         title="Already urgent"
         aria-label="Already urgent"
@@ -35,7 +35,7 @@ export function UrgentButton({ listingId, isUrgent, canMarkUrgent }: UrgentButto
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-9 w-9"
         disabled
         title="Upgrade to Pro to mark listings as urgent"
         aria-label="Upgrade to Pro to mark listings as urgent"
@@ -80,7 +80,7 @@ export function UrgentButton({ listingId, isUrgent, canMarkUrgent }: UrgentButto
     <Button
       variant="ghost"
       size="icon"
-      className="h-8 w-8 transition-colors hover:text-red-500"
+      className="h-9 w-9 transition-colors hover:text-red-500"
       onClick={handleUrgent}
       disabled={loading}
       title="Mark as urgent (R10 for 7 days)"

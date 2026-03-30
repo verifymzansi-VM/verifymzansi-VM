@@ -596,7 +596,7 @@ export default function EditListingPage() {
                   {/* ── Price ──────────────────────────────────── */}
                   <div className="space-y-2">
                     <Label htmlFor="price">Price (ZAR) *</Label>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col xs:flex-row gap-3">
                       <Input
                         id="price"
                         type="number"
@@ -760,7 +760,7 @@ export default function EditListingPage() {
                   {existingPhotos.length > 0 && (
                     <div className="space-y-2">
                       <Label>Current Photos</Label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {existingPhotos.map((url, i) => (
                           <div
                             key={url}
@@ -871,7 +871,7 @@ export default function EditListingPage() {
                     <div
                       role="group"
                       aria-label="Contact methods"
-                      className="grid grid-cols-3 gap-2"
+                      className="grid grid-cols-1 xs:grid-cols-3 gap-2"
                     >
                       {CONTACT_OPTIONS.map((opt) => {
                         const Icon = opt.icon;

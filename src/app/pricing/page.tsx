@@ -58,21 +58,21 @@ export default function PricingPage() {
               <TabsList className="grid w-full max-w-3xl grid-cols-3 p-1 h-9 bg-muted/50 rounded-full">
                 <TabsTrigger
                   value="market"
-                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
                 >
-                  Mzansi Market
+                  <span className="hidden sm:inline">Mzansi </span>Market
                 </TabsTrigger>
                 <TabsTrigger
                   value="business"
-                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
                 >
-                  Mzansi Business
+                  <span className="hidden sm:inline">Mzansi </span>Business
                 </TabsTrigger>
                 <TabsTrigger
                   value="promotions"
-                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
                 >
-                  Promotions & Events
+                  <span className="hidden sm:inline">Promotions & </span>Events
                 </TabsTrigger>
               </TabsList>
             </div>

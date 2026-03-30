@@ -408,7 +408,7 @@ function ListingList({
               </span>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-wrap">
               <BoostButton
                 listingId={listing.id}
                 isBoosted={listing.boost_until ? new Date(listing.boost_until) > new Date() : false}
@@ -442,7 +442,7 @@ function ListingList({
                 asChild
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-9 w-9"
                 aria-label={`Edit ${listing.title}`}
               >
                 <Link href={getEditHref(listing.area, listing.id)}>

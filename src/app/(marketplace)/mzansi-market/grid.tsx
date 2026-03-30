@@ -458,6 +458,10 @@ export function MzansiMarketGrid() {
             Previous
           </Button>
 
+          <span className="sm:hidden text-xs text-muted-foreground">
+            Page {page} of {totalPages}
+          </span>
+
           <div className="hidden sm:flex items-center gap-1">
             {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
               const pageNum =

@@ -23,10 +23,12 @@ import {
   Users,
   TrendingUp,
   Scale,
+  Menu,
 } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 interface AdminSidebarProps {
   pendingVerifications?: number;
@@ -268,13 +270,8 @@ export function AdminSidebar({
       break;
   }
 
-  return (
-    <aside
-      className={cn(
-        "sticky top-[65px] h-[calc(100vh-65px)] border-r bg-card transition-all duration-200 flex flex-col",
-        collapsed ? "w-16" : "w-56"
-      )}
-    >
+  const navContent = (
+    <>
       <div className="flex-1 overflow-y-auto py-3">
         {sections.map((section, sIdx) => (
           <div key={section.label} className={cn(sIdx > 0 && "mt-3")}>
@@ -341,6 +338,38 @@ export function AdminSidebar({
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar — hidden on mobile */}
+      <aside
+        className={cn(
+          "hidden md:flex sticky top-[65px] h-[calc(100vh-65px)] border-r bg-card transition-all duration-200 flex-col",
+          collapsed ? "w-16" : "w-56"
+        )}
+      >
+        {navContent}
+      </aside>
+
+      {/* Mobile drawer trigger — visible only on mobile */}
+      <div className="md:hidden fixed bottom-20 right-4 z-40">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button
+              size="icon"
+              className="h-12 w-12 rounded-full shadow-lg bg-primary text-primary-foreground"
+              aria-label="Open admin menu"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-72 p-0">
+            <div className="flex h-full flex-col">{navContent}</div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
   );
 }

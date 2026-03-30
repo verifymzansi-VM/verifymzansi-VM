@@ -137,7 +137,7 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
                     Submitted {formatRelativeTime(item.created_at)}
                   </p>
                 </div>
-                <div className="flex gap-1 flex-shrink-0">
+                <div className="flex gap-1 flex-shrink-0 flex-wrap">
                   <Button
                     size="sm"
                     variant="ghost"

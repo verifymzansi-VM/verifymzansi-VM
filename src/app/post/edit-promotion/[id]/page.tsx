@@ -523,7 +523,7 @@ export default function EditPromotionPage() {
 
               <div className="space-y-2">
                 <Label>Contact Methods</Label>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   {(["call", "whatsapp", "form"] as const).map((method) => (
                     <label key={method} className="flex items-center gap-2 text-sm cursor-pointer">
                       <input
@@ -567,7 +567,7 @@ export default function EditPromotionPage() {
               {existingImages.length > 0 && (
                 <div className="space-y-2">
                   <Label>Current Photos ({existingImages.length})</Label>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {existingImages.map((url, i) => (
                       <div
                         key={i}

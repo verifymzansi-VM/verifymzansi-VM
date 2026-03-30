@@ -108,7 +108,7 @@ export async function HomeCategoryShowcase() {
           {categories.map((cat) => (
             <div
               key={cat.title}
-              className="min-w-[280px] max-w-[340px] sm:min-w-[340px] sm:max-w-[380px]"
+              className="min-w-[240px] max-w-[340px] sm:min-w-[340px] sm:max-w-[380px]"
             >
               <CategoryCard category={cat} />
             </div>

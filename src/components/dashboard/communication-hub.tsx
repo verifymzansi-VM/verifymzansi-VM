@@ -219,7 +219,8 @@ export function CommunicationHub() {
         </TabsTrigger>
         <TabsTrigger value="emails" className="gap-2">
           <Mail className="h-4 w-4" />
-          Email Coverage
+          <span className="sm:hidden">Emails</span>
+          <span className="hidden sm:inline">Email Coverage</span>
         </TabsTrigger>
         <TabsTrigger value="preferences" className="gap-2">
           <Bell className="h-4 w-4" />

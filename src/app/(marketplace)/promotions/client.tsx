@@ -371,7 +371,7 @@ export function PromotionsExplorer() {
         <div className="min-w-0 flex-1 space-y-5">
           {/* ── Featured Hero Card ── */}
           {featuredPromotion && !loading && (
-            <div className="hidden sm:block">
+            <div>
               <FeaturedHeroCard
                 promotion={featuredPromotion}
                 businessName={
@@ -395,7 +395,7 @@ export function PromotionsExplorer() {
                 </>
               )}
             </p>
-            <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex gap-1">
+            <Button asChild variant="outline" size="sm" className="gap-1">
               <Link href="/post/create-promotion">
                 Create Promotion
                 <ArrowRight className="h-4 w-4" />
@@ -504,6 +504,10 @@ export function PromotionsExplorer() {
                   >
                     Previous
                   </Button>
+
+                  <span className="sm:hidden text-xs text-muted-foreground">
+                    Page {page} of {totalPages}
+                  </span>
 
                   <div className="hidden sm:flex items-center gap-1">
                     {Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {

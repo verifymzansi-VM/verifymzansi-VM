@@ -180,7 +180,7 @@ export default async function MyPromotionsPage({
         description="Track boosts, features, and promotions."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Promotions & Events" }]}
       >
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <Button asChild size="sm" variant="outline" className="gap-1">
             <Link href="/promotions">
               <Megaphone className="h-4 w-4" />

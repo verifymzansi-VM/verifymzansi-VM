@@ -156,7 +156,7 @@ export function ListingDetailContent({
                 <Separator />
                 <div className="space-y-3">
                   <h2 className="font-display text-lg font-semibold">Details</h2>
-                  <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                     {(() => {
                       const categoryDefinition = CATEGORIES.find(
                         (item) => item.value === listing.category

@@ -744,7 +744,7 @@ export default function CreateListingPage() {
                   <div className="space-y-5">
                     <div className="space-y-2">
                       <Label htmlFor="price">Price (ZAR) *</Label>
-                      <div className="flex gap-3">
+                      <div className="flex flex-col xs:flex-row gap-3">
                         <div className="relative flex-1">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
                             R
@@ -871,7 +871,7 @@ export default function CreateListingPage() {
                       <p className="text-xs text-muted-foreground">
                         Choose how buyers should reach you.
                       </p>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
                         {CONTACT_OPTIONS.map((option) => {
                           const Icon = option.icon;
                           const isSelected = contactMethods.includes(option.id);

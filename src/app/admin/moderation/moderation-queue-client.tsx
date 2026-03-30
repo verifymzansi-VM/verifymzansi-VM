@@ -126,7 +126,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
   return (
     <>
       {/* Area Filter */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
         {areas.map((a) => (
           <Button
             key={a}
@@ -187,7 +187,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                     Submitted {formatRelativeTime(item.created_at)}
                   </p>
                 </div>
-                <div className="flex gap-1 flex-shrink-0">
+                <div className="flex flex-wrap gap-1 flex-shrink-0">
                   <Button
                     size="sm"
                     variant="outline"

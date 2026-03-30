@@ -146,7 +146,7 @@ export function FlaggingQueueTable({
   return (
     <>
       {/* Severity Filter */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
         {SEVERITY_FILTER.map((s) => (
           <Button
             key={s}

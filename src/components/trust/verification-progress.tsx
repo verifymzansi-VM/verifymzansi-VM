@@ -56,7 +56,7 @@ export function VerificationProgress({ steps, className }: VerificationProgressP
               >
                 {isApproved ? <Check className="h-4 w-4" /> : <span>{i + 1}</span>}
               </div>
-              <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
+              <span className="text-[10px] sm:text-xs text-muted-foreground sm:whitespace-nowrap">
                 {STEP_LABELS[stepType]}
               </span>
             </div>

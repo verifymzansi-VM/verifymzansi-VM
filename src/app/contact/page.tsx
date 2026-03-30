@@ -153,6 +153,7 @@ export default function ContactPage() {
                         id="email"
                         name="email"
                         type="email"
+                        inputMode="email"
                         value={email}
                         onChange={(e) => {
                           setEmail(e.target.value);
