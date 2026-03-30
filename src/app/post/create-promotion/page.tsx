@@ -502,7 +502,7 @@ function CreatePromotionContent() {
       toast({ title: "Promotion submitted for review.", variant: "success" });
       setSubmitSucceeded(true);
       discardDraft();
-      router.push("/dashboard/promotions?created=true");
+      router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&created=promotion");
     } catch (error: unknown) {
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {

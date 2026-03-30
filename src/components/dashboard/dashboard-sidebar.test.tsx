@@ -3,16 +3,16 @@ import { describe, expect, it, vi } from "vitest";
 import { DashboardSidebar } from "./dashboard-sidebar";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/dashboard/promotions",
+  usePathname: () => "/dashboard/listings",
 }));
 
 describe("DashboardSidebar", () => {
-  it("labels the promotions area consistently", () => {
+  it("shows the My Posts link pointing to the unified listings page", () => {
     render(<DashboardSidebar onSignOut={vi.fn()} />);
 
-    expect(screen.getByRole("link", { name: /Promotions/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /My Posts/i })).toHaveAttribute(
       "href",
-      "/dashboard/promotions"
+      "/dashboard/listings"
     );
   });
 });

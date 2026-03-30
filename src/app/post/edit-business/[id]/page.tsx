@@ -534,7 +534,7 @@ export default function EditBusinessPage() {
           existingStatus === "live" ? "Updated and resubmitted for review" : "Business updated!",
         variant: "success",
       });
-      router.push("/dashboard/businesses?updated=true");
+      router.push("/dashboard/listings?area=MZANSI_BUSINESS&updated=business");
     } catch (error: unknown) {
       const uploadFailure = getBusinessMediaUploadErrorState(error);
       if (uploadFailure) {

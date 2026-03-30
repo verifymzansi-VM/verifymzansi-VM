@@ -81,6 +81,16 @@ vi.mock("@/components/listings/delete-post-button", () => ({
   DeletePostButton: () => <button type="button">Delete</button>,
 }));
 
+vi.mock("@/components/dashboard/area-filter", () => ({
+  AreaFilter: () => <div data-testid="area-filter" />,
+}));
+
+vi.mock("@/components/ui/alert", () => ({
+  Alert: ({ children }: React.PropsWithChildren) => <div role="alert">{children}</div>,
+  AlertTitle: ({ children }: React.PropsWithChildren) => <strong>{children}</strong>,
+  AlertDescription: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+}));
+
 function createOrderedQuery(data: unknown[]) {
   return {
     select: vi.fn().mockReturnValue({
@@ -197,6 +207,7 @@ describe("Dashboard listings page", () => {
             boost_until: null,
             featured_until: null,
             status_reason: "Clarify the event venue before review.",
+            promotion_type: "EVENT",
           },
         ]);
       }
@@ -204,7 +215,7 @@ describe("Dashboard listings page", () => {
       return createOrderedQuery([]);
     });
 
-    render(await ListingsPage());
+    render(await ListingsPage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByRole("heading", { name: "Your Content" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Active (1)" })).toBeInTheDocument();

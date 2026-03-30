@@ -9,6 +9,7 @@ const {
   mockEnforceSameOriginMutation,
   mockVerifyStaffActorRoleFromDb,
   mockCheckLocalRateLimit,
+  mockCreateNotification,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -17,6 +18,7 @@ const {
   mockEnforceSameOriginMutation: vi.fn<(request: NextRequest) => Response | null>(() => null),
   mockVerifyStaffActorRoleFromDb: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(() => ({ limited: false })),
+  mockCreateNotification: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
@@ -36,6 +38,9 @@ vi.mock("@/lib/auth/admin-access", () => ({
 }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: mockCheckLocalRateLimit,
+}));
+vi.mock("@/lib/notifications", () => ({
+  createNotification: mockCreateNotification,
 }));
 
 import { POST } from "@/app/api/admin/promotions/[id]/moderate/route";
@@ -269,5 +274,71 @@ describe("POST /api/admin/promotions/[id]/moderate", () => {
     expect(mockLoggerError).toHaveBeenCalledWith("Failed to moderate promotion", {
       error: "raw db failure",
     });
+  });
+
+  it("sends a rejection notification to the promotion owner", async () => {
+    const updateIn = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = vi.fn().mockReturnValue({ in: updateIn });
+    const update = vi.fn().mockReturnValue({ eq: updateEq });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: VALID_UUID,
+            status: "pending_moderation",
+            owner_id: "owner-1",
+            title: "Weekend Sale",
+            published_at: null,
+          },
+        }),
+        update,
+      }),
+    });
+
+    const response = await POST(
+      createRequest({ decision: "reject", reason: "Inappropriate content" }),
+      createParams()
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "owner-1",
+        type: "error",
+        title: "Promotion rejected",
+        href: "/dashboard/listings",
+      })
+    );
+    expect(mockCreateNotification.mock.calls[0][0].message).toContain("Inappropriate content");
+  });
+
+  it("does not send a notification when approving", async () => {
+    const updateIn = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = vi.fn().mockReturnValue({ in: updateIn });
+    const update = vi.fn().mockReturnValue({ eq: updateEq });
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: VALID_UUID,
+            status: "pending_moderation",
+            owner_id: "owner-1",
+            title: "Weekend Sale",
+            published_at: null,
+          },
+        }),
+        update,
+      }),
+    });
+
+    await POST(createRequest({ decision: "approve", reason: "Looks good" }), createParams());
+
+    expect(mockCreateNotification).not.toHaveBeenCalled();
   });
 });

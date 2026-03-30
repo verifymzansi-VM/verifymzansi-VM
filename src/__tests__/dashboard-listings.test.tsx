@@ -35,6 +35,14 @@ vi.mock("@/components/listings/delete-post-button", () => ({
 vi.mock("@/components/listings/resubmit-button", () => ({
   ResubmitButton: () => <button type="button">Resubmit</button>,
 }));
+vi.mock("@/components/dashboard/area-filter", () => ({
+  AreaFilter: () => <div data-testid="area-filter" />,
+}));
+vi.mock("@/components/ui/alert", () => ({
+  Alert: ({ children }: React.PropsWithChildren) => <div role="alert">{children}</div>,
+  AlertTitle: ({ children }: React.PropsWithChildren) => <strong>{children}</strong>,
+  AlertDescription: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+}));
 
 describe("ListingsPage", () => {
   const mockSupabase = {
@@ -90,7 +98,7 @@ describe("ListingsPage", () => {
     });
 
     // Render RSC
-    const ui = await ListingsPage();
+    const ui = await ListingsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     // Assertions
@@ -116,7 +124,7 @@ describe("ListingsPage", () => {
       }
     });
 
-    const ui = await ListingsPage();
+    const ui = await ListingsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText(/Active \(0\)/)).toBeDefined();
@@ -169,7 +177,7 @@ describe("ListingsPage", () => {
       }
     });
 
-    const ui = await ListingsPage();
+    const ui = await ListingsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByRole("tab", { name: /Rejected \(1\)/ })).toBeDefined();

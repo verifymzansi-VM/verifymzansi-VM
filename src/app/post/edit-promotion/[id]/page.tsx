@@ -307,7 +307,7 @@ export default function EditPromotionPage() {
         return;
       }
 
-      router.push("/dashboard/promotions?updated=true");
+      router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&updated=promotion");
     } catch (error: unknown) {
       setError(normalizeCreatePostRuntimeError(error, "Something went wrong. Please try again."));
     } finally {

@@ -2,15 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  ShoppingBag,
-  MessageSquare,
-  Building2,
-  Megaphone,
-  Settings,
-  LogOut,
-} from "lucide-react";
+import { LayoutDashboard, ShoppingBag, MessageSquare, Settings, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,11 +18,6 @@ const PRIMARY_NAV: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/dashboard/listings", icon: ShoppingBag, label: "My Posts" },
   { href: "/dashboard/leads", icon: MessageSquare, label: "Leads" },
-];
-
-const SECONDARY_NAV: NavItem[] = [
-  { href: "/dashboard/businesses", icon: Building2, label: "Businesses" },
-  { href: "/dashboard/promotions", icon: Megaphone, label: "Promotions" },
 ];
 
 const TERTIARY_NAV: NavItem[] = [{ href: "/dashboard/profile", icon: Settings, label: "Settings" }];
@@ -97,11 +84,6 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
       <nav aria-label="Dashboard" className="flex-1 space-y-1">
         {/* Primary */}
         {PRIMARY_NAV.map(renderNavItem)}
-
-        <Separator className="my-2" />
-
-        {/* Secondary */}
-        {SECONDARY_NAV.map(renderNavItem)}
 
         <Separator className="my-2" />
 

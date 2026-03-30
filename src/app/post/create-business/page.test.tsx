@@ -595,7 +595,9 @@ describe("CreateBusinessPage", () => {
         expect.objectContaining({ title: "Business submitted for review.", variant: "success" })
       );
     });
-    expect(mockPush).toHaveBeenCalledWith("/dashboard/businesses?created=true");
+    expect(mockPush).toHaveBeenCalledWith(
+      "/dashboard/listings?area=MZANSI_BUSINESS&created=business"
+    );
   });
 
   it("submits online-only delivery areas only when delivery is enabled and hides the duplicate step-3 prompt", async () => {

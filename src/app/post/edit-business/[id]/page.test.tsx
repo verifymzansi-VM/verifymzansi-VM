@@ -200,7 +200,9 @@ describe("EditBusinessPage", () => {
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Updated and resubmitted for review", variant: "success" })
     );
-    expect(mockPush).toHaveBeenCalledWith("/dashboard/businesses?updated=true");
+    expect(mockPush).toHaveBeenCalledWith(
+      "/dashboard/listings?area=MZANSI_BUSINESS&updated=business"
+    );
     expect(payload.map_directions).toBe("https://maps.example.com/home-studio");
     expect(payload.business_details).toMatchObject({
       type: "home_business",

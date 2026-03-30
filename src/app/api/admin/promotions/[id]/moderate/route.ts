@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
+import { createNotification } from "@/lib/notifications";
 import { z } from "zod";
 import {
   internalApiError,
@@ -138,6 +139,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       });
     } catch {
       // non-fatal
+    }
+
+    // Notify owner on rejection / hiding
+    if (decision !== "approve") {
+      try {
+        const shortTitle = (promotion.title ?? "Your promotion").slice(0, 40);
+        await createNotification({
+          userId: promotion.owner_id,
+          type: "error",
+          title: "Promotion rejected",
+          message: reason
+            ? `"${shortTitle}" was rejected: ${reason.slice(0, 80)}`
+            : `"${shortTitle}" needs changes before it can go live.`,
+          href: "/dashboard/listings",
+        });
+      } catch {
+        // non-fatal
+      }
     }
 
     return NextResponse.json({ success: true, status: newStatus });

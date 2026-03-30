@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, Megaphone, CreditCard, User } from "lucide-react";
+import { ShoppingBag, CreditCard, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface QuickLink {
@@ -18,16 +18,10 @@ interface QuickLinksProps {
 export function QuickLinks({ planLabel }: QuickLinksProps) {
   const links: QuickLink[] = [
     {
-      label: "Businesses",
-      href: "/dashboard/businesses",
-      icon: Building2,
+      label: "My Posts",
+      href: "/dashboard/listings",
+      icon: ShoppingBag,
       toneClassName: "bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300",
-    },
-    {
-      label: "Promotions",
-      href: "/dashboard/promotions",
-      icon: Megaphone,
-      toneClassName: "bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-300",
     },
     {
       label: "Billing",

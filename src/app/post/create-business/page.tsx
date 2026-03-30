@@ -778,7 +778,7 @@ function CreateBusinessContent() {
       toast({ title: "Business submitted for review.", variant: "success" });
       setSubmitSucceeded(true);
       discardDraft();
-      router.push("/dashboard/businesses?created=true");
+      router.push("/dashboard/listings?area=MZANSI_BUSINESS&created=business");
     } catch (error: unknown) {
       const uploadFailure = getBusinessMediaUploadErrorState(error);
       if (uploadFailure) {

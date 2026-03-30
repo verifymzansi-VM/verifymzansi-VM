@@ -1,8 +1,8 @@
-import React from "react";
+import React, { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Eye, Pencil, Plus, XCircle, Package } from "lucide-react";
+import { Eye, ExternalLink, Megaphone, Pencil, Plus, XCircle, Package } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ import { FeaturedButton } from "@/components/listings/featured-button";
 import { UrgentButton } from "@/components/listings/urgent-button";
 import { ResubmitButton } from "@/components/listings/resubmit-button";
 import { DeletePostButton } from "@/components/listings/delete-post-button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AreaFilter } from "@/components/dashboard/area-filter";
 import {
   canBoost as checkCanBoost,
   canFeatured as checkCanFeatured,
@@ -24,7 +26,13 @@ import {
 import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
 import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
-import { AREA_LABELS, type MarketplaceArea, type PlanTier } from "@/types/enums";
+import {
+  AREA_LABELS,
+  PROMOTION_TYPE_LABELS,
+  type MarketplaceArea,
+  type PlanTier,
+  type PromotionType,
+} from "@/types/enums";
 
 const LISTING_DASHBOARD_FALLBACK_FIELDS = ["featured_until", "urgent_until"] as const;
 
@@ -48,6 +56,7 @@ type DashboardItem = {
   featured_until?: string | null;
   urgent_until?: string | null;
   status_reason?: string | null;
+  promotion_type?: string | null;
 };
 
 type BusinessDashboardRow = {
@@ -100,7 +109,40 @@ function getDisplayPrice(item: DashboardItem) {
   return AREA_LABELS[item.area];
 }
 
-export default async function ListingsPage() {
+function getViewHref(area: MarketplaceArea, id: string) {
+  switch (area) {
+    case "MZANSI_BUSINESS":
+      return `/mzansi-business/${id}`;
+    case "PROMOTIONS_EVENTS":
+      return `/promotion/${id}`;
+    default:
+      return `/listing/${id}`;
+  }
+}
+
+export default async function ListingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ area?: string; created?: string; updated?: string }>;
+}) {
+  const { area: areaParam, created, updated } = await searchParams;
+  const areaFilter =
+    areaParam && ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"].includes(areaParam)
+      ? (areaParam as MarketplaceArea)
+      : null;
+
+  const successAlert = updated
+    ? {
+        title: `${updated === "business" ? "Business" : "Promotion"} updated`,
+        description: "Your changes were saved and resubmitted for review.",
+      }
+    : created
+      ? {
+          title: `${created === "business" ? "Business" : "Promotion"} submitted`,
+          description: "Your post was created successfully and is now waiting for moderation.",
+        }
+      : null;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -160,7 +202,7 @@ export default async function ListingsPage() {
       supabase
         .from("promotions")
         .select(
-          "id, title, status, price_cents, category, created_at, photos, view_count, boost_until, featured_until, status_reason"
+          "id, title, status, price_cents, category, created_at, photos, view_count, boost_until, featured_until, status_reason, promotion_type"
         )
         .order("created_at", { ascending: false }),
       promotionOwnerColumn,
@@ -202,6 +244,8 @@ export default async function ListingsPage() {
       area: "PROMOTIONS_EVENTS" as const,
       photos: Array.isArray(promotion.photos) ? promotion.photos : [],
       urgent_until: null,
+      promotion_type:
+        ((promotion as Record<string, unknown>).promotion_type as string | null) ?? null,
     })),
   ]);
 
@@ -211,6 +255,14 @@ export default async function ListingsPage() {
   );
   const expired = items.filter((item) => item.status === "expired" || item.status === "sold");
   const rejected = items.filter((item) => item.status === "rejected");
+
+  const byArea = (list: DashboardItem[]) =>
+    areaFilter ? list.filter((item) => item.area === areaFilter) : list;
+
+  const filteredActive = byArea(active);
+  const filteredPending = byArea(pending);
+  const filteredExpired = byArea(expired);
+  const filteredRejected = byArea(rejected);
 
   const [mzansiTier, businessTier, mallTier, mzansiBusinessTier, promotionsTier] =
     await Promise.all([
@@ -231,6 +283,15 @@ export default async function ListingsPage() {
 
   return (
     <div className="space-y-6">
+      {successAlert && (
+        <Alert variant="success">
+          <div>
+            <AlertTitle>{successAlert.title}</AlertTitle>
+            <AlertDescription>{successAlert.description}</AlertDescription>
+          </div>
+        </Alert>
+      )}
+
       <PageHeader
         title="Your Content"
         description="Manage listings, businesses, and promotions from one place."
@@ -244,36 +305,38 @@ export default async function ListingsPage() {
         </Button>
       </PageHeader>
 
+      <Suspense>
+        <AreaFilter />
+      </Suspense>
+
       <Tabs defaultValue="active">
         <TabsList>
-          <TabsTrigger value="active">Active ({active.length})</TabsTrigger>
-          <TabsTrigger value="pending">Under Review ({pending.length})</TabsTrigger>
-          <TabsTrigger value="rejected">
-            Rejected{rejected.length > 0 ? ` (${rejected.length})` : ""}
-          </TabsTrigger>
-          <TabsTrigger value="expired">Sold / Expired ({expired.length})</TabsTrigger>
+          <TabsTrigger value="active">Active ({filteredActive.length})</TabsTrigger>
+          <TabsTrigger value="pending">Under Review ({filteredPending.length})</TabsTrigger>
+          <TabsTrigger value="rejected">Rejected ({filteredRejected.length})</TabsTrigger>
+          <TabsTrigger value="expired">Sold / Expired ({filteredExpired.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active" className="mt-4">
           <ListingList
-            listings={active}
+            listings={filteredActive}
             planTiers={planTiers}
             emptyStateLabel="No posts yet. Create your first post to get started."
           />
         </TabsContent>
         <TabsContent value="pending" className="mt-4">
           <ListingList
-            listings={pending}
+            listings={filteredPending}
             planTiers={planTiers}
             emptyStateLabel="No posts are waiting for review right now."
           />
         </TabsContent>
         <TabsContent value="rejected" className="mt-4">
-          <RejectedListingList listings={rejected} />
+          <RejectedListingList listings={filteredRejected} />
         </TabsContent>
         <TabsContent value="expired" className="mt-4">
           <ListingList
-            listings={expired}
+            listings={filteredExpired}
             planTiers={planTiers}
             emptyStateLabel="No expired or sold posts right now."
           />
@@ -312,6 +375,16 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
                   <Badge variant="destructive" className="text-[10px]">
                     Rejected
                   </Badge>
+                  <Badge variant="outline" className="text-[10px]">
+                    {AREA_LABELS[listing.area]}
+                  </Badge>
+                  {listing.area === "PROMOTIONS_EVENTS" &&
+                    listing.promotion_type &&
+                    PROMOTION_TYPE_LABELS[listing.promotion_type as PromotionType] && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {PROMOTION_TYPE_LABELS[listing.promotion_type as PromotionType]}
+                      </Badge>
+                    )}
                 </div>
               </div>
 
@@ -398,6 +471,13 @@ function ListingList({
                 <Badge variant="default" className="text-[10px]">
                   {AREA_LABELS[listing.area]}
                 </Badge>
+                {listing.area === "PROMOTIONS_EVENTS" &&
+                  listing.promotion_type &&
+                  PROMOTION_TYPE_LABELS[listing.promotion_type as PromotionType] && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {PROMOTION_TYPE_LABELS[listing.promotion_type as PromotionType]}
+                    </Badge>
+                  )}
               </div>
             </div>
 
@@ -409,6 +489,31 @@ function ListingList({
             </div>
 
             <div className="flex items-center gap-1 flex-wrap">
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                aria-label={`View ${listing.title}`}
+              >
+                <Link href={getViewHref(listing.area, listing.id)} target="_blank">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+              {listing.area === "MZANSI_BUSINESS" &&
+                (listing.status === "active" || listing.status === "live") && (
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9"
+                    aria-label={`Promote ${listing.title}`}
+                  >
+                    <Link href={`/post/create-promotion?business_id=${listing.id}`}>
+                      <Megaphone className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                )}
               <BoostButton
                 listingId={listing.id}
                 isBoosted={listing.boost_until ? new Date(listing.boost_until) > new Date() : false}
