@@ -14,13 +14,13 @@ export const businessProfileSchema = z.object({
     .min(3, "Slug must be at least 3 characters")
     .max(60, "Slug cannot exceed 60 characters")
     .regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers and hyphens"),
-  industry: z.string().min(1, "Industry is required"),
+  industry: z.string().min(1, "Industry is required").max(100),
   description: z.string().max(3000, "Description cannot exceed 3000 characters").optional(),
   logo_url: z.string().url().optional().or(z.literal("")),
   banner_url: z.string().url().optional().or(z.literal("")),
   website: z.string().url("Enter a valid URL").optional().or(z.literal("")),
-  province: z.string().min(1, "Province is required"),
-  city: z.string().min(1, "City is required"),
+  province: z.string().min(1, "Province is required").max(50),
+  city: z.string().min(1, "City is required").max(80),
   whatsapp: z
     .string()
     .regex(/^(\+27|0)[6-8][0-9]{8}$/, "Enter a valid SA number")

@@ -26,8 +26,8 @@ export const verificationSelfieSchema = z.object({
 
 /** Zod schema for location verification (province, city, optional GPS). */
 export const verificationLocationSchema = z.object({
-  province: z.string().min(1, "Province is required"),
-  city: z.string().min(1, "City is required"),
+  province: z.string().min(1, "Province is required").max(50),
+  city: z.string().min(1, "City is required").max(80),
   latitude: z.number().min(-35).max(-22).optional(),
   longitude: z.number().min(16).max(33).optional(),
 });
@@ -37,8 +37,8 @@ export const verificationLocationSchema = z.object({
  * Accepts GPS coordinates and accuracy in addition to province/city.
  */
 export const verificationLocationSubmitSchema = z.object({
-  province: z.string().trim().min(1, "Province is required"),
-  city: z.string().trim().min(1, "City is required"),
+  province: z.string().trim().min(1, "Province is required").max(50),
+  city: z.string().trim().min(1, "City is required").max(80),
   latitude: z.number().min(-35).max(-22).optional(),
   longitude: z.number().min(16).max(33).optional(),
   locationMethod: z.enum(["gps", "proof_of_address"]).default("proof_of_address"),
@@ -56,7 +56,7 @@ export const proofOfAddressLineSchema = z
 /** Zod schema for buyer-initiated verification of an account profile. */
 export const buyerVerifySchema = z.object({
   accountProfileId: z.string().uuid(),
-  turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
+  turnstileToken: z.string().min(1, "Complete the CAPTCHA").max(4096),
 });
 
 // ── File upload validation ───────────────────────────────
@@ -81,7 +81,7 @@ export const fileUploadSchema = z.object({
   docType: z.enum(["id_document", "selfie", "proof_of_address"], {
     error: "Document type is required",
   }),
-  idNumber: z.string().optional(),
+  idNumber: z.string().max(13).optional(),
   idDocumentType: z.enum(["sa_id"]).optional(),
 });
 

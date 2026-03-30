@@ -31,11 +31,11 @@ const SOCIAL_AUTHORIZER_RELATIONSHIP_VALUES = [
 const socialAuthorizationSchema = z
   .object({
     granted: z.boolean(),
-    authorizerName: z.string().trim().optional(),
-    authorizerRole: z.string().trim().optional(),
+    authorizerName: z.string().trim().max(100).optional(),
+    authorizerRole: z.string().trim().max(100).optional(),
     relationship: z.enum(SOCIAL_AUTHORIZER_RELATIONSHIP_VALUES).optional(),
     monetizationAcknowledged: z.boolean().optional(),
-    acceptedVersion: z.string().optional(),
+    acceptedVersion: z.string().max(30).optional(),
   })
   .superRefine((value, ctx) => {
     if (!value.granted) {
@@ -104,8 +104,8 @@ export const promotionSchema = z
     category_key: z.enum(BUSINESS_CATEGORY_VALUES).optional(),
     price_zar: priceSchema.optional(),
     negotiable: z.boolean().default(false),
-    province: z.string().min(1, "Province is required"),
-    city: z.string().min(1, "City is required"),
+    province: z.string().min(1, "Province is required").max(50),
+    city: z.string().min(1, "City is required").max(80),
     location_town: z.string().trim().max(120).optional(),
     location_address: z.string().trim().max(300).optional(),
     contact_methods: z

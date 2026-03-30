@@ -17,6 +17,7 @@ import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -28,6 +29,7 @@ export default function RegisterPage() {
     getTurnstileClientState().mode === "unavailable"
   );
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInteractive = useHydrated();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -204,6 +206,7 @@ export default function RegisterPage() {
               placeholder="Thabo"
               autoComplete="given-name"
               autoCapitalize="words"
+              disabled={!isInteractive}
               aria-invalid={!!errors.firstName}
               aria-describedby={errors.firstName ? "firstName-error" : undefined}
               {...register("firstName")}
@@ -221,6 +224,7 @@ export default function RegisterPage() {
               placeholder="Mokoena"
               autoComplete="family-name"
               autoCapitalize="words"
+              disabled={!isInteractive}
               aria-invalid={!!errors.lastName}
               aria-describedby={errors.lastName ? "lastName-error" : undefined}
               {...register("lastName")}
@@ -242,6 +246,7 @@ export default function RegisterPage() {
             autoComplete="email"
             spellCheck={false}
             autoCapitalize="none"
+            disabled={!isInteractive}
             aria-invalid={!!errors.email}
             aria-describedby={errors.email ? "email-error" : undefined}
             {...register("email")}
@@ -261,6 +266,7 @@ export default function RegisterPage() {
             inputMode="tel"
             placeholder="071 234 5678"
             autoComplete="tel"
+            disabled={!isInteractive}
             aria-invalid={!!errors.phone}
             aria-describedby={errors.phone ? "phone-error" : undefined}
             {...register("phone")}
@@ -282,14 +288,20 @@ export default function RegisterPage() {
               autoComplete="new-password"
               spellCheck={false}
               autoCapitalize="none"
+              disabled={!isInteractive}
               aria-invalid={!!errors.password}
-              aria-describedby={errors.password ? "password-error" : undefined}
+              aria-describedby={
+                ["password-requirements", errors.password ? "password-error" : undefined]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               {...register("password")}
             />
             <button
               type="button"
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => setShowPassword(!showPassword)}
+              disabled={!isInteractive}
               tabIndex={-1}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
@@ -297,7 +309,7 @@ export default function RegisterPage() {
             </button>
           </div>
           {/* Password strength indicators */}
-          <div className="grid grid-cols-2 gap-1">
+          <div id="password-requirements" className="grid grid-cols-2 gap-1">
             {requirements.map((req) => (
               <span
                 key={req.label}
@@ -327,6 +339,7 @@ export default function RegisterPage() {
               autoComplete="new-password"
               spellCheck={false}
               autoCapitalize="none"
+              disabled={!isInteractive}
               aria-invalid={!!errors.confirmPassword}
               aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
               {...register("confirmPassword")}
@@ -335,6 +348,7 @@ export default function RegisterPage() {
               type="button"
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              disabled={!isInteractive}
               tabIndex={-1}
               aria-label={showConfirmPassword ? "Hide password" : "Show password"}
             >
@@ -352,7 +366,8 @@ export default function RegisterPage() {
           <input
             type="checkbox"
             id="acceptTerms"
-            className="mt-1 rounded border-warm-300 dark:border-warm-600"
+            disabled={!isInteractive}
+            className="mt-1 h-4 w-4 rounded border-warm-300 text-brand-green focus:ring-brand-green dark:border-warm-600 dark:bg-warm-900"
             {...register("acceptTerms")}
           />
           <Label htmlFor="acceptTerms" className="text-xs text-muted-foreground leading-tight">
@@ -413,7 +428,7 @@ export default function RegisterPage() {
           type="submit"
           className="w-full"
           variant="trust-verified"
-          disabled={isSubmitting || captchaUnavailable || Boolean(turnstileError)}
+          disabled={!isInteractive || isSubmitting || captchaUnavailable || Boolean(turnstileError)}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Create Account

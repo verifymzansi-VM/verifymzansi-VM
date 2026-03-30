@@ -89,7 +89,7 @@ export const priceSchema = z
 // ── Turnstile token ─────────────────────────────────────────
 
 /** Zod schema for a non-empty Cloudflare Turnstile CAPTCHA token. */
-export const turnstileTokenSchema = z.string().min(1, "Complete the CAPTCHA");
+export const turnstileTokenSchema = z.string().min(1, "Complete the CAPTCHA").max(4096);
 
 // ── Shared ingress helpers ──────────────────────────────────
 
@@ -101,13 +101,13 @@ export const uuidSchema = z
 /** Zod schema for a required trimmed string. */
 export const trimmedStringSchema = z.preprocess(
   trimStringInput,
-  z.string().min(1, "This field is required")
+  z.string().min(1, "This field is required").max(500)
 );
 
 /** Zod schema for an optional trimmed string that treats blank input as absent. */
 export const optionalTrimmedStringSchema = z.preprocess(
   trimToUndefined,
-  z.string().min(1).optional()
+  z.string().min(1).max(500).optional()
 );
 
 /** Zod schema for an optional UUID string that treats blank input as absent. */

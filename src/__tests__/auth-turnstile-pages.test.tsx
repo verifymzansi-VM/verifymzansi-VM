@@ -354,6 +354,7 @@ describe("auth page Turnstile retry behavior", () => {
       };
     });
 
+    window.history.replaceState({}, "", "/login?registered=true");
     render(<LoginPage />);
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "user@example.com" } });

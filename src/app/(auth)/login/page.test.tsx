@@ -67,16 +67,17 @@ describe("LoginPage", () => {
     expect(screen.getByRole("heading", { name: /Sign in to your account/i })).toBeInTheDocument();
   });
 
-  it("shows a neutral resend confirmation section for returning users", async () => {
+  it("does not show the resend confirmation section for plain login visitors", async () => {
     render(<LoginPage />);
 
-    expect(await screen.findByText(/Need a new confirmation email\?/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /Sign in to your account/i })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/Need a new confirmation email\?/i)).not.toBeInTheDocument();
     expect(
-      screen.getByText(/If your account is still waiting for email confirmation/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /^Resend confirmation email$/i })
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /^Resend confirmation email$/i })
+    ).not.toBeInTheDocument();
   });
 
   it("enables the email and password fields after hydration", async () => {

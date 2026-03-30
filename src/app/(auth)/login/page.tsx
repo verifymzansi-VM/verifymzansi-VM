@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, RefreshCw, MailCheck, Mail, Send } from "lucide-react";
+import { Loader2, Eye, EyeOff, RefreshCw, MailCheck, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -136,6 +136,12 @@ export default function LoginPage() {
     setTurnstileLoaded(false);
     setTurnstileError(true);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setValue("turnstileToken", "", { shouldValidate: true });
+  }, [setValue]);
+
+  const handleTurnstileExpire = useCallback(() => {
+    setTurnstileLoaded(false);
+    setTurnstileError(true);
     setValue("turnstileToken", "", { shouldValidate: true });
   }, [setValue]);
 
@@ -308,7 +314,11 @@ export default function LoginPage() {
       )}
 
       {justRegistered && !emailConfirmed && (
-        <div className="flex items-start gap-3 rounded-lg border border-brand-green/30 bg-brand-green/5 p-4">
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-start gap-3 rounded-lg border border-brand-green/30 bg-brand-green/5 p-4"
+        >
           <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-green" />
           <div className="space-y-2">
             <p className="text-sm font-medium text-foreground">Check your email</p>
@@ -414,6 +424,7 @@ export default function LoginPage() {
           retryToken={turnstileRetryToken}
           onSuccess={handleTurnstileSuccess}
           onError={handleTurnstileError}
+          onExpire={handleTurnstileExpire}
           onLoad={handleTurnstileLoad}
           onUnavailable={handleTurnstileUnavailable}
         />
@@ -445,36 +456,6 @@ export default function LoginPage() {
           Sign in
         </Button>
       </form>
-
-      {!emailConfirmed && !justRegistered && (
-        <div className="rounded-lg border border-border bg-muted/30 p-4">
-          <div className="flex items-start gap-3">
-            <Mail className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">Need a new confirmation email?</p>
-              <p className="text-sm text-muted-foreground">
-                If your account is still waiting for email confirmation, enter your email above and
-                request a fresh confirmation link.
-              </p>
-              <button
-                type="button"
-                onClick={handleResendConfirmation}
-                disabled={resendingEmail || resendCooldown > 0}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green underline hover:text-brand-green/80 disabled:opacity-50 disabled:no-underline"
-              >
-                {resendingEmail ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Send className="h-3.5 w-3.5" />
-                )}
-                {resendCooldown > 0
-                  ? `Resend confirmation email in ${resendCooldown}s`
-                  : "Resend confirmation email"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <p className="text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}

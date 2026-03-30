@@ -21,8 +21,8 @@ const listingBase = z.object({
     .max(5000, "Description cannot exceed 5000 characters"),
   price_zar: priceSchema,
   negotiable: z.boolean().default(false),
-  province: z.string().min(1, "Province is required"),
-  city: z.string().min(1, "City is required"),
+  province: z.string().min(1, "Province is required").max(50),
+  city: z.string().min(1, "City is required").max(80),
   category: z.enum([
     "property",
     "vehicles",
@@ -63,8 +63,8 @@ const propertyAttrs = z.object({
 });
 
 const carsAttrs = z.object({
-  make: z.string().min(1, "Make is required"),
-  model: z.string().min(1, "Model is required"),
+  make: z.string().min(1, "Make is required").max(80),
+  model: z.string().min(1, "Model is required").max(80),
   year: z
     .number()
     .int()
@@ -78,16 +78,16 @@ const carsAttrs = z.object({
 });
 
 const autoPartsAttrs = z.object({
-  part_type: z.string().min(1, "Part type is required"),
-  compatible_make: z.string().optional(),
-  compatible_model: z.string().optional(),
+  part_type: z.string().min(1, "Part type is required").max(100),
+  compatible_make: z.string().max(80).optional(),
+  compatible_model: z.string().max(80).optional(),
   oem_or_aftermarket: z.enum(["oem", "aftermarket"]).optional(),
 });
 
 const electronicsAttrs = z.object({
   device_type: z.enum(ELECTRONICS_DEVICE_TYPES),
-  brand: z.string().min(1, "Brand is required"),
-  model_name: z.string().optional(),
+  brand: z.string().min(1, "Brand is required").max(80),
+  model_name: z.string().max(100).optional(),
   storage_gb: z.number().int().min(1).optional(),
   screen_size_inches: z.number().min(1).max(100).optional(),
   warranty_months: z.number().int().min(0).optional(),

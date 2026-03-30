@@ -39,7 +39,7 @@ const mediaUrlField = (label: string) =>
     .or(z.literal(""));
 
 const serviceAreasSchema = z.object({
-  areas: z.array(z.string().trim().min(1)).min(1, "Add at least one service area."),
+  areas: z.array(z.string().trim().min(1).max(120)).min(1, "Add at least one service area."),
 });
 
 const mallStoreDetailsSchema = z.object({
@@ -99,7 +99,7 @@ const onlineOnlyDetailsSchema = z.object({
     "other",
   ]),
   order_url: z.string().url("Enter a valid order URL."),
-  delivery_regions: z.array(z.string().trim().min(1)).optional(),
+  delivery_regions: z.array(z.string().trim().min(1).max(120)).optional(),
   support_response_time: optionalText(120),
 });
 
@@ -107,7 +107,7 @@ const marketStallDetailsSchema = z.object({
   type: z.literal("market_stall"),
   market_name: z.string().trim().min(1, "Market name is required.").max(120),
   stall_label: optionalText(80),
-  trading_days: z.array(z.string().trim().min(1)).min(1, "Add at least one trading day."),
+  trading_days: z.array(z.string().trim().min(1).max(40)).min(1, "Add at least one trading day."),
   trading_hours: z.string().trim().min(1, "Trading hours are required.").max(120),
 });
 
@@ -145,8 +145,8 @@ export const businessSchema = z
       .default(""),
 
     // Location
-    location_province: z.string().min(1, "Province is required"),
-    location_city: z.string().min(1, "City is required"),
+    location_province: z.string().min(1, "Province is required").max(50),
+    location_city: z.string().min(1, "City is required").max(80),
     location_town: z
       .string()
       .trim()
@@ -193,7 +193,7 @@ export const businessSchema = z
     services_offered: z.array(z.string().max(200)).max(30).optional().default([]),
     service_areas: serviceAreasSchema.optional(),
     business_details: businessDetailsSchema.nullable().optional(),
-    operating_hours: z.record(z.string(), z.unknown()).optional().default({}),
+    operating_hours: z.record(z.string().max(20), z.unknown()).optional().default({}),
     payment_methods_accepted: z
       .array(z.enum(["cash", "card", "eft", "snapscan", "capitec_pay", "other"]))
       .optional()

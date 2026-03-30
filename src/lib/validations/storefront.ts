@@ -18,8 +18,8 @@ export const storefrontSchema = z.object({
   description: z.string().max(2000, "Description cannot exceed 2000 characters").optional(),
   logo_url: z.string().url().optional().or(z.literal("")),
   banner_url: z.string().url().optional().or(z.literal("")),
-  province: z.string().min(1, "Province is required"),
-  city: z.string().min(1, "City is required"),
+  province: z.string().min(1, "Province is required").max(50),
+  city: z.string().min(1, "City is required").max(80),
   whatsapp: z
     .string()
     .regex(/^(\+27|0)[6-8][0-9]{8}$/, "Enter a valid SA number")

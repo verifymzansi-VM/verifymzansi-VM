@@ -78,6 +78,7 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
   getProvinceNames: () => ["Gauteng", "Western Cape"],
   getCitiesForProvince: (province: string) =>
     province === "Gauteng" ? ["Johannesburg", "Pretoria"] : [],
+  getTownsForCity: () => [],
 }));
 
 vi.mock("@/lib/supabase/client", () => ({

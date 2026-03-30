@@ -290,6 +290,19 @@ function isDemoUser(user: AuthUserRecord): boolean {
   return DEMO_EMAIL_PATTERNS.some((pattern) => pattern.test(email));
 }
 
+function isAdminUser(user: AuthUserRecord): boolean {
+  const appRole =
+    user.app_metadata && typeof user.app_metadata.role === "string"
+      ? user.app_metadata.role.toLowerCase()
+      : null;
+  const userRole =
+    user.user_metadata && typeof user.user_metadata.role === "string"
+      ? user.user_metadata.role.toLowerCase()
+      : null;
+
+  return appRole === "admin" || userRole === "admin";
+}
+
 async function countRows(supabase: SupabaseClient, table: string): Promise<number> {
   const { count, error } = await supabase.from(table).select("id", { count: "exact", head: true });
 
@@ -450,6 +463,13 @@ async function runWipe(supabase: SupabaseClient, snapshot: LaunchResetSnapshot):
     );
   }
 
+  const adminUsers = snapshot.authUsers.filter(isAdminUser);
+  if (adminUsers.length === 0) {
+    throw new Error("Refusing wipe: no admin users found to preserve.");
+  }
+
+  const usersToDelete = snapshot.authUsers.filter((user) => !isAdminUser(user));
+
   console.log("");
   console.log("Deleting account-linked application data...");
 
@@ -459,9 +479,10 @@ async function runWipe(supabase: SupabaseClient, snapshot: LaunchResetSnapshot):
   }
 
   console.log("");
-  console.log("Deleting auth users...");
-  const deletedUsers = await deleteAllAuthUsers(supabase, snapshot.authUsers);
-  console.log(`  cleared auth.users: ${deletedUsers}`);
+  console.log("Deleting non-admin auth users...");
+  const deletedUsers = await deleteAllAuthUsers(supabase, usersToDelete);
+  console.log(`  deleted auth.users: ${deletedUsers}`);
+  console.log(`  preserved admin users: ${adminUsers.length}`);
 }
 
 async function main(): Promise<void> {

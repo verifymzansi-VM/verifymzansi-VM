@@ -4,7 +4,7 @@ import { emailSchema, passwordSchema, saPhoneSchema, turnstileTokenSchema } from
 /** Zod schema for the login form (email + password + Turnstile token). */
 export const loginSchema = z.object({
   email: emailSchema,
-  password: z.string().min(1, "Password is required"),
+  password: z.string().min(1, "Password is required").max(128),
   turnstileToken: turnstileTokenSchema,
 });
 
@@ -28,7 +28,7 @@ export const registerSchema = z
     email: emailSchema,
     phone: saPhoneSchema,
     password: passwordSchema,
-    confirmPassword: z.string(),
+    confirmPassword: z.string().max(128),
     acceptTerms: z.literal(true, {
       message: "You must accept the terms of service",
     }),
@@ -49,7 +49,7 @@ export const forgotPasswordSchema = z.object({
 export const resetPasswordSchema = z
   .object({
     password: passwordSchema,
-    confirmPassword: z.string(),
+    confirmPassword: z.string().max(128),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
@@ -68,9 +68,9 @@ export const otpVerifySchema = z.object({
 /** Zod schema for changing password (current + new + confirmation). */
 export const changePasswordSchema = z
   .object({
-    currentPassword: z.string().min(1, "Current password is required"),
+    currentPassword: z.string().min(1, "Current password is required").max(128),
     newPassword: passwordSchema,
-    confirmNewPassword: z.string(),
+    confirmNewPassword: z.string().max(128),
   })
   .refine((data) => data.newPassword === data.confirmNewPassword, {
     message: "Passwords do not match",
