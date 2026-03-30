@@ -9,7 +9,7 @@ import { useHoverCapability } from "@/hooks/use-hover-capability";
 import { useVideoVisibility } from "@/hooks/use-video-visibility";
 import { useVideoHover } from "@/hooks/use-video-hover";
 
-const DEFAULT_MEDIA_FIT = "object-fill";
+const DEFAULT_MEDIA_FIT = "object-cover";
 const DEFAULT_CONTAINER_ASPECT_RATIO = 5 / 4;
 
 export type MediaFitStrategy = "cover" | "smart";
@@ -31,11 +31,11 @@ export function isVideoUrl(url: string | null | undefined): boolean {
 }
 
 function shouldUseSmartFit(
-  _fitStrategy: MediaFitStrategy,
+  fitStrategy: MediaFitStrategy,
   _mediaAspectRatio: number | null,
   _containerAspectRatio: number
 ) {
-  return false;
+  return fitStrategy === "smart";
 }
 
 function getForegroundMediaClassName(
