@@ -240,8 +240,7 @@ export function MzansiBusinessGrid() {
         {businesses.map((business, index) => (
           <div
             key={business.id}
-            className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms]"
-            style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
+            className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
           >
             <BusinessCard
               id={business.id}

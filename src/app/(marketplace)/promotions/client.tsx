@@ -666,7 +666,8 @@ function PromotionTypeBar({
             <button
               key={item}
               type="button"
-              aria-pressed={isActive}
+              data-active={isActive || undefined}
+              aria-label={`${presentation.label}${isActive ? " (selected)" : ""}`}
               className={cn(
                 "inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 isActive ? presentation.activeClassName : presentation.inactiveClassName
