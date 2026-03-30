@@ -52,6 +52,8 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
   getProvinceNames: () => ["Gauteng", "Western Cape"],
   getCitiesForProvince: (province: string) =>
     province === "Gauteng" ? ["Johannesburg", "Pretoria"] : [],
+  getTownsForCity: (province: string, city: string) =>
+    province === "Gauteng" && city === "Johannesburg" ? ["Noordwyk", "Midrand"] : [],
 }));
 
 vi.mock("@/components/billing/plan-gate", () => ({
