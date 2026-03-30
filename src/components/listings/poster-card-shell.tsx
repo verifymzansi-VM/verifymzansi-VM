@@ -58,7 +58,7 @@ export function PosterCardShell({
   className,
   contentClassName,
   eyebrowClassName,
-  mediaSizes = "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw",
+  mediaSizes = "(max-width: 640px) 240px, 264px",
   trustLevel = 0,
   fallback,
   logoUrl,
@@ -95,11 +95,9 @@ export function PosterCardShell({
               priority={priority}
             />
           ) : fallback ? (
-            <div className="absolute inset-0 bg-gradient-to-br from-warm-300 via-warm-200 to-warm-100 dark:from-warm-800 dark:via-warm-700 dark:to-warm-900">
-              {fallback}
-            </div>
+            <div className="absolute inset-0 skeleton-shimmer">{fallback}</div>
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-warm-300 via-warm-200 to-warm-100 dark:from-warm-800 dark:via-warm-700 dark:to-warm-900" />
+            <div className="absolute inset-0 skeleton-shimmer" />
           )}
 
           <div className="pointer-events-none absolute inset-0 transition-opacity duration-500 group-hover:opacity-0">

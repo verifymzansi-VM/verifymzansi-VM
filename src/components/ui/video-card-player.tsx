@@ -480,9 +480,7 @@ function VideoCardPlayerInner({
 
   if (!isVideo) {
     if (!normalizedSrc || posterError) {
-      return (
-        <div className="absolute inset-0 bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
-      );
+      return <div className="absolute inset-0 skeleton-shimmer" />;
     }
 
     if (usesSmartFit) {
@@ -549,7 +547,7 @@ function VideoCardPlayerInner({
             data-media-fit={usesSmartFit ? "smart" : "cover"}
           />
         ) : !videoReady || hasError || reducedMotion ? (
-          <div className="absolute inset-0 z-[2] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
+          <div className="absolute inset-0 z-[2] skeleton-shimmer" />
         ) : null}
 
         <video
@@ -615,7 +613,7 @@ function VideoCardPlayerInner({
           data-media-fit={usesSmartFit ? "smart" : "cover"}
         />
       ) : !videoReady || hasError ? (
-        <div className="absolute inset-0 z-[2] flex items-center justify-center bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800">
+        <div className="absolute inset-0 z-[2] flex items-center justify-center skeleton-shimmer">
           <Play className="h-10 w-10 text-white/60" />
         </div>
       ) : null}
@@ -834,9 +832,7 @@ function HoverVideoPlayer({
 
   if (!normalizedSrc) {
     if (!normalizedPoster || posterError) {
-      return (
-        <div className="absolute inset-0 bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
-      );
+      return <div className="absolute inset-0 skeleton-shimmer" />;
     }
 
     if (usesSmartFit) {
@@ -903,7 +899,7 @@ function HoverVideoPlayer({
           data-media-fit={usesSmartFit ? "smart" : "cover"}
         />
       ) : !(isHovering && videoReady) || hasError || reducedMotion ? (
-        <div className="absolute inset-0 z-[2] bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
+        <div className="absolute inset-0 z-[2] skeleton-shimmer" />
       ) : null}
 
       <video
