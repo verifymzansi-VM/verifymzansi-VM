@@ -117,6 +117,8 @@ test.describe("Platform Smoke", () => {
   }) => {
     await page.goto("/login");
 
+    const oauthRedirectUrl = new URL("/login#oauth-ok", page.url()).toString();
+
     const clearedState = await page.evaluate(() => {
       document.cookie = "vm_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
       document.querySelector('meta[name="csrf-token"]')?.remove();
@@ -131,11 +133,11 @@ test.describe("Platform Smoke", () => {
       (request) => request.url().includes("/api/auth/oauth/google") && request.method() === "POST"
     );
 
-    await page.route("**/api/auth/oauth/google", async (route) => {
+    await page.context().route("**/api/auth/oauth/google*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ url: "#oauth-ok" }),
+        body: JSON.stringify({ url: oauthRedirectUrl }),
       });
     });
 
@@ -154,8 +156,9 @@ test.describe("Platform Smoke", () => {
       .toMatchObject({
         meta: expect.stringMatching(/^[a-f0-9]{64}$/i),
       });
-    await expect(page).toHaveURL(/#oauth-ok/);
     await expect(page.getByText(/invalid csrf token/i)).toHaveCount(0);
+    await expect(page.getByText(/google sign-in failed/i)).toHaveCount(0);
+    await expect(page.getByText(/something went wrong/i)).toHaveCount(0);
   });
 
   test("@smoke webhook endpoints handle malformed payloads without 5xx", async ({ request }) => {

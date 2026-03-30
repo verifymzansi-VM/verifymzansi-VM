@@ -65,7 +65,7 @@ export function GoogleOAuthButton({ mode }: GoogleOAuthButtonProps) {
         return;
       }
 
-      window.location.assign(result.url);
+      window.location.assign(new URL(result.url, window.location.href).toString());
     } catch {
       toast({
         title: "Something went wrong",
