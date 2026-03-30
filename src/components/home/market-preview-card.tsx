@@ -12,6 +12,7 @@ interface MarketPreviewCardProps {
   provinceCode: string;
   boosted?: boolean;
   logoUrl?: string | null;
+  priority?: boolean;
 }
 
 const formatPrice = (price: number) =>
@@ -31,6 +32,7 @@ export function MarketPreviewCard({
   provinceCode: _provinceCode,
   boosted: _boosted,
   logoUrl,
+  priority,
 }: MarketPreviewCardProps) {
   return (
     <PosterCardShell
@@ -44,6 +46,7 @@ export function MarketPreviewCard({
       statusClassName="bg-brand-blue/95 text-white border border-white/10"
       accentClassName="hover:border-brand-green/55"
       logoUrl={logoUrl}
+      priority={priority}
     />
   );
 }

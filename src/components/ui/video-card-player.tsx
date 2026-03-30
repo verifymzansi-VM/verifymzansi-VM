@@ -27,7 +27,7 @@ export function isVideoUrl(url: string | null | undefined): boolean {
     url
       .split("?")[0]
       .toLowerCase()
-      .match(/\.(mp4|webm|ogg)$/) != null
+      .match(/\.(mp4|webm|ogg|mov)$/) != null
   );
 }
 
@@ -198,7 +198,9 @@ export function VideoCardPlayer({
   const normalizedPoster = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const canHover = useHoverCapability();
   const effectiveMode = mode === "hover" && !canHover ? "ambient" : mode;
-  const mediaKey = `${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}|${effectiveMode}|${showPlaybackControl ? "controls" : "no-controls"}`;
+  // Exclude effectiveMode from the key so that the canHover hydration flip
+  // (false → true) does not unmount/remount the player and restart image loads.
+  const mediaKey = `${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}|${showPlaybackControl ? "controls" : "no-controls"}`;
 
   if (effectiveMode === "hover" && isVideo) {
     return (
@@ -310,6 +312,7 @@ function VideoCardPlayerInner({
   const [isMuted, setIsMuted] = useState(true);
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [posterError, setPosterError] = useState(false);
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
 
   const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
@@ -361,6 +364,10 @@ function VideoCardPlayerInner({
     if (image.naturalWidth > 0 && image.naturalHeight > 0) {
       setMediaAspectRatio(image.naturalWidth / image.naturalHeight);
     }
+  }, []);
+
+  const handlePosterError = useCallback(() => {
+    setPosterError(true);
   }, []);
 
   const handleVideoClick = useCallback(
@@ -472,7 +479,11 @@ function VideoCardPlayerInner({
   );
 
   if (!isVideo) {
-    if (!normalizedSrc) return null;
+    if (!normalizedSrc || posterError) {
+      return (
+        <div className="absolute inset-0 bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
+      );
+    }
 
     if (usesSmartFit) {
       return (
@@ -489,6 +500,7 @@ function VideoCardPlayerInner({
             sizes={sizes}
             priority={priority}
             onLoad={handleImageLoad}
+            onError={handlePosterError}
             data-media-fit="smart"
           />
         </div>
@@ -504,6 +516,7 @@ function VideoCardPlayerInner({
         sizes={sizes}
         priority={priority}
         onLoad={handleImageLoad}
+        onError={handlePosterError}
         data-media-fit="cover"
       />
     );
@@ -519,7 +532,7 @@ function VideoCardPlayerInner({
           <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
         ) : null}
 
-        {normalizedPoster ? (
+        {normalizedPoster && !posterError ? (
           <Image
             src={normalizedPoster}
             alt={alt || "Video cover"}
@@ -532,6 +545,7 @@ function VideoCardPlayerInner({
             sizes={sizes}
             priority={priority}
             onLoad={handleImageLoad}
+            onError={handlePosterError}
             data-media-fit={usesSmartFit ? "smart" : "cover"}
           />
         ) : !videoReady || hasError || reducedMotion ? (
@@ -584,7 +598,7 @@ function VideoCardPlayerInner({
         <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
       ) : null}
 
-      {normalizedPoster ? (
+      {normalizedPoster && !posterError ? (
         <Image
           src={normalizedPoster}
           alt={alt || "Video cover"}
@@ -597,6 +611,7 @@ function VideoCardPlayerInner({
           sizes={sizes}
           priority={priority}
           onLoad={handleImageLoad}
+          onError={handlePosterError}
           data-media-fit={usesSmartFit ? "smart" : "cover"}
         />
       ) : !videoReady || hasError ? (
@@ -745,6 +760,7 @@ function HoverVideoPlayer({
   const { videoRef, containerRef, reducedMotion, isHovering } = useVideoHover(normalizedSrc);
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [posterError, setPosterError] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
 
@@ -790,6 +806,10 @@ function HoverVideoPlayer({
     setHasError(true);
   }, []);
 
+  const handlePosterError = useCallback(() => {
+    setPosterError(true);
+  }, []);
+
   const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
     const image = event.currentTarget;
     if (image.naturalWidth > 0 && image.naturalHeight > 0) {
@@ -813,7 +833,11 @@ function HoverVideoPlayer({
   );
 
   if (!normalizedSrc) {
-    if (!normalizedPoster) return null;
+    if (!normalizedPoster || posterError) {
+      return (
+        <div className="absolute inset-0 bg-gradient-to-br from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800" />
+      );
+    }
 
     if (usesSmartFit) {
       return (
@@ -830,6 +854,7 @@ function HoverVideoPlayer({
             sizes={sizes}
             priority={priority}
             onLoad={handleImageLoad}
+            onError={handlePosterError}
             data-media-fit="smart"
           />
         </div>
@@ -845,6 +870,7 @@ function HoverVideoPlayer({
         sizes={sizes}
         priority={priority}
         onLoad={handleImageLoad}
+        onError={handlePosterError}
         data-media-fit="cover"
       />
     );
@@ -860,7 +886,7 @@ function HoverVideoPlayer({
         <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
       ) : null}
 
-      {normalizedPoster ? (
+      {normalizedPoster && !posterError ? (
         <Image
           src={normalizedPoster}
           alt={alt || "Video cover"}
@@ -873,6 +899,7 @@ function HoverVideoPlayer({
           sizes={sizes}
           priority={priority}
           onLoad={handleImageLoad}
+          onError={handlePosterError}
           data-media-fit={usesSmartFit ? "smart" : "cover"}
         />
       ) : !(isHovering && videoReady) || hasError || reducedMotion ? (

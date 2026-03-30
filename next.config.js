@@ -71,6 +71,18 @@ const nextConfig = {
     // Only cache headers remain here.
     return [
       {
+        // Media proxy serves R2 objects with long-lived immutable headers;
+        // exclude it from the generic no-cache rule so browsers and CDN can
+        // cache video responses served through the proxy.
+        source: "/api/media/serve/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
         source: "/api/:path*",
         headers: [
           {

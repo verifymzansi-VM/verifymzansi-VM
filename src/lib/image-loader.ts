@@ -25,11 +25,26 @@ interface ImageLoaderParams {
  */
 const CF_RESIZING_ENABLED = process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING === "true";
 
+const MEDIA_HOST = "media.verifymzansi.com";
+
 export default function cloudflareImageLoader({ src, width, quality }: ImageLoaderParams): string {
   // If Cloudflare Image Resizing is not available, return the src unchanged
   // so images still render (unoptimized but functional).
   if (!CF_RESIZING_ENABLED) {
     return src;
+  }
+
+  const cfParams = `width=${width},quality=${quality || 75},format=auto`;
+
+  // Same-origin CDN URLs (media.verifymzansi.com) — extract the pathname
+  // so Cloudflare can resize them via the zone's /cdn-cgi/image/ endpoint.
+  try {
+    const parsed = new URL(src);
+    if (parsed.hostname === MEDIA_HOST) {
+      return `/cdn-cgi/image/${cfParams}${parsed.pathname}`;
+    }
+  } catch {
+    // Not a valid absolute URL — fall through to relative path handling
   }
 
   // Absolute remote URLs are left untouched. The current production zone can
@@ -40,6 +55,5 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
   }
 
   // Relative URL (local asset) — transform via the same endpoint
-  const cfParams = `width=${width},quality=${quality || 75},format=auto`;
   return `/cdn-cgi/image/${cfParams}${src}`;
 }

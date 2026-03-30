@@ -67,7 +67,7 @@ export async function HomeMzansiMarketShowcase() {
         </div>
 
         <AutoScrollRail ariaLabel="Latest on Mzansi Market">
-          {items.map((l) => {
+          {items.map((l, index) => {
             const videoUrl = l.videos?.[0];
             const displayUrl = videoUrl || l.photos?.[0];
             const isBoosted = l.boost_until ? new Date(l.boost_until) > new Date() : false;
@@ -87,6 +87,7 @@ export async function HomeMzansiMarketShowcase() {
                   provinceCode={provinceCode(l.location_province ?? "ZA")}
                   boosted={isBoosted}
                   logoUrl={l.logo_url}
+                  priority={index === 0}
                 />
               </div>
             );

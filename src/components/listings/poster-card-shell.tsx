@@ -39,6 +39,8 @@ interface PosterCardShellProps {
   description?: string | null;
   /** Fit strategy for media in constrained frames. */
   fitStrategy?: MediaFitStrategy;
+  /** Load the first-visible card's images eagerly for faster above-the-fold paint. */
+  priority?: boolean;
 }
 
 export function PosterCardShell({
@@ -62,6 +64,7 @@ export function PosterCardShell({
   logoUrl,
   description,
   fitStrategy = "cover",
+  priority = false,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
@@ -89,6 +92,7 @@ export function PosterCardShell({
               containerAspectRatio={5 / 4}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
               mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
+              priority={priority}
             />
           ) : fallback ? (
             <div className="absolute inset-0 bg-gradient-to-br from-warm-300 via-warm-200 to-warm-100 dark:from-warm-800 dark:via-warm-700 dark:to-warm-900">

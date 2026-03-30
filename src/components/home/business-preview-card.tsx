@@ -15,6 +15,7 @@ interface BusinessPreviewCardProps {
   provinceCode: string;
   boosted?: boolean;
   featured?: boolean;
+  priority?: boolean;
 }
 
 export function BusinessPreviewCard({
@@ -27,6 +28,7 @@ export function BusinessPreviewCard({
   provinceCode: _provinceCode,
   boosted: _boosted,
   featured: _featured,
+  priority,
 }: BusinessPreviewCardProps) {
   return (
     <PosterCardShell
@@ -39,6 +41,7 @@ export function BusinessPreviewCard({
       statusLabel={null}
       statusClassName={undefined}
       accentClassName="hover:border-brand-blue/55"
+      priority={priority}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-brand-blue/35">
           <Store className="h-16 w-16" />

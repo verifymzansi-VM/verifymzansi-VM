@@ -95,8 +95,10 @@ export function normalizeMediaUrl(url: string | null | undefined): string {
     return `${PROXY_PREFIX}${key}`;
   }
 
-  // Images: serve through proxy for ETag/cache-control
-  return `${PROXY_PREFIX}${key}`;
+  // Images: serve directly from CDN domain for edge-cached delivery.
+  // The CDN (media.verifymzansi.com) is backed by R2 with Cloudflare edge
+  // caching, making it significantly faster than the API proxy route.
+  return `${MEDIA_BASE}/${key}`;
 }
 
 /**

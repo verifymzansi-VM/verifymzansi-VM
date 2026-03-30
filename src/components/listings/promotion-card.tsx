@@ -28,6 +28,7 @@ interface PromotionCardProps {
   endDate?: string | null;
   businessName?: string;
   logoUrl?: string | null;
+  priority?: boolean;
 }
 
 function getPromotionStatus(
@@ -78,6 +79,7 @@ export const PromotionCard = memo(function PromotionCard({
   featured,
   startDate,
   logoUrl,
+  priority,
 }: PromotionCardProps) {
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
   const status = getPromotionStatus(featured, boosted, promotionType);
@@ -102,6 +104,7 @@ export const PromotionCard = memo(function PromotionCard({
       statusVariant="ribbon"
       accentClassName={typePresentation.cardAccentClassName}
       trustLevel={ownerTrustLevel}
+      priority={priority}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-white/35">
           <Tag className="h-16 w-16" />

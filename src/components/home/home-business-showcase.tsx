@@ -61,7 +61,7 @@ export async function HomeBusinessShowcase() {
         </div>
 
         <AutoScrollRail ariaLabel="Mzansi Business">
-          {items.map((b) => (
+          {items.map((b, index) => (
             <div
               key={b.id}
               className="min-w-[240px] max-w-[264px] sm:min-w-[264px] sm:max-w-[264px]"
@@ -77,6 +77,7 @@ export async function HomeBusinessShowcase() {
                 provinceCode={provinceCode(b.location_province ?? "ZA")}
                 boosted={b.boost_until ? new Date(b.boost_until) > new Date() : false}
                 featured={b.featured_until ? new Date(b.featured_until) > new Date() : false}
+                priority={index === 0}
               />
             </div>
           ))}

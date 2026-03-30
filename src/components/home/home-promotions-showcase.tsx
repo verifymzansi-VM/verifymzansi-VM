@@ -121,7 +121,7 @@ export async function HomePromotionsShowcase() {
         </div>
 
         <AutoScrollRail ariaLabel="Promotions and ads">
-          {promotions.map((promo) => (
+          {promotions.map((promo, index) => (
             <div
               key={promo.id}
               className="min-w-[240px] max-w-[264px] sm:min-w-[264px] sm:max-w-[264px]"
@@ -146,6 +146,7 @@ export async function HomePromotionsShowcase() {
                 startDate={promo.start_date}
                 endDate={promo.end_date}
                 logoUrl={promo.business_id ? logoMap.get(promo.business_id) : undefined}
+                priority={index === 0}
               />
             </div>
           ))}
