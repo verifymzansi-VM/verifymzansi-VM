@@ -15,7 +15,7 @@ import {
   usePlanMaxVideos,
   usePlanVideoAllowed,
 } from "@/components/billing/plan-gate";
-import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
 import {
   getPromotionFilterTypeFromStoredType,
   getStoredPromotionTypeForFilter,
@@ -33,12 +33,16 @@ import {
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import { getDefaultEventDates } from "@/lib/post-drafts/defaults";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { DevicePreviewShell } from "@/components/business/shared/device-preview-shell";
 import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
 import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
+import type { PromotionDraftData } from "@/lib/post-drafts/storage";
 const SELECT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
@@ -84,11 +88,14 @@ function CreatePromotionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { user, profile, isLoading } = useAuth();
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [submitSucceeded, setSubmitSucceeded] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [promotionType, setPromotionType] = useState<PromotionType>("general");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -98,6 +105,8 @@ function CreatePromotionContent() {
   const [negotiable, setNegotiable] = useState(false);
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
+  const [locationTown, setLocationTown] = useState("");
+  const [locationAddress, setLocationAddress] = useState("");
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -111,8 +120,17 @@ function CreatePromotionContent() {
   );
   const [businessId, setBusinessId] = useState(searchParams.get("business_id") || "");
   const [myBusinesses, setMyBusinesses] = useState<{ id: string; business_name: string }[]>([]);
-  const provinces = getProvinceNames();
-  const cities = province ? getCitiesForProvince(province) : [];
+  const {
+    save: saveDraft,
+    restore: restoreDraft,
+    discard: discardDraft,
+  } = usePostDraftAutosave<PromotionDraftData>("promotion", user?.id, !isLoading);
+  const locationValue: LocationValue = {
+    province,
+    city,
+    town: locationTown,
+    address: locationAddress,
+  };
   const isEvent = promotionType === "event";
   const selectedPromotionFilterType = getPromotionFilterTypeFromStoredType(promotionType);
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
@@ -164,6 +182,118 @@ function CreatePromotionContent() {
     }
     loadBusinesses();
   }, []);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    if (!province && profile.location_province) {
+      setProvince(profile.location_province);
+    }
+
+    if (!city && profile.location_city && (!province || province === profile.location_province)) {
+      setCity(profile.location_city);
+    }
+  }, [profile, province, city]);
+
+  useEffect(() => {
+    if (!user?.id || isLoading || submitSucceeded) return;
+
+    const restored = restoreDraft();
+    if (!restored) return;
+
+    const restoredData = restored.data;
+    setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
+    setPromotionType((restoredData.promotionType as PromotionType) ?? "general");
+    setTitle(restoredData.title ?? "");
+    setDescription(restoredData.description ?? "");
+    setCategory(restoredData.category ?? "");
+    setCategoryKey((restoredData.categoryKey as BusinessCategory | "") ?? "");
+    setPriceZar(restoredData.priceZar ?? "");
+    setNegotiable(Boolean(restoredData.negotiable));
+    setProvince(restoredData.province ?? "");
+    setCity(restoredData.city ?? "");
+    setLocationTown(restoredData.locationTown ?? "");
+    setLocationAddress(restoredData.locationAddress ?? "");
+    setContactMethods(
+      Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
+        ? restoredData.contactMethods
+        : ["call"]
+    );
+    setStartDate(restoredData.startDate ?? "");
+    setEndDate(restoredData.endDate ?? "");
+    setBusinessId(restoredData.businessId ?? (searchParams.get("business_id") || ""));
+    setSocialAuthorization(
+      restoredData.socialAuthorization && typeof restoredData.socialAuthorization === "object"
+        ? restoredData.socialAuthorization
+        : { granted: false }
+    );
+    setLastSavedAt(restored.savedAt ?? null);
+    toast({
+      title: "Draft restored",
+      description: "You can continue from where you left off.",
+      variant: "success",
+    });
+  }, [user?.id, isLoading, submitSucceeded, restoreDraft, searchParams, toast]);
+
+  useEffect(() => {
+    if (!isEvent) return;
+
+    const defaults = getDefaultEventDates(startDate, endDate);
+    if (!startDate) {
+      setStartDate(defaults.startDate);
+    }
+
+    if (!endDate) {
+      setEndDate(defaults.endDate);
+    }
+  }, [isEvent, startDate, endDate]);
+
+  useEffect(() => {
+    if (!user?.id || isLoading || isSubmitting || submitSucceeded) return;
+
+    saveDraft(step, {
+      promotionType,
+      title,
+      description,
+      category,
+      categoryKey,
+      priceZar,
+      negotiable,
+      province,
+      city,
+      locationTown,
+      locationAddress,
+      contactMethods,
+      startDate,
+      endDate,
+      businessId,
+      socialAuthorization,
+    });
+    setLastSavedAt(Date.now());
+  }, [
+    user?.id,
+    isLoading,
+    isSubmitting,
+    submitSucceeded,
+    saveDraft,
+    step,
+    promotionType,
+    title,
+    description,
+    category,
+    categoryKey,
+    priceZar,
+    negotiable,
+    province,
+    city,
+    locationTown,
+    locationAddress,
+    contactMethods,
+    startDate,
+    endDate,
+    businessId,
+    socialAuthorization,
+  ]);
 
   function clearErrors(...keys: string[]) {
     setFormError(null);
@@ -342,6 +472,8 @@ function CreatePromotionContent() {
         negotiable,
         province,
         city,
+        location_town: locationTown || undefined,
+        location_address: locationAddress || undefined,
         contact_methods: contactMethods,
         images: imageUrls,
         videos: videoUrls,
@@ -368,6 +500,8 @@ function CreatePromotionContent() {
       }
 
       toast({ title: "Promotion submitted for review.", variant: "success" });
+      setSubmitSucceeded(true);
+      discardDraft();
       router.push("/dashboard/promotions?created=true");
     } catch (error: unknown) {
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
@@ -375,6 +509,38 @@ function CreatePromotionContent() {
       setIsSubmitting(false);
       setSubmitProgress(null);
     }
+  }
+
+  function handleDiscardDraft() {
+    discardDraft();
+    setStep(0);
+    setPromotionType("general");
+    setTitle("");
+    setDescription("");
+    setCategory("");
+    setCategoryKey("");
+    setPriceZar("");
+    setNegotiable(false);
+    setProvince(profile?.location_province ?? "");
+    setCity(profile?.location_city ?? "");
+    setLocationTown("");
+    setLocationAddress("");
+    setContactMethods(["call"]);
+    setStartDate("");
+    setEndDate("");
+    setBusinessId(searchParams.get("business_id") || "");
+    setPhotoFiles([]);
+    setVideoFiles([]);
+    setVideoThumbnailFile([]);
+    setSocialAuthorization({ granted: false });
+    setFieldErrors({});
+    setFormError(null);
+    setLastSavedAt(null);
+    toast({
+      title: "Draft discarded",
+      description: "You can start a fresh promotion now.",
+      variant: "success",
+    });
   }
 
   return (
@@ -404,30 +570,49 @@ function CreatePromotionContent() {
                 currentStep={step}
                 error={formError}
                 footer={
-                  <PostFormFooter
-                    currentStep={step}
-                    totalSteps={STEPS.length}
-                    onBack={() => {
-                      clearErrors();
-                      setStep((current) => Math.max(current - 1, 0));
-                    }}
-                    onNext={() => {
-                      const errors = validateStep(step);
-                      if (Object.keys(errors).length > 0) {
-                        setFieldErrors((current) => ({ ...current, ...errors }));
-                        setFormError(
-                          "Some required fields are missing or invalid. Check the highlighted fields above."
-                        );
-                        focusFirstError(errors);
-                        return;
-                      }
-                      clearErrors();
-                      setStep((current) => Math.min(current + 1, STEPS.length - 1));
-                    }}
-                    submitDisabled={isSubmitting}
-                    isSubmitting={isSubmitting}
-                    submittingLabel={submitProgress || "Submitting..."}
-                  />
+                  <>
+                    {user?.id && !isSubmitting && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
+                        <p>
+                          {lastSavedAt
+                            ? `Draft saved locally at ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                            : "Changes are saved locally while you fill this form."}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleDiscardDraft}
+                          className="font-medium text-amber-700 hover:underline"
+                        >
+                          Discard draft
+                        </button>
+                      </div>
+                    )}
+
+                    <PostFormFooter
+                      currentStep={step}
+                      totalSteps={STEPS.length}
+                      onBack={() => {
+                        clearErrors();
+                        setStep((current) => Math.max(current - 1, 0));
+                      }}
+                      onNext={() => {
+                        const errors = validateStep(step);
+                        if (Object.keys(errors).length > 0) {
+                          setFieldErrors((current) => ({ ...current, ...errors }));
+                          setFormError(
+                            "Some required fields are missing or invalid. Check the highlighted fields above."
+                          );
+                          focusFirstError(errors);
+                          return;
+                        }
+                        clearErrors();
+                        setStep((current) => Math.min(current + 1, STEPS.length - 1));
+                      }}
+                      submitDisabled={isSubmitting}
+                      isSubmitting={isSubmitting}
+                      submittingLabel={submitProgress || "Submitting..."}
+                    />
+                  </>
                 }
               >
                 {step === 0 && (
@@ -608,56 +793,19 @@ function CreatePromotionContent() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="province">Province *</Label>
-                        <select
-                          id="province"
-                          aria-label="Province"
-                          className={cn(SELECT_CLASS, fieldErrors.province && "border-destructive")}
-                          value={province}
-                          onChange={(event) => {
-                            setProvince(event.target.value);
-                            setCity("");
-                            clearErrors("province", "city");
-                          }}
-                        >
-                          <option value="">Select province</option>
-                          {provinces.map((provinceName) => (
-                            <option key={provinceName} value={provinceName}>
-                              {provinceName}
-                            </option>
-                          ))}
-                        </select>
-                        {fieldErrors.province && (
-                          <p className="inline-form-error">{fieldErrors.province}</p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="city">City / Town *</Label>
-                        <select
-                          id="city"
-                          aria-label="City / Town"
-                          className={cn(SELECT_CLASS, fieldErrors.city && "border-destructive")}
-                          value={city}
-                          onChange={(event) => {
-                            setCity(event.target.value);
-                            clearErrors("city");
-                          }}
-                          disabled={!province}
-                        >
-                          <option value="">Select city</option>
-                          {cities.map((cityName) => (
-                            <option key={cityName} value={cityName}>
-                              {cityName}
-                            </option>
-                          ))}
-                        </select>
-                        {fieldErrors.city && (
-                          <p className="inline-form-error">{fieldErrors.city}</p>
-                        )}
-                      </div>
-                    </div>
+                    <LocationSelector
+                      value={locationValue}
+                      onChange={(v) => {
+                        setProvince(v.province);
+                        setCity(v.city);
+                        setLocationTown(v.town ?? "");
+                        setLocationAddress(v.address ?? "");
+                        clearErrors("province", "city");
+                      }}
+                      showTown
+                      showAddress
+                      errors={fieldErrors}
+                    />
 
                     <div
                       id="promotion-contact-methods"
@@ -814,6 +962,8 @@ function CreatePromotionContent() {
                             price_negotiable: negotiable,
                             location_province: province,
                             location_city: city,
+                            location_town: locationTown || null,
+                            location_address: locationAddress || null,
                             contact_methods: contactMethods,
                             start_date: startDate || null,
                             end_date: endDate || null,

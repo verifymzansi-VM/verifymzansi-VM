@@ -4,8 +4,9 @@ import CreateListingPage from "./page";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
-const { listingCardSpy } = vi.hoisted(() => ({
+const { listingCardSpy, useAuthMock } = vi.hoisted(() => ({
   listingCardSpy: vi.fn(),
+  useAuthMock: vi.fn(() => ({ user: null, profile: null, isLoading: false })),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -16,6 +17,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({
   useToast: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: useAuthMock,
 }));
 
 vi.mock("next/link", () => ({
@@ -108,6 +113,7 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
   getProvinceNames: () => ["Gauteng", "Western Cape"],
   getCitiesForProvince: (province: string) =>
     province === "Gauteng" ? ["Johannesburg", "Pretoria"] : [],
+  getTownsForCity: () => [],
 }));
 
 vi.mock("@/lib/utils/format", () => ({
@@ -120,6 +126,7 @@ describe("CreateListingPage", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
     global.URL.createObjectURL = vi.fn(() => "blob:logo-preview");
@@ -249,5 +256,80 @@ describe("CreateListingPage", () => {
     expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/logo.jpg");
     expect(payload.images).toEqual(["https://media.verifymzansi.com/listings/photo.jpg"]);
     expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
+  });
+
+  describe("draft restore and discard", () => {
+    const DRAFT_USER_ID = "user-draft-listing-123";
+
+    function seedDraft(overrides: Record<string, unknown> = {}) {
+      const data = {
+        category: "electronics",
+        condition: "used",
+        categoryAttributes: { device_type: "Smartphone", brand: "Apple" },
+        title: "Saved iPhone 15",
+        description: "A draft description from last session.",
+        price: "2500",
+        negotiable: true,
+        province: "Gauteng",
+        city: "Johannesburg",
+        town: "",
+        address: "",
+        contactMethods: ["call", "whatsapp"],
+        ...overrides,
+      };
+      localStorage.setItem(
+        `vm-draft:listing:${DRAFT_USER_ID}`,
+        JSON.stringify({ v: 1, savedAt: Date.now(), step: 0, data })
+      );
+    }
+
+    beforeEach(() => {
+      useAuthMock.mockReturnValue({
+        user: { id: DRAFT_USER_ID, email: "draft@test.com" },
+        profile: null,
+        isLoading: false,
+      });
+    });
+
+    it("restores title and description from a saved draft and shows a toast", async () => {
+      seedDraft();
+      render(<CreateListingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Title *")).toHaveValue("Saved iPhone 15");
+      });
+      expect(screen.getByLabelText("Description *")).toHaveValue(
+        "A draft description from last session."
+      );
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft restored" }));
+    });
+
+    it("clears restored fields when discard draft is clicked", async () => {
+      seedDraft();
+      render(<CreateListingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Title *")).toHaveValue("Saved iPhone 15");
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+
+      expect(screen.getByLabelText("Title *")).toHaveValue("");
+      expect(screen.getByLabelText("Description *")).toHaveValue("");
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft discarded" }));
+    });
+
+    it("still validates missing category after restoring a draft", async () => {
+      seedDraft({ category: "" });
+      render(<CreateListingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Title *")).toHaveValue("Saved iPhone 15");
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+      expect(screen.getByText("Select a category.")).toBeInTheDocument();
+    });
   });
 });

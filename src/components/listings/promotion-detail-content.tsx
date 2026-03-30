@@ -38,6 +38,8 @@ export interface PromotionDetailRecord {
   price_negotiable: boolean;
   location_province: string;
   location_city: string;
+  location_town: string | null;
+  location_address: string | null;
   contact_methods: string[] | null;
   start_date: string | null;
   end_date: string | null;
@@ -208,7 +210,7 @@ export function PromotionDetailContent({
   // Calendar link (Google Calendar)
   const calendarUrl =
     isEvent && promotion.start_date
-      ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(promotion.title)}&dates=${promotion.start_date.replace(/[-:]/g, "").split(".")[0]}Z${promotion.end_date ? `/${promotion.end_date.replace(/[-:]/g, "").split(".")[0]}Z` : ""}&details=${encodeURIComponent(promotion.description?.slice(0, 500) ?? "")}&location=${encodeURIComponent(`${promotion.location_city}, ${promotion.location_province}`)}`
+      ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(promotion.title)}&dates=${promotion.start_date.replace(/[-:]/g, "").split(".")[0]}Z${promotion.end_date ? `/${promotion.end_date.replace(/[-:]/g, "").split(".")[0]}Z` : ""}&details=${encodeURIComponent(promotion.description?.slice(0, 500) ?? "")}&location=${encodeURIComponent([promotion.location_town, promotion.location_city, promotion.location_province].filter(Boolean).join(", "))}`
       : null;
 
   return (
@@ -373,7 +375,9 @@ export function PromotionDetailContent({
               )}
               <span className="flex items-center gap-1">
                 <MapPin className="h-3.5 w-3.5" />
-                {promotion.location_city}, {promotion.location_province}
+                {[promotion.location_town, promotion.location_city, promotion.location_province]
+                  .filter(Boolean)
+                  .join(", ")}
               </span>
               <span className="flex items-center gap-1">
                 <Eye className="h-3.5 w-3.5" />
@@ -413,7 +417,9 @@ export function PromotionDetailContent({
                 <dt className="text-muted-foreground">Location</dt>
                 <dd className="flex items-center gap-1 font-medium">
                   <MapPin className="h-3 w-3" />
-                  {promotion.location_city}, {promotion.location_province}
+                  {[promotion.location_town, promotion.location_city, promotion.location_province]
+                    .filter(Boolean)
+                    .join(", ")}
                 </dd>
 
                 {promotion.start_date && (

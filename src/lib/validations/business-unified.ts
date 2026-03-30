@@ -147,6 +147,16 @@ export const businessSchema = z
     // Location
     location_province: z.string().min(1, "Province is required"),
     location_city: z.string().min(1, "City is required"),
+    location_town: z
+      .string()
+      .trim()
+      .max(120, "Town / suburb must be 120 characters or fewer")
+      .optional(),
+    location_address: z
+      .string()
+      .trim()
+      .max(300, "Address must be 300 characters or fewer")
+      .optional(),
     store_number: z.string().trim().max(20).optional(),
     map_directions: z
       .string()

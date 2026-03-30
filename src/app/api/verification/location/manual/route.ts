@@ -29,6 +29,7 @@ const log = createLogger("ManualLocationVerification");
 const manualLocationSchema = z.object({
   province: trimmedStringSchema,
   city: trimmedStringSchema,
+  town: z.string().trim().max(120).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
       return bodyResult.response;
     }
 
-    const { province, city } = bodyResult.data;
+    const { province, city, town } = bodyResult.data;
 
     // Validate province
     const validProvinces = getProvinceNames();
@@ -165,6 +166,7 @@ export async function POST(request: NextRequest) {
           gps_lon: null,
           location_province: province,
           location_city: city,
+          location_town: town || null,
           risk_score: riskScore,
           risk_level: riskLevel,
           auto_status: "needs_manual_review",
@@ -196,6 +198,7 @@ export async function POST(request: NextRequest) {
       value_json: {
         province,
         city,
+        town: town || undefined,
         note: "Location submitted via manual selection without GPS confirmation",
       },
     });

@@ -353,6 +353,8 @@ export async function POST(request: NextRequest) {
             price_negotiable: data.negotiable,
             location_province: data.province,
             location_city: data.city,
+            location_town: data.location_town || null,
+            location_address: data.location_address || null,
             contact_methods: data.contact_methods,
             start_date: data.start_date || null,
             end_date: data.end_date || null,

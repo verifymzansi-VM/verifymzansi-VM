@@ -37,6 +37,7 @@ const businessIdParamsSchema = z.object({
 const BUSINESS_DETAIL_SELECT = `
   id, owner_id, business_type, business_name, slug, description, category, logo_url,
   cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city,
+  location_town, location_address,
   store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, layout_template, boost_until, featured_until, published_at, status, area, created_at,
@@ -311,6 +312,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           gallery_photos: data.gallery_photos || [],
           location_province: data.location_province,
           location_city: data.location_city,
+          location_town: data.location_town || null,
+          location_address: data.location_address || null,
           store_number: data.store_number || null,
           map_directions: data.map_directions || null,
           phone: data.phone || null,

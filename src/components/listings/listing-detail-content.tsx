@@ -33,6 +33,7 @@ export interface ListingDetailRecord {
   location_province: string | null;
   location_city: string | null;
   location_suburb: string | null;
+  location_address: string | null;
   contact_methods: string[] | null;
   created_at: string;
 }
@@ -222,6 +223,9 @@ export function ListingDetailContent({
                   <p className="text-xs text-muted-foreground">Listed location</p>
                 </div>
               </div>
+              {listing.location_address && (
+                <p className="ml-12 text-sm text-muted-foreground">{listing.location_address}</p>
+              )}
             </>
           )}
         </div>

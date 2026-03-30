@@ -13,7 +13,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { MediaUpload } from "@/components/ui/media-upload";
-import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { LocationSelector } from "@/components/ui/location-selector";
 import {
   getPromotionFilterTypeFromStoredType,
   getStoredPromotionTypeForFilter,
@@ -57,6 +57,8 @@ export default function EditPromotionPage() {
   const [negotiable, setNegotiable] = useState(false);
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
+  const [locationTown, setLocationTown] = useState("");
+  const [locationAddress, setLocationAddress] = useState("");
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -77,8 +79,6 @@ export default function EditPromotionPage() {
   const [businessId, setBusinessId] = useState("");
   const [myBusinesses, setMyBusinesses] = useState<{ id: string; business_name: string }[]>([]);
 
-  const provinces = getProvinceNames();
-  const cities = province ? getCitiesForProvince(province) : [];
   const selectedPromotionFilterType = getPromotionFilterTypeFromStoredType(promotionType);
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
@@ -113,6 +113,8 @@ export default function EditPromotionPage() {
         setNegotiable(p.price_negotiable || false);
         setProvince(p.location_province || "");
         setCity(p.location_city || "");
+        setLocationTown(p.location_town || "");
+        setLocationAddress(p.location_address || "");
         setContactMethods(p.contact_methods || ["call"]);
         setStartDate(p.start_date ? p.start_date.split("T")[0] : "");
         setEndDate(p.end_date ? p.end_date.split("T")[0] : "");
@@ -277,6 +279,8 @@ export default function EditPromotionPage() {
         negotiable,
         province,
         city,
+        location_town: locationTown || undefined,
+        location_address: locationAddress || undefined,
         contact_methods: contactMethods,
         images: allImages,
         videos: allVideos,
@@ -481,46 +485,23 @@ export default function EditPromotionPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="province">Province</Label>
-                  <select
-                    id="province"
-                    aria-label="Province"
-                    className={selectClass}
-                    value={province}
-                    onChange={(e) => {
-                      setProvince(e.target.value);
-                      setCity("");
-                    }}
-                  >
-                    <option value="">Select province</option>
-                    {provinces.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="city">City / Town</Label>
-                  <select
-                    id="city"
-                    aria-label="City / Town"
-                    className={selectClass}
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    disabled={!province}
-                  >
-                    <option value="">Select city</option>
-                    {cities.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              <LocationSelector
+                value={{
+                  province,
+                  city,
+                  town: locationTown,
+                  address: locationAddress,
+                }}
+                onChange={(newLocation) => {
+                  setProvince(newLocation.province);
+                  setCity(newLocation.city);
+                  setLocationTown(newLocation.town || "");
+                  setLocationAddress(newLocation.address || "");
+                }}
+                showTown={true}
+                showAddress={true}
+                errors={fieldErrors}
+              />
 
               <div className="space-y-2">
                 <Label>Contact Methods</Label>
@@ -639,6 +620,8 @@ export default function EditPromotionPage() {
                       price_negotiable: negotiable,
                       location_province: province || "South Africa",
                       location_city: city || "Online",
+                      location_town: locationTown || null,
+                      location_address: locationAddress || null,
                       contact_methods: contactMethods,
                       start_date: startDate ? new Date(startDate).toISOString() : null,
                       end_date: endDate ? new Date(endDate).toISOString() : null,

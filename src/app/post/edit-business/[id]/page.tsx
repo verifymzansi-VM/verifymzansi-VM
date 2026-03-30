@@ -32,7 +32,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useToast } from "@/hooks/use-toast";
-import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { LocationSelector } from "@/components/ui/location-selector";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import { usePlanCoverVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
@@ -99,6 +99,8 @@ export default function EditBusinessPage() {
   // Location
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
+  const [locationTown, setLocationTown] = useState("");
+  const [locationAddress, setLocationAddress] = useState("");
   const [storeNumber, setStoreNumber] = useState("");
   const [serviceAreasInput, setServiceAreasInput] = useState("");
   const [mapDirections, setMapDirections] = useState("");
@@ -144,8 +146,6 @@ export default function EditBusinessPage() {
   const [removeMallPhotos, setRemoveMallPhotos] = useState(false);
   const [removeVideo, setRemoveVideo] = useState(false);
 
-  const provinces = getProvinceNames();
-  const cities = province ? getCitiesForProvince(province) : [];
   const maxPhotos = usePlanMaxPhotos("MZANSI_BUSINESS");
   const coverVideoAllowed = usePlanCoverVideoAllowed("MZANSI_BUSINESS");
   const previewLogoUrl = useMemo(
@@ -193,6 +193,8 @@ export default function EditBusinessPage() {
         setCategory(b.category || "");
         setProvince(b.location_province || "");
         setCity(b.location_city || "");
+        setLocationTown(b.location_town || "");
+        setLocationAddress(b.location_address || "");
         setStoreNumber(b.store_number || "");
         setMapDirections(b.map_directions || "");
         setPhone(b.phone || "");
@@ -486,6 +488,8 @@ export default function EditBusinessPage() {
         description,
         location_province: province,
         location_city: city,
+        location_town: locationTown || undefined,
+        location_address: locationAddress || undefined,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
         map_directions: mapDirections || undefined,
         phone: phone || undefined,
@@ -677,47 +681,24 @@ export default function EditBusinessPage() {
                 </select>
               </div>
 
-              {/* Location */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="province">Province</Label>
-                  <select
-                    id="province"
-                    aria-label="Province"
-                    className={selectClass}
-                    value={province}
-                    onChange={(e) => {
-                      setProvince(e.target.value);
-                      setCity("");
-                    }}
-                  >
-                    <option value="">Select province</option>
-                    {provinces.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="city">City / Town</Label>
-                  <select
-                    id="city"
-                    aria-label="City / Town"
-                    className={selectClass}
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    disabled={!province}
-                  >
-                    <option value="">Select city</option>
-                    {cities.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              {/* Location: Province / City / Town / Address */}
+              <LocationSelector
+                value={{
+                  province,
+                  city,
+                  town: locationTown,
+                  address: locationAddress,
+                }}
+                onChange={(newLocation) => {
+                  setProvince(newLocation.province);
+                  setCity(newLocation.city);
+                  setLocationTown(newLocation.town || "");
+                  setLocationAddress(newLocation.address || "");
+                }}
+                showTown={true}
+                showAddress={true}
+                errors={fieldErrors}
+              />
 
               <BusinessTypeDetailsFields
                 businessType={businessType}
@@ -1265,6 +1246,8 @@ export default function EditBusinessPage() {
                             : null,
                         location_city: city || null,
                         location_province: province || null,
+                        location_town: locationTown || null,
+                        location_address: locationAddress || null,
                         phone: phone || null,
                         whatsapp: whatsapp || null,
                         email: email || null,

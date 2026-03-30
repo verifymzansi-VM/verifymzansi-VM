@@ -46,7 +46,7 @@ import {
   VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE,
   isVerificationEmailConfirmationRequired,
 } from "@/lib/constants/verification-email-confirmation";
-import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { LocationSelector } from "@/components/ui/location-selector";
 import { isValidSaPhone, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 
 type WizardStep = "phone" | "id_doc" | "selfie" | "location" | "complete";
@@ -318,6 +318,7 @@ export default function VerificationPage() {
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
+  const [locationTown, setLocationTown] = useState("");
 
   // Session-driven state
   const [_sessionId, setSessionId] = useState<string | null>(null);
@@ -1018,7 +1019,7 @@ export default function VerificationPage() {
       const res = await fetch("/api/verification/location/manual", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ province, city }),
+        body: JSON.stringify({ province, city, town: locationTown || undefined }),
       });
       if (res.ok) {
         setManualSubmitted(true);
@@ -1617,53 +1618,17 @@ export default function VerificationPage() {
                         Select Your Location
                       </h4>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="province-select" className="text-xs">
-                          Province
-                        </Label>
-                        <select
-                          id="province-select"
-                          title="Province"
-                          aria-label="Province"
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          value={province}
-                          disabled={manualSubmitted || verificationSubmissionBlocked}
-                          onChange={(e) => {
-                            setProvince(e.target.value);
-                            setCity("");
-                          }}
-                        >
-                          <option value="">Select province…</option>
-                          {getProvinceNames().map((p) => (
-                            <option key={p} value={p}>
-                              {p}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="city-select" className="text-xs">
-                          City / Town
-                        </Label>
-                        <select
-                          id="city-select"
-                          title="City"
-                          aria-label="City"
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          value={city}
-                          disabled={!province || manualSubmitted || verificationSubmissionBlocked}
-                          onChange={(e) => setCity(e.target.value)}
-                        >
-                          <option value="">Select city…</option>
-                          {province &&
-                            getCitiesForProvince(province).map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
+                      <LocationSelector
+                        value={{ province, city, town: locationTown }}
+                        onChange={(v) => {
+                          setProvince(v.province);
+                          setCity(v.city);
+                          setLocationTown(v.town ?? "");
+                        }}
+                        showTown
+                        showAddress={false}
+                        disabled={manualSubmitted || verificationSubmissionBlocked}
+                      />
 
                       {!manualSubmitted && (
                         <Button
@@ -1687,7 +1652,8 @@ export default function VerificationPage() {
                       {manualSubmitted && (
                         <div className="flex items-center gap-2 text-sm text-brand-green">
                           <CheckCircle2 className="h-4 w-4" />
-                          Location saved: {city}, {province}
+                          Location saved: {locationTown ? `${locationTown}, ` : ""}
+                          {city}, {province}
                         </div>
                       )}
                     </div>

@@ -700,6 +700,7 @@ export async function POST(request: NextRequest) {
         location_province: data.province || null,
         location_city: data.city || null,
         location_suburb: data.town || null,
+        location_address: data.address || null,
         status: "pending_moderation",
         area: AREA,
         photos: data.images,

@@ -212,6 +212,7 @@ export interface Listing {
   location_province: string;
   location_city: string;
   location_suburb: string | null;
+  location_address: string | null;
   contact_methods: ContactMethod[];
   buyer_verification_required: boolean;
   attributes: Record<string, unknown>;
@@ -246,6 +247,8 @@ export interface Business {
   gallery_photos: string[] | null;
   location_province: string;
   location_city: string;
+  location_town: string | null;
+  location_address: string | null;
   store_number: string | null;
   map_directions: string | null;
   phone: string | null;
@@ -286,6 +289,8 @@ export interface Promotion {
   price_negotiable: boolean;
   location_province: string;
   location_city: string;
+  location_town: string | null;
+  location_address: string | null;
   contact_methods: ContactMethod[];
   start_date: string | null;
   end_date: string | null;

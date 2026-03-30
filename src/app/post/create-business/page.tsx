@@ -27,13 +27,15 @@ import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { MediaUpload } from "@/components/ui/media-upload";
 import {
   PlanGate,
   usePlanCoverVideoAllowed,
   usePlanMaxPhotos,
 } from "@/components/billing/plan-gate";
-import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import type { BusinessCategory, BusinessType } from "@/types/enums";
 import { cn } from "@/lib/utils";
@@ -66,6 +68,7 @@ import { DevicePreviewShell } from "@/components/business/shared/device-preview-
 import { LayoutChooser } from "@/components/business/shared/layout-chooser";
 import { resolveBusinessLayout } from "@/lib/business/category-layout-map";
 import type { LayoutTemplate } from "@/lib/business/layout-templates";
+import type { BusinessDraftData } from "@/lib/post-drafts/storage";
 
 const SELECT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
@@ -183,6 +186,7 @@ export default function CreateBusinessPage() {
 function CreateBusinessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, profile, isLoading } = useAuth();
   const initialType = (searchParams.get("type") as BusinessType) || "";
   const [step, setStep] = useState(0);
   const [businessType, setBusinessType] = useState<BusinessType | "">(initialType);
@@ -196,6 +200,8 @@ function CreateBusinessContent() {
   const [category, setCategory] = useState<BusinessCategory | "">("");
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
+  const [locationTown, setLocationTown] = useState("");
+  const [locationAddress, setLocationAddress] = useState("");
   const [storeNumber, setStoreNumber] = useState("");
   const [serviceAreasInput, setServiceAreasInput] = useState("");
   const [mapDirections, setMapDirections] = useState("");
@@ -224,9 +230,20 @@ function CreateBusinessContent() {
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [submitSucceeded, setSubmitSucceeded] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const { toast } = useToast();
-  const provinces = getProvinceNames();
-  const cities = province ? getCitiesForProvince(province) : [];
+  const {
+    save: saveDraft,
+    restore: restoreDraft,
+    discard: discardDraft,
+  } = usePostDraftAutosave<BusinessDraftData>("business", user?.id, !isLoading);
+  const locationValue: LocationValue = {
+    province,
+    city,
+    town: locationTown,
+    address: locationAddress,
+  };
   const maxPhotos = usePlanMaxPhotos("MZANSI_BUSINESS");
   const coverVideoAllowed = usePlanCoverVideoAllowed("MZANSI_BUSINESS");
   const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplate | null>(null);
@@ -298,6 +315,171 @@ function CreateBusinessContent() {
       setSlug(generateSlug(businessName));
     }
   }, [businessName, slugManual]);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    if (!province && profile.location_province) {
+      setProvince(profile.location_province);
+    }
+
+    if (!city && profile.location_city && (!province || province === profile.location_province)) {
+      setCity(profile.location_city);
+    }
+
+    if (!phone && profile.phone) {
+      setPhone(profile.phone);
+    }
+
+    if (!whatsapp && profile.phone) {
+      setWhatsapp(profile.phone);
+    }
+  }, [profile, province, city, phone, whatsapp]);
+
+  useEffect(() => {
+    if (!email && user?.email) {
+      setEmail(user.email);
+    }
+  }, [email, user?.email]);
+
+  useEffect(() => {
+    if (!user?.id || isLoading || submitSucceeded) return;
+
+    const restored = restoreDraft();
+    if (!restored) return;
+
+    const restoredData = restored.data;
+    const restoredType = (restoredData.businessType as BusinessType) || "";
+
+    setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
+    setBusinessType(restoredType);
+    if (restoredType) {
+      const fallbackDetails = getDefaultBusinessDetails(restoredType);
+      const restoredDetails =
+        restoredData.businessDetails && typeof restoredData.businessDetails === "object"
+          ? (restoredData.businessDetails as unknown as BusinessDetails)
+          : fallbackDetails;
+      setBusinessDetails(coerceBusinessDetails(restoredType, restoredDetails));
+    } else {
+      setBusinessDetails(null);
+    }
+
+    setBusinessName(restoredData.businessName ?? "");
+    setSlug(restoredData.slug ?? "");
+    setSlugManual(Boolean(restoredData.slugManual));
+    setDescription(restoredData.description ?? "");
+    setCategory((restoredData.category as BusinessCategory | "") ?? "");
+    setProvince(restoredData.province ?? "");
+    setCity(restoredData.city ?? "");
+    setLocationTown(restoredData.locationTown ?? "");
+    setLocationAddress(restoredData.locationAddress ?? "");
+    setStoreNumber(restoredData.storeNumber ?? "");
+    setServiceAreasInput(restoredData.serviceAreasInput ?? "");
+    setMapDirections(restoredData.mapDirections ?? "");
+    setPhone(restoredData.phone ?? "");
+    setWhatsapp(restoredData.whatsapp ?? "");
+    setEmail(restoredData.email ?? "");
+    setWebsite(restoredData.website ?? "");
+    setHoursMonFri(restoredData.hoursMonFri ?? "");
+    setHoursSat(restoredData.hoursSat ?? "");
+    setHoursSun(restoredData.hoursSun ?? "");
+    setSocialFacebook(restoredData.socialFacebook ?? "");
+    setSocialInstagram(restoredData.socialInstagram ?? "");
+    setSocialTwitter(restoredData.socialTwitter ?? "");
+    setSocialTiktok(restoredData.socialTiktok ?? "");
+    setServicesInput(restoredData.servicesInput ?? "");
+    setServices(Array.isArray(restoredData.services) ? restoredData.services : []);
+    setPaymentMethods(
+      Array.isArray(restoredData.paymentMethods) ? restoredData.paymentMethods : []
+    );
+    setDeliveryOptions(
+      Array.isArray(restoredData.deliveryOptions) ? restoredData.deliveryOptions : []
+    );
+    setLayoutTemplate(
+      restoredData.selectedLayout ? (restoredData.selectedLayout as LayoutTemplate) : null
+    );
+    setLastSavedAt(restored.savedAt ?? null);
+    toast({
+      title: "Draft restored",
+      description: "You can continue from where you left off.",
+      variant: "success",
+    });
+  }, [user?.id, isLoading, submitSucceeded, restoreDraft, toast]);
+
+  useEffect(() => {
+    if (!user?.id || isLoading || isSubmitting || submitSucceeded) return;
+
+    saveDraft(step, {
+      businessType,
+      businessName,
+      slug,
+      slugManual,
+      description,
+      category,
+      province,
+      city,
+      locationTown,
+      locationAddress,
+      storeNumber,
+      serviceAreasInput,
+      mapDirections,
+      phone,
+      whatsapp,
+      email,
+      website,
+      hoursMonFri,
+      hoursSat,
+      hoursSun,
+      socialFacebook,
+      socialInstagram,
+      socialTwitter,
+      socialTiktok,
+      servicesInput,
+      services,
+      paymentMethods,
+      deliveryOptions,
+      businessDetails: businessDetails as Record<string, unknown> | null,
+      selectedLayout: layoutTemplate || "",
+    });
+    setLastSavedAt(Date.now());
+  }, [
+    user?.id,
+    isLoading,
+    isSubmitting,
+    submitSucceeded,
+    saveDraft,
+    step,
+    businessType,
+    businessName,
+    slug,
+    slugManual,
+    description,
+    category,
+    province,
+    city,
+    locationTown,
+    locationAddress,
+    storeNumber,
+    serviceAreasInput,
+    mapDirections,
+    phone,
+    whatsapp,
+    email,
+    website,
+    hoursMonFri,
+    hoursSat,
+    hoursSun,
+    socialFacebook,
+    socialInstagram,
+    socialTwitter,
+    socialTiktok,
+    servicesInput,
+    services,
+    paymentMethods,
+    deliveryOptions,
+    businessDetails,
+    layoutTemplate,
+  ]);
 
   function clearErrors(...keys: string[]) {
     setFormError(null);
@@ -555,6 +737,8 @@ function CreateBusinessContent() {
         description: description.trim(),
         location_province: province,
         location_city: city,
+        location_town: locationTown || undefined,
+        location_address: locationAddress || undefined,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
         map_directions: mapDirections || undefined,
         phone: phone || undefined,
@@ -592,6 +776,8 @@ function CreateBusinessContent() {
         return;
       }
       toast({ title: "Business submitted for review.", variant: "success" });
+      setSubmitSucceeded(true);
+      discardDraft();
       router.push("/dashboard/businesses?created=true");
     } catch (error: unknown) {
       const uploadFailure = getBusinessMediaUploadErrorState(error);
@@ -608,6 +794,55 @@ function CreateBusinessContent() {
       setIsSubmitting(false);
       setSubmitProgress(null);
     }
+  }
+
+  function handleDiscardDraft() {
+    discardDraft();
+    setStep(0);
+    setBusinessType(initialType);
+    setBusinessDetails(initialType ? getDefaultBusinessDetails(initialType) : null);
+    setBusinessName("");
+    setSlug("");
+    setSlugManual(false);
+    setDescription("");
+    setCategory("");
+    setProvince(profile?.location_province ?? "");
+    setCity(profile?.location_city ?? "");
+    setLocationTown("");
+    setLocationAddress("");
+    setStoreNumber("");
+    setServiceAreasInput("");
+    setMapDirections("");
+    setPhone(profile?.phone ?? "");
+    setWhatsapp(profile?.phone ?? "");
+    setEmail(user?.email ?? "");
+    setWebsite("");
+    setHoursMonFri("");
+    setHoursSat("");
+    setHoursSun("");
+    setSocialFacebook("");
+    setSocialInstagram("");
+    setSocialTwitter("");
+    setSocialTiktok("");
+    setServicesInput("");
+    setServices([]);
+    setPaymentMethods([]);
+    setDeliveryOptions([]);
+    setLogoFile([]);
+    setCoverFile([]);
+    setGalleryFiles([]);
+    setMallPhotoFiles([]);
+    setPromoVideoFile([]);
+    setVideoThumbnailFile([]);
+    setLayoutTemplate(null);
+    setFieldErrors({});
+    setFormError(null);
+    setLastSavedAt(null);
+    toast({
+      title: "Draft discarded",
+      description: "You can start a fresh business profile now.",
+      variant: "success",
+    });
   }
 
   function renderReview() {
@@ -661,6 +896,8 @@ function CreateBusinessContent() {
       service_areas: serviceAreas.length > 0 ? { areas: serviceAreas } : null,
       location_city: city || null,
       location_province: province || null,
+      location_town: locationTown || null,
+      location_address: locationAddress || null,
       phone: phone || null,
       whatsapp: whatsapp || null,
       email: email || null,
@@ -724,15 +961,34 @@ function CreateBusinessContent() {
                 currentStep={step}
                 error={formError}
                 footer={
-                  <PostFormFooter
-                    currentStep={step}
-                    totalSteps={STEPS.length}
-                    onBack={goBack}
-                    onNext={goNext}
-                    submitDisabled={isSubmitting}
-                    isSubmitting={isSubmitting}
-                    submittingLabel={submitProgress || "Submitting..."}
-                  />
+                  <>
+                    {user?.id && !isSubmitting && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
+                        <p>
+                          {lastSavedAt
+                            ? `Draft saved locally at ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                            : "Changes are saved locally while you fill this form."}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleDiscardDraft}
+                          className="font-medium text-brand-blue hover:underline"
+                        >
+                          Discard draft
+                        </button>
+                      </div>
+                    )}
+
+                    <PostFormFooter
+                      currentStep={step}
+                      totalSteps={STEPS.length}
+                      onBack={goBack}
+                      onNext={goNext}
+                      submitDisabled={isSubmitting}
+                      isSubmitting={isSubmitting}
+                      submittingLabel={submitProgress || "Submitting..."}
+                    />
+                  </>
                 }
               >
                 {step === 0 && (
@@ -943,63 +1199,22 @@ function CreateBusinessContent() {
 
                 {step === 1 && (
                   <div className="space-y-5">
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="province">Province *</Label>
-                        <select
-                          id="province"
-                          aria-label="Province"
-                          className={cn(
-                            SELECT_CLASS,
-                            fieldErrors.location_province && "border-destructive"
-                          )}
-                          value={province}
-                          onChange={(event) => {
-                            setProvince(event.target.value);
-                            setCity("");
-                            clearErrors("location_province", "location_city");
-                          }}
-                        >
-                          <option value="">Select province</option>
-                          {provinces.map((provinceName) => (
-                            <option key={provinceName} value={provinceName}>
-                              {provinceName}
-                            </option>
-                          ))}
-                        </select>
-                        {fieldErrors.location_province && (
-                          <p className="inline-form-error">{fieldErrors.location_province}</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="city">City / Town *</Label>
-                        <select
-                          id="city"
-                          aria-label="City / Town"
-                          className={cn(
-                            SELECT_CLASS,
-                            fieldErrors.location_city && "border-destructive"
-                          )}
-                          value={city}
-                          onChange={(event) => {
-                            setCity(event.target.value);
-                            clearErrors("location_city");
-                          }}
-                          disabled={!province}
-                        >
-                          <option value="">Select city</option>
-                          {cities.map((cityName) => (
-                            <option key={cityName} value={cityName}>
-                              {cityName}
-                            </option>
-                          ))}
-                        </select>
-                        {fieldErrors.location_city && (
-                          <p className="inline-form-error">{fieldErrors.location_city}</p>
-                        )}
-                      </div>
-                    </div>
+                    <LocationSelector
+                      value={locationValue}
+                      onChange={(v) => {
+                        setProvince(v.province);
+                        setCity(v.city);
+                        setLocationTown(v.town ?? "");
+                        setLocationAddress(v.address ?? "");
+                        clearErrors("location_province", "location_city");
+                      }}
+                      showTown
+                      showAddress
+                      errors={{
+                        province: fieldErrors.location_province,
+                        city: fieldErrors.location_city,
+                      }}
+                    />
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">

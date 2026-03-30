@@ -19,10 +19,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { PlanGate, usePlanMaxPhotos, usePlanVideoAllowed } from "@/components/billing/plan-gate";
-import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
 import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { cn } from "@/lib/utils";
@@ -37,6 +39,7 @@ import {
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
+import type { ListingDraftData } from "@/lib/post-drafts/storage";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 
@@ -114,6 +117,7 @@ const INITIAL_UPLOAD_STATUSES: UploadStatuses = {
 };
 
 export default function CreateListingPage() {
+  const { user, profile, isLoading } = useAuth();
   const [step, setStep] = useState(0);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -127,6 +131,7 @@ export default function CreateListingPage() {
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [town, setTown] = useState("");
+  const [address, setAddress] = useState("");
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
   const [logoFile, setLogoFile] = useState<File[]>([]);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
@@ -137,11 +142,17 @@ export default function CreateListingPage() {
   const [uploadStatuses, setUploadStatuses] = useState<UploadStatuses>(INITIAL_UPLOAD_STATUSES);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [submitSucceeded, setSubmitSucceeded] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   const router = useRouter();
   const { toast } = useToast();
-  const provinces = getProvinceNames();
-  const cities = province ? getCitiesForProvince(province) : [];
+  const {
+    save: saveDraft,
+    restore: restoreDraft,
+    discard: discardDraft,
+  } = usePostDraftAutosave<ListingDraftData>("listing", user?.id, !isLoading);
+  const locationValue: LocationValue = { province, city, town, address };
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
   const videoAllowed = usePlanVideoAllowed("MZANSI_MARKET");
   const logoPreviewUrl = useMemo(
@@ -188,6 +199,89 @@ export default function CreateListingPage() {
     },
     [videoCoverPreviewUrl]
   );
+
+  useEffect(() => {
+    if (!profile) return;
+
+    if (!province && profile.location_province) {
+      setProvince(profile.location_province);
+    }
+
+    if (!city && profile.location_city && (!province || province === profile.location_province)) {
+      setCity(profile.location_city);
+    }
+  }, [profile, province, city]);
+
+  useEffect(() => {
+    if (!user?.id || isLoading || submitSucceeded) return;
+
+    const restored = restoreDraft();
+    if (!restored) return;
+
+    const restoredData = restored.data;
+    setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
+    setTitle(restoredData.title ?? "");
+    setDescription(restoredData.description ?? "");
+    setPrice(restoredData.price ?? "");
+    setNegotiable(Boolean(restoredData.negotiable));
+    setCategory((restoredData.category as ListingCategory | "") ?? "");
+    setCondition((restoredData.condition as ListingCondition | "") ?? "");
+    setCategoryAttributes(restoredData.categoryAttributes ?? {});
+    setProvince(restoredData.province ?? "");
+    setCity(restoredData.city ?? "");
+    setTown(restoredData.town ?? "");
+    setAddress(restoredData.address ?? "");
+    setContactMethods(
+      Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
+        ? restoredData.contactMethods
+        : ["call"]
+    );
+    setLastSavedAt(restored.savedAt ?? null);
+    toast({
+      title: "Draft restored",
+      description: "You can continue from where you left off.",
+      variant: "success",
+    });
+  }, [user?.id, isLoading, submitSucceeded, restoreDraft, toast]);
+
+  useEffect(() => {
+    if (!user?.id || isLoading || isSubmitting || submitSucceeded) return;
+
+    saveDraft(step, {
+      category,
+      condition,
+      categoryAttributes,
+      title,
+      description,
+      price,
+      negotiable,
+      province,
+      city,
+      town,
+      address,
+      contactMethods,
+    });
+    setLastSavedAt(Date.now());
+  }, [
+    user?.id,
+    isLoading,
+    isSubmitting,
+    submitSucceeded,
+    saveDraft,
+    step,
+    category,
+    condition,
+    categoryAttributes,
+    title,
+    description,
+    price,
+    negotiable,
+    province,
+    city,
+    town,
+    address,
+    contactMethods,
+  ]);
 
   function clearErrors(...keys: string[]) {
     setFormError(null);
@@ -269,7 +363,9 @@ export default function CreateListingPage() {
 
   function handleCategoryChange(nextCategory: ListingCategory) {
     setCategory(nextCategory);
-    setCategoryAttributes({});
+    setCategoryAttributes(
+      nextCategory === "vehicles" ? { year: String(new Date().getFullYear()) } : {}
+    );
     clearErrors("category");
   }
 
@@ -439,6 +535,7 @@ export default function CreateListingPage() {
           province,
           city,
           town,
+          address,
           logo_url: logoUrls[0] || null,
           images: photoUrls,
           videos: videoUrl ? [videoUrl] : [],
@@ -457,6 +554,8 @@ export default function CreateListingPage() {
       }
 
       toast({ title: "Listing submitted for review.", variant: "success" });
+      setSubmitSucceeded(true);
+      discardDraft();
       setUploadStatuses((current) => ({ ...current, saving: "done" }));
       router.push("/dashboard/listings");
     } catch (error: unknown) {
@@ -466,6 +565,35 @@ export default function CreateListingPage() {
       setSubmitProgress(null);
       setUploadStatuses(INITIAL_UPLOAD_STATUSES);
     }
+  }
+
+  function handleDiscardDraft() {
+    discardDraft();
+    setStep(0);
+    setTitle("");
+    setDescription("");
+    setPrice("");
+    setNegotiable(false);
+    setCategory("");
+    setCondition("");
+    setCategoryAttributes({});
+    setProvince(profile?.location_province ?? "");
+    setCity(profile?.location_city ?? "");
+    setTown("");
+    setAddress("");
+    setContactMethods(["call"]);
+    setLogoFile([]);
+    setPhotoFiles([]);
+    setVideoFile([]);
+    setVideoCoverFile([]);
+    setFieldErrors({});
+    setFormError(null);
+    setLastSavedAt(null);
+    toast({
+      title: "Draft discarded",
+      description: "You can start a fresh listing now.",
+      variant: "success",
+    });
   }
 
   function renderPreview() {
@@ -522,6 +650,7 @@ export default function CreateListingPage() {
             location_province: province || null,
             location_city: city || null,
             location_suburb: town || null,
+            location_address: address || null,
             contact_methods: contactMethods,
             created_at: new Date().toISOString(),
           }}
@@ -563,6 +692,23 @@ export default function CreateListingPage() {
                 error={formError}
                 footer={
                   <>
+                    {user?.id && !isSubmitting && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
+                        <p>
+                          {lastSavedAt
+                            ? `Draft saved locally at ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                            : "Changes are saved locally while you fill this form."}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleDiscardDraft}
+                          className="font-medium text-brand-green hover:underline"
+                        >
+                          Discard draft
+                        </button>
+                      </div>
+                    )}
+
                     {isSubmitting && (
                       <div className="space-y-1.5 border-t pt-3 text-sm text-muted-foreground">
                         {logoFile.length > 0 && (
@@ -790,76 +936,23 @@ export default function CreateListingPage() {
 
                     <div className="space-y-3">
                       <Label className="text-base font-semibold">Location</Label>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="province">Province *</Label>
-                          <select
-                            id="province"
-                            aria-label="Province"
-                            className={cn(
-                              "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                              fieldErrors.province && "border-destructive"
-                            )}
-                            value={province}
-                            onChange={(event) => {
-                              setProvince(event.target.value);
-                              setCity("");
-                              setTown("");
-                              clearErrors("province", "city");
-                            }}
-                          >
-                            <option value="">Select province</option>
-                            {provinces.map((provinceName) => (
-                              <option key={provinceName} value={provinceName}>
-                                {provinceName}
-                              </option>
-                            ))}
-                          </select>
-                          {fieldErrors.province && (
-                            <p className="inline-form-error">{fieldErrors.province}</p>
-                          )}
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label htmlFor="city">City *</Label>
-                          <select
-                            id="city"
-                            aria-label="City"
-                            className={cn(
-                              "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                              fieldErrors.city && "border-destructive"
-                            )}
-                            value={city}
-                            onChange={(event) => {
-                              setCity(event.target.value);
-                              setTown("");
-                              clearErrors("city");
-                            }}
-                            disabled={!province}
-                          >
-                            <option value="">Select city</option>
-                            {cities.map((cityName) => (
-                              <option key={cityName} value={cityName}>
-                                {cityName}
-                              </option>
-                            ))}
-                          </select>
-                          {fieldErrors.city && (
-                            <p className="inline-form-error">{fieldErrors.city}</p>
-                          )}
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label htmlFor="town">Town / Suburb</Label>
-                          <Input
-                            id="town"
-                            value={town}
-                            onChange={(event) => setTown(event.target.value)}
-                            placeholder="e.g. Sandton, Umlazi"
-                            disabled={!city}
-                          />
-                        </div>
-                      </div>
+                      <LocationSelector
+                        value={locationValue}
+                        onChange={(v) => {
+                          setProvince(v.province);
+                          setCity(v.city);
+                          setTown(v.town ?? "");
+                          setAddress(v.address ?? "");
+                          clearErrors("province", "city");
+                        }}
+                        cityLabel="City"
+                        showTown
+                        showAddress
+                        errors={{
+                          province: fieldErrors.province,
+                          city: fieldErrors.city,
+                        }}
+                      />
                     </div>
 
                     <div

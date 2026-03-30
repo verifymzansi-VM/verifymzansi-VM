@@ -44,6 +44,7 @@ const listingBase = z.object({
   videoThumbnail: trustedMediaUrl.nullable().optional(),
   logo_url: trustedMediaUrl.nullable().optional(),
   town: z.string().trim().max(120, "Town / suburb must be 120 characters or fewer").optional(),
+  address: z.string().trim().max(300, "Address must be 300 characters or fewer").optional(),
   contactMethods: z
     .array(z.enum(CONTACT_METHODS))
     .min(1, "Choose at least one contact method.")

@@ -48,6 +48,8 @@ type PromotionOwnerRow = {
   price_cents?: number | null;
   location_province?: string | null;
   location_city?: string | null;
+  location_town?: string | null;
+  location_address?: string | null;
   photos?: string[] | null;
   videos?: string[] | null;
   video_thumbnail?: string | null;
@@ -87,7 +89,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { data: promotion, error } = await supabase
       .from("promotions")
       .select(
-        "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
+        "id, owner_id, seller_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged, boost_until, featured_until, status, view_count, published_at, created_at, updated_at"
       )
       .eq("id", id)
       .maybeSingle();
@@ -199,7 +201,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         .from("promotions")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, title, description, promotion_type, category, category_key, business_id, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged",
+            "id, owner_id, status, title, description, promotion_type, category, category_key, business_id, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, social_distribution_authorized, social_distribution_authorized_at, social_distribution_revoked_at, social_authorizer_name, social_authorizer_role, social_authorizer_relationship, social_authorization_version, social_monetization_acknowledged",
             ownerColumn
           )
         )
@@ -296,6 +298,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       existing.price_cents !== priceCents ||
       existing.location_province !== data.province ||
       existing.location_city !== data.city ||
+      (existing.location_town ?? null) !== (data.location_town || null) ||
+      (existing.location_address ?? null) !== (data.location_address || null) ||
       JSON.stringify(existing.photos) !== JSON.stringify(data.images) ||
       JSON.stringify(existing.videos) !== JSON.stringify(data.videos) ||
       (existing.video_thumbnail ?? null) !== (data.video_thumbnail || null);
@@ -317,6 +321,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           price_negotiable: data.negotiable,
           location_province: data.province,
           location_city: data.city,
+          location_town: data.location_town || null,
+          location_address: data.location_address || null,
           contact_methods: data.contact_methods,
           start_date: data.start_date || null,
           end_date: data.end_date || null,

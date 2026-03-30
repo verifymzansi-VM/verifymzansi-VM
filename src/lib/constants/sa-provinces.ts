@@ -186,3 +186,6 @@ export function getCitiesForProvince(provinceName: string): string[] {
   const province = SA_PROVINCES.find((p) => p.name === provinceName);
   return province?.cities ?? [];
 }
+
+/** Re-export town helper for single-import convenience. */
+export { getTownsForCity } from "./sa-towns";

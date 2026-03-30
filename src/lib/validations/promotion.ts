@@ -106,6 +106,8 @@ export const promotionSchema = z
     negotiable: z.boolean().default(false),
     province: z.string().min(1, "Province is required"),
     city: z.string().min(1, "City is required"),
+    location_town: z.string().trim().max(120).optional(),
+    location_address: z.string().trim().max(300).optional(),
     contact_methods: z
       .array(z.enum(["call", "whatsapp", "form"]))
       .min(1, "At least one contact method is required"),

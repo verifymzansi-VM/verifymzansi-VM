@@ -4,6 +4,10 @@ import CreatePromotionPage from "./page";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
+const { useAuthMock } = vi.hoisted(() => ({
+  useAuthMock: vi.fn(() => ({ user: null, profile: null, isLoading: false })),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
   usePathname: vi.fn().mockReturnValue("/post/create-promotion"),
@@ -12,6 +16,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({
   useToast: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: useAuthMock,
 }));
 
 vi.mock("next/link", () => ({
@@ -72,6 +80,7 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
   getProvinceNames: () => ["Gauteng", "Western Cape"],
   getCitiesForProvince: (province: string) =>
     province === "Gauteng" ? ["Johannesburg", "Pretoria"] : [],
+  getTownsForCity: () => [],
 }));
 
 describe("CreatePromotionPage", () => {
@@ -80,6 +89,7 @@ describe("CreatePromotionPage", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
     (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(new URLSearchParams());
@@ -182,5 +192,70 @@ describe("CreatePromotionPage", () => {
     expect(screen.getByText("Upcoming Event")).toBeInTheDocument();
     expect(screen.getByText("Saved contact methods")).toBeInTheDocument();
     expect(screen.getByText("Phone Call")).toBeInTheDocument();
+  });
+
+  describe("draft restore", () => {
+    const DRAFT_USER_ID = "user-draft-promo-123";
+
+    function seedDraft(overrides: Record<string, unknown> = {}) {
+      const data = {
+        promotionType: "event",
+        title: "Saved Music Festival",
+        description: "A draft promotion description that is long enough to pass validation.",
+        category: "",
+        categoryKey: "",
+        priceZar: "",
+        negotiable: false,
+        province: "Gauteng",
+        city: "Johannesburg",
+        locationTown: "",
+        locationAddress: "",
+        contactMethods: ["call"],
+        startDate: "2099-06-01",
+        endDate: "2099-06-08",
+        businessId: "",
+        socialAuthorization: { granted: false },
+        ...overrides,
+      };
+      localStorage.setItem(
+        `vm-draft:promotion:${DRAFT_USER_ID}`,
+        JSON.stringify({ v: 1, savedAt: Date.now(), step: 0, data })
+      );
+    }
+
+    beforeEach(() => {
+      useAuthMock.mockReturnValue({
+        user: { id: DRAFT_USER_ID, email: "draft@test.com" },
+        profile: null,
+        isLoading: false,
+      });
+    });
+
+    it("restores title and promotion type from a saved draft", async () => {
+      seedDraft();
+      render(<CreatePromotionPage />);
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Title/i)).toHaveValue("Saved Music Festival");
+      });
+      expect(screen.getByLabelText("Promotion Type")).toHaveValue("event");
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft restored" }));
+    });
+
+    it("clears restored fields when discard draft is clicked", async () => {
+      seedDraft();
+      render(<CreatePromotionPage />);
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Title/i)).toHaveValue("Saved Music Festival");
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+
+      expect(screen.getByLabelText(/Title/i)).toHaveValue("");
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft discarded" }));
+    });
   });
 });

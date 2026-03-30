@@ -73,6 +73,8 @@ export interface BusinessDetailRecord {
   service_areas: { areas?: string[] } | null;
   location_city: string | null;
   location_province: string | null;
+  location_town: string | null;
+  location_address: string | null;
   phone: string | null;
   whatsapp: string | null;
   email: string | null;
@@ -607,8 +609,13 @@ export function BusinessDetailContent({
               {(business.location_province || business.location_city) && (
                 <span className="flex items-center gap-1 text-sm text-muted-foreground">
                   <MapPin className="h-4 w-4" />
-                  {[business.location_city, business.location_province].filter(Boolean).join(", ")}
+                  {[business.location_town, business.location_city, business.location_province]
+                    .filter(Boolean)
+                    .join(", ")}
                 </span>
+              )}
+              {business.location_address && (
+                <p className="text-sm text-muted-foreground">{business.location_address}</p>
               )}
             </div>
           </div>

@@ -21,7 +21,7 @@ import {
   usePlanMaxVideos,
   usePlanVideoAllowed,
 } from "@/components/billing/plan-gate";
-import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
+import { LocationSelector } from "@/components/ui/location-selector";
 import type { ListingCategory, ListingCondition, UploadArea } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { normalizeMediaUrl, normalizeMediaUrls } from "@/lib/utils/media-url";
@@ -54,6 +54,7 @@ export default function EditListingPage() {
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [town, setTown] = useState("");
+  const [locationAddress, setLocationAddress] = useState("");
   const [negotiable, setNegotiable] = useState(false);
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,8 +74,6 @@ export default function EditListingPage() {
   const [newVideoCoverFile, setNewVideoCoverFile] = useState<File[]>([]);
   const router = useRouter();
   const { toast } = useToast();
-  const provinces = getProvinceNames();
-  const cities = province ? getCitiesForProvince(province) : [];
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
   const maxVideos = usePlanMaxVideos("MZANSI_MARKET");
   const videoAllowed = usePlanVideoAllowed("MZANSI_MARKET");
@@ -175,7 +174,12 @@ export default function EditListingPage() {
         setCategoryAttributes((data.attributes as Record<string, string | boolean>) || {});
         setProvince(data.location_province || "");
         setCity(data.location_city || "");
-        setTown(((data as Record<string, unknown>).location_suburb as string) || "");
+        setTown(
+          ((data as Record<string, unknown>).location_town as string) ||
+            ((data as Record<string, unknown>).location_suburb as string) ||
+            ""
+        );
+        setLocationAddress(((data as Record<string, unknown>).location_address as string) || "");
         setNegotiable(data.price_negotiable ?? false);
         setContactMethods(
           Array.isArray(data.contact_methods) && data.contact_methods.length > 0
@@ -431,6 +435,7 @@ export default function EditListingPage() {
           province: province || "",
           city: city || "",
           town: town || "",
+          address: locationAddress || "",
           images: allPhotos,
           videos: allVideos,
           videoThumbnail,
@@ -640,79 +645,25 @@ export default function EditListingPage() {
                     )}
                   </div>
 
-                  {/* ── Location: Province / City / Town ───────── */}
-                  <div className="space-y-3">
-                    <Label className="text-base font-semibold">Location</Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="province">Province</Label>
-                        <select
-                          id="province"
-                          aria-label="Province"
-                          className={cn(
-                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                            fieldErrors.province && "border-destructive"
-                          )}
-                          value={province}
-                          onChange={(e) => {
-                            setProvince(e.target.value);
-                            setCity("");
-                            setTown("");
-                            clearErrors("province", "city");
-                          }}
-                        >
-                          <option value="">Select province</option>
-                          {provinces.map((p) => (
-                            <option key={p} value={p}>
-                              {p}
-                            </option>
-                          ))}
-                        </select>
-                        {fieldErrors.province && (
-                          <p className="inline-form-error">{fieldErrors.province}</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label htmlFor="city">City</Label>
-                        <select
-                          id="city"
-                          aria-label="City"
-                          className={cn(
-                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                            fieldErrors.city && "border-destructive"
-                          )}
-                          value={city}
-                          onChange={(e) => {
-                            setCity(e.target.value);
-                            clearErrors("city");
-                          }}
-                          disabled={!province}
-                        >
-                          <option value="">Select city</option>
-                          {cities.map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                        </select>
-                        {fieldErrors.city && (
-                          <p className="inline-form-error">{fieldErrors.city}</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label htmlFor="town">Town / Suburb</Label>
-                        <Input
-                          id="town"
-                          value={town}
-                          onChange={(e) => setTown(e.target.value)}
-                          placeholder="e.g. Sandton, Umlazi"
-                          disabled={!city}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  {/* ── Location: Province / City / Town / Address ───────── */}
+                  <LocationSelector
+                    value={{
+                      province,
+                      city,
+                      town,
+                      address: locationAddress,
+                    }}
+                    onChange={(newLocation) => {
+                      setProvince(newLocation.province);
+                      setCity(newLocation.city);
+                      setTown(newLocation.town || "");
+                      setLocationAddress(newLocation.address || "");
+                      clearErrors("province", "city");
+                    }}
+                    showTown={true}
+                    showAddress={true}
+                    errors={fieldErrors}
+                  />
 
                   <div className="space-y-2">
                     <Label>Listing Logo</Label>
@@ -935,6 +886,7 @@ export default function EditListingPage() {
                         location_province: province || null,
                         location_city: city || null,
                         location_suburb: town || null,
+                        location_address: locationAddress || null,
                         contact_methods: contactMethods,
                         created_at: new Date().toISOString(),
                       }}

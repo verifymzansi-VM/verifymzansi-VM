@@ -4,6 +4,10 @@ import CreateBusinessPage from "./page";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
+const { useAuthMock } = vi.hoisted(() => ({
+  useAuthMock: vi.fn(() => ({ user: null, profile: null, isLoading: false })),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
   usePathname: vi.fn().mockReturnValue("/post/create-business"),
@@ -12,6 +16,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({
   useToast: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: useAuthMock,
 }));
 
 vi.mock("next/link", () => ({
@@ -81,6 +89,7 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
   getProvinceNames: () => ["Gauteng", "Western Cape"],
   getCitiesForProvince: (province: string) =>
     province === "Gauteng" ? ["Johannesburg", "Pretoria"] : [],
+  getTownsForCity: () => [],
 }));
 
 vi.mock("@/components/business/layouts/business-layout-router", () => ({
@@ -103,6 +112,7 @@ describe("CreateBusinessPage", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
     (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(new URLSearchParams());
@@ -622,6 +632,82 @@ describe("CreateBusinessPage", () => {
       primary_order_channel: "website",
       order_url: "https://orders.example.com",
       delivery_regions: ["Johannesburg", "Pretoria"],
+    });
+  });
+
+  describe("draft restore", () => {
+    const DRAFT_USER_ID = "user-draft-biz-123";
+
+    function seedDraft(overrides: Record<string, unknown> = {}) {
+      const data = {
+        businessType: "mall_store",
+        businessName: "Saved Boutique",
+        slug: "saved-boutique",
+        slugManual: false,
+        description: "A saved business description that is long enough to pass validation.",
+        category: "fashion",
+        province: "Gauteng",
+        city: "Johannesburg",
+        locationTown: "",
+        locationAddress: "",
+        storeNumber: "",
+        serviceAreasInput: "",
+        mapDirections: "",
+        phone: "",
+        whatsapp: "",
+        email: "",
+        website: "",
+        hoursMonFri: "",
+        hoursSat: "",
+        hoursSun: "",
+        socialFacebook: "",
+        socialInstagram: "",
+        socialTwitter: "",
+        socialTiktok: "",
+        servicesInput: "",
+        services: [],
+        paymentMethods: [],
+        deliveryOptions: [],
+        businessDetails: null,
+        selectedLayout: "",
+        ...overrides,
+      };
+      localStorage.setItem(
+        `vm-draft:business:${DRAFT_USER_ID}`,
+        JSON.stringify({ v: 1, savedAt: Date.now(), step: 0, data })
+      );
+    }
+
+    beforeEach(() => {
+      useAuthMock.mockReturnValue({
+        user: { id: DRAFT_USER_ID, email: "draft@test.com" },
+        profile: null,
+        isLoading: false,
+      });
+    });
+
+    it("restores business name from a saved draft and shows a toast", async () => {
+      seedDraft();
+      render(<CreateBusinessPage />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Business Name *")).toHaveValue("Saved Boutique");
+      });
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft restored" }));
+    });
+
+    it("clears restored fields when discard draft is clicked", async () => {
+      seedDraft();
+      render(<CreateBusinessPage />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Business Name *")).toHaveValue("Saved Boutique");
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+
+      expect(screen.getByLabelText("Business Name *")).toHaveValue("");
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft discarded" }));
     });
   });
 });

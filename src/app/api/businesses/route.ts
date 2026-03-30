@@ -294,6 +294,8 @@ export async function POST(request: NextRequest) {
       gallery_photos: data.gallery_photos || [],
       location_province: data.location_province,
       location_city: data.location_city,
+      location_town: data.location_town || null,
+      location_address: data.location_address || null,
       store_number: data.store_number || null,
       map_directions: data.map_directions || null,
       phone: data.phone || null,

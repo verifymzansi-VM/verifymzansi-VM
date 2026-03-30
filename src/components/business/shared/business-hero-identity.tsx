@@ -90,7 +90,9 @@ export function BusinessHeroIdentity({
               }`}
             >
               <MapPin className="h-4 w-4" />
-              {[business.location_city, business.location_province].filter(Boolean).join(", ")}
+              {[business.location_town, business.location_city, business.location_province]
+                .filter(Boolean)
+                .join(", ")}
             </span>
           )}
         </div>
