@@ -49,17 +49,52 @@ const BUSINESS_DETAIL_SELECT = `
   created_at, updated_at
 `;
 
+const BUSINESS_DETAIL_SELECT_LEGACY = `
+  id, owner_id, business_type, business_name, slug, description, category,
+  logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
+  location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
+  services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
+  delivery_options, boost_until, featured_until, published_at, status, area,
+  created_at, updated_at
+`;
+
 const BUSINESS_PROMOTION_SELECT =
   "id, title, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, boost_until, featured_until, view_count, start_date, end_date, created_at";
+
+function isMissingLayoutTemplateColumnError(
+  error: { code?: string | null; message?: string | null } | null
+) {
+  if (!error) {
+    return false;
+  }
+
+  if (error.code === "42703") {
+    const message = (error.message ?? "").toLowerCase();
+    return message.includes("layout_template");
+  }
+
+  return false;
+}
 
 async function loadBusinessDetail(id: string): Promise<LoadedBusinessDetail | null> {
   const supabase = await createClient();
   const ownerColumn = await getOwnerColumn(supabase, "businesses");
-  const { data: rawBusiness, error } = await supabase
+  let { data: rawBusiness, error } = await supabase
     .from("businesses")
     .select(withOwnerColumn(BUSINESS_DETAIL_SELECT, ownerColumn))
     .eq("id", id)
     .maybeSingle();
+
+  if (isMissingLayoutTemplateColumnError(error)) {
+    const legacyResult = await supabase
+      .from("businesses")
+      .select(withOwnerColumn(BUSINESS_DETAIL_SELECT_LEGACY, ownerColumn))
+      .eq("id", id)
+      .maybeSingle();
+
+    rawBusiness = legacyResult.data;
+    error = legacyResult.error;
+  }
 
   if (error || !rawBusiness) {
     return null;
