@@ -35,9 +35,7 @@ interface R2BucketBinding {
     key: string,
     options?: { range?: { offset: number; length: number } }
   ): Promise<R2ObjectBody | null>;
-  head(
-    key: string
-  ): Promise<{
+  head(key: string): Promise<{
     key: string;
     size: number;
     etag: string;
