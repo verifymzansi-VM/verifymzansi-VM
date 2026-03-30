@@ -115,9 +115,37 @@ test.describe("Platform Smoke", () => {
   test("@smoke Google OAuth recovers when the page starts without a CSRF token", async ({
     page,
   }) => {
-    await page.goto("/login");
+    await page.addInitScript(() => {
+      const nativeFetch = window.fetch.bind(window);
 
-    const oauthRedirectUrl = new URL("/login#oauth-ok", page.url()).toString();
+      window.fetch = async (input, init) => {
+        const requestUrl =
+          typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        const requestMethod = (
+          init?.method ?? (input instanceof Request ? input.method : "GET")
+        ).toUpperCase();
+
+        if (requestMethod === "POST" && /\/api\/auth\/oauth\/google(?:\?|$)/.test(requestUrl)) {
+          const requestHeaders = new Headers(
+            init?.headers ?? (input instanceof Request ? input.headers : undefined)
+          );
+          (window as Window & { __oauthCsrfHeader?: string }).__oauthCsrfHeader =
+            requestHeaders.get("x-csrf-token") ?? undefined;
+
+          return new Response(
+            JSON.stringify({ url: new URL("/login#oauth-ok", window.location.href).toString() }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        return nativeFetch(input, init);
+      };
+    });
+
+    await page.goto("/login");
 
     const clearedState = await page.evaluate(() => {
       document.cookie = "vm_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
@@ -129,23 +157,14 @@ test.describe("Platform Smoke", () => {
     });
     expect(clearedState).toEqual({ cookie: false, meta: false });
 
-    const oauthRequestPromise = page.waitForRequest(
-      (request) => request.url().includes("/api/auth/oauth/google") && request.method() === "POST"
-    );
-
-    await page.context().route("**/api/auth/oauth/google*", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: oauthRedirectUrl }),
-      });
-    });
-
     await page.getByRole("button", { name: /continue with google/i }).click();
-
-    const oauthRequest = await oauthRequestPromise;
-
-    expect(oauthRequest.headers()["x-csrf-token"]).toMatch(/^[a-f0-9]{64}$/i);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as Window & { __oauthCsrfHeader?: string }).__oauthCsrfHeader ?? null
+        )
+      )
+      .toMatch(/^[a-f0-9]{64}$/i);
     await expect
       .poll(() =>
         page.evaluate(() => ({
