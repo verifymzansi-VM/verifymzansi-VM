@@ -4,6 +4,8 @@ import { POSTING_MOBILE_STATE } from "./auth-state";
 
 const IMAGE_FIXTURE = path.join(process.cwd(), "src", "app", "icon.png");
 const RUN_SUFFIX = Date.now().toString().slice(-6);
+const BUSINESS_DASHBOARD_URL = /\/dashboard\/(?:listings|businesses)/;
+const PROMOTION_DASHBOARD_URL = /\/dashboard\/(?:listings|promotions)/;
 
 test.use({ storageState: POSTING_MOBILE_STATE });
 test.describe.configure({ mode: "serial" });
@@ -37,7 +39,7 @@ async function enterPostingForm(
   await firstField.waitFor({ state: "visible", timeout: 15_000 });
 }
 
-async function completeSubmission(page: Page, dashboardPath: RegExp, headingName: string) {
+async function completeSubmission(page: Page, dashboardPath: RegExp, headingName: string | RegExp) {
   const submitButton = page.getByRole("button", { name: /Submit for review/i });
   const dashboardHeading = page.getByRole("heading", { name: headingName });
 
@@ -96,10 +98,10 @@ async function completeMobileBusinessCreate(page: Page) {
   await page.getByLabel(/Suburb/i).fill("CBD");
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByLabel(/Province/i).selectOption("Gauteng");
-  await page.getByLabel(/City \/ Town/i).selectOption("Johannesburg");
+  await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Profile photos/i).setInputFiles(IMAGE_FIXTURE);
-  await completeSubmission(page, /\/dashboard\/businesses/, "Mzansi Business");
+  await completeSubmission(page, BUSINESS_DASHBOARD_URL, /Your Content|Mzansi Business/i);
 }
 
 async function completeMobilePromotionCreate(page: Page) {
@@ -114,10 +116,10 @@ async function completeMobilePromotionCreate(page: Page) {
     .fill("Mobile Chrome promotion description with enough detail for the validation rules.");
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByLabel(/^Province/i).selectOption("Gauteng");
-  await page.getByLabel(/City \/ Town/i).selectOption("Johannesburg");
+  await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Photos \(max/i).setInputFiles(IMAGE_FIXTURE);
-  await completeSubmission(page, /\/dashboard\/promotions/, "Promotions & Events");
+  await completeSubmission(page, PROMOTION_DASHBOARD_URL, /Your Content|Promotions & Events/i);
 }
 
 test.describe("Posting flows on mobile Chrome", () => {

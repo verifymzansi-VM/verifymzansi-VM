@@ -36,9 +36,8 @@ test.describe("Dashboard verification state", () => {
       await page.goto("/dashboard");
 
       await expect(page).toHaveURL(/\/dashboard$/);
-      await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible();
-      // Verified users see the resolved status copy instead of the old warning card.
-      await expect(page.getByText(/your account is verified/i)).toBeVisible();
+      await expect(page.getByRole("heading", { name: /^hi,/i })).toBeVisible();
+      await expect(page.getByText(/^verified$/i)).toBeVisible();
       await expect(page.getByText(/steps left/i)).toHaveCount(0);
       await expect(page.getByText(/verification under review/i)).toHaveCount(0);
 
@@ -59,8 +58,9 @@ test.describe("Dashboard verification state", () => {
       await page.goto("/dashboard");
 
       await expect(page).toHaveURL(/\/dashboard$/);
-      await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible();
+      await expect(page.getByRole("heading", { name: /^hi,/i })).toBeVisible();
       await expect(page.getByText(/steps left/i)).toHaveCount(0);
+      await expect(page.getByText(/verification under review/i)).toHaveCount(0);
       await expect(page.getByRole("link", { name: "Post", exact: true })).toBeVisible();
       // Auth state in MobileNav hydrates asynchronously — give it time
       await expect(page.getByRole("link", { name: "Post", exact: true })).toHaveAttribute(

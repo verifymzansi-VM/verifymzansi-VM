@@ -4,6 +4,8 @@ import { POSTING_CHROMIUM_STATE } from "./auth-state";
 
 const IMAGE_FIXTURE = path.join(process.cwd(), "src", "app", "icon.png");
 const RUN_SUFFIX = Date.now().toString().slice(-6);
+const BUSINESS_DASHBOARD_URL = /\/dashboard\/(?:listings|businesses)/;
+const PROMOTION_DASHBOARD_URL = /\/dashboard\/(?:listings|promotions)/;
 
 test.use({ storageState: POSTING_CHROMIUM_STATE });
 test.describe.configure({ mode: "serial" });
@@ -87,17 +89,17 @@ async function completeBusinessCreate(page: Page) {
   await page.getByLabel(/Suburb/i).fill("Orlando West");
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByLabel(/Province/i).selectOption("Gauteng");
-  await page.getByLabel(/City \/ Town/i).selectOption("Johannesburg");
+  await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Profile photos/i).setInputFiles(IMAGE_FIXTURE);
 
   const submitButton = page.getByRole("button", { name: /Submit for review/i });
   await Promise.race([
     submitButton.waitFor({ state: "visible", timeout: 15_000 }),
-    page.waitForURL(/\/dashboard\/businesses/, { timeout: 30_000 }),
+    page.waitForURL(BUSINESS_DASHBOARD_URL, { timeout: 30_000 }),
   ]).catch(() => undefined);
 
-  if (!/\/dashboard\/businesses/.test(page.url())) {
+  if (!BUSINESS_DASHBOARD_URL.test(page.url())) {
     await submitButton
       .scrollIntoViewIfNeeded()
       .then(() => submitButton.click())
@@ -105,7 +107,7 @@ async function completeBusinessCreate(page: Page) {
   }
 
   await Promise.race([
-    page.waitForURL(/\/dashboard\/businesses/, { timeout: 30_000 }),
+    page.waitForURL(BUSINESS_DASHBOARD_URL, { timeout: 30_000 }),
     businessesHeading.waitFor({ state: "visible", timeout: 30_000 }),
     businessLink.waitFor({ state: "visible", timeout: 30_000 }),
   ]);
@@ -131,7 +133,7 @@ async function completePromotionCreate(page: Page) {
     .fill("Playwright promotion description with enough detail to satisfy the validation rules.");
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByLabel(/^Province/i).selectOption("Gauteng");
-  await page.getByLabel(/City \/ Town/i).selectOption("Johannesburg");
+  await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Photos \(max/i).setInputFiles(IMAGE_FIXTURE);
 
@@ -144,7 +146,7 @@ async function completePromotionCreate(page: Page) {
 
   await page.getByRole("button", { name: /Submit for review/i }).click();
   await responsePromise;
-  await expect(page).toHaveURL(/\/dashboard\/promotions/);
+  await expect(page).toHaveURL(PROMOTION_DASHBOARD_URL);
   const editLink = page.getByRole("link", { name: "Edit" }).first();
   const href = await editLink.getAttribute("href");
   const promotionId = href?.split("/").pop();
@@ -210,7 +212,7 @@ test.describe("Posting flows in Chromium", () => {
     );
     await page.getByRole("button", { name: /Save Changes/i }).click();
     await updatePromise;
-    await expect(page).toHaveURL(/\/dashboard\/businesses/);
+    await expect(page).toHaveURL(BUSINESS_DASHBOARD_URL);
 
     await page.goto(`/mzansi-business/${businessId}`);
     await expect(page.getByText(updatedBusinessName).first()).toBeVisible();
@@ -233,7 +235,7 @@ test.describe("Posting flows in Chromium", () => {
     );
     await page.getByRole("button", { name: /Save Changes/i }).click();
     await updatePromise;
-    await expect(page).toHaveURL(/\/dashboard\/promotions/);
+    await expect(page).toHaveURL(PROMOTION_DASHBOARD_URL);
 
     await page.goto(`/promotion/${promotionId}`);
     await expect(page.getByText(updatedPromotionTitle).first()).toBeVisible();

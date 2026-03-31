@@ -599,6 +599,29 @@ export function createPlaywrightStubSupabaseClient(
           error: null,
         };
       },
+      async signInWithOAuth(credentials: {
+        provider: string;
+        options?: { redirectTo?: string | undefined };
+      }) {
+        const fallbackOrigin = "http://127.0.0.1:3100";
+        let origin = fallbackOrigin;
+
+        if (typeof credentials.options?.redirectTo === "string") {
+          try {
+            origin = new URL(credentials.options.redirectTo).origin;
+          } catch {
+            origin = fallbackOrigin;
+          }
+        }
+
+        return {
+          data: {
+            provider: credentials.provider,
+            url: `${origin}/login#oauth-ok`,
+          },
+          error: null,
+        };
+      },
       async resetPasswordForEmail() {
         return { data: {}, error: null };
       },
