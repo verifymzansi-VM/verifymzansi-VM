@@ -105,7 +105,12 @@ import { POST } from "./route";
 
 function createFormDataRequest(fields: Record<string, string | Blob>) {
   const formData = new FormData();
-  for (const [key, value] of Object.entries(fields)) {
+  const shouldAddLegalNames =
+    fields.docType === "id_document" && !("firstName" in fields) && !("lastName" in fields);
+  const finalFields = shouldAddLegalNames
+    ? { ...fields, firstName: "Sipho", lastName: "Mokoena" }
+    : fields;
+  for (const [key, value] of Object.entries(finalFields)) {
     formData.append(key, value);
   }
   // NextRequest.formData() can hang in jsdom, so we mock it directly

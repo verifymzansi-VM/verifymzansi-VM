@@ -314,6 +314,8 @@ export default function VerificationPage() {
   const [verificationUnavailable, setVerificationUnavailable] = useState(false);
 
   const [idNumber, setIdNumber] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [idFile, setIdFile] = useState<File | null>(null);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [province, setProvince] = useState("");
@@ -369,9 +371,28 @@ export default function VerificationPage() {
 
   const idFileError = validateFile(idFile, true);
   const selfieFileError = validateFile(selfieFile);
+  const normalizedFirstName = firstName.trim();
+  const normalizedLastName = lastName.trim();
+  const firstNameError =
+    normalizedFirstName.length === 0
+      ? "First name as shown on your ID is required"
+      : normalizedFirstName.length > 100
+        ? "First name cannot exceed 100 characters"
+        : null;
+  const lastNameError =
+    normalizedLastName.length === 0
+      ? "Surname as shown on your ID is required"
+      : normalizedLastName.length > 100
+        ? "Surname cannot exceed 100 characters"
+        : null;
   const isPhoneValid = isValidSaPhone(phone);
   const isOtpValid = otp.length === 6;
-  const isIdReady = /^\d{13}$/.test(idNumber) && !idFileError && idChecksumValid !== false;
+  const isIdReady =
+    /^\d{13}$/.test(idNumber) &&
+    !idFileError &&
+    idChecksumValid !== false &&
+    !firstNameError &&
+    !lastNameError;
   const isSelfieReady = !selfieFileError;
   const serverStepMap = useMemo(
     () => new Map(serverSteps.map((entry) => [entry.step_type, entry] as const)),
@@ -835,6 +856,13 @@ export default function VerificationPage() {
       toast({ title: "Enter a valid 13-digit SA ID number", variant: "destructive" });
       return;
     }
+    if (firstNameError || lastNameError) {
+      toast({
+        title: firstNameError ?? lastNameError ?? "Enter legal names",
+        variant: "destructive",
+      });
+      return;
+    }
     if (idFileError) {
       toast({ title: idFileError, variant: "destructive" });
       return;
@@ -952,6 +980,8 @@ export default function VerificationPage() {
       fd.append("file", idFile);
       fd.append("docType", "id_document");
       fd.append("idNumber", idNumber);
+      fd.append("firstName", normalizedFirstName);
+      fd.append("lastName", normalizedLastName);
       fd.append("idDocumentType", "sa_id");
       return fd;
     }, "ID document");
@@ -1396,6 +1426,38 @@ export default function VerificationPage() {
                   )}
 
                   <div className="space-y-2">
+                    <Label htmlFor="firstName">First name (as shown on ID)</Label>
+                    <Input
+                      id="firstName"
+                      maxLength={100}
+                      value={firstName}
+                      disabled={verificationSubmissionBlocked}
+                      onChange={(e) => {
+                        setFirstName(e.target.value);
+                        setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                        clearStepCompletion("id_doc");
+                      }}
+                    />
+                    {firstNameError && <p className="inline-form-error">{firstNameError}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">Surname (as shown on ID)</Label>
+                    <Input
+                      id="lastName"
+                      maxLength={100}
+                      value={lastName}
+                      disabled={verificationSubmissionBlocked}
+                      onChange={(e) => {
+                        setLastName(e.target.value);
+                        setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                        clearStepCompletion("id_doc");
+                      }}
+                    />
+                    {lastNameError && <p className="inline-form-error">{lastNameError}</p>}
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="idNumber">13-digit SA ID number</Label>
                     <Input
                       id="idNumber"
@@ -1404,6 +1466,7 @@ export default function VerificationPage() {
                       disabled={verificationSubmissionBlocked}
                       onChange={(e) => {
                         setIdNumber(e.target.value.replace(/\D/g, ""));
+                        setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
                         clearStepCompletion("id_doc");
                       }}
                     />

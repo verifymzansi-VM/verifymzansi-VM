@@ -50,6 +50,8 @@ export default function ProfilePage() {
     null
   );
   const [displayName, setDisplayName] = useState("");
+  const [legalFirstName, setLegalFirstName] = useState("");
+  const [legalLastName, setLegalLastName] = useState("");
   const [bio, setBio] = useState("");
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
@@ -126,7 +128,7 @@ export default function ProfilePage() {
         supabase
           .from(ACCOUNT_PROFILE_TABLE)
           .select(
-            "display_name, bio, location_province, location_city, phone, account_verification_status, avatar_url, legal_name_locked_at, location_verified_at, contact_last_phone_change_at, contact_last_email_change_at"
+            "display_name, legal_first_name, legal_last_name, bio, location_province, location_city, phone, account_verification_status, avatar_url, legal_name_locked_at, location_verified_at, contact_last_phone_change_at, contact_last_email_change_at"
           )
           .eq("user_id", user.id)
           .maybeSingle(),
@@ -144,6 +146,8 @@ export default function ProfilePage() {
 
       if (profile) {
         setDisplayName(profile.display_name || "");
+        setLegalFirstName(profile.legal_first_name || "");
+        setLegalLastName(profile.legal_last_name || "");
         setBio(profile.bio || "");
         setProvince(profile.location_province || "");
         setCity(profile.location_city || "");
@@ -496,6 +500,27 @@ export default function ProfilePage() {
 
               {/* Profile form */}
               <form noValidate onSubmit={handleSave} className="space-y-3">
+                {(legalFirstName || legalLastName) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="flex items-center gap-1.5">
+                        Legal first name <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Label>
+                      <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground cursor-not-allowed">
+                        {legalFirstName || "-"}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="flex items-center gap-1.5">
+                        Legal surname <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Label>
+                      <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground cursor-not-allowed">
+                        {legalLastName || "-"}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <Label htmlFor="displayName" className="flex items-center gap-1.5">
                     Display Name *

@@ -426,6 +426,13 @@ describe("VerificationPage", () => {
       expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
     });
 
+    fireEvent.change(screen.getByLabelText(/First name \(as shown on ID\)/i), {
+      target: { value: "Sipho" },
+    });
+    fireEvent.change(screen.getByLabelText(/Surname \(as shown on ID\)/i), {
+      target: { value: "Mokoena" },
+    });
+
     fireEvent.change(screen.getByLabelText(/13-digit SA ID number/i), {
       target: { value: "8001015009087" },
     });
@@ -482,6 +489,13 @@ describe("VerificationPage", () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/First name \(as shown on ID\)/i), {
+      target: { value: "Sipho" },
+    });
+    fireEvent.change(screen.getByLabelText(/Surname \(as shown on ID\)/i), {
+      target: { value: "Mokoena" },
     });
 
     fireEvent.change(screen.getByLabelText(/13-digit SA ID number/i), {

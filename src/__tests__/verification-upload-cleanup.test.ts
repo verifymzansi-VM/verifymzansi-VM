@@ -59,7 +59,12 @@ vi.mock("@/lib/validations/verification", () => ({
   fileUploadSchema: {
     safeParse: (input: Record<string, unknown>) => ({
       success: true,
-      data: { docType: input.docType ?? "id_document", idNumber: input.idNumber ?? undefined },
+      data: {
+        docType: input.docType ?? "id_document",
+        idNumber: input.idNumber ?? undefined,
+        firstName: input.firstName ?? undefined,
+        lastName: input.lastName ?? undefined,
+      },
     }),
   },
   validateUploadedFile: () => ({ valid: true }),
@@ -106,6 +111,10 @@ function createUploadRequest(docType = "id_document"): NextRequest {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("docType", docType);
+  if (docType === "id_document") {
+    formData.append("firstName", "Sipho");
+    formData.append("lastName", "Mokoena");
+  }
 
   return {
     method: "POST",
