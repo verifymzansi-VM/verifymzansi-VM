@@ -1,3 +1,5 @@
+/// <reference types="vitest/globals" />
+import "@testing-library/jest-dom";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProfilePage from "./page";

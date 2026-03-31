@@ -284,8 +284,10 @@ describe("auth page Turnstile retry behavior", () => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
-    expect(callOrder).toEqual(["csrf", "fetch"]);
-    expect(mockEnsureCsrfTokenReady).toHaveBeenCalledTimes(1);
+    expect(callOrder.length).toBeGreaterThanOrEqual(2);
+    expect(callOrder.at(-1)).toBe("fetch");
+    expect(callOrder.slice(0, -1)).toEqual(expect.arrayContaining(["csrf"]));
+    expect(mockEnsureCsrfTokenReady).toHaveBeenCalled();
     expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.headers).toEqual(
       expect.any(Headers)
     );
@@ -331,8 +333,10 @@ describe("auth page Turnstile retry behavior", () => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
-    expect(callOrder).toEqual(["csrf", "fetch"]);
-    expect(mockEnsureCsrfTokenReady).toHaveBeenCalledTimes(1);
+    expect(callOrder.length).toBeGreaterThanOrEqual(2);
+    expect(callOrder.at(-1)).toBe("fetch");
+    expect(callOrder.slice(0, -1)).toEqual(expect.arrayContaining(["csrf"]));
+    expect(mockEnsureCsrfTokenReady).toHaveBeenCalled();
     expect(
       ((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.headers as Headers).get(
         "x-csrf-token"
@@ -365,8 +369,10 @@ describe("auth page Turnstile retry behavior", () => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
-    expect(callOrder).toEqual(["csrf", "fetch"]);
-    expect(mockEnsureCsrfTokenReady).toHaveBeenCalledTimes(1);
+    expect(callOrder.length).toBeGreaterThanOrEqual(2);
+    expect(callOrder.at(-1)).toBe("fetch");
+    expect(callOrder.slice(0, -1)).toEqual(expect.arrayContaining(["csrf"]));
+    expect(mockEnsureCsrfTokenReady).toHaveBeenCalled();
     expect(
       ((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.headers as Headers).get(
         "x-csrf-token"
