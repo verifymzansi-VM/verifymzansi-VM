@@ -197,7 +197,7 @@ describe("VerificationPage", () => {
       expect(screen.getByRole("heading", { name: /Verification Submitted/i })).toBeInTheDocument();
     });
     expect(
-      screen.getByText(/phone, documents, and location details are under admin review/i)
+      screen.getByText(/phone, documents, and saved address are under admin review/i)
     ).toBeInTheDocument();
     expect(screen.getAllByText(/Pending review/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Return to Posting/i })).toHaveAttribute(
@@ -558,16 +558,16 @@ describe("VerificationPage", () => {
     render(<VerificationPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Submit Location/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByLabelText(/^Province$/i), {
       target: { value: "Gauteng" },
     });
-    fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Submit Location/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(
@@ -577,8 +577,137 @@ describe("VerificationPage", () => {
         })
       );
     });
-    expect(screen.getByRole("button", { name: /Submit Location/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Save Address/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Final Submit/i })).toBeDisabled();
+  });
+
+  it("keeps a saved address visible without a verification tick until GPS succeeds", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-1",
+        completedSteps: ["phone", "id_doc", "selfie"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: null,
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "approved" },
+          { step_type: "selfie", status: "approved" },
+        ],
+      }),
+      200
+    );
+    manualLocationResponse = jsonResponse({ success: true }, 200);
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/^Province$/i), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.change(screen.getByLabelText(/Town \/ Suburb/i), {
+      target: { value: "Soweto" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/^Saved address$/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Soweto, Johannesburg, Gauteng/i).length).toBeGreaterThan(0);
+      expect(screen.getByText(/Saved, not GPS verified/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/^Verified address$/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a verified address state after successful GPS confirmation", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-1",
+        completedSteps: ["phone", "id_doc", "selfie"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: null,
+        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "approved" },
+          { step_type: "selfie", status: "approved" },
+        ],
+      }),
+      200
+    );
+    manualLocationResponse = jsonResponse({ success: true }, 200);
+    gpsResponse = jsonResponse(
+      {
+        success: true,
+        verified: true,
+        confidence: "high",
+        resolvedProvince: "Gauteng",
+        resolvedCity: "Johannesburg",
+      },
+      200
+    );
+
+    const mockGetCurrentPosition = vi.fn((success: PositionCallback) =>
+      success({
+        coords: {
+          latitude: -26.2041,
+          longitude: 28.0473,
+          accuracy: 12,
+        } as GeolocationCoordinates,
+        timestamp: Date.now(),
+      } as GeolocationPosition)
+    );
+    Object.defineProperty(global.navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: mockGetCurrentPosition,
+      },
+    });
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/^Province$/i), {
+      target: { value: "Gauteng" },
+    });
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
+      target: { value: "Johannesburg" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Verify Address with GPS/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/^Verified address$/i)).toBeInTheDocument();
+      expect(screen.getByText(/Address verified by GPS/i)).toBeInTheDocument();
+      expect(screen.getByText(/Address verified \(high\)/i)).toBeInTheDocument();
+    });
   });
 
   it("shows the explicit email-confirmation blocker when GPS verification is rejected", async () => {
@@ -631,23 +760,23 @@ describe("VerificationPage", () => {
     render(<VerificationPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Submit Location/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByLabelText(/^Province$/i), {
       target: { value: "Gauteng" },
     });
-    fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Submit Location/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Location saved:/i)).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /Confirm with GPS/i })).toBeInTheDocument();
+      expect(screen.getByText(/^Saved address$/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Confirm with GPS/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Verify Address with GPS/i }));
 
     await waitFor(() => {
       expect(
@@ -660,6 +789,6 @@ describe("VerificationPage", () => {
         })
       );
     });
-    expect(screen.getByRole("button", { name: /Confirm with GPS/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeDisabled();
   });
 });

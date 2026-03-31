@@ -147,6 +147,18 @@ describe("Retention & Legal Hold", () => {
                   }),
                 };
               }
+              if (typeof args[0] === "string" && args[0].includes("first_name")) {
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    eq: vi.fn().mockReturnValue({
+                      single: vi.fn().mockResolvedValue({
+                        data: { first_name: "Test", last_name: "Member" },
+                        error: null,
+                      }),
+                    }),
+                  }),
+                };
+              }
               return {
                 eq: vi.fn().mockResolvedValue({
                   data: [
@@ -263,6 +275,18 @@ describe("Retention & Legal Hold", () => {
                 return {
                   eq: vi.fn().mockReturnValue({
                     single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
+                  }),
+                };
+              }
+              if (typeof args[0] === "string" && args[0].includes("first_name")) {
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    eq: vi.fn().mockReturnValue({
+                      single: vi.fn().mockResolvedValue({
+                        data: { first_name: "Test", last_name: "Member" },
+                        error: null,
+                      }),
+                    }),
                   }),
                 };
               }

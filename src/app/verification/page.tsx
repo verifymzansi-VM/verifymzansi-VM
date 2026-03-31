@@ -59,6 +59,10 @@ type StepStatusEntry = {
   reason_note?: string | null;
   risk_level?: string | null;
   submitted_at?: string | null;
+  location_method?: string | null;
+  location_province?: string | null;
+  location_city?: string | null;
+  location_town?: string | null;
 };
 
 const STEP_ORDER: Exclude<WizardStep, "complete">[] = ["phone", "id_doc", "selfie", "location"];
@@ -89,7 +93,7 @@ const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
     "Enter your 13-digit SA ID number and add a clear photo or PDF of your ID document. Accepted: JPG, PNG, WebP, PDF up to 5 MB.",
   selfie: "Upload a clear selfie with your full face visible. Accepted: JPG, PNG, WebP up to 5 MB.",
   location:
-    "Select your province and city below. You can optionally confirm with GPS for faster approval.",
+    "Enter your province, city, and optional town or suburb. GPS can verify the saved address so the location step does not wait for admin review.",
 };
 
 class SubmissionError extends Error {
@@ -242,6 +246,14 @@ function formatUploadedTime(isoDate: string): string {
   });
 }
 
+function formatLocationSummary(
+  town?: string | null,
+  city?: string | null,
+  province?: string | null
+): string {
+  return [town, city, province].filter(Boolean).join(", ");
+}
+
 function validateFile(file: File | null, allowPdf = false): string | null {
   if (!file) return "Please select a file";
   if (file.size === 0) return "Selected file is empty";
@@ -340,6 +352,7 @@ export default function VerificationPage() {
   const [gpsConfidence, setGpsConfidence] = useState<LocationConfidence | null>(null);
   const [gpsProvince, setGpsProvince] = useState<string | null>(null);
   const [gpsFeatureAvailable, setGpsFeatureAvailable] = useState(true);
+  const [gpsApproved, setGpsApproved] = useState(false);
 
   // Manual location state
   const [manualSubmitted, setManualSubmitted] = useState(false);
@@ -407,7 +420,11 @@ export default function VerificationPage() {
   const persistedLocationSubmitted = ["approved", "pending"].includes(
     serverStepMap.get("location")?.status ?? ""
   );
-  const isLocationReady = persistedLocationSubmitted || manualSubmitted;
+  const persistedLocationStep = serverStepMap.get("location");
+  const locationSaved = persistedLocationSubmitted || manualSubmitted;
+  const locationVerified = persistedLocationStep?.status === "approved" || gpsApproved;
+  const isLocationReady = locationSaved;
+  const locationSummary = formatLocationSummary(locationTown, city, province);
   const allStepsResolved = useMemo(
     () =>
       REVIEWABLE_STEP_ORDER.every((stepType) => {
@@ -452,6 +469,22 @@ export default function VerificationPage() {
           payload.overallStatus ??
           null) as AccountVerificationStatus | null
       );
+
+      const nextLocationStep = nextSteps.find((entry) => entry.step_type === "location");
+      if (nextLocationStep) {
+        setProvince(nextLocationStep.location_province ?? "");
+        setCity(nextLocationStep.location_city ?? "");
+        setLocationTown(nextLocationStep.location_town ?? "");
+        setManualSubmitted(
+          nextLocationStep.status === "approved" || nextLocationStep.status === "pending"
+        );
+
+        const gpsBackedLocation =
+          nextLocationStep.location_method === "gps" ||
+          nextLocationStep.location_method === "manual_with_gps";
+
+        setGpsApproved(nextLocationStep.status === "approved" && gpsBackedLocation);
+      }
 
       const approvedSteps = nextSteps
         .filter((entry) => entry.status === "approved" || entry.status === "pending")
@@ -610,7 +643,6 @@ export default function VerificationPage() {
     }
 
     setGpsStatus("requesting");
-    clearStepCompletion("location");
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -643,14 +675,20 @@ export default function VerificationPage() {
             }
             setGpsConfidence(data.confidence);
             setGpsProvince(data.resolvedProvince ?? null);
-            if (data.mismatch) {
-              setGpsMismatch(data.mismatch);
-            }
-            markStepComplete("location");
-            toast({ title: "GPS confirmation captured", variant: "success" });
+            setGpsMismatch(data.mismatch ?? null);
+            setGpsApproved(Boolean(data.verified));
+            await syncVerificationStatus();
+            toast({
+              title: data.verified ? "Address verified" : "GPS check recorded",
+              description: data.verified
+                ? "GPS matched your saved address. The location step is now approved."
+                : "Your saved address was kept, but GPS could not verify it for automatic approval.",
+              variant: data.verified ? "success" : "default",
+            });
           } else if (res.status === 404) {
             setGpsFeatureAvailable(false);
             setGpsStatus("idle");
+            setGpsApproved(false);
             toast({
               title: "GPS verification unavailable",
               description: "GPS verification is temporarily unavailable. Please try again later.",
@@ -660,6 +698,7 @@ export default function VerificationPage() {
             const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
             if (applyEmailConfirmationBlocker(data)) {
               setGpsStatus("idle");
+              setGpsApproved(false);
               toast({
                 title: "Confirm your email first",
                 description: EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
@@ -668,6 +707,7 @@ export default function VerificationPage() {
               return;
             }
             setGpsStatus("error");
+            setGpsApproved(false);
             toast({
               title: "GPS could not verify this location",
               description: data.error || "Please enable location permissions and try again.",
@@ -675,6 +715,8 @@ export default function VerificationPage() {
             });
           }
         } catch (err) {
+          setGpsApproved(false);
+          setGpsStatus("error");
           toast({
             title: "GPS verification failed",
             description: err instanceof Error ? err.message : "Please try again.",
@@ -683,10 +725,11 @@ export default function VerificationPage() {
         }
       },
       (err) => {
+        setGpsApproved(false);
         setGpsStatus(err.code === err.PERMISSION_DENIED ? "denied" : "error");
         toast({
           title: err.code === err.PERMISSION_DENIED ? "GPS permission denied" : "GPS error",
-          description: "GPS confirmation is optional. You can proceed without it.",
+          description: "Your saved address stays in place. GPS confirmation is optional.",
           variant: "destructive",
         });
       },
@@ -696,7 +739,15 @@ export default function VerificationPage() {
         maximumAge: GPS_MAX_AGE_MS,
       }
     );
-  }, [applyEmailConfirmationBlocker, gpsStatus, toast, manualSubmitted, province, city]);
+  }, [
+    applyEmailConfirmationBlocker,
+    gpsStatus,
+    toast,
+    manualSubmitted,
+    province,
+    city,
+    syncVerificationStatus,
+  ]);
 
   // GPS is no longer auto-triggered — it's optional confirmation after manual selection
 
@@ -1053,8 +1104,19 @@ export default function VerificationPage() {
       });
       if (res.ok) {
         setManualSubmitted(true);
-        markStepComplete("location");
-        toast({ title: "Location saved", variant: "success" });
+        setGpsApproved(false);
+        setGpsStatus("idle");
+        setGpsCoords(null);
+        setGpsConfidence(null);
+        setGpsProvince(null);
+        setGpsMismatch(null);
+        await syncVerificationStatus();
+        toast({
+          title: "Address saved",
+          description:
+            "Your address is saved. Use GPS to verify it automatically or continue without the verification tick.",
+          variant: "success",
+        });
       } else {
         const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
         if (applyEmailConfirmationBlocker(data)) {
@@ -1109,8 +1171,8 @@ export default function VerificationPage() {
     }
     if (!isLocationReady) {
       toast({
-        title: "Complete your location verification",
-        description: "Please allow GPS access to capture your location.",
+        title: "Save your address first",
+        description: "Please select your province and city before final submit.",
         variant: "destructive",
       });
       return;
@@ -1121,11 +1183,19 @@ export default function VerificationPage() {
       await uploadIdIfNeeded();
       await uploadSelfieIfNeeded();
       await submitLocation();
-      await syncVerificationStatus();
+      const statusSnapshot = await syncVerificationStatus();
+
+      const locationStep = statusSnapshot?.steps.find((entry) => entry.step_type === "location");
+      const addressVerified = locationStep?.status === "approved";
+      const verificationComplete = statusSnapshot?.accountStatus === "verified";
 
       toast({
-        title: "Verification submitted",
-        description: "Your documents and location details were sent for admin review.",
+        title: verificationComplete ? "Verification approved" : "Verification submitted",
+        description: verificationComplete
+          ? "Your account is verified."
+          : addressVerified
+            ? "Your address was verified by GPS. Any remaining documents stay under admin review."
+            : "Your documents and saved address were sent for admin review.",
         variant: "success",
       });
       setStep("complete");
@@ -1688,12 +1758,14 @@ export default function VerificationPage() {
                           setCity(v.city);
                           setLocationTown(v.town ?? "");
                         }}
+                        cityLabel="City"
                         showTown
+                        suggestTownOptions={false}
                         showAddress={false}
-                        disabled={manualSubmitted || verificationSubmissionBlocked}
+                        disabled={locationSaved || verificationSubmissionBlocked}
                       />
 
-                      {!manualSubmitted && (
+                      {!locationSaved && (
                         <Button
                           onClick={handleManualLocationSubmit}
                           disabled={
@@ -1706,31 +1778,46 @@ export default function VerificationPage() {
                           {manualSubmitting ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
-                            <CheckCircle2 className="h-4 w-4" />
+                            <MapPin className="h-4 w-4" />
                           )}
-                          Submit Location
+                          Save Address
                         </Button>
                       )}
 
-                      {manualSubmitted && (
-                        <div className="flex items-center gap-2 text-sm text-brand-green">
-                          <CheckCircle2 className="h-4 w-4" />
-                          Location saved: {locationTown ? `${locationTown}, ` : ""}
-                          {city}, {province}
+                      {locationSaved && locationSummary && (
+                        <div className="rounded-md border border-warm-200/70 bg-warm-50/50 p-3 text-sm dark:border-warm-700/70 dark:bg-warm-950/20">
+                          <div className="flex items-center gap-2 text-foreground">
+                            {locationVerified ? (
+                              <CheckCircle2 className="h-4 w-4 text-brand-green" />
+                            ) : (
+                              <MapPin className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <span className="font-medium">
+                              {locationVerified ? "Verified address" : "Saved address"}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-muted-foreground">{locationSummary}</p>
+                          {!locationVerified && (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              This address is saved, but it does not have a GPS verification tick
+                              yet.
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
 
                     {/* Optional GPS Confirmation */}
-                    {manualSubmitted && gpsStatus !== "success" && (
+                    {locationSaved && !locationVerified && (
                       <div className="space-y-3 rounded-md border border-dashed border-brand-blue/40 p-4 bg-brand-blue/5">
                         <h4 className="flex items-center gap-2 text-sm font-medium">
                           <Navigation className="h-4 w-4 text-brand-blue" />
-                          Confirm with GPS (Optional)
+                          Verify with GPS (Optional)
                         </h4>
                         <p className="text-xs text-muted-foreground">
-                          GPS confirmation speeds up approval. Your selected location will still be
-                          used as your address.
+                          GPS verification checks the saved address. If it matches, the location
+                          step is approved immediately. If it fails, your saved address stays on
+                          file without a verification tick.
                         </p>
 
                         {gpsFeatureAvailable && gpsStatus === "idle" && (
@@ -1742,7 +1829,7 @@ export default function VerificationPage() {
                             disabled={verificationSubmissionBlocked}
                           >
                             <Navigation className="h-4 w-4" />
-                            Confirm with GPS
+                            Verify Address with GPS
                           </Button>
                         )}
 
@@ -1758,12 +1845,13 @@ export default function VerificationPage() {
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <AlertTriangle className="h-3.5 w-3.5" />
                               {gpsStatus === "denied"
-                                ? "GPS permission denied — you can still proceed without it."
-                                : "GPS unavailable — you can still proceed without it."}
+                                ? "GPS permission denied. Your saved address remains unverified."
+                                : "GPS unavailable. Your saved address remains unverified."}
                             </div>
                             <Button
                               onClick={() => {
                                 setGpsStatus("idle");
+                                setGpsApproved(false);
                                 setGpsCoords(null);
                                 setGpsConfidence(null);
                               }}
@@ -1779,33 +1867,59 @@ export default function VerificationPage() {
 
                         {!gpsFeatureAvailable && (
                           <p className="text-xs text-muted-foreground">
-                            GPS is not available on this device. You can proceed without it.
+                            GPS is not available on this device. Your saved address can still be
+                            reviewed manually.
                           </p>
                         )}
                       </div>
                     )}
 
                     {/* GPS Confirmation Result */}
-                    {manualSubmitted && gpsStatus === "success" && gpsCoords && (
-                      <div className="space-y-2 rounded-md border border-brand-green/30 bg-brand-green-50/30 p-4 dark:bg-brand-green-950/20">
-                        <div className="flex items-center gap-2 text-sm text-brand-green">
-                          <Navigation className="h-4 w-4" />
-                          GPS confirmed (accuracy: {Math.round(gpsCoords.accuracy)}m)
+                    {gpsStatus === "success" && gpsCoords && (
+                      <div
+                        className={`space-y-2 rounded-md border p-4 ${
+                          locationVerified
+                            ? "border-brand-green/30 bg-brand-green-50/30 dark:bg-brand-green-950/20"
+                            : "border-amber-400/30 bg-amber-50/60 dark:bg-amber-950/20"
+                        }`}
+                      >
+                        <div
+                          className={`flex items-center gap-2 text-sm ${
+                            locationVerified
+                              ? "text-brand-green"
+                              : "text-amber-700 dark:text-amber-300"
+                          }`}
+                        >
+                          {locationVerified ? (
+                            <CheckCircle2 className="h-4 w-4" />
+                          ) : (
+                            <Navigation className="h-4 w-4" />
+                          )}
+                          {locationVerified
+                            ? `Address verified by GPS (accuracy: ${Math.round(gpsCoords.accuracy)}m)`
+                            : `GPS checked the saved address (accuracy: ${Math.round(gpsCoords.accuracy)}m)`}
                         </div>
                         {gpsMismatch?.province && (
                           <div className="rounded-md border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
-                            GPS detected a different province ({gpsProvince}). Your selected
-                            location will be reviewed by an admin.
+                            GPS detected a different province ({gpsProvince}). Your saved address
+                            was kept, but it was not verified automatically.
                           </div>
                         )}
                         {gpsMismatch && !gpsMismatch.province && gpsMismatch.city && (
                           <div className="rounded-md border border-yellow-300/50 bg-yellow-50 px-3 py-2 text-xs text-yellow-700 dark:bg-yellow-950/20 dark:text-yellow-400">
-                            GPS detected a different city. Your selected city will be used.
+                            GPS detected a different city. Your saved address was kept without a
+                            verification tick.
                           </div>
                         )}
-                        {gpsMismatch && !gpsMismatch.province && !gpsMismatch.city && (
+                        {!gpsMismatch && !locationVerified && (
+                          <div className="text-xs text-amber-700 dark:text-amber-300">
+                            GPS captured your location, but it could not grant automatic
+                            verification for this address.
+                          </div>
+                        )}
+                        {locationVerified && (
                           <div className="text-xs text-brand-green">
-                            GPS matches your selected location.
+                            GPS matches your saved location, so the address is verified.
                           </div>
                         )}
                         {gpsConfidence && (
@@ -1894,19 +2008,17 @@ export default function VerificationPage() {
 
                     <div className="rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
                       <p className="font-medium">Location</p>
-                      {(manualSubmitted || persistedLocationSubmitted) && province ? (
+                      {locationSaved && locationSummary ? (
                         <div className="mt-1 space-y-1">
-                          <p className="text-muted-foreground">
-                            {city ? `${city}, ${province}` : province}
-                          </p>
+                          <p className="text-muted-foreground">{locationSummary}</p>
                           <div className="flex items-center gap-1 text-xs">
-                            {gpsStatus === "success" ? (
+                            {locationVerified ? (
                               <span className="text-brand-green flex items-center gap-1">
-                                <Navigation className="h-3 w-3" />
-                                GPS confirmed{gpsConfidence ? ` (${gpsConfidence})` : ""}
+                                <CheckCircle2 className="h-3 w-3" />
+                                Address verified{gpsConfidence ? ` (${gpsConfidence})` : ""}
                               </span>
                             ) : (
-                              <span className="text-muted-foreground">Manual selection</span>
+                              <span className="text-muted-foreground">Saved, not GPS verified</span>
                             )}
                           </div>
                         </div>
@@ -1936,7 +2048,9 @@ export default function VerificationPage() {
                   <p className="mx-auto max-w-sm text-sm text-muted-foreground">
                     {accountVerificationStatus === "verified"
                       ? "Your account is verified."
-                      : "Your phone, documents, and location details are under admin review."}
+                      : locationVerified
+                        ? "Your address is already verified. Any remaining documents stay under admin review."
+                        : "Your phone, documents, and saved address are under admin review."}
                   </p>
                   <div className="mx-auto w-full max-w-lg space-y-2 text-left">
                     {REVIEWABLE_STEP_ORDER.map((stepType) => {

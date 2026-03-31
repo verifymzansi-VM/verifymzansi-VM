@@ -27,6 +27,8 @@ export interface LocationSelectorProps {
   cityLabel?: string;
   /** Show the town / suburb combobox (default: true) */
   showTown?: boolean;
+  /** Offer predefined town suggestions via datalist (default: true) */
+  suggestTownOptions?: boolean;
   /** Show the detailed address textarea (default: false) */
   showAddress?: boolean;
   /** Mark town as required (default: false) */
@@ -44,8 +46,9 @@ export function LocationSelector({
   onChange,
   idPrefix,
   provinceLabel = "Province",
-  cityLabel = "City / Town",
+  cityLabel = "City",
   showTown = true,
+  suggestTownOptions = true,
   showAddress = false,
   townRequired = false,
   addressRequired = false,
@@ -60,8 +63,11 @@ export function LocationSelector({
     [value.province]
   );
   const towns = useMemo(
-    () => (value.province && value.city ? getTownsForCity(value.province, value.city) : []),
-    [value.province, value.city]
+    () =>
+      suggestTownOptions && value.province && value.city
+        ? getTownsForCity(value.province, value.city)
+        : [],
+    [suggestTownOptions, value.province, value.city]
   );
 
   const townListId = `${uid}-towns`;
@@ -146,14 +152,14 @@ export function LocationSelector({
           <Input
             id={townId}
             aria-label="Town / Suburb"
-            list={townListId}
-            placeholder={value.city ? "Type or select a town / suburb…" : "Select city first"}
+            list={suggestTownOptions ? townListId : undefined}
+            placeholder={value.city ? "Enter your town or suburb" : "Select city first"}
             value={value.town ?? ""}
             disabled={disabled || !value.city}
             maxLength={120}
             onChange={(e) => onChange({ ...value, town: e.target.value })}
           />
-          {towns.length > 0 && (
+          {suggestTownOptions && towns.length > 0 && (
             <datalist id={townListId}>
               {towns.map((t) => (
                 <option key={t} value={t} />

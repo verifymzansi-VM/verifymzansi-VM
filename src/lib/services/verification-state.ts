@@ -10,10 +10,11 @@ type PendingVerificationStepFields = {
   submitted_at?: string;
 };
 
-export function buildPendingVerificationStep<T extends PendingVerificationStepFields>(
-  step: T
+export function buildVerificationStep<T extends PendingVerificationStepFields>(
+  step: T,
+  status: "pending" | "approved" = "pending"
 ): T & {
-  status: "pending";
+  status: "pending" | "approved";
   reviewed_by: null;
   reviewed_at: null;
   reason_code: null;
@@ -22,13 +23,17 @@ export function buildPendingVerificationStep<T extends PendingVerificationStepFi
 } & Record<string, unknown> {
   return {
     ...step,
-    status: "pending",
+    status,
     reviewed_by: null,
     reviewed_at: null,
     reason_code: null,
     reason_note: null,
     override_reason_code: null,
   };
+}
+
+export function buildPendingVerificationStep<T extends PendingVerificationStepFields>(step: T) {
+  return buildVerificationStep(step, "pending");
 }
 
 export function buildVerificationSessionResumePatch<T extends Record<string, unknown>>(

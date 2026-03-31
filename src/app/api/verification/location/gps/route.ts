@@ -26,10 +26,11 @@ import {
   GPS_CITY_MISMATCH_RISK,
 } from "@/lib/constants/verification";
 import {
-  buildPendingVerificationStep,
+  buildVerificationStep,
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
 import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
+import { summarizeVerification } from "@/lib/account/verification-summary";
 
 /**
  * Canonical province name mapping for South African provinces.
@@ -180,7 +181,7 @@ export async function POST(request: NextRequest) {
     // Check account profile exists
     const { data: profile } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("id")
+      .select("id, account_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -301,30 +302,34 @@ export async function POST(request: NextRequest) {
       riskScore <= 25 ? "low" : riskScore <= 50 ? "medium" : riskScore <= 75 ? "high" : "critical";
 
     // Upsert verification step
-    const stepData = buildPendingVerificationStep({
-      user_id: user.id,
-      step_type: "location",
-      location_method: isConfirmationMode ? "manual_with_gps" : "gps",
-      gps_lat: latitude,
-      gps_lon: longitude,
-      location_province: isConfirmationMode ? declaredProvince! : resolvedProvince,
-      location_city: isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity,
-      risk_score: riskScore,
-      risk_level: riskLevel,
-      auto_status: riskScore <= 25 ? "approved" : "needs_manual_review",
-      submitted_at: new Date().toISOString(),
-      ...(isConfirmationMode
-        ? {
-            metadata: {
-              declared_province: declaredProvince,
-              declared_city: declaredCity,
-              gps_province: resolvedProvince,
-              gps_city: resolvedCity,
-              mismatch,
-            },
-          }
-        : {}),
-    });
+    const stepStatus = riskScore <= 25 ? "approved" : "pending";
+    const stepData = buildVerificationStep(
+      {
+        user_id: user.id,
+        step_type: "location",
+        location_method: isConfirmationMode ? "manual_with_gps" : "gps",
+        gps_lat: latitude,
+        gps_lon: longitude,
+        location_province: isConfirmationMode ? declaredProvince! : resolvedProvince,
+        location_city: isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity,
+        risk_score: riskScore,
+        risk_level: riskLevel,
+        auto_status: riskScore <= 25 ? "approved" : "needs_manual_review",
+        submitted_at: new Date().toISOString(),
+        ...(isConfirmationMode
+          ? {
+              metadata: {
+                declared_province: declaredProvince,
+                declared_city: declaredCity,
+                gps_province: resolvedProvince,
+                gps_city: resolvedCity,
+                mismatch,
+              },
+            }
+          : {}),
+      },
+      stepStatus
+    );
 
     const { data: step, error: stepError } = await adminClient
       .from("verification_steps")
@@ -358,23 +363,50 @@ export async function POST(request: NextRequest) {
       { onConflict: "user_id" }
     );
 
-    // Update account profile — use declared values in confirmation mode
-    await supabase
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .update({
-        location_province: isConfirmationMode ? declaredProvince! : resolvedProvince,
-        location_city: isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity,
-      })
+    const locationProvince = isConfirmationMode ? declaredProvince! : resolvedProvince;
+    const locationCity = isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity;
+
+    const profilePatch: Record<string, unknown> = {
+      location_province: locationProvince,
+      location_city: locationCity,
+    };
+
+    const { data: allSteps } = await adminClient
+      .from("verification_steps")
+      .select("step_type, status")
       .eq("user_id", user.id);
 
-    // Set pending_review if currently incomplete
-    await supabase
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .update({
-        account_verification_status: "pending_review",
-      })
-      .eq("user_id", user.id)
-      .in("account_verification_status", ["incomplete", "rejected"]);
+    const verificationSummary = summarizeVerification(
+      profile.account_verification_status,
+      allSteps ?? []
+    );
+
+    profilePatch.account_verification_status = verificationSummary.accountVerificationStatus;
+
+    if (verificationSummary.accountVerificationStatus === "verified") {
+      const { data: idDocDetail } = await adminClient
+        .from("verification_steps")
+        .select("first_name, last_name")
+        .eq("user_id", user.id)
+        .eq("step_type", "id_doc")
+        .single();
+
+      if (idDocDetail?.first_name && idDocDetail?.last_name) {
+        profilePatch.legal_first_name = idDocDetail.first_name;
+        profilePatch.legal_last_name = idDocDetail.last_name;
+        profilePatch.display_name = `${idDocDetail.first_name} ${idDocDetail.last_name}`;
+        profilePatch.legal_name_locked_at = new Date().toISOString();
+      }
+
+      const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      await adminClient
+        .from("kyc_artifacts")
+        .update({ purge_after: purgeAfter })
+        .eq("user_id", user.id)
+        .is("purge_after", null);
+    }
+
+    await adminClient.from(ACCOUNT_PROFILE_WRITE_TABLE).update(profilePatch).eq("user_id", user.id);
 
     // Audit log
     await logAuditEvent({
@@ -397,6 +429,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       stepId: step.id,
+      verified: stepStatus === "approved",
+      stepStatus,
       confidence,
       resolvedProvince,
       resolvedCity,

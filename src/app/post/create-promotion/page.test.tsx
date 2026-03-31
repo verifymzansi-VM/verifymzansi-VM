@@ -166,7 +166,7 @@ describe("CreatePromotionPage", () => {
 
     completeStepOne();
     fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
-    fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -184,7 +184,7 @@ describe("CreatePromotionPage", () => {
     completeStepOne();
 
     fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
-    fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
     fireEvent.change(screen.getByLabelText(/Start Date$/i), {

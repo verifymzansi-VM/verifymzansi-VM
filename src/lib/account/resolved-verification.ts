@@ -20,6 +20,10 @@ type VerificationStepRow = {
   reason_note?: string | null;
   risk_level?: string | null;
   submitted_at?: string | null;
+  location_method?: string | null;
+  location_province?: string | null;
+  location_city?: string | null;
+  location_town?: string | null;
 };
 
 export interface ResolvedAccountVerification extends VerificationSummary {
@@ -48,7 +52,9 @@ export async function resolveAccountVerification(
   if (shouldLoadSteps) {
     const stepsResult = await client
       .from("verification_steps")
-      .select("step_type, status, reviewed_at, reason_code, reason_note, risk_level, submitted_at")
+      .select(
+        "step_type, status, reviewed_at, reason_code, reason_note, risk_level, submitted_at, location_method, location_province, location_city, location_town"
+      )
       .eq("user_id", userId);
 
     steps = (stepsResult.data as VerificationStepRow[] | null) ?? [];

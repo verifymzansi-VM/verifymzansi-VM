@@ -176,7 +176,7 @@ describe("CreateBusinessPage", () => {
 
   function completeLocationStep() {
     fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
-    fireEvent.change(screen.getByLabelText(/City \/ Town/i), {
+    fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));

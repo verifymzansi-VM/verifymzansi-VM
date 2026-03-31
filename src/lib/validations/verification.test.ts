@@ -52,6 +52,8 @@ describe("verificationIdDocSchema", () => {
   it("accepts valid ID doc submission", () => {
     const result = verificationIdDocSchema.safeParse({
       idNumber: "8001015009087",
+      firstName: "Test",
+      lastName: "User",
       idDocumentUrl: "https://r2.example.com/file.jpg",
       idDocumentType: "sa_id",
     });
