@@ -337,12 +337,13 @@ export async function POST(request: NextRequest) {
       .select("id")
       .single();
 
+    const stepErrorText =
+      `${String(stepError?.message ?? "")} ${String(stepError?.details ?? "")}`.toLowerCase();
+
     const manualWithGpsUnsupported =
       isConfirmationMode &&
       stepError?.code === "22P02" &&
-      String(stepError.message ?? "")
-        .toLowerCase()
-        .includes("manual_with_gps");
+      (stepErrorText.includes("manual_with_gps") || stepErrorText.includes("location_method"));
 
     if (manualWithGpsUnsupported) {
       // Backward-compatibility fallback for environments missing the enum migration.
@@ -373,6 +374,26 @@ export async function POST(request: NextRequest) {
         code: stepError?.code,
         details: stepError?.details,
       });
+
+      // GPS confirmation is optional when users already saved a manual address.
+      // Return a non-fatal payload so the UI can keep the saved address flow unblocked.
+      if (isConfirmationMode) {
+        return NextResponse.json({
+          success: true,
+          persisted: false,
+          warning: "Failed to save location verification",
+          verified: false,
+          stepStatus,
+          confidence,
+          resolvedProvince,
+          resolvedCity,
+          source: geoResult.source,
+          riskScore,
+          riskLevel,
+          mismatch,
+        });
+      }
+
       return NextResponse.json({ error: "Failed to save location verification" }, { status: 500 });
     }
 

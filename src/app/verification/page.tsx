@@ -78,6 +78,18 @@ const VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION =
   "Verification is temporarily unavailable right now. Please try again later.";
 
 type VerificationApiResponse = {
+  success?: boolean;
+  persisted?: boolean;
+  warning?: string;
+  verified?: boolean;
+  stepStatus?: VerificationStatus;
+  confidence?: LocationConfidence;
+  resolvedProvince?: string | null;
+  resolvedCity?: string | null;
+  mismatch?: {
+    province: boolean;
+    city: boolean;
+  } | null;
   error?: string;
   code?: string;
   detail?: string;
@@ -669,6 +681,18 @@ export default function VerificationPage() {
           });
           if (res.ok) {
             const data = await res.json();
+            if (data.persisted === false) {
+              setGpsStatus("idle");
+              setGpsApproved(false);
+              toast({
+                title: "GPS check not saved",
+                description:
+                  data.warning ||
+                  "Your saved address remains in place. GPS confirmation is optional, so you can continue or try again.",
+                variant: "default",
+              });
+              return;
+            }
             if (!manualSubmitted) {
               setProvince(data.resolvedProvince ?? "");
               setCity(data.resolvedCity ?? "");
@@ -706,6 +730,22 @@ export default function VerificationPage() {
               });
               return;
             }
+            const optionalGpsPersistenceFailure =
+              manualSubmitted &&
+              (res.status >= 500 || data.error === "Failed to save location verification");
+
+            if (optionalGpsPersistenceFailure) {
+              setGpsStatus("idle");
+              setGpsApproved(false);
+              toast({
+                title: "GPS check not saved",
+                description:
+                  "Your saved address remains in place. GPS confirmation is optional, so you can continue or try again.",
+                variant: "default",
+              });
+              return;
+            }
+
             setGpsStatus("error");
             setGpsApproved(false);
             toast({

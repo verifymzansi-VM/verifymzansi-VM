@@ -439,4 +439,107 @@ describe("POST /api/verification/location/gps", () => {
       expect.anything()
     );
   });
+
+  it("returns non-fatal success when optional manual GPS confirmation cannot be persisted", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -29.8587,
+        longitude: 31.0218,
+        accuracy: 15,
+        timestamp: Date.now(),
+        declaredProvince: "KwaZulu-Natal",
+        declaredCity: "Richards Bay",
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "KwaZulu-Natal",
+      city: "Richards Bay",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("high");
+
+    let upsertCallCount = 0;
+    const upsertVerificationStep = vi.fn().mockImplementation(() => {
+      upsertCallCount++;
+      const isFirstCall = upsertCallCount === 1;
+      return {
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue(
+          isFirstCall
+            ? {
+                data: null,
+                error: {
+                  code: "22P02",
+                  message: 'invalid input value for enum location_method: "manual_with_gps"',
+                  details: null,
+                },
+              }
+            : {
+                data: null,
+                error: {
+                  code: "23514",
+                  message: "new row for relation verification_steps violates check constraint",
+                  details: "failing row contains ...",
+                },
+              }
+        ),
+      };
+    });
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "verification_sessions") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          upsert: upsertVerificationStep,
+        };
+      }
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -29.8587,
+        longitude: 31.0218,
+        accuracy: 15,
+        timestamp: Date.now(),
+        declaredProvince: "KwaZulu-Natal",
+        declaredCity: "Richards Bay",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        persisted: false,
+        warning: "Failed to save location verification",
+        verified: false,
+      })
+    );
+  });
 });
