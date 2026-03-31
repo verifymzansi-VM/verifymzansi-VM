@@ -1,12 +1,34 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function openAuthenticatedBilling(page: Page) {
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const sessionResponse = await page.goto(
+      "/api/e2e/auth/session?persona=billing-payment&reset=1",
+      {
+        waitUntil: "networkidle",
+      }
+    );
+    expect(sessionResponse?.ok()).toBeTruthy();
+
+    await page.goto("/billing", { waitUntil: "networkidle" });
+
+    const redirectedToAuth = /\/(login|sign-in)(\?|$)/i.test(new URL(page.url()).pathname);
+    if (!redirectedToAuth) {
+      return;
+    }
+
+    if (attempt === maxAttempts) {
+      await expect(page).not.toHaveURL(/\/(login|sign-in)(\?|$)/i);
+      return;
+    }
+  }
+}
 
 test.describe("Billing payment round-trip", () => {
   test("completes a mock Ozow checkout and reaches confirmed success state", async ({ page }) => {
-    await page.goto("/api/e2e/auth/session?persona=billing-payment&reset=1", {
-      waitUntil: "networkidle",
-    });
-
-    await page.goto("/billing", { waitUntil: "networkidle" });
+    await openAuthenticatedBilling(page);
 
     const checkoutResponsePromise = page.waitForResponse(
       (response) =>

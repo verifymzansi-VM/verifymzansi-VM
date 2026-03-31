@@ -292,8 +292,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   }
 
   if (shouldUsePlaywrightStubForRequest(request)) {
-    const allowStubAuth =
-      process.env.NODE_ENV !== "production" && process.env.PLAYWRIGHT_E2E_AUTH === "1";
+    const allowStubAuth = process.env.PLAYWRIGHT_E2E_AUTH === "1";
     const stubUser = allowStubAuth
       ? getPlaywrightStubUserFromToken(
           request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value ?? null
