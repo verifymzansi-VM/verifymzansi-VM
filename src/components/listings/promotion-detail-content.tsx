@@ -372,7 +372,7 @@ export function PromotionDetailContent({
 
       {/* ═══ PHOTO/VIDEO GALLERY GRID ═══ */}
       {mediaItems.length > 1 && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {mediaItems.map((item, index) => {
             if (index === activeMediaIndex) return null;
             const isVideo = item.kind === "video";
@@ -381,7 +381,7 @@ export function PromotionDetailContent({
                 key={`${item.kind}-${index}`}
                 type="button"
                 onClick={() => setActiveMediaIndex(index)}
-                className="group relative aspect-[4/3] overflow-hidden rounded-xl shadow-sm ring-2 ring-transparent transition-all hover:shadow-md hover:ring-brand-blue/50"
+                className="group relative aspect-square overflow-hidden rounded-xl ring-2 ring-transparent transition-all hover:shadow-md hover:ring-brand-blue/50"
                 aria-label={
                   isVideo
                     ? `View video ${index + 1}`

@@ -30,7 +30,6 @@ import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-err
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
-import { DevicePreviewShell } from "@/components/business/shared/device-preview-shell";
 import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
 import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
 const selectClass =
@@ -600,55 +599,55 @@ export default function EditPromotionPage() {
                 errors={fieldErrors}
               />
 
-              <div className="space-y-3 rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
-                <div className="text-sm font-medium text-muted-foreground">Promotion preview</div>
-                <DevicePreviewShell>
-                  <PromotionDetailContent
-                    promotion={{
-                      id: promotionId,
-                      owner_id: "preview-seller",
-                      business_id: businessId || null,
-                      title: title || "Your promotion title",
-                      description: description || "Your promotion description will appear here.",
-                      promotion_type: promotionType,
-                      category: category || null,
-                      category_key: categoryKey || null,
-                      photos: previewImages,
-                      videos: previewVideos,
-                      video_thumbnail: videoThumbnail || null,
-                      price_cents: priceZar ? Math.round(parseFloat(priceZar || "0") * 100) : null,
-                      price_negotiable: negotiable,
-                      location_province: province || "South Africa",
-                      location_city: city || "Online",
-                      location_town: locationTown || null,
-                      location_address: locationAddress || null,
-                      contact_methods: contactMethods,
-                      start_date: startDate ? new Date(startDate).toISOString() : null,
-                      end_date: endDate ? new Date(endDate).toISOString() : null,
-                      boost_until: null,
-                      featured_until: null,
-                      view_count: null,
-                      created_at: new Date().toISOString(),
-                    }}
-                    advertiserProfile={{
-                      display_name: "You",
-                      account_verification_status: null,
-                      phone: null,
-                      masked_phone_public: null,
-                    }}
-                    linkedBusiness={
-                      linkedBusiness
-                        ? {
-                            id: linkedBusiness.id,
-                            business_name: linkedBusiness.business_name,
-                            logo_url: null,
-                          }
-                        : null
-                    }
-                    showContactActions={false}
-                    showContactSummary
-                  />
-                </DevicePreviewShell>
+              <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
+                <div className="mb-3 text-sm font-medium text-muted-foreground">
+                  Promotion preview
+                </div>
+                <PromotionDetailContent
+                  promotion={{
+                    id: promotionId,
+                    owner_id: "preview-seller",
+                    business_id: businessId || null,
+                    title: title || "Your promotion title",
+                    description: description || "Your promotion description will appear here.",
+                    promotion_type: promotionType,
+                    category: category || null,
+                    category_key: categoryKey || null,
+                    photos: previewImages,
+                    videos: previewVideos,
+                    video_thumbnail: videoThumbnail || null,
+                    price_cents: priceZar ? Math.round(parseFloat(priceZar || "0") * 100) : null,
+                    price_negotiable: negotiable,
+                    location_province: province || "South Africa",
+                    location_city: city || "Online",
+                    location_town: locationTown || null,
+                    location_address: locationAddress || null,
+                    contact_methods: contactMethods,
+                    start_date: startDate ? new Date(startDate).toISOString() : null,
+                    end_date: endDate ? new Date(endDate).toISOString() : null,
+                    boost_until: null,
+                    featured_until: null,
+                    view_count: null,
+                    created_at: new Date().toISOString(),
+                  }}
+                  advertiserProfile={{
+                    display_name: "You",
+                    account_verification_status: null,
+                    phone: null,
+                    masked_phone_public: null,
+                  }}
+                  linkedBusiness={
+                    linkedBusiness
+                      ? {
+                          id: linkedBusiness.id,
+                          business_name: linkedBusiness.business_name,
+                          logo_url: null,
+                        }
+                      : null
+                  }
+                  showContactActions={false}
+                  showContactSummary
+                />
               </div>
 
               {!isSubmitting &&

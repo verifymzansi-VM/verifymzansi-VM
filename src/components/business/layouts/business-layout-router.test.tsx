@@ -6,19 +6,9 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 
 /* ── Mocks ── */
-vi.mock("@/components/business/layouts/cinematic-layout", () => ({
-  CinematicLayout: (props: Record<string, unknown>) => (
-    <div data-testid="cinematic-layout" data-delivery={String(props.deliveryAvailable)} />
-  ),
-}));
-vi.mock("@/components/business/layouts/showcase-layout", () => ({
-  ShowcaseLayout: (props: Record<string, unknown>) => (
-    <div data-testid="showcase-layout" data-delivery={String(props.deliveryAvailable)} />
-  ),
-}));
-vi.mock("@/components/business/layouts/professional-layout", () => ({
-  ProfessionalLayout: (props: Record<string, unknown>) => (
-    <div data-testid="professional-layout" data-delivery={String(props.deliveryAvailable)} />
+vi.mock("@/components/business/layouts/unified-layout", () => ({
+  UnifiedLayout: (props: Record<string, unknown>) => (
+    <div data-testid="unified-layout" data-delivery={String(props.deliveryAvailable)} />
   ),
 }));
 
@@ -72,7 +62,7 @@ describe("BusinessLayoutRouter", () => {
     vi.clearAllMocks();
   });
 
-  it("renders cinematic layout for fashion_accessories by default", () => {
+  it("always renders the unified layout regardless of category", () => {
     render(
       <BusinessLayoutRouter
         business={makeBusiness({ category: "fashion_accessories" })}
@@ -80,21 +70,10 @@ describe("BusinessLayoutRouter", () => {
         ownerProfile={null}
       />
     );
-    expect(screen.getByTestId("cinematic-layout")).toBeInTheDocument();
+    expect(screen.getByTestId("unified-layout")).toBeInTheDocument();
   });
 
-  it("renders showcase layout for electronics_tech by default", () => {
-    render(
-      <BusinessLayoutRouter
-        business={makeBusiness({ category: "electronics_tech" })}
-        trustLevel={null}
-        ownerProfile={null}
-      />
-    );
-    expect(screen.getByTestId("showcase-layout")).toBeInTheDocument();
-  });
-
-  it("renders professional layout for professional_services by default", () => {
+  it("renders unified layout for any category", () => {
     render(
       <BusinessLayoutRouter
         business={makeBusiness({ category: "professional_services" })}
@@ -102,10 +81,10 @@ describe("BusinessLayoutRouter", () => {
         ownerProfile={null}
       />
     );
-    expect(screen.getByTestId("professional-layout")).toBeInTheDocument();
+    expect(screen.getByTestId("unified-layout")).toBeInTheDocument();
   });
 
-  it("respects explicit layout_template over category default", () => {
+  it("ignores layout_template — always renders unified", () => {
     render(
       <BusinessLayoutRouter
         business={makeBusiness({
@@ -116,22 +95,7 @@ describe("BusinessLayoutRouter", () => {
         ownerProfile={null}
       />
     );
-    expect(screen.getByTestId("professional-layout")).toBeInTheDocument();
-  });
-
-  it("layoutOverride prop takes highest priority", () => {
-    render(
-      <BusinessLayoutRouter
-        business={makeBusiness({
-          category: "fashion_accessories",
-          layout_template: "professional",
-        })}
-        trustLevel={null}
-        ownerProfile={null}
-        layoutOverride="showcase"
-      />
-    );
-    expect(screen.getByTestId("showcase-layout")).toBeInTheDocument();
+    expect(screen.getByTestId("unified-layout")).toBeInTheDocument();
   });
 
   it("computes deliveryAvailable from delivery_options", () => {
@@ -142,7 +106,7 @@ describe("BusinessLayoutRouter", () => {
         ownerProfile={null}
       />
     );
-    const el = screen.getByTestId("cinematic-layout");
+    const el = screen.getByTestId("unified-layout");
     expect(el).toHaveAttribute("data-delivery", "true");
   });
 
@@ -154,7 +118,7 @@ describe("BusinessLayoutRouter", () => {
         ownerProfile={null}
       />
     );
-    const el = screen.getByTestId("cinematic-layout");
+    const el = screen.getByTestId("unified-layout");
     expect(el).toHaveAttribute("data-delivery", "false");
   });
 });

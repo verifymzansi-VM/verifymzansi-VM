@@ -53,11 +53,8 @@ import { BusinessTypeDetailsFields } from "@/components/business/business-type-d
 import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 import { BusinessLayoutRouter } from "@/components/business/layouts/business-layout-router";
-import { DevicePreviewShell } from "@/components/business/shared/device-preview-shell";
-import { LayoutChooser } from "@/components/business/shared/layout-chooser";
-import { resolveBusinessLayout } from "@/lib/business/category-layout-map";
 import type { LayoutTemplate } from "@/lib/business/layout-templates";
-import type { BusinessCategory, BusinessType } from "@/types/enums";
+import type { BusinessType } from "@/types/enums";
 import {
   OperatingHoursInput,
   formatHoursValue,
@@ -1210,98 +1207,78 @@ export default function EditBusinessPage() {
                 )}
               </div>
 
-              <div className="space-y-6 rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
-                <div className="text-sm font-medium text-muted-foreground">Business preview</div>
-                <LayoutChooser
-                  selected={resolveBusinessLayout(
-                    layoutTemplate,
-                    (category || "general_other") as BusinessCategory
-                  )}
-                  onChange={(id) => setLayoutTemplate(id)}
-                  category={category ? (category as BusinessCategory) : undefined}
+              <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
+                <div className="mb-3 text-sm font-medium text-muted-foreground">
+                  Profile preview
+                </div>
+                <BusinessLayoutRouter
+                  business={
+                    {
+                      id: businessId,
+                      owner_id: "preview-seller",
+                      business_name: businessName || "Your business name",
+                      description: description || "Your business description will appear here.",
+                      status: "preview",
+                      business_type: businessType,
+                      category: category || "general_other",
+                      cover_photo: previewCoverPhotoUrl ?? existingCoverPhoto ?? null,
+                      logo_url: previewLogoUrl ?? existingLogo ?? null,
+                      cover_video: previewCoverVideo,
+                      video_thumbnail: previewVideoThumbnail,
+                      gallery_photos: previewGalleryPhotos,
+                      social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
+                      operating_hours: {
+                        ...(formatHoursValue(
+                          hoursMonFri.open,
+                          hoursMonFri.close,
+                          hoursMonFri.closed
+                        )
+                          ? {
+                              Mon_Fri: formatHoursValue(
+                                hoursMonFri.open,
+                                hoursMonFri.close,
+                                hoursMonFri.closed
+                              ),
+                            }
+                          : {}),
+                        ...(formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed)
+                          ? {
+                              Sat: formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed),
+                            }
+                          : {}),
+                        ...(formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed)
+                          ? {
+                              Sun: formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed),
+                            }
+                          : {}),
+                      },
+                      services_offered: services,
+                      payment_methods_accepted: paymentMethods,
+                      delivery_options: deliveryOptions,
+                      service_areas:
+                        businessType === "mobile_service" && serviceAreasInput
+                          ? { areas: parseServiceAreas(serviceAreasInput) }
+                          : null,
+                      location_city: city || null,
+                      location_province: province || null,
+                      location_town: locationTown || null,
+                      location_address: locationAddress || null,
+                      phone: phone || null,
+                      whatsapp: whatsapp || null,
+                      email: email || null,
+                      website: website || null,
+                      store_number: storeNumber || null,
+                      map_directions: mapDirections || null,
+                      business_details: previewMallDetails,
+                      layout_template: layoutTemplate,
+                    } as BusinessDetailRecord
+                  }
+                  trustLevel={null}
+                  ownerProfile={{ display_name: "You" }}
+                  promotions={[]}
+                  showPromotions={false}
+                  showPublicActions={false}
                 />
-                <DevicePreviewShell>
-                  <BusinessLayoutRouter
-                    business={
-                      {
-                        id: businessId,
-                        owner_id: "preview-seller",
-                        business_name: businessName || "Your business name",
-                        description: description || "Your business description will appear here.",
-                        status: "preview",
-                        business_type: businessType,
-                        category: category || "general_other",
-                        cover_photo: previewCoverPhotoUrl ?? existingCoverPhoto ?? null,
-                        logo_url: previewLogoUrl ?? existingLogo ?? null,
-                        cover_video: previewCoverVideo,
-                        video_thumbnail: previewVideoThumbnail,
-                        gallery_photos: previewGalleryPhotos,
-                        social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
-                        operating_hours: {
-                          ...(formatHoursValue(
-                            hoursMonFri.open,
-                            hoursMonFri.close,
-                            hoursMonFri.closed
-                          )
-                            ? {
-                                Mon_Fri: formatHoursValue(
-                                  hoursMonFri.open,
-                                  hoursMonFri.close,
-                                  hoursMonFri.closed
-                                ),
-                              }
-                            : {}),
-                          ...(formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed)
-                            ? {
-                                Sat: formatHoursValue(
-                                  hoursSat.open,
-                                  hoursSat.close,
-                                  hoursSat.closed
-                                ),
-                              }
-                            : {}),
-                          ...(formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed)
-                            ? {
-                                Sun: formatHoursValue(
-                                  hoursSun.open,
-                                  hoursSun.close,
-                                  hoursSun.closed
-                                ),
-                              }
-                            : {}),
-                        },
-                        services_offered: services,
-                        payment_methods_accepted: paymentMethods,
-                        delivery_options: deliveryOptions,
-                        service_areas:
-                          businessType === "mobile_service" && serviceAreasInput
-                            ? { areas: parseServiceAreas(serviceAreasInput) }
-                            : null,
-                        location_city: city || null,
-                        location_province: province || null,
-                        location_town: locationTown || null,
-                        location_address: locationAddress || null,
-                        phone: phone || null,
-                        whatsapp: whatsapp || null,
-                        email: email || null,
-                        website: website || null,
-                        store_number: storeNumber || null,
-                        map_directions: mapDirections || null,
-                        business_details: previewMallDetails,
-                        layout_template: layoutTemplate,
-                      } as BusinessDetailRecord
-                    }
-                    trustLevel={null}
-                    ownerProfile={{ display_name: "You" }}
-                    promotions={[]}
-                    showPromotions={false}
-                    showPublicActions={false}
-                    layoutOverride={resolveBusinessLayout(
-                      layoutTemplate,
-                      (category || "general_other") as BusinessCategory
-                    )}
-                  />
-                </DevicePreviewShell>
               </div>
 
               {/* Payment Methods */}

@@ -104,14 +104,6 @@ vi.mock("@/components/business/layouts/business-layout-router", () => ({
   ),
 }));
 
-vi.mock("@/components/business/shared/device-preview-shell", () => ({
-  DevicePreviewShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock("@/components/business/shared/layout-chooser", () => ({
-  LayoutChooser: () => <div>Layout Chooser</div>,
-}));
-
 describe("CreateBusinessPage", () => {
   const mockPush = vi.fn();
   const mockToast = vi.fn();
@@ -322,7 +314,7 @@ describe("CreateBusinessPage", () => {
     await completeStandaloneStepOne();
     completeLocationStep();
 
-    expect(screen.getByText(/Preview how your profile will look/i)).toBeInTheDocument();
+    expect(screen.getByText(/Profile preview/i)).toBeInTheDocument();
     expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
   });
 
@@ -516,7 +508,7 @@ describe("CreateBusinessPage", () => {
 
     completeLocationStep();
 
-    expect(screen.getByText(/Preview how your profile will look/i)).toBeInTheDocument();
+    expect(screen.getByText(/Profile preview/i)).toBeInTheDocument();
     expect(screen.getByText("Nomsa Home Studio")).toBeInTheDocument();
   });
 

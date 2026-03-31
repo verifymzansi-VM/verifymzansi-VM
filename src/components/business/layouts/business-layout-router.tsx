@@ -1,17 +1,14 @@
 "use client";
 
-import { resolveBusinessLayout } from "@/lib/business/category-layout-map";
 import { hasBusinessDeliveryAvailable } from "@/lib/forms/business-type-details";
-import type { BusinessCategory, TrustLevel } from "@/types/enums";
+import type { TrustLevel } from "@/types/enums";
 import type {
   BusinessDetailRecord,
   BusinessOwnerRecord,
   BusinessPromotionRecord,
 } from "@/components/business/business-detail-content";
 import type { LayoutTemplate } from "@/lib/business/layout-templates";
-import { CinematicLayout } from "@/components/business/layouts/cinematic-layout";
-import { ShowcaseLayout } from "@/components/business/layouts/showcase-layout";
-import { ProfessionalLayout } from "@/components/business/layouts/professional-layout";
+import { UnifiedLayout } from "@/components/business/layouts/unified-layout";
 
 interface BusinessLayoutRouterProps {
   business: BusinessDetailRecord;
@@ -20,17 +17,16 @@ interface BusinessLayoutRouterProps {
   promotions?: BusinessPromotionRecord[];
   showPromotions?: boolean;
   showPublicActions?: boolean;
-  /** Override the resolved layout (used in preview / chooser). */
+  /** @deprecated No longer used — single unified layout is always rendered. */
   layoutOverride?: LayoutTemplate;
 }
 
 /**
- * Resolves the correct layout template for a business and renders it.
+ * Renders the unified media-first business layout.
  *
- * Resolution order:
- *  1. `layoutOverride` prop (preview / chooser)
- *  2. `business.layout_template` (user-chosen, persisted)
- *  3. category default (from CATEGORY_LAYOUT_MAP)
+ * Previously routed between cinematic / showcase / professional templates.
+ * Now always renders `UnifiedLayout` (video → photos → compact details).
+ * The `layoutOverride` prop is kept for backward compat but ignored.
  */
 export function BusinessLayoutRouter({
   business,
@@ -39,37 +35,23 @@ export function BusinessLayoutRouter({
   promotions = [],
   showPromotions = true,
   showPublicActions = true,
-  layoutOverride,
 }: BusinessLayoutRouterProps) {
-  const template: LayoutTemplate =
-    layoutOverride ??
-    resolveBusinessLayout(business.layout_template, business.category as BusinessCategory);
-
   const galleryPhotos = business.gallery_photos ?? [];
   const deliveryAvailable = hasBusinessDeliveryAvailable(
     business.delivery_options,
     business.business_details
   );
 
-  const common = {
-    business,
-    trustLevel,
-    ownerProfile,
-    promotions,
-    showPromotions,
-    showPublicActions,
-    galleryPhotos,
-    deliveryAvailable,
-  } as const;
-
-  switch (template) {
-    case "cinematic":
-      return <CinematicLayout {...common} />;
-    case "showcase":
-      return <ShowcaseLayout {...common} />;
-    case "professional":
-      return <ProfessionalLayout {...common} />;
-    default:
-      return <ProfessionalLayout {...common} />;
-  }
+  return (
+    <UnifiedLayout
+      business={business}
+      trustLevel={trustLevel}
+      ownerProfile={ownerProfile}
+      promotions={promotions}
+      showPromotions={showPromotions}
+      showPublicActions={showPublicActions}
+      galleryPhotos={galleryPhotos}
+      deliveryAvailable={deliveryAvailable}
+    />
+  );
 }

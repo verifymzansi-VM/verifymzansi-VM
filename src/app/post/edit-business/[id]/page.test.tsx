@@ -47,14 +47,6 @@ vi.mock("@/components/business/layouts/business-layout-router", () => ({
   ),
 }));
 
-vi.mock("@/components/business/shared/device-preview-shell", () => ({
-  DevicePreviewShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock("@/components/business/shared/layout-chooser", () => ({
-  LayoutChooser: () => <div>Layout Chooser</div>,
-}));
-
 vi.mock("@/components/business/business-detail-content", () => ({
   BusinessDetailContent: ({
     business,
@@ -184,7 +176,7 @@ describe("EditBusinessPage", () => {
     });
 
     expect(screen.getByText("Home Business")).toBeInTheDocument();
-    expect(screen.getByText("Business preview")).toBeInTheDocument();
+    expect(screen.getByText("Profile preview")).toBeInTheDocument();
     expect(screen.getByTestId("layout-router")).toBeInTheDocument();
     expect(screen.getByText("Nomsa Home Studio")).toBeInTheDocument();
 

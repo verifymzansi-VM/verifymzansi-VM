@@ -64,9 +64,6 @@ import { BusinessTypeDetailsFields } from "@/components/business/business-type-d
 import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 import { BusinessLayoutRouter } from "@/components/business/layouts/business-layout-router";
-import { DevicePreviewShell } from "@/components/business/shared/device-preview-shell";
-import { LayoutChooser } from "@/components/business/shared/layout-chooser";
-import { resolveBusinessLayout } from "@/lib/business/category-layout-map";
 import type { LayoutTemplate } from "@/lib/business/layout-templates";
 import type { BusinessDraftData } from "@/lib/post-drafts/storage";
 import {
@@ -894,9 +891,6 @@ function CreateBusinessContent() {
           : previewBusinessDetails;
     const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryAvailable);
 
-    const effectiveCategory = (category || "general_other") as BusinessCategory;
-    const effectiveLayout = resolveBusinessLayout(layoutTemplate, effectiveCategory);
-
     const previewBusiness = {
       id: "preview-business",
       owner_id: "preview-seller",
@@ -941,32 +935,19 @@ function CreateBusinessContent() {
     };
 
     return (
-      <div className="space-y-6">
-        {/* Layout chooser */}
-        <LayoutChooser
-          selected={effectiveLayout}
-          onChange={(id) => setLayoutTemplate(id)}
-          category={category ? (category as BusinessCategory) : undefined}
-        />
-
-        {/* Device preview with layout router */}
-        <div className="rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue/5 p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <Building2 className="h-4 w-4" />
-            Preview how your profile will look
-          </div>
-          <DevicePreviewShell>
-            <BusinessLayoutRouter
-              business={previewBusiness as BusinessDetailRecord}
-              trustLevel={null}
-              ownerProfile={{ display_name: "You" }}
-              promotions={[]}
-              showPromotions={false}
-              showPublicActions={false}
-              layoutOverride={effectiveLayout}
-            />
-          </DevicePreviewShell>
+      <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <Building2 className="h-4 w-4" />
+          Profile preview
         </div>
+        <BusinessLayoutRouter
+          business={previewBusiness as BusinessDetailRecord}
+          trustLevel={null}
+          ownerProfile={{ display_name: "You" }}
+          promotions={[]}
+          showPromotions={false}
+          showPublicActions={false}
+        />
       </div>
     );
   }
