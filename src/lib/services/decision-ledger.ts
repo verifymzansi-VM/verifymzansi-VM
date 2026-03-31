@@ -271,11 +271,43 @@ export async function escalateDecision(params: EscalateDecisionParams) {
 
 /* ── Appeals ───────────────────────────────────────────── */
 
+/** Maximum depth of appeal chains to prevent infinite loops. */
+const MAX_APPEAL_DEPTH = 3;
+
 /**
  * Submit an appeal against a finalized decision.
  */
 export async function createAppeal(params: CreateAppealParams) {
   const supabase = createAdminClient();
+
+  // Enforce appeal depth limit by walking the parent_decision_id chain.
+  const { data: decision } = await supabase
+    .from("decision_records")
+    .select("id, parent_decision_id")
+    .eq("id", params.decisionId)
+    .single();
+
+  if (!decision) {
+    throw new Error("Decision record not found");
+  }
+
+  let depth = 0;
+  let parentId = decision.parent_decision_id as string | null;
+  while (parentId && depth < MAX_APPEAL_DEPTH + 1) {
+    depth++;
+    const { data: parent } = await supabase
+      .from("decision_records")
+      .select("parent_decision_id")
+      .eq("id", parentId)
+      .single();
+    parentId = (parent?.parent_decision_id as string | null) ?? null;
+  }
+
+  if (depth >= MAX_APPEAL_DEPTH) {
+    throw new Error(
+      `Maximum appeal depth of ${MAX_APPEAL_DEPTH} reached. Please contact support for further assistance.`
+    );
+  }
 
   // Mark the parent decision as appealed
   await supabase

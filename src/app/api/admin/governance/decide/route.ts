@@ -19,7 +19,21 @@ const governanceDecideSchema = z.object({
   action: z.enum(["approve", "reject", "escalate"]),
   rationale: z.string().min(1).max(2000),
   afterState: z.record(z.string(), z.unknown()).optional(),
+  secondaryApproverId: uuidSchema.optional(),
 });
+
+/**
+ * High-stakes action categories that require dual approval (four-eyes principle).
+ * For these categories, the approver must not be the recommender, and a
+ * secondaryApproverId is required.
+ */
+const DUAL_APPROVAL_CATEGORIES: ReadonlySet<string> = new Set([
+  "kyc_override",
+  "account_ban",
+  "data_deletion",
+  "role_change",
+  "policy_exception",
+]);
 
 /**
  * POST /api/admin/governance/decide
@@ -66,8 +80,45 @@ export async function POST(request: Request) {
       return bodyResult.response;
     }
 
-    const { decisionId, action, rationale, afterState } = bodyResult.data;
+    const { decisionId, action, rationale, afterState, secondaryApproverId } = bodyResult.data;
     const actorRole = getRoleFromUser(user) as StaffRole;
+
+    // ── Dual approval enforcement for high-stakes actions ────
+    if (action === "approve" || action === "reject") {
+      const { createAdminClient } = await import("@/lib/supabase/admin");
+      const adminSupabase = createAdminClient();
+      const { data: decision } = await adminSupabase
+        .from("decision_records")
+        .select("recommender_id, action_category")
+        .eq("id", decisionId)
+        .single();
+
+      if (decision) {
+        // Four-eyes principle: approver must differ from recommender
+        if (decision.recommender_id === user.id) {
+          return NextResponse.json(
+            { error: "Cannot approve/reject your own recommendation" },
+            { status: 403 }
+          );
+        }
+
+        // High-stakes categories require a secondary approver
+        if (
+          action === "approve" &&
+          DUAL_APPROVAL_CATEGORIES.has(decision.action_category) &&
+          !secondaryApproverId
+        ) {
+          return NextResponse.json(
+            {
+              error: "Dual approval required",
+              detail:
+                "High-stakes decisions require a secondary approver. Provide secondaryApproverId.",
+            },
+            { status: 422 }
+          );
+        }
+      }
+    }
 
     if (action === "approve") {
       const result = await approveDecision({
@@ -76,6 +127,7 @@ export async function POST(request: Request) {
         approverRole: actorRole,
         rationale,
         afterState: afterState ?? {},
+        secondaryApproverId,
       });
       if (!result) {
         return NextResponse.json(

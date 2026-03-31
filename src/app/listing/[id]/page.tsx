@@ -46,6 +46,12 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   const supabase = await createClient();
   const listingOwnerColumn = await getOwnerColumn(supabase, "listings");
 
+  // Check if visitor is authenticated
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isAuthenticated = Boolean(user);
+
   // Fetch listing
   const { data: rawListing } = await supabase
     .from("listings")
@@ -69,6 +75,13 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
         .eq("user_id", listingOwnerId)
         .maybeSingle()
     : { data: null };
+
+  // Strip seller phone data for anonymous visitors to prevent PII scraping
+  const safeSeller = seller
+    ? isAuthenticated
+      ? seller
+      : { ...seller, phone: null, masked_phone_public: null }
+    : null;
 
   // Track view (non-blocking, best-effort)
   void (async () => {
@@ -126,7 +139,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       priceCurrency: "ZAR",
       price: listing.price_cents ? (listing.price_cents / 100).toFixed(2) : "0",
       availability: "https://schema.org/InStock",
-      seller: seller ? { "@type": "Person", name: seller.display_name } : undefined,
+      seller: safeSeller ? { "@type": "Person", name: safeSeller.display_name } : undefined,
     },
   };
 
@@ -149,9 +162,10 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
           />
           <ListingDetailContent
             listing={listing}
-            seller={seller}
+            seller={safeSeller}
             similarItems={similarItems}
             similarSellers={similarSellers}
+            showContactActions={isAuthenticated}
           />
         </div>
       </main>

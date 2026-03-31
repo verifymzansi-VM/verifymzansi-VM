@@ -262,7 +262,7 @@ describe("VerificationPage", () => {
       expect(fetchCalls().some(([input]) => String(input).includes("/api/otp/send"))).toBe(true);
       expect(screen.getByLabelText(/6-digit OTP/i)).toBeInTheDocument();
     });
-    expect(screen.getByText(/Codes expire after 5 minutes/i)).toBeInTheDocument();
+    expect(screen.getByText(/Code expires in/i)).toBeInTheDocument();
     expect(screen.queryByText(/Dev OTP:/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Test OTP:/i)).not.toBeInTheDocument();
   });

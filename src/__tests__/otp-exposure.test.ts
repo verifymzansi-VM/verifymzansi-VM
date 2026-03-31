@@ -68,7 +68,9 @@ function createOtpRequest(body: Record<string, unknown>, hostname = "localhost")
 }
 
 function mockAuthenticatedUser(id = "user-123") {
-  mockGetUser.mockResolvedValue({ data: { user: { id } } });
+  mockGetUser.mockResolvedValue({
+    data: { user: { id, email_confirmed_at: "2026-01-01T00:00:00Z" } },
+  });
 }
 
 function mockOtpDbSuccess() {

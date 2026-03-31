@@ -10,6 +10,7 @@ import {
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { ensureCsrfCookie, CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
+import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 
 const logger = createLogger("Proxy");
 
@@ -341,6 +342,18 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   const needsAuth =
     protectedPrefixesAll.some((p) => pathname.startsWith(p)) ||
     authRoutes.some((r) => pathname === r || pathname.startsWith(r + "/"));
+
+  // Rate-limit public marketplace pages to deter scraping.
+  if (!needsAuth && (pathname.startsWith("/listing/") || pathname.startsWith("/marketplace"))) {
+    const ip = getClientIp(request);
+    const { limited, retryAfter } = checkLocalRateLimit(ip, "marketplace:browse", 60);
+    if (limited) {
+      return new NextResponse("Too Many Requests", {
+        status: 429,
+        headers: { "Retry-After": String(retryAfter ?? 60) },
+      });
+    }
+  }
 
   if (!needsAuth) {
     return NextResponse.next();

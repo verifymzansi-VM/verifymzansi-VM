@@ -91,6 +91,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             verificationSummary.accountVerificationStatus === "incomplete" ||
             verificationSummary.accountVerificationStatus === "rejected",
           pendingReview: verificationSummary.accountVerificationStatus === "pending_review",
+          verificationProgress: {
+            approved: verificationSummary.approvedStepCount,
+            submitted: verificationSummary.submittedStepCount,
+            total: 4,
+          },
         });
       } catch {
         // Non-critical — sidebar works fine without badges

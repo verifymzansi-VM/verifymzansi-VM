@@ -86,7 +86,9 @@ describe("OTP verifyOtp — timing-safe comparison", () => {
     const { NextRequest } = await import("next/server");
     const { POST } = await import("@/app/api/otp/verify/route");
 
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1", email_confirmed_at: "2026-01-01T00:00:00Z" } },
+    });
 
     // Profile guard — no pending_phone
     mockServerFrom.mockImplementation((table: string) => {
@@ -193,7 +195,9 @@ describe("OTP verifyOtp — timing-safe comparison", () => {
     const { NextRequest } = await import("next/server");
     const { POST } = await import("@/app/api/otp/verify/route");
 
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1", email_confirmed_at: "2026-01-01T00:00:00Z" } },
+    });
 
     mockServerFrom.mockImplementation((table: string) => {
       if (table === "account_profiles") {

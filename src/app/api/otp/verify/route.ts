@@ -14,6 +14,7 @@ import {
   normalizeSaPhone,
 } from "@/lib/utils/phone";
 import { sendSms } from "@/lib/services/sms";
+import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 
 const log = createLogger("OTPVerify");
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -376,6 +377,12 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!user.email_confirmed_at) {
+      return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
+        status: 403,
+      });
     }
 
     // If a pending_phone exists, OTP verification must target that exact staged value.

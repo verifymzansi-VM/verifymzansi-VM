@@ -75,7 +75,9 @@ describe("POST /api/otp/send safe error envelopes", () => {
     });
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123", email_confirmed_at: "2026-01-01T00:00:00Z" } },
+    });
     mockSendOtpSms.mockResolvedValue({ success: true });
   });
 

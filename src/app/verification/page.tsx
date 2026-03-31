@@ -72,6 +72,7 @@ const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"];
 const OTP_RESEND_COOLDOWN_SECONDS = 30;
+const OTP_EXPIRY_SECONDS = 300; // 5 minutes
 const EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION =
   "Check your inbox for the confirmation link, then return here to continue with document and location verification.";
 const VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION =
@@ -158,12 +159,41 @@ function mapUploadFailureMessage(label: string, error: unknown, code?: string): 
   }
 }
 
+/** Map rejection reason codes to human-readable guidance. */
+const REJECTION_GUIDANCE: Record<string, string> = {
+  blurry_image:
+    "Your image is too blurry. Please retake the photo in good lighting, hold your device steady, and make sure the text is sharp.",
+  mismatch:
+    "The details on your document don't match the information you provided. Please double-check your name and ID number, then resubmit.",
+  expired_document:
+    "Your document appears to be expired. Please upload a valid, unexpired document.",
+  incomplete_info:
+    "Some required information is missing or cut off. Please retake the photo showing the full document with all edges visible.",
+  fraudulent:
+    "Your submission could not be verified. If you believe this is an error, please contact support.",
+  wrong_document_type:
+    "The uploaded file is not the correct document type. Please upload a South African ID document, card, or passport.",
+  not_sa_document:
+    "Only South African identity documents are accepted. Please upload a valid SA ID book, smart ID card, or passport.",
+  location_mismatch:
+    "Your GPS location doesn't match the province you selected. Please verify your location or update your province selection.",
+  high_risk_override:
+    "Your submission was flagged for additional review. An admin will review your case — no action needed from you.",
+  other:
+    "Your submission needs attention. Please review the admin note above for specific instructions.",
+  insufficient_face_visibility:
+    "Your face isn't clearly visible in the selfie. Please retake it in good lighting, facing the camera directly, without sunglasses or a hat.",
+};
+
 function formatReasonCode(reasonCode: string | null | undefined): string | null {
   if (!reasonCode) return null;
-  return reasonCode
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  return (
+    REJECTION_GUIDANCE[reasonCode] ??
+    reasonCode
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ")
+  );
 }
 
 function formatStatusLabel(status: VerificationStatus): string {
@@ -333,6 +363,7 @@ export default function VerificationPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [otpRetryAfterSeconds, setOtpRetryAfterSeconds] = useState(0);
+  const [otpExpirySeconds, setOtpExpirySeconds] = useState(0);
   const [otpSupportMessage, setOtpSupportMessage] = useState<string | null>(null);
   const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
   const [verificationUnavailable, setVerificationUnavailable] = useState(false);
@@ -509,6 +540,25 @@ export default function VerificationPage() {
             (entry.status === "approved" || entry.status === "pending")
         )
       );
+
+      // Hydrate upload receipts from server so they survive page refresh
+      setUploadReceipts((prev) => {
+        const next = { ...prev };
+        for (const entry of nextSteps) {
+          if (
+            (entry.step_type === "id_doc" || entry.step_type === "selfie") &&
+            (entry.status === "approved" || entry.status === "pending") &&
+            !next[entry.step_type]
+          ) {
+            next[entry.step_type] = {
+              name: entry.step_type === "id_doc" ? "ID document" : "Selfie",
+              sizeBytes: 0,
+              uploadedAtIso: entry.submitted_at ?? new Date().toISOString(),
+            };
+          }
+        }
+        return next;
+      });
 
       return {
         steps: nextSteps,
@@ -824,6 +874,16 @@ export default function VerificationPage() {
     return () => window.clearInterval(timer);
   }, [otpRetryAfterSeconds]);
 
+  useEffect(() => {
+    if (otpExpirySeconds <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setOtpExpirySeconds((current) => (current <= 1 ? 0 : current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [otpExpirySeconds]);
+
   function markStepComplete(stepType: VerificationStepType) {
     setCompletedSteps((prev) => (prev.includes(stepType) ? prev : [...prev, stepType]));
   }
@@ -837,6 +897,7 @@ export default function VerificationPage() {
     setOtp("");
     setOtpSent(false);
     setOtpRetryAfterSeconds(0);
+    setOtpExpirySeconds(0);
     setOtpSupportMessage(null);
   }
 
@@ -874,6 +935,7 @@ export default function VerificationPage() {
       setOtpSent(true);
       setOtp("");
       setOtpRetryAfterSeconds(OTP_RESEND_COOLDOWN_SECONDS);
+      setOtpExpirySeconds(OTP_EXPIRY_SECONDS);
       setOtpSupportMessage(buildOtpSupportMessage({}, OTP_RESEND_COOLDOWN_SECONDS, formattedPhone));
       toast({
         title: otpSent ? "OTP resent" : "OTP sent",
@@ -914,6 +976,7 @@ export default function VerificationPage() {
       setPhoneVerified(true);
       setOtpSupportMessage(null);
       setOtpRetryAfterSeconds(0);
+      setOtpExpirySeconds(0);
       markStepComplete("phone");
       await syncVerificationStatus();
       setStep("id_doc");
@@ -1030,6 +1093,16 @@ export default function VerificationPage() {
             payload.requestId
           );
         }
+        // 409 = step already approved by admin between our pre-check and write.
+        // Treat as success — the step is done, just not by us.
+        if (res.status === 409 && payload.code === "step_already_approved") {
+          toast({
+            title: "Already approved",
+            description: `Your ${label} was already approved while you were uploading. No action needed.`,
+            variant: "success",
+          });
+          return payload;
+        }
         throw new SubmissionError(
           appendRequestId(
             mapUploadFailureMessage(
@@ -1051,7 +1124,8 @@ export default function VerificationPage() {
     } catch (error) {
       if (
         error instanceof SubmissionError &&
-        error.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE
+        (error.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE ||
+          error.code === "step_already_approved")
       ) {
         throw error;
       }
@@ -1469,10 +1543,19 @@ export default function VerificationPage() {
 
                   {otpSent && !phoneVerified && (
                     <div className="space-y-3 rounded-md border border-warm-200/70 dark:border-warm-700/70 p-3">
-                      <p className="text-xs text-muted-foreground">
-                        Enter the 6-digit code sent to {formattedPhone}. Codes expire after 5
-                        minutes.
-                      </p>
+                      {otpExpirySeconds > 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Enter the 6-digit code sent to {formattedPhone}. Code expires in{" "}
+                          <span className="font-medium text-foreground">
+                            {formatCountdown(otpExpirySeconds)}
+                          </span>
+                          .
+                        </p>
+                      ) : (
+                        <p className="text-xs text-destructive font-medium">
+                          Your code has expired. Please request a new one.
+                        </p>
+                      )}
                       {otpSupportMessage && (
                         <div className="rounded-md border border-warm-200/70 bg-warm-50/80 p-3 text-xs text-muted-foreground dark:border-warm-700/70 dark:bg-warm-950/20">
                           {otpSupportMessage}
@@ -1489,7 +1572,7 @@ export default function VerificationPage() {
                       </div>
                       <Button
                         onClick={handleVerifyOtp}
-                        disabled={isLoading || !isOtpValid}
+                        disabled={isLoading || !isOtpValid || otpExpirySeconds === 0}
                         variant="trust-verified"
                         className="gap-2"
                       >
@@ -1500,8 +1583,27 @@ export default function VerificationPage() {
                   )}
 
                   {phoneVerified && (
-                    <div className="rounded-md border border-brand-green/30 bg-brand-green-50 p-3 text-sm text-brand-green-900">
-                      Phone number verified: {formattedPhone}
+                    <div className="space-y-2">
+                      <div className="rounded-md border border-brand-green/30 bg-brand-green-50 p-3 text-sm text-brand-green-900">
+                        Phone number verified: {formattedPhone}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground"
+                        disabled={isLoading || isFinalizing}
+                        onClick={() => {
+                          setPhoneVerified(false);
+                          setOtpSent(false);
+                          setOtp("");
+                          setOtpExpirySeconds(0);
+                          setOtpRetryAfterSeconds(0);
+                          setOtpSupportMessage(null);
+                          clearStepCompletion("phone");
+                        }}
+                      >
+                        Change phone number
+                      </Button>
                     </div>
                   )}
                 </CardContent>
@@ -1531,6 +1633,15 @@ export default function VerificationPage() {
                         <p className="mt-1 text-xs">
                           Reason: {formatReasonCode(currentStepStatus.reason_code)}
                         </p>
+                      )}
+                      {(currentStepStatus.status === "rejected" ||
+                        currentStepStatus.status === "needs_resubmission") && (
+                        <Link
+                          href="/help/verification"
+                          className="mt-1 inline-block text-xs underline"
+                        >
+                          Need help?
+                        </Link>
                       )}
                     </div>
                   )}
@@ -1689,6 +1800,15 @@ export default function VerificationPage() {
                           Reason: {formatReasonCode(currentStepStatus.reason_code)}
                         </p>
                       )}
+                      {(currentStepStatus.status === "rejected" ||
+                        currentStepStatus.status === "needs_resubmission") && (
+                        <Link
+                          href="/help/verification"
+                          className="mt-1 inline-block text-xs underline"
+                        >
+                          Need help?
+                        </Link>
+                      )}
                     </div>
                   )}
 
@@ -1780,6 +1900,15 @@ export default function VerificationPage() {
                           <p className="mt-1 text-xs">
                             Reason: {formatReasonCode(currentStepStatus.reason_code)}
                           </p>
+                        )}
+                        {(currentStepStatus.status === "rejected" ||
+                          currentStepStatus.status === "needs_resubmission") && (
+                          <Link
+                            href="/help/verification"
+                            className="mt-1 inline-block text-xs underline"
+                          >
+                            Need help?
+                          </Link>
                         )}
                       </div>
                     )}

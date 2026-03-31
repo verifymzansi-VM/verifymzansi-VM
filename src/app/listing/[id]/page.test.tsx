@@ -50,8 +50,15 @@ function buildClient(options?: {
   seller?: Record<string, unknown> | null;
   similarListings?: Array<Record<string, unknown>>;
   similarSellers?: Array<Record<string, unknown>>;
+  user?: { id: string } | null;
 }) {
   return {
+    auth: {
+      getUser: async () => ({
+        data: { user: options?.user ?? null },
+        error: null,
+      }),
+    },
     from: (table: string) => {
       if (table === "listings") {
         return {

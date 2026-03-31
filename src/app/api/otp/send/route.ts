@@ -11,6 +11,7 @@ import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 
 const log = createLogger("OTP");
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
@@ -125,6 +126,12 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return otpSendError("Unauthorized", 401, { code: "unauthorized" });
+    }
+
+    if (!user.email_confirmed_at) {
+      return NextResponse.json(buildVerificationEmailConfirmationRequiredPayload(), {
+        status: 403,
+      });
     }
 
     // otp_logs is service-only; use admin client to bypass RLS safely in this server route.

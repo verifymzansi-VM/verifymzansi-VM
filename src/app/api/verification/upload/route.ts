@@ -12,6 +12,7 @@ import { scanForMalware } from "@/lib/utils/malware-scan";
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import {
   buildPendingVerificationStep,
+  buildVerificationStep,
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
 import crypto from "crypto";
@@ -447,14 +448,40 @@ export async function POST(request: NextRequest) {
       .eq("id", artifact.id);
 
     // ── Build verification step data ──────────────────────────
-    const stepData = buildPendingVerificationStep({
-      user_id: user.id,
-      step_type: stepType,
-      auto_status: engineResult.autoStatus,
-      risk_score: engineResult.riskScore,
-      risk_level: engineResult.riskLevel,
-      submitted_at: new Date().toISOString(),
-    });
+    // Auto-approve low-risk steps where the provider approved and no
+    // block-level signals fired (R1: streamline verification for low-risk users).
+    const isAutoApproved =
+      engineResult.autoStatus === "approved" && engineResult.riskLevel === "low";
+
+    const stepData = isAutoApproved
+      ? buildVerificationStep(
+          {
+            user_id: user.id,
+            step_type: stepType,
+            auto_status: engineResult.autoStatus,
+            risk_score: engineResult.riskScore,
+            risk_level: engineResult.riskLevel,
+            submitted_at: new Date().toISOString(),
+          },
+          "approved"
+        )
+      : buildPendingVerificationStep({
+          user_id: user.id,
+          step_type: stepType,
+          auto_status: engineResult.autoStatus,
+          risk_score: engineResult.riskScore,
+          risk_level: engineResult.riskLevel,
+          submitted_at: new Date().toISOString(),
+        });
+
+    if (isAutoApproved) {
+      log.info("Low-risk step auto-approved by engine", {
+        userId: user.id,
+        stepType,
+        riskScore: engineResult.riskScore,
+        autoStatus: engineResult.autoStatus,
+      });
+    }
 
     if (docType === "id_document" && idNumber) {
       // Encrypt ID number with AES-256-GCM before storage
@@ -681,6 +708,40 @@ export async function POST(request: NextRequest) {
         autoStatus: engineResult.autoStatus,
         riskScore: engineResult.riskScore,
       });
+    }
+
+    // ── Auto-promote to verified when all steps are approved ──
+    // If this step was auto-approved, check whether every required step
+    // (phone, id_doc, selfie, location) is now approved. If so, skip
+    // the admin queue entirely and promote the account to "verified".
+    if (isAutoApproved) {
+      const { data: allSteps } = await admin
+        .from("verification_steps")
+        .select("step_type, status")
+        .eq("user_id", user.id);
+
+      const stepMap = new Map((allSteps ?? []).map((s) => [s.step_type, s.status]));
+      const allApproved =
+        stepMap.get("phone") === "approved" &&
+        stepMap.get("id_doc") === "approved" &&
+        stepMap.get("selfie") === "approved" &&
+        stepMap.get("location") === "approved";
+
+      if (allApproved) {
+        const { data: promoted } = await admin
+          .from(ACCOUNT_PROFILE_WRITE_TABLE)
+          .update({ account_verification_status: "verified" })
+          .eq("id", profile.id)
+          .in("account_verification_status", ["incomplete", "pending_review"])
+          .select("id");
+
+        if (promoted?.length) {
+          log.info("Account auto-promoted to verified — all steps approved by engine", {
+            profileId: profile.id,
+            userId: user.id,
+          });
+        }
+      }
     }
 
     // ── Audit log ────────────────────────────────────────────

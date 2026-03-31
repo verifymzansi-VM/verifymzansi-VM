@@ -401,6 +401,7 @@ describe("POST /api/listings", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             neq: vi.fn().mockReturnThis(),
+            update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
             insert: insertSpy,
           };
         }
@@ -474,10 +475,12 @@ describe("POST /api/listings", () => {
                   limit: vi.fn().mockResolvedValue({ error: null }),
                 };
               }
-              return {
-                neq: vi.fn().mockResolvedValue({ count: 0 }),
-              };
+              const chain = { eq: vi.fn(), neq: vi.fn() };
+              chain.eq.mockReturnValue(chain);
+              chain.neq.mockReturnValue(chain);
+              return chain;
             }),
+            update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
             insert: insertSpy,
           };
         }
@@ -546,6 +549,7 @@ describe("POST /api/listings", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             neq: vi.fn().mockReturnThis(),
+            update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
             insert: insertSpy,
           };
         }

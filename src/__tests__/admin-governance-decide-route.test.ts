@@ -10,6 +10,7 @@ const {
   mockEnforceCsrfToken,
   mockCheckLocalRateLimit,
   mockLogApiError,
+  mockAdminFrom,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockVerifyCapabilityFromDb: vi.fn(),
@@ -20,10 +21,15 @@ const {
   mockEnforceCsrfToken: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(),
   mockLogApiError: vi.fn(),
+  mockAdminFrom: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({ from: mockAdminFrom }),
 }));
 
 vi.mock("@/lib/auth/admin-access", () => ({
@@ -94,6 +100,22 @@ describe("POST /api/admin/governance/decide", () => {
           data: { user: { id: "gov-1", app_metadata: { role: "governance_controller" } } },
         }),
       },
+    });
+    // Default admin mock: decision_records query returns a non-blocking decision
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "decision_records") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { recommender_id: "mod-1", action_category: "report_review" },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return {};
     });
   });
 

@@ -24,7 +24,8 @@ import {
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { hasPhoneNumber } from "@/lib/account/require-phone";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
-import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import type { MarketplaceArea, PlanTier, AccountVerificationStatus } from "@/types/enums";
 import {
   normalizeMarketplaceCategoryParam,
   normalizeMarketplaceConditionParam,
@@ -829,6 +830,43 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // ── Auto-approve for trusted, clean-history sellers ──────
+    let autoApproved = false;
+    const trustLevel = computeTrustLevel(
+      verification.accountVerificationStatus as AccountVerificationStatus | null,
+      tier as PlanTier | null
+    );
+    if (trustLevel >= 3) {
+      // Check the seller has no prior rejected listings (clean history)
+      const { count: rejectedCount } = await getAdmin()
+        .from("listings")
+        .select("id", { count: "exact", head: true })
+        .eq(ownerColumn, user.id)
+        .eq("status", "rejected");
+
+      if ((rejectedCount ?? 0) === 0) {
+        const { error: approveError } = await getAdmin()
+          .from("listings")
+          .update({ status: "active" })
+          .eq("id", newListing.id);
+
+        if (approveError) {
+          log.warn("Auto-approve failed; listing stays in moderation queue", {
+            listingId: newListing.id,
+            userId: user.id,
+            error: approveError.message,
+          });
+        } else {
+          autoApproved = true;
+          log.info("Listing auto-approved for trusted seller", {
+            listingId: newListing.id,
+            userId: user.id,
+            trustLevel,
+          });
+        }
+      }
+    }
+
     log.info("Listing created", {
       listingId: newListing.id,
       userId: user.id,
@@ -836,7 +874,11 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { id: newListing.id, message: "Listing submitted for review" },
+      {
+        id: newListing.id,
+        message: autoApproved ? "Listing published" : "Listing submitted for review",
+        status: autoApproved ? "active" : "pending_moderation",
+      },
       { status: 201 }
     );
   } catch (err) {

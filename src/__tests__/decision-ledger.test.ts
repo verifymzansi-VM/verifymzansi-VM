@@ -190,7 +190,17 @@ describe("decision-ledger service", () => {
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
         if (table === "decision_records") {
-          return { update: vi.fn().mockReturnValue({ eq: decisionUpdateEq }) };
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { id: "decision-1", parent_decision_id: null },
+                  error: null,
+                }),
+              }),
+            }),
+            update: vi.fn().mockReturnValue({ eq: decisionUpdateEq }),
+          };
         }
         if (table === "appeal_cases") {
           return { insert: appealInsert };

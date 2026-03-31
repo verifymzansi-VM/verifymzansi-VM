@@ -52,7 +52,7 @@ export function PwaInstallPrompt() {
   });
   const [showIOSHelp, setShowIOSHelp] = useState(false);
   const promptBlockedForRoute = PROMPT_BLOCKED_PATH_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    (prefix) => pathname != null && (pathname === prefix || pathname.startsWith(`${prefix}/`))
   );
 
   useEffect(() => {

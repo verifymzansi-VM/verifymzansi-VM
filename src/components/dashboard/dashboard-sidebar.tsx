@@ -29,6 +29,7 @@ export interface DashboardSidebarBadges {
   pendingModeration?: number;
   incompleteVerification?: boolean;
   pendingReview?: boolean;
+  verificationProgress?: { approved: number; submitted: number; total: number };
 }
 
 interface DashboardSidebarProps {
@@ -89,6 +90,37 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
 
         {/* Tertiary */}
         {TERTIARY_NAV.map(renderNavItem)}
+
+        {/* Verification progress */}
+        {badges.verificationProgress &&
+          badges.verificationProgress.approved < badges.verificationProgress.total &&
+          (() => {
+            const pct = Math.round(
+              (badges.verificationProgress!.approved / badges.verificationProgress!.total) * 100
+            );
+            // Map to nearest Tailwind width utility
+            const widthClass =
+              pct === 0 ? "w-0" : pct <= 25 ? "w-1/4" : pct <= 50 ? "w-1/2" : "w-3/4";
+            return (
+              <div className="mt-3 rounded-lg border bg-muted/40 px-3 py-2">
+                <p className="text-xs font-medium text-muted-foreground mb-1">
+                  Verification: {badges.verificationProgress!.approved}/
+                  {badges.verificationProgress!.total} steps
+                </p>
+                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={cn("h-full rounded-full bg-brand-green transition-all", widthClass)}
+                  />
+                </div>
+                {badges.verificationProgress!.submitted > badges.verificationProgress!.approved && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {badges.verificationProgress!.submitted - badges.verificationProgress!.approved}{" "}
+                    pending review
+                  </p>
+                )}
+              </div>
+            );
+          })()}
       </nav>
 
       <Separator className="my-3" />

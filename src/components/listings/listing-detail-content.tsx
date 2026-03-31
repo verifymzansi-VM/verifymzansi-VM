@@ -265,6 +265,16 @@ export function ListingDetailContent({
                     listing.contact_methods?.includes("whatsapp") ? (seller?.phone ?? null) : null
                   }
                 />
+              ) : seller?.phone === null && seller?.masked_phone_public === null ? (
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">Contact seller</p>
+                  <p>
+                    <a href="/login" className="text-brand-green hover:underline font-medium">
+                      Sign in
+                    </a>{" "}
+                    to see the seller&apos;s contact details.
+                  </p>
+                </div>
               ) : (
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">Creator preview</p>

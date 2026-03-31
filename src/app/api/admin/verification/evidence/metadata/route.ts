@@ -305,6 +305,15 @@ export async function GET(request: NextRequest) {
     const accountProfile = accountProfileResult.data || null;
     const accessLog = accessLogResult.data || [];
 
+    // Filter out risk signals linked to superseded (rejected) artifacts so admins
+    // see a consolidated view per user instead of duplicate rows from resubmissions.
+    const rejectedArtifactIds = new Set(
+      (artifacts || []).filter((a) => a.status === "rejected").map((a) => a.id as string)
+    );
+    const activeRiskSignals = riskSignals.filter(
+      (rs) => !rs.artifact_id || !rejectedArtifactIds.has(rs.artifact_id as string)
+    );
+
     if (riskSignalsResult.error) {
       log.warn("Risk signal query failed during evidence metadata fetch", {
         actorId: user.id,
@@ -385,7 +394,7 @@ export async function GET(request: NextRequest) {
       steps,
       artifacts: artifacts || [],
       providerResults,
-      riskSignals: riskSignals || [],
+      riskSignals: activeRiskSignals || [],
       accountProfile: accountProfilePayload,
       sellerProfile: accountProfilePayload,
       accessLog: accessLog || [],
