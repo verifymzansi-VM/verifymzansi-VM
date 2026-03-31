@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,12 @@ interface GoogleOAuthButtonProps {
 export function GoogleOAuthButton({ mode }: GoogleOAuthButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  // Pre-bootstrap CSRF token on mount to avoid race condition where user
+  // clicks the button before ensureCsrfTokenReady completes during handleGoogleSignIn.
+  useEffect(() => {
+    void ensureCsrfTokenReady();
+  }, []);
 
   async function handleGoogleSignIn() {
     setIsLoading(true);

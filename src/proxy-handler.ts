@@ -195,10 +195,28 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
     request: { headers: requestHeaders },
   });
 
-  // Transfer the CSRF cookie from the temporary response
+  // Transfer the CSRF cookie from the temporary response.
+  // CRITICAL: Ensure the cookie is always set, even if extraction from the temporary
+  // response fails (e.g., timing issue with NextResponse.next() finalization).
+  // If extraction succeeds, use the extracted cookie; otherwise, explicitly set
+  // the token we already computed as a cookie with the same settings ensureCsrfCookie would use.
   const csrfCookie = csrfResponse.cookies.get("vm_csrf");
   if (csrfCookie) {
     response.cookies.set(csrfCookie);
+  } else {
+    // Fallback: explicitly set the CSRF token as a cookie if extraction failed.
+    // This ensures the browser always receives the cookie regardless of NextResponse state.
+    const isSecure =
+      request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
+    response.cookies.set({
+      name: "vm_csrf",
+      value: csrfToken,
+      httpOnly: false,
+      sameSite: "lax",
+      secure: isSecure,
+      path: "/",
+      maxAge: 60 * 60 * 12,
+    });
   }
 
   // Preserve cookies set during auth (Supabase session refresh, etc.)
@@ -274,12 +292,13 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   }
 
   if (shouldUsePlaywrightStubForRequest(request)) {
-    const stubUser =
-      process.env.PLAYWRIGHT_E2E_AUTH === "1"
-        ? getPlaywrightStubUserFromToken(
-            request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value ?? null
-          )
-        : null;
+    const allowStubAuth =
+      process.env.NODE_ENV !== "production" && process.env.PLAYWRIGHT_E2E_AUTH === "1";
+    const stubUser = allowStubAuth
+      ? getPlaywrightStubUserFromToken(
+          request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value ?? null
+        )
+      : null;
     const isProtected = protectedPrefixesAll.some((prefix) => pathname.startsWith(prefix));
     const isAuthRoute = authRoutes.some(
       (route) => pathname === route || pathname.startsWith(route + "/")

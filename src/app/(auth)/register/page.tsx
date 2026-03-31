@@ -53,6 +53,12 @@ export default function RegisterPage() {
     },
   });
 
+  // Pre-bootstrap CSRF token on mount to avoid race condition where user
+  // submits form before ensureCsrfTokenReady completes during handleSubmit.
+  useEffect(() => {
+    void ensureCsrfTokenReady();
+  }, []);
+
   // Turnstile widget load timeout — show error if it doesn't load in 15s.
   const turnstileState = getTurnstileClientState();
   const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;

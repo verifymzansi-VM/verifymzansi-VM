@@ -163,6 +163,12 @@ export default function LoginPage() {
     };
   }, []);
 
+  // Pre-bootstrap CSRF token on mount to avoid race condition where user
+  // submits form before ensureCsrfTokenReady completes during handleSubmit.
+  useEffect(() => {
+    void ensureCsrfTokenReady();
+  }, []);
+
   function startCooldown() {
     setResendCooldown(60);
     if (cooldownRef.current) clearInterval(cooldownRef.current);

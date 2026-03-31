@@ -220,10 +220,19 @@ export function enforceCsrfToken(
     return null;
   }
 
+  // Enhanced diagnostics: track token format validity separately from presence.
+  // This distinguishes between missing tokens, malformed tokens, and mismatches.
+  const cookieValid = isValidToken(cookieToken);
+  const headerValid = isValidToken(headerToken);
+  const tokensMatch = cookieToken === headerToken;
+
   log?.warn("Rejected request with invalid CSRF token", {
     path: request.nextUrl?.pathname ?? new URL(request.url).pathname,
     hasCookie: Boolean(cookieToken),
     hasHeader: Boolean(headerToken),
+    cookieValid,
+    headerValid,
+    tokensMatch,
   });
 
   return NextResponse.json({ error: "Invalid CSRF token" }, { status: 403 });

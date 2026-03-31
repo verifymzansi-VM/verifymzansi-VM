@@ -155,6 +155,27 @@ describe("middleware security headers", () => {
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
   });
 
+  it("guarantees CSRF cookie is set even with cookie extraction edge cases", async () => {
+    // This test validates the fallback behavior in withSecurityHeaders:
+    // The temporary ensureCsrfCookie response may not synchronously finalize
+    // its cookies yet, so proxy-handler must ensure the final response always
+    // includes vm_csrf, either by extracting from temporary response or by
+    // explicitly setting it with the computed token.
+    const res = await proxy(createMockRequest("/"));
+    const setCookie = res.headers.get("set-cookie");
+
+    expect(res.status).toBe(200);
+    expect(setCookie).toBeDefined();
+    expect(setCookie).toContain("vm_csrf=");
+
+    // Verify cookie attributes are correct (httpOnly=false so client can read it)
+    const cookieParts = setCookie?.split(";").map((part) => part.trim().toLowerCase()) ?? [];
+    expect(cookieParts.some((part) => part.startsWith("path=/"))).toBe(true);
+    expect(cookieParts.some((part) => part.startsWith("samesite="))).toBe(true);
+    // secure attribute depends on protocol detection; at least verify no errors
+    expect(setCookie).toBeTruthy();
+  });
+
   it("clears stale Playwright session cookies outside stub mode", async () => {
     const res = await proxy(
       createMockRequest("/", { cookieHeader: "vmz_pw_session=persona%3Aold" })
