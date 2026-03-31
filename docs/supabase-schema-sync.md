@@ -1,6 +1,6 @@
 # Supabase Schema Sync Runbook
 
-This runbook prevents runtime schema drift in the linked Supabase project, including `PGRST205` failures and enum mismatches such as a missing `PROMOTIONS_EVENTS` marketplace area.
+This runbook prevents runtime schema drift in the linked Supabase project, including PGRST205 failures, missing policy columns on account_profiles, and enum mismatches such as a missing PROMOTIONS_EVENTS marketplace area.
 
 ## 1. Install Supabase CLI
 
@@ -22,9 +22,7 @@ Use the project ref from your Supabase dashboard URL or `NEXT_PUBLIC_SUPABASE_UR
 
 Current production project ref in this workspace:
 
-```text
 tnygdgormnofpgjknlhr
-```
 
 ## 3. Apply migrations from this repo
 
@@ -46,11 +44,39 @@ Important current state:
 - The linked production project also has the follow-up explicit audit/intake
   insert-policy migration applied:
   `20260319194000_explicit_audit_service_role_insert_policies.sql`
-- If `supabase migration list` or `supabase db push` fails with pooler auth
-  errors for `postgres.tnygdgormnofpgjknlhr`, the local Postgres password is
+- If supabase migration list or supabase db push fails with pooler auth
+  errors for postgres.tnygdgormnofpgjknlhr, the local Postgres password is
   still not accepted by the remote database. Reconcile `SUPABASE_DB_PASSWORD`
   with the current project database password before relying on the CLI path
   again.
+
+### 3a. If CLI project auth fails with Unauthorized
+
+If you see Unauthorized from supabase link even with a token present:
+
+```bash
+supabase login --token "$SUPABASE_ACCESS_TOKEN"
+```
+
+Then retry link and migration commands.
+
+### 3b. If DB password auth fails (SQLSTATE 28P01)
+
+If the CLI can read via service-role checks but cannot connect for migration operations:
+
+1. Apply the missing migration in Supabase Dashboard SQL Editor:
+   - supabase/migrations/20260331000000_identity_lock_and_contact_cooldowns.sql
+2. After running the migration SQL, reload PostgREST schema cache:
+
+```sql
+NOTIFY pgrst, 'reload schema';
+```
+
+1. Re-run verification from repo root:
+
+```bash
+pnpm db:verify-schema
+```
 
 If the database is missing the `PROMOTIONS_EVENTS` marketplace area enum value, make sure the latest migrations include:
 
@@ -81,7 +107,7 @@ This checks:
 
 - `listings`
 - `promotions`
-- `seller_profiles`
+- absence of seller_profiles
 - `plans`
 - `storefronts`
 - `businesses`
@@ -90,7 +116,16 @@ This checks:
 - `verification_sessions`
 - `kyc_artifacts`
 
-If any table returns `PGRST205`, migrations are not fully applied or PostgREST cache has not reloaded.
+It also validates required account_profiles policy columns used by profile update enforcement:
+
+- pending_phone
+- location_verified_at
+- legal_name_locked_at
+- contact_last_phone_change_at
+- contact_last_email_change_at
+- pending_email
+
+If verification fails with 42703 for account_profiles policy columns, apply the identity-lock migration and reload schema cache.
 
 ## 6. Preflight before deploy
 

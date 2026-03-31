@@ -170,6 +170,64 @@ describe("POST /api/profile/update", () => {
     });
   });
 
+  it("falls back to legacy profile select when policy columns are missing", async () => {
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          code: "PGRST204",
+          message:
+            "Could not find the 'legal_name_locked_at' column of 'account_profiles' in the schema cache",
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          account_verification_status: "pending_review",
+          phone: "+27821234567",
+        },
+        error: null,
+      });
+
+    const updateSingle = vi.fn().mockResolvedValue({
+      data: { user_id: "user-1", display_name: "Nomsa" },
+      error: null,
+    });
+
+    const from = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle,
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: updateSingle,
+          }),
+        }),
+      }),
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1" } },
+          error: null,
+        }),
+      },
+    });
+
+    const res = await POST(
+      createRequest({
+        displayName: "Nomsa",
+        bio: "Trusted seller",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(maybeSingle).toHaveBeenCalledTimes(2);
+  });
+
   it("returns 403 when phone is changed but account is not verified", async () => {
     const from = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnThis(),
@@ -202,6 +260,49 @@ describe("POST /api/profile/update", () => {
 
     expect(res.status).toBe(403);
     await expect(res.json()).resolves.toMatchObject({ code: "PHONE_REVERIFICATION_REQUIRED" });
+  });
+
+  it("does not enforce phone re-verification when phone is unchanged", async () => {
+    const update = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({
+            data: { user_id: "user-1", display_name: "Nomsa" },
+            error: null,
+          }),
+        }),
+      }),
+    });
+
+    const from = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: {
+          legal_name_locked_at: null,
+          location_verified_at: null,
+          account_verification_status: "pending_review",
+          phone: "+27821234567",
+          contact_last_phone_change_at: null,
+        },
+        error: null,
+      }),
+      update,
+    });
+
+    mockCreateClient.mockResolvedValue({
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+    });
+
+    const res = await POST(createRequest({ displayName: "Nomsa", phone: "+27821234567" }));
+
+    expect(res.status).toBe(200);
+    expect(update).toHaveBeenCalledWith(
+      expect.not.objectContaining({ pending_phone: expect.anything() })
+    );
   });
 
   it("returns 429 when phone is changed within the 15-day cooldown window", async () => {

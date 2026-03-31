@@ -101,13 +101,22 @@ async function probeSchema(
     const { createAdminClient } = await import("@/lib/supabase/admin");
     const supabase = createAdminClient();
 
-    const tables = ["plans", "feature_flags", "businesses"] as const;
+    const probes = [
+      { table: "plans", select: "id" },
+      { table: "feature_flags", select: "id" },
+      { table: "businesses", select: "id" },
+      {
+        table: "account_profiles",
+        select:
+          "id, pending_phone, location_verified_at, legal_name_locked_at, contact_last_phone_change_at, contact_last_email_change_at, pending_email",
+      },
+    ] as const;
     const failures: string[] = [];
 
-    for (const table of tables) {
-      const { error } = await supabase.from(table).select("*").limit(1);
+    for (const probe of probes) {
+      const { error } = await supabase.from(probe.table).select(probe.select).limit(1);
       if (error) {
-        failures.push(`${table}: ${error.code ?? error.message}`);
+        failures.push(`${probe.table}: ${error.code ?? error.message}`);
       }
     }
 
@@ -122,7 +131,7 @@ async function probeSchema(
 
     return {
       status: "ok",
-      detail: `All ${tables.length} critical tables verified`,
+      detail: `All ${probes.length} critical schema probes verified`,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
