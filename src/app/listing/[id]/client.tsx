@@ -25,8 +25,18 @@ interface MediaItem {
   url: string;
 }
 
+function isBlobOrDataUrl(url: string): boolean {
+  return url.startsWith("blob:") || url.startsWith("data:");
+}
+
+function isRenderableMediaUrl(url: string): boolean {
+  return url.trim().length > 0;
+}
+
 /** Small thumbnail placeholder for videos in the thumbnail strip */
 function VideoThumbnailThumb({ firstPhoto }: { firstPhoto?: string }) {
+  const useUnoptimizedImage = firstPhoto ? isBlobOrDataUrl(firstPhoto) : false;
+
   return firstPhoto ? (
     <div className="relative w-full h-full">
       <Image
@@ -35,6 +45,7 @@ function VideoThumbnailThumb({ firstPhoto }: { firstPhoto?: string }) {
         width={80}
         height={80}
         className="w-full h-full object-cover"
+        unoptimized={useUnoptimizedImage ? true : undefined}
       />
       <div className="absolute inset-0 flex items-center justify-center bg-black/30">
         <Play className="h-4 w-4 text-white fill-white" />
@@ -81,7 +92,9 @@ export function ListingDetailClient({
     undefined;
   const activeMedia = orderedMedia[activeIndex];
   const activeUrl = activeMedia?.url || "";
+  const hasActiveUrl = isRenderableMediaUrl(activeUrl);
   const isVideo = activeMedia?.kind === "video";
+  const shouldUseUnoptimizedImage = isBlobOrDataUrl(activeUrl);
 
   function goTo(index: number) {
     if (index >= 0 && index < orderedMedia.length) {
@@ -113,7 +126,11 @@ export function ListingDetailClient({
       {/* ── Main Image / Video ──────────────────────────── */}
       <div className="relative group rounded-xl overflow-hidden bg-warm-100 dark:bg-warm-800">
         <div className="aspect-video relative">
-          {isVideo ? (
+          {!hasActiveUrl ? (
+            <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground text-sm">
+              Media could not load
+            </div>
+          ) : isVideo ? (
             <VideoWithPoster
               key={activeUrl}
               src={activeUrl}
@@ -131,6 +148,7 @@ export function ListingDetailClient({
               className="object-cover transition-transform duration-500"
               sizes="(max-width: 1024px) 100vw, 66vw"
               priority={activeIndex === 0}
+              unoptimized={shouldUseUnoptimizedImage ? true : undefined}
             />
           )}
 
@@ -194,6 +212,7 @@ export function ListingDetailClient({
                     fill
                     className="object-cover"
                     sizes="80px"
+                    unoptimized={isBlobOrDataUrl(item.url) ? true : undefined}
                   />
                 )}
               </button>

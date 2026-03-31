@@ -14,6 +14,7 @@ import { CATEGORIES } from "@/lib/constants/categories";
 import { ListingDetailClient } from "@/app/listing/[id]/client";
 import { ListingContactActions } from "@/app/listing/[id]/listing-contact-actions";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
+import { ErrorBoundary } from "@/components/shared/error-boundary";
 import type { AccountVerificationStatus } from "@/types/enums";
 
 export interface ListingDetailRecord {
@@ -101,14 +102,23 @@ export function ListingDetailContent({
     <>
       <article className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <ListingDetailClient
-            photos={listing.photos ?? []}
-            videos={listing.videos ?? []}
-            title={listing.title}
-            listingId={listing.id}
-            videoThumbnail={listing.video_thumbnail}
-            photoCount={photoCount}
-          />
+          <ErrorBoundary
+            label="ListingDetailClient"
+            fallback={
+              <div className="aspect-video rounded-xl bg-muted flex items-center justify-center">
+                <p className="text-sm text-muted-foreground">Media preview failed to render</p>
+              </div>
+            }
+          >
+            <ListingDetailClient
+              photos={listing.photos ?? []}
+              videos={listing.videos ?? []}
+              title={listing.title}
+              listingId={listing.id}
+              videoThumbnail={listing.video_thumbnail}
+              photoCount={photoCount}
+            />
+          </ErrorBoundary>
 
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div className="flex items-baseline gap-2">

@@ -12,6 +12,7 @@ vi.mock("next/image", () => ({
     fill: _fill,
     sizes: _sizes,
     priority: _priority,
+    unoptimized: _unoptimized,
     ...props
   }: Record<string, unknown> & { src: string; alt: string }) => (
     // eslint-disable-next-line @next/next/no-img-element
@@ -130,5 +131,34 @@ describe("ListingDetailClient", () => {
       "blob:http://localhost/video-preview"
     );
     expect(screen.getByRole("button", { name: "View video 1 of 2" })).toBeTruthy();
+  });
+
+  it("renders blob photo previews in the main image area", () => {
+    render(
+      <ListingDetailClient
+        photos={["blob:http://localhost/photo-preview"]}
+        videos={[]}
+        title="Blob Photo Listing"
+        listingId="listing-5"
+      />
+    );
+
+    expect(screen.getByAltText("Blob Photo Listing - photo 1")).toHaveAttribute(
+      "src",
+      "blob:http://localhost/photo-preview"
+    );
+  });
+
+  it("shows a fallback when active media URL is blank-like", () => {
+    render(
+      <ListingDetailClient
+        photos={["   "]}
+        videos={[]}
+        title="Invalid Media Listing"
+        listingId="listing-6"
+      />
+    );
+
+    expect(screen.getByText("Media could not load")).toBeTruthy();
   });
 });

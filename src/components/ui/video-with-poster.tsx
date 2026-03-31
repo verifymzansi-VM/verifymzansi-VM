@@ -49,8 +49,10 @@ export function VideoWithPoster({
 }: VideoWithPosterProps) {
   const [activated, setActivated] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [posterErrorForSrc, setPosterErrorForSrc] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const posterError = Boolean(posterUrl && posterErrorForSrc === posterUrl);
 
   /** Ref callback: set src and auto-play when the <video> mounts */
   const mountVideo = useCallback(
@@ -79,19 +81,24 @@ export function VideoWithPoster({
     setActivated(false);
   }, []);
 
+  const handlePosterError = useCallback(() => {
+    setPosterErrorForSrc(posterUrl ?? null);
+  }, [posterUrl]);
+
   /* ---- Error state: show poster with retry button ---- */
   if (hasError) {
     const showDownload = retryCount >= 1;
     return (
       <div className={cn("relative select-none", wrapperClassName)}>
         {/* Cover image or gradient placeholder */}
-        {posterUrl ? (
+        {posterUrl && !posterError ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={posterUrl}
             alt={posterAlt}
             className={cn("w-full h-full object-cover", className)}
             draggable={false}
+            onErrorCapture={handlePosterError}
           />
         ) : (
           <div
@@ -174,13 +181,14 @@ export function VideoWithPoster({
       }}
     >
       {/* Cover image or gradient placeholder */}
-      {posterUrl ? (
+      {posterUrl && !posterError ? (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={posterUrl}
           alt={posterAlt}
           className={cn("w-full h-full object-cover", className)}
           draggable={false}
+          onErrorCapture={handlePosterError}
         />
       ) : (
         <div
