@@ -331,14 +331,48 @@ export async function POST(request: NextRequest) {
       stepStatus
     );
 
-    const { data: step, error: stepError } = await adminClient
+    let { data: step, error: stepError } = await adminClient
       .from("verification_steps")
       .upsert(stepData, { onConflict: "user_id,step_type" })
       .select("id")
       .single();
 
+    const manualWithGpsUnsupported =
+      isConfirmationMode &&
+      stepError?.code === "22P02" &&
+      String(stepError.message ?? "")
+        .toLowerCase()
+        .includes("manual_with_gps");
+
+    if (manualWithGpsUnsupported) {
+      // Backward-compatibility fallback for environments missing the enum migration.
+      const fallbackStepData = {
+        ...stepData,
+        location_method: "gps" as const,
+      };
+
+      const fallbackResult = await adminClient
+        .from("verification_steps")
+        .upsert(fallbackStepData, { onConflict: "user_id,step_type" })
+        .select("id")
+        .single();
+
+      step = fallbackResult.data;
+      stepError = fallbackResult.error;
+
+      if (!stepError) {
+        log.warn("location_method enum missing manual_with_gps; fell back to gps", {
+          userId: user.id,
+        });
+      }
+    }
+
     if (stepError || !step) {
-      log.error("Failed to upsert step", { error: stepError?.message ?? "unknown" });
+      log.error("Failed to upsert step", {
+        error: stepError?.message ?? "unknown",
+        code: stepError?.code,
+        details: stepError?.details,
+      });
       return NextResponse.json({ error: "Failed to save location verification" }, { status: 500 });
     }
 

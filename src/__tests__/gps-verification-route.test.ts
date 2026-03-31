@@ -304,4 +304,139 @@ describe("POST /api/verification/location/gps", () => {
       })
     );
   });
+
+  it("falls back to location_method gps when manual_with_gps enum value is missing (22P02)", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -29.8587,
+        longitude: 31.0218,
+        accuracy: 15,
+        timestamp: Date.now(),
+        declaredProvince: "KwaZulu-Natal",
+        declaredCity: "Richards Bay",
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "KwaZulu-Natal",
+      city: "Richards Bay",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("high");
+
+    let upsertCallCount = 0;
+    const upsertVerificationStep = vi.fn().mockImplementation(() => {
+      upsertCallCount++;
+      const isFirstCall = upsertCallCount === 1;
+      return {
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue(
+          isFirstCall
+            ? {
+                data: null,
+                error: {
+                  code: "22P02",
+                  message: 'invalid input value for enum location_method: "manual_with_gps"',
+                  details: null,
+                },
+              }
+            : { data: { id: "step-fallback" }, error: null }
+        ),
+      };
+    });
+
+    const updateProfile = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+              }),
+            }),
+          }),
+          update: updateProfile,
+        };
+      }
+      if (table === "verification_sessions") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            }),
+          }),
+          upsert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          upsert: upsertVerificationStep,
+          select: vi.fn().mockImplementation((columns: string) => {
+            if (columns === "step_type, status") {
+              return {
+                eq: vi.fn().mockResolvedValue({
+                  data: [
+                    { step_type: "phone", status: "approved" },
+                    { step_type: "id_doc", status: "pending" },
+                    { step_type: "selfie", status: "approved" },
+                    { step_type: "location", status: "approved" },
+                  ],
+                }),
+              };
+            }
+            return { eq: vi.fn() };
+          }),
+        };
+      }
+      if (table === "kyc_risk_signals") {
+        return { insert: vi.fn().mockResolvedValue({ error: null }) };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -29.8587,
+        longitude: 31.0218,
+        accuracy: 15,
+        timestamp: Date.now(),
+        declaredProvince: "KwaZulu-Natal",
+        declaredCity: "Richards Bay",
+      })
+    );
+
+    // Should succeed via fallback, not return 500
+    expect(res.status).toBe(200);
+
+    // First upsert used manual_with_gps, second used gps
+    expect(upsertVerificationStep).toHaveBeenCalledTimes(2);
+    expect(upsertVerificationStep).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ location_method: "manual_with_gps" }),
+      expect.anything()
+    );
+    expect(upsertVerificationStep).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ location_method: "gps" }),
+      expect.anything()
+    );
+  });
 });
