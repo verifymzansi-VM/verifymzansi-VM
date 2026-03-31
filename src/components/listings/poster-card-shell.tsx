@@ -80,7 +80,7 @@ export function PosterCardShell({
         )}
         trustLevel={trustLevel}
       >
-        <div className="relative aspect-[5/4] h-full w-full overflow-hidden">
+        <div className="relative aspect-[3/4] h-full w-full overflow-hidden">
           {normalizedMediaUrl ? (
             <VideoCardPlayer
               src={normalizedMediaUrl}

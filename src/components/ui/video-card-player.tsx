@@ -121,14 +121,18 @@ function MuteButton({
   onToggle: (event: React.SyntheticEvent) => void;
 }) {
   return (
-    <div className="absolute right-3 top-3 z-[8]">
+    <div className="absolute right-2 top-2 z-[8] sm:right-3 sm:top-3">
       <button
         type="button"
         onClick={onToggle}
-        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70"
+        className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70 sm:h-[2.75rem] sm:w-[2.75rem]"
         aria-label={isMuted ? "Unmute" : "Mute"}
       >
-        {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        {isMuted ? (
+          <VolumeX className="h-2.5 w-2.5 sm:h-4 sm:w-4" />
+        ) : (
+          <Volume2 className="h-2.5 w-2.5 sm:h-4 sm:w-4" />
+        )}
       </button>
     </div>
   );
