@@ -195,4 +195,64 @@ describe("/api/admin/verification/evidence/metadata", () => {
       decided_at: "2026-03-31T00:00:00.000Z",
     });
   });
+
+  it("returns 401 when user is not authenticated", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: null },
+          error: new Error("Unauthorized"),
+        }),
+      },
+    });
+
+    const response = await GET(
+      createGetRequest(
+        `http://localhost:3000/api/admin/verification/evidence/metadata?stepId=${STEP_ID}`
+      )
+    );
+
+    expect(response.status).toBe(401);
+    const payload = await response.json();
+    expect(payload.error).toBe("Unauthorized");
+    expect(payload.code).toBe("unauthorized");
+  });
+
+  it("returns 403 when user does not have staff role", async () => {
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue(null);
+
+    const response = await GET(
+      createGetRequest(
+        `http://localhost:3000/api/admin/verification/evidence/metadata?stepId=${STEP_ID}`
+      )
+    );
+
+    expect(response.status).toBe(403);
+    const payload = await response.json();
+    expect(payload.error).toBe("Forbidden");
+    expect(payload.code).toBe("forbidden");
+  });
+
+  it("returns 429 when rate limited", async () => {
+    mockCheckLocalRateLimit.mockReturnValue({ limited: true, retryAfter: 60 });
+
+    const response = await GET(
+      createGetRequest(
+        `http://localhost:3000/api/admin/verification/evidence/metadata?stepId=${STEP_ID}`
+      )
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("60");
+    const payload = await response.json();
+    expect(payload.code).toBe("rate_limited");
+  });
+
+  it("returns 400 when neither stepId nor userId is provided", async () => {
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/admin/verification/evidence/metadata")
+    );
+
+    expect(response.status).toBe(400);
+  });
 });
