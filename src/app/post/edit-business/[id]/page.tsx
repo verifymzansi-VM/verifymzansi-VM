@@ -1238,9 +1238,37 @@ export default function EditBusinessPage() {
                         gallery_photos: previewGalleryPhotos,
                         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
                         operating_hours: {
-                          ...(hoursMonFri ? { Mon_Fri: hoursMonFri } : {}),
-                          ...(hoursSat ? { Sat: hoursSat } : {}),
-                          ...(hoursSun ? { Sun: hoursSun } : {}),
+                          ...(formatHoursValue(
+                            hoursMonFri.open,
+                            hoursMonFri.close,
+                            hoursMonFri.closed
+                          )
+                            ? {
+                                Mon_Fri: formatHoursValue(
+                                  hoursMonFri.open,
+                                  hoursMonFri.close,
+                                  hoursMonFri.closed
+                                ),
+                              }
+                            : {}),
+                          ...(formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed)
+                            ? {
+                                Sat: formatHoursValue(
+                                  hoursSat.open,
+                                  hoursSat.close,
+                                  hoursSat.closed
+                                ),
+                              }
+                            : {}),
+                          ...(formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed)
+                            ? {
+                                Sun: formatHoursValue(
+                                  hoursSun.open,
+                                  hoursSun.close,
+                                  hoursSun.closed
+                                ),
+                              }
+                            : {}),
                         },
                         services_offered: services,
                         payment_methods_accepted: paymentMethods,

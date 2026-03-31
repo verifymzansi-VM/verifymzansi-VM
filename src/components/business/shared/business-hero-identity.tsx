@@ -21,6 +21,8 @@ interface BusinessHeroIdentityProps {
   hideCallCta?: boolean;
   /** Show a category-specific CTA label instead of generic "Call". */
   primaryCtaLabel?: string;
+  /** Compact mode: smaller logo, hidden badges on mobile for media-first layouts. */
+  compact?: boolean;
 }
 
 export function BusinessHeroIdentity({
@@ -28,14 +30,19 @@ export function BusinessHeroIdentity({
   variant = "below",
   hideCallCta = false,
   primaryCtaLabel,
+  compact = false,
 }: BusinessHeroIdentityProps) {
   const businessType = business.business_type as BusinessType;
   const businessCategory = business.category as BusinessCategory;
 
   return (
-    <div className="relative z-10 mx-auto flex w-full flex-row items-center gap-3 px-4 pb-4 pt-3 text-left md:gap-4">
-      {/* Logo – compact */}
-      <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl border bg-white p-1 dark:bg-warm-900">
+    <div
+      className={`relative z-10 mx-auto flex w-full flex-row items-center gap-3 px-4 text-left ${compact ? "pb-3 pt-2 md:gap-3" : "pb-4 pt-3 md:gap-4"}`}
+    >
+      {/* Logo */}
+      <div
+        className={`flex-shrink-0 overflow-hidden rounded-xl border bg-white p-0.5 dark:bg-warm-900 ${compact ? "h-8 w-8" : "h-12 w-12 p-1"}`}
+      >
         {business.logo_url ? (
           <Image
             src={normalizeMediaUrl(business.logo_url)}
@@ -60,7 +67,9 @@ export function BusinessHeroIdentity({
         >
           {business.business_name}
         </h1>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <div
+          className={`mt-1.5 flex flex-wrap items-center gap-1.5 ${compact ? "hidden md:flex" : ""}`}
+        >
           <Badge
             variant="outline"
             className={`text-[10px] ${variant === "overlay" ? "border-white/40 text-white" : ""}`}

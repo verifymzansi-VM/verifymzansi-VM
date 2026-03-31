@@ -85,6 +85,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Revoke every other session after a successful password change so an
+    // already-compromised session cannot survive the credential rotation.
+    const { error: revokeError } = await supabase.auth.signOut({ scope: "others" });
+    if (revokeError) {
+      log.warn("Password updated but failed to revoke other sessions", {
+        userId: user.id,
+        error: revokeError.message,
+      });
+    }
+
     // Non-blocking notification so users can spot unauthorized changes
     void sendPasswordChangeNotification(user.email).catch((err) => {
       log.warn("Failed to send password change notification", {

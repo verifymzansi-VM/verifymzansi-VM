@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 import Image from "next/image";
 import { Play, Store, Volume2, VolumeX } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { CATEGORY_CTA_CONFIG } from "@/lib/business/category-layout-map";
@@ -82,7 +81,7 @@ export function CinematicLayout({
     <>
       {/* ═══ HERO: Full-bleed video/cover ═══ */}
       <div className="relative -mx-4 overflow-hidden rounded-2xl sm:-mx-0">
-        <div className="relative aspect-[16/9] overflow-hidden bg-black md:aspect-[21/9]">
+        <div className="relative aspect-[4/5] overflow-hidden bg-black sm:aspect-[16/9] md:aspect-[21/9]">
           {activeHero === "video" && hasVideo ? (
             <>
               <video
@@ -145,7 +144,7 @@ export function CinematicLayout({
           )}
 
           {/* Gradient overlay for text legibility */}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
         </div>
 
         {/* Identity overlay at bottom of hero */}
@@ -154,6 +153,7 @@ export function CinematicLayout({
             business={business}
             variant="overlay"
             hideCallCta
+            compact
             primaryCtaLabel={ctaConfig?.primaryCta}
           />
         </div>
@@ -161,78 +161,77 @@ export function CinematicLayout({
 
       {/* ═══ CONTENT ═══ */}
       <div className="space-y-6">
-        {/* Gallery as horizontal stories-style scroll */}
-        {galleryPhotos.length > 0 && (
-          <div className="-mx-4 sm:-mx-0">
-            <div className="flex gap-3 overflow-x-auto px-4 pb-2 pt-1 snap-x snap-mandatory scrollbar-hide sm:px-0">
-              {hasVideo && (
-                <button
-                  type="button"
-                  onClick={() => setActiveHero("video")}
-                  className={`relative flex-none w-32 h-32 rounded-2xl overflow-hidden snap-center shadow-md border-2 ${
-                    activeHero === "video" ? "border-brand-blue" : "border-transparent"
-                  }`}
-                  aria-label="View profile video"
-                >
-                  {business.video_thumbnail || business.cover_photo ? (
-                    <Image
-                      src={normalizeMediaUrl(business.video_thumbnail || business.cover_photo!)}
-                      alt={`${business.business_name} video thumbnail`}
-                      fill
-                      className="object-cover"
-                      sizes="128px"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-black text-white text-xs">
-                      Video
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/30" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Play className="h-5 w-5 text-white fill-white" />
-                  </div>
-                </button>
-              )}
-              {galleryPhotos.map((url, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => {
-                    setActivePhotoIndex(i);
-                    setActiveHero("gallery-photo");
-                  }}
-                  className={`relative flex-none w-32 h-32 rounded-2xl overflow-hidden snap-center shadow-md border-2 ${
-                    activeHero !== "video" && activePhotoUrl === url
-                      ? "border-brand-blue"
-                      : "border-transparent"
-                  }`}
-                  aria-label={`View photo ${i + 1}`}
-                >
+        {/* Gallery — curated grid */}
+        {(galleryPhotos.length > 0 || hasVideo) && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {hasVideo && (
+              <button
+                type="button"
+                onClick={() => setActiveHero("video")}
+                className={`group relative aspect-[4/3] overflow-hidden rounded-xl shadow-sm ring-2 transition-shadow hover:shadow-md ${
+                  activeHero === "video" ? "ring-brand-blue" : "ring-transparent"
+                }`}
+                aria-label="View profile video"
+              >
+                {business.video_thumbnail || business.cover_photo ? (
                   <Image
-                    src={normalizeMediaUrl(url)}
-                    alt={`${business.business_name} photo ${i + 1}`}
+                    src={normalizeMediaUrl(business.video_thumbnail || business.cover_photo!)}
+                    alt={`${business.business_name} video thumbnail`}
                     fill
-                    className="object-cover"
-                    sizes="128px"
+                    className="object-cover transition-transform group-hover:scale-105"
+                    sizes="(max-width: 640px) 50vw, 33vw"
                   />
-                </button>
-              ))}
-            </div>
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-black text-white text-xs">
+                    Video
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/25" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="rounded-full bg-white/90 p-2.5 shadow-lg backdrop-blur-sm">
+                    <Play className="h-5 w-5 text-black fill-black" />
+                  </div>
+                </div>
+              </button>
+            )}
+            {galleryPhotos.map((url, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  setActivePhotoIndex(i);
+                  setActiveHero("gallery-photo");
+                }}
+                className={`group relative aspect-[4/3] overflow-hidden rounded-xl shadow-sm ring-2 transition-shadow hover:shadow-md ${
+                  activeHero !== "video" && activePhotoUrl === url
+                    ? "ring-brand-blue"
+                    : "ring-transparent"
+                }`}
+                aria-label={`View photo ${i + 1}`}
+              >
+                <Image
+                  src={normalizeMediaUrl(url)}
+                  alt={`${business.business_name} photo ${i + 1}`}
+                  fill
+                  className="object-cover transition-transform group-hover:scale-105"
+                  sizes="(max-width: 640px) 50vw, 33vw"
+                />
+              </button>
+            ))}
           </div>
         )}
 
-        {/* About – truncated */}
-        <Card className="border-none bg-background/60 shadow-md backdrop-blur-sm">
-          <CardContent className="space-y-3 p-5">
-            <h2 className="font-display text-lg font-bold">About {business.business_name}</h2>
+        {/* About – minimal inline */}
+        {business.description && (
+          <div className="space-y-1.5">
             <p
               className={`whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground ${
-                !isAboutExpanded ? "line-clamp-3" : ""
+                !isAboutExpanded ? "line-clamp-2" : ""
               }`}
             >
-              {business.description || "No description provided."}
+              {business.description}
             </p>
-            {business.description && business.description.length > 120 && (
+            {business.description.length > 100 && (
               <button
                 type="button"
                 onClick={() => setIsAboutExpanded(!isAboutExpanded)}
@@ -241,8 +240,8 @@ export function CinematicLayout({
                 {isAboutExpanded ? "Show less" : "Read more"}
               </button>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
 
         {/* Collapsible details accordion */}
         <BusinessDetailsAccordion

@@ -1,13 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockCreateClient, mockExchangeCodeForSession, mockFrom } = vi.hoisted(() => ({
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockExchangeCodeForSession,
+  mockFrom,
+  mockAdminFrom,
+} = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
   mockExchangeCodeForSession: vi.fn(),
   mockFrom: vi.fn(),
+  mockAdminFrom: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: mockCreateAdminClient,
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -22,6 +34,48 @@ describe("GET /auth/callback", () => {
     mockCreateClient.mockResolvedValue({
       from: mockFrom,
       auth: { exchangeCodeForSession: mockExchangeCodeForSession },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: mockAdminFrom,
+    });
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: { pending_email: null }, error: null }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+
+      if (table === "contact_change_history") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                is: vi.fn().mockReturnValue({
+                  order: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockReturnValue({
+                      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+
+      return {};
     });
   });
 
@@ -119,5 +173,76 @@ describe("GET /auth/callback", () => {
       }),
       { onConflict: "user_id" }
     );
+  });
+
+  it("clears pending email and marks the latest email change as applied when the confirmed email matches", async () => {
+    const clearPendingEmail = vi.fn().mockResolvedValue({ error: null });
+    const markApplied = vi.fn().mockResolvedValue({ error: null });
+
+    mockExchangeCodeForSession.mockResolvedValue({
+      error: null,
+      data: {
+        session: {
+          user: {
+            id: "user-1",
+            email: "new@example.com",
+            app_metadata: { provider: "email" },
+          },
+        },
+      },
+    });
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { pending_email: "new@example.com" },
+                error: null,
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: clearPendingEmail,
+          }),
+        };
+      }
+
+      if (table === "contact_change_history") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                is: vi.fn().mockReturnValue({
+                  order: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockReturnValue({
+                      maybeSingle: vi.fn().mockResolvedValue({
+                        data: { id: "history-1" },
+                        error: null,
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: markApplied,
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    const response = await GET(
+      new Request("https://verifymzansi.com/auth/callback?code=test-code&next=%2Fdashboard")
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://verifymzansi.com/dashboard");
+    expect(clearPendingEmail).toHaveBeenCalledWith("user_id", "user-1");
+    expect(markApplied).toHaveBeenCalledWith("id", "history-1");
   });
 });

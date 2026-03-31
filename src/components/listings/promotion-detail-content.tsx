@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Building2, Calendar, CalendarPlus, Eye, MapPin, Timer } from "lucide-react";
+import {
+  Building2,
+  Calendar,
+  CalendarPlus,
+  ChevronDown,
+  Eye,
+  MapPin,
+  Play,
+  Timer,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -185,8 +196,13 @@ export function PromotionDetailContent({
           url,
           poster: leadPoster,
         }));
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const activeMedia = mediaItems[activeMediaIndex] ?? null;
+  const [isMuted, setIsMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const contactMethods = promotion.contact_methods ?? [];
   const isEvent = promotion.promotion_type === "event";
   const eventState = isEvent ? getEventState(promotion.start_date, promotion.end_date) : null;
@@ -214,22 +230,61 @@ export function PromotionDetailContent({
       : null;
 
   return (
-    <article className="space-y-6">
-      {/* ═══ HERO: Video-first full-bleed media ═══ */}
+    <article className="space-y-4">
+      {/* ═══ HERO: Immersive video/photo — portrait on mobile ═══ */}
       {activeMedia && (
         <div className="-mx-4 overflow-hidden rounded-2xl sm:-mx-0">
-          <div className="relative aspect-[16/9] overflow-hidden bg-black md:aspect-[2/1]">
+          <div className="relative aspect-[4/5] overflow-hidden bg-black sm:aspect-[16/9] md:aspect-[2/1]">
             {activeMedia.kind === "video" ? (
-              <video
-                src={normalizeMediaUrl(activeMedia.url)}
-                controls
-                playsInline
-                preload="metadata"
-                poster={activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined}
-                className="h-full w-full bg-black object-contain"
-              >
-                <track kind="captions" />
-              </video>
+              <>
+                <video
+                  ref={videoRef}
+                  src={normalizeMediaUrl(activeMedia.url)}
+                  poster={activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  aria-label={`${promotion.title} video`}
+                >
+                  <track kind="captions" />
+                </video>
+
+                {/* Play overlay */}
+                {!isPlaying && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      videoRef.current?.play();
+                      setIsPlaying(true);
+                    }}
+                    className="absolute inset-0 z-10 flex items-center justify-center bg-black/20"
+                    aria-label="Play video"
+                  >
+                    <div className="rounded-full bg-white/90 p-4 shadow-xl backdrop-blur-sm">
+                      <Play className="h-8 w-8 text-black fill-black" />
+                    </div>
+                  </button>
+                )}
+
+                {/* Mute toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (videoRef.current) {
+                      videoRef.current.muted = !videoRef.current.muted;
+                      setIsMuted(videoRef.current.muted);
+                    }
+                  }}
+                  className="absolute bottom-4 right-4 z-20 rounded-full bg-black/60 p-2.5 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
+                  aria-label={isMuted ? "Unmute" : "Mute"}
+                >
+                  {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                </button>
+              </>
             ) : (
               <Image
                 src={normalizeMediaUrl(activeMedia.url)}
@@ -240,6 +295,10 @@ export function PromotionDetailContent({
                 priority
               />
             )}
+
+            {/* Gradient for legibility */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+
             {/* Overlay badges */}
             <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
               <Badge className="bg-black/70 text-white backdrop-blur-sm border-0">
@@ -251,340 +310,431 @@ export function PromotionDetailContent({
                 </Badge>
               )}
             </div>
-            {/* Price overlay */}
-            {promotion.price_cents != null && promotion.price_cents > 0 && (
-              <div className="absolute bottom-3 right-3">
-                <div className="flex items-baseline gap-1.5 rounded-xl bg-black/70 px-4 py-2 backdrop-blur-sm">
-                  <span className="font-display text-xl font-bold text-white">
+
+            {/* Price + title overlay at bottom */}
+            <div className="absolute inset-x-0 bottom-0 z-10 px-4 pb-4">
+              <h1 className="font-display text-xl font-bold leading-tight text-white drop-shadow-lg sm:text-2xl">
+                {promotion.title}
+              </h1>
+              <div className="mt-1.5 flex items-center gap-3">
+                <span className="flex items-center gap-1 text-xs text-white/80">
+                  <MapPin className="h-3 w-3" />
+                  {[promotion.location_town, promotion.location_city, promotion.location_province]
+                    .filter(Boolean)
+                    .join(", ")}
+                </span>
+                {promotion.price_cents != null && promotion.price_cents > 0 && (
+                  <span className="rounded-lg bg-white/20 px-3 py-1 text-sm font-bold text-white backdrop-blur-sm">
                     {formatZAR(promotion.price_cents)}
+                    {promotion.price_negotiable && (
+                      <span className="ml-1 text-xs font-normal text-brand-green">Neg</span>
+                    )}
                   </span>
-                  {promotion.price_negotiable && (
-                    <span className="text-xs text-brand-green font-medium">Neg</span>
-                  )}
-                </div>
+                )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ TITLE BAR — fallback when no media hero ═══ */}
+      {!activeMedia && (
+        <div>
+          <h1 className="font-display text-xl font-bold leading-tight sm:text-2xl">
+            {promotion.title}
+          </h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <Badge className="bg-black/70 text-white backdrop-blur-sm border-0">
+              {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] || "Ads"}
+            </Badge>
+            {isEvent && eventState && (
+              <Badge className={`${EVENT_STATE_BADGE[eventState].className} border-0`}>
+                {EVENT_STATE_BADGE[eventState].label}
+              </Badge>
+            )}
+            <span className="flex items-center gap-1">
+              <MapPin className="h-3 w-3" />
+              {[promotion.location_town, promotion.location_city, promotion.location_province]
+                .filter(Boolean)
+                .join(", ")}
+            </span>
+            {promotion.price_cents != null && promotion.price_cents > 0 && (
+              <span className="font-bold">
+                {formatZAR(promotion.price_cents)}
+                {promotion.price_negotiable && (
+                  <span className="ml-1 text-xs font-normal text-brand-green">Negotiable</span>
+                )}
+              </span>
             )}
           </div>
         </div>
       )}
 
-      {/* Remaining media gallery */}
+      {/* ═══ PHOTO/VIDEO GALLERY GRID ═══ */}
       {mediaItems.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-hide">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {mediaItems.map((item, index) => {
-            const isActive = activeMediaIndex === index;
-
-            if (item.kind === "video") {
-              return (
-                <button
-                  key={`v-${index}`}
-                  type="button"
-                  onClick={() => setActiveMediaIndex(index)}
-                  className={`relative flex-none w-48 aspect-video overflow-hidden rounded-xl bg-black snap-center border-2 ${
-                    isActive ? "border-brand-blue" : "border-transparent"
-                  }`}
-                  aria-label={`View video ${index + 1}`}
-                >
-                  <video
-                    src={normalizeMediaUrl(item.url)}
-                    muted
-                    playsInline
-                    preload="metadata"
-                    poster={item.poster ? normalizeMediaUrl(item.poster) : undefined}
-                    className="h-full w-full object-contain"
-                  >
-                    <track kind="captions" />
-                  </video>
-                </button>
-              );
-            }
-
+            if (index === activeMediaIndex) return null;
+            const isVideo = item.kind === "video";
             return (
               <button
-                key={`p-${index}`}
+                key={`${item.kind}-${index}`}
                 type="button"
                 onClick={() => setActiveMediaIndex(index)}
-                className={`relative flex-none w-32 aspect-square overflow-hidden rounded-xl snap-center border-2 ${
-                  isActive ? "border-brand-blue" : "border-transparent"
-                }`}
-                aria-label={`View photo ${item.photoNumber ?? index + 1}`}
+                className="group relative aspect-[4/3] overflow-hidden rounded-xl shadow-sm ring-2 ring-transparent transition-all hover:shadow-md hover:ring-brand-blue/50"
+                aria-label={
+                  isVideo
+                    ? `View video ${index + 1}`
+                    : `View photo ${item.photoNumber ?? index + 1}`
+                }
               >
-                <Image
-                  src={normalizeMediaUrl(item.url)}
-                  alt={`${promotion.title} photo ${item.photoNumber ?? index + 1}`}
-                  fill
-                  className="object-cover"
-                  sizes="128px"
-                />
+                {isVideo ? (
+                  <>
+                    {item.poster ? (
+                      <Image
+                        src={normalizeMediaUrl(item.poster)}
+                        alt={`${promotion.title} video thumbnail`}
+                        fill
+                        className="object-cover transition-transform group-hover:scale-105"
+                        sizes="(max-width: 640px) 50vw, 33vw"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-black" />
+                    )}
+                    <div className="absolute inset-0 bg-black/25" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="rounded-full bg-white/90 p-2 shadow-lg backdrop-blur-sm">
+                        <Play className="h-4 w-4 text-black fill-black" />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <Image
+                    src={normalizeMediaUrl(item.url)}
+                    alt={`${promotion.title} photo ${item.photoNumber ?? index + 1}`}
+                    fill
+                    className="object-cover transition-transform group-hover:scale-105"
+                    sizes="(max-width: 640px) 50vw, 33vw"
+                  />
+                )}
               </button>
             );
           })}
         </div>
       )}
 
-      {/* ═══ EVENT COUNTDOWN ═══ */}
+      {/* ═══ EVENT COUNTDOWN (compact) ═══ */}
       {isEvent && countdown && (
-        <Card className="border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10">
-          <CardContent className="flex flex-col items-center gap-3 p-6 sm:flex-row sm:justify-between">
-            <div className="flex items-center gap-2 text-sm font-medium text-brand-blue">
-              <Timer className="h-4 w-4" />
+        <div className="flex items-center justify-between rounded-xl border border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-brand-blue">
+            <Timer className="h-4 w-4" />
+            <span className="hidden sm:inline">
               {eventState === "upcoming" ? "Starts in" : "Ends in"}
-            </div>
-            <div className="flex gap-3 text-center">
-              {[
-                { value: countdown.days, label: "Days" },
-                { value: countdown.hours, label: "Hrs" },
-                { value: countdown.minutes, label: "Min" },
-                { value: countdown.seconds, label: "Sec" },
-              ].map((unit) => (
-                <div key={unit.label} className="min-w-[3.5rem]">
-                  <div className="font-display text-2xl font-bold tabular-nums">
-                    {String(unit.value).padStart(2, "0")}
-                  </div>
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {unit.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {calendarUrl && (
-              <Button asChild variant="outline" size="sm" className="gap-1.5">
-                <a href={calendarUrl} target="_blank" rel="noopener noreferrer">
-                  <CalendarPlus className="h-4 w-4" />
-                  Add to Calendar
-                </a>
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ═══ CONTENT GRID ═══ */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Main content */}
-        <div className="space-y-6 lg:col-span-2">
-          {/* Title + meta (shown on mobile — redundant with hero text for desktop) */}
-          <div>
-            <h1 className="font-display text-2xl font-bold leading-tight">{promotion.title}</h1>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              {categoryLabel && <Badge variant="secondary">{categoryLabel}</Badge>}
-              {isEvent && eventState && (
-                <Badge className={`${EVENT_STATE_BADGE[eventState].className} border-0`}>
-                  {EVENT_STATE_BADGE[eventState].label}
-                </Badge>
-              )}
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
-                {[promotion.location_town, promotion.location_city, promotion.location_province]
-                  .filter(Boolean)
-                  .join(", ")}
-              </span>
-              <span className="flex items-center gap-1">
-                <Eye className="h-3.5 w-3.5" />
-                {promotion.view_count || 0} views
-              </span>
-            </div>
+            </span>
           </div>
-
-          {/* About */}
-          <Card>
-            <CardContent className="space-y-4 p-6">
-              <h2 className="font-display text-lg font-bold">About this promotion</h2>
-              <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
-                {promotion.description}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Details */}
-          <Card>
-            <CardContent className="space-y-3 p-6">
-              <h2 className="font-display text-lg font-bold">Details</h2>
-              <dl className="grid grid-cols-2 gap-y-3 text-sm">
-                <dt className="text-muted-foreground">Type</dt>
-                <dd className="font-medium">
-                  {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] ||
-                    promotion.promotion_type}
-                </dd>
-
-                {categoryLabel && (
-                  <>
-                    <dt className="text-muted-foreground">Category</dt>
-                    <dd className="font-medium">{categoryLabel}</dd>
-                  </>
-                )}
-
-                <dt className="text-muted-foreground">Location</dt>
-                <dd className="flex items-center gap-1 font-medium">
-                  <MapPin className="h-3 w-3" />
-                  {[promotion.location_town, promotion.location_city, promotion.location_province]
-                    .filter(Boolean)
-                    .join(", ")}
-                </dd>
-
-                {promotion.start_date && (
-                  <>
-                    <dt className="text-muted-foreground">Starts</dt>
-                    <dd className="flex items-center gap-1 font-medium">
-                      <Calendar className="h-3 w-3" />
-                      <time dateTime={promotion.start_date}>
-                        {new Date(promotion.start_date).toLocaleDateString("en-ZA", {
-                          weekday: "short",
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </time>
-                    </dd>
-                  </>
-                )}
-
-                {promotion.end_date && (
-                  <>
-                    <dt className="text-muted-foreground">Ends</dt>
-                    <dd className="flex items-center gap-1 font-medium">
-                      <Calendar className="h-3 w-3" />
-                      <time dateTime={promotion.end_date}>
-                        {new Date(promotion.end_date).toLocaleDateString("en-ZA", {
-                          weekday: "short",
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </time>
-                    </dd>
-                  </>
-                )}
-
-                <dt className="text-muted-foreground">Views</dt>
-                <dd className="flex items-center gap-1 font-medium">
-                  <Eye className="h-3 w-3" />
-                  {promotion.view_count || 0}
-                </dd>
-              </dl>
-
-              {(showContactSummary || contactMethods.length > 0) && contactMethods.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">
-                      {showContactSummary ? "Saved contact methods" : "Contact options"}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {contactMethods.map((method) => (
-                        <Badge key={method} variant="outline" className="capitalize">
-                          {CONTACT_METHOD_LABELS[method] ?? method}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-4">
-          {/* Price card (when no overlay — e.g. no media) */}
-          {promotion.price_cents != null &&
-            promotion.price_cents > 0 &&
-            photos.length === 0 &&
-            videos.length === 0 && (
-              <Card>
-                <CardContent className="space-y-2 p-6">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-display text-2xl font-bold">
-                      {formatZAR(promotion.price_cents)}
-                    </span>
-                    {promotion.price_negotiable && (
-                      <Badge variant="outline" className="text-brand-green">
-                        Negotiable
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-          {/* Advertiser card */}
-          <Card>
-            <CardContent className="space-y-4 p-6">
-              <h3 className="font-semibold">Advertiser</h3>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-green font-bold text-white">
-                  {advertiserProfile?.display_name?.charAt(0)?.toUpperCase() || "A"}
+          <div className="flex gap-2 text-center">
+            {[
+              { value: countdown.days, label: "D" },
+              { value: countdown.hours, label: "H" },
+              { value: countdown.minutes, label: "M" },
+              { value: countdown.seconds, label: "S" },
+            ].map((unit) => (
+              <div key={unit.label} className="min-w-[2.5rem]">
+                <div className="font-display text-lg font-bold tabular-nums sm:text-xl">
+                  {String(unit.value).padStart(2, "0")}
                 </div>
-                <div>
-                  <p className="text-sm font-medium">
-                    {advertiserProfile?.display_name || "Advertiser"}
-                  </p>
-                  <TrustBadge level={trustLevel} size="sm" />
+                <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                  {unit.label}
                 </div>
               </div>
+            ))}
+          </div>
+          {calendarUrl && (
+            <Button asChild variant="outline" size="sm" className="gap-1 text-xs">
+              <a href={calendarUrl} target="_blank" rel="noopener noreferrer">
+                <CalendarPlus className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Add to Calendar</span>
+                <span className="sm:hidden">Cal</span>
+              </a>
+            </Button>
+          )}
+        </div>
+      )}
 
-              <Separator />
-
-              {showContactActions ? (
-                <PromotionContactActions
-                  promotionId={promotion.id}
-                  contactMethods={contactMethods}
-                  advertiserPhone={
-                    contactMethods.includes("call")
-                      ? (advertiserProfile?.masked_phone_public ?? null)
-                      : null
-                  }
-                  advertiserWhatsapp={
-                    contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
-                  }
-                />
-              ) : (
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">Creator preview</p>
-                  <p>Public contact actions appear after approval.</p>
-                </div>
-              )}
+      {/* ═══ CONTACT ACTIONS — mobile-first, above details ═══ */}
+      {showContactActions && (
+        <div className="lg:hidden">
+          <Card>
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green text-sm font-bold text-white">
+                {advertiserProfile?.display_name?.charAt(0)?.toUpperCase() || "A"}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">
+                  {advertiserProfile?.display_name || "Advertiser"}
+                </p>
+                <TrustBadge level={trustLevel} size="sm" />
+              </div>
             </CardContent>
           </Card>
+          <div className="mt-2">
+            <PromotionContactActions
+              promotionId={promotion.id}
+              contactMethods={contactMethods}
+              advertiserPhone={
+                contactMethods.includes("call")
+                  ? (advertiserProfile?.masked_phone_public ?? null)
+                  : null
+              }
+              advertiserWhatsapp={
+                contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
+              }
+            />
+          </div>
+        </div>
+      )}
 
-          {/* Linked business */}
-          {linkedBusiness && (
+      {/* ═══ DESCRIPTION — condensed ═══ */}
+      {promotion.description && (
+        <div className="space-y-1">
+          <p
+            className={`whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground ${
+              !isDescExpanded ? "line-clamp-2" : ""
+            }`}
+          >
+            {promotion.description}
+          </p>
+          {promotion.description.length > 100 && (
+            <button
+              type="button"
+              onClick={() => setIsDescExpanded(!isDescExpanded)}
+              className="text-sm font-medium text-brand-blue hover:underline"
+            >
+              {isDescExpanded ? "Show less" : "Read more"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ═══ DETAILS — collapsible single section ═══ */}
+      <div className="rounded-xl border">
+        <button
+          type="button"
+          onClick={() => setIsDetailsOpen(!isDetailsOpen)}
+          className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
+        >
+          Details
+          <ChevronDown
+            className={`h-4 w-4 text-muted-foreground transition-transform ${
+              isDetailsOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+        {isDetailsOpen && (
+          <div className="border-t px-4 py-3">
+            <dl className="grid grid-cols-2 gap-y-2.5 text-sm">
+              <dt className="text-muted-foreground">Type</dt>
+              <dd className="font-medium">
+                {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] ||
+                  promotion.promotion_type}
+              </dd>
+
+              {categoryLabel && (
+                <>
+                  <dt className="text-muted-foreground">Category</dt>
+                  <dd className="font-medium">{categoryLabel}</dd>
+                </>
+              )}
+
+              {promotion.start_date && (
+                <>
+                  <dt className="text-muted-foreground">Starts</dt>
+                  <dd className="flex items-center gap-1 font-medium">
+                    <Calendar className="h-3 w-3" />
+                    <time dateTime={promotion.start_date}>
+                      {new Date(promotion.start_date).toLocaleDateString("en-ZA", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </time>
+                  </dd>
+                </>
+              )}
+
+              {promotion.end_date && (
+                <>
+                  <dt className="text-muted-foreground">Ends</dt>
+                  <dd className="flex items-center gap-1 font-medium">
+                    <Calendar className="h-3 w-3" />
+                    <time dateTime={promotion.end_date}>
+                      {new Date(promotion.end_date).toLocaleDateString("en-ZA", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </time>
+                  </dd>
+                </>
+              )}
+
+              <dt className="text-muted-foreground">Views</dt>
+              <dd className="flex items-center gap-1 font-medium">
+                <Eye className="h-3 w-3" />
+                {promotion.view_count || 0}
+              </dd>
+            </dl>
+
+            {(showContactSummary || contactMethods.length > 0) && contactMethods.length > 0 && (
+              <div className="mt-3 border-t pt-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {showContactSummary ? "Saved contact methods" : "Contact options"}
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {contactMethods.map((method) => (
+                    <Badge key={method} variant="outline" className="capitalize text-xs">
+                      {CONTACT_METHOD_LABELS[method] ?? method}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ═══ SIDEBAR — desktop only (mobile contact shown above) ═══ */}
+      <div className="hidden space-y-4 lg:block">
+        {/* Price card (when no media overlay) */}
+        {promotion.price_cents != null &&
+          promotion.price_cents > 0 &&
+          photos.length === 0 &&
+          videos.length === 0 && (
             <Card>
-              <CardContent className="space-y-3 p-5">
-                <h3 className="text-sm font-semibold text-muted-foreground">From Business</h3>
-                <Link
-                  href={`/mzansi-business/${linkedBusiness.id}`}
-                  className="flex items-center gap-3 transition-opacity hover:opacity-80"
-                >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-blue/10">
-                    {linkedBusiness.logo_url ? (
-                      <Image
-                        src={normalizeMediaUrl(linkedBusiness.logo_url)}
-                        alt={linkedBusiness.business_name}
-                        width={40}
-                        height={40}
-                        className="object-cover"
-                      />
-                    ) : (
-                      <Building2 className="h-5 w-5 text-brand-blue" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{linkedBusiness.business_name}</p>
-                    <p className="text-xs text-brand-blue">View Business</p>
-                  </div>
-                </Link>
+              <CardContent className="space-y-2 p-4">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-display text-2xl font-bold">
+                    {formatZAR(promotion.price_cents)}
+                  </span>
+                  {promotion.price_negotiable && (
+                    <Badge variant="outline" className="text-brand-green">
+                      Negotiable
+                    </Badge>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}
 
-          <p className="text-center text-xs text-muted-foreground">
-            Posted{" "}
-            <time dateTime={promotion.created_at}>
-              {new Date(promotion.created_at).toLocaleDateString("en-ZA")}
-            </time>
-          </p>
-        </div>
+        {/* Advertiser card */}
+        <Card>
+          <CardContent className="space-y-3 p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green text-sm font-bold text-white">
+                {advertiserProfile?.display_name?.charAt(0)?.toUpperCase() || "A"}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">
+                  {advertiserProfile?.display_name || "Advertiser"}
+                </p>
+                <TrustBadge level={trustLevel} size="sm" />
+              </div>
+            </div>
+
+            <Separator />
+
+            {showContactActions ? (
+              <PromotionContactActions
+                promotionId={promotion.id}
+                contactMethods={contactMethods}
+                advertiserPhone={
+                  contactMethods.includes("call")
+                    ? (advertiserProfile?.masked_phone_public ?? null)
+                    : null
+                }
+                advertiserWhatsapp={
+                  contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
+                }
+              />
+            ) : (
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Creator preview</p>
+                <p>Public contact actions appear after approval.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Linked business */}
+        {linkedBusiness && (
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <Link
+                href={`/mzansi-business/${linkedBusiness.id}`}
+                className="flex items-center gap-3 transition-opacity hover:opacity-80"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-blue/10">
+                  {linkedBusiness.logo_url ? (
+                    <Image
+                      src={normalizeMediaUrl(linkedBusiness.logo_url)}
+                      alt={linkedBusiness.business_name}
+                      width={32}
+                      height={32}
+                      className="object-cover"
+                    />
+                  ) : (
+                    <Building2 className="h-4 w-4 text-brand-blue" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{linkedBusiness.business_name}</p>
+                  <p className="text-xs text-brand-blue">View Business</p>
+                </div>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
+        <p className="text-center text-xs text-muted-foreground">
+          Posted{" "}
+          <time dateTime={promotion.created_at}>
+            {new Date(promotion.created_at).toLocaleDateString("en-ZA")}
+          </time>
+        </p>
+      </div>
+
+      {/* ═══ LINKED BUSINESS + POSTED — mobile only ═══ */}
+      <div className="space-y-3 lg:hidden">
+        {linkedBusiness && (
+          <Link
+            href={`/mzansi-business/${linkedBusiness.id}`}
+            className="flex items-center gap-3 rounded-xl border p-3 transition-opacity hover:opacity-80"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-blue/10">
+              {linkedBusiness.logo_url ? (
+                <Image
+                  src={normalizeMediaUrl(linkedBusiness.logo_url)}
+                  alt={linkedBusiness.business_name}
+                  width={32}
+                  height={32}
+                  className="object-cover"
+                />
+              ) : (
+                <Building2 className="h-4 w-4 text-brand-blue" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{linkedBusiness.business_name}</p>
+              <p className="text-xs text-brand-blue">View Business</p>
+            </div>
+          </Link>
+        )}
+        <p className="text-center text-xs text-muted-foreground">
+          Posted{" "}
+          <time dateTime={promotion.created_at}>
+            {new Date(promotion.created_at).toLocaleDateString("en-ZA")}
+          </time>
+        </p>
       </div>
     </article>
   );

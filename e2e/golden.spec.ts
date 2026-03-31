@@ -52,10 +52,10 @@ test.describe("VerifyMzansi Golden Paths", () => {
   });
 
   test("Legacy marketplace routes redirect to mzansi-business", async ({ page }) => {
-    await page.goto("/business-ads");
+    await page.goto("/business-ads", { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/\/mzansi-business/, { timeout: 15_000 });
 
-    await page.goto("/mall-shops");
+    await page.goto("/mall-shops", { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/\/mzansi-business\?type=mall_store/, { timeout: 15_000 });
   });
 

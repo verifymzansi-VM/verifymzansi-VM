@@ -832,6 +832,7 @@ export async function POST(request: NextRequest) {
 
     // ── Auto-approve for trusted, clean-history sellers ──────
     let autoApproved = false;
+    const publishedAt = new Date().toISOString();
     const trustLevel = computeTrustLevel(
       verification.accountVerificationStatus as AccountVerificationStatus | null,
       tier as PlanTier | null
@@ -847,7 +848,7 @@ export async function POST(request: NextRequest) {
       if ((rejectedCount ?? 0) === 0) {
         const { error: approveError } = await getAdmin()
           .from("listings")
-          .update({ status: "active" })
+          .update({ status: "live", published_at: publishedAt })
           .eq("id", newListing.id);
 
         if (approveError) {
@@ -877,7 +878,7 @@ export async function POST(request: NextRequest) {
       {
         id: newListing.id,
         message: autoApproved ? "Listing published" : "Listing submitted for review",
-        status: autoApproved ? "active" : "pending_moderation",
+        status: autoApproved ? "live" : "pending_moderation",
       },
       { status: 201 }
     );

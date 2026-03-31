@@ -141,6 +141,7 @@ describe("POST /api/auth/change-password", () => {
   it("updates the password on valid input", async () => {
     const signInWithPassword = vi.fn().mockResolvedValue({ error: null });
     const updateUser = vi.fn().mockResolvedValue({ error: null });
+    const signOut = vi.fn().mockResolvedValue({ error: null });
 
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -150,6 +151,7 @@ describe("POST /api/auth/change-password", () => {
         }),
         signInWithPassword,
         updateUser,
+        signOut,
       },
     });
 
@@ -167,5 +169,6 @@ describe("POST /api/auth/change-password", () => {
       password: "old-password-123",
     });
     expect(updateUser).toHaveBeenCalledWith({ password: "NewPassword123" });
+    expect(signOut).toHaveBeenCalledWith({ scope: "others" });
   });
 });

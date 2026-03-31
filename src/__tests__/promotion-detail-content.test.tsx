@@ -97,6 +97,9 @@ describe("PromotionDetailContent", () => {
     );
 
     expect(screen.getByText("Upcoming Event")).toBeTruthy();
+
+    // Details section is collapsed by default — expand it to see contact methods
+    fireEvent.click(screen.getByRole("button", { name: /details/i }));
     expect(screen.getByText("Phone Call")).toBeTruthy();
     expect(screen.getByText("WhatsApp")).toBeTruthy();
     expect(screen.getByText("Contact Form")).toBeTruthy();
@@ -136,18 +139,17 @@ describe("PromotionDetailContent", () => {
       />
     );
 
+    // Only the hero video is a <video> element; gallery uses poster images
     const videos = Array.from(container.querySelectorAll("video"));
-    expect(videos).toHaveLength(3);
+    expect(videos).toHaveLength(1);
     expect(videos[0]).toHaveAttribute("src", "https://example.com/video-1.mp4");
-    const secondVideo = videos.find(
-      (video) => video.getAttribute("src") === "https://example.com/video-2.mp4"
-    );
-    expect(secondVideo).toBeTruthy();
+
+    // Gallery should still contain buttons for the other media items
+    const galleryButtons = screen.getAllByRole("button", { name: /view (video|photo)/i });
+    expect(galleryButtons.length).toBeGreaterThanOrEqual(3);
 
     const photo = screen.getByAltText("Weekend Event photo 2");
-    expect(secondVideo!.compareDocumentPosition(photo) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
+    expect(photo).toBeTruthy();
   });
 
   it("swaps hero to a photo when its thumbnail is clicked", () => {
@@ -184,9 +186,10 @@ describe("PromotionDetailContent", () => {
       />
     );
 
-    expect(container.querySelector("video[controls]")).toBeTruthy();
+    // Hero uses custom play/mute overlay instead of native controls
+    expect(container.querySelector("video")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "View photo 2" }));
-    expect(container.querySelector("video[controls]")).toBeNull();
+    expect(container.querySelector("video")).toBeNull();
     const images = Array.from(container.querySelectorAll("img"));
     expect(
       images.some((img) => img.getAttribute("src") === "https://example.com/photo-2.jpg")

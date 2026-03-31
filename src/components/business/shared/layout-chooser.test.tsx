@@ -39,7 +39,7 @@ describe("LayoutChooser", () => {
     render(<LayoutChooser selected="showcase" onChange={vi.fn()} />);
     expect(screen.getByText("Video-first, immersive hero")).toBeInTheDocument();
     expect(screen.getByText("Gallery-first, product-focused")).toBeInTheDocument();
-    expect(screen.getByText("Info-first, structured layout")).toBeInTheDocument();
+    expect(screen.getByText("Clean, organized layout")).toBeInTheDocument();
   });
 
   it("has an accessible group role", () => {
