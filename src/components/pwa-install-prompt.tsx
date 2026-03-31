@@ -1,8 +1,17 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
 import { X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+const PROMPT_BLOCKED_PATH_PREFIXES = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/auth",
+];
 
 // Define the interface for the beforeinstallprompt event
 interface BeforeInstallPromptEvent extends Event {
@@ -26,6 +35,7 @@ function getIOSFallbackSnapshot() {
 }
 
 export function PwaInstallPrompt() {
+  const pathname = usePathname();
   const isIOSFallback = useSyncExternalStore(
     subscribeDisplayMode,
     getIOSFallbackSnapshot,
@@ -33,12 +43,26 @@ export function PwaInstallPrompt() {
   );
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return localStorage.getItem("pwa-prompt-dismissed") === "true";
+  });
   const [showIOSHelp, setShowIOSHelp] = useState(false);
+  const promptBlockedForRoute = PROMPT_BLOCKED_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
 
   useEffect(() => {
-    // Check if the user has already dismissed or installed the app in this session/device
-    const isDismissed = localStorage.getItem("pwa-prompt-dismissed");
+    if (dismissed) {
+      return;
+    }
+
+    if (promptBlockedForRoute) {
+      return;
+    }
 
     const userAgent = window.navigator.userAgent;
     const isIOSDevice = /iPad|iPhone|iPod/.test(userAgent);
@@ -51,32 +75,29 @@ export function PwaInstallPrompt() {
       });
     }
 
-    // Only handle if not dismissed previously
-    if (isDismissed !== "true") {
-      const handleBeforeInstallPrompt = (e: Event) => {
-        // Prevent Chrome 67 and earlier from automatically showing the prompt
-        e.preventDefault();
-        // Stash the event so it can be triggered later.
-        setDeferredPrompt(e as BeforeInstallPromptEvent);
-        // Show the prompt UI
-        setShowPrompt(true);
-      };
+    const handleBeforeInstallPrompt = (e: Event) => {
+      // Prevent Chrome 67 and earlier from automatically showing the prompt
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      // Show the prompt UI
+      setShowPrompt(true);
+    };
 
-      const handleAppInstalled = () => {
-        // Hide the prompt if the app was installed successfully
-        setShowPrompt(false);
-        setDeferredPrompt(null);
-      };
+    const handleAppInstalled = () => {
+      // Hide the prompt if the app was installed successfully
+      setShowPrompt(false);
+      setDeferredPrompt(null);
+    };
 
-      window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-      window.addEventListener("appinstalled", handleAppInstalled);
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
 
-      return () => {
-        window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-        window.removeEventListener("appinstalled", handleAppInstalled);
-      };
-    }
-  }, []);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, [dismissed, promptBlockedForRoute]);
 
   const handleInstallClick = async () => {
     if (isIOSFallback) {
@@ -103,7 +124,7 @@ export function PwaInstallPrompt() {
     localStorage.setItem("pwa-prompt-dismissed", "true");
   };
 
-  if (dismissed || !(showPrompt || isIOSFallback)) return null;
+  if (dismissed || promptBlockedForRoute || !(showPrompt || isIOSFallback)) return null;
 
   return (
     <div className="fixed bottom-20 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom flex justify-center pb-safe">
