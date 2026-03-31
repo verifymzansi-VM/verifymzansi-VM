@@ -3,9 +3,9 @@
 -- first_name/last_name on verification_steps, and a DB trigger to enforce
 -- immutable fields even if the API is bypassed.
 
--- ── 1. New columns on seller_profiles ──────────────────────
+-- ── 1. New columns on account_profiles ─────────────────────
 
-ALTER TABLE public.seller_profiles
+ALTER TABLE public.account_profiles
   ADD COLUMN IF NOT EXISTS legal_first_name  TEXT,
   ADD COLUMN IF NOT EXISTS legal_last_name   TEXT,
   ADD COLUMN IF NOT EXISTS legal_name_locked_at TIMESTAMPTZ,
@@ -13,12 +13,12 @@ ALTER TABLE public.seller_profiles
   ADD COLUMN IF NOT EXISTS contact_last_email_change_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS pending_email     TEXT;
 
-COMMENT ON COLUMN public.seller_profiles.legal_first_name IS 'First name from verified ID document — immutable once set';
-COMMENT ON COLUMN public.seller_profiles.legal_last_name  IS 'Surname from verified ID document — immutable once set';
-COMMENT ON COLUMN public.seller_profiles.legal_name_locked_at IS 'Timestamp when legal name was locked from verified ID';
-COMMENT ON COLUMN public.seller_profiles.contact_last_phone_change_at IS 'Last time canonical phone was changed — used for 15-day cooldown';
-COMMENT ON COLUMN public.seller_profiles.contact_last_email_change_at IS 'Last time email was changed — used for 15-day cooldown';
-COMMENT ON COLUMN public.seller_profiles.pending_email IS 'Pending email change awaiting confirmation';
+COMMENT ON COLUMN public.account_profiles.legal_first_name IS 'First name from verified ID document - immutable once set';
+COMMENT ON COLUMN public.account_profiles.legal_last_name  IS 'Surname from verified ID document - immutable once set';
+COMMENT ON COLUMN public.account_profiles.legal_name_locked_at IS 'Timestamp when legal name was locked from verified ID';
+COMMENT ON COLUMN public.account_profiles.contact_last_phone_change_at IS 'Last time canonical phone was changed - used for 15-day cooldown';
+COMMENT ON COLUMN public.account_profiles.contact_last_email_change_at IS 'Last time email was changed - used for 15-day cooldown';
+COMMENT ON COLUMN public.account_profiles.pending_email IS 'Pending email change awaiting confirmation';
 
 -- ── 2. New columns on verification_steps (first_name / last_name) ──
 
@@ -132,8 +132,8 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS enforce_identity_locks ON public.seller_profiles;
+DROP TRIGGER IF EXISTS enforce_identity_locks ON public.account_profiles;
 CREATE TRIGGER enforce_identity_locks
-  BEFORE UPDATE ON public.seller_profiles
+  BEFORE UPDATE ON public.account_profiles
   FOR EACH ROW
   EXECUTE FUNCTION public.enforce_identity_locks();

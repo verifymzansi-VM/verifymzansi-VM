@@ -46,6 +46,8 @@ interface EvidenceStep {
   reviewed_at: string | null;
   created_at: string;
   metadata: Record<string, unknown> | null;
+  first_name: string | null;
+  last_name: string | null;
 }
 
 interface Artifact {
