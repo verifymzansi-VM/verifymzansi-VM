@@ -32,16 +32,16 @@ export const LAYOUT_TEMPLATES: Record<LayoutTemplate, LayoutTemplateMeta> = {
     tagline: "Gallery-first, product-focused",
     description:
       "Media grid with video as the featured tile. Best for product businesses that want to display inventory and variety.",
-    videoRole: "inline-grid",
+    videoRole: "hero",
     icon: "LayoutGrid",
   },
   professional: {
     id: "professional",
     name: "Professional",
-    tagline: "Info-first, structured layout",
+    tagline: "Clean, organized layout",
     description:
-      "Clean banner with structured sections. Best for service businesses that need to present credentials and information clearly.",
-    videoRole: "dedicated-card",
+      "Professional layout with visual hero and organized details. Best for service businesses that need to present credentials clearly.",
+    videoRole: "hero",
     icon: "Briefcase",
   },
 } as const;

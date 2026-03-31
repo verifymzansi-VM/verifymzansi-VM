@@ -78,8 +78,8 @@ function MobileFrame({ children }: { children: React.ReactNode }) {
         {/* Notch */}
         <div className="mx-auto mb-2 h-6 w-28 rounded-full bg-gray-900 dark:bg-gray-700" />
         {/* Screen */}
-        <div className="overflow-y-auto rounded-[1.5rem] bg-background max-h-[667px]">
-          <div className="p-4">{children}</div>
+        <div className="overflow-y-auto rounded-[1.5rem] bg-background max-h-[720px]">
+          <div className="p-3">{children}</div>
         </div>
         {/* Home bar */}
         <div className="mx-auto mt-2 h-1.5 w-24 rounded-full bg-gray-600" />

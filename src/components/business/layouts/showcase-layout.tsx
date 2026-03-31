@@ -11,21 +11,14 @@ import { CATEGORY_CTA_CONFIG } from "@/lib/business/category-layout-map";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import type { BusinessCategory, BusinessType, PromotionType, TrustLevel } from "@/types/enums";
 import {
-  BusinessDetailsCard,
   type BusinessDetailRecord,
   type BusinessOwnerRecord,
   type BusinessPromotionRecord,
 } from "@/components/business/business-detail-content";
 import { BusinessHeroIdentity } from "@/components/business/shared/business-hero-identity";
-import { BusinessContactSection } from "@/components/business/shared/business-contact-section";
-import { BusinessServicesSection } from "@/components/business/shared/business-services-section";
 import { StickyContactBar } from "@/components/business/shared/sticky-contact-bar";
-import {
-  OperatingHoursCard,
-  ManagedByCard,
-  ShareReportRow,
-} from "@/components/business/shared/business-sidebar-cards";
-import { BusinessPaymentDeliverySection } from "@/components/business/shared/business-payment-delivery-section";
+import { ManagedByCard, ShareReportRow } from "@/components/business/shared/business-sidebar-cards";
+import { BusinessDetailsAccordion } from "@/components/business/shared/business-details-accordion";
 
 interface ShowcaseLayoutProps {
   business: BusinessDetailRecord;
@@ -41,8 +34,7 @@ interface ShowcaseLayoutProps {
 /**
  * **Showcase Layout**
  *
- * Gallery-forward grid with video as the first tile.
- * Cover photo header → identity below → masonry gallery (video first) → details.
+ * Media-forward: video hero → gallery grid → compact identity → details accordion.
  * Best for: electronics, groceries, home & living, automotive.
  */
 export function ShowcaseLayout({
@@ -75,14 +67,34 @@ export function ShowcaseLayout({
     })),
   ];
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [isAboutExpanded, setIsAboutExpanded] = useState(false);
   const activeMedia = mediaItems[activeMediaIndex] ?? null;
 
   return (
     <>
-      {/* ═══ HEADER: Cover photo with subtle overlay ═══ */}
+      {/* ═══ HERO: Video-first or cover photo ═══ */}
       <div className="relative -mx-4 overflow-hidden rounded-2xl sm:-mx-0">
-        <div className="relative aspect-[3/1] overflow-hidden bg-muted">
-          {business.cover_photo ? (
+        <div className="relative aspect-[16/9] overflow-hidden bg-muted">
+          {activeMedia ? (
+            activeMedia.kind === "video" ? (
+              <BusinessPromoVideo
+                videoUrl={normalizeMediaUrl(activeMedia.url)}
+                thumbnailUrl={
+                  activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined
+                }
+                businessName={business.business_name}
+              />
+            ) : (
+              <Image
+                src={normalizeMediaUrl(activeMedia.url)}
+                alt={`${business.business_name} photo ${activeMedia.photoNumber ?? 1}`}
+                fill
+                className="object-cover"
+                priority
+                sizes="100vw"
+              />
+            )
+          ) : business.cover_photo ? (
             <Image
               src={normalizeMediaUrl(business.cover_photo)}
               alt={`${business.business_name} cover`}
@@ -96,131 +108,108 @@ export function ShowcaseLayout({
               <Store className="h-16 w-16 text-primary/30" />
             </div>
           )}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
         </div>
       </div>
 
-      {/* Identity below cover */}
-      <div className="-mt-10 relative z-10 px-4 sm:px-0">
-        <BusinessHeroIdentity
-          business={business}
-          variant="below"
-          primaryCtaLabel={ctaConfig?.primaryCta}
-        />
-      </div>
+      {/* ═══ GALLERY THUMBNAILS ═══ */}
+      {mediaItems.length > 1 && (
+        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+          {mediaItems.map((item, i) => (
+            <button
+              key={`${item.kind}-${i}`}
+              type="button"
+              onClick={() => setActiveMediaIndex(i)}
+              className={`relative aspect-square overflow-hidden rounded-lg border-2 ${
+                activeMediaIndex === i ? "border-brand-blue" : "border-transparent"
+              }`}
+              aria-label={
+                item.kind === "video"
+                  ? "View profile video"
+                  : `View photo ${item.photoNumber ?? i + 1}`
+              }
+            >
+              {item.kind === "video" ? (
+                <>
+                  {item.poster || business.cover_photo ? (
+                    <Image
+                      src={normalizeMediaUrl(item.poster || business.cover_photo!)}
+                      alt={`${business.business_name} video thumbnail`}
+                      fill
+                      className="object-cover"
+                      sizes="100px"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-black text-white text-xs">
+                      Video
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/30" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Play className="h-4 w-4 text-white fill-white" />
+                  </div>
+                </>
+              ) : (
+                <Image
+                  src={normalizeMediaUrl(item.url)}
+                  alt={`${business.business_name} photo ${item.photoNumber ?? i + 1}`}
+                  fill
+                  className="object-cover"
+                  sizes="100px"
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ═══ IDENTITY ═══ */}
+      <BusinessHeroIdentity
+        business={business}
+        variant="below"
+        primaryCtaLabel={ctaConfig?.primaryCta}
+      />
 
       {/* ═══ CONTENT ═══ */}
-      <div className="space-y-6">
-        {/* Gallery grid: video as first tile, then photos */}
-        {activeMedia && (
-          <div>
-            <h2 className="mb-3 font-display text-lg font-bold">
-              {ctaConfig?.galleryHeading ?? "Gallery"}
-            </h2>
-            <div className="space-y-3">
-              <div className="relative aspect-[16/9] overflow-hidden rounded-2xl bg-black">
-                {activeMedia.kind === "video" ? (
-                  <BusinessPromoVideo
-                    videoUrl={normalizeMediaUrl(activeMedia.url)}
-                    thumbnailUrl={
-                      activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined
-                    }
-                    businessName={business.business_name}
-                  />
-                ) : (
-                  <Image
-                    src={normalizeMediaUrl(activeMedia.url)}
-                    alt={`${business.business_name} photo ${activeMedia.photoNumber ?? 1}`}
-                    fill
-                    className="object-cover"
-                    sizes="100vw"
-                  />
-                )}
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                {mediaItems.map((item, i) => (
-                  <button
-                    key={`${item.kind}-${i}`}
-                    type="button"
-                    onClick={() => setActiveMediaIndex(i)}
-                    className={`relative aspect-square overflow-hidden rounded-xl border-2 ${
-                      activeMediaIndex === i ? "border-brand-blue" : "border-transparent"
-                    }`}
-                    aria-label={
-                      item.kind === "video"
-                        ? "View profile video"
-                        : `View photo ${item.photoNumber ?? i + 1}`
-                    }
-                  >
-                    {item.kind === "video" ? (
-                      <>
-                        {item.poster || business.cover_photo ? (
-                          <Image
-                            src={normalizeMediaUrl(item.poster || business.cover_photo!)}
-                            alt={`${business.business_name} video thumbnail`}
-                            fill
-                            className="object-cover"
-                            sizes="160px"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-black text-white text-xs">
-                            Video
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-black/30" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <Play className="h-5 w-5 text-white fill-white" />
-                        </div>
-                      </>
-                    ) : (
-                      <Image
-                        src={normalizeMediaUrl(item.url)}
-                        alt={`${business.business_name} photo ${item.photoNumber ?? i + 1}`}
-                        fill
-                        className="object-cover"
-                        sizes="160px"
-                      />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* About */}
+      <div className="space-y-5">
+        {/* About – truncated */}
         <Card>
-          <CardContent className="space-y-4 p-6">
-            <h2 className="font-display text-xl font-bold">About {business.business_name}</h2>
-            <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
+          <CardContent className="space-y-3 p-5">
+            <h2 className="font-display text-lg font-bold">About {business.business_name}</h2>
+            <p
+              className={`whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground ${
+                !isAboutExpanded ? "line-clamp-3" : ""
+              }`}
+            >
               {business.description || "No description provided."}
             </p>
+            {business.description && business.description.length > 120 && (
+              <button
+                type="button"
+                onClick={() => setIsAboutExpanded(!isAboutExpanded)}
+                className="text-sm font-medium text-brand-blue hover:underline"
+              >
+                {isAboutExpanded ? "Show less" : "Read more"}
+              </button>
+            )}
           </CardContent>
         </Card>
 
-        {/* Two-column details + sidebar */}
+        {/* Collapsible details accordion */}
+        <BusinessDetailsAccordion
+          business={business}
+          businessType={business.business_type as BusinessType}
+          businessDetails={business.business_details}
+          serviceAreas={business.service_areas}
+          servicesOffered={business.services_offered ?? []}
+          servicesHeading={ctaConfig?.servicesHeading}
+          paymentMethods={business.payment_methods_accepted}
+          deliveryAvailable={deliveryAvailable}
+          operatingHours={opHours}
+        />
+
+        {/* Two-column: promotions + sidebar */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
-            <BusinessDetailsCard
-              business={business}
-              businessType={business.business_type as BusinessType}
-              businessDetails={business.business_details}
-              serviceAreas={business.service_areas}
-            />
-
-            {business.services_offered && business.services_offered.length > 0 && (
-              <BusinessServicesSection
-                services={business.services_offered}
-                heading={ctaConfig?.servicesHeading}
-              />
-            )}
-
-            <BusinessPaymentDeliverySection
-              paymentMethods={business.payment_methods_accepted}
-              deliveryAvailable={deliveryAvailable}
-            />
-
             {showPromotions && promotions.length > 0 && (
               <div className="space-y-4">
                 <h3 className="px-1 font-display text-xl font-bold">Promotions & Offers</h3>
@@ -256,11 +245,8 @@ export function ShowcaseLayout({
             )}
           </div>
 
+          {/* Sidebar */}
           <div className="space-y-6">
-            <BusinessContactSection business={business} />
-            {opHours && Object.keys(opHours).length > 0 && (
-              <OperatingHoursCard operatingHours={opHours} />
-            )}
             <ManagedByCard ownerProfile={ownerProfile} trustLevel={trustLevel} />
             <ShareReportRow business={business} showPublicActions={showPublicActions} />
           </div>

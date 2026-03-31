@@ -10,21 +10,14 @@ import { CATEGORY_CTA_CONFIG } from "@/lib/business/category-layout-map";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import type { BusinessCategory, BusinessType, PromotionType, TrustLevel } from "@/types/enums";
 import {
-  BusinessDetailsCard,
   type BusinessDetailRecord,
   type BusinessOwnerRecord,
   type BusinessPromotionRecord,
 } from "@/components/business/business-detail-content";
 import { BusinessHeroIdentity } from "@/components/business/shared/business-hero-identity";
-import { BusinessContactSection } from "@/components/business/shared/business-contact-section";
-import { BusinessServicesSection } from "@/components/business/shared/business-services-section";
 import { StickyContactBar } from "@/components/business/shared/sticky-contact-bar";
-import {
-  OperatingHoursCard,
-  ManagedByCard,
-  ShareReportRow,
-} from "@/components/business/shared/business-sidebar-cards";
-import { BusinessPaymentDeliverySection } from "@/components/business/shared/business-payment-delivery-section";
+import { ManagedByCard, ShareReportRow } from "@/components/business/shared/business-sidebar-cards";
+import { BusinessDetailsAccordion } from "@/components/business/shared/business-details-accordion";
 
 interface CinematicLayoutProps {
   business: BusinessDetailRecord;
@@ -60,6 +53,7 @@ export function CinematicLayout({
   const opHours = business.operating_hours;
   const [isMuted, setIsMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isAboutExpanded, setIsAboutExpanded] = useState(false);
   const [activeHero, setActiveHero] = useState<"video" | "cover-photo" | "gallery-photo">(
     hasVideo ? "video" : business.cover_photo ? "cover-photo" : "gallery-photo"
   );
@@ -227,38 +221,45 @@ export function CinematicLayout({
           </div>
         )}
 
-        {/* About */}
+        {/* About – truncated */}
         <Card className="border-none bg-background/60 shadow-md backdrop-blur-sm">
-          <CardContent className="space-y-4 p-6">
-            <h2 className="font-display text-xl font-bold">About {business.business_name}</h2>
-            <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
+          <CardContent className="space-y-3 p-5">
+            <h2 className="font-display text-lg font-bold">About {business.business_name}</h2>
+            <p
+              className={`whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground ${
+                !isAboutExpanded ? "line-clamp-3" : ""
+              }`}
+            >
               {business.description || "No description provided."}
             </p>
+            {business.description && business.description.length > 120 && (
+              <button
+                type="button"
+                onClick={() => setIsAboutExpanded(!isAboutExpanded)}
+                className="text-sm font-medium text-brand-blue hover:underline"
+              >
+                {isAboutExpanded ? "Show less" : "Read more"}
+              </button>
+            )}
           </CardContent>
         </Card>
 
-        {/* Two-column: details + sidebar */}
+        {/* Collapsible details accordion */}
+        <BusinessDetailsAccordion
+          business={business}
+          businessType={business.business_type as BusinessType}
+          businessDetails={business.business_details}
+          serviceAreas={business.service_areas}
+          servicesOffered={business.services_offered ?? []}
+          servicesHeading={ctaConfig?.servicesHeading}
+          paymentMethods={business.payment_methods_accepted}
+          deliveryAvailable={deliveryAvailable}
+          operatingHours={opHours}
+        />
+
+        {/* Two-column: promotions + sidebar */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
-            <BusinessDetailsCard
-              business={business}
-              businessType={business.business_type as BusinessType}
-              businessDetails={business.business_details}
-              serviceAreas={business.service_areas}
-            />
-
-            {business.services_offered && business.services_offered.length > 0 && (
-              <BusinessServicesSection
-                services={business.services_offered}
-                heading={ctaConfig?.servicesHeading}
-              />
-            )}
-
-            <BusinessPaymentDeliverySection
-              paymentMethods={business.payment_methods_accepted}
-              deliveryAvailable={deliveryAvailable}
-            />
-
             {showPromotions && promotions.length > 0 && (
               <div className="space-y-4">
                 <h3 className="px-1 font-display text-xl font-bold">Promotions & Offers</h3>
@@ -296,10 +297,6 @@ export function CinematicLayout({
 
           {/* Sidebar */}
           <div className="space-y-6">
-            <BusinessContactSection business={business} />
-            {opHours && Object.keys(opHours).length > 0 && (
-              <OperatingHoursCard operatingHours={opHours} />
-            )}
             <ManagedByCard ownerProfile={ownerProfile} trustLevel={trustLevel} />
             <ShareReportRow business={business} showPublicActions={showPublicActions} />
           </div>

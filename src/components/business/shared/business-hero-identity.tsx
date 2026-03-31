@@ -33,63 +33,63 @@ export function BusinessHeroIdentity({
   const businessCategory = business.category as BusinessCategory;
 
   return (
-    <div className="relative z-10 mx-auto flex w-full flex-col items-center gap-6 px-6 pb-6 pt-4 text-center md:flex-row md:items-end md:gap-8 md:text-left">
-      {/* Logo */}
-      <div className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-2xl border bg-white p-2 shadow-xl dark:bg-warm-900">
+    <div className="relative z-10 mx-auto flex w-full flex-row items-center gap-3 px-4 pb-4 pt-3 text-left md:gap-4">
+      {/* Logo – compact */}
+      <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl border bg-white p-1 dark:bg-warm-900">
         {business.logo_url ? (
           <Image
             src={normalizeMediaUrl(business.logo_url)}
             alt={`${business.business_name} Logo`}
-            width={128}
-            height={128}
-            className="h-full w-full rounded-xl object-contain"
+            width={48}
+            height={48}
+            className="h-full w-full rounded-lg object-contain"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center rounded-xl bg-muted">
-            <Store className="h-10 w-10 text-muted-foreground" />
+          <div className="flex h-full w-full items-center justify-center rounded-lg bg-muted">
+            <Store className="h-5 w-5 text-muted-foreground" />
           </div>
         )}
       </div>
 
       {/* Identity */}
-      <div className="flex-1 pt-12 md:pt-0">
+      <div className="min-w-0 flex-1">
         <h1
-          className={`font-display text-2xl font-bold md:text-3xl ${
+          className={`font-display text-lg font-bold md:text-2xl ${
             variant === "overlay" ? "text-white drop-shadow-lg" : "text-foreground"
           }`}
         >
           {business.business_name}
         </h1>
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2 md:justify-start">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <Badge
             variant="outline"
-            className={`text-xs ${variant === "overlay" ? "border-white/40 text-white" : ""}`}
+            className={`text-[10px] ${variant === "overlay" ? "border-white/40 text-white" : ""}`}
           >
             {BUSINESS_TYPE_LABELS[businessType]}
           </Badge>
           <Badge
             variant="secondary"
-            className={`text-xs ${variant === "overlay" ? "bg-white/20 text-white" : ""}`}
+            className={`text-[10px] ${variant === "overlay" ? "bg-white/20 text-white" : ""}`}
           >
             {BUSINESS_CATEGORY_LABELS[businessCategory]}
           </Badge>
           {business.store_number && business.store_number !== "N/A" && (
             <span
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm ${
+              className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
                 variant === "overlay" ? "bg-white/20 text-white" : "bg-muted text-foreground"
               }`}
             >
-              <Store className="h-4 w-4 text-brand-blue" />
+              <Store className="h-3 w-3 text-brand-blue" />
               Shop {business.store_number}
             </span>
           )}
           {(business.location_province || business.location_city) && (
             <span
-              className={`flex items-center gap-1 text-sm ${
+              className={`flex items-center gap-1 text-xs ${
                 variant === "overlay" ? "text-white/80" : "text-muted-foreground"
               }`}
             >
-              <MapPin className="h-4 w-4" />
+              <MapPin className="h-3 w-3" />
               {[business.location_town, business.location_city, business.location_province]
                 .filter(Boolean)
                 .join(", ")}
