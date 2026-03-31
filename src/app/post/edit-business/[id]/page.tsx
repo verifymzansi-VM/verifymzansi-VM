@@ -58,6 +58,11 @@ import { LayoutChooser } from "@/components/business/shared/layout-chooser";
 import { resolveBusinessLayout } from "@/lib/business/category-layout-map";
 import type { LayoutTemplate } from "@/lib/business/layout-templates";
 import type { BusinessCategory, BusinessType } from "@/types/enums";
+import {
+  OperatingHoursInput,
+  formatHoursValue,
+  parseHoursValue,
+} from "@/components/ui/operating-hours-input";
 
 const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow";
@@ -116,9 +121,9 @@ export default function EditBusinessPage() {
   const [socialTiktok, setSocialTiktok] = useState("");
 
   // Operating Hours
-  const [hoursMonFri, setHoursMonFri] = useState("");
-  const [hoursSat, setHoursSat] = useState("");
-  const [hoursSun, setHoursSun] = useState("");
+  const [hoursMonFri, setHoursMonFri] = useState({ open: "", close: "", closed: false });
+  const [hoursSat, setHoursSat] = useState({ open: "", close: "", closed: false });
+  const [hoursSun, setHoursSun] = useState({ open: "", close: "", closed: true });
 
   // Services & Additional
   const [servicesInput, setServicesInput] = useState("");
@@ -222,9 +227,9 @@ export default function EditBusinessPage() {
 
         // Operating hours
         const hours = b.operating_hours || {};
-        setHoursMonFri(hours.Mon_Fri || "");
-        setHoursSat(hours.Sat || "");
-        setHoursSun(hours.Sun || "");
+        setHoursMonFri(parseHoursValue(hours.Mon_Fri || ""));
+        setHoursSat(parseHoursValue(hours.Sat || ""));
+        setHoursSun(parseHoursValue(hours.Sun || ""));
 
         // Social links
         const social = b.social_links || {};
@@ -461,9 +466,12 @@ export default function EditBusinessPage() {
 
       // Build operating hours
       const operatingHours: Record<string, string> = {};
-      if (hoursMonFri) operatingHours.Mon_Fri = hoursMonFri;
-      if (hoursSat) operatingHours.Sat = hoursSat;
-      if (hoursSun) operatingHours.Sun = hoursSun;
+      const monFriVal = formatHoursValue(hoursMonFri.open, hoursMonFri.close, hoursMonFri.closed);
+      const satVal = formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed);
+      const sunVal = formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed);
+      if (monFriVal) operatingHours.Mon_Fri = monFriVal;
+      if (satVal) operatingHours.Sat = satVal;
+      if (sunVal) operatingHours.Sun = sunVal;
 
       // Build service areas
       const serviceAreas =
@@ -838,39 +846,36 @@ export default function EditBusinessPage() {
               <div className="space-y-3">
                 <Label>Operating Hours</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="hoursMonFri" className="text-xs text-muted-foreground">
-                      Mon - Fri
-                    </Label>
-                    <Input
-                      id="hoursMonFri"
-                      value={hoursMonFri}
-                      onChange={(e) => setHoursMonFri(e.target.value)}
-                      placeholder="09:00 - 17:00"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="hoursSat" className="text-xs text-muted-foreground">
-                      Saturday
-                    </Label>
-                    <Input
-                      id="hoursSat"
-                      value={hoursSat}
-                      onChange={(e) => setHoursSat(e.target.value)}
-                      placeholder="09:00 - 14:00"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="hoursSun" className="text-xs text-muted-foreground">
-                      Sunday
-                    </Label>
-                    <Input
-                      id="hoursSun"
-                      value={hoursSun}
-                      onChange={(e) => setHoursSun(e.target.value)}
-                      placeholder="Closed"
-                    />
-                  </div>
+                  <OperatingHoursInput
+                    id="hoursMonFri"
+                    label="Mon - Fri"
+                    open={hoursMonFri.open}
+                    close={hoursMonFri.close}
+                    closed={hoursMonFri.closed}
+                    onOpenChange={(v) => setHoursMonFri((p) => ({ ...p, open: v }))}
+                    onCloseChange={(v) => setHoursMonFri((p) => ({ ...p, close: v }))}
+                    onClosedChange={(v) => setHoursMonFri((p) => ({ ...p, closed: v }))}
+                  />
+                  <OperatingHoursInput
+                    id="hoursSat"
+                    label="Saturday"
+                    open={hoursSat.open}
+                    close={hoursSat.close}
+                    closed={hoursSat.closed}
+                    onOpenChange={(v) => setHoursSat((p) => ({ ...p, open: v }))}
+                    onCloseChange={(v) => setHoursSat((p) => ({ ...p, close: v }))}
+                    onClosedChange={(v) => setHoursSat((p) => ({ ...p, closed: v }))}
+                  />
+                  <OperatingHoursInput
+                    id="hoursSun"
+                    label="Sunday / Public Holidays"
+                    open={hoursSun.open}
+                    close={hoursSun.close}
+                    closed={hoursSun.closed}
+                    onOpenChange={(v) => setHoursSun((p) => ({ ...p, open: v }))}
+                    onCloseChange={(v) => setHoursSun((p) => ({ ...p, close: v }))}
+                    onClosedChange={(v) => setHoursSun((p) => ({ ...p, closed: v }))}
+                  />
                 </div>
               </div>
 

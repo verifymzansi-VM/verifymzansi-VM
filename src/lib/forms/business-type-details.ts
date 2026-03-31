@@ -13,7 +13,9 @@ export type BusinessDetailsFieldKind =
   | "url"
   | "checkbox"
   | "list"
-  | "select";
+  | "select"
+  | "time_range"
+  | "day_select";
 
 export interface BusinessDetailsFieldConfig {
   name: string;
@@ -32,6 +34,38 @@ export interface BusinessDetailsSectionConfig {
   description: string;
   fields: BusinessDetailsFieldConfig[];
 }
+
+const FLOOR_OR_WING_OPTIONS: SelectOption[] = [
+  { value: "Ground Floor", label: "Ground Floor" },
+  { value: "1st Floor", label: "1st Floor" },
+  { value: "2nd Floor", label: "2nd Floor" },
+  { value: "3rd Floor", label: "3rd Floor" },
+  { value: "Upper Level", label: "Upper Level" },
+  { value: "Basement", label: "Basement" },
+  { value: "North Wing", label: "North Wing" },
+  { value: "South Wing", label: "South Wing" },
+  { value: "East Wing", label: "East Wing" },
+  { value: "West Wing", label: "West Wing" },
+];
+
+const SUPPORT_RESPONSE_TIME_OPTIONS: SelectOption[] = [
+  { value: "Within 1 hour", label: "Within 1 hour" },
+  { value: "Within 2 hours", label: "Within 2 hours" },
+  { value: "Within 4 hours", label: "Within 4 hours" },
+  { value: "Same day", label: "Same day" },
+  { value: "Next business day", label: "Next business day" },
+  { value: "Within 2-3 days", label: "Within 2-3 days" },
+];
+
+export const DAYS_OF_WEEK: SelectOption[] = [
+  { value: "Monday", label: "Monday" },
+  { value: "Tuesday", label: "Tuesday" },
+  { value: "Wednesday", label: "Wednesday" },
+  { value: "Thursday", label: "Thursday" },
+  { value: "Friday", label: "Friday" },
+  { value: "Saturday", label: "Saturday" },
+  { value: "Sunday", label: "Sunday" },
+];
 
 const WALK_IN_POLICY_OPTIONS: SelectOption[] = [
   { value: "walk_ins_welcome", label: "Walk-ins welcome" },
@@ -94,8 +128,8 @@ export const BUSINESS_DETAILS_SECTIONS: Record<BusinessType, BusinessDetailsSect
       {
         name: "floor_or_wing",
         label: "Floor or wing",
-        kind: "text",
-        placeholder: "e.g. Upper Level, East Wing",
+        kind: "select",
+        options: FLOOR_OR_WING_OPTIONS,
       },
       {
         name: "nearest_entrance",
@@ -228,8 +262,8 @@ export const BUSINESS_DETAILS_SECTIONS: Record<BusinessType, BusinessDetailsSect
       {
         name: "support_response_time",
         label: "Support response time",
-        kind: "text",
-        placeholder: "e.g. Within 2 hours on weekdays",
+        kind: "select",
+        options: SUPPORT_RESPONSE_TIME_OPTIONS,
       },
     ],
   },
@@ -253,14 +287,13 @@ export const BUSINESS_DETAILS_SECTIONS: Record<BusinessType, BusinessDetailsSect
       {
         name: "trading_days",
         label: "Trading days",
-        kind: "list",
+        kind: "day_select",
         required: true,
-        placeholder: "e.g. Saturday, Sunday",
       },
       {
         name: "trading_hours",
         label: "Trading hours",
-        kind: "text",
+        kind: "time_range",
         required: true,
         placeholder: "e.g. 09:00 - 16:00",
       },

@@ -3,12 +3,18 @@
 import { cn } from "@/lib/utils";
 import {
   BUSINESS_DETAILS_SECTIONS,
+  DAYS_OF_WEEK,
   stringifyListValue,
   type BusinessDetailsFieldConfig,
 } from "@/lib/forms/business-type-details";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  OperatingHoursInput,
+  formatHoursValue,
+  parseHoursValue,
+} from "@/components/ui/operating-hours-input";
 import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessType } from "@/types/enums";
 
@@ -178,7 +184,52 @@ export function BusinessTypeDetailsFields({
           const path = `business_details.${field.name}`;
           const error = fieldErrors[path];
           const value = (businessDetails as unknown as Record<string, unknown>)[field.name];
-          const isWide = field.kind === "textarea" || field.kind === "list";
+          const isWide =
+            field.kind === "textarea" || field.kind === "list" || field.kind === "day_select";
+
+          if (field.kind === "day_select") {
+            const selectedDays = Array.isArray(value) ? (value as string[]) : [];
+            return (
+              <fieldset key={field.name} className="space-y-2 sm:col-span-2">
+                <legend className="text-sm font-medium">
+                  {field.label}
+                  {field.required ? " *" : ""}
+                </legend>
+                <div className="flex flex-wrap gap-2">
+                  {DAYS_OF_WEEK.map((day) => {
+                    const checked = selectedDays.includes(day.value);
+                    return (
+                      <label
+                        key={day.value}
+                        htmlFor={`business-detail-${field.name}-${day.value}`}
+                        className={cn(
+                          "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                          checked
+                            ? "border-brand-green bg-brand-green/10 text-brand-green"
+                            : "border-input bg-background hover:bg-muted/50"
+                        )}
+                      >
+                        <input
+                          id={`business-detail-${field.name}-${day.value}`}
+                          type="checkbox"
+                          className="sr-only"
+                          checked={checked}
+                          onChange={() => {
+                            const next = checked
+                              ? selectedDays.filter((d) => d !== day.value)
+                              : [...selectedDays, day.value];
+                            onBusinessDetailsChange(field.name, next);
+                          }}
+                        />
+                        {day.label}
+                      </label>
+                    );
+                  })}
+                </div>
+                {error && <p className="inline-form-error">{error}</p>}
+              </fieldset>
+            );
+          }
 
           if (field.kind === "checkbox") {
             return (
@@ -196,6 +247,52 @@ export function BusinessTypeDetailsFields({
                 />
                 <span>{field.label}</span>
               </label>
+            );
+          }
+
+          if (field.kind === "time_range") {
+            const parsed = parseHoursValue(typeof value === "string" ? value : "");
+            return (
+              <div key={field.name} className="space-y-2 sm:col-span-2">
+                <Label htmlFor={`business-detail-${field.name}`}>
+                  {field.label}
+                  {field.required ? " *" : ""}
+                </Label>
+                <OperatingHoursInput
+                  id={`business-detail-${field.name}`}
+                  label={field.label}
+                  open={parsed.open}
+                  close={parsed.close}
+                  closed={parsed.closed}
+                  onOpenChange={(v) => {
+                    const next = { ...parsed, open: v };
+                    onBusinessDetailsChange(
+                      field.name,
+                      formatHoursValue(next.open, next.close, next.closed)
+                    );
+                  }}
+                  onCloseChange={(v) => {
+                    const next = { ...parsed, close: v };
+                    onBusinessDetailsChange(
+                      field.name,
+                      formatHoursValue(next.open, next.close, next.closed)
+                    );
+                  }}
+                  onClosedChange={(v) => {
+                    const next = { ...parsed, closed: v };
+                    onBusinessDetailsChange(
+                      field.name,
+                      formatHoursValue(next.open, next.close, next.closed)
+                    );
+                  }}
+                  hideClosed={field.required}
+                  selectClassName={selectClassName}
+                />
+                {field.description && (
+                  <p className="text-xs text-muted-foreground">{field.description}</p>
+                )}
+                {error && <p className="inline-form-error">{error}</p>}
+              </div>
             );
           }
 
