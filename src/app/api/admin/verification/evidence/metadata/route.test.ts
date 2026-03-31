@@ -1,0 +1,198 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { NextRequest } from "next/server";
+
+const {
+  mockCreateClient,
+  mockCreateAdminClient,
+  mockVerifyStaffActorRoleFromDb,
+  mockCheckLocalRateLimit,
+  mockGetLinkedEvidenceArtifactIds,
+  mockLogAuditEvent,
+  mockReadAccountVerificationStatus,
+  verificationStepSelect,
+} = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockCreateAdminClient: vi.fn(),
+  mockVerifyStaffActorRoleFromDb: vi.fn(),
+  mockCheckLocalRateLimit: vi.fn(),
+  mockGetLinkedEvidenceArtifactIds: vi.fn(),
+  mockLogAuditEvent: vi.fn(),
+  mockReadAccountVerificationStatus: vi.fn(() => "pending_review"),
+  verificationStepSelect: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: mockCreateClient,
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: mockCreateAdminClient,
+}));
+
+vi.mock("@/lib/auth/admin-access", () => ({
+  verifyStaffActorRoleFromDb: (...args: unknown[]) => mockVerifyStaffActorRoleFromDb(...args),
+}));
+
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkLocalRateLimit: (...args: unknown[]) => mockCheckLocalRateLimit(...args),
+}));
+
+vi.mock("@/lib/services/kyc-evidence-access", () => ({
+  getLinkedEvidenceArtifactIds: (...args: unknown[]) => mockGetLinkedEvidenceArtifactIds(...args),
+}));
+
+vi.mock("@/lib/services/audit", () => ({
+  logAuditEvent: (...args: unknown[]) => mockLogAuditEvent(...args),
+}));
+
+vi.mock("@/lib/account/compat", async () => {
+  const actual = await vi.importActual("@/lib/account/compat");
+  return {
+    ...actual,
+    readAccountVerificationStatus: mockReadAccountVerificationStatus,
+  };
+});
+
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+}));
+
+import { GET } from "./route";
+
+const STEP_ID = "123e4567-e89b-42d3-a456-426614174000";
+const USER_ID = "123e4567-e89b-42d3-a456-426614174111";
+
+function createGetRequest(url: string): NextRequest {
+  return {
+    nextUrl: new URL(url),
+    url,
+    headers: {
+      get: vi.fn().mockReturnValue(null),
+    },
+  } as unknown as NextRequest;
+}
+
+describe("/api/admin/verification/evidence/metadata", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "admin-1" } },
+          error: null,
+        }),
+      },
+    });
+
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue("admin");
+    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
+    mockGetLinkedEvidenceArtifactIds.mockResolvedValue([]);
+    mockLogAuditEvent.mockResolvedValue(undefined);
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "verification_steps") {
+          return {
+            select: verificationStepSelect.mockImplementation((_columns: string) => ({
+              eq: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: STEP_ID,
+                    user_id: USER_ID,
+                    step_type: "id_doc",
+                    status: "pending",
+                    reviewed_at: "2026-03-31T00:00:00.000Z",
+                    decided_at: "2026-03-31T00:00:00.000Z",
+                    rejection_reason: null,
+                  },
+                ],
+                error: null,
+              }),
+            })),
+          };
+        }
+
+        if (table === "kyc_artifacts") {
+          return {
+            select: vi.fn().mockReturnValue({
+              in: vi.fn().mockReturnValue({
+                order: vi.fn().mockResolvedValue({ data: [], error: null }),
+              }),
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+
+        if (table === "kyc_risk_signals") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockResolvedValue({ data: [], error: null }),
+              }),
+            }),
+          };
+        }
+
+        if (table === "account_profiles") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
+          };
+        }
+
+        if (table === "kyc_evidence_access_logs") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+
+        if (table === "kyc_provider_results") {
+          return {
+            select: vi.fn().mockReturnValue({
+              in: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          };
+        }
+
+        return {};
+      }),
+    });
+  });
+
+  it("uses schema-compatible aliases for legacy step fields", async () => {
+    const response = await GET(
+      createGetRequest(
+        `http://localhost:3000/api/admin/verification/evidence/metadata?stepId=${STEP_ID}`
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(verificationStepSelect).toHaveBeenCalled();
+
+    const firstSelectArg = verificationStepSelect.mock.calls[0]?.[0] as string;
+    expect(firstSelectArg).toContain("decided_at:reviewed_at");
+    expect(firstSelectArg).toContain("rejection_reason:reason_note");
+
+    const payload = await response.json();
+    expect(Array.isArray(payload.steps)).toBe(true);
+    expect(payload.steps[0]).toMatchObject({
+      id: STEP_ID,
+      user_id: USER_ID,
+      decided_at: "2026-03-31T00:00:00.000Z",
+    });
+  });
+});

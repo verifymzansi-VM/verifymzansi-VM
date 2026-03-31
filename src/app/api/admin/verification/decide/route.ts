@@ -94,7 +94,6 @@ export async function POST(request: Request) {
       status: decision,
       reviewed_by: user.id,
       reviewed_at: new Date().toISOString(),
-      decided_at: new Date().toISOString(),
     };
 
     if (decision !== "approved") {
@@ -116,6 +115,14 @@ export async function POST(request: Request) {
       .select("id");
 
     if (updateError) {
+      log.error("Failed to update verification step", {
+        stepId,
+        decision,
+        error: updateError.message,
+        code: updateError.code,
+        details: updateError.details,
+        hint: updateError.hint,
+      });
       return NextResponse.json({ error: "Failed to update verification step" }, { status: 500 });
     }
 

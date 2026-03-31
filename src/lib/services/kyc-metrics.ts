@@ -101,19 +101,19 @@ export async function getKycOverviewMetrics(periodDays = 30): Promise<KycOvervie
     }
   }
 
-  // Average review time (hours) for decided steps
+  // Average review time (hours) for reviewed steps
   const { data: reviewTimeData } = await adminClient
     .from("verification_steps")
-    .select("submitted_at, decided_at")
-    .not("decided_at", "is", null)
+    .select("submitted_at, reviewed_at")
+    .not("reviewed_at", "is", null)
     .gte("submitted_at", since);
 
   let averageReviewHours: number | null = null;
   if (reviewTimeData && reviewTimeData.length > 0) {
     const totalHours = reviewTimeData.reduce((sum, row) => {
       const submitted = new Date(row.submitted_at).getTime();
-      const decided = new Date(row.decided_at).getTime();
-      return sum + (decided - submitted) / (1000 * 60 * 60);
+      const reviewed = new Date(row.reviewed_at).getTime();
+      return sum + (reviewed - submitted) / (1000 * 60 * 60);
     }, 0);
     averageReviewHours = Math.round((totalHours / reviewTimeData.length) * 10) / 10;
   }
@@ -169,11 +169,11 @@ export async function getReviewSlaMetrics(periodDays = 30): Promise<ReviewSlaMet
   const adminClient = createAdminClient();
   const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
 
-  // Decided steps with timing
+  // Reviewed steps with timing
   const { data: decidedSteps } = await adminClient
     .from("verification_steps")
-    .select("submitted_at, decided_at")
-    .not("decided_at", "is", null)
+    .select("submitted_at, reviewed_at")
+    .not("reviewed_at", "is", null)
     .gte("submitted_at", since);
 
   // Overdue: pending steps submitted > SLA_HOURS ago
@@ -192,8 +192,8 @@ export async function getReviewSlaMetrics(periodDays = 30): Promise<ReviewSlaMet
     const durations = decidedSteps
       .map((row) => {
         const submitted = new Date(row.submitted_at).getTime();
-        const decided = new Date(row.decided_at).getTime();
-        return (decided - submitted) / (1000 * 60 * 60);
+        const reviewed = new Date(row.reviewed_at).getTime();
+        return (reviewed - submitted) / (1000 * 60 * 60);
       })
       .sort((a, b) => a - b);
 

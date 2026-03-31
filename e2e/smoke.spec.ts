@@ -115,34 +115,22 @@ test.describe("Platform Smoke", () => {
   test("@smoke Google OAuth recovers when the page starts without a CSRF token", async ({
     page,
   }) => {
-    await page.addInitScript(() => {
-      const nativeFetch = window.fetch.bind(window);
-
-      window.fetch = async (input, init) => {
-        const requestUrl =
-          typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-        const requestMethod = (
-          init?.method ?? (input instanceof Request ? input.method : "GET")
-        ).toUpperCase();
-
-        if (requestMethod === "POST" && /\/api\/auth\/oauth\/google(?:\?|$)/.test(requestUrl)) {
-          const requestHeaders = new Headers(
-            init?.headers ?? (input instanceof Request ? input.headers : undefined)
-          );
-          (window as Window & { __oauthCsrfHeader?: string }).__oauthCsrfHeader =
-            requestHeaders.get("x-csrf-token") ?? undefined;
-
-          return new Response(
-            JSON.stringify({ url: new URL("/login#oauth-ok", window.location.href).toString() }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }
-          );
-        }
-
-        return nativeFetch(input, init);
-      };
+    // Use Playwright's native network-level interception rather than patching
+    // window.fetch via addInitScript.  The addInitScript approach is flaky across
+    // browser engines because certain runtimes (Chromium's V8, WebKit's JSC) may
+    // reference the original fetch binding before the script replacement takes
+    // effect.  page.route() intercepts at the network layer and is reliable on
+    // every browser project.
+    await page.route(/\/api\/auth\/oauth\/google(?:\?|$)/, async (route) => {
+      if (route.request().method() === "POST") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ url: "/login#oauth-ok" }),
+        });
+      } else {
+        await route.continue();
+      }
     });
 
     await page.goto("/login");
@@ -157,24 +145,27 @@ test.describe("Platform Smoke", () => {
     });
     expect(clearedState).toEqual({ cookie: false, meta: false });
 
+    // Register the response waiter before clicking so the request cannot slip by.
+    const oauthResponsePromise = page.waitForResponse(
+      (res) =>
+        /\/api\/auth\/oauth\/google(?:\?|$)/.test(res.url()) && res.request().method() === "POST"
+    );
     await page.getByRole("button", { name: /continue with google/i }).click();
+    const oauthResponse = await oauthResponsePromise;
+
+    // The CSRF token must have been bootstrapped and included in the request.
+    expect(oauthResponse.request().headers()["x-csrf-token"]).toMatch(/^[a-f0-9]{64}$/i);
+
+    // ensureCsrfTokenReady() sets the meta tag before the POST fires, so the
+    // token should already be present — poll briefly for any async DOM settling.
     await expect
       .poll(() =>
         page.evaluate(
-          () => (window as Window & { __oauthCsrfHeader?: string }).__oauthCsrfHeader ?? null
+          () => document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") ?? null
         )
       )
       .toMatch(/^[a-f0-9]{64}$/i);
-    await expect
-      .poll(() =>
-        page.evaluate(() => ({
-          hasCookie: document.cookie.includes("vm_csrf="),
-          meta: document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") ?? null,
-        }))
-      )
-      .toMatchObject({
-        meta: expect.stringMatching(/^[a-f0-9]{64}$/i),
-      });
+
     await expect(page.getByText(/invalid csrf token/i)).toHaveCount(0);
     await expect(page.getByText(/google sign-in failed/i)).toHaveCount(0);
     await expect(page.getByText(/something went wrong/i)).toHaveCount(0);
