@@ -85,6 +85,8 @@ function SmartFitBackdrop({
   sizes: string;
   priority: boolean;
 }) {
+  const useUnoptimized = src ? src.startsWith("blob:") || src.startsWith("data:") : false;
+
   if (!src) {
     return (
       <>
@@ -104,6 +106,7 @@ function SmartFitBackdrop({
         className="absolute inset-0 scale-110 object-cover blur-2xl brightness-90 saturate-150"
         sizes={sizes}
         priority={priority}
+        unoptimized={useUnoptimized ? true : undefined}
       />
       <div className="absolute inset-0 bg-black/10" />
     </>
@@ -138,6 +141,8 @@ function MuteButton({
 export interface VideoCardPlayerProps {
   /** Raw media URL (may be video or image — detected automatically) */
   src: string | null | undefined;
+  /** Explicitly treat media as video when URL has no extension (e.g. blob previews). */
+  isVideo?: boolean;
   /** Optional poster image shown before the video is ready */
   posterUrl?: string | null;
   /** Alt text for the poster image */
@@ -178,6 +183,7 @@ export interface VideoCardPlayerProps {
 
 export function VideoCardPlayer({
   src,
+  isVideo,
   posterUrl,
   alt = "Media",
   sizes = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw",
@@ -193,7 +199,7 @@ export function VideoCardPlayer({
   showPlaybackControl = false,
   onPlaybackStateChange,
 }: VideoCardPlayerProps) {
-  const isVideo = isVideoUrl(src);
+  const isVideoMedia = isVideo ?? isVideoUrl(src);
   const normalizedSrc = src ? normalizeMediaUrl(src) : undefined;
   const normalizedPoster = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const canHover = useHoverCapability();
@@ -202,7 +208,7 @@ export function VideoCardPlayer({
   // (false → true) does not unmount/remount the player and restart image loads.
   const mediaKey = `${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}|${showPlaybackControl ? "controls" : "no-controls"}`;
 
-  if (effectiveMode === "hover" && isVideo) {
+  if (effectiveMode === "hover" && isVideoMedia) {
     return (
       <HoverVideoPlayer
         key={mediaKey}
@@ -225,7 +231,7 @@ export function VideoCardPlayer({
   return (
     <VideoCardPlayerInner
       key={mediaKey}
-      isVideo={isVideo}
+      isVideo={isVideoMedia}
       normalizedSrc={normalizedSrc}
       normalizedPoster={normalizedPoster}
       alt={alt}
@@ -300,6 +306,11 @@ function VideoCardPlayerInner({
   showPlaybackControl,
   onPlaybackStateChange,
 }: VideoCardPlayerInnerProps) {
+  const posterNeedsUnoptimized =
+    normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
+  const srcNeedsUnoptimized =
+    normalizedSrc?.startsWith("blob:") || normalizedSrc?.startsWith("data:");
+
   const [isPlaybackPaused, setIsPlaybackPaused] = useState(() =>
     getInitialAmbientPlaybackPaused(mode, showPlaybackControl)
   );
@@ -500,6 +511,7 @@ function VideoCardPlayerInner({
             onLoad={handleImageLoad}
             onError={handlePosterError}
             data-media-fit="smart"
+            unoptimized={srcNeedsUnoptimized ? true : undefined}
           />
         </div>
       );
@@ -516,6 +528,7 @@ function VideoCardPlayerInner({
         onLoad={handleImageLoad}
         onError={handlePosterError}
         data-media-fit="cover"
+        unoptimized={srcNeedsUnoptimized ? true : undefined}
       />
     );
   }
@@ -545,6 +558,7 @@ function VideoCardPlayerInner({
             onLoad={handleImageLoad}
             onError={handlePosterError}
             data-media-fit={usesSmartFit ? "smart" : "cover"}
+            unoptimized={posterNeedsUnoptimized ? true : undefined}
           />
         ) : !videoReady || hasError || reducedMotion ? (
           <div className="absolute inset-0 z-[2] skeleton-shimmer" />
@@ -611,6 +625,7 @@ function VideoCardPlayerInner({
           onLoad={handleImageLoad}
           onError={handlePosterError}
           data-media-fit={usesSmartFit ? "smart" : "cover"}
+          unoptimized={posterNeedsUnoptimized ? true : undefined}
         />
       ) : !videoReady || hasError ? (
         <div className="absolute inset-0 z-[2] flex items-center justify-center skeleton-shimmer">
@@ -755,6 +770,9 @@ function HoverVideoPlayer({
   containerAspectRatio,
   muteControlVisibility,
 }: HoverVideoPlayerProps) {
+  const posterNeedsUnoptimized =
+    normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
+
   const { videoRef, containerRef, reducedMotion, isHovering } = useVideoHover(normalizedSrc);
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -852,6 +870,7 @@ function HoverVideoPlayer({
             onLoad={handleImageLoad}
             onError={handlePosterError}
             data-media-fit="smart"
+            unoptimized={posterNeedsUnoptimized ? true : undefined}
           />
         </div>
       );
@@ -868,6 +887,7 @@ function HoverVideoPlayer({
         onLoad={handleImageLoad}
         onError={handlePosterError}
         data-media-fit="cover"
+        unoptimized={posterNeedsUnoptimized ? true : undefined}
       />
     );
   }
@@ -897,6 +917,7 @@ function HoverVideoPlayer({
           onLoad={handleImageLoad}
           onError={handlePosterError}
           data-media-fit={usesSmartFit ? "smart" : "cover"}
+          unoptimized={posterNeedsUnoptimized ? true : undefined}
         />
       ) : !(isHovering && videoReady) || hasError || reducedMotion ? (
         <div className="absolute inset-0 z-[2] skeleton-shimmer" />

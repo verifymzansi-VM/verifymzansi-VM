@@ -84,6 +84,7 @@ export function PosterCardShell({
           {normalizedMediaUrl ? (
             <VideoCardPlayer
               src={normalizedMediaUrl}
+              isVideo={hasVideo}
               posterUrl={normalizedPosterUrl}
               alt={mediaAlt || title}
               sizes={mediaSizes}

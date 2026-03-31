@@ -8,16 +8,19 @@ import { render, screen } from "@testing-library/react";
 const videoCardPlayerMock = vi.fn(
   ({
     src,
+    isVideo,
     fitStrategy,
     muteControlVisibility,
   }: {
     src: string;
+    isVideo?: boolean;
     fitStrategy?: string;
     muteControlVisibility?: string;
   }) => (
     <div
       data-testid="video-card-player"
       data-src={src}
+      data-is-video={isVideo ? "true" : "false"}
       data-fit-strategy={fitStrategy}
       data-mute-control={muteControlVisibility}
     />
@@ -210,6 +213,7 @@ describe("ListingCard", () => {
     const videoPlayer = screen.getByTestId("video-card-player");
     expect(videoPlayer).toBeTruthy();
     expect(videoPlayer).toHaveAttribute("data-src", blobUrl);
+    expect(videoPlayer).toHaveAttribute("data-is-video", "true");
     expect(videoPlayer).toHaveAttribute("data-fit-strategy", "cover");
     expect(videoPlayer).toHaveAttribute("data-mute-control", "always");
     expect(screen.queryByAltText("Test Listing")).toBeNull();
