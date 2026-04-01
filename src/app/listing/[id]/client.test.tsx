@@ -71,8 +71,8 @@ describe("ListingDetailClient", () => {
       />
     );
 
-    expect(screen.getByTestId("video-with-poster")).toHaveAttribute(
-      "data-src",
+    expect(screen.getByLabelText("Toyota Hilux 2019 video")).toHaveAttribute(
+      "src",
       "https://example.com/video-1.mp4"
     );
 
@@ -109,8 +109,8 @@ describe("ListingDetailClient", () => {
       />
     );
 
-    expect(screen.getByTestId("video-with-poster")).toHaveAttribute(
-      "data-src",
+    expect(screen.getByLabelText("Video Listing video")).toHaveAttribute(
+      "src",
       "https://example.com/video-only.mp4"
     );
   });
@@ -126,8 +126,8 @@ describe("ListingDetailClient", () => {
       />
     );
 
-    expect(screen.getByTestId("video-with-poster")).toHaveAttribute(
-      "data-src",
+    expect(screen.getByLabelText("Preview Listing video")).toHaveAttribute(
+      "src",
       "blob:http://localhost/video-preview"
     );
     expect(screen.getByRole("button", { name: "View video 1 of 2" })).toBeTruthy();
