@@ -1056,7 +1056,7 @@ function FeedVideoPlayer({
   sizes,
   className,
   mediaClassName,
-  _hoverScale,
+  hoverScale: _hoverScale,
   mediaFitClassName,
   priority,
   fitStrategy,
