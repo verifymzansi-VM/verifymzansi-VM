@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
-import { Camera, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { MediaLightbox, type MediaItem } from "@/components/ui/media-lightbox";
 
 interface BusinessGalleryProps {
   photos: string[];
@@ -12,26 +12,21 @@ interface BusinessGalleryProps {
 }
 
 export function BusinessGallery({ photos, businessName }: BusinessGalleryProps) {
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxStart, setLightboxStart] = useState(0);
+
+  const lightboxItems: MediaItem[] = useMemo(
+    () => photos.map((url) => ({ kind: "photo" as const, url })),
+    [photos]
+  );
 
   function openLightbox(index: number) {
-    setLightboxIndex(index);
+    setLightboxStart(index);
+    setLightboxOpen(true);
   }
 
   function closeLightbox() {
-    setLightboxIndex(null);
-  }
-
-  function goNext() {
-    if (lightboxIndex !== null) {
-      setLightboxIndex((lightboxIndex + 1) % photos.length);
-    }
-  }
-
-  function goPrev() {
-    if (lightboxIndex !== null) {
-      setLightboxIndex((lightboxIndex - 1 + photos.length) % photos.length);
-    }
+    setLightboxOpen(false);
   }
 
   if (photos.length === 0) return null;
@@ -92,68 +87,13 @@ export function BusinessGallery({ photos, businessName }: BusinessGalleryProps) 
         </CardContent>
       </Card>
 
-      {/* Lightbox Dialog */}
-      <Dialog open={lightboxIndex !== null} onOpenChange={(open) => !open && closeLightbox()}>
-        <DialogContent className="max-w-4xl w-full p-0 bg-black/95 border-none overflow-hidden">
-          <DialogTitle className="sr-only">
-            {businessName} photo {lightboxIndex !== null ? lightboxIndex + 1 : ""} of{" "}
-            {photos.length}
-          </DialogTitle>
-
-          {lightboxIndex !== null && (
-            <div className="relative flex items-center justify-center min-h-[40vh] max-h-[85vh]">
-              {/* Close button */}
-              <button
-                type="button"
-                onClick={closeLightbox}
-                className="absolute top-3 right-3 z-20 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-
-              {/* Navigation arrows */}
-              {photos.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={goPrev}
-                    className="absolute left-3 z-20 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
-                    aria-label="Previous photo"
-                  >
-                    <ChevronLeft className="h-6 w-6" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={goNext}
-                    className="absolute right-3 z-20 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
-                    aria-label="Next photo"
-                  >
-                    <ChevronRight className="h-6 w-6" />
-                  </button>
-                </>
-              )}
-
-              {/* Image */}
-              <div className="relative w-full h-[70vh]">
-                <Image
-                  src={photos[lightboxIndex]}
-                  alt={`${businessName} photo ${lightboxIndex + 1}`}
-                  fill
-                  className="object-contain"
-                  sizes="100vw"
-                  priority
-                />
-              </div>
-
-              {/* Photo counter */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">
-                {lightboxIndex + 1} / {photos.length}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Media Lightbox */}
+      <MediaLightbox
+        items={lightboxItems}
+        startIndex={lightboxStart}
+        isOpen={lightboxOpen}
+        onClose={closeLightbox}
+      />
     </>
   );
 }

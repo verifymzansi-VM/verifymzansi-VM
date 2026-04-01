@@ -1,10 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { ChevronLeft, ChevronRight, Play, Copy, Check } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Play,
+  Copy,
+  Check,
+  Volume2,
+  VolumeX,
+  RotateCcw,
+  AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { VideoWithPoster } from "@/components/ui/video-with-poster";
+import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrls } from "@/lib/utils/media-url";
 
@@ -78,12 +89,81 @@ export function ListingDetailClient({
           ...normalizedPhotos.map((url) => ({ url, kind: "photo" as const })),
           ...normalizedVideos.map((url) => ({ url, kind: "video" as const })),
         ];
-  const orderedMedia = [
-    ...sourceOrderedMedia.filter((item) => item.kind === "video"),
-    ...sourceOrderedMedia.filter((item) => item.kind === "photo"),
-  ];
+  const orderedMedia = useMemo(
+    () => [
+      ...sourceOrderedMedia.filter((item) => item.kind === "video"),
+      ...sourceOrderedMedia.filter((item) => item.kind === "photo"),
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [normalizedPhotos.length, normalizedVideos.length]
+  );
   const [activeIndex, setActiveIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+
+  /* ---- video controls state ---- */
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [videoError, setVideoError] = useState(false);
+  const [videoRetries, setVideoRetries] = useState(0);
+
+  /* ---- lightbox state ---- */
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxStart, setLightboxStart] = useState(0);
+  const wasPlayingRef = useRef(false);
+
+  const openLightbox = useCallback((idx: number) => {
+    const v = videoRef.current;
+    wasPlayingRef.current = v ? !v.paused : false;
+    setLightboxStart(idx);
+    setLightboxOpen(true);
+    v?.pause();
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    setLightboxOpen(false);
+    if (orderedMedia[activeIndex]?.kind === "video" && videoRef.current && wasPlayingRef.current) {
+      videoRef.current.play().catch(() => {});
+    }
+  }, [activeIndex, orderedMedia]);
+
+  const togglePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) {
+      v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setIsMuted(v.muted);
+  }, []);
+
+  const enterFullscreen = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      if (v.requestFullscreen) {
+        v.requestFullscreen();
+      } else if (
+        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen
+      ) {
+        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen?.();
+      }
+    } catch {
+      /* fullscreen not supported */
+    }
+  }, []);
+
+  const handleVideoRetry = useCallback(() => {
+    setVideoError(false);
+    setVideoRetries((c) => c + 1);
+  }, []);
 
   // Use videoThumbnail if available, then fall back to first photo
   const firstPhotoUrl =
@@ -130,26 +210,108 @@ export function ListingDetailClient({
             <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground text-sm">
               Media could not load
             </div>
+          ) : isVideo && videoError ? (
+            /* ---- Video error state with retry ---- */
+            <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-2">
+              {firstPhotoUrl && (
+                <Image
+                  src={firstPhotoUrl}
+                  alt="Video thumbnail"
+                  fill
+                  className="object-cover opacity-40"
+                  sizes="(max-width: 1024px) 100vw, 66vw"
+                />
+              )}
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-sm">
+                <AlertTriangle className="h-5 w-5 text-amber-400" />
+                <span className="text-xs font-medium text-white/90">Video failed to load</span>
+                <button
+                  type="button"
+                  onClick={handleVideoRetry}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm text-white shadow-lg transition-transform hover:scale-110"
+                  aria-label="Retry"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           ) : isVideo ? (
-            <VideoWithPoster
-              key={activeUrl}
-              src={activeUrl}
-              posterUrl={firstPhotoUrl}
-              controls
-              playsInline
-              className="w-full h-full object-contain bg-black rounded-xl"
-              wrapperClassName="w-full h-full"
-            />
+            /* ---- Autoplay video with custom controls ---- */
+            <>
+              <video
+                ref={videoRef}
+                key={`${activeUrl}-${videoRetries}`}
+                src={activeUrl}
+                poster={firstPhotoUrl}
+                autoPlay
+                muted
+                loop
+                playsInline
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onError={() => setVideoError(true)}
+                className="absolute inset-0 h-full w-full object-contain bg-black rounded-xl"
+                aria-label={`${title} video`}
+              >
+                <track kind="captions" />
+              </video>
+
+              {/* Play overlay when paused */}
+              {!isPlaying && (
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  className="absolute inset-0 z-10 flex items-center justify-center bg-black/20"
+                  aria-label="Play video"
+                >
+                  <div className="rounded-full bg-white/90 p-4 shadow-xl backdrop-blur-sm">
+                    <Play className="h-8 w-8 text-black fill-black" />
+                  </div>
+                </button>
+              )}
+
+              {/* Video controls */}
+              <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={toggleMute}
+                  className="rounded-full bg-black/60 p-2 text-white transition-colors hover:bg-black/80"
+                  aria-label={isMuted ? "Unmute" : "Mute"}
+                >
+                  {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={enterFullscreen}
+                  className="rounded-full bg-black/60 p-2 text-white transition-colors hover:bg-black/80"
+                  aria-label="Fullscreen"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </button>
+              </div>
+            </>
           ) : (
-            <Image
-              src={activeUrl}
-              alt={`${title} - ${activeMedia?.kind ?? "photo"} ${activeIndex + 1}`}
-              fill
-              className="object-cover transition-transform duration-500"
-              sizes="(max-width: 1024px) 100vw, 66vw"
-              priority={activeIndex === 0}
-              unoptimized={shouldUseUnoptimizedImage ? true : undefined}
-            />
+            /* ---- Photo with click-to-lightbox ---- */
+            <button
+              type="button"
+              className="relative w-full h-full cursor-zoom-in"
+              onClick={() => openLightbox(activeIndex)}
+              aria-label={`View ${title} photo fullscreen`}
+            >
+              <Image
+                src={activeUrl}
+                alt={`${title} - ${activeMedia?.kind ?? "photo"} ${activeIndex + 1}`}
+                fill
+                className="object-cover transition-transform duration-500"
+                sizes="(max-width: 1024px) 100vw, 66vw"
+                priority={activeIndex === 0}
+                unoptimized={shouldUseUnoptimizedImage ? true : undefined}
+              />
+              {/* Expand affordance */}
+              <div className="absolute bottom-3 left-3 z-10 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                <Maximize2 className="h-4 w-4" />
+              </div>
+            </button>
           )}
 
           {/* Navigation arrows */}
@@ -237,6 +399,18 @@ export function ListingDetailClient({
           )}
         </Button>
       </div>
+
+      {/* ── Media Lightbox ──────────────────────────────── */}
+      <MediaLightbox
+        items={orderedMedia.map((m) => ({
+          url: m.url,
+          kind: m.kind,
+          poster: m.kind === "video" ? firstPhotoUrl : undefined,
+        }))}
+        startIndex={lightboxStart}
+        isOpen={lightboxOpen}
+        onClose={closeLightbox}
+      />
     </div>
   );
 }

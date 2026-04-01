@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
-import { MapPin, Play, Store, Volume2, VolumeX } from "lucide-react";
+import { MapPin, Maximize2, Play, Store, Volume2, VolumeX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
@@ -24,6 +24,7 @@ import {
 import { StickyContactBar } from "@/components/business/shared/sticky-contact-bar";
 import { ManagedByCard, ShareReportRow } from "@/components/business/shared/business-sidebar-cards";
 import { BusinessDetailsAccordion } from "@/components/business/shared/business-details-accordion";
+import { MediaLightbox } from "@/components/ui/media-lightbox";
 
 interface UnifiedLayoutProps {
   business: BusinessDetailRecord;
@@ -63,6 +64,49 @@ export function UnifiedLayout({
     hasVideo ? "video" : business.cover_photo ? "cover-photo" : "gallery-photo"
   );
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxStart, setLightboxStart] = useState(0);
+  const wasPlayingRef = useRef(false);
+
+  // Include cover_photo in lightbox items if not already in galleryPhotos
+  const lightboxItems = (() => {
+    const items = galleryPhotos.map((url) => ({ url, kind: "photo" as const }));
+    if (business.cover_photo && !galleryPhotos.includes(business.cover_photo)) {
+      items.unshift({ url: business.cover_photo, kind: "photo" as const });
+    }
+    return items;
+  })();
+
+  function openLightbox(idx: number) {
+    const v = videoRef.current;
+    wasPlayingRef.current = v ? !v.paused : false;
+    setLightboxStart(idx);
+    setLightboxOpen(true);
+    v?.pause();
+  }
+
+  function closeLightbox() {
+    setLightboxOpen(false);
+    if (videoRef.current && wasPlayingRef.current) {
+      videoRef.current.play().catch(() => {});
+    }
+  }
+
+  function enterFullscreen() {
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      if (v.requestFullscreen) {
+        v.requestFullscreen();
+      } else if (
+        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen
+      ) {
+        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen?.();
+      }
+    } catch {
+      /* fullscreen not supported */
+    }
+  }
 
   const activePhotoUrl =
     activeHero === "cover-photo"
@@ -132,16 +176,37 @@ export function UnifiedLayout({
               >
                 {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
               </button>
+              <button
+                type="button"
+                onClick={enterFullscreen}
+                className="absolute bottom-4 right-16 z-20 rounded-full bg-black/60 p-2.5 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
+                aria-label="Fullscreen"
+              >
+                <Maximize2 className="h-5 w-5" />
+              </button>
             </>
           ) : activePhotoUrl ? (
-            <Image
-              src={normalizeMediaUrl(activePhotoUrl)}
-              alt={`${business.business_name} Cover`}
-              fill
-              className="object-cover"
-              priority
-              sizes="100vw"
-            />
+            <button
+              type="button"
+              className="relative w-full h-full cursor-zoom-in"
+              onClick={() => {
+                const idx = lightboxItems.findIndex((item) => item.url === activePhotoUrl);
+                openLightbox(idx >= 0 ? idx : 0);
+              }}
+              aria-label={`View ${business.business_name} photo fullscreen`}
+            >
+              <Image
+                src={normalizeMediaUrl(activePhotoUrl)}
+                alt={`${business.business_name} Cover`}
+                fill
+                className="object-cover"
+                priority
+                sizes="100vw"
+              />
+              <div className="absolute bottom-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm">
+                <Maximize2 className="h-5 w-5" />
+              </div>
+            </button>
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-blue via-brand-blue/80 to-brand-blue/60">
               <Store className="h-24 w-24 text-white/30" />
@@ -335,6 +400,14 @@ export function UnifiedLayout({
       {showPublicActions && (
         <StickyContactBar business={business} ctaLabel={ctaConfig?.primaryCta} />
       )}
+
+      {/* ═══ MEDIA LIGHTBOX ═══ */}
+      <MediaLightbox
+        items={lightboxItems}
+        startIndex={lightboxStart}
+        isOpen={lightboxOpen}
+        onClose={closeLightbox}
+      />
     </>
   );
 }

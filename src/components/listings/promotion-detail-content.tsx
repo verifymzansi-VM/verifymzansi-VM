@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Eye,
   MapPin,
+  Maximize2,
   Play,
   Timer,
   Volume2,
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { PromotionContactActions } from "@/app/promotion/[id]/promotion-contact-actions";
 import { TrustBadge } from "@/components/trust/trust-badge";
+import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { formatZAR } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
@@ -205,6 +207,40 @@ export function PromotionDetailContent({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxStart, setLightboxStart] = useState(0);
+  const wasPlayingRef = useRef(false);
+
+  const openLightbox = (idx: number) => {
+    const v = videoRef.current;
+    wasPlayingRef.current = v ? !v.paused : false;
+    setLightboxStart(idx);
+    setLightboxOpen(true);
+    v?.pause();
+  };
+
+  const closeLightbox = () => {
+    setLightboxOpen(false);
+    if (videoRef.current && wasPlayingRef.current) {
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
+  const enterFullscreen = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      if (v.requestFullscreen) {
+        v.requestFullscreen();
+      } else if (
+        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen
+      ) {
+        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen?.();
+      }
+    } catch {
+      /* fullscreen not supported */
+    }
+  };
 
   // Register hero video with global playback manager so it participates in
   // single-video arbitration (pauses when a card video claims priority).
@@ -299,30 +335,50 @@ export function PromotionDetailContent({
                   </button>
                 )}
 
-                {/* Mute toggle */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (videoRef.current) {
-                      videoRef.current.muted = !videoRef.current.muted;
-                      setIsMuted(videoRef.current.muted);
-                    }
-                  }}
-                  className="absolute bottom-4 right-4 z-20 rounded-full bg-black/60 p-2.5 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
-                  aria-label={isMuted ? "Unmute" : "Mute"}
-                >
-                  {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-                </button>
+                {/* Mute toggle + fullscreen */}
+                <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (videoRef.current) {
+                        videoRef.current.muted = !videoRef.current.muted;
+                        setIsMuted(videoRef.current.muted);
+                      }
+                    }}
+                    className="rounded-full bg-black/60 p-2.5 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
+                    aria-label={isMuted ? "Unmute" : "Mute"}
+                  >
+                    {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={enterFullscreen}
+                    className="rounded-full bg-black/60 p-2.5 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
+                    aria-label="Fullscreen"
+                  >
+                    <Maximize2 className="h-5 w-5" />
+                  </button>
+                </div>
               </>
             ) : (
-              <Image
-                src={normalizeMediaUrl(activeMedia.url)}
-                alt={promotion.title}
-                fill
-                className="object-cover"
-                sizes="100vw"
-                priority
-              />
+              <button
+                type="button"
+                className="relative w-full h-full cursor-zoom-in"
+                onClick={() => openLightbox(activeMediaIndex)}
+                aria-label={`View ${promotion.title} photo fullscreen`}
+              >
+                <Image
+                  src={normalizeMediaUrl(activeMedia.url)}
+                  alt={promotion.title}
+                  fill
+                  className="object-cover"
+                  sizes="100vw"
+                  priority
+                />
+                <div className="absolute bottom-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm">
+                  <Maximize2 className="h-5 w-5" />
+                </div>
+              </button>
             )}
 
             {/* Gradient for legibility */}
@@ -765,6 +821,18 @@ export function PromotionDetailContent({
           </time>
         </p>
       </div>
+
+      {/* ═══ MEDIA LIGHTBOX ═══ */}
+      <MediaLightbox
+        items={mediaItems.map((m) => ({
+          url: m.url,
+          kind: m.kind,
+          poster: m.kind === "video" ? (m.poster ?? undefined) : undefined,
+        }))}
+        startIndex={lightboxStart}
+        isOpen={lightboxOpen}
+        onClose={closeLightbox}
+      />
     </article>
   );
 }
