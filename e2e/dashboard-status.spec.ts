@@ -73,6 +73,10 @@ test.describe("Dashboard verification state", () => {
         "/dashboard/leads",
         { timeout: 15_000 }
       );
+      await expect(page.getByText("Install App")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Install" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "How To Install" })).toHaveCount(0);
+      await expect(page.getByLabel("Dismiss install prompt")).toHaveCount(0);
 
       expect(errors.consoleErrors).toEqual([]);
       expect(errors.pageErrors).toEqual([]);

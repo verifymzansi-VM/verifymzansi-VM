@@ -44,8 +44,8 @@ export function PwaInstallPrompt() {
   const pathname = usePathname();
   const isPlaywright = isPlaywrightTestMode();
   const isIOSFallback = useSyncExternalStore(
-    subscribeDisplayMode,
-    getIOSFallbackSnapshot,
+    isPlaywright ? () => () => {} : subscribeDisplayMode,
+    isPlaywright ? () => false : getIOSFallbackSnapshot,
     () => false
   );
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);

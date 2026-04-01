@@ -56,8 +56,18 @@ function setupPageListeners(page: Page) {
 
 const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
 
+async function assertNoInstallPrompt(page: Page) {
+  await expect(page.getByText("Install App")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Install" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "How To Install" })).toHaveCount(0);
+  await expect(page.getByLabel("Dismiss install prompt")).toHaveCount(0);
+  await expect(page.getByLabel("Install on iPhone")).toHaveCount(0);
+}
+
 async function prepareTurnstile(page: Page) {
   if (!isPlaywrightTestMode) return;
+
+  await assertNoInstallPrompt(page);
 
   await expect(page.getByText("Click to bypass CAPTCHA")).toHaveCount(0);
   await expect(page.locator('iframe[src*="challenges.cloudflare"]')).toHaveCount(0);
