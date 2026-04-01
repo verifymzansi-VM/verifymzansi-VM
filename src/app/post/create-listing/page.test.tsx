@@ -33,6 +33,11 @@ vi.mock("@/hooks/use-auth", () => ({
   useAuth: useAuthMock,
 }));
 
+vi.mock("@/lib/utils/csrf", () => ({
+  ensureCsrfTokenReady: vi.fn().mockResolvedValue("a".repeat(64)),
+  withCsrfHeaders: (headers?: HeadersInit) => new Headers(headers),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,

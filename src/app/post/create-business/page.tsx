@@ -71,6 +71,7 @@ import {
   formatHoursValue,
   parseHoursValue,
 } from "@/components/ui/operating-hours-input";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 
 const SELECT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
@@ -249,6 +250,10 @@ function CreateBusinessContent() {
   const maxPhotos = usePlanMaxPhotos("MZANSI_BUSINESS");
   const coverVideoAllowed = usePlanCoverVideoAllowed("MZANSI_BUSINESS");
   const [layoutTemplate, setLayoutTemplate] = useState<LayoutTemplate | null>(null);
+
+  useEffect(() => {
+    void ensureCsrfTokenReady();
+  }, []);
 
   // Stable blob URLs for logo/cover previews — revoked on change
   const logoPreviewUrl = useMemo(
@@ -681,6 +686,12 @@ function CreateBusinessContent() {
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
     try {
+      const csrfToken = await ensureCsrfTokenReady();
+      if (!csrfToken) {
+        setFormError("Security check failed. Please refresh the page and try again.");
+        return;
+      }
+
       const [logoUrls, coverUrls, galleryUrls, mallPhotoUrls, videoUrl] = await Promise.all([
         uploadRequiredBusinessMedia({
           files: logoFile,
@@ -785,7 +796,7 @@ function CreateBusinessContent() {
       };
       const res = await fetch("/api/businesses", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(body),
       });
       const payload = await res.json().catch(() => null);

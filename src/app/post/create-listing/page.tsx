@@ -39,6 +39,7 @@ import {
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
 import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import type { ListingDraftData } from "@/lib/post-drafts/storage";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
@@ -211,6 +212,10 @@ export default function CreateListingPage() {
       setCity(profile.location_city);
     }
   }, [profile, province, city]);
+
+  useEffect(() => {
+    void ensureCsrfTokenReady();
+  }, []);
 
   useEffect(() => {
     if (!user?.id || isLoading || submitSucceeded) return;
@@ -425,6 +430,12 @@ export default function CreateListingPage() {
     });
 
     try {
+      const csrfToken = await ensureCsrfTokenReady();
+      if (!csrfToken) {
+        setFormError("Security check failed. Please refresh the page and try again.");
+        return;
+      }
+
       const normalizedAttributes = category
         ? coerceListingAttributes(category, categoryAttributes)
         : {};
@@ -438,6 +449,7 @@ export default function CreateListingPage() {
               uploadData.append("files", logoFile[0]);
               const uploadRes = await fetch("/api/media/upload", {
                 method: "POST",
+                headers: withCsrfHeaders(),
                 body: uploadData,
               });
               if (!uploadRes.ok) throw new Error("Failed to upload listing logo");
@@ -454,6 +466,7 @@ export default function CreateListingPage() {
               photoFiles.forEach((file) => uploadData.append("files", file));
               const uploadRes = await fetch("/api/media/upload", {
                 method: "POST",
+                headers: withCsrfHeaders(),
                 body: uploadData,
               });
               if (!uploadRes.ok) throw new Error("Failed to upload photos");
@@ -480,7 +493,7 @@ export default function CreateListingPage() {
               const file = videoFile[0];
               const urlRes = await fetch("/api/media/upload-url", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({
                   filename: file.name,
                   contentType: file.type,
@@ -509,6 +522,7 @@ export default function CreateListingPage() {
               uploadData.append("files", videoCoverFile[0]);
               const uploadRes = await fetch("/api/media/upload", {
                 method: "POST",
+                headers: withCsrfHeaders(),
                 body: uploadData,
               });
               if (!uploadRes.ok) return null;
@@ -523,7 +537,7 @@ export default function CreateListingPage() {
 
       const res = await fetch("/api/listings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim(),

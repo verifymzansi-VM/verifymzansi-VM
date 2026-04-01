@@ -44,12 +44,12 @@ function createRequest(origin?: string, includeCsrf = false) {
   }
 
   return {
-    url: "https://verifymzansi.com/api/promotions/00000000-0000-0000-0000-000000000001/boost",
+    url: "https://verifymzansi.com/api/promotions/00000000-0000-0000-0000-000000000001/featured",
     headers,
   } as unknown as NextRequest;
 }
 
-describe("POST /api/promotions/[id]/boost", () => {
+describe("POST /api/promotions/[id]/featured", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCreateAdminClient.mockReturnValue({ from: vi.fn() });
@@ -62,12 +62,21 @@ describe("POST /api/promotions/[id]/boost", () => {
     mockGetClientIp.mockReturnValue("127.0.0.1");
   });
 
-  it("rejects cross-site boost checkout requests", async () => {
+  it("rejects cross-site featured checkout requests", async () => {
     const response = await POST(createRequest("https://evil.example"), {
       params: Promise.resolve({ id: "00000000-0000-0000-0000-000000000001" }),
     });
 
     expect(response.status).toBe(403);
+  });
+
+  it("rejects featured checkout requests without CSRF token", async () => {
+    const response = await POST(createRequest("https://verifymzansi.com"), {
+      params: Promise.resolve({ id: "00000000-0000-0000-0000-000000000001" }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "Invalid CSRF token" });
   });
 
   it("returns 400 for a malformed promotion ID", async () => {
@@ -88,14 +97,5 @@ describe("POST /api/promotions/[id]/boost", () => {
 
     expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe("90");
-  });
-
-  it("rejects boost checkout requests without CSRF token", async () => {
-    const response = await POST(createRequest("https://verifymzansi.com"), {
-      params: Promise.resolve({ id: "00000000-0000-0000-0000-000000000001" }),
-    });
-
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({ error: "Invalid CSRF token" });
   });
 });

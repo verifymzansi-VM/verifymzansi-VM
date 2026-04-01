@@ -41,6 +41,7 @@ import { getDefaultEventDates } from "@/lib/post-drafts/defaults";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
 import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import type { PromotionDraftData } from "@/lib/post-drafts/storage";
 const SELECT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
@@ -135,6 +136,10 @@ function CreatePromotionContent() {
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
+
+  useEffect(() => {
+    void ensureCsrfTokenReady();
+  }, []);
 
   // Stable blob URLs for photo previews — revoked on change
   const photoPreviewUrls = useMemo(
@@ -397,6 +402,12 @@ function CreatePromotionContent() {
     setSubmitProgress("Uploading media...");
 
     try {
+      const csrfToken = await ensureCsrfTokenReady();
+      if (!csrfToken) {
+        setFormError("Security check failed. Please refresh the page and try again.");
+        return;
+      }
+
       // Upload photos, videos, and video thumbnail in parallel
       const [imageUrls, videoUrls, uploadedVideoThumbnailUrl] = await Promise.all([
         // Photos via server proxy (small files)
@@ -407,6 +418,7 @@ function CreatePromotionContent() {
               photoFiles.forEach((file) => uploadData.append("files", file));
               const uploadRes = await fetch("/api/media/upload", {
                 method: "POST",
+                headers: withCsrfHeaders(),
                 body: uploadData,
               });
               if (!uploadRes.ok) throw new Error("Failed to upload photos");
@@ -421,7 +433,7 @@ function CreatePromotionContent() {
               videoFiles.map(async (file) => {
                 const urlRes = await fetch("/api/media/upload-url", {
                   method: "POST",
-                  headers: { "Content-Type": "application/json" },
+                  headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                   body: JSON.stringify({
                     filename: file.name,
                     contentType: file.type,
@@ -450,6 +462,7 @@ function CreatePromotionContent() {
               uploadData.append("files", videoThumbnailFile[0]);
               const uploadRes = await fetch("/api/media/upload", {
                 method: "POST",
+                headers: withCsrfHeaders(),
                 body: uploadData,
               });
               if (!uploadRes.ok) return undefined;
@@ -485,7 +498,7 @@ function CreatePromotionContent() {
 
       const res = await fetch("/api/promotions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(body),
       });
       const payload = await res.json().catch(() => null);

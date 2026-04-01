@@ -20,6 +20,11 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: vi.fn(),
 }));
 
+vi.mock("@/lib/utils/csrf", () => ({
+  ensureCsrfTokenReady: vi.fn().mockResolvedValue("a".repeat(64)),
+  withCsrfHeaders: (headers?: HeadersInit) => new Headers(headers),
+}));
+
 vi.mock("@/components/layout/header", () => ({
   Header: () => <header data-testid="header">Header</header>,
 }));

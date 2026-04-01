@@ -17,6 +17,7 @@ import {
 import type { MarketplaceArea } from "@/types/enums";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { parseAndValidateRouteParams } from "@/lib/utils/api";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
@@ -45,6 +46,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const request = _request;
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const parsedParams = parseAndValidateRouteParams(await params, promotionBoostParamsSchema, {
       validationErrorMessage: "Invalid promotion ID",

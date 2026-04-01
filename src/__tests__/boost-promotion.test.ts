@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
 import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
+import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 
 const {
   mockCreateClient,
@@ -60,13 +61,19 @@ import { POST } from "@/app/api/promotions/[id]/boost/route";
 
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "user-0001";
+const VALID_CSRF_TOKEN = "a".repeat(64);
 
 function createRequest(url: string): NextRequest {
+  const headers = new Headers();
+  headers.set(CSRF_HEADER_NAME, VALID_CSRF_TOKEN);
+  headers.set("cookie", `${CSRF_COOKIE_NAME}=${VALID_CSRF_TOKEN}`);
+
   return {
     method: "POST",
     json: async () => ({}),
-    headers: { get: vi.fn().mockReturnValue(null) },
+    headers,
     nextUrl: new URL(url, "http://localhost:3000"),
+    url,
   } as unknown as NextRequest;
 }
 

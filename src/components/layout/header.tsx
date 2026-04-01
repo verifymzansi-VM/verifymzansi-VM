@@ -255,7 +255,6 @@ function HeaderInner({
           onClick={() => setMobileOpen((prev) => !prev)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
           aria-controls="mobile-nav-menu"
-          aria-expanded={mobileOpen}
           data-testid="mobile-menu-toggle"
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

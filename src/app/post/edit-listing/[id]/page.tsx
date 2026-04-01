@@ -35,6 +35,7 @@ import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingCard } from "@/components/listings/listing-card";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { createLogger } from "@/lib/utils/logger";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 
 const log = createLogger("EditListingPage");
 const TITLE_MAX = 120;
@@ -220,6 +221,10 @@ export default function EditListingPage() {
     };
   }, [id, router, toast]);
 
+  useEffect(() => {
+    void ensureCsrfTokenReady();
+  }, []);
+
   useEffect(
     () => () => {
       if (previewLogoUrl) URL.revokeObjectURL(previewLogoUrl);
@@ -306,7 +311,11 @@ export default function EditListingPage() {
     const uploadData = new FormData();
     uploadData.append("area", area);
     files.forEach((f) => uploadData.append("files", f));
-    const uploadRes = await fetch("/api/media/upload", { method: "POST", body: uploadData });
+    const uploadRes = await fetch("/api/media/upload", {
+      method: "POST",
+      headers: withCsrfHeaders(),
+      body: uploadData,
+    });
     if (!uploadRes.ok) throw new Error("Upload failed");
     const uploadJson = await uploadRes.json();
     return uploadJson.urls || [];
@@ -372,6 +381,12 @@ export default function EditListingPage() {
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
     try {
+      const csrfToken = await ensureCsrfTokenReady();
+      if (!csrfToken) {
+        setFormError("Security check failed. Please refresh the page and try again.");
+        return;
+      }
+
       const numPrice = parseFloat(price);
       const normalizedAttributes = category
         ? coerceListingAttributes(category, categoryAttributes)
@@ -386,7 +401,7 @@ export default function EditListingPage() {
               const file = newVideoFile[0];
               const urlRes = await fetch("/api/media/upload-url", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({
                   filename: file.name,
                   contentType: file.type,
@@ -423,7 +438,7 @@ export default function EditListingPage() {
       // Submit via server-side API route for full validation & ownership check
       const res = await fetch(`/api/listings/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim(),
