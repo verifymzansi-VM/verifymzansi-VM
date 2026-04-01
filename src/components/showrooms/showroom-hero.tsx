@@ -161,7 +161,7 @@ export function ShowroomHero({
     <section className="w-full">
       <div className="relative overflow-hidden border-b border-warm-200 dark:border-warm-800">
         <div
-          className="relative aspect-[2/1] w-full overflow-hidden bg-warm-100 dark:bg-warm-900 sm:aspect-[16/7] lg:aspect-[21/8]"
+          className="relative aspect-video w-full overflow-hidden bg-warm-100 dark:bg-warm-900"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
@@ -177,8 +177,6 @@ export function ShowroomHero({
               alt={activeSlide.title}
               sizes="100vw"
               mode="ambient"
-              fitStrategy="smart"
-              containerAspectRatio={21 / 8}
               muteControlVisibility="always"
               showPlaybackControl={activeSlideIsVideo}
               onPlaybackStateChange={(isPlaying) => setIsActiveVideoPaused(!isPlaying)}

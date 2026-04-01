@@ -273,7 +273,7 @@ export function HeroBanner({
       <div className="relative border-b border-warm-200 dark:border-warm-800 overflow-hidden">
         {/* === Image area — clean, no overlay on mobile === */}
         <div
-          className="relative bg-warm-100 dark:bg-warm-900 aspect-[2/1] sm:aspect-[3/1] overflow-hidden"
+          className="relative bg-warm-100 dark:bg-warm-900 aspect-video overflow-hidden"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
