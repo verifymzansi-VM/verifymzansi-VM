@@ -34,6 +34,24 @@ export function CategoryPicker({
   function handleSelect(cat: CategoryDefinition) {
     setExpanded(cat.value);
     onChange(cat.value);
+
+    // Auto-focus: after selecting a category, focus the first attribute field or fall back to the title input
+    requestAnimationFrame(() => {
+      if (cat.attributeFields.length > 0) {
+        const firstFieldId = `listing-attribute-${cat.attributeFields[0].name}`;
+        const el = document.getElementById(firstFieldId);
+        if (el) {
+          el.focus();
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+      }
+      const titleEl = document.getElementById("title");
+      if (titleEl) {
+        titleEl.focus();
+        titleEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
   }
 
   return (

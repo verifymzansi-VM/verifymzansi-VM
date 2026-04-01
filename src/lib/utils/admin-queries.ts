@@ -190,7 +190,8 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     supabase
       .from("verification_steps")
       .select("*", { count: "exact", head: true })
-      .eq("status", "pending"),
+      .eq("status", "pending")
+      .neq("step_type", "location"),
     supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("*", { count: "exact", head: true })
@@ -421,6 +422,7 @@ export async function getPendingVerifications(limit = 50): Promise<PendingVerifi
       "id, user_id, step_type, status, created_at, risk_level, risk_score, auto_status, reviewed_at"
     )
     .eq("status", "pending")
+    .neq("step_type", "location")
     .order("created_at", { ascending: true })
     .limit(limit);
 
@@ -522,8 +524,7 @@ async function getVerificationProfileMap(
 const VERIFICATION_STEP_DISPLAY_ORDER: Record<string, number> = {
   id_doc: 0,
   selfie: 1,
-  location: 2,
-  phone: 3,
+  phone: 2,
 };
 
 function sortPendingVerificationSteps(a: PendingVerification, b: PendingVerification): number {
@@ -837,10 +838,10 @@ export async function getVerificationStepCounts(): Promise<VerificationStepCount
   const counts: VerificationStepCounts = { phone: 0, id_doc: 0, selfie: 0, location: 0, total: 0 };
   for (const row of (data || []) as { step_type: string }[]) {
     const t = row.step_type;
+    if (t === "location") continue; // Location is self-service, exclude from admin counts
     if (t === "phone") counts.phone++;
     else if (t === "id_doc") counts.id_doc++;
     else if (t === "selfie") counts.selfie++;
-    else if (t === "location") counts.location++;
     counts.total++;
   }
   return counts;

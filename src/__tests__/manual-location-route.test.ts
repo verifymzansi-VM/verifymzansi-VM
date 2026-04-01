@@ -42,6 +42,11 @@ vi.mock("@/lib/utils/api", () => ({
 vi.mock("@/lib/constants/verification", () => ({
   MANUAL_ONLY_BASELINE_RISK: 20,
 }));
+vi.mock("@/lib/account/verification-summary", () => ({
+  summarizeVerification: vi.fn().mockReturnValue({
+    accountVerificationStatus: "pending_review",
+  }),
+}));
 vi.mock("@/lib/services/feature-flags", () => ({
   isFeatureEnabled: mockIsFeatureEnabled,
 }));
@@ -80,7 +85,9 @@ function setupAuthenticatedUser() {
     eq: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
-    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+    maybeSingle: vi.fn().mockResolvedValue({
+      data: { account_verification_status: "incomplete" },
+    }),
     update: vi.fn().mockReturnThis(),
   };
 
@@ -89,11 +96,31 @@ function setupAuthenticatedUser() {
     single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
   };
 
+  // Chain for verification_steps .select().eq() queries (allSteps + id_doc detail)
+  const mockStepsSelectChain = {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockImplementation((_col: string, val: string) => {
+        // If a second .eq is chained (for step_type filter), return single()
+        if (val === "id_doc") {
+          return {
+            single: vi.fn().mockResolvedValue({ data: null }),
+          };
+        }
+        // First .eq(user_id) — resolves to list of steps
+        return {
+          data: [{ step_type: "location", status: "approved" }],
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null }),
+          }),
+        };
+      }),
+    }),
+    upsert: vi.fn().mockReturnValue(mockUpsertChain),
+  };
+
   mockAdminFrom.mockImplementation((table: string) => {
     if (table === "verification_steps") {
-      return {
-        upsert: vi.fn().mockReturnValue(mockUpsertChain),
-      };
+      return mockStepsSelectChain;
     }
     if (table === "kyc_risk_signals") {
       return { insert: vi.fn().mockResolvedValue({}) };

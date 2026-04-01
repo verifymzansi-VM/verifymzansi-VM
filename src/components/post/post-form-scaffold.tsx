@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { CheckCircle2, Loader2, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -44,8 +45,16 @@ export function PostFormScaffold({
   children,
   footer,
 }: PostFormScaffoldProps) {
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (error && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [error]);
+
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
+    <div id="post-form-top" className="max-w-3xl mx-auto space-y-4">
       <PageHeader title={title} description={description} breadcrumbs={breadcrumbs} />
 
       <Alert variant="info" hideIcon className="border-foreground/10 bg-muted/40 text-foreground">
@@ -130,7 +139,7 @@ export function PostFormScaffold({
           </nav>
 
           {error && (
-            <Alert variant="destructive">
+            <Alert ref={errorRef} variant="destructive">
               <div>
                 <AlertTitle>Please review this form</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>

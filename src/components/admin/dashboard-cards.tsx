@@ -80,7 +80,7 @@ export function VerificationCard({ pendingVerifications, stepCounts }: Verificat
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-bold tracking-tight">Verification (KYC)</h2>
-          <p className="text-xs text-muted-foreground">Account identity verification requests</p>
+          <p className="text-xs text-muted-foreground">ID &amp; selfie verification requests</p>
         </div>
         <Badge
           variant={pendingVerifications > 0 ? "destructive" : "secondary"}
@@ -91,14 +91,13 @@ export function VerificationCard({ pendingVerifications, stepCounts }: Verificat
       </div>
 
       <div className="px-4 py-3 space-y-3">
-        {/* Step breakdown */}
+        {/* Step breakdown — location is self-service, only show admin-reviewed steps */}
         {stepCounts && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {[
               { label: "Phone", value: stepCounts.phone },
               { label: "ID Doc", value: stepCounts.id_doc },
               { label: "Selfie", value: stepCounts.selfie },
-              { label: "Location", value: stepCounts.location },
             ].map((s) => (
               <div key={s.label} className="text-center rounded-lg bg-muted/50 px-2 py-2">
                 <p className="text-lg font-bold tabular-nums">{s.value}</p>

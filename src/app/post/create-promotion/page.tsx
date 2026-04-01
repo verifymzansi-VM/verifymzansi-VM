@@ -603,7 +603,16 @@ function CreatePromotionContent() {
                       totalSteps={STEPS.length}
                       onBack={() => {
                         clearErrors();
-                        setStep((current) => Math.max(current - 1, 0));
+                        const prev = Math.max(step - 1, 0);
+                        setStep(prev);
+                        const firstFieldByStep = ["promotion_type", "price", "promotion-images"];
+                        requestAnimationFrame(() => {
+                          document
+                            .getElementById("post-form-top")
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          const el = document.getElementById(firstFieldByStep[prev]);
+                          el?.focus({ preventScroll: true });
+                        });
                       }}
                       onNext={() => {
                         const errors = validateStep(step);
@@ -614,7 +623,16 @@ function CreatePromotionContent() {
                           return;
                         }
                         clearErrors();
-                        setStep((current) => Math.min(current + 1, STEPS.length - 1));
+                        const next = Math.min(step + 1, STEPS.length - 1);
+                        setStep(next);
+                        const firstFieldByStep = ["promotion_type", "price", "promotion-images"];
+                        requestAnimationFrame(() => {
+                          document
+                            .getElementById("post-form-top")
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          const el = document.getElementById(firstFieldByStep[next]);
+                          el?.focus({ preventScroll: true });
+                        });
                       }}
                       submitDisabled={isSubmitting}
                       isSubmitting={isSubmitting}
@@ -624,7 +642,7 @@ function CreatePromotionContent() {
                 }
               >
                 {step === 0 && (
-                  <div className="space-y-5">
+                  <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div className="space-y-2">
                       <Label htmlFor="promotion_type">Promotion Type</Label>
                       <select
@@ -632,15 +650,23 @@ function CreatePromotionContent() {
                         aria-label="Promotion Type"
                         className={SELECT_CLASS}
                         value={selectedPromotionFilterType}
-                        onChange={(event) =>
+                        onChange={(event) => {
                           setPromotionType(
                             getStoredPromotionTypeForFilter(
                               event.target
                                 .value as (typeof PROMOTION_FILTER_TYPE_OPTIONS)[number]["value"],
                               promotionType
                             )
-                          )
-                        }
+                          );
+                          // Auto-focus the title field after selecting a promotion type
+                          requestAnimationFrame(() => {
+                            const el = document.getElementById("title");
+                            if (el) {
+                              el.focus();
+                              el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            }
+                          });
+                        }}
                       >
                         {PROMOTION_FILTER_TYPE_OPTIONS.map(({ value, label }) => (
                           <option key={value} value={value}>
@@ -764,7 +790,7 @@ function CreatePromotionContent() {
                 )}
 
                 {step === 1 && (
-                  <div className="space-y-5">
+                  <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="price">
@@ -888,7 +914,7 @@ function CreatePromotionContent() {
                 )}
 
                 {step === 2 && (
-                  <div className="space-y-5">
+                  <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div id="promotion-images" tabIndex={-1} className="space-y-2 rounded-lg">
                       <MediaUpload
                         label={`Photos (max ${maxPhotos})`}

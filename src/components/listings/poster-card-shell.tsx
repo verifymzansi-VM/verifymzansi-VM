@@ -104,7 +104,7 @@ export function PosterCardShell({
 
           {/* Status badge — top-left corner of thumbnail */}
           {statusLabel ? (
-            <div className="absolute left-2 top-2 z-10">
+            <div className="absolute left-2 top-2 z-[6]">
               <span
                 className={cn(
                   "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] shadow-md",

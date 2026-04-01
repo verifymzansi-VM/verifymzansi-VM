@@ -22,7 +22,6 @@ import {
   Phone,
   CreditCard,
   Camera,
-  MapPin,
   FileCheck,
   User,
   Loader2,
@@ -40,14 +39,12 @@ const STEP_ICONS: Record<string, React.ElementType> = {
   phone: Phone,
   id_doc: CreditCard,
   selfie: Camera,
-  location: MapPin,
 };
 
 const STEP_LABELS: Record<string, string> = {
   phone: "Phone Verification",
   id_doc: "ID Document",
   selfie: "Selfie",
-  location: "Location Proof",
 };
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -55,13 +52,6 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   sa_id_book: "SA ID Book",
   sa_passport: "Passport",
   sa_drivers_license: "Driver's Licence",
-};
-
-const LOCATION_METHOD_LABELS: Record<string, string> = {
-  gps: "GPS coordinates",
-  proof_of_address: "Proof of address document",
-  manual: "Manual selection (no GPS)",
-  manual_with_gps: "Manual selection + GPS confirmed",
 };
 
 const REASON_CODES = [
@@ -75,7 +65,7 @@ const REASON_CODES = [
   { value: "other", label: "Other (provide note)" },
 ];
 
-type StepFilter = "all" | "phone" | "id_doc" | "selfie" | "location";
+type StepFilter = "all" | "phone" | "id_doc" | "selfie";
 
 function AccountStatusBadge({ status }: { status: string | null }) {
   if (!status) return null;
@@ -205,12 +195,6 @@ export function DashboardKycPanel({
       label: "Selfie",
       icon: Camera,
       count: stepCounts?.selfie ?? items.filter((i) => i.step_type === "selfie").length,
-    },
-    {
-      key: "location",
-      label: "Location",
-      icon: MapPin,
-      count: stepCounts?.location ?? items.filter((i) => i.step_type === "location").length,
     },
     {
       key: "phone",
@@ -363,37 +347,6 @@ export function DashboardKycPanel({
                         </div>
                       )}
 
-                      {/* Location details */}
-                      {item.step_type === "location" && (
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                          {item.location_method && (
-                            <span>
-                              <span className="text-muted-foreground">Method: </span>
-                              <span className="font-medium">
-                                {LOCATION_METHOD_LABELS[item.location_method] ||
-                                  item.location_method}
-                              </span>
-                            </span>
-                          )}
-                          {item.location_address_line && (
-                            <span className="col-span-2">
-                              <span className="text-muted-foreground">Address: </span>
-                              <span className="font-medium">{item.location_address_line}</span>
-                            </span>
-                          )}
-                          {(item.location_province || item.location_city) && (
-                            <span>
-                              <span className="text-muted-foreground">Area: </span>
-                              <span className="font-medium">
-                                {[item.location_city, item.location_province]
-                                  .filter(Boolean)
-                                  .join(", ")}
-                              </span>
-                            </span>
-                          )}
-                        </div>
-                      )}
-
                       {/* Selfie note */}
                       {item.step_type === "selfie" && (
                         <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 rounded px-2 py-1">
@@ -500,8 +453,8 @@ export function DashboardKycPanel({
           {dialog?.decision === "approved" ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                This will mark the step as approved. If all 4 steps (phone, ID document, selfie,
-                location) are approved, the account will be marked as verified.
+                This will mark the step as approved. If all verification steps are now approved, the
+                account will be marked as verified.
               </p>
               {(dialog.step.risk_level === "high" || dialog.step.risk_level === "critical") && (
                 <div className="space-y-2">

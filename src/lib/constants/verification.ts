@@ -39,6 +39,12 @@ export const MAX_UPLOADS_PER_24H = 3;
 /* ── Verification Steps ──────────────────────────────────── */
 export const REQUIRED_VERIFICATION_STEPS = ["phone", "id_doc", "selfie", "location"] as const;
 
+/**
+ * Steps that require admin review. Location is self-service (auto-approved
+ * via manual address selection + optional GPS confirmation).
+ */
+export const ADMIN_REQUIRED_VERIFICATION_STEPS = ["phone", "id_doc", "selfie"] as const;
+
 /* ── Decision Reason Codes ───────────────────────────────── */
 export const REASON_CODES = [
   "blurry_image",

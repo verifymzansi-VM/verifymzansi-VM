@@ -356,8 +356,6 @@ describe("POST /api/listings", () => {
         single: vi.fn().mockResolvedValue({ data: { id: "listing-1" }, error: null }),
       }),
     });
-    const approveEqSpy = vi.fn().mockResolvedValue({ error: null });
-    const approveUpdateSpy = vi.fn().mockReturnValue({ eq: approveEqSpy });
 
     mockCreateAdminClient.mockReturnValue({
       rpc: vi.fn().mockResolvedValue({ data: true }),
@@ -403,7 +401,6 @@ describe("POST /api/listings", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             neq: vi.fn().mockReturnThis(),
-            update: approveUpdateSpy,
             insert: insertSpy,
           };
         }
@@ -420,17 +417,10 @@ describe("POST /api/listings", () => {
 
     expect(res.status).toBe(201);
     expect(insertSpy).toHaveBeenCalled();
-    expect(approveUpdateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "live",
-        published_at: expect.any(String),
-      })
-    );
-    expect(approveEqSpy).toHaveBeenCalledWith("id", "listing-1");
     expect(body).toMatchObject({
       id: "listing-1",
-      message: "Listing published",
-      status: "live",
+      message: "Listing submitted for review",
+      status: "pending_moderation",
     });
   });
 

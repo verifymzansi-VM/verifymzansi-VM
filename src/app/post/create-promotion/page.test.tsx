@@ -89,6 +89,16 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
   getTownsForCity: () => [],
 }));
 
+vi.mock("@/contexts/video-playback-context", () => ({
+  useVideoPlaybackManager: () => ({
+    register: vi.fn(),
+    unregister: vi.fn(),
+    updateVisibility: vi.fn(),
+    requestPriority: vi.fn(),
+    releasePriority: vi.fn(),
+  }),
+}));
+
 describe("CreatePromotionPage", () => {
   const mockPush = vi.fn();
   const mockToast = vi.fn();

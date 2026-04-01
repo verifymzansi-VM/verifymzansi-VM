@@ -383,6 +383,21 @@ export default function CreateListingPage() {
     clearErrors("contactMethods");
   }
 
+  /** Scroll to top and focus the first field of the target step */
+  function scrollToStepTop(targetStep: number) {
+    const firstFieldByStep = ["listing-category-field", "price", "listing-images"];
+    requestAnimationFrame(() => {
+      document
+        .getElementById("post-form-top")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const fieldId = firstFieldByStep[targetStep];
+      if (fieldId) {
+        const el = document.getElementById(fieldId);
+        el?.focus({ preventScroll: true });
+      }
+    });
+  }
+
   function goNext() {
     const errors = validateStep(step);
     if (Object.keys(errors).length > 0) {
@@ -393,12 +408,16 @@ export default function CreateListingPage() {
     }
 
     clearErrors();
-    setStep((current) => Math.min(current + 1, STEPS.length - 1));
+    const next = Math.min(step + 1, STEPS.length - 1);
+    setStep(next);
+    scrollToStepTop(next);
   }
 
   function goBack() {
     clearErrors();
-    setStep((current) => Math.max(current - 1, 0));
+    const prev = Math.max(step - 1, 0);
+    setStep(prev);
+    scrollToStepTop(prev);
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -786,7 +805,7 @@ export default function CreateListingPage() {
                 }
               >
                 {step === 0 && (
-                  <div className="space-y-5">
+                  <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div
                       id="listing-category-field"
                       tabIndex={-1}
@@ -814,9 +833,17 @@ export default function CreateListingPage() {
                         aria-label="Condition"
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         value={condition}
-                        onChange={(event) =>
-                          setCondition(event.target.value as ListingCondition | "")
-                        }
+                        onChange={(event) => {
+                          setCondition(event.target.value as ListingCondition | "");
+                          // Auto-focus the title field after selecting condition
+                          requestAnimationFrame(() => {
+                            const el = document.getElementById("title");
+                            if (el) {
+                              el.focus();
+                              el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            }
+                          });
+                        }}
                       >
                         <option value="">Condition not specified</option>
                         {LISTING_CONDITIONS.map((item) => (
@@ -897,7 +924,7 @@ export default function CreateListingPage() {
                 )}
 
                 {step === 1 && (
-                  <div className="space-y-5">
+                  <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div className="space-y-2">
                       <Label htmlFor="price">Price (ZAR) *</Label>
                       <div className="flex flex-col xs:flex-row gap-3">
@@ -1010,7 +1037,7 @@ export default function CreateListingPage() {
                 )}
 
                 {step === 2 && (
-                  <div className="space-y-5">
+                  <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div className="space-y-2">
                       <MediaUpload
                         label="Listing logo (optional)"

@@ -301,8 +301,8 @@ export async function POST(request: NextRequest) {
     const riskLevel =
       riskScore <= 25 ? "low" : riskScore <= 50 ? "medium" : riskScore <= 75 ? "high" : "critical";
 
-    // Upsert verification step
-    const stepStatus = riskScore <= 25 ? "approved" : "pending";
+    // Upsert verification step — always auto-approved (location is self-service)
+    const stepStatus = "approved" as const;
     const stepData = buildVerificationStep(
       {
         user_id: user.id,
@@ -314,7 +314,7 @@ export async function POST(request: NextRequest) {
         location_city: isConfirmationMode ? (declaredCity ?? resolvedCity) : resolvedCity,
         risk_score: riskScore,
         risk_level: riskLevel,
-        auto_status: riskScore <= 25 ? "approved" : "needs_manual_review",
+        auto_status: "approved",
         submitted_at: new Date().toISOString(),
         ...(isConfirmationMode
           ? {

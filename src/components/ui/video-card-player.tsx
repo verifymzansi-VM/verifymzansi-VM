@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { Volume2, VolumeX, Maximize2, Play, Pause, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useHoverCapability } from "@/hooks/use-hover-capability";
 import { useVideoVisibility } from "@/hooks/use-video-visibility";
 import { useVideoHover } from "@/hooks/use-video-hover";
+import { useVideoFeed } from "@/hooks/use-video-feed";
 
 const DEFAULT_MEDIA_FIT = "object-cover";
 const DEFAULT_CONTAINER_ASPECT_RATIO = 5 / 4;
@@ -232,6 +233,36 @@ export function VideoCardPlayer({
     );
   }
 
+  // Touch-device feed mode: tap-to-toggle with auto-play on scroll visibility.
+  // Applies when a hover card falls back to ambient on touch devices, or when
+  // ambient mode is used directly on a touch device with a video.
+  // Excludes showroom/carousel players that have explicit playback controls.
+  const isTouchFeed =
+    isVideoMedia &&
+    !canHover &&
+    !showPlaybackControl &&
+    (effectiveMode === "ambient" || mode === "hover");
+
+  if (isTouchFeed) {
+    return (
+      <FeedVideoPlayer
+        key={mediaKey}
+        normalizedSrc={normalizedSrc}
+        normalizedPoster={normalizedPoster}
+        alt={alt}
+        sizes={sizes}
+        className={className}
+        mediaClassName={mediaClassName}
+        hoverScale={hoverScale}
+        mediaFitClassName={mediaFitClassName}
+        priority={priority}
+        fitStrategy={fitStrategy}
+        containerAspectRatio={containerAspectRatio}
+        muteControlVisibility={muteControlVisibility}
+      />
+    );
+  }
+
   return (
     <VideoCardPlayerInner
       key={mediaKey}
@@ -373,6 +404,27 @@ function VideoCardPlayerInner({
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
     };
   }, [videoRef]);
+
+  // Sync external pause/play events (e.g. global manager arbitration) back to
+  // the showroom's isActiveVideoPaused state so the slide timer pauses properly.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !onPlaybackStateChange || !showPlaybackControl) return;
+
+    const onExternalPause = () => {
+      onPlaybackStateChange(false);
+    };
+    const onExternalPlay = () => {
+      onPlaybackStateChange(true);
+    };
+
+    el.addEventListener("pause", onExternalPause);
+    el.addEventListener("play", onExternalPlay);
+    return () => {
+      el.removeEventListener("pause", onExternalPause);
+      el.removeEventListener("play", onExternalPlay);
+    };
+  }, [videoRef, onPlaybackStateChange, showPlaybackControl]);
 
   const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
     const image = event.currentTarget;
@@ -942,6 +994,286 @@ function HoverVideoPlayer({
         )}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
       />
+
+      {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Feed tap indicator (YouTube-style fade-out icon)                    */
+/* ------------------------------------------------------------------ */
+
+function FeedTapIndicator({ action }: { action: "play" | "pause" }) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 z-[12] flex items-center justify-center animate-feed-tap-indicator"
+      aria-hidden="true"
+    >
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg backdrop-blur-md">
+        {action === "play" ? (
+          <Play className="h-6 w-6 fill-white pl-0.5" />
+        ) : (
+          <Pause className="h-6 w-6 fill-white" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Mobile feed video player (tap-to-toggle, scroll auto-play)         */
+/* ------------------------------------------------------------------ */
+
+interface FeedVideoPlayerProps {
+  normalizedSrc?: string;
+  normalizedPoster?: string;
+  alt: string;
+  sizes: string;
+  className?: string;
+  mediaClassName?: string;
+  hoverScale: boolean;
+  mediaFitClassName: string;
+  priority: boolean;
+  fitStrategy: MediaFitStrategy;
+  containerAspectRatio: number;
+  muteControlVisibility: MuteControlVisibility;
+}
+
+function FeedVideoPlayer({
+  normalizedSrc,
+  normalizedPoster,
+  alt,
+  sizes,
+  className,
+  mediaClassName,
+  _hoverScale,
+  mediaFitClassName,
+  priority,
+  fitStrategy,
+  containerAspectRatio,
+  muteControlVisibility,
+}: FeedVideoPlayerProps) {
+  const posterNeedsUnoptimized =
+    normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
+
+  const { videoRef, isPlaying, isPausedByUser, togglePlayback, reducedMotion } =
+    useVideoFeed(normalizedSrc);
+  const [videoReady, setVideoReady] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [posterError, setPosterError] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
+  const [tapIndicator, setTapIndicator] = useState<{
+    key: number;
+    action: "play" | "pause";
+  } | null>(null);
+  const tapKeyRef = useRef(0);
+
+  const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
+  const backgroundMediaSrc = normalizedPoster || normalizedSrc;
+  const foregroundMediaClassName = getForegroundMediaClassName(
+    mediaFitClassName,
+    usesSmartFit,
+    mediaClassName
+  );
+  const showMuteControl =
+    muteControlVisibility !== "hidden" &&
+    !hasError &&
+    !reducedMotion &&
+    muteControlVisibility === "always";
+
+  // Show poster when user has tapped pause (not when manager arbitrates away)
+  const showPoster = isPausedByUser || !videoReady || hasError;
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+
+    const onPlaying = () => setVideoReady(true);
+    const onLoadedMetadata = () => {
+      if (el.videoWidth > 0 && el.videoHeight > 0) {
+        setMediaAspectRatio(el.videoWidth / el.videoHeight);
+      }
+    };
+
+    el.addEventListener("playing", onPlaying);
+    el.addEventListener("loadedmetadata", onLoadedMetadata);
+    return () => {
+      el.removeEventListener("playing", onPlaying);
+      el.removeEventListener("loadedmetadata", onLoadedMetadata);
+    };
+  }, [videoRef]);
+
+  const handleError = useCallback(() => {
+    setHasError(true);
+  }, []);
+
+  const handlePosterError = useCallback(() => {
+    setPosterError(true);
+  }, []);
+
+  const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget;
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      setMediaAspectRatio(image.naturalWidth / image.naturalHeight);
+    }
+  }, []);
+
+  const toggleMute = useCallback(
+    (e: React.SyntheticEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsMuted((current) => {
+        const nextMuted = !current;
+        if (videoRef.current) {
+          videoRef.current.muted = nextMuted;
+        }
+        return nextMuted;
+      });
+    },
+    [videoRef]
+  );
+
+  const handleTap = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (hasError) return;
+
+      const willPause = isPlaying;
+      togglePlayback();
+
+      tapKeyRef.current += 1;
+      setTapIndicator({
+        key: tapKeyRef.current,
+        action: willPause ? "pause" : "play",
+      });
+    },
+    [isPlaying, togglePlayback, hasError]
+  );
+
+  if (!normalizedSrc) {
+    if (!normalizedPoster || posterError) {
+      return <div className="absolute inset-0 skeleton-shimmer" />;
+    }
+
+    return (
+      <Image
+        src={normalizedPoster}
+        alt={alt}
+        fill
+        className={getForegroundMediaClassName(mediaFitClassName, usesSmartFit, mediaClassName)}
+        sizes={sizes}
+        priority={priority}
+        onLoad={handleImageLoad}
+        onError={handlePosterError}
+        data-media-fit={usesSmartFit ? "smart" : "cover"}
+        unoptimized={posterNeedsUnoptimized ? true : undefined}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={cn("relative h-full w-full", className)}
+      data-media-fit={usesSmartFit ? "smart" : "cover"}
+    >
+      {usesSmartFit ? (
+        <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
+      ) : null}
+
+      {/* Poster / thumbnail — shown when paused-by-user or video not ready */}
+      {normalizedPoster && !posterError ? (
+        <Image
+          src={normalizedPoster}
+          alt={alt || "Video cover"}
+          fill
+          className={cn(
+            "absolute inset-0 z-[2] transition-opacity duration-300",
+            foregroundMediaClassName,
+            showPoster ? "opacity-100" : "opacity-0"
+          )}
+          sizes={sizes}
+          priority={priority}
+          onLoad={handleImageLoad}
+          onError={handlePosterError}
+          data-media-fit={usesSmartFit ? "smart" : "cover"}
+          unoptimized={posterNeedsUnoptimized ? true : undefined}
+        />
+      ) : showPoster ? (
+        <div className="absolute inset-0 z-[2] skeleton-shimmer" />
+      ) : null}
+
+      {/* Video element */}
+      <video
+        ref={videoRef}
+        preload="none"
+        loop
+        muted={isMuted}
+        playsInline
+        aria-label={alt ? `${alt} video` : "Video preview"}
+        onError={handleError}
+        className={cn(
+          "relative z-[3] h-full w-full transition-opacity duration-300",
+          foregroundMediaClassName,
+          hasError || !videoReady ? "opacity-0" : "opacity-100"
+        )}
+        data-media-fit={usesSmartFit ? "smart" : "cover"}
+      />
+
+      {/* Transparent tap overlay — intercepts taps to toggle playback,
+          prevents parent <Link> from navigating */}
+      {!hasError && !reducedMotion ? (
+        <div
+          role="button"
+          tabIndex={0}
+          className="absolute inset-0 z-[10] cursor-pointer"
+          onClick={handleTap}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleTap(e as unknown as React.MouseEvent);
+            }
+          }}
+          aria-label={isPlaying ? "Pause video" : "Play video"}
+        />
+      ) : null}
+
+      {/* Reduced motion: show play button, tap to start */}
+      {reducedMotion && !hasError ? (
+        <div
+          role="button"
+          tabIndex={0}
+          className="absolute inset-0 z-[10] flex cursor-pointer items-center justify-center"
+          onClick={handleTap}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleTap(e as unknown as React.MouseEvent);
+            }
+          }}
+          aria-label="Play video"
+        >
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white shadow-lg backdrop-blur-sm">
+            <Play className="h-5 w-5 fill-white" />
+          </div>
+        </div>
+      ) : null}
+
+      {/* Tap indicator — YouTube-style fade-out circle */}
+      {tapIndicator ? (
+        <FeedTapIndicator key={tapIndicator.key} action={tapIndicator.action} />
+      ) : null}
 
       {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
     </div>

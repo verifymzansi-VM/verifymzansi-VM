@@ -104,7 +104,8 @@ const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
   phone: "Enter your SA mobile number. We'll send an OTP via SMS.",
   id_doc: "Enter your 13-digit SA ID and upload a clear photo or PDF of your ID. Max 5 MB.",
   selfie: "Upload a clear selfie showing your full face. Max 5 MB.",
-  location: "Select your province and city. GPS verification skips the admin review wait.",
+  location:
+    "Select your province and city, then use GPS to verify your address. Your address is approved instantly — no admin review needed.",
 };
 
 class SubmissionError extends Error {
@@ -1224,9 +1225,9 @@ export default function VerificationPage() {
         setGpsMismatch(null);
         await syncVerificationStatus();
         toast({
-          title: "Address saved",
+          title: "Address saved and verified",
           description:
-            "Your address is saved. Use GPS to verify it automatically or continue without the verification tick.",
+            "Your address has been verified. You can also confirm it with GPS for extra confidence.",
           variant: "success",
         });
       } else {
@@ -1298,16 +1299,14 @@ export default function VerificationPage() {
       const statusSnapshot = await syncVerificationStatus();
 
       const locationStep = statusSnapshot?.steps.find((entry) => entry.step_type === "location");
-      const addressVerified = locationStep?.status === "approved";
+      const _addressVerified = locationStep?.status === "approved";
       const verificationComplete = statusSnapshot?.accountStatus === "verified";
 
       toast({
         title: verificationComplete ? "Verification approved" : "Verification submitted",
         description: verificationComplete
           ? "Your account is verified."
-          : addressVerified
-            ? "Your address was verified by GPS. Any remaining documents stay under admin review."
-            : "Your documents and saved address were sent for admin review.",
+          : "Your address is verified. Your ID and selfie have been sent for admin review.",
         variant: "success",
       });
       setStep("complete");
@@ -1880,7 +1879,7 @@ export default function VerificationPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base font-display">
                       <MapPin className="h-5 w-5 text-brand-red" />
-                      Step 4: Location + Final Submit
+                      Step 4: Verify Your Address
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -1957,34 +1956,32 @@ export default function VerificationPage() {
                             {locationVerified ? (
                               <CheckCircle2 className="h-4 w-4 text-brand-green" />
                             ) : (
-                              <MapPin className="h-4 w-4 text-muted-foreground" />
+                              <CheckCircle2 className="h-4 w-4 text-brand-green" />
                             )}
                             <span className="font-medium">
-                              {locationVerified ? "Verified address" : "Saved address"}
+                              {locationVerified ? "GPS-verified address" : "Verified address"}
                             </span>
                           </div>
                           <p className="mt-1 text-muted-foreground">{locationSummary}</p>
                           {!locationVerified && (
                             <p className="mt-2 text-xs text-muted-foreground">
-                              This address is saved, but it does not have a GPS verification tick
-                              yet.
+                              Your address is verified. Use GPS to add a GPS-confirmed badge.
                             </p>
                           )}
                         </div>
                       )}
                     </div>
 
-                    {/* Optional GPS Confirmation */}
+                    {/* GPS Confirmation (Recommended) */}
                     {locationSaved && !locationVerified && (
                       <div className="space-y-3 rounded-md border border-dashed border-brand-blue/40 p-4 bg-brand-blue/5">
                         <h4 className="flex items-center gap-2 text-sm font-medium">
                           <Navigation className="h-4 w-4 text-brand-blue" />
-                          Verify with GPS (Optional)
+                          Verify with GPS (Recommended)
                         </h4>
                         <p className="text-xs text-muted-foreground">
-                          GPS verification checks the saved address. If it matches, the location
-                          step is approved immediately. If it fails, your saved address stays on
-                          file without a verification tick.
+                          Use GPS to confirm your address. This strengthens your verification and
+                          adds a GPS-verified badge to your profile.
                         </p>
 
                         {gpsFeatureAvailable && gpsStatus === "idle" && (
@@ -2034,8 +2031,8 @@ export default function VerificationPage() {
 
                         {!gpsFeatureAvailable && (
                           <p className="text-xs text-muted-foreground">
-                            GPS is not available on this device. Your saved address can still be
-                            reviewed manually.
+                            GPS is not available on this device. Your address is still verified
+                            based on your selection.
                           </p>
                         )}
                       </div>
@@ -2179,14 +2176,11 @@ export default function VerificationPage() {
                         <div className="mt-1 space-y-1">
                           <p className="text-muted-foreground">{locationSummary}</p>
                           <div className="flex items-center gap-1 text-xs">
-                            {locationVerified ? (
-                              <span className="text-brand-green flex items-center gap-1">
-                                <CheckCircle2 className="h-3 w-3" />
-                                Address verified{gpsConfidence ? ` (${gpsConfidence})` : ""}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">Saved, not GPS verified</span>
-                            )}
+                            <span className="text-brand-green flex items-center gap-1">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Address verified
+                              {locationVerified && gpsConfidence ? ` (GPS: ${gpsConfidence})` : ""}
+                            </span>
                           </div>
                         </div>
                       ) : (
@@ -2215,9 +2209,7 @@ export default function VerificationPage() {
                   <p className="mx-auto max-w-sm text-sm text-muted-foreground">
                     {accountVerificationStatus === "verified"
                       ? "Your account is verified."
-                      : locationVerified
-                        ? "Your address is already verified. Any remaining documents stay under admin review."
-                        : "Your phone, documents, and saved address are under admin review."}
+                      : "Your address is verified. Your ID and selfie are under admin review."}
                   </p>
                   <div className="mx-auto w-full max-w-lg space-y-2 text-left">
                     {REVIEWABLE_STEP_ORDER.map((stepType) => {

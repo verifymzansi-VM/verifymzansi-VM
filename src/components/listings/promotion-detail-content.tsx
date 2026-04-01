@@ -23,6 +23,7 @@ import { PromotionContactActions } from "@/app/promotion/[id]/promotion-contact-
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { formatZAR } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 import {
   PROMOTION_TYPE_LABELS,
   type BusinessCategory,
@@ -197,12 +198,40 @@ export function PromotionDetailContent({
           poster: leadPoster,
         }));
   const videoRef = useRef<HTMLVideoElement>(null);
+  const manager = useVideoPlaybackManager();
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const activeMedia = mediaItems[activeMediaIndex] ?? null;
   const [isMuted, setIsMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
+  // Register hero video with global playback manager so it participates in
+  // single-video arbitration (pauses when a card video claims priority).
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+
+    manager.register(el);
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          manager.updateVisibility(el, entry.intersectionRatio);
+        } else {
+          el.pause();
+          manager.updateVisibility(el, 0);
+        }
+      },
+      { threshold: [0, 0.25, 0.5, 0.75, 1] }
+    );
+
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      manager.unregister(el);
+    };
+  }, [manager, activeMediaIndex]);
   const contactMethods = promotion.contact_methods ?? [];
   const isEvent = promotion.promotion_type === "event";
   const eventState = isEvent ? getEventState(promotion.start_date, promotion.end_date) : null;

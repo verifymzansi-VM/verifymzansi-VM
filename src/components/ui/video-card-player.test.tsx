@@ -4,11 +4,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
-const { useVideoVisibilityMock, useVideoHoverMock, useHoverCapabilityMock } = vi.hoisted(() => ({
-  useVideoVisibilityMock: vi.fn(),
-  useVideoHoverMock: vi.fn(),
-  useHoverCapabilityMock: vi.fn(),
-}));
+const { useVideoVisibilityMock, useVideoHoverMock, useHoverCapabilityMock, useVideoFeedMock } =
+  vi.hoisted(() => ({
+    useVideoVisibilityMock: vi.fn(),
+    useVideoHoverMock: vi.fn(),
+    useHoverCapabilityMock: vi.fn(),
+    useVideoFeedMock: vi.fn(),
+  }));
 
 vi.mock("next/image", () => ({
   default: ({
@@ -36,6 +38,10 @@ vi.mock("@/hooks/use-hover-capability", () => ({
   useHoverCapability: useHoverCapabilityMock,
 }));
 
+vi.mock("@/hooks/use-video-feed", () => ({
+  useVideoFeed: useVideoFeedMock,
+}));
+
 const { VideoCardPlayer } = await import("./video-card-player");
 
 describe("VideoCardPlayer", () => {
@@ -52,6 +58,13 @@ describe("VideoCardPlayer", () => {
       containerRef: { current: null },
       reducedMotion: false,
       isHovering: false,
+    });
+    useVideoFeedMock.mockReturnValue({
+      videoRef: { current: null },
+      isPlaying: false,
+      isPausedByUser: false,
+      togglePlayback: vi.fn(),
+      reducedMotion: false,
     });
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);

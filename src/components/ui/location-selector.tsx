@@ -93,7 +93,12 @@ export function LocationSelector({
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-normal"
           value={value.province}
           disabled={disabled}
-          onChange={(e) => onChange({ province: e.target.value, city: "", town: "", address: "" })}
+          onChange={(e) => {
+            onChange({ province: e.target.value, city: "", town: "", address: "" });
+            if (e.target.value) {
+              requestAnimationFrame(() => document.getElementById(cityId)?.focus());
+            }
+          }}
         >
           <option value="">Select province…</option>
           {provinces.map((p) => (
@@ -120,9 +125,12 @@ export function LocationSelector({
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-normal"
           value={value.city}
           disabled={disabled || !value.province}
-          onChange={(e) =>
-            onChange({ ...value, city: e.target.value, town: "", address: value.address ?? "" })
-          }
+          onChange={(e) => {
+            onChange({ ...value, city: e.target.value, town: "", address: value.address ?? "" });
+            if (e.target.value && showTown) {
+              requestAnimationFrame(() => document.getElementById(townId)?.focus());
+            }
+          }}
         >
           <option value="">{value.province ? "Select city…" : "Select province first"}</option>
           {cities.map((c) => (

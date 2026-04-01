@@ -176,6 +176,8 @@ export async function POST(request: Request) {
         .eq("user_id", step.user_id);
 
       const approvedSteps = (allSteps || []).filter((s) => s.status === "approved");
+      // Location is self-service (auto-approved) so it will already be in the
+      // approved set by the time admin reviews id_doc / selfie.
       const requiredSteps = ["phone", "id_doc", "selfie", "location"];
       const allApproved = requiredSteps.every((reqStep) =>
         approvedSteps.some((s) => s.step_type === reqStep)

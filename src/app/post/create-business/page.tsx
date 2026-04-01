@@ -650,6 +650,21 @@ function CreateBusinessContent() {
     return errors;
   }
 
+  /** Scroll to top and focus the first field of the target step */
+  function scrollToStepTop(targetStep: number) {
+    const firstFieldByStep = ["business-type-group", "province", "business-logo"];
+    requestAnimationFrame(() => {
+      document
+        .getElementById("post-form-top")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const fieldId = firstFieldByStep[targetStep];
+      if (fieldId) {
+        const el = document.getElementById(fieldId);
+        el?.focus({ preventScroll: true });
+      }
+    });
+  }
+
   function goNext() {
     const errors = validateStep(step);
     if (Object.keys(errors).length > 0) {
@@ -659,12 +674,16 @@ function CreateBusinessContent() {
       return;
     }
     clearErrors();
-    setStep((current) => Math.min(current + 1, STEPS.length - 1));
+    const next = Math.min(step + 1, STEPS.length - 1);
+    setStep(next);
+    scrollToStepTop(next);
   }
 
   function goBack() {
     clearErrors();
-    setStep((current) => Math.max(current - 1, 0));
+    const prev = Math.max(step - 1, 0);
+    setStep(prev);
+    scrollToStepTop(prev);
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -1012,7 +1031,7 @@ function CreateBusinessContent() {
                 }
               >
                 {step === 0 && (
-                  <div className="space-y-5">
+                  <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div id="business-type-group" tabIndex={-1} className="space-y-3">
                       <Label>Business Type *</Label>
                       <div
@@ -1065,6 +1084,14 @@ function CreateBusinessContent() {
                                     "map_directions"
                                   );
                                   clearErrorPrefix("business_details.");
+                                  // Auto-focus the business name field after selecting a business type
+                                  requestAnimationFrame(() => {
+                                    const el = document.getElementById("businessName");
+                                    if (el) {
+                                      el.focus();
+                                      el.scrollIntoView({ behavior: "smooth", block: "center" });
+                                    }
+                                  });
                                 }}
                                 className="sr-only"
                               />
@@ -1184,6 +1211,14 @@ function CreateBusinessContent() {
                         onChange={(event) => {
                           setCategory(event.target.value as BusinessCategory);
                           clearErrors("category");
+                          // Auto-focus description after selecting a category
+                          requestAnimationFrame(() => {
+                            const el = document.getElementById("description");
+                            if (el) {
+                              el.focus();
+                              el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            }
+                          });
                         }}
                       >
                         <option value="">Select a category</option>
@@ -1218,7 +1253,7 @@ function CreateBusinessContent() {
                 )}
 
                 {step === 1 && (
-                  <div className="space-y-5">
+                  <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <LocationSelector
                       value={locationValue}
                       onChange={(v) => {
@@ -1365,7 +1400,7 @@ function CreateBusinessContent() {
                 )}
 
                 {step === 2 && (
-                  <div className="space-y-5">
+                  <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       <div id="business-logo" tabIndex={-1} className="space-y-2 rounded-lg">
                         <MediaUpload

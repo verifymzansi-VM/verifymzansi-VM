@@ -241,6 +241,11 @@ const config: Config = {
           "0%, 100%": { boxShadow: "0 0 16px 2px rgba(0, 131, 62, 0.2)" },
           "50%": { boxShadow: "0 0 24px 4px rgba(0, 131, 62, 0.35)" },
         },
+        "feed-tap-indicator": {
+          "0%": { opacity: "0", transform: "scale(0.7)" },
+          "15%": { opacity: "1", transform: "scale(1)" },
+          "100%": { opacity: "0", transform: "scale(1)" },
+        },
       },
       animation: {
         "fade-in-up": "fade-in-up 0.5s ease-out forwards",
@@ -249,6 +254,7 @@ const config: Config = {
         shimmer: "shimmer 2s linear infinite",
         "pulse-soft": "pulse-soft 2s ease-in-out infinite",
         "trust-glow": "trust-glow 2.5s ease-in-out infinite",
+        "feed-tap-indicator": "feed-tap-indicator 0.8s ease-out forwards",
       },
 
       /* ── Layout ───────────────────────────────────────── */

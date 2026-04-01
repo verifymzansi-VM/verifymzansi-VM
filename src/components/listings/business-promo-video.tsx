@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Play, Volume2, VolumeX } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 
 interface BusinessPromoVideoProps {
   videoUrl: string;
@@ -18,6 +19,34 @@ export function BusinessPromoVideo({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const manager = useVideoPlaybackManager();
+
+  // Register with global playback manager so this video participates in
+  // single-video arbitration (pauses when a card video claims priority).
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+
+    manager.register(el);
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          manager.updateVisibility(el, entry.intersectionRatio);
+        } else {
+          el.pause();
+          manager.updateVisibility(el, 0);
+        }
+      },
+      { threshold: [0, 0.25, 0.5, 0.75, 1] }
+    );
+
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      manager.unregister(el);
+    };
+  }, [manager]);
 
   function toggleMute() {
     if (videoRef.current) {

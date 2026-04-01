@@ -52,6 +52,16 @@ vi.mock("@/lib/utils/format", () => ({
   formatZAR: (cents: number) => `R ${(cents / 100).toFixed(2)}`,
 }));
 
+vi.mock("@/contexts/video-playback-context", () => ({
+  useVideoPlaybackManager: () => ({
+    register: vi.fn(),
+    unregister: vi.fn(),
+    updateVisibility: vi.fn(),
+    requestPriority: vi.fn(),
+    releasePriority: vi.fn(),
+  }),
+}));
+
 const { PromotionDetailContent } = await import("@/components/listings/promotion-detail-content");
 
 describe("PromotionDetailContent", () => {

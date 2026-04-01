@@ -17,9 +17,10 @@ import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { MANUAL_ONLY_BASELINE_RISK } from "@/lib/constants/verification";
 import {
-  buildPendingVerificationStep,
+  buildVerificationStep,
   buildVerificationSessionResumePatch,
 } from "@/lib/services/verification-state";
+import { summarizeVerification } from "@/lib/account/verification-summary";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { trimmedStringSchema } from "@/lib/validations/shared";
 import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
@@ -154,24 +155,27 @@ export async function POST(request: NextRequest) {
     const riskScore = MANUAL_ONLY_BASELINE_RISK;
     const riskLevel = riskScore <= 25 ? "low" : "medium";
 
-    // Upsert verification step
+    // Upsert verification step — auto-approved (location is self-service)
     const { data: step, error: stepError } = await adminClient
       .from("verification_steps")
       .upsert(
-        buildPendingVerificationStep({
-          user_id: user.id,
-          step_type: "location",
-          location_method: "manual",
-          gps_lat: null,
-          gps_lon: null,
-          location_province: province,
-          location_city: city,
-          location_town: town || null,
-          risk_score: riskScore,
-          risk_level: riskLevel,
-          auto_status: "needs_manual_review",
-          submitted_at: new Date().toISOString(),
-        }),
+        buildVerificationStep(
+          {
+            user_id: user.id,
+            step_type: "location",
+            location_method: "manual",
+            gps_lat: null,
+            gps_lon: null,
+            location_province: province,
+            location_city: city,
+            location_town: town || null,
+            risk_score: riskScore,
+            risk_level: riskLevel,
+            auto_status: "approved",
+            submitted_at: new Date().toISOString(),
+          },
+          "approved"
+        ),
         { onConflict: "user_id,step_type" }
       )
       .select("id")
@@ -211,23 +215,55 @@ export async function POST(request: NextRequest) {
       { onConflict: "user_id" }
     );
 
-    // Update account profile
-    await supabase
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .update({
-        location_province: province,
-        location_city: city,
-      })
+    // Update account profile with location
+    const profilePatch: Record<string, unknown> = {
+      location_province: province,
+      location_city: city,
+    };
+
+    // Check if all verification steps are now approved → promote to verified
+    const { data: allSteps } = await adminClient
+      .from("verification_steps")
+      .select("step_type, status")
       .eq("user_id", user.id);
 
-    // Set pending_review if currently incomplete
-    await supabase
+    const { data: profileRow } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .update({
-        account_verification_status: "pending_review",
-      })
+      .select("account_verification_status")
       .eq("user_id", user.id)
-      .in("account_verification_status", ["incomplete", "rejected"]);
+      .maybeSingle();
+
+    const verificationSummary = summarizeVerification(
+      profileRow?.account_verification_status,
+      allSteps ?? []
+    );
+
+    profilePatch.account_verification_status = verificationSummary.accountVerificationStatus;
+
+    if (verificationSummary.accountVerificationStatus === "verified") {
+      const { data: idDocDetail } = await adminClient
+        .from("verification_steps")
+        .select("first_name, last_name")
+        .eq("user_id", user.id)
+        .eq("step_type", "id_doc")
+        .single();
+
+      if (idDocDetail?.first_name && idDocDetail?.last_name) {
+        profilePatch.legal_first_name = idDocDetail.first_name;
+        profilePatch.legal_last_name = idDocDetail.last_name;
+        profilePatch.display_name = `${idDocDetail.first_name} ${idDocDetail.last_name}`;
+        profilePatch.legal_name_locked_at = new Date().toISOString();
+      }
+
+      const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      await adminClient
+        .from("kyc_artifacts")
+        .update({ purge_after: purgeAfter })
+        .eq("user_id", user.id)
+        .is("purge_after", null);
+    }
+
+    await adminClient.from(ACCOUNT_PROFILE_WRITE_TABLE).update(profilePatch).eq("user_id", user.id);
 
     // Audit log
     await logAuditEvent({

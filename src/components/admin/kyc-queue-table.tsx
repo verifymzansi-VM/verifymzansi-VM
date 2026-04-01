@@ -23,7 +23,6 @@ import {
   FileCheck,
   Phone,
   Camera,
-  MapPin,
   CreditCard,
   Loader2,
   Eye,
@@ -82,17 +81,15 @@ const STEP_ICONS: Record<string, React.ElementType> = {
   phone: Phone,
   id_doc: CreditCard,
   selfie: Camera,
-  location: MapPin,
 };
 
 const STEP_LABELS: Record<string, string> = {
   phone: "Phone Verification",
   id_doc: "ID Document",
   selfie: "Selfie Verification",
-  location: "Location Proof",
 };
 
-const VIEWABLE_STEP_TYPES = new Set(["id_doc", "selfie", "location"]);
+const VIEWABLE_STEP_TYPES = new Set(["id_doc", "selfie"]);
 
 const REASON_CODES = [
   { value: "blurry_image", label: "Image too blurry to verify" },
@@ -494,8 +491,8 @@ export function KycQueueTable({
           {decision === "approved" ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                This will mark the step as approved. If all 4 verification steps are now approved,
-                the account will be marked as verified.
+                This will mark the step as approved. If all verification steps are now approved, the
+                account will be marked as verified.
               </p>
               {selectedStep?.reviewed_at && selectedStep?.status === "pending" && (
                 <div className="rounded-md border border-amber-500/30 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-700 dark:text-amber-400">

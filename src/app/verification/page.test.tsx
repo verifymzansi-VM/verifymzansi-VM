@@ -197,7 +197,7 @@ describe("VerificationPage", () => {
       expect(screen.getByRole("heading", { name: /Verification Submitted/i })).toBeInTheDocument();
     });
     expect(
-      screen.getByText(/phone, documents, and saved address are under admin review/i)
+      screen.getByText(/address is verified.*ID and selfie are under admin review/i)
     ).toBeInTheDocument();
     expect(screen.getAllByText(/Pending review/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Return to Posting/i })).toHaveAttribute(
@@ -623,13 +623,12 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/^Saved address$/i)).toBeInTheDocument();
+      expect(screen.getByText(/^Verified address$/i)).toBeInTheDocument();
       expect(screen.getAllByText(/Soweto, Johannesburg, Gauteng/i).length).toBeGreaterThan(0);
-      expect(screen.getByText(/Saved, not GPS verified/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
     });
 
-    expect(screen.queryByText(/^Verified address$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^GPS-verified address$/i)).not.toBeInTheDocument();
   });
 
   it("shows a verified address state after successful GPS confirmation", async () => {
@@ -704,9 +703,9 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Verify Address with GPS/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/^Verified address$/i)).toBeInTheDocument();
+      expect(screen.getByText(/^GPS-verified address$/i)).toBeInTheDocument();
       expect(screen.getByText(/Address verified by GPS/i)).toBeInTheDocument();
-      expect(screen.getByText(/Address verified \(high\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/Address verified \(GPS: high\)/i)).toBeInTheDocument();
     });
   });
 
@@ -772,7 +771,7 @@ describe("VerificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/^Saved address$/i)).toBeInTheDocument();
+      expect(screen.getByText(/^Verified address$/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
     });
 
