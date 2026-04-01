@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { HeroBanner } from "./hero-banner";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
+import { ShowroomSideCard, type SideCardItem } from "@/components/showrooms/showroom-side-card";
+import { normalizeMediaUrl } from "@/lib/utils/media-url";
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -73,11 +75,46 @@ export async function HeroBannerWithData() {
       .slice(0, 3);
   }
 
-  return (
+  // Extract side-card items from promotions that have cover photos
+  const sideCardItems: SideCardItem[] = (latestPromotions || []).flatMap((p) => {
+    const promo = p as { id: string; photos?: string[] | null };
+    const photo = promo.photos?.[0];
+    if (!photo) return [];
+    const imageUrl = normalizeMediaUrl(photo);
+    return imageUrl ? [{ id: promo.id, imageUrl }] : [];
+  });
+
+  const hasEnoughItems = sideCardItems.length >= 2;
+  const leftItems = sideCardItems.filter((_, i) => i % 2 === 0);
+  const rightItems = sideCardItems.filter((_, i) => i % 2 !== 0);
+
+  const heroBannerNode = (
     <HeroBanner
       topBusinesses={topBusinesses || []}
       latestListings={latestListings || []}
       latestPromotions={latestPromotions || []}
     />
+  );
+
+  if (!hasEnoughItems) {
+    return heroBannerNode;
+  }
+
+  return (
+    <section className="w-full">
+      <div className="lg:flex lg:items-stretch lg:gap-2 lg:px-2 xl:gap-3 xl:px-3">
+        <div className="hidden w-[15%] shrink-0 self-stretch lg:block">
+          <div className="h-full">
+            <ShowroomSideCard items={leftItems} initialDelayMs={0} />
+          </div>
+        </div>
+        <div className="min-w-0 lg:flex-1">{heroBannerNode}</div>
+        <div className="hidden w-[15%] shrink-0 self-stretch lg:block">
+          <div className="h-full">
+            <ShowroomSideCard items={rightItems} initialDelayMs={2500} />
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

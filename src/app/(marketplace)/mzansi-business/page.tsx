@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
+import { type ShowroomSlide } from "@/components/showrooms/showroom-hero";
+import { ShowroomWithSideCards } from "@/components/showrooms/showroom-with-side-cards";
+import { type SideCardItem } from "@/components/showrooms/showroom-side-card";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { PageHeader } from "@/components/layout";
@@ -7,6 +9,7 @@ import { TrustStrip } from "@/components/layout/trust-strip";
 import { MzansiBusinessGrid } from "./grid";
 import { MzansiBusinessFilterSync } from "./filter-sync";
 import { ListingGridSkeleton } from "@/components/listings/listing-skeleton";
+import { getOwnerColumn, withOwnerColumn } from "@/lib/account/compat";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { BusinessDiscoveryBar } from "./discovery-bar";
 import { BusinessFilterDrawer } from "@/components/listings/business-filter-drawer";
@@ -32,12 +35,22 @@ export const metadata = {
 /** Revalidate every 60 seconds (ISR) */
 export const revalidate = 60;
 
+type PromotionSideCardRow = {
+  id: string;
+  title?: string | null;
+  photos?: string[] | null;
+  owner_id?: string | null;
+  seller_id?: string | null;
+};
+
 export default async function MzansiBusinessPage() {
   const cookieStore = await cookies();
   const hideFixtures = shouldHidePlaywrightFixtures(
     cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
   );
   const supabase = await createClient();
+  const promotionOwnerColumn = await getOwnerColumn(supabase, "promotions");
+  const now = new Date().toISOString();
 
   // Fetch top businesses for showroom hero
   const { data: topBusinesses } = await supabase
@@ -88,17 +101,37 @@ export default async function MzansiBusinessPage() {
           },
         ];
 
+  // Fetch live promotions & events for desktop side cards
+  const { data: sideCardPromos } = await supabase
+    .from("promotions")
+    .select(withOwnerColumn("id, title, photos, owner_id", promotionOwnerColumn))
+    .eq("status", "live")
+    .or(`end_date.is.null,end_date.gte.${now}`)
+    .order("boost_until", { ascending: false, nullsFirst: false })
+    .order("featured_until", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  const sideCardItems: SideCardItem[] = (
+    (sideCardPromos ?? []) as unknown as PromotionSideCardRow[]
+  )
+    .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
+    .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
+    .filter((p) => p.photos && p.photos.length > 0)
+    .map((p) => ({ id: p.id, imageUrl: normalizeMediaUrl(p.photos![0]) }));
+
   return (
     <div className="space-y-0">
       <Suspense fallback={<div className="h-10" />}>
         <MzansiBusinessFilterSync />
       </Suspense>
 
-      {/* ── Dynamic Showroom Hero ──────────────────────────────────── */}
-      <ShowroomHero
+      {/* ── Dynamic Showroom Hero with side ad cards ─────────────── */}
+      <ShowroomWithSideCards
         slides={slides}
         fallbackTitle="Mzansi Business"
         fallbackDescription="Discover verified South African businesses and services."
+        sideCardItems={sideCardItems}
       />
 
       <TrustStrip variant="blue" />

@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
+import { type ShowroomSlide } from "@/components/showrooms/showroom-hero";
+import { ShowroomWithSideCards } from "@/components/showrooms/showroom-with-side-cards";
+import { type SideCardItem } from "@/components/showrooms/showroom-side-card";
 import { PageHeader } from "@/components/layout";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
@@ -10,6 +12,7 @@ import { ListingFilterDrawer } from "@/components/listings/listing-filter-drawer
 import { ListingGridHeader } from "@/components/listings/listing-grid-header";
 import { MzansiMarketGrid } from "./grid";
 import { MarketplaceUrlFilterSync } from "./url-filter-sync";
+import { getOwnerColumn, withOwnerColumn } from "@/lib/account/compat";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -35,12 +38,22 @@ export const metadata: Metadata = {
 /** Revalidate marketplace data every 60 seconds (ISR) */
 export const revalidate = 60;
 
+type PromotionSideCardRow = {
+  id: string;
+  title?: string | null;
+  photos?: string[] | null;
+  owner_id?: string | null;
+  seller_id?: string | null;
+};
+
 export default async function MzansiMarketPage() {
   const cookieStore = await cookies();
   const hideFixtures = shouldHidePlaywrightFixtures(
     cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
   );
   const supabase = await createClient();
+  const promotionOwnerColumn = await getOwnerColumn(supabase, "promotions");
+  const now = new Date().toISOString();
 
   const { data: listings } = await supabase
     .from("listings")
@@ -79,17 +92,37 @@ export default async function MzansiMarketPage() {
       promotions: [],
     }));
 
+  // Fetch live promotions & events for desktop side cards
+  const { data: sideCardPromos } = await supabase
+    .from("promotions")
+    .select(withOwnerColumn("id, title, photos, owner_id", promotionOwnerColumn))
+    .eq("status", "live")
+    .or(`end_date.is.null,end_date.gte.${now}`)
+    .order("boost_until", { ascending: false, nullsFirst: false })
+    .order("featured_until", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  const sideCardItems: SideCardItem[] = (
+    (sideCardPromos ?? []) as unknown as PromotionSideCardRow[]
+  )
+    .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
+    .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
+    .filter((p) => p.photos && p.photos.length > 0)
+    .map((p) => ({ id: p.id, imageUrl: normalizeMediaUrl(p.photos![0]) }));
+
   return (
     <div className="space-y-0">
       <Suspense fallback={null}>
         <MarketplaceUrlFilterSync />
       </Suspense>
 
-      {/* ── Dynamic Showroom Hero ──────────────────────────────────── */}
-      <ShowroomHero
+      {/* ── Dynamic Showroom Hero with side ad cards ─────────────── */}
+      <ShowroomWithSideCards
         slides={slides}
         fallbackTitle="Mzansi Market Showroom"
         fallbackDescription="Browse classified ads from identity-verified members."
+        sideCardItems={sideCardItems}
       />
 
       <TrustStrip variant="green" />
