@@ -42,10 +42,10 @@ export function ShowroomSideCard({ items, initialDelayMs = 0 }: ShowroomSideCard
       // Delay the first transition on one side so both cards do not advance in sync.
       delayRef.current = setTimeout(() => {
         advance();
-        timerRef.current = setInterval(advance, 5000);
+        timerRef.current = setInterval(advance, 6000);
       }, initialDelayMs);
     } else {
-      timerRef.current = setInterval(advance, 5000);
+      timerRef.current = setInterval(advance, 6000);
     }
 
     return () => {

@@ -85,39 +85,14 @@ export async function HeroBannerWithData() {
     return imageUrl ? [{ id: promo.id, imageUrl }] : [];
   });
 
-  // Fallback: fill from listings when promotions don't provide enough images
-  if (sideCardItems.length < 2) {
-    const listingFallbacks: SideCardItem[] = (latestListings || []).flatMap((l) => {
-      const listing = l as { id: string; photos?: string[] | null };
-      const photo = listing.photos?.[0];
-      if (!photo) return [];
-      const imageUrl = normalizeMediaUrl(photo);
-      return imageUrl ? [{ id: listing.id, imageUrl }] : [];
-    });
-    sideCardItems.push(...listingFallbacks.slice(0, 6 - sideCardItems.length));
-  }
-
-  // Second fallback: fill from businesses
-  if (sideCardItems.length < 2) {
-    const bizFallbacks: SideCardItem[] = (topBusinesses || []).flatMap((b) => {
-      const biz = b as { id: string; cover_photo?: string | null };
-      if (!biz.cover_photo) return [];
-      const imageUrl = normalizeMediaUrl(biz.cover_photo);
-      return imageUrl ? [{ id: biz.id, imageUrl }] : [];
-    });
-    sideCardItems.push(...bizFallbacks.slice(0, 6 - sideCardItems.length));
-  }
-
-  // Last resort: branded promotional banners
-  if (sideCardItems.length < 2) {
-    sideCardItems.push(...BRANDED_SIDE_CARD_FALLBACKS.slice(0, 4 - sideCardItems.length));
+  // Last resort: branded promotional banners when no promotions have photos
+  if (sideCardItems.length === 0) {
+    sideCardItems.push(...BRANDED_SIDE_CARD_FALLBACKS);
   }
 
   const hasEnoughItems = sideCardItems.length >= 1;
-  const leftItems =
-    sideCardItems.length === 1 ? sideCardItems : sideCardItems.filter((_, i) => i % 2 === 0);
-  const rightItems =
-    sideCardItems.length === 1 ? sideCardItems : sideCardItems.filter((_, i) => i % 2 !== 0);
+  const leftItems = sideCardItems;
+  const rightItems = sideCardItems;
 
   const heroBannerNode = (
     <HeroBanner
@@ -142,7 +117,7 @@ export async function HeroBannerWithData() {
         <div className="min-w-0 lg:flex-1">{heroBannerNode}</div>
         <div className="hidden w-[15%] shrink-0 self-stretch lg:block">
           <div className="h-full">
-            <ShowroomSideCard items={rightItems} initialDelayMs={2500} />
+            <ShowroomSideCard items={rightItems} initialDelayMs={3000} />
           </div>
         </div>
       </div>
