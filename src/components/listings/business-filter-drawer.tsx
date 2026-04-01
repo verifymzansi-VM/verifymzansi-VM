@@ -104,33 +104,33 @@ export function BusinessFilterDrawer() {
         setOpen(next);
       }}
     >
-      {/* ── Compact filter pill + chips (mobile only) ── */}
-      <div className="lg:hidden space-y-2">
-        <div className="flex items-center gap-2">
-          <SheetTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 h-9 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
-              aria-label="Open business filters"
-              disabled={!isInteractive}
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
-              <span>Filters</span>
-              {activeFilterCount > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-          </SheetTrigger>
-        </div>
-
+      {/* ── Active filter chips (mobile only, inline) ── */}
+      <div className="lg:hidden">
         <ActiveFilterChips chips={activeChips} onClearAll={clearAllFilters} />
       </div>
 
+      {/* ── Sticky FAB filter button (mobile only) ── */}
+      <SheetTrigger asChild>
+        <button
+          type="button"
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-5 h-11 text-sm font-semibold text-foreground shadow-lg transition-colors hover:bg-amber-500 active:bg-amber-600 md:hidden"
+          aria-label="Open business filters"
+          disabled={!isInteractive}
+        >
+          <SlidersHorizontal className="h-4 w-4 shrink-0" />
+          <span>Filters</span>
+          {activeFilterCount > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-foreground px-1.5 text-[10px] font-bold text-amber-400">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+      </SheetTrigger>
+
       <SheetContent
         side="bottom"
-        className="max-h-[55vh] overflow-y-auto rounded-t-2xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
+        className="max-h-[90dvh] overflow-y-auto rounded-t-2xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <SheetHeader className="mb-3">
           <SheetTitle>Filter Businesses</SheetTitle>

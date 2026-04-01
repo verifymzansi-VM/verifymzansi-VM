@@ -157,38 +157,8 @@ export function ListingFilterDrawer() {
         setOpen(nextOpen);
       }}
     >
-      {/* ── Compact filter pill + chips (mobile only) ── */}
-      <div className="lg:hidden space-y-2">
-        <div className="flex items-center gap-2">
-          {isHydrated ? (
-            <SheetTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 h-9 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
-                aria-label="Open listing filters"
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
-                <span>Filters</span>
-                {appliedFilterCount > 0 && (
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-                    {appliedFilterCount}
-                  </span>
-                )}
-              </button>
-            </SheetTrigger>
-          ) : (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 h-9 text-sm text-muted-foreground shadow-sm"
-              aria-label="Open listing filters"
-              disabled
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
-              <span>Filters</span>
-            </button>
-          )}
-        </div>
-
+      {/* ── Active filter chips (mobile only, inline) ── */}
+      <div className="lg:hidden">
         <ActiveFilterChips
           chips={activeChips}
           onClearAll={() => {
@@ -198,7 +168,40 @@ export function ListingFilterDrawer() {
         />
       </div>
 
-      <SheetContent side="bottom" className="max-h-[55vh] overflow-y-auto rounded-t-2xl">
+      {/* ── Sticky FAB filter button (mobile only) ── */}
+      {isHydrated ? (
+        <SheetTrigger asChild>
+          <button
+            type="button"
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-5 h-11 text-sm font-semibold text-foreground shadow-lg transition-colors hover:bg-amber-500 active:bg-amber-600 md:hidden"
+            aria-label="Open listing filters"
+          >
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
+            <span>Filters</span>
+            {appliedFilterCount > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-foreground px-1.5 text-[10px] font-bold text-amber-400">
+                {appliedFilterCount}
+              </span>
+            )}
+          </button>
+        </SheetTrigger>
+      ) : (
+        <button
+          type="button"
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-5 h-11 text-sm font-semibold text-foreground shadow-lg opacity-50 md:hidden"
+          aria-label="Open listing filters"
+          disabled
+        >
+          <SlidersHorizontal className="h-4 w-4 shrink-0" />
+          <span>Filters</span>
+        </button>
+      )}
+
+      <SheetContent
+        side="bottom"
+        className="max-h-[90dvh] overflow-y-auto rounded-t-2xl"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <SheetHeader className="flex flex-row items-center justify-between pb-3">
           <SheetTitle>Filters</SheetTitle>
           {draftFilterCount > 0 && (
