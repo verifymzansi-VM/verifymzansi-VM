@@ -108,15 +108,15 @@ export async function HeroBannerWithData() {
 
   return (
     <section className="w-full">
-      <div className="lg:flex lg:items-center lg:gap-2 lg:px-2 lg:max-h-[480px] xl:gap-3 xl:px-3">
-        <div className="hidden w-[15%] shrink-0 lg:block">
-          <div className="aspect-[1/2] max-h-full w-full">
+      <div className="lg:flex lg:items-stretch lg:gap-2 lg:px-2 xl:gap-3 xl:px-3">
+        <div className="hidden w-[15%] shrink-0 self-stretch lg:block">
+          <div className="h-full">
             <ShowroomSideCard items={leftItems} initialDelayMs={0} />
           </div>
         </div>
         <div className="min-w-0 lg:flex-1">{heroBannerNode}</div>
-        <div className="hidden w-[15%] shrink-0 lg:block">
-          <div className="aspect-[1/2] max-h-full w-full">
+        <div className="hidden w-[15%] shrink-0 self-stretch lg:block">
+          <div className="h-full">
             <ShowroomSideCard items={rightItems} initialDelayMs={3000} />
           </div>
         </div>
