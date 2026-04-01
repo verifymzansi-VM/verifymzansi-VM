@@ -90,7 +90,7 @@ export default function VerifyBuyerPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Verify a Buyer"
-            description="Sellers can check whether a buyer's verification is still valid by entering the buyer token from that buyer's profile."
+            description="Check a buyer's verification status using their token."
             breadcrumbs={[{ label: "Verify a Buyer" }]}
           />
 
@@ -116,8 +116,7 @@ export default function VerifyBuyerPage() {
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Paste the 36-character buyer token from the buyer's profile, for example
-                      550e8400-e29b-41d4-a716-446655440000.
+                      Paste the buyer token from their profile.
                     </p>
                   </div>
 

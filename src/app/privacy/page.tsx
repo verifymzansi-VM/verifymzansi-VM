@@ -86,14 +86,14 @@ export default function PrivacyPolicyPage() {
                   <div className="space-y-1 pl-6 text-muted-foreground leading-snug">
                     {section.content.map((paragraph, pIdx) =>
                       paragraph.startsWith("•") ? (
-                        <div key={pIdx} className="flex gap-2 text-[13px]">
+                        <div key={pIdx} className="flex gap-2 text-sm">
                           <span className="text-brand-green mt-0.5" aria-hidden="true">
                             •
                           </span>
                           <span>{paragraph.replace("• ", "")}</span>
                         </div>
                       ) : (
-                        <p key={pIdx} className="text-[13px]">
+                        <p key={pIdx} className="text-sm">
                           {paragraph}
                         </p>
                       )
@@ -110,7 +110,7 @@ export default function PrivacyPolicyPage() {
                   Data Subjects & Contact
                 </h2>
                 <div className="pl-6 space-y-2">
-                  <p className="text-[13px] text-muted-foreground leading-snug">
+                  <p className="text-sm text-muted-foreground leading-snug">
                     To exercise your rights under POPIA, submit an access request or contact our
                     Information Officer.
                   </p>

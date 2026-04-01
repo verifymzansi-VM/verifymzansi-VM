@@ -365,7 +365,7 @@ export function AdminSidebar({
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-72 p-0">
+          <SheetContent side="left" className="w-72 p-0 pb-[env(safe-area-inset-bottom)]">
             <div className="flex h-full flex-col">{navContent}</div>
           </SheetContent>
         </Sheet>

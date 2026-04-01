@@ -50,9 +50,7 @@ describe("LoginPage", () => {
 
     expect(await screen.findByText("Check your email")).toBeInTheDocument();
     expect(screen.getByText(/We've sent a confirmation link/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /^Resend confirmation email$/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Resend confirmation$/i })).toBeInTheDocument();
   });
 
   it("shows the email confirmed banner when redirected from confirmation", async () => {
@@ -76,7 +74,7 @@ describe("LoginPage", () => {
 
     expect(screen.queryByText(/Need a new confirmation email\?/i)).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /^Resend confirmation email$/i })
+      screen.queryByRole("button", { name: /^Resend confirmation$/i })
     ).not.toBeInTheDocument();
   });
 

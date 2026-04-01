@@ -134,7 +134,7 @@ export default function AdvertisePage() {
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
             {pillars.map(({ title, description, icon: Icon }) => (
               <Card key={title} className="border-border/70 bg-card/90">
                 <CardHeader className="space-y-3">

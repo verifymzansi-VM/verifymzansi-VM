@@ -314,7 +314,7 @@ export default async function ListingsPage({
           <TabsTrigger value="active">Active ({filteredActive.length})</TabsTrigger>
           <TabsTrigger value="pending">Under Review ({filteredPending.length})</TabsTrigger>
           <TabsTrigger value="rejected">Rejected ({filteredRejected.length})</TabsTrigger>
-          <TabsTrigger value="expired">Sold / Expired ({filteredExpired.length})</TabsTrigger>
+          <TabsTrigger value="expired">Ended ({filteredExpired.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active" className="mt-4">

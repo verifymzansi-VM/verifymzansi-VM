@@ -5,5 +5,5 @@ import { redirect } from "next/navigation";
  * Kept as a server redirect to preserve bookmarks and shared links.
  */
 export default function SettingsPage() {
-  redirect("/dashboard/profile#account");
+  redirect("/dashboard/profile");
 }

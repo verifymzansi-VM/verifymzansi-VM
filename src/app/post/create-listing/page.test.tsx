@@ -159,8 +159,8 @@ describe("CreateListingPage", () => {
 
     expect(screen.getByText("Quick guide")).toBeInTheDocument();
     expect(within(stepNav).getAllByText("Details").length).toBeGreaterThan(0);
-    expect(within(stepNav).getAllByText("Pricing & Reach").length).toBeGreaterThan(0);
-    expect(within(stepNav).getAllByText("Media & Review").length).toBeGreaterThan(0);
+    expect(within(stepNav).getAllByText("Pricing").length).toBeGreaterThan(0);
+    expect(within(stepNav).getAllByText("Media").length).toBeGreaterThan(0);
   });
 
   it("shows inline validation instead of only using toast errors", () => {

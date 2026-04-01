@@ -74,7 +74,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           evidenceDeskEnabled={evidenceDeskEnabled}
         />
         <main className="flex-1 overflow-auto">
-          <div className="container-page py-6">{children}</div>
+          <div className="container-page py-4 sm:py-6">{children}</div>
         </main>
       </div>
     </div>

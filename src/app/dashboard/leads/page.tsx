@@ -83,10 +83,12 @@ export default async function LeadsPage() {
           {(leads as unknown as LeadRow[]).map((lead) => (
             <Card key={lead.id}>
               <CardContent className="py-4 space-y-2">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Re: {lead.listings?.title || "Listing"}</p>
-                    <Badge variant="outline" className="text-[10px] mt-1">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">
+                      Re: {lead.listings?.title || "Listing"}
+                    </p>
+                    <Badge variant="outline" className="text-xs mt-1">
                       {lead.status === "new"
                         ? "New"
                         : lead.status === "contacted"

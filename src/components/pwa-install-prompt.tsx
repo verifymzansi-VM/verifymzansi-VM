@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 const PROMPT_BLOCKED_PATH_PREFIXES = [
   "/login",
@@ -36,6 +37,7 @@ function getIOSFallbackSnapshot() {
 
 export function PwaInstallPrompt() {
   const pathname = usePathname();
+  const isPlaywright = isPlaywrightTestMode();
   const isIOSFallback = useSyncExternalStore(
     subscribeDisplayMode,
     getIOSFallbackSnapshot,
@@ -56,6 +58,10 @@ export function PwaInstallPrompt() {
   );
 
   useEffect(() => {
+    if (isPlaywright) {
+      return;
+    }
+
     if (dismissed) {
       return;
     }
@@ -97,7 +103,7 @@ export function PwaInstallPrompt() {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
-  }, [dismissed, promptBlockedForRoute]);
+  }, [dismissed, isPlaywright, promptBlockedForRoute]);
 
   const handleInstallClick = async () => {
     if (isIOSFallback) {
@@ -124,10 +130,12 @@ export function PwaInstallPrompt() {
     localStorage.setItem("pwa-prompt-dismissed", "true");
   };
 
-  if (dismissed || promptBlockedForRoute || !(showPrompt || isIOSFallback)) return null;
+  if (isPlaywright || dismissed || promptBlockedForRoute || !(showPrompt || isIOSFallback)) {
+    return null;
+  }
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom flex justify-center pb-safe">
+    <div className="fixed bottom-24 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom flex justify-center pb-safe">
       <div className="bg-background/95 backdrop-blur-md border shadow-lg rounded-xl p-4 flex items-center justify-between gap-4 w-full max-w-sm relative overflow-hidden">
         {/* Decorative background element for premium feel */}
         <div className="absolute inset-0 bg-gradient-to-r from-brand-green/10 to-transparent pointer-events-none" />

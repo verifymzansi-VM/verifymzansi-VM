@@ -81,7 +81,7 @@ export function MobileNav() {
                   <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-destructive border-2 border-background" />
                 )}
               </span>
-              <span className="text-[10px] font-medium">{tab.label}</span>
+              <span className="text-xs font-medium">{tab.label}</span>
             </Link>
           );
         })}

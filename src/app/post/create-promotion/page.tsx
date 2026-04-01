@@ -390,9 +390,7 @@ function CreatePromotionContent() {
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
       setFieldErrors(stepErrors[firstInvalidStep]);
-      setFormError(
-        "Some required fields are missing or invalid. Check the highlighted fields above."
-      );
+      setFormError("Please fix the highlighted fields.");
       focusFirstError(stepErrors[firstInvalidStep], firstInvalidStep);
       return;
     }
@@ -611,9 +609,7 @@ function CreatePromotionContent() {
                         const errors = validateStep(step);
                         if (Object.keys(errors).length > 0) {
                           setFieldErrors((current) => ({ ...current, ...errors }));
-                          setFormError(
-                            "Some required fields are missing or invalid. Check the highlighted fields above."
-                          );
+                          setFormError("Please fix the highlighted fields.");
                           focusFirstError(errors);
                           return;
                         }

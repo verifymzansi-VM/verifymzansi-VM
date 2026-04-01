@@ -216,7 +216,7 @@ export default function CompleteProfilePage() {
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Verify Phone" }]}
       />
 
-      <Card className="max-w-xl">
+      <Card className="mx-auto w-full max-w-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Phone className="h-5 w-5" />
@@ -231,8 +231,7 @@ export default function CompleteProfilePage() {
           {step === "phone" ? (
             <>
               <p className="mb-4 text-sm text-muted-foreground">
-                A valid South African mobile number is required to use marketplace features, verify
-                your identity, and receive important notifications.
+                Enter your SA mobile number to continue.
               </p>
               <form noValidate onSubmit={handleSendOtp} className="space-y-4">
                 <div className="space-y-2">
@@ -250,8 +249,7 @@ export default function CompleteProfilePage() {
                     required
                   />
                   <p className="text-xs text-muted-foreground">
-                    Format: 0XX XXX XXXX or +27XX XXX XXXX. Each phone number can only belong to one
-                    account.
+                    Format: 0XX XXX XXXX. One number per account.
                   </p>
                 </div>
 

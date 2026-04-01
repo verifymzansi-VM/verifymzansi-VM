@@ -176,7 +176,7 @@ export default function VerificationHelpPage() {
               <step.icon className="h-5 w-5 mt-0.5 text-muted-foreground shrink-0" />
               <div>
                 <p className="text-sm font-medium">{step.name}</p>
-                <p className="text-xs text-muted-foreground">{step.description}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">{step.description}</p>
               </div>
             </div>
           ))}
@@ -202,7 +202,7 @@ export default function VerificationHelpPage() {
                 <p className="text-sm text-muted-foreground mb-2">{entry.description}</p>
                 <ul className="list-disc list-inside space-y-1">
                   {entry.tips.map((tip) => (
-                    <li key={tip} className="text-xs text-muted-foreground">
+                    <li key={tip} className="text-xs sm:text-sm text-muted-foreground">
                       {tip}
                     </li>
                   ))}

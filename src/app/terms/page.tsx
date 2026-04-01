@@ -103,14 +103,14 @@ export default function TermsPage() {
                   <div className="space-y-1 pl-6 text-muted-foreground leading-snug">
                     {section.content.map((paragraph, pIdx) =>
                       paragraph.startsWith("•") ? (
-                        <div key={pIdx} className="flex gap-2 text-[13px]">
+                        <div key={pIdx} className="flex gap-2 text-sm">
                           <span className="text-brand-green mt-0.5" aria-hidden="true">
                             •
                           </span>
                           <span>{paragraph.replace("• ", "")}</span>
                         </div>
                       ) : (
-                        <p key={pIdx} className="text-[13px]">
+                        <p key={pIdx} className="text-sm">
                           {paragraph}
                         </p>
                       )
@@ -127,7 +127,7 @@ export default function TermsPage() {
                   Privacy & Contact
                 </h2>
                 <div className="pl-6 space-y-2">
-                  <p className="text-[13px] text-muted-foreground leading-snug">
+                  <p className="text-sm text-muted-foreground leading-snug">
                     Your use of VerifyMzansi is also governed by our Privacy Policy.
                   </p>
 

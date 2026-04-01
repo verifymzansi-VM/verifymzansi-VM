@@ -23,7 +23,7 @@ export default function BillingPage() {
       <main id="main-content" className="flex-1 bg-background scroll-mt-24">
         <div className="container-page py-4 space-y-4">
           <div className="text-center max-w-3xl mx-auto space-y-1">
-            <h1 className="text-xl md:text-2xl font-display font-bold tracking-tight">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-display font-bold tracking-tight">
               Simple, transparent pricing
             </h1>
             <p className="text-sm text-muted-foreground">

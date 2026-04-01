@@ -12,7 +12,7 @@ export function Footer() {
     <footer className="border-t bg-warm-50 dark:bg-warm-950">
       <div className="container-page py-4 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] md:pb-4">
         {/* Mobile nav is h-16 (64px). Bottom padding of 6.5rem (104px) + py-4 (1rem) ensures no overlap */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4 lg:grid-cols-5">
           {/* Brand */}
           <div className="space-y-2">
             <Link href="/" className="flex items-center gap-1.5">
@@ -26,7 +26,7 @@ export function Footer() {
           {/* Marketplace */}
           <div className="space-y-2">
             <h4 className="font-display font-semibold text-xs">Marketplace</h4>
-            <nav aria-label="Marketplace" className="flex flex-col gap-1">
+            <nav aria-label="Marketplace" className="flex flex-col gap-1.5">
               <Link
                 href="/mzansi-market"
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -57,7 +57,7 @@ export function Footer() {
           {/* Safety */}
           <div className="space-y-2">
             <h4 className="font-display font-semibold text-xs">Safety</h4>
-            <nav aria-label="Safety" className="flex flex-col gap-1">
+            <nav aria-label="Safety" className="flex flex-col gap-1.5">
               <Link
                 href="/safety/scam-alerts"
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -82,7 +82,7 @@ export function Footer() {
           {/* Legal */}
           <div className="space-y-2">
             <h4 className="font-display font-semibold text-xs">Legal</h4>
-            <nav aria-label="Legal" className="flex flex-col gap-1">
+            <nav aria-label="Legal" className="flex flex-col gap-1.5">
               <Link
                 href="/privacy"
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"

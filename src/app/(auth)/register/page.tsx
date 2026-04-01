@@ -134,9 +134,9 @@ export default function RegisterPage() {
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
   const requirements = [
-    { label: "8+ characters", met: password.length >= 8 },
-    { label: "Lowercase letter", met: /[a-z]/.test(password) },
-    { label: "Uppercase letter", met: /[A-Z]/.test(password) },
+    { label: "8+ chars", met: password.length >= 8 },
+    { label: "Lowercase", met: /[a-z]/.test(password) },
+    { label: "Uppercase", met: /[A-Z]/.test(password) },
     { label: "Number", met: /[0-9]/.test(password) },
   ];
 

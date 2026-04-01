@@ -46,8 +46,8 @@ import { ListingDetailContent } from "@/components/listings/listing-detail-conte
 
 const STEPS: PostFormStep[] = [
   { label: "Details", icon: FileText, description: "Category, title, and description" },
-  { label: "Pricing & Reach", icon: MapPin, description: "Price, location, and contact" },
-  { label: "Media & Review", icon: Camera, description: "Photos, video, and final review" },
+  { label: "Pricing", icon: MapPin, description: "Price, location, and contact" },
+  { label: "Media", icon: Camera, description: "Photos, video, and final review" },
 ];
 
 const TITLE_MAX = 120;
@@ -387,9 +387,7 @@ export default function CreateListingPage() {
     const errors = validateStep(step);
     if (Object.keys(errors).length > 0) {
       setFieldErrors((current) => ({ ...current, ...errors }));
-      setFormError(
-        "Some required fields are missing or invalid. Check the highlighted fields above."
-      );
+      setFormError("Please fix the highlighted fields.");
       focusFirstError(errors);
       return;
     }
@@ -412,9 +410,7 @@ export default function CreateListingPage() {
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
       setFieldErrors(stepErrors[firstInvalidStep]);
-      setFormError(
-        "Some required fields are missing or invalid. Check the highlighted fields above."
-      );
+      setFormError("Please fix the highlighted fields.");
       requestAnimationFrame(() => focusFirstError(stepErrors[firstInvalidStep]));
       return;
     }

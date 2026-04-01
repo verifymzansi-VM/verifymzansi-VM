@@ -161,14 +161,14 @@ function getPreviewLabel(status: string) {
 
 function getPreviewDescription(status: string) {
   if (status === "draft") {
-    return "This business profile is still a draft. Only you can see it right now, and public actions stay hidden until you submit it.";
+    return "Draft — only visible to you. Submit to go live.";
   }
 
   if (status === "rejected") {
-    return "This business profile was rejected. Only you can see it right now, and public actions stay hidden until it is updated and resubmitted.";
+    return "Rejected — only visible to you. Update and resubmit.";
   }
 
-  return "This business profile is currently awaiting moderation. Only you can see it right now, and public actions stay hidden until it goes live.";
+  return "Awaiting moderation — only visible to you until approved.";
 }
 
 export async function generateMetadata({ params }: BusinessDetailPageProps): Promise<Metadata> {

@@ -115,10 +115,10 @@ export default function ScamAlertsPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2 pt-0">
-                    <p className="text-xs text-muted-foreground">{scam.description}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">{scam.description}</p>
                     <ul className="space-y-0.5">
                       {scam.tips.map((tip) => (
-                        <li key={tip} className="text-xs flex items-start gap-1.5">
+                        <li key={tip} className="text-xs sm:text-sm flex items-start gap-1.5">
                           <ShieldAlert className="h-3 w-3 mt-0.5 text-brand-green flex-shrink-0" />
                           {tip}
                         </li>
@@ -137,7 +137,7 @@ export default function ScamAlertsPage() {
                 Golden Rules
               </Badge>
             </p>
-            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 list-decimal list-inside text-xs text-muted-foreground">
+            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 list-decimal list-inside text-xs sm:text-sm text-muted-foreground">
               <li>Always deal with verified accounts, businesses, or advertisers (green shield)</li>
               <li>Never pay before inspecting the item</li>
               <li>Meet in public, well-lit places</li>

@@ -101,12 +101,10 @@ type VerificationApiResponse = {
 type OtpSendResponse = VerificationApiResponse;
 
 const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
-  phone: "Use your real South African mobile number. We will send a one-time password by SMS.",
-  id_doc:
-    "Enter your 13-digit SA ID number and add a clear photo or PDF of your ID document. Accepted: JPG, PNG, WebP, PDF up to 5 MB.",
-  selfie: "Upload a clear selfie with your full face visible. Accepted: JPG, PNG, WebP up to 5 MB.",
-  location:
-    "Enter your province, city, and optional town or suburb. GPS can verify the saved address so the location step does not wait for admin review.",
+  phone: "Enter your SA mobile number. We'll send an OTP via SMS.",
+  id_doc: "Enter your 13-digit SA ID and upload a clear photo or PDF of your ID. Max 5 MB.",
+  selfie: "Upload a clear selfie showing your full face. Max 5 MB.",
+  location: "Select your province and city. GPS verification skips the admin review wait.",
 };
 
 class SubmissionError extends Error {

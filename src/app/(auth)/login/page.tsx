@@ -343,9 +343,7 @@ export default function LoginPage() {
               ) : (
                 <Send className="h-3.5 w-3.5" />
               )}
-              {resendCooldown > 0
-                ? `Resend confirmation email in ${resendCooldown}s`
-                : "Resend confirmation email"}
+              {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend confirmation"}
             </button>
           </div>
         </div>

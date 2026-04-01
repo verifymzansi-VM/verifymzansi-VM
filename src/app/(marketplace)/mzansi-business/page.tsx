@@ -109,7 +109,7 @@ export default async function MzansiBusinessPage() {
           title="Mzansi Business"
           description="Browse verified South African businesses, build visibility for your brand, and help customers discover trusted services."
           breadcrumbs={[{ label: "Mzansi Business" }]}
-          className="hidden lg:block"
+          className="hidden lg:flex"
         >
           <Button asChild size="sm" className="gap-2">
             <Link href="/post/create-business">
@@ -118,6 +118,17 @@ export default async function MzansiBusinessPage() {
             </Link>
           </Button>
         </PageHeader>
+
+        {/* Compact mobile header */}
+        <div className="flex items-center justify-between lg:hidden">
+          <h1 className="font-display text-lg font-bold tracking-tight">Mzansi Business</h1>
+          <Button asChild size="sm" className="gap-1">
+            <Link href="/post/create-business">
+              List
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
 
         {/* Mobile filter drawer (FAB visible < lg only) */}
         <BusinessFilterDrawer />

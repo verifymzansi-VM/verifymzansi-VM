@@ -363,7 +363,7 @@ describe("auth page Turnstile retry behavior", () => {
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "user@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Success" }));
-    fireEvent.click(screen.getAllByRole("button", { name: /resend confirmation email/i })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /resend confirmation/i })[0]);
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);

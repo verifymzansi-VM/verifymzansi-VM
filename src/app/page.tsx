@@ -139,9 +139,8 @@ export default async function HomePage() {
                     </h2>
 
                     <p className="text-warm-100 text-base sm:text-lg max-w-2xl">
-                      VerifyMzansi helps businesses market products and services, showcase trusted
-                      brands, and reach more customers while giving audiences more confidence
-                      through verification-first visibility.
+                      Market products, showcase your brand, and reach more customers with
+                      verification-first visibility.
                     </p>
                   </div>
 
@@ -157,13 +156,12 @@ export default async function HomePage() {
                         },
                         {
                           title: "Complete verification",
-                          detail:
-                            "Strengthen your credibility with phone, ID, and location checks that help customers trust what they see.",
+                          detail: "Verify with phone, ID, and location to build customer trust.",
                         },
                         {
                           title: "Choose the surface that fits your goal",
                           detail:
-                            "Promote a product, build your business presence, or launch a time-sensitive campaign with stronger visibility.",
+                            "Promote products, build your business, or launch campaigns with stronger visibility.",
                         },
                       ].map((step, index) => (
                         <li key={step.title} className="flex items-start gap-3 text-warm-100">
