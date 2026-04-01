@@ -31,6 +31,11 @@ function subscribeDisplayMode(callback: () => void) {
 }
 
 function getIOSFallbackSnapshot() {
+  // Don't show iOS fallback if dismissed from localStorage
+  if (typeof window !== "undefined" && localStorage.getItem("pwa-prompt-dismissed") === "true") {
+    return false;
+  }
+
   const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
   return isIOSDevice && !window.matchMedia("(display-mode: standalone)").matches;
 }
@@ -130,7 +135,11 @@ export function PwaInstallPrompt() {
     localStorage.setItem("pwa-prompt-dismissed", "true");
   };
 
-  if (isPlaywright || dismissed || promptBlockedForRoute || !(showPrompt || isIOSFallback)) {
+  if (isPlaywright || dismissed || promptBlockedForRoute) {
+    return null;
+  }
+
+  if (!showPrompt && !isIOSFallback) {
     return null;
   }
 
