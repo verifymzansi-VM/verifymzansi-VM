@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="800" viewBox="0 0 400 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#001f10"/>
+      <stop offset="50%" stop-color="#002395"/>
+      <stop offset="100%" stop-color="#de3831"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="800" fill="url(#bg)"/>
+  <!-- Verified badge icon -->
+  <g transform="translate(200,180)" fill="none" stroke="#ffb81c" stroke-width="3">
+    <circle cx="0" cy="0" r="45"/>
+    <polyline points="-20,2 -5,17 22,-12" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- Text -->
+  <text x="200" y="300" text-anchor="middle" font-family="system-ui, sans-serif" font-size="28" font-weight="700" fill="#ffffff">South Africa's</text>
+  <text x="200" y="340" text-anchor="middle" font-family="system-ui, sans-serif" font-size="28" font-weight="700" fill="#ffb81c">Trusted</text>
+  <text x="200" y="380" text-anchor="middle" font-family="system-ui, sans-serif" font-size="28" font-weight="700" fill="#ffffff">Marketplace</text>
+  <text x="200" y="430" text-anchor="middle" font-family="system-ui, sans-serif" font-size="17" fill="#d4f7df">Identity-verified sellers</text>
+  <text x="200" y="458" text-anchor="middle" font-family="system-ui, sans-serif" font-size="17" fill="#d4f7df">Safer transactions</text>
+  <!-- CTA -->
+  <rect x="100" y="500" width="200" height="48" rx="24" fill="#ffb81c"/>
+  <text x="200" y="530" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="700" fill="#001f10">Explore Now</text>
+  <!-- Brand -->
+  <text x="200" y="720" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" fill="#ffffff" opacity="0.7">VerifyMzansi</text>
+</svg>

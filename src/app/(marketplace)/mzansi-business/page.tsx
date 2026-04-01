@@ -18,6 +18,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
+import { BRANDED_SIDE_CARD_FALLBACKS } from "@/components/showrooms/side-card-fallbacks";
 import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
@@ -145,6 +146,11 @@ export default async function MzansiBusinessPage() {
       .slice(0, 6 - sideCardItems.length)
       .map((l) => ({ id: l.id, imageUrl: normalizeMediaUrl(l.photos![0]) }));
     sideCardItems.push(...listingFallbacks);
+  }
+
+  // Last resort: branded promotional banners
+  if (sideCardItems.length < 2) {
+    sideCardItems.push(...BRANDED_SIDE_CARD_FALLBACKS.slice(0, 4 - sideCardItems.length));
   }
 
   return (

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="800" viewBox="0 0 400 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000f3d"/>
+      <stop offset="100%" stop-color="#002395"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="800" fill="url(#bg)"/>
+  <!-- Tag/price icon -->
+  <g transform="translate(200,200)" fill="none" stroke="#ffb81c" stroke-width="3">
+    <rect x="-45" y="-45" width="90" height="90" rx="12" transform="rotate(45)"/>
+    <circle cx="-15" cy="-15" r="8" fill="#ffb81c"/>
+  </g>
+  <!-- Text -->
+  <text x="200" y="340" text-anchor="middle" font-family="system-ui, sans-serif" font-size="32" font-weight="700" fill="#ffffff">Sell on</text>
+  <text x="200" y="382" text-anchor="middle" font-family="system-ui, sans-serif" font-size="32" font-weight="700" fill="#ffffff">Mzansi Market</text>
+  <text x="200" y="430" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" fill="#b9c5ff">Post verified classifieds</text>
+  <text x="200" y="458" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" fill="#b9c5ff">trusted by buyers</text>
+  <!-- CTA -->
+  <rect x="110" y="500" width="180" height="48" rx="24" fill="#ffb81c"/>
+  <text x="200" y="530" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="700" fill="#000f3d">Create Listing</text>
+  <!-- Brand -->
+  <text x="200" y="720" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" fill="#8aa1ff">VerifyMzansi</text>
+</svg>

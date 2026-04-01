@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="800" viewBox="0 0 400 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#451a03"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="800" fill="url(#bg)"/>
+  <!-- Megaphone icon -->
+  <g transform="translate(200,200)" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M-40,15 L-40,-15 L30,-40 L30,40 Z"/>
+    <rect x="-55" y="-12" width="15" height="24" rx="4" fill="#ffb81c" stroke="#ffb81c"/>
+    <line x1="30" y1="0" x2="55" y2="0"/>
+    <line x1="30" y1="-20" x2="50" y2="-30"/>
+    <line x1="30" y1="20" x2="50" y2="30"/>
+  </g>
+  <!-- Text -->
+  <text x="200" y="340" text-anchor="middle" font-family="system-ui, sans-serif" font-size="32" font-weight="700" fill="#ffffff">Promote</text>
+  <text x="200" y="382" text-anchor="middle" font-family="system-ui, sans-serif" font-size="32" font-weight="700" fill="#ffffff">Your Event</text>
+  <text x="200" y="430" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" fill="#ffe588">Reach verified audiences</text>
+  <text x="200" y="458" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" fill="#ffe588">across South Africa</text>
+  <!-- CTA -->
+  <rect x="110" y="500" width="180" height="48" rx="24" fill="#ffffff"/>
+  <text x="200" y="530" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="700" fill="#451a03">Advertise Now</text>
+  <!-- Brand -->
+  <text x="200" y="720" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" fill="#ffd34a">VerifyMzansi</text>
+</svg>

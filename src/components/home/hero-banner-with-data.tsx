@@ -3,6 +3,7 @@ import { HeroBanner } from "./hero-banner";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 import { ShowroomSideCard, type SideCardItem } from "@/components/showrooms/showroom-side-card";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { BRANDED_SIDE_CARD_FALLBACKS } from "@/components/showrooms/side-card-fallbacks";
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -105,6 +106,11 @@ export async function HeroBannerWithData() {
       return imageUrl ? [{ id: biz.id, imageUrl }] : [];
     });
     sideCardItems.push(...bizFallbacks.slice(0, 6 - sideCardItems.length));
+  }
+
+  // Last resort: branded promotional banners
+  if (sideCardItems.length < 2) {
+    sideCardItems.push(...BRANDED_SIDE_CARD_FALLBACKS.slice(0, 4 - sideCardItems.length));
   }
 
   const hasEnoughItems = sideCardItems.length >= 1;

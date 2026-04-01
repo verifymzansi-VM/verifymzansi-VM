@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 export interface SideCardItem {
   id: string;
   imageUrl: string;
+  /** Override the default /promotion/:id link target */
+  href?: string;
 }
 
 interface ShowroomSideCardProps {
@@ -61,7 +63,7 @@ export function ShowroomSideCard({ items, initialDelayMs = 0 }: ShowroomSideCard
 
   return (
     <Link
-      href={`/promotion/${item.id}`}
+      href={item.href || `/promotion/${item.id}`}
       className={cn(
         "relative block h-full w-full overflow-hidden rounded-lg border",
         "border-warm-200 bg-warm-100",
