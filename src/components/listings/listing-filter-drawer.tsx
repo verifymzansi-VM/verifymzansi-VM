@@ -8,12 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
-import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
+import { LISTING_CONDITIONS, getListingConditionLabel } from "@/lib/constants/listing-condition";
 import { cloneMarketplaceFilters, useMarketplaceStore, type MarketplaceFilters } from "@/stores";
 import { cn } from "@/lib/utils";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { ListingAttributeFilters } from "./listing-attribute-filters";
+import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
 
 function countActiveFilters(
   filters: Pick<
@@ -90,6 +91,61 @@ export function ListingFilterDrawer() {
     setOpen(false);
   }
 
+  /* ── Build active-filter chips for the strip ───────── */
+  const activeChips: FilterChip[] = [];
+  if (filters.query) {
+    activeChips.push({
+      key: "query",
+      label: filters.query,
+      onRemove: () => replaceFilters({ ...filters, query: undefined }),
+    });
+  }
+  if (filters.category) {
+    const catLabel =
+      CATEGORIES.find((c) => c.value === filters.category)?.label ||
+      filters.category.replace(/_/g, " ");
+    activeChips.push({
+      key: "category",
+      label: catLabel,
+      onRemove: () => replaceFilters({ ...filters, category: undefined, attributes: {} }),
+    });
+  }
+  if (filters.province) {
+    const locLabel = filters.city ? `${filters.province} › ${filters.city}` : filters.province;
+    activeChips.push({
+      key: "location",
+      label: locLabel,
+      onRemove: () => replaceFilters({ ...filters, province: undefined, city: undefined }),
+    });
+  }
+  if (filters.condition) {
+    activeChips.push({
+      key: "condition",
+      label: getListingConditionLabel(filters.condition) || filters.condition,
+      onRemove: () => replaceFilters({ ...filters, condition: undefined }),
+    });
+  }
+  if (filters.priceMin !== undefined || filters.priceMax !== undefined) {
+    activeChips.push({
+      key: "price",
+      label: `R${filters.priceMin || 0} – R${filters.priceMax || "∞"}`,
+      onRemove: () => replaceFilters({ ...filters, priceMin: undefined, priceMax: undefined }),
+    });
+  }
+  for (const [name, val] of Object.entries(filters.attributes)) {
+    if (val !== undefined && val !== "") {
+      activeChips.push({
+        key: `attr-${name}`,
+        label: typeof val === "boolean" ? name.replace(/_/g, " ") : String(val),
+        onRemove: () => {
+          const next = { ...filters.attributes };
+          delete next[name];
+          replaceFilters({ ...filters, attributes: next });
+        },
+      });
+    }
+  }
+
   return (
     <Sheet
       open={open}
@@ -101,43 +157,49 @@ export function ListingFilterDrawer() {
         setOpen(nextOpen);
       }}
     >
-      <div className="lg:hidden">
-        {isHydrated ? (
-          <SheetTrigger asChild>
+      {/* ── Compact filter pill + chips (mobile only) ── */}
+      <div className="lg:hidden space-y-2">
+        <div className="flex items-center gap-2">
+          {isHydrated ? (
+            <SheetTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 h-9 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+                aria-label="Open listing filters"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                <span>Filters</span>
+                {appliedFilterCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                    {appliedFilterCount}
+                  </span>
+                )}
+              </button>
+            </SheetTrigger>
+          ) : (
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 h-9 text-sm text-muted-foreground shadow-sm"
               aria-label="Open listing filters"
+              disabled
             >
-              <SlidersHorizontal className="h-4 w-4 shrink-0" />
-              <span className="flex-1 text-left">Filter &amp; search listings</span>
-              {appliedFilterCount > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-                  {appliedFilterCount}
-                </span>
-              )}
+              <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+              <span>Filters</span>
             </button>
-          </SheetTrigger>
-        ) : (
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm"
-            aria-label="Open listing filters"
-            disabled
-          >
-            <SlidersHorizontal className="h-4 w-4 shrink-0" />
-            <span className="flex-1 text-left">Filter &amp; search listings</span>
-            {appliedFilterCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-                {appliedFilterCount}
-              </span>
-            )}
-          </button>
-        )}
+          )}
+        </div>
+
+        <ActiveFilterChips
+          chips={activeChips}
+          onClearAll={() => {
+            triggerHaptic("light");
+            replaceFilters(cloneMarketplaceFilters());
+          }}
+        />
       </div>
 
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
-        <SheetHeader className="flex flex-row items-center justify-between pb-4">
+      <SheetContent side="bottom" className="max-h-[55vh] overflow-y-auto rounded-t-2xl">
+        <SheetHeader className="flex flex-row items-center justify-between pb-3">
           <SheetTitle>Filters</SheetTitle>
           {draftFilterCount > 0 && (
             <Button
@@ -152,9 +214,9 @@ export function ListingFilterDrawer() {
           )}
         </SheetHeader>
 
-        <div className="space-y-5 pb-20">
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Search</Label>
+        <div className="space-y-3 pb-20">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Search</Label>
             <div className="relative" role="search">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -169,8 +231,8 @@ export function ListingFilterDrawer() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Category</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Category</Label>
             <select
               aria-label="Category"
               className={selectClass}
@@ -193,8 +255,8 @@ export function ListingFilterDrawer() {
             onAttributeChange={updateDraftAttribute}
           />
 
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Location</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Location</Label>
             <select
               aria-label="Province"
               className={selectClass}
@@ -227,8 +289,8 @@ export function ListingFilterDrawer() {
             </select>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Price range (ZAR)</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Price range (ZAR)</Label>
             <div className="flex items-center gap-2">
               <Input
                 type="number"
@@ -264,8 +326,8 @@ export function ListingFilterDrawer() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Condition</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Condition</Label>
             <div className="flex flex-wrap gap-2">
               {LISTING_CONDITIONS.map((condition) => (
                 <button
@@ -291,7 +353,7 @@ export function ListingFilterDrawer() {
           </div>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 border-t bg-background p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-4">
+        <div className="fixed bottom-0 left-0 right-0 border-t bg-background p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-3">
           <Button className="w-full" size="lg" onClick={handleApply}>
             Show results
           </Button>

@@ -79,9 +79,9 @@ export function ListingGridHeader() {
         </div>
       </div>
 
-      {/* Active filter chips */}
+      {/* Active filter chips – hidden on mobile where ActiveFilterChips handles this */}
       {hasActiveFilters && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="hidden lg:flex flex-wrap items-center gap-1.5">
           {filters.query && (
             <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
               {filters.query}

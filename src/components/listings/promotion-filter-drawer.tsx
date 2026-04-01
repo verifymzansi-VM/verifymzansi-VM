@@ -8,10 +8,19 @@ import {
   PromotionFilterPanel,
   type PromotionFilterState,
 } from "@/components/listings/promotion-filter-panel";
-import type { PromotionFilterType } from "@/lib/promotions/type-taxonomy";
-import type { BusinessCategory, PromotionEventState } from "@/types/enums";
+import {
+  getPromotionFilterTypeLabel,
+  type PromotionFilterType,
+} from "@/lib/promotions/type-taxonomy";
+import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import {
+  PROMOTION_EVENT_STATE_LABELS,
+  type BusinessCategory,
+  type PromotionEventState,
+} from "@/types/enums";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
 
 interface PromotionFilterDrawerProps {
   filters: PromotionFilterState;
@@ -53,6 +62,47 @@ export function PromotionFilterDrawer({
   const isHydrated = useHydrated();
   const activeFilterCount = countActivePromotionFilters(filters);
 
+  /* ── Build active-filter chips for the strip ───────── */
+  const activeChips: FilterChip[] = [];
+  if (filters.query) {
+    activeChips.push({ key: "query", label: filters.query, onRemove: onClearQuery });
+  }
+  if (filters.type) {
+    activeChips.push({
+      key: "type",
+      label: getPromotionFilterTypeLabel(filters.type),
+      onRemove: () => onTypeChange(undefined),
+    });
+  }
+  if (filters.category) {
+    const catLabel =
+      BUSINESS_CATEGORIES.find((c) => c.value === filters.category)?.label ||
+      String(filters.category).replace(/_/g, " ");
+    activeChips.push({
+      key: "category",
+      label: catLabel,
+      onRemove: () => onCategoryChange(undefined),
+    });
+  }
+  if (filters.province) {
+    const locLabel = filters.city ? `${filters.province} › ${filters.city}` : filters.province;
+    activeChips.push({
+      key: "location",
+      label: locLabel,
+      onRemove: () => {
+        onProvinceChange(undefined);
+        onCityChange(undefined);
+      },
+    });
+  }
+  if (filters.eventState) {
+    activeChips.push({
+      key: "eventState",
+      label: PROMOTION_EVENT_STATE_LABELS[filters.eventState],
+      onRemove: () => onEventStateChange(undefined),
+    });
+  }
+
   return (
     <Sheet
       open={open}
@@ -61,48 +111,53 @@ export function PromotionFilterDrawer({
         setOpen(next);
       }}
     >
-      {/* ── Inline filter bar (mobile only) ─────────── */}
-      <div className="lg:hidden">
-        {isHydrated ? (
-          <SheetTrigger asChild>
+      {/* ── Compact filter pill + chips (mobile only) ── */}
+      <div className="lg:hidden space-y-2">
+        <div className="flex items-center gap-2">
+          {isHydrated ? (
+            <SheetTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 h-9 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+                aria-label="Open promotion filters"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                <span>Filters</span>
+                {activeFilterCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            </SheetTrigger>
+          ) : (
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 h-9 text-sm text-muted-foreground shadow-sm"
               aria-label="Open promotion filters"
+              disabled
             >
-              <SlidersHorizontal className="h-4 w-4 shrink-0" />
-              <span className="flex-1 text-left">Filter promotions &amp; events</span>
-              {activeFilterCount > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                  {activeFilterCount}
-                </span>
-              )}
+              <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+              <span>Filters</span>
             </button>
-          </SheetTrigger>
-        ) : (
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground shadow-sm"
-            aria-label="Open promotion filters"
-            disabled
-          >
-            <SlidersHorizontal className="h-4 w-4 shrink-0" />
-            <span className="flex-1 text-left">Filter promotions &amp; events</span>
-            {activeFilterCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-        )}
+          )}
+        </div>
+
+        <ActiveFilterChips
+          chips={activeChips}
+          onClearAll={() => {
+            triggerHaptic("light");
+            onClearAll();
+          }}
+        />
       </div>
 
       {/* ── Drawer Content ───────────────────────────── */}
       <SheetContent
         side="bottom"
-        className="max-h-[85vh] overflow-y-auto rounded-t-2xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
+        className="max-h-[55vh] overflow-y-auto rounded-t-2xl pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
       >
-        <SheetHeader className="flex flex-row items-center justify-between pb-4">
+        <SheetHeader className="flex flex-row items-center justify-between pb-3">
           <SheetTitle>Filter Promotions &amp; Events</SheetTitle>
           {activeFilterCount > 0 && (
             <Button
@@ -137,7 +192,7 @@ export function PromotionFilterDrawer({
         />
 
         {/* ── Apply button ─────────────────────────────── */}
-        <div className="fixed bottom-0 left-0 right-0 border-t bg-background p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div className="fixed bottom-0 left-0 right-0 border-t bg-background p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           <Button
             className="w-full"
             onClick={() => {
