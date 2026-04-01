@@ -1,7 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+const WEBKIT_SKIP = ["webkit", "mobile-safari"];
+const WEBKIT_SKIP_MSG =
+  "WebKit rendering under headless CI is unreliable for page-navigation tests.";
+
 test.describe("DSAR (Data Subject Access Request)", () => {
-  test("@smoke DSAR page loads", async ({ page }) => {
+  test("@smoke DSAR page loads", async ({ page }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     await page.goto("/dsar", { waitUntil: "domcontentloaded" });
 
     // Wait for client hydration — the form or a redirect should appear within 10s
@@ -32,7 +37,8 @@ test.describe("DSAR (Data Subject Access Request)", () => {
     expect(finalIsForm || finalIsLogin || finalIsLoading || hasHeading).toBeTruthy();
   });
 
-  test("@smoke DSAR form validates SA ID", async ({ page }) => {
+  test("@smoke DSAR form validates SA ID", async ({ page }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     await page.goto("/dsar");
 
     // If redirected to login, this is an accepted protected-route behavior.

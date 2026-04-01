@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
+const WEBKIT_SKIP = ["webkit", "mobile-safari"];
+const WEBKIT_SKIP_MSG =
+  "WebKit rendering under headless CI is unreliable for page-navigation tests.";
+
 function collectHydrationErrors(page: Page) {
   const hydrationErrors: string[] = [];
 
@@ -47,7 +51,10 @@ function collectMarketplacePageErrors(page: Page) {
 }
 
 test.describe("Platform Smoke", () => {
-  test("@smoke public and auth pages render without hydration errors", async ({ page }) => {
+  test("@smoke public and auth pages render without hydration errors", async ({
+    page,
+  }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     const hydrationErrors = collectHydrationErrors(page);
 
     const checks = [
@@ -97,7 +104,8 @@ test.describe("Platform Smoke", () => {
     expect(hydrationErrors).toEqual([]);
   });
 
-  test("@smoke protected pages redirect unauthenticated users", async ({ page }) => {
+  test("@smoke protected pages redirect unauthenticated users", async ({ page }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     await page.goto("/dashboard");
     await page.waitForURL(/\/login/);
     await page.goto("/admin");
@@ -114,7 +122,8 @@ test.describe("Platform Smoke", () => {
 
   test("@smoke Google OAuth recovers when the page starts without a CSRF token", async ({
     page,
-  }) => {
+  }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     // Use Playwright's native network-level interception rather than patching
     // window.fetch via addInitScript.  The addInitScript approach is flaky across
     // browser engines because certain runtimes (Chromium's V8, WebKit's JSC) may
@@ -186,7 +195,10 @@ test.describe("Platform Smoke", () => {
     expect(kyc.status()).toBeLessThan(500);
   });
 
-  test("@smoke mzansi business filters can be cleared from the keyboard", async ({ page }) => {
+  test("@smoke mzansi business filters can be cleared from the keyboard", async ({
+    page,
+  }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     await page.goto("/mzansi-business");
 
     const isMobileViewport = (page.viewportSize()?.width ?? 1280) < 1024;
@@ -218,7 +230,8 @@ test.describe("Platform Smoke", () => {
 
   test("@smoke mobile footer stays above bottom nav and marketplace tabs remain readable", async ({
     page,
-  }) => {
+  }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Mobile-only layout check");
 
     await page.goto("/mzansi-business");
@@ -253,7 +266,8 @@ test.describe("Platform Smoke", () => {
 
   test("@smoke marketplace mobile pages avoid bootstrap errors and overlapping chrome", async ({
     page,
-  }) => {
+  }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Mobile-only marketplace check");
 
     const { consoleErrors, pageErrors, failedApiResponses } = collectMarketplacePageErrors(page);

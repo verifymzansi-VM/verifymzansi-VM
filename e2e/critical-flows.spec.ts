@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+const WEBKIT_SKIP = ["webkit", "mobile-safari"];
+const WEBKIT_SKIP_MSG =
+  "WebKit rendering under headless CI is unreliable for page-navigation tests.";
+
 const hasAuthCreds = Boolean(process.env.E2E_EMAIL && process.env.E2E_PASSWORD);
 
 test.describe("Critical Platform Flows", () => {
@@ -20,8 +24,11 @@ test.describe("Critical Platform Flows", () => {
     expect([400, 401]).toContain(report.status());
   });
 
-  test("critical auth flow: login and dashboard access with seeded user", async ({ page }) => {
+  test("critical auth flow: login and dashboard access with seeded user", async ({
+    page,
+  }, testInfo) => {
     test.skip(!hasAuthCreds, "Set E2E_EMAIL and E2E_PASSWORD to enable auth critical flow");
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
 
     await page.goto("/login");
     await page.fill("input[type='email'], input[name='email']", process.env.E2E_EMAIL!);

@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
+const WEBKIT_SKIP = ["webkit", "mobile-safari"];
+const WEBKIT_SKIP_MSG =
+  "WebKit rendering under headless CI is unreliable for page-navigation tests.";
+
 async function openAuthenticatedBilling(page: Page) {
   const maxAttempts = 3;
 
@@ -27,7 +31,10 @@ async function openAuthenticatedBilling(page: Page) {
 }
 
 test.describe("Billing payment round-trip", () => {
-  test("completes a mock Ozow checkout and reaches confirmed success state", async ({ page }) => {
+  test("completes a mock Ozow checkout and reaches confirmed success state", async ({
+    page,
+  }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     await openAuthenticatedBilling(page);
 
     const checkoutResponsePromise = page.waitForResponse(

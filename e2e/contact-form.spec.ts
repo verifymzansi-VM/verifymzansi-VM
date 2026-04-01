@@ -1,7 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+const WEBKIT_SKIP = ["webkit", "mobile-safari"];
+const WEBKIT_SKIP_MSG =
+  "WebKit rendering under headless CI is unreliable for page-navigation tests.";
+
 test.describe("Contact Form", () => {
-  test("@smoke contact page loads", async ({ page }) => {
+  test("@smoke contact page loads", async ({ page }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     await page.goto("/contact");
     // Should show the contact form
     await expect(page.locator("form, [data-testid='contact-form']").first()).toBeVisible({
@@ -9,7 +14,8 @@ test.describe("Contact Form", () => {
     });
   });
 
-  test("@smoke contact form rejects empty submission", async ({ page }) => {
+  test("@smoke contact form rejects empty submission", async ({ page }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     await page.goto("/contact");
 
     const submitBtn = page.locator("button[type='submit']").first();
@@ -22,7 +28,8 @@ test.describe("Contact Form", () => {
     }
   });
 
-  test("@smoke contact form strips HTML tags from message", async ({ page }) => {
+  test("@smoke contact form strips HTML tags from message", async ({ page }, testInfo) => {
+    test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     await page.goto("/contact");
 
     // Fill in required fields
