@@ -53,7 +53,7 @@ export function PosterCardShell({
   eyebrow,
   statusLabel,
   statusClassName,
-  statusVariant = "pill",
+  statusVariant: _statusVariant = "pill",
   accentClassName,
   className,
   contentClassName,
@@ -63,7 +63,7 @@ export function PosterCardShell({
   fallback,
   logoUrl,
   description,
-  fitStrategy = "smart",
+  fitStrategy: _fitStrategy = "smart",
   priority = false,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
@@ -72,15 +72,16 @@ export function PosterCardShell({
   const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
 
   return (
-    <Link href={href} className={cn("group block h-full", className)}>
+    <Link href={href} className={cn("group block", className)}>
       <Card
         className={cn(
-          "relative h-full overflow-hidden rounded-[1.75rem] border-white/10 bg-warm-100 text-white shadow-[0_16px_48px_-24px_rgba(15,23,42,0.75)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_64px_-28px_rgba(15,23,42,0.9)]",
+          "overflow-hidden rounded-xl border-transparent bg-warm-100 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-8px_rgba(15,23,42,0.28)]",
           accentClassName
         )}
         trustLevel={trustLevel}
       >
-        <div className="relative aspect-[3/4] h-full w-full overflow-hidden">
+        {/* ── 16:9 video/image thumbnail ─────────────────────────── */}
+        <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-slate-900">
           {normalizedMediaUrl ? (
             <VideoCardPlayer
               src={normalizedMediaUrl}
@@ -89,10 +90,10 @@ export function PosterCardShell({
               alt={mediaAlt || title}
               sizes={mediaSizes}
               mode={hasVideo ? "hover" : "ambient"}
-              fitStrategy={fitStrategy}
-              containerAspectRatio={3 / 4}
+              fitStrategy="smart"
+              containerAspectRatio={16 / 9}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
-              mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
+              mediaClassName="transition-transform duration-700 group-hover:scale-[1.03]"
               priority={priority}
             />
           ) : fallback ? (
@@ -101,79 +102,62 @@ export function PosterCardShell({
             <div className="absolute inset-0 skeleton-shimmer" />
           )}
 
-          <div className="pointer-events-none absolute inset-0 transition-opacity duration-500 group-hover:opacity-0">
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/28 to-black/8" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/18 via-transparent to-transparent" />
-            <div className="absolute inset-0 ring-1 ring-inset ring-white/12" />
-
-            {/* Status badge / ribbon */}
-            {statusLabel ? (
-              statusVariant === "ribbon" ? (
-                <div className="absolute left-3 top-3 z-10">
-                  <span
-                    className={cn(
-                      "inline-flex min-h-[1.1rem] items-center rounded-full px-2.5 py-1 text-[8px] font-black uppercase leading-none tracking-[0.12em] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.92)] backdrop-blur-md",
-                      statusClassName
-                    )}
-                  >
-                    {statusLabel}
-                  </span>
-                </div>
-              ) : (
-                <div className="absolute left-3 top-3 z-10">
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] shadow-sm backdrop-blur-md",
-                      statusClassName
-                    )}
-                  >
-                    {statusLabel}
-                  </span>
-                </div>
-              )
-            ) : null}
-
-            {/* Business logo — bottom-right */}
-            {normalizedLogoUrl ? (
-              <div className="absolute bottom-3 right-3 z-20">
-                <div className="h-10 w-10 overflow-hidden rounded-full border border-white/20 ring-2 ring-black/25 shadow-lg backdrop-blur-md">
-                  <Image
-                    src={normalizedLogoUrl}
-                    alt="Business logo"
-                    width={36}
-                    height={36}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            {/* Bottom content overlay */}
-            <div
-              className={cn(
-                "absolute inset-x-0 bottom-0 z-10 space-y-1 p-3 pr-14 sm:p-4 sm:pr-16",
-                contentClassName
-              )}
-            >
-              {eyebrow ? (
-                <p
-                  className={cn(
-                    "text-xs font-bold tracking-[0.01em] text-white/90 sm:text-sm",
-                    eyebrowClassName
-                  )}
-                >
-                  {eyebrow}
-                </p>
-              ) : null}
-              <h3 className="font-display text-[11px] font-semibold leading-tight text-white drop-shadow-[0_3px_14px_rgba(15,23,42,0.55)] line-clamp-2 sm:text-xs">
-                {title}
-              </h3>
-              {description ? (
-                <p className="text-[10px] leading-snug text-white/72 line-clamp-2 sm:text-[11px]">
-                  {description}
-                </p>
-              ) : null}
+          {/* Status badge — top-left corner of thumbnail */}
+          {statusLabel ? (
+            <div className="absolute left-2 top-2 z-10">
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] shadow-md",
+                  statusClassName
+                )}
+              >
+                {statusLabel}
+              </span>
             </div>
+          ) : null}
+        </div>
+
+        {/* ── Metadata row (YouTube-style below thumbnail) ────────── */}
+        <div className={cn("flex gap-3 px-3 py-2.5", contentClassName)}>
+          {/* Channel avatar / logo */}
+          <div className="mt-0.5 shrink-0">
+            {normalizedLogoUrl ? (
+              <div className="h-9 w-9 overflow-hidden rounded-full border border-black/8 shadow-sm">
+                <Image
+                  src={normalizedLogoUrl}
+                  alt="Business logo"
+                  width={36}
+                  height={36}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-blue/12 text-brand-blue/55">
+                <span className="text-xs font-bold uppercase leading-none">{title.charAt(0)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Text meta */}
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <h3 className="font-display text-[13px] font-semibold leading-snug text-slate-900 line-clamp-2 dark:text-white">
+              {title}
+            </h3>
+            {description ? (
+              <p className="text-[11px] leading-snug text-slate-500 line-clamp-1 dark:text-slate-400">
+                {description}
+              </p>
+            ) : null}
+            {eyebrow ? (
+              <p
+                className={cn(
+                  "text-[11px] font-semibold text-slate-500 dark:text-slate-400",
+                  eyebrowClassName
+                )}
+              >
+                {eyebrow}
+              </p>
+            ) : null}
           </div>
         </div>
       </Card>

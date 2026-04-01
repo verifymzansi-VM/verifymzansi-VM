@@ -106,7 +106,7 @@ describe("BusinessCard", () => {
     );
   });
 
-  it("prefers cover video when available", () => {
+  it("uses the shared smart-fit video player when cover video is available", () => {
     render(
       <BusinessCard
         {...defaultProps}
@@ -119,7 +119,7 @@ describe("BusinessCard", () => {
       "data-src",
       "https://example.com/cover.mp4"
     );
-    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-fit-strategy", "cover");
+    expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-fit-strategy", "smart");
     expect(screen.getByTestId("video-card-player")).toHaveAttribute("data-mute-control", "always");
   });
 
