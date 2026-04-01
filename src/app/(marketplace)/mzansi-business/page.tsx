@@ -120,6 +120,17 @@ export default async function MzansiBusinessPage() {
     .filter((p) => p.photos && p.photos.length > 0)
     .map((p) => ({ id: p.id, imageUrl: normalizeMediaUrl(p.photos![0]) }));
 
+  // Fallback: fill from business cover photos when promotions don't provide enough images
+  if (sideCardItems.length < 2) {
+    const businessFallbacks: SideCardItem[] = (topBusinesses ?? [])
+      .filter((b) => !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures))
+      .filter((b) => !isPlaceholderMarketplaceContent(b.business_name, b.description))
+      .filter((b) => b.cover_photo)
+      .slice(0, 6 - sideCardItems.length)
+      .map((b) => ({ id: b.id, imageUrl: normalizeMediaUrl(b.cover_photo!) }));
+    sideCardItems.push(...businessFallbacks);
+  }
+
   return (
     <div className="space-y-0">
       <Suspense fallback={<div className="h-10" />}>

@@ -17,11 +17,13 @@ export function ShowroomWithSideCards({
   fallbackMedia,
   sideCardItems = [],
 }: ShowroomWithSideCardsProps) {
-  const hasEnoughItems = sideCardItems.length >= 2;
+  const hasEnoughItems = sideCardItems.length >= 1;
 
-  // Split items between left and right cards
-  const leftItems = sideCardItems.filter((_, i) => i % 2 === 0);
-  const rightItems = sideCardItems.filter((_, i) => i % 2 !== 0);
+  // Split items between left and right cards; if only 1, show it on both sides
+  const leftItems =
+    sideCardItems.length === 1 ? sideCardItems : sideCardItems.filter((_, i) => i % 2 === 0);
+  const rightItems =
+    sideCardItems.length === 1 ? sideCardItems : sideCardItems.filter((_, i) => i % 2 !== 0);
 
   const showroomNode = (
     <ShowroomHero
