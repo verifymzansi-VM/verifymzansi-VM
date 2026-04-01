@@ -4,6 +4,7 @@ import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { CsrfBootstrap } from "@/components/providers/csrf-bootstrap";
 import { PublicRuntimeConfigBridge } from "@/components/providers/public-runtime-config";
+import { VideoPlaybackProvider } from "@/contexts/video-playback-context";
 import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
@@ -147,7 +148,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           disableTransitionOnChange
           nonce={nonce}
         >
-          {children}
+          <VideoPlaybackProvider>{children}</VideoPlaybackProvider>
           <Toaster />
           <PwaInstallPrompt />
           <ServiceWorkerRegistrar />

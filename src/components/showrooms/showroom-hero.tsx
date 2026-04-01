@@ -177,6 +177,8 @@ export function ShowroomHero({
               alt={activeSlide.title}
               sizes="100vw"
               mode="ambient"
+              fitStrategy="smart"
+              containerAspectRatio={21 / 8}
               muteControlVisibility="always"
               showPlaybackControl={activeSlideIsVideo}
               onPlaybackStateChange={(isPlaying) => setIsActiveVideoPaused(!isPlaying)}
@@ -191,10 +193,7 @@ export function ShowroomHero({
               fading ? "opacity-0" : "opacity-100"
             )}
           >
-            <div
-              className="flex min-h-[44px] items-center rounded-full border border-white/12 bg-black/45 px-2.5 py-1.5 shadow-[0_18px_36px_-22px_rgba(15,23,42,0.92)] backdrop-blur-md"
-              data-testid="showroom-logo-tag"
-            >
+            <div className="flex items-center" data-testid="showroom-logo-tag">
               {activeLogoUrl ? (
                 <div className="relative h-8 w-[72px] sm:h-9 sm:w-[88px]">
                   <Image

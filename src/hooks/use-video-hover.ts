@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "./use-reduced-motion";
+import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 
 /**
  * Hook that lazily loads a video on viewport visibility but only plays on hover.
@@ -7,6 +8,8 @@ import { useReducedMotion } from "./use-reduced-motion";
  * - The video `src` is NOT set until the element is ≥ 25 % visible, so pages
  *   with many video cards make **zero** video network requests on initial load.
  * - Video plays on `mouseenter` and pauses + rewinds on `mouseleave`.
+ * - Hover claims **exclusive playback priority** in the global playback manager
+ *   so only the hovered video plays (other ambient videos are paused).
  * - Respects `prefers-reduced-motion: reduce` — auto-play on hover is skipped.
  *
  * @param videoSrc The video URL. Pass `undefined` when the media is not a video.
@@ -17,11 +20,14 @@ export function useVideoHover(videoSrc?: string) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const reducedMotion = useReducedMotion();
   const [isHovering, setIsHovering] = useState(false);
+  const manager = useVideoPlaybackManager();
 
-  // Lazy-load video src when scrolled into view
+  // Register with manager + lazy-load video src when scrolled into view
   useEffect(() => {
     const el = videoRef.current;
     if (!el || !videoSrc) return;
+
+    manager.register(el);
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -32,35 +38,37 @@ export function useVideoHover(videoSrc?: string) {
         } else {
           // Pause when out of viewport regardless of hover state
           el.pause();
+          manager.updateVisibility(el, 0);
         }
       },
       { threshold: 0.25 }
     );
 
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [videoSrc]);
+    return () => {
+      observer.disconnect();
+      manager.unregister(el);
+    };
+  }, [videoSrc, manager]);
 
-  // Play/pause based on hover
+  // Play/pause based on hover — claims priority in the global manager
   const onMouseEnter = useCallback(() => {
     setIsHovering(true);
     const el = videoRef.current;
     if (!el || reducedMotion) return;
     if (el.src) {
-      el.play().catch(() => {
-        /* autoplay may be blocked */
-      });
+      manager.requestPriority(el);
     }
-  }, [reducedMotion]);
+  }, [reducedMotion, manager]);
 
   const onMouseLeave = useCallback(() => {
     setIsHovering(false);
     const el = videoRef.current;
     if (!el) return;
     el.pause();
-    // Reset to start so the poster shows cleanly next time
     el.currentTime = 0;
-  }, []);
+    manager.releasePriority(el);
+  }, [manager]);
 
   // Attach hover listeners to the container
   useEffect(() => {
