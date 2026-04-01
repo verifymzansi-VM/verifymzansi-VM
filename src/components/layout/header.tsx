@@ -269,106 +269,107 @@ function HeaderInner({
       </div>
 
       {/* Mobile Menu */}
-      {mobileOpen && (
-        <nav
-          id="mobile-nav-menu"
-          aria-label="Mobile navigation"
-          className="lg:hidden border-t bg-background animate-fade-in-up"
-        >
-          <div className="container-page space-y-4 py-4 pb-safe">
-            <div className="flex flex-col gap-2">
-              {isAuthenticated ? (
-                <>
-                  {/* Mobile user info */}
-                  <div className="flex items-center gap-3 px-1 py-2">
-                    <Avatar className="h-9 w-9 border-2 border-brand-gold">
-                      <AvatarFallback className="bg-brand-gold text-amber-950 text-xs font-bold">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col flex-1">
-                      <span className="text-sm font-semibold">
-                        {finalDisplayName || "My Account"}
-                      </span>
-                      {email && <span className="text-xs text-muted-foreground">{email}</span>}
-                    </div>
-                    <NotificationBell userId={auth.user?.id} />
+      <nav
+        id="mobile-nav-menu"
+        aria-label="Mobile navigation"
+        hidden={!mobileOpen}
+        className={`lg:hidden border-t bg-background ${
+          mobileOpen ? "animate-fade-in-up" : "hidden"
+        }`}
+      >
+        <div className="container-page space-y-4 py-4 pb-safe">
+          <div className="flex flex-col gap-2">
+            {isAuthenticated ? (
+              <>
+                {/* Mobile user info */}
+                <div className="flex items-center gap-3 px-1 py-2">
+                  <Avatar className="h-9 w-9 border-2 border-brand-gold">
+                    <AvatarFallback className="bg-brand-gold text-amber-950 text-xs font-bold">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col flex-1">
+                    <span className="text-sm font-semibold">
+                      {finalDisplayName || "My Account"}
+                    </span>
+                    {email && <span className="text-xs text-muted-foreground">{email}</span>}
                   </div>
+                  <NotificationBell userId={auth.user?.id} />
+                </div>
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-2 py-2 text-sm font-medium"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  Dashboard
+                </Link>
+                <Link
+                  href="/dashboard/settings"
+                  className="flex items-center gap-2 py-2 text-sm font-medium"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </Link>
+                {hasAdminAccess && (
                   <Link
-                    href="/dashboard"
+                    href="/admin"
                     className="flex items-center gap-2 py-2 text-sm font-medium"
                     onClick={() => setMobileOpen(false)}
                   >
-                    <LayoutDashboard className="h-4 w-4" />
-                    Dashboard
+                    <ShieldAlert className="h-4 w-4" />
+                    Admin
                   </Link>
-                  <Link
-                    href="/dashboard/settings"
-                    className="flex items-center gap-2 py-2 text-sm font-medium"
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    <Settings className="h-4 w-4" />
-                    Settings
+                )}
+                <Button asChild variant="trust-verified" className="w-full">
+                  <Link href="/post/create" onClick={() => setMobileOpen(false)}>
+                    + Post
                   </Link>
-                  {hasAdminAccess && (
-                    <Link
-                      href="/admin"
-                      className="flex items-center gap-2 py-2 text-sm font-medium"
-                      onClick={() => setMobileOpen(false)}
-                    >
-                      <ShieldAlert className="h-4 w-4" />
-                      Admin
-                    </Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/advertise" onClick={() => setMobileOpen(false)}>
+                    Advertise
+                  </Link>
+                </Button>
+                <button
+                  className="flex items-center gap-2 py-2 text-sm font-medium text-destructive disabled:opacity-50"
+                  disabled={signingOut}
+                  onClick={() => {
+                    setMobileOpen(false);
+                    handleSignOut();
+                  }}
+                >
+                  {signingOut ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <LogOut className="h-4 w-4" />
                   )}
-                  <Button asChild variant="trust-verified" className="w-full">
-                    <Link href="/post/create" onClick={() => setMobileOpen(false)}>
-                      + Post
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href="/advertise" onClick={() => setMobileOpen(false)}>
-                      Advertise
-                    </Link>
-                  </Button>
-                  <button
-                    className="flex items-center gap-2 py-2 text-sm font-medium text-destructive disabled:opacity-50"
-                    disabled={signingOut}
-                    onClick={() => {
-                      setMobileOpen(false);
-                      handleSignOut();
-                    }}
-                  >
-                    {signingOut ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <LogOut className="h-4 w-4" />
-                    )}
-                    {signingOut ? "Signing out…" : "Sign Out"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href="/advertise" onClick={() => setMobileOpen(false)}>
-                      Advertise
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href="/login" onClick={() => setMobileOpen(false)}>
-                      Sign In
-                    </Link>
-                  </Button>
-                  <Button asChild variant="trust-verified" className="w-full">
-                    <Link href="/register" onClick={() => setMobileOpen(false)}>
-                      Register
-                    </Link>
-                  </Button>
-                </>
-              )}
-            </div>
+                  {signingOut ? "Signing out…" : "Sign Out"}
+                </button>
+              </>
+            ) : (
+              <>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/advertise" onClick={() => setMobileOpen(false)}>
+                    Advertise
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/login" onClick={() => setMobileOpen(false)}>
+                    Sign In
+                  </Link>
+                </Button>
+                <Button asChild variant="trust-verified" className="w-full">
+                  <Link href="/register" onClick={() => setMobileOpen(false)}>
+                    Register
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
-        </nav>
-      )}
+        </div>
+      </nav>
     </header>
   );
 }

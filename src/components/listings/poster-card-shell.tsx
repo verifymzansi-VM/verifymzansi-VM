@@ -63,7 +63,7 @@ export function PosterCardShell({
   fallback,
   logoUrl,
   description,
-  fitStrategy = "cover",
+  fitStrategy = "smart",
   priority = false,
 }: PosterCardShellProps) {
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
@@ -90,7 +90,7 @@ export function PosterCardShell({
               sizes={mediaSizes}
               mode={hasVideo ? "hover" : "ambient"}
               fitStrategy={fitStrategy}
-              containerAspectRatio={5 / 4}
+              containerAspectRatio={3 / 4}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
               mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
               priority={priority}
