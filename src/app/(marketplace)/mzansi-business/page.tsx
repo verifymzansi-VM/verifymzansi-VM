@@ -131,6 +131,22 @@ export default async function MzansiBusinessPage() {
     sideCardItems.push(...businessFallbacks);
   }
 
+  // Second fallback: fill from marketplace listing photos
+  if (sideCardItems.length < 2) {
+    const { data: fallbackListings } = await supabase
+      .from("listings")
+      .select("id, photos")
+      .eq("status", "live")
+      .order("created_at", { ascending: false })
+      .limit(10);
+    const listingFallbacks: SideCardItem[] = (fallbackListings ?? [])
+      .filter((l) => !shouldHidePlaywrightFixtureRowWhenEnabled(l, hideFixtures))
+      .filter((l) => l.photos && l.photos.length > 0)
+      .slice(0, 6 - sideCardItems.length)
+      .map((l) => ({ id: l.id, imageUrl: normalizeMediaUrl(l.photos![0]) }));
+    sideCardItems.push(...listingFallbacks);
+  }
+
   return (
     <div className="space-y-0">
       <Suspense fallback={<div className="h-10" />}>
