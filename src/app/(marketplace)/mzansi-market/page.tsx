@@ -112,20 +112,9 @@ export default async function MzansiMarketPage() {
     .filter((p) => p.photos && p.photos.length > 0)
     .map((p) => ({ id: p.id, imageUrl: normalizeMediaUrl(p.photos![0]) }));
 
-  // Fallback: fill from listing photos when promotions don't provide enough images
-  if (sideCardItems.length < 2) {
-    const listingFallbacks: SideCardItem[] = (listings ?? [])
-      .filter((l) => !shouldHidePlaywrightFixtureRowWhenEnabled(l, hideFixtures))
-      .filter((l) => !isPlaceholderMarketplaceContent(l.title, l.description))
-      .filter((l) => l.photos && l.photos.length > 0)
-      .slice(0, 6 - sideCardItems.length)
-      .map((l) => ({ id: l.id, imageUrl: normalizeMediaUrl(l.photos![0]) }));
-    sideCardItems.push(...listingFallbacks);
-  }
-
-  // Last resort: branded promotional banners
-  if (sideCardItems.length < 2) {
-    sideCardItems.push(...BRANDED_SIDE_CARD_FALLBACKS.slice(0, 4 - sideCardItems.length));
+  // Last resort: branded promotional banners when no promotions have photos
+  if (sideCardItems.length === 0) {
+    sideCardItems.push(...BRANDED_SIDE_CARD_FALLBACKS);
   }
 
   return (

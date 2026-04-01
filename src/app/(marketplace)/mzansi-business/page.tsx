@@ -121,36 +121,9 @@ export default async function MzansiBusinessPage() {
     .filter((p) => p.photos && p.photos.length > 0)
     .map((p) => ({ id: p.id, imageUrl: normalizeMediaUrl(p.photos![0]) }));
 
-  // Fallback: fill from business cover photos when promotions don't provide enough images
-  if (sideCardItems.length < 2) {
-    const businessFallbacks: SideCardItem[] = (topBusinesses ?? [])
-      .filter((b) => !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures))
-      .filter((b) => !isPlaceholderMarketplaceContent(b.business_name, b.description))
-      .filter((b) => b.cover_photo)
-      .slice(0, 6 - sideCardItems.length)
-      .map((b) => ({ id: b.id, imageUrl: normalizeMediaUrl(b.cover_photo!) }));
-    sideCardItems.push(...businessFallbacks);
-  }
-
-  // Second fallback: fill from marketplace listing photos
-  if (sideCardItems.length < 2) {
-    const { data: fallbackListings } = await supabase
-      .from("listings")
-      .select("id, photos")
-      .eq("status", "live")
-      .order("created_at", { ascending: false })
-      .limit(10);
-    const listingFallbacks: SideCardItem[] = (fallbackListings ?? [])
-      .filter((l) => !shouldHidePlaywrightFixtureRowWhenEnabled(l, hideFixtures))
-      .filter((l) => l.photos && l.photos.length > 0)
-      .slice(0, 6 - sideCardItems.length)
-      .map((l) => ({ id: l.id, imageUrl: normalizeMediaUrl(l.photos![0]) }));
-    sideCardItems.push(...listingFallbacks);
-  }
-
-  // Last resort: branded promotional banners
-  if (sideCardItems.length < 2) {
-    sideCardItems.push(...BRANDED_SIDE_CARD_FALLBACKS.slice(0, 4 - sideCardItems.length));
+  // Last resort: branded promotional banners when no promotions have photos
+  if (sideCardItems.length === 0) {
+    sideCardItems.push(...BRANDED_SIDE_CARD_FALLBACKS);
   }
 
   return (
