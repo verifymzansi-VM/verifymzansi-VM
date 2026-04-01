@@ -21,6 +21,7 @@ interface BusinessCardProps {
   boostUntil?: string | null;
   featuredUntil?: string | null;
   serviceAreas?: Record<string, unknown> | null;
+  videoDuration?: number | null;
 }
 
 function getBusinessStatus(
@@ -58,6 +59,7 @@ export function BusinessCard({
   trustLevel = 0,
   boostUntil,
   featuredUntil,
+  videoDuration,
 }: BusinessCardProps) {
   const displayCover =
     coverVideo ||
@@ -81,6 +83,7 @@ export function BusinessCard({
       statusVariant="ribbon"
       accentClassName="hover:border-brand-blue/55"
       trustLevel={trustLevel}
+      videoDuration={videoDuration}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-brand-blue/35">
           <Store className="h-16 w-16" />

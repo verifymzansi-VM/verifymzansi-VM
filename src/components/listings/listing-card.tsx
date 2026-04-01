@@ -26,6 +26,7 @@ interface ListingCardProps {
   featured?: boolean;
   urgent?: boolean;
   logoUrl?: string | null;
+  videoDuration?: number | null;
 }
 
 function isNew(createdAt: string): boolean {
@@ -63,13 +64,14 @@ export const ListingCard = memo(function ListingCard({
   posterUrl,
   isVideo,
   province: _province,
-  city: _city,
+  city,
   createdAt,
   ownerTrustLevel = 0,
   boosted,
   featured,
   urgent,
   logoUrl,
+  videoDuration,
 }: ListingCardProps) {
   const status = getListingStatus(featured, boosted, urgent, createdAt);
 
@@ -81,12 +83,14 @@ export const ListingCard = memo(function ListingCard({
       posterUrl={posterUrl}
       isVideo={isVideo}
       mediaAlt={title}
+      description={city || null}
       eyebrow={price > 0 ? formatZARShort(price) : null}
       statusLabel={status?.label}
       statusClassName={status?.className}
       accentClassName="hover:border-brand-green/55"
       trustLevel={ownerTrustLevel}
       logoUrl={logoUrl}
+      videoDuration={videoDuration}
     />
   );
 });

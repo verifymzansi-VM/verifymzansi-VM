@@ -29,6 +29,7 @@ interface PromotionCardProps {
   businessName?: string;
   logoUrl?: string | null;
   priority?: boolean;
+  videoDuration?: number | null;
 }
 
 /* ── Urgency helper ─────────────────────────────────────────────── */
@@ -136,6 +137,7 @@ export const PromotionCard = memo(function PromotionCard({
   businessName,
   logoUrl,
   priority,
+  videoDuration,
 }: PromotionCardProps) {
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
   const status = getPromotionStatus(featured, boosted, promotionType);
@@ -164,6 +166,7 @@ export const PromotionCard = memo(function PromotionCard({
       accentClassName={typePresentation.cardAccentClassName}
       trustLevel={ownerTrustLevel}
       priority={priority}
+      videoDuration={videoDuration}
       fallback={
         <div className="flex h-full w-full items-center justify-center text-white/35">
           <Tag className="h-16 w-16" />

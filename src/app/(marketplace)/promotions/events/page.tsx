@@ -189,7 +189,7 @@ export default async function EventsPage() {
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="-mx-4 sm:mx-0 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
                 {group.events.map((event, index) => {
                   const accountProfile = accountProfileMap.get(readOwnerId(event) as string);
                   const businessName = event.business_id
@@ -209,7 +209,7 @@ export default async function EventsPage() {
                   return (
                     <div
                       key={event.id}
-                      className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                      className={`animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
                     >
                       <PromotionCard
                         id={event.id}

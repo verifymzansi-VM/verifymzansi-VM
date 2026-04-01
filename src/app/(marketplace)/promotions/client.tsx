@@ -405,11 +405,11 @@ export function PromotionsExplorer() {
 
           {/* ── Grid / Loading / Error / Empty ── */}
           {loading ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="-mx-4 sm:mx-0 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
               {Array.from({ length: 8 }).map((_, index) => (
                 <div
                   key={index}
-                  className="aspect-[5/4] rounded-[1.75rem] bg-muted animate-pulse"
+                  className="aspect-[5/4] sm:rounded-[1.75rem] bg-muted animate-pulse"
                 />
               ))}
             </div>
@@ -438,7 +438,7 @@ export function PromotionsExplorer() {
             </Card>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="-mx-4 sm:mx-0 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
                 {gridPromotions.map((promotion, index) => {
                   const accountProfile = accountProfileMap.get(promotion.owner_id);
                   const businessName = promotion.business_id
@@ -457,7 +457,7 @@ export function PromotionsExplorer() {
                   return (
                     <div
                       key={promotion.id}
-                      className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                      className={`animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
                     >
                       <PromotionCard
                         id={promotion.id}

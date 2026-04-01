@@ -835,6 +835,7 @@ function HoverVideoPlayer({
   const [posterError, setPosterError] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
+  const [hoverProgress, setHoverProgress] = useState(0);
 
   const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
   const backgroundMediaSrc = normalizedPoster || normalizedSrc;
@@ -873,6 +874,21 @@ function HoverVideoPlayer({
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
     };
   }, [videoRef]);
+
+  // Track hover playback progress for YouTube-style red progress bar
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !isHovering) return;
+
+    const onTimeUpdate = () => {
+      if (el.duration > 0) {
+        setHoverProgress((el.currentTime / el.duration) * 100);
+      }
+    };
+
+    el.addEventListener("timeupdate", onTimeUpdate);
+    return () => el.removeEventListener("timeupdate", onTimeUpdate);
+  }, [videoRef, isHovering]);
 
   const handleError = useCallback(() => {
     setHasError(true);
@@ -996,6 +1012,16 @@ function HoverVideoPlayer({
       />
 
       {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
+
+      {/* YouTube-style red progress bar during hover playback */}
+      {isHovering && videoReady && !hasError && !reducedMotion ? (
+        <div className="absolute bottom-0 left-0 z-[9] h-[3px] w-full bg-white/20">
+          <div
+            className="h-full bg-red-600 transition-[width] duration-200 ease-linear"
+            style={{ width: `${hoverProgress}%` }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1247,6 +1273,18 @@ function FeedVideoPlayer({
           }}
           aria-label={isPlaying ? "Pause video" : "Play video"}
         />
+      ) : null}
+
+      {/* Centered play button overlay — shown when video is paused/not playing (YouTube mobile style) */}
+      {!hasError && !reducedMotion && !isPlaying ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-[11] flex items-center justify-center"
+          aria-hidden="true"
+        >
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm">
+            <Play className="h-6 w-6 fill-white pl-0.5" />
+          </div>
+        </div>
       ) : null}
 
       {/* Reduced motion: show play button, tap to start */}

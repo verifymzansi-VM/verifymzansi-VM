@@ -356,7 +356,7 @@ export function MzansiMarketGrid() {
       </div>
 
       {viewMode === "grid" ? (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="-mx-4 sm:mx-0 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
           {listings.map((listing, index) => {
             const videoUrl = listing.videos?.[0];
             const displayUrl = videoUrl || listing.photos?.[0];
@@ -372,7 +372,7 @@ export function MzansiMarketGrid() {
             return (
               <div
                 key={listing.id}
-                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both [animation-duration:400ms] ${getStaggerDelayClass(index)}`}
+                className={`animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 ${getStaggerDelayClass(index)}`}
               >
                 <ListingCard
                   id={listing.id}
