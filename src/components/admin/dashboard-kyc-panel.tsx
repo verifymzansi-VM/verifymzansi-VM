@@ -386,6 +386,7 @@ export function DashboardKycPanel({
                         variant="ghost"
                         className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950 w-full justify-start"
                         onClick={() => openDialog(item, "approved")}
+                        disabled={loading}
                       >
                         <CheckCircle className="h-4 w-4 mr-1.5" />
                         Approve
@@ -395,6 +396,7 @@ export function DashboardKycPanel({
                         variant="ghost"
                         className="h-8 text-destructive hover:bg-destructive/10 w-full justify-start"
                         onClick={() => openDialog(item, "rejected")}
+                        disabled={loading}
                       >
                         <XCircle className="h-4 w-4 mr-1.5" />
                         Reject
@@ -404,6 +406,7 @@ export function DashboardKycPanel({
                         variant="ghost"
                         className="h-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950 w-full justify-start"
                         onClick={() => openDialog(item, "needs_resubmission")}
+                        disabled={loading}
                       >
                         <RotateCcw className="h-4 w-4 mr-1.5" />
                         Resubmit

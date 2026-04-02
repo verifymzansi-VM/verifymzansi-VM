@@ -175,7 +175,8 @@ function parseRangeHeader(
     return null;
   }
 
-  if (start > end || start < 0 || start >= totalSize) return null;
+  if (Number.isNaN(start) || Number.isNaN(end) || start > end || start < 0 || start >= totalSize)
+    return null;
 
   return { start, end };
 }

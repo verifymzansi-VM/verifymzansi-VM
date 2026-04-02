@@ -117,12 +117,20 @@ export function HeroBanner({
   const [current, setCurrent] = useState(0);
   const [fading, setFading] = useState(false);
   const [isActiveVideoPaused, setIsActiveVideoPaused] = useState(false);
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  useEffect(() => {
+    return () => {
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+    };
+  }, []);
 
   const goTo = useCallback(
     (index: number) => {
       if (index === current) return;
       setFading(true);
-      setTimeout(() => {
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+      fadeTimerRef.current = setTimeout(() => {
         setIsActiveVideoPaused(false);
         setCurrent(index);
         setFading(false);

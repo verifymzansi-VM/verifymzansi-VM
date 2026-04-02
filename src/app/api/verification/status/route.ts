@@ -31,11 +31,16 @@ export async function GET(_request: NextRequest) {
       includeStepsWhenVerified: true,
     });
 
-    return NextResponse.json({
-      accountVerificationStatus: verification.accountVerificationStatus,
-      overallStatus: verification.accountVerificationStatus,
-      steps: verification.steps,
-    });
+    return NextResponse.json(
+      {
+        accountVerificationStatus: verification.accountVerificationStatus,
+        overallStatus: verification.accountVerificationStatus,
+        steps: verification.steps,
+      },
+      {
+        headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },
+      }
+    );
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

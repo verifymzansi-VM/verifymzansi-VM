@@ -75,10 +75,15 @@ export function useAuth() {
           .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .select("*")
           .eq("user_id", userId)
-          .single();
+          .maybeSingle();
 
-        if (!error) {
+        if (!error && data) {
           return data;
+        }
+
+        // No row and no error — profile doesn't exist yet, no point retrying.
+        if (!error && !data) {
+          return null;
         }
 
         lastError = error;
@@ -181,6 +186,11 @@ export function useAuth() {
       log.error("Sign-out failed", { error: err instanceof Error ? err.message : String(err) });
     }
     reset();
+    // Clear notification store to prevent cross-account data leak
+    const { clearAll: clearNotifications } = (
+      await import("@/stores/notification-store")
+    ).useNotificationStore.getState();
+    clearNotifications();
     // Clear the phone-gate cookie client-side (server sign-out route also
     // does this, but the client hook may be used directly).
     document.cookie = "x-phone-ok=; path=/; max-age=0";

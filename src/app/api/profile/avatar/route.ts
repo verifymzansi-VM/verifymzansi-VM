@@ -5,6 +5,7 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 import { stripExifFromJpeg } from "@/lib/utils/exif-strip";
@@ -20,6 +21,8 @@ export async function POST(request: NextRequest) {
   if (sameOriginFailure) {
     return sameOriginFailure;
   }
+  const csrfBlock = enforceCsrfToken(request, log);
+  if (csrfBlock) return csrfBlock;
 
   // Rate limit by IP
   const ip = getClientIp(request);

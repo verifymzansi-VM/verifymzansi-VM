@@ -110,18 +110,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to cancel subscription" }, { status: 500 });
     }
 
-    await logAuditEvent({
-      actorId: user.id,
-      actorRole: "member",
-      action: "subscription_cancelled",
-      targetType: "entitlement",
-      targetId: entitlement.id,
-      metadata: {
-        area: entitlement.area,
-        tier: entitlement.tier,
-        expires_at: entitlement.expires_at,
-      },
-    });
+    try {
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: "member",
+        action: "subscription_cancelled",
+        targetType: "entitlement",
+        targetId: entitlement.id,
+        metadata: {
+          area: entitlement.area,
+          tier: entitlement.tier,
+          expires_at: entitlement.expires_at,
+        },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     void createNotification({
       userId: user.id,
@@ -129,7 +135,7 @@ export async function POST(request: NextRequest) {
       title: "Subscription cancelled",
       message: "Your active subscription was cancelled. Your paid features are now disabled.",
       href: "/billing",
-    });
+    }).catch((err: unknown) => log.warn("Cancel notification failed", { error: String(err) }));
 
     return NextResponse.json({ success: true, entitlementId: entitlement.id });
   } catch (error) {

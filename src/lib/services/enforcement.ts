@@ -76,31 +76,41 @@ export async function enforceAction(params: EnforceParams) {
   }
 
   // Create moderation action record
+  const { error: insertErr } = await supabase.from("moderation_actions").insert({
+    target_owner_id: params.ownerId,
+    actor_id: params.moderatorId,
+    action: params.action,
+    reason: params.reason,
+    report_id: params.reportId || null,
+    area: params.area || "MZANSI_MARKET",
+  });
+  if (insertErr) {
+    throw new Error(`Failed to record moderation action: ${insertErr.message}`);
+  }
+
+  // Resolve owner columns via compat layer — propagate transient errors
+  // instead of silently falling back to a possibly-wrong column.
+  let listingsOwnerCol: Awaited<ReturnType<typeof getOwnerColumn>>;
+  let businessesOwnerCol: Awaited<ReturnType<typeof getOwnerColumn>>;
+  let promotionsOwnerCol: Awaited<ReturnType<typeof getOwnerColumn>>;
   try {
-    await supabase.from("moderation_actions").insert({
-      target_owner_id: params.ownerId,
-      actor_id: params.moderatorId,
-      action: params.action,
-      reason: params.reason,
-      report_id: params.reportId || null,
-      area: params.area || "MZANSI_MARKET",
+    [listingsOwnerCol, businessesOwnerCol, promotionsOwnerCol] = await Promise.all([
+      getOwnerColumn(supabase as never, "listings"),
+      getOwnerColumn(supabase as never, "businesses"),
+      getOwnerColumn(supabase as never, "promotions"),
+    ]);
+  } catch (colErr) {
+    log.error("Failed to resolve owner columns for enforcement", {
+      error: colErr instanceof Error ? colErr.message : String(colErr),
     });
-  } catch (insertErr) {
     throw new Error(
-      `Failed to record moderation action: ${insertErr instanceof Error ? insertErr.message : "Unknown error"}`
+      `Cannot enforce moderation: owner column probe failed (${colErr instanceof Error ? colErr.message : "unknown"})`
     );
   }
 
-  // Resolve owner columns via compat layer
-  const [listingsOwnerCol, businessesOwnerCol, promotionsOwnerCol] = await Promise.all([
-    getOwnerColumn(supabase as never, "listings").catch(() => "owner_id" as const),
-    getOwnerColumn(supabase as never, "businesses").catch(() => "owner_id" as const),
-    getOwnerColumn(supabase as never, "promotions").catch(() => "owner_id" as const),
-  ]);
-
   // If banned, hide all content across all marketplace areas (including promotions)
   if (params.action === "ban") {
-    const hideResults = await Promise.all([
+    const hideResults = await Promise.allSettled([
       supabase.from("listings").update({ status: "hidden" }).eq(listingsOwnerCol, params.ownerId),
       supabase
         .from("businesses")
@@ -111,17 +121,19 @@ export async function enforceAction(params: EnforceParams) {
         .update({ status: "hidden" })
         .eq(promotionsOwnerCol, params.ownerId),
     ]);
-    const hideErrors = hideResults.filter((r) => r.error);
+    const hideErrors = hideResults
+      .map((r) => (r.status === "rejected" ? r.reason : r.value?.error))
+      .filter(Boolean);
     if (hideErrors.length > 0) {
       log.error("Failed to hide some content on ban", {
-        errors: hideErrors.map((r) => r.error?.message),
+        errors: hideErrors.map((e) => (e instanceof Error ? e.message : String(e?.message ?? e))),
       });
     }
   }
 
   // If suspended, hide live content temporarily across all areas (including promotions)
   if (params.action === "suspend") {
-    const suspendResults = await Promise.all([
+    const suspendResults = await Promise.allSettled([
       supabase
         .from("listings")
         .update({ status: "hidden" })
@@ -138,10 +150,14 @@ export async function enforceAction(params: EnforceParams) {
         .eq(promotionsOwnerCol, params.ownerId)
         .eq("status", "live"),
     ]);
-    const suspendErrors = suspendResults.filter((r) => r.error);
+    const suspendErrors = suspendResults
+      .map((r) => (r.status === "rejected" ? r.reason : r.value?.error))
+      .filter(Boolean);
     if (suspendErrors.length > 0) {
       log.error("Failed to hide some content on suspend", {
-        errors: suspendErrors.map((r) => r.error?.message),
+        errors: suspendErrors.map((e) =>
+          e instanceof Error ? e.message : String(e?.message ?? e)
+        ),
       });
     }
   }
@@ -167,7 +183,7 @@ export async function enforceAction(params: EnforceParams) {
     const hiddenSince = lastAction?.created_at || new Date(0).toISOString();
 
     // Only restore content that was updated (hidden) after the ban/suspend action
-    const restoreResults = await Promise.all([
+    const restoreResults = await Promise.allSettled([
       supabase
         .from("listings")
         .update({ status: "live" })
@@ -187,10 +203,14 @@ export async function enforceAction(params: EnforceParams) {
         .eq("status", "hidden")
         .gte("updated_at", hiddenSince),
     ]);
-    const restoreErrors = restoreResults.filter((r) => r.error);
+    const restoreErrors = restoreResults
+      .map((r) => (r.status === "rejected" ? r.reason : r.value?.error))
+      .filter(Boolean);
     if (restoreErrors.length > 0) {
       log.error("Failed to restore some content on unban", {
-        errors: restoreErrors.map((r) => r.error?.message),
+        errors: restoreErrors.map((e) =>
+          e instanceof Error ? e.message : String(e?.message ?? e)
+        ),
       });
     }
   }

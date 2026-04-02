@@ -24,6 +24,7 @@ import {
 import { userOwnsBusiness } from "@/lib/account/owned-business";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 import {
@@ -113,7 +114,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     // Increment view count atomically (best-effort, non-blocking).
     const admin = createAdminClient();
-    admin.rpc("increment_promotion_view_count", { promotion_id: id }).then(() => {});
+    Promise.resolve(admin.rpc("increment_promotion_view_count", { promotion_id: id }))
+      .then(({ error }) => {
+        if (error) log.warn("View count increment failed", { id, error: error.message });
+      })
+      .catch((err: unknown) => log.warn("View count RPC error", { id, error: String(err) }));
 
     const {
       social_authorizer_name: _socialAuthorizerName,
@@ -166,6 +171,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const parsedParams = parseAndValidateRouteParams(await params, promotionIdParamsSchema, {
       validationErrorMessage: "Invalid promotion ID",
@@ -286,7 +293,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       collectMediaUrls(data.images, data.videos, data.video_thumbnail || null)
     );
 
-    const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
+    const priceCents =
+      data.price_zar != null ? Math.round(+(data.price_zar * 100).toPrecision(12)) : null;
 
     // Only re-trigger moderation when substantive content fields change (#33)
     const contentChanged =
@@ -441,6 +449,8 @@ export async function DELETE(
   try {
     const originBlock = enforceSameOriginMutation(_request, log);
     if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(_request, log);
+    if (csrfBlock) return csrfBlock;
 
     const parsedParams = parseAndValidateRouteParams(await params, promotionIdParamsSchema, {
       validationErrorMessage: "Invalid promotion ID",

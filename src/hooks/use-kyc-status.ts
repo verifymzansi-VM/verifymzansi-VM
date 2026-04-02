@@ -27,12 +27,14 @@ export function useKycStatus() {
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
 
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async (cancelled: () => boolean) => {
     setIsLoading(true);
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      if (cancelled()) return;
 
       if (!user) {
         setStatus("unverified");
@@ -41,11 +43,24 @@ export function useKycStatus() {
       }
 
       // Check account profile verification status
-      const { data: profile } = await supabase
+      const { data: profile, error: profileErr } = await supabase
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .select("account_verification_status")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
+
+      if (cancelled()) return;
+
+      if (profileErr) {
+        log.error("Failed to fetch KYC profile", { error: profileErr.message, userId: user.id });
+        setStatus("unverified");
+        return;
+      }
+
+      if (!profile) {
+        setStatus("unverified");
+        return;
+      }
 
       const verificationStatus = readAccountVerificationStatus(profile);
 
@@ -55,11 +70,20 @@ export function useKycStatus() {
         setStatus("rejected");
       } else {
         // Check if there are pending steps
-        const { data: verificationSteps } = await supabase
+        const { data: verificationSteps, error: stepsErr } = await supabase
           .from("verification_steps")
           .select("id, step_type, status, created_at")
           .eq("user_id", user.id)
           .order("created_at", { ascending: true });
+
+        if (cancelled()) return;
+
+        if (stepsErr) {
+          log.error("Failed to fetch verification steps", {
+            error: stepsErr.message,
+            userId: user.id,
+          });
+        }
 
         setSteps(verificationSteps || []);
 
@@ -69,19 +93,24 @@ export function useKycStatus() {
         setStatus(hasPendingOrAction ? "pending" : "unverified");
       }
     } catch (err) {
+      if (cancelled()) return;
       log.error("Failed to fetch KYC status", {
         error: err instanceof Error ? err.message : String(err),
       });
       setStatus("unverified");
     } finally {
-      setIsLoading(false);
+      if (!cancelled()) setIsLoading(false);
     }
     // supabase is a stable singleton — safe to omit from deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    fetchStatus();
+    let dead = false;
+    fetchStatus(() => dead);
+    return () => {
+      dead = true;
+    };
   }, [fetchStatus]);
 
   const nextStep =

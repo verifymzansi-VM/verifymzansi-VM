@@ -34,6 +34,8 @@ export default function CompleteProfilePage() {
   const router = useRouter();
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       const returnUrl = sanitizeReturnUrl(
         new URLSearchParams(window.location.search).get("returnUrl")
@@ -42,6 +44,7 @@ export default function CompleteProfilePage() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      if (cancelled) return;
       if (!user) {
         router.push("/login");
         return;
@@ -52,6 +55,7 @@ export default function CompleteProfilePage() {
         .select("display_name, phone, pending_phone")
         .eq("user_id", user.id)
         .maybeSingle();
+      if (cancelled) return;
 
       if (profile?.phone) {
         // Canonical OTP-verified phone already exists — skip this step.
@@ -67,6 +71,9 @@ export default function CompleteProfilePage() {
     }
 
     void load();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   // Resend countdown timer

@@ -170,10 +170,17 @@ export async function POST(request: NextRequest) {
       // Record failed attempt for ALL auth errors including email-not-confirmed
       // to prevent lockout bypass via unconfirmed accounts.
       recordFailedLogin(parsedBody.data.email);
-      recordDistributedFailedLogin(parsedBody.data.email).catch(() => {});
+      recordDistributedFailedLogin(parsedBody.data.email).catch((err) => {
+        log.warn("Distributed lockout recording failed", {
+          email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
 
       if (isEmailNotConfirmed) {
-        log.info("Login failed: email not confirmed", { email: parsedBody.data.email });
+        log.info("Login failed: email not confirmed", {
+          email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
+        });
         return NextResponse.json(
           {
             error: "Please confirm your email address before signing in.",

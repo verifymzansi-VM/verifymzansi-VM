@@ -92,7 +92,7 @@ export async function POST(request: Request) {
         .from("listings")
         .select(listingsOwnerCol)
         .eq("id", report.target_id)
-        .single();
+        .maybeSingle();
       if (listingErr) {
         log.warn("Target listing not found", {
           targetId: report.target_id,
@@ -111,7 +111,7 @@ export async function POST(request: Request) {
         .from("businesses")
         .select(businessesOwnerCol)
         .eq("id", report.target_id)
-        .single();
+        .maybeSingle();
       if (bizErr) {
         log.warn("Target business not found", {
           targetId: report.target_id,
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
         .from("promotions")
         .select(promotionsOwnerCol)
         .eq("id", report.target_id)
-        .single();
+        .maybeSingle();
       if (promotionErr) {
         log.warn("Target promotion not found", {
           targetId: report.target_id,
@@ -178,7 +178,7 @@ export async function POST(request: Request) {
 
       if (record) {
         // Record moderation action as "pending_approval"
-        await admin.from("moderation_actions").insert({
+        const { error: recInsertErr } = await admin.from("moderation_actions").insert({
           report_id: reportId,
           actor_id: user.id,
           action: `${action}_recommended`,
@@ -187,6 +187,12 @@ export async function POST(request: Request) {
           reason: reason || null,
           duration_days: action === "suspend" ? durationDays : null,
         });
+        if (recInsertErr) {
+          log.error("Failed to record recommended moderation action (non-fatal)", {
+            error: recInsertErr.message,
+            reportId,
+          });
+        }
 
         await logAuditEvent({
           actorId: user.id,
@@ -219,10 +225,17 @@ export async function POST(request: Request) {
       const { error: rpcErr } = await admin.rpc("increment_strikes", { owner_id_input: ownerId });
       if (rpcErr) {
         // If RPC doesn't exist, do manual update
-        await admin
+        const { error: warnErr } = await admin
           .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .update({ account_status: "warned" })
           .eq("user_id", ownerId);
+        if (warnErr) {
+          log.error("Failed to apply warn enforcement", { error: warnErr.message, ownerId });
+          return NextResponse.json(
+            { error: "Failed to apply enforcement action" },
+            { status: 500 }
+          );
+        }
       }
     } else if (action === "hide") {
       const tableMap: Record<string, string> = {
@@ -234,38 +247,71 @@ export async function POST(request: Request) {
       };
       const table = tableMap[report.target_type];
       if (table) {
-        await admin.from(table).update({ status: "hidden" }).eq("id", report.target_id);
+        const { error: hideErr } = await admin
+          .from(table)
+          .update({ status: "hidden" })
+          .eq("id", report.target_id);
+        if (hideErr) {
+          log.error("Failed to hide content", {
+            error: hideErr.message,
+            targetId: report.target_id,
+            table,
+          });
+          return NextResponse.json(
+            { error: "Failed to apply enforcement action" },
+            { status: 500 }
+          );
+        }
       }
     } else if (action === "suspend" && ownerId) {
       const suspendUntil = new Date();
-      suspendUntil.setDate(suspendUntil.getDate() + (durationDays || 7));
+      suspendUntil.setDate(suspendUntil.getDate() + (durationDays ?? 7));
 
-      await admin
+      const { error: suspendErr } = await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_status: "suspended",
           suspended_until: suspendUntil.toISOString(),
         })
         .eq("user_id", ownerId);
+      if (suspendErr) {
+        log.error("Failed to suspend account", { error: suspendErr.message, ownerId });
+        return NextResponse.json({ error: "Failed to apply enforcement action" }, { status: 500 });
+      }
 
-      // Hide all content for the suspended account holder
-      await admin
+      // Hide all content for the suspended account holder (best-effort)
+      const { error: hideListErr } = await admin
         .from("listings")
         .update({ status: "hidden" })
         .eq(listingsOwnerCol, ownerId)
         .eq("status", "live");
-      await admin
+      if (hideListErr)
+        log.error("Failed to hide listings for suspended user (non-fatal)", {
+          error: hideListErr.message,
+          ownerId,
+        });
+      const { error: hideBizErr } = await admin
         .from("businesses")
         .update({ status: "hidden" })
         .eq(businessesOwnerCol, ownerId)
         .eq("status", "live");
-      await admin
+      if (hideBizErr)
+        log.error("Failed to hide businesses for suspended user (non-fatal)", {
+          error: hideBizErr.message,
+          ownerId,
+        });
+      const { error: hidePromoErr } = await admin
         .from("promotions")
         .update({ status: "hidden" })
         .eq(promotionsOwnerCol, ownerId)
         .eq("status", "live");
+      if (hidePromoErr)
+        log.error("Failed to hide promotions for suspended user (non-fatal)", {
+          error: hidePromoErr.message,
+          ownerId,
+        });
     } else if (action === "ban" && ownerId) {
-      await admin
+      const { error: banErr } = await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_status: "banned",
@@ -273,11 +319,39 @@ export async function POST(request: Request) {
           ban_reason: reason || "Violation of terms",
         })
         .eq("user_id", ownerId);
+      if (banErr) {
+        log.error("Failed to ban account", { error: banErr.message, ownerId });
+        return NextResponse.json({ error: "Failed to apply enforcement action" }, { status: 500 });
+      }
 
-      // Hide all content
-      await admin.from("listings").update({ status: "hidden" }).eq(listingsOwnerCol, ownerId);
-      await admin.from("businesses").update({ status: "hidden" }).eq(businessesOwnerCol, ownerId);
-      await admin.from("promotions").update({ status: "hidden" }).eq(promotionsOwnerCol, ownerId);
+      // Hide all content (best-effort)
+      const { error: banListErr } = await admin
+        .from("listings")
+        .update({ status: "hidden" })
+        .eq(listingsOwnerCol, ownerId);
+      if (banListErr)
+        log.error("Failed to hide listings for banned user (non-fatal)", {
+          error: banListErr.message,
+          ownerId,
+        });
+      const { error: banBizErr } = await admin
+        .from("businesses")
+        .update({ status: "hidden" })
+        .eq(businessesOwnerCol, ownerId);
+      if (banBizErr)
+        log.error("Failed to hide businesses for banned user (non-fatal)", {
+          error: banBizErr.message,
+          ownerId,
+        });
+      const { error: banPromoErr } = await admin
+        .from("promotions")
+        .update({ status: "hidden" })
+        .eq(promotionsOwnerCol, ownerId);
+      if (banPromoErr)
+        log.error("Failed to hide promotions for banned user (non-fatal)", {
+          error: banPromoErr.message,
+          ownerId,
+        });
     }
 
     // Send enforcement emails to affected account holders (non-blocking)
@@ -356,7 +430,7 @@ export async function POST(request: Request) {
     }
 
     // Record moderation action
-    await admin.from("moderation_actions").insert({
+    const { error: modInsertErr } = await admin.from("moderation_actions").insert({
       report_id: reportId,
       actor_id: user.id,
       action,
@@ -365,16 +439,29 @@ export async function POST(request: Request) {
       reason: reason || null,
       duration_days: action === "suspend" ? durationDays : null,
     });
+    if (modInsertErr) {
+      log.error("Failed to record moderation action (non-fatal)", {
+        error: modInsertErr.message,
+        reportId,
+        action,
+      });
+    }
 
     // Resolve the report
     const reportStatus = action === "dismiss" ? "dismissed" : "resolved";
-    await admin
+    const { error: reportUpdateErr } = await admin
       .from("reports")
       .update({
         status: reportStatus,
         assigned_to: user.id,
       })
       .eq("id", reportId);
+    if (reportUpdateErr) {
+      log.error("Failed to resolve report (non-fatal)", {
+        error: reportUpdateErr.message,
+        reportId,
+      });
+    }
 
     // Audit log
     const auditActionMap: Record<string, string> = {

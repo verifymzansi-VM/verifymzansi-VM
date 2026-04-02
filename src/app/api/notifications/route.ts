@@ -9,6 +9,7 @@ import {
   parseAndValidateSearchParams,
 } from "@/lib/utils/api";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import {
   createBooleanFlagSchema,
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("notifications")
-      .select("*")
+      .select("id, type, title, message, href, read, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -92,14 +93,19 @@ export async function GET(request: NextRequest) {
     // Also get unread count
     const { count: unreadCount } = await supabase
       .from("notifications")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .eq("read", false);
 
-    return NextResponse.json({
-      notifications: data || [],
-      unreadCount: unreadCount || 0,
-    });
+    return NextResponse.json(
+      {
+        notifications: data || [],
+        unreadCount: unreadCount || 0,
+      },
+      {
+        headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },
+      }
+    );
   } catch (error) {
     logApiError(log, "Unexpected notifications fetch error", error);
     return internalApiError();
@@ -118,6 +124,8 @@ export async function PATCH(request: NextRequest) {
     if (sameOriginFailure) {
       return sameOriginFailure;
     }
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const supabase = await createClient();
     const {
@@ -201,6 +209,8 @@ export async function DELETE(request: NextRequest) {
     if (sameOriginFailure) {
       return sameOriginFailure;
     }
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const supabase = await createClient();
     const {

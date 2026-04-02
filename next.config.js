@@ -66,10 +66,19 @@ const nextConfig = {
     ],
   },
   async headers() {
-    // Security headers (CSP, X-Frame-Options, etc.) are set per-request
-    // in src/middleware.ts via the shared proxy-handler nonce/CSP logic.
-    // Only cache headers remain here.
+    // Full CSP with nonce is applied by the Cloudflare Workers proxy
+    // (proxy-handler.ts). The headers below are defense-in-depth: they
+    // protect against direct-origin access (DNS leak, staging, etc.).
     return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
       {
         // Media proxy serves R2 objects with long-lived immutable headers;
         // exclude it from the generic no-cache rule so browsers and CDN can

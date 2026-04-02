@@ -410,6 +410,7 @@ export async function sendDsarSubmissionEmail(
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: "Africa/Johannesburg",
   });
   const safeReference = escapeHtml(reference);
   const safeDueDate = escapeHtml(dueDate);
@@ -656,7 +657,7 @@ export async function sendAccountEnforcementEmail(params: {
 
   const suspensionCopy =
     params.action === "suspend" && params.suspendedUntil
-      ? `<p><strong>Suspension end:</strong> ${escapeHtml(new Date(params.suspendedUntil).toLocaleString("en-ZA"))}</p>`
+      ? `<p><strong>Suspension end:</strong> ${escapeHtml(new Date(params.suspendedUntil).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" }))}</p>`
       : "";
 
   const reasonCopy = params.reason
@@ -701,7 +702,7 @@ export async function sendAccountEnforcementEmail(params: {
     </html>
   `;
 
-  const text = `Hi ${params.accountName},\n\n${statusCopy}${params.reason ? `\n\nReason: ${params.reason}` : ""}${params.action === "suspend" && params.suspendedUntil ? `\nSuspension end: ${new Date(params.suspendedUntil).toLocaleString("en-ZA")}` : ""}\n\nReview account: ${appUrl}/dashboard/profile#account\n\nIf you need clarification, please contact support.`;
+  const text = `Hi ${params.accountName},\n\n${statusCopy}${params.reason ? `\n\nReason: ${params.reason}` : ""}${params.action === "suspend" && params.suspendedUntil ? `\nSuspension end: ${new Date(params.suspendedUntil).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" })}` : ""}\n\nReview account: ${appUrl}/dashboard/profile#account\n\nIf you need clarification, please contact support.`;
 
   return sendEmail({ to: params.email, subject, html, text });
 }

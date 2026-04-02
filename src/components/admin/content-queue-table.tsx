@@ -143,6 +143,7 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
                     variant="ghost"
                     className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
                     onClick={() => openReview(item, "approve")}
+                    disabled={loading}
                   >
                     <CheckCircle className="h-4 w-4 mr-1" />
                     <span className="text-xs">Approve</span>
@@ -152,6 +153,7 @@ export function ContentQueueTable({ items, area, onDecisionComplete }: ContentQu
                     variant="ghost"
                     className="h-8 text-destructive hover:bg-destructive/10"
                     onClick={() => openReview(item, "reject")}
+                    disabled={loading}
                   >
                     <XCircle className="h-4 w-4 mr-1" />
                     <span className="text-xs">Reject</span>

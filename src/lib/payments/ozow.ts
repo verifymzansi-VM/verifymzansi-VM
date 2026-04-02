@@ -51,6 +51,7 @@ type CachedToken = {
   scope: string;
 };
 
+const MAX_CACHED_TOKENS = 20;
 const cachedTokens = new Map<string, CachedToken>();
 const pendingTokenFetches = new Map<string, Promise<string>>();
 const OZOW_WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
@@ -275,7 +276,6 @@ async function fetchOzowAccessToken(normalizedScope: string): Promise<string> {
 
   if (!response.ok) {
     const body = await response.text();
-    const bodyPreview = body.slice(0, 200);
     const errorDetail = extractOzowErrorDetail(body);
     const isAuthenticationFailure = response.status === 401 || response.status === 403;
     const isConsumerNotFound =
@@ -289,7 +289,6 @@ async function fetchOzowAccessToken(normalizedScope: string): Promise<string> {
       status: response.status,
       ozowEnv,
       baseUrlHost,
-      body: bodyPreview,
     });
     if (isAuthenticationFailure) {
       throw new OzowAuthenticationError("Payment provider authentication failed", {
@@ -337,6 +336,18 @@ async function fetchOzowAccessToken(normalizedScope: string): Promise<string> {
     });
   }
 
+  // Evict expired entries and cap size to prevent unbounded growth
+  if (cachedTokens.size >= MAX_CACHED_TOKENS) {
+    const now = Date.now();
+    for (const [k, v] of cachedTokens) {
+      if (v.expiresAt <= now) cachedTokens.delete(k);
+    }
+    // If still at capacity, delete the oldest entry
+    if (cachedTokens.size >= MAX_CACHED_TOKENS) {
+      const firstKey = cachedTokens.keys().next().value;
+      if (firstKey !== undefined) cachedTokens.delete(firstKey);
+    }
+  }
   cachedTokens.set(normalizedScope, {
     accessToken,
     expiresAt: Date.now() + expiresIn * 1000,

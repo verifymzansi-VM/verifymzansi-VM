@@ -387,7 +387,7 @@ describe("POST /api/admin/verification/decide", () => {
               return {
                 eq: vi.fn().mockReturnValue({
                   eq: vi.fn().mockReturnValue({
-                    single: vi.fn().mockResolvedValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
                       data: { first_name: "Test", last_name: "Member" },
                       error: null,
                     }),
@@ -605,7 +605,7 @@ describe("POST /api/admin/verification/decide", () => {
               return {
                 eq: vi.fn().mockReturnValue({
                   eq: vi.fn().mockReturnValue({
-                    single: vi.fn().mockResolvedValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
                       data: { first_name: "Test", last_name: "Member" },
                       error: null,
                     }),
@@ -828,7 +828,7 @@ describe("POST /api/admin/verification/decide", () => {
               return {
                 eq: vi.fn().mockReturnValue({
                   eq: vi.fn().mockReturnValue({
-                    single: vi.fn().mockResolvedValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
                       data: { first_name: "Test", last_name: "Member" },
                       error: null,
                     }),

@@ -389,7 +389,8 @@ export async function generatePresignedUploadUrl(
   bucket: string,
   key: string,
   contentType: string,
-  expiresIn: number = 3600
+  expiresIn: number = 3600,
+  maxContentLength?: number
 ): Promise<string> {
   // Clamp expiresIn to safe range: 60s–86400s (1 min–24 hours)
   const safeExpiry = Math.max(60, Math.min(86400, expiresIn));
@@ -399,6 +400,7 @@ export async function generatePresignedUploadUrl(
     Bucket: bucket,
     Key: key,
     ContentType: contentType,
+    ...(maxContentLength != null ? { ContentLength: maxContentLength } : {}),
   });
 
   return await getSignedUrl(client, command, { expiresIn: safeExpiry });

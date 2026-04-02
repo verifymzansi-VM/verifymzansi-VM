@@ -164,10 +164,15 @@ describe("useMediaUpload", () => {
         "/api/media/upload-url",
         expect.objectContaining({
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: expect.any(Headers),
         })
       );
     });
+
+    // Verify Content-Type was forwarded through withCsrfHeaders
+    const urlCall = mockFetch.mock.calls.find((c: unknown[]) => c[0] === "/api/media/upload-url");
+    const urlCallHeaders = urlCall?.[1]?.headers as Headers | undefined;
+    expect(urlCallHeaders?.get("Content-Type")).toBe("application/json");
 
     expect(uploadResult).toBe("https://media.verifymzansi.com/media/listing/user1/video.mp4");
     expect(result.current.isUploading).toBe(false);

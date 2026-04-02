@@ -156,20 +156,22 @@ describe("/api/admin/verification/evidence", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             in: vi.fn().mockReturnThis(),
-            order: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: "artifact-2",
-                  r2_key: "kyc/id_document/user-1/fallback.bin",
-                  created_at: "2026-03-27T09:30:00Z",
-                },
-                {
-                  id: "artifact-1",
-                  r2_key: "kyc/id_document/user-1/missing.bin",
-                  created_at: "2026-03-27T08:30:00Z",
-                },
-              ],
-              error: null,
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: "artifact-2",
+                    r2_key: "kyc/id_document/user-1/fallback.bin",
+                    created_at: "2026-03-27T09:30:00Z",
+                  },
+                  {
+                    id: "artifact-1",
+                    r2_key: "kyc/id_document/user-1/missing.bin",
+                    created_at: "2026-03-27T08:30:00Z",
+                  },
+                ],
+                error: null,
+              }),
             }),
           };
         }
@@ -240,15 +242,17 @@ describe("/api/admin/verification/evidence", () => {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             in: vi.fn().mockReturnThis(),
-            order: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: "artifact-2",
-                  r2_key: "kyc/id_document/user-1/also-missing.bin",
-                  created_at: "2026-03-27T09:30:00Z",
-                },
-              ],
-              error: null,
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: "artifact-2",
+                    r2_key: "kyc/id_document/user-1/also-missing.bin",
+                    created_at: "2026-03-27T09:30:00Z",
+                  },
+                ],
+                error: null,
+              }),
             }),
           };
         }

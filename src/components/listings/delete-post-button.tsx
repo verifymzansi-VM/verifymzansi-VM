@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import type { MarketplaceArea } from "@/types/enums";
 
 interface DeletePostButtonProps {
@@ -26,7 +27,7 @@ export function DeletePostButton({ itemId, area, label = "Delete" }: DeletePostB
     try {
       const res = await fetch("/api/content/delete", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ itemId, area }),
       });
 

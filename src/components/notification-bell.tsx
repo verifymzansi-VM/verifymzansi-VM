@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotificationStore, type Notification } from "@/stores/notification-store";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { useRealtime } from "@/hooks/use-realtime";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -39,9 +40,15 @@ export function NotificationBell({ userId }: { userId?: string }) {
     // Flush previous user's notifications before fetching
     clearAll();
 
-    fetch("/api/notifications?limit=25")
-      .then((r) => r.json())
+    const controller = new AbortController();
+
+    fetch("/api/notifications?limit=25", { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
+        if (controller.signal.aborted) return;
         if (data.notifications && Array.isArray(data.notifications)) {
           // Map DB rows → store Notification objects, preserving id + read status
           const mapped = data.notifications.map((n: Record<string, unknown>) => {
@@ -65,6 +72,8 @@ export function NotificationBell({ userId }: { userId?: string }) {
       .catch(() => {
         // Silently fail — notifications are non-critical
       });
+
+    return () => controller.abort();
   }, [userId, hydrateNotifications, clearAll]);
 
   // Subscribe to real-time notifications for the authenticated user
@@ -91,32 +100,50 @@ export function NotificationBell({ userId }: { userId?: string }) {
   // ── API-synced action wrappers ─────────────────────────────────────
   const handleMarkRead = useCallback(
     (id: string) => {
+      const prev = useNotificationStore.getState();
       markRead(id);
       fetch("/api/notifications", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ id }),
-      }).catch(() => {});
+      }).catch(() => {
+        useNotificationStore.setState({
+          notifications: prev.notifications,
+          unreadCount: prev.unreadCount,
+        });
+      });
     },
     [markRead]
   );
 
   const handleMarkAllRead = useCallback(() => {
+    const prev = useNotificationStore.getState();
     markAllRead();
     fetch("/api/notifications", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ all: true }),
-    }).catch(() => {});
+    }).catch(() => {
+      useNotificationStore.setState({
+        notifications: prev.notifications,
+        unreadCount: prev.unreadCount,
+      });
+    });
   }, [markAllRead]);
 
   const handleClearAll = useCallback(() => {
+    const prev = useNotificationStore.getState();
     clearAll();
     fetch("/api/notifications", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ all: true }),
-    }).catch(() => {});
+    }).catch(() => {
+      useNotificationStore.setState({
+        notifications: prev.notifications,
+        unreadCount: prev.unreadCount,
+      });
+    });
   }, [clearAll]);
 
   return (

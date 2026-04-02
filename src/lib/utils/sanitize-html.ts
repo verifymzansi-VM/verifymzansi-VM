@@ -26,3 +26,23 @@ export function sanitizeUserMessage(input: string): string {
   const stripped = input.replace(/<[^>]*>/g, "");
   return escapeHtml(stripped).trim();
 }
+
+/**
+ * Return a safe href for user-supplied external URLs.
+ *
+ * Only allows `http:` and `https:` protocols.  Any other scheme
+ * (e.g. `javascript:`, `data:`, `vbscript:`) is replaced with `"#"`,
+ * preventing XSS via `<a href={userInput}>`.
+ */
+export function safeExternalHref(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return url;
+    }
+    return "#";
+  } catch {
+    // Relative paths or garbage — disallow
+    return "#";
+  }
+}

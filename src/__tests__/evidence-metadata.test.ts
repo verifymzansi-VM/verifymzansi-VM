@@ -131,6 +131,7 @@ function chainStub(data: unknown, error: unknown = null) {
   chain.order = vi.fn().mockReturnValue(chain);
   chain.limit = vi.fn().mockReturnValue(chain);
   chain.single = vi.fn().mockResolvedValue({ data, error });
+  chain.maybeSingle = vi.fn().mockResolvedValue({ data, error });
   // For non-.single() calls, make the chain itself thenable
   chain.then = (resolve: (v: unknown) => void) => resolve({ data, error });
   return chain;

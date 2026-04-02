@@ -85,7 +85,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (rl.limited) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later.", retryAfter: rl.retryAfter },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
       );
     }
 
@@ -211,7 +211,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // ── Prepare update record ────────────────────────────────
-    const priceCents = Math.round(data.price_zar * 100);
+    const priceCents = Math.round(+(data.price_zar * 100).toPrecision(12));
 
     const updateRecord = {
       title: data.title,
@@ -231,8 +231,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       video_thumbnail: nextVideoThumbnail,
       logo_url: nextLogoUrl,
       contact_methods: data.contactMethods,
-      // Re-submit for moderation on edit
-      status: listing.status === "live" ? "pending_moderation" : listing.status,
+      // Re-submit for moderation on edit (covers both live and approved listings)
+      status: ["live", "approved"].includes(listing.status) ? "pending_moderation" : listing.status,
     };
     const removedMediaUrls = diffRemovedMediaUrls(
       collectMediaUrls(listing.photos, listing.videos, listing.video_thumbnail, listing.logo_url),
@@ -255,7 +255,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         userId: user.id,
       });
       return NextResponse.json(
-        { error: "Failed to update listing", details: updateError.message },
+        { error: "Failed to update listing", details: "Please try again shortly." },
         { status: 500 }
       );
     }
@@ -272,20 +272,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    // ── Audit log ────────────────────────────────────────────
-    await logAuditEvent({
-      actorId: user.id,
-      actorRole: "member",
-      action: "listing_updated",
-      targetType: "listing",
-      targetId: listingId,
-      area: AREA,
-      metadata: {
-        category: data.category,
-        priceCents,
-        previousStatus: listing.status,
-      },
-    });
+    // ── Audit log (best-effort) ────────────────────────────────
+    try {
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: "member",
+        action: "listing_updated",
+        targetType: "listing",
+        targetId: listingId,
+        area: AREA,
+        metadata: {
+          category: data.category,
+          priceCents,
+          previousStatus: listing.status,
+        },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     log.info("Listing updated", {
       listingId,

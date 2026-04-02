@@ -118,7 +118,12 @@ function CreatePromotionContent() {
       granted: false,
     }
   );
-  const [businessId, setBusinessId] = useState(searchParams.get("business_id") || "");
+  const rawBusinessId = searchParams.get("business_id") || "";
+  const [businessId, setBusinessId] = useState(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawBusinessId)
+      ? rawBusinessId
+      : ""
+  );
   const [myBusinesses, setMyBusinesses] = useState<{ id: string; business_name: string }[]>([]);
   const {
     save: saveDraft,
@@ -184,7 +189,7 @@ function CreatePromotionContent() {
         // Non-critical.
       }
     }
-    loadBusinesses();
+    void loadBusinesses();
   }, []);
 
   useEffect(() => {

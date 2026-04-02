@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
       .select(
         "id, user_id, display_name, avatar_url, bio, location_province, location_city, account_verification_status, account_status"
       )
-      .single();
+      .maybeSingle();
 
     if (updateError) {
       if (updateError.code === "23505") {
@@ -213,6 +213,10 @@ export async function POST(request: NextRequest) {
       }
       log.error("Profile update failed", { userId: user.id, error: updateError.message });
       return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });
+    }
+
+    if (!updatedProfile) {
+      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
     const res = NextResponse.json({ success: true, profile: updatedProfile });

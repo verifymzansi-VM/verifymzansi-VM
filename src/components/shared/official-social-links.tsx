@@ -28,7 +28,7 @@ export function OfficialSocialLinks({
             key={link.key}
             href={link.href}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className={
               linkClassName ??
               "inline-flex items-center rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"

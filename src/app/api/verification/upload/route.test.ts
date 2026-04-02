@@ -252,7 +252,7 @@ function setupDefaultAdminMocks() {
         upsert: vi.fn().mockResolvedValue({ error: null }),
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           }),
         }),
         update: vi.fn().mockReturnValue({
@@ -690,7 +690,7 @@ describe("POST /api/verification/upload", () => {
           upsert: vi.fn().mockResolvedValue({ error: null }),
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: null, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
             }),
           }),
           update: vi.fn().mockReturnValue({
@@ -876,7 +876,7 @@ describe("POST /api/verification/upload", () => {
           upsert: sessionUpsert,
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   id_artifact_id: "artifact-1",
                   selfie_artifact_id: null,
@@ -1014,7 +1014,7 @@ describe("POST /api/verification/upload", () => {
           upsert: sessionUpsert,
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   id_artifact_id: "artifact-1",
                   selfie_artifact_id: null,

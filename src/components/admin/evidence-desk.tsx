@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -147,6 +148,7 @@ export function EvidenceDeskClient({
   initialUserId?: string;
 }) {
   const { toast } = useToast();
+  const router = useRouter();
   const [stepId, setStepId] = useState(initialStepId ?? "");
   const [userId, setUserId] = useState(initialUserId ?? "");
   const [loading, setLoading] = useState(false);
@@ -222,6 +224,7 @@ export function EvidenceDeskClient({
   function handleDecisionComplete() {
     // Refresh metadata after a decision
     fetchMetadata();
+    router.refresh();
   }
 
   return (

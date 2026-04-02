@@ -6,6 +6,7 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import {
   applyOwnerFilter,
@@ -52,6 +53,8 @@ export async function POST(request: Request) {
     if (sameOriginFailure) {
       return sameOriginFailure;
     }
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const supabase = await createClient();
     const {
@@ -148,7 +151,7 @@ export async function POST(request: Request) {
         .from(config.table)
         .select(selectCols)
         .eq("id", itemId)
-        .single();
+        .maybeSingle();
 
       if (fetchError || !fetchedItem) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
@@ -192,16 +195,22 @@ export async function POST(request: Request) {
       storefront: "storefront_deleted",
       promotion: "listing_deleted",
     };
-    await logAuditEvent({
-      actorId: user.id,
-      actorRole: "member",
-      action: (actionMap[targetType] || "listing_deleted") as Parameters<
-        typeof logAuditEvent
-      >[0]["action"],
-      targetType,
-      targetId: itemId,
-      metadata: { action: "account_delete", area, previousStatus: item?.status ?? null },
-    });
+    try {
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: "member",
+        action: (actionMap[targetType] || "listing_deleted") as Parameters<
+          typeof logAuditEvent
+        >[0]["action"],
+        targetType,
+        targetId: itemId,
+        metadata: { action: "account_delete", area, previousStatus: item?.status ?? null },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

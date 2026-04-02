@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { stripExifFromJpeg, stripMetadataFromPng } from "@/lib/utils/exif-strip";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 import { parseAndValidateFormData } from "@/lib/utils/api";
@@ -59,6 +60,9 @@ export async function POST(request: NextRequest) {
     if (sameOriginFailure) {
       return sameOriginFailure;
     }
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     // ── Authenticate ─────────────────────────────────────────
     const supabase = await createClient();

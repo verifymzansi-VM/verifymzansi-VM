@@ -1,4 +1,5 @@
 import { createLogger } from "@/lib/utils/logger";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("BusinessMediaUpload");
@@ -99,6 +100,7 @@ export async function uploadRequiredBusinessMedia({
 
   const response = await fetch("/api/media/upload", {
     method: "POST",
+    headers: withCsrfHeaders(),
     body: uploadData,
   });
 
@@ -131,7 +133,7 @@ export async function uploadRequiredBusinessVideo({
 }): Promise<string> {
   const urlResponse = await fetch("/api/media/upload-url", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({
       filename: file.name,
       contentType: file.type,

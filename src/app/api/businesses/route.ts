@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
     if (rl.limited) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later.", retryAfter: rl.retryAfter },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
       );
     }
 
@@ -322,7 +322,17 @@ export async function POST(request: NextRequest) {
     if (insertError || !business) {
       if (isBusinessSlugConflictError(insertError)) {
         if (!hasPaidPlan && !postingLimitBypassEnabled) {
-          await getAdmin().from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+          const { error: cleanupErr } = await getAdmin()
+            .from("free_posts_used")
+            .delete()
+            .eq("user_id", user.id)
+            .eq("area", AREA);
+          if (cleanupErr) {
+            log.error("Failed to clean up free_posts_used after slug conflict", {
+              error: cleanupErr.message,
+              userId: user.id,
+            });
+          }
         }
 
         return NextResponse.json(BUSINESS_SLUG_CONFLICT_RESPONSE, { status: 409 });
@@ -330,7 +340,17 @@ export async function POST(request: NextRequest) {
 
       log.error("Failed to create business", { error: insertError?.message });
       if (!hasPaidPlan && !postingLimitBypassEnabled) {
-        await getAdmin().from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+        const { error: cleanupErr2 } = await getAdmin()
+          .from("free_posts_used")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("area", AREA);
+        if (cleanupErr2) {
+          log.error("Failed to clean up free_posts_used after insert failure", {
+            error: cleanupErr2.message,
+            userId: user.id,
+          });
+        }
       }
       return NextResponse.json({ error: "Failed to create business" }, { status: 500 });
     }
@@ -349,7 +369,17 @@ export async function POST(request: NextRequest) {
       const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
 
       if (!postCheck.allowed) {
-        await getAdmin().from("businesses").delete().eq("id", business.id);
+        const { error: rollbackErr } = await getAdmin()
+          .from("businesses")
+          .delete()
+          .eq("id", business.id);
+        if (rollbackErr) {
+          log.error("Failed to roll back business — orphaned record", {
+            businessId: business.id,
+            userId: user.id,
+            error: rollbackErr.message,
+          });
+        }
         log.warn("Rolled back business due to concurrent limit breach", {
           businessId: business.id,
           userId: user.id,
@@ -444,7 +474,8 @@ export async function GET(request: NextRequest) {
           .from("businesses")
           .select("category, business_name, description")
           .eq("status", "live")
-          .eq("area", "MZANSI_BUSINESS");
+          .eq("area", "MZANSI_BUSINESS")
+          .limit(500);
 
         const categoryCounts: Record<string, number> = {};
         for (const b of businesses ?? []) {

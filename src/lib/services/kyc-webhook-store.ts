@@ -28,8 +28,13 @@ type KycWebhookStoreClient = {
           value: string
         ) => {
           single: () => Promise<{ data: VerificationStepRow | null }>;
+          maybeSingle: () => Promise<{ data: VerificationStepRow | null }>;
         };
         single: () => Promise<{
+          data: ProviderResultRow | VerificationArtifactRow | VerificationStepRow | null;
+          error?: { code?: string } | null;
+        }>;
+        maybeSingle: () => Promise<{
           data: ProviderResultRow | VerificationArtifactRow | VerificationStepRow | null;
           error?: { code?: string } | null;
         }>;
@@ -49,7 +54,7 @@ export async function findProviderResultByRef(
     .from("kyc_provider_results")
     .select("id, artifact_id, user_id, provider_status, updated_at")
     .eq("provider_ref", providerRef)
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
     return null;
@@ -63,7 +68,11 @@ export async function updateProviderResult(
   providerResultId: string,
   updateData: Record<string, unknown>
 ): Promise<void> {
-  await adminClient.from("kyc_provider_results").update(updateData).eq("id", providerResultId);
+  const { error } = await adminClient
+    .from("kyc_provider_results")
+    .update(updateData)
+    .eq("id", providerResultId);
+  if (error) throw new Error(`updateProviderResult failed: ${error.message}`);
 }
 
 export async function getArtifactStepType(
@@ -74,7 +83,7 @@ export async function getArtifactStepType(
     .from("kyc_artifacts")
     .select("step_type")
     .eq("id", artifactId)
-    .single();
+    .maybeSingle();
 
   return (data as VerificationArtifactRow | null)?.step_type ?? null;
 }
@@ -89,7 +98,7 @@ export async function getVerificationStepForUserAndType(
     .select("id, status, risk_score")
     .eq("user_id", userId)
     .eq("step_type", stepType)
-    .single();
+    .maybeSingle();
 
   return (data as VerificationStepRow | null) ?? null;
 }
@@ -99,5 +108,9 @@ export async function updateVerificationStepRiskDecision(
   stepId: string,
   updateData: Record<string, unknown>
 ): Promise<void> {
-  await adminClient.from("verification_steps").update(updateData).eq("id", stepId);
+  const { error } = await adminClient
+    .from("verification_steps")
+    .update(updateData)
+    .eq("id", stepId);
+  if (error) throw new Error(`updateVerificationStepRiskDecision failed: ${error.message}`);
 }

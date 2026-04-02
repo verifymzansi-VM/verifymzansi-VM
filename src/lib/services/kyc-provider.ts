@@ -8,6 +8,8 @@ import type {
 
 const log = createLogger("KycProvider");
 
+/** Maximum time allowed for provider verification before aborting. */
+const PROVIDER_TIMEOUT_MS = 30_000;
 // ── Null scores returned by the simulator ────────────────────
 const NULL_SCORES = {
   faceMatchScore: null,
@@ -79,7 +81,21 @@ export class StubKycProvider implements IKycProvider {
   readonly name = "stub";
 
   async submitIdentity(submission: KycProviderSubmission): Promise<KycProviderResult> {
-    return simulateKycVerification(submission.idImageR2Key, submission.idNumber);
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), PROVIDER_TIMEOUT_MS);
+    try {
+      const result = await Promise.race([
+        simulateKycVerification(submission.idImageR2Key, submission.idNumber),
+        new Promise<never>((_, reject) => {
+          ac.signal.addEventListener("abort", () =>
+            reject(new Error(`KYC provider timed out after ${PROVIDER_TIMEOUT_MS}ms`))
+          );
+        }),
+      ]);
+      return result;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 

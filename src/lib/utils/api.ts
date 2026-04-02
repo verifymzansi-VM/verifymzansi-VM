@@ -57,14 +57,18 @@ function coerceEntriesToObject(source: KeyValueEntrySource): Record<string, unkn
 /**
  * Safely parse a JSON request body, returning null if invalid
  * to prevent uncaught 500 errors on the server.
+ *
+ * @param maxBytes Maximum text length to accept (default 256 KiB). Returns null for oversized bodies.
  */
 export async function parseJsonRequest<T = Record<string, unknown>>(
-  request: JsonRequestLike
+  request: JsonRequestLike,
+  { maxBytes = 256 * 1024 }: { maxBytes?: number } = {}
 ): Promise<T | null> {
   try {
     if ("text" in request && typeof request.text === "function") {
       const text = await request.text();
       if (!text) return null;
+      if (text.length > maxBytes) return null;
       return JSON.parse(text) as T;
     }
 

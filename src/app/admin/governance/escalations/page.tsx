@@ -99,7 +99,9 @@ export default async function GovernanceEscalationsPage() {
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Case: {decision.case_id} ·{" "}
-                        {new Date(decision.created_at).toLocaleDateString()}
+                        {new Date(decision.created_at).toLocaleDateString("en-ZA", {
+                          timeZone: "Africa/Johannesburg",
+                        })}
                       </p>
                     </div>
                   </div>

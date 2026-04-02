@@ -12,6 +12,7 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn() }),
 }));
+vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: vi.fn().mockReturnValue(null) }));
 
 import { DELETE, GET, PATCH } from "@/app/api/notifications/route";
 

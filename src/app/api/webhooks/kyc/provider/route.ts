@@ -320,19 +320,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Audit log
-    await logAuditEvent({
-      actorId: "system",
-      actorRole: "system",
-      action: "kyc_provider_webhook_received",
-      targetType: "kyc_provider_result",
-      targetId: providerResult.id,
-      metadata: {
-        provider_ref: payloadData.provider_ref,
-        status: payloadData.status,
-        user_id: providerResult.user_id,
-      },
-    });
+    // Audit log (best-effort)
+    try {
+      await logAuditEvent({
+        actorId: "system",
+        actorRole: "system",
+        action: "kyc_provider_webhook_received",
+        targetType: "kyc_provider_result",
+        targetId: providerResult.id,
+        metadata: {
+          provider_ref: payloadData.provider_ref,
+          status: payloadData.status,
+          user_id: providerResult.user_id,
+        },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     return NextResponse.json({
       acknowledged: true,

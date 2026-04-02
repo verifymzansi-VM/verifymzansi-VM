@@ -250,20 +250,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });
     }
 
-    // ── Audit log ────────────────────────────────────────────
-    await logAuditEvent({
-      actorId: user.id,
-      actorRole: "member",
-      action: "checkout_initiated",
-      targetType: "payment",
-      targetId: paymentId,
-      metadata: {
-        planId: plan.id,
-        planName: plan.name,
-        amount: plan.price_cents / 100,
-        status: "checkout_initiated",
-      },
-    });
+    // ── Audit log (best-effort) ────────────────────────────────
+    try {
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: "member",
+        action: "checkout_initiated",
+        targetType: "payment",
+        targetId: paymentId,
+        metadata: {
+          planId: plan.id,
+          planName: plan.name,
+          amount: plan.price_cents / 100,
+          status: "checkout_initiated",
+        },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     return NextResponse.json({
       success: true,

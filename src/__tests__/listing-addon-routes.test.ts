@@ -49,6 +49,9 @@ const mockLogAuditEvent = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: (...args: unknown[]) => mockLogAuditEvent(...args),
 }));
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
 
 vi.mock("@/lib/constants/pricing", () => ({
   ADDON_PRICES: { boost: 1500, featured: 2500, urgent: 1000 },

@@ -130,7 +130,7 @@ describe("POST /api/admin/flagging/action", () => {
       }),
     });
     const listingsEq = vi.fn().mockReturnValue({
-      single: vi.fn().mockResolvedValue({
+      maybeSingle: vi.fn().mockResolvedValue({
         data: { owner_id: "owner-1" },
         error: null,
       }),

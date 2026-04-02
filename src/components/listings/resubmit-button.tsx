@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCcw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import type { MarketplaceArea } from "@/types/enums";
 
 interface ResubmitButtonProps {
@@ -29,7 +30,7 @@ export function ResubmitButton({
     try {
       const res = await fetch("/api/content/resubmit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ itemId, area }),
       });
 

@@ -694,7 +694,7 @@ describe("GET /api/listings", () => {
 
         return {
           select: vi.fn().mockReturnThis(),
-          in: vi.fn().mockResolvedValue({ data: [] }),
+          in: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue({ data: [] }) }),
         };
       }),
     });
@@ -764,14 +764,16 @@ describe("GET /api/listings", () => {
         if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
-            in: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  user_id: USER_ID,
-                  display_name: "Nomsa",
-                  account_verification_status: "verified",
-                },
-              ],
+            in: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    user_id: USER_ID,
+                    display_name: "Nomsa",
+                    account_verification_status: "verified",
+                  },
+                ],
+              }),
             }),
           };
         }
@@ -841,14 +843,16 @@ describe("GET /api/listings", () => {
         if (table === "account_profiles") {
           return {
             select: vi.fn().mockReturnThis(),
-            in: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  user_id: USER_ID,
-                  display_name: "Nomsa",
-                  account_verification_status: "verified",
-                },
-              ],
+            in: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    user_id: USER_ID,
+                    display_name: "Nomsa",
+                    account_verification_status: "verified",
+                  },
+                ],
+              }),
             }),
           };
         }
@@ -1010,14 +1014,16 @@ describe("GET /api/listings", () => {
           if (table === "account_profiles") {
             return {
               select: vi.fn().mockReturnThis(),
-              in: vi.fn().mockResolvedValue({
-                data: [
-                  {
-                    user_id: USER_ID,
-                    display_name: "Nomsa",
-                    account_verification_status: "verified",
-                  },
-                ],
+              in: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({
+                  data: [
+                    {
+                      user_id: USER_ID,
+                      display_name: "Nomsa",
+                      account_verification_status: "verified",
+                    },
+                  ],
+                }),
               }),
             };
           }

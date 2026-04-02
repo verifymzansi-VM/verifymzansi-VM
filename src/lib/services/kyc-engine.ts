@@ -59,14 +59,24 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
   // ── 1. SHA-256 deduplication ──────────────────────────────
   const sha256 = crypto.createHash("sha256").update(fileBuffer).digest("hex");
 
-  const { data: dupRows } = await adminClient
+  const { data: dupRows, error: dupErr } = await adminClient
     .from("kyc_artifacts")
     .select("id, user_id")
     .eq("sha256", sha256)
     .neq("user_id", userId)
     .limit(1);
 
-  if (dupRows && dupRows.length > 0) {
+  if (dupErr) {
+    log.error("SHA-256 dedup query failed — treating as block", { error: dupErr.message });
+    await writeSignal(adminClient, {
+      userId,
+      artifactId,
+      signalCode: "duplicate_sha256_check_error",
+      severity: "block",
+      valueJson: { error: dupErr.message },
+    });
+    signalScore += SEVERITY_WEIGHT.block;
+  } else if (dupRows && dupRows.length > 0) {
     log.warn("Duplicate SHA-256 detected across accounts", {
       sha256: sha256.slice(0, 8) + "...",
       otherUserId: dupRows[0].user_id,
@@ -118,7 +128,14 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
     const hmacSecret = env("HMAC_SECRET");
     const ZERO_KEY = "0".repeat(64);
     const CAFEBABE_PLACEHOLDER = "cafebabe".repeat(8);
-    if (!hmacSecret || hmacSecret === ZERO_KEY || hmacSecret === CAFEBABE_PLACEHOLDER) {
+    const isLowEntropy =
+      hmacSecret != null && hmacSecret.length === 64 && new Set(hmacSecret).size < 8;
+    if (
+      !hmacSecret ||
+      hmacSecret === ZERO_KEY ||
+      hmacSecret === CAFEBABE_PLACEHOLDER ||
+      isLowEntropy
+    ) {
       if (process.env.NODE_ENV === "production") {
         throw new Error(
           "HMAC_SECRET is not configured — cannot process KYC artifacts in production"
@@ -140,14 +157,24 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
         .update(idNumber)
         .digest("hex");
 
-      const { data: hmacRows } = await adminClient
+      const { data: hmacRows, error: hmacErr } = await adminClient
         .from("verification_steps")
         .select("id, user_id")
         .eq("id_number_hmac", idNumberHmac)
         .neq("user_id", userId)
         .limit(1);
 
-      if (hmacRows && hmacRows.length > 0) {
+      if (hmacErr) {
+        log.error("HMAC reuse query failed — treating as block", { error: hmacErr.message });
+        await writeSignal(adminClient, {
+          userId,
+          artifactId,
+          signalCode: "id_reuse_check_error",
+          severity: "block",
+          valueJson: { error: hmacErr.message },
+        });
+        signalScore += SEVERITY_WEIGHT.block;
+      } else if (hmacRows && hmacRows.length > 0) {
         log.warn("ID number HMAC reuse detected across accounts", {
           hmacPrefix: idNumberHmac.slice(0, 8) + "...",
         });

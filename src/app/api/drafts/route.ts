@@ -1,10 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createLogger } from "@/lib/utils/logger";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const logger = createLogger("Drafts");
 
 const VALID_FLOWS = new Set(["listing", "promotion", "business"]);
+
+/** Maximum draft request body size (64 KiB). */
+const MAX_DRAFT_BODY_BYTES = 64 * 1024;
 
 /**
  * GET /api/drafts?flow=listing
@@ -36,7 +41,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Failed to load draft" }, { status: 500 });
   }
 
-  return NextResponse.json({ draft: data });
+  return NextResponse.json(
+    { draft: data },
+    {
+      headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },
+    }
+  );
 }
 
 /**
@@ -45,10 +55,23 @@ export async function GET(request: NextRequest) {
  * Body: { flow, step, data }
  */
 export async function PUT(request: NextRequest) {
+  const originBlock = enforceSameOriginMutation(request, logger);
+  if (originBlock) return originBlock;
+  const csrfBlock = enforceCsrfToken(request, logger);
+  if (csrfBlock) return csrfBlock;
+
   let body: unknown;
   try {
-    body = await request.json();
+    const raw = await request.text();
+    if (raw.length > MAX_DRAFT_BODY_BYTES) {
+      return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+    }
+    body = JSON.parse(raw);
   } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
@@ -92,6 +115,11 @@ export async function PUT(request: NextRequest) {
  * Remove the authenticated user's draft for the given flow.
  */
 export async function DELETE(request: NextRequest) {
+  const originBlock = enforceSameOriginMutation(request, logger);
+  if (originBlock) return originBlock;
+  const csrfBlock = enforceCsrfToken(request, logger);
+  if (csrfBlock) return csrfBlock;
+
   const flow = request.nextUrl.searchParams.get("flow");
   if (!flow || !VALID_FLOWS.has(flow)) {
     return NextResponse.json({ error: "Invalid flow" }, { status: 400 });

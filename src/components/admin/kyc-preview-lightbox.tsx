@@ -236,7 +236,7 @@ export function KycPreviewLightbox({
       }
     }
 
-    loadBlob();
+    void loadBlob();
 
     return () => {
       cancelled = true;

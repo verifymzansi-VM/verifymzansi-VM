@@ -187,14 +187,11 @@ export async function POST(request: NextRequest) {
         code: stepError?.code,
         details: stepError?.details,
       });
-      return NextResponse.json(
-        { error: "Failed to save location verification", detail: stepError?.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Failed to save location verification" }, { status: 500 });
     }
 
     // Write risk signal for manual-only submission
-    await adminClient.from("kyc_risk_signals").insert({
+    const { error: signalErr } = await adminClient.from("kyc_risk_signals").insert({
       user_id: user.id,
       step_id: step.id,
       signal_code: "manual_only_location",
@@ -206,14 +203,26 @@ export async function POST(request: NextRequest) {
         note: "Location submitted via manual selection without GPS confirmation",
       },
     });
+    if (signalErr) {
+      log.error("Failed to write manual-location risk signal (non-fatal)", {
+        error: signalErr.message,
+        userId: user.id,
+      });
+    }
 
     // Update verification session
-    await adminClient.from("verification_sessions").upsert(
+    const { error: sessionErr } = await adminClient.from("verification_sessions").upsert(
       buildVerificationSessionResumePatch(user.id, {
         location_submitted_at: new Date().toISOString(),
       }),
       { onConflict: "user_id" }
     );
+    if (sessionErr) {
+      log.error("Failed to update verification session (non-fatal)", {
+        error: sessionErr.message,
+        userId: user.id,
+      });
+    }
 
     // Update account profile with location
     const profilePatch: Record<string, unknown> = {
@@ -246,7 +255,7 @@ export async function POST(request: NextRequest) {
         .select("first_name, last_name")
         .eq("user_id", user.id)
         .eq("step_type", "id_doc")
-        .single();
+        .maybeSingle();
 
       if (idDocDetail?.first_name && idDocDetail?.last_name) {
         profilePatch.legal_first_name = idDocDetail.first_name;
@@ -256,14 +265,33 @@ export async function POST(request: NextRequest) {
       }
 
       const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      await adminClient
+      const { error: purgeErr } = await adminClient
         .from("kyc_artifacts")
         .update({ purge_after: purgeAfter })
         .eq("user_id", user.id)
         .is("purge_after", null);
+      if (purgeErr) {
+        log.error("Failed to schedule KYC artifact purge (non-fatal)", {
+          error: purgeErr.message,
+          userId: user.id,
+        });
+      }
     }
 
-    await adminClient.from(ACCOUNT_PROFILE_WRITE_TABLE).update(profilePatch).eq("user_id", user.id);
+    const { error: profileUpdateErr } = await adminClient
+      .from(ACCOUNT_PROFILE_WRITE_TABLE)
+      .update(profilePatch)
+      .eq("user_id", user.id);
+    if (profileUpdateErr) {
+      log.error("Failed to update profile after location verification", {
+        userId: user.id,
+        error: profileUpdateErr.message,
+      });
+      return NextResponse.json(
+        { error: "Location saved but failed to update profile status" },
+        { status: 500 }
+      );
+    }
 
     // Audit log
     await logAuditEvent({

@@ -202,7 +202,8 @@ export async function GET(request: NextRequest) {
             "id, user_id, step_type, artifact_kind, content_type, file_size_bytes, provider_ref, purge_after, status, created_at"
           )
           .eq("user_id", matchedUserId)
-          .order("created_at", { ascending: true }),
+          .order("created_at", { ascending: true })
+          .limit(500),
         admin
           .from("listings")
           .select(
@@ -262,17 +263,23 @@ export async function GET(request: NextRequest) {
       userAuditLogs = (userAuditLogsResult.data as Record<string, unknown>[] | null) || [];
     }
 
-    await logAuditEvent({
-      action: "dsar_exported",
-      actorId: user.id,
-      actorRole,
-      targetId: requestId,
-      targetType: "dsar_case",
-      metadata: {
-        resolution: userResolution.status,
-        matchedUserId,
-      },
-    });
+    try {
+      await logAuditEvent({
+        action: "dsar_exported",
+        actorId: user.id,
+        actorRole,
+        targetId: requestId,
+        targetType: "dsar_case",
+        metadata: {
+          resolution: userResolution.status,
+          matchedUserId,
+        },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     const exportPackage = {
       generatedAt: new Date().toISOString(),

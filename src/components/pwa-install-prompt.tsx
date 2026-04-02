@@ -6,6 +6,8 @@ import { X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
+const DISMISSED_STORAGE_KEY = "pwa-prompt-dismissed";
+
 const PROMPT_BLOCKED_PATH_PREFIXES = [
   "/login",
   "/register",
@@ -30,9 +32,41 @@ function subscribeDisplayMode(callback: () => void) {
   return () => mql.removeEventListener("change", callback);
 }
 
-function getIOSFallbackSnapshot() {
+function safeGetLocalStorageItem(key: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetLocalStorageItem(key: string, value: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage write failures so the prompt remains usable in restricted contexts.
+  }
+}
+
+function isPromptDismissed() {
+  return safeGetLocalStorageItem(DISMISSED_STORAGE_KEY) === "true";
+}
+
+function getIOSFallbackSnapshot(suppressed: boolean) {
+  if (typeof window === "undefined" || suppressed) {
+    return false;
+  }
+
   // Don't show iOS fallback if dismissed from localStorage
-  if (typeof window !== "undefined" && localStorage.getItem("pwa-prompt-dismissed") === "true") {
+  if (isPromptDismissed()) {
     return false;
   }
 
@@ -43,35 +77,22 @@ function getIOSFallbackSnapshot() {
 export function PwaInstallPrompt() {
   const pathname = usePathname();
   const isPlaywright = isPlaywrightTestMode();
+  const [dismissed, setDismissed] = useState(() => isPromptDismissed());
+  const promptBlockedForRoute = PROMPT_BLOCKED_PATH_PREFIXES.some(
+    (prefix) => pathname != null && (pathname === prefix || pathname.startsWith(`${prefix}/`))
+  );
+  const promptSuppressed = isPlaywright || dismissed || promptBlockedForRoute;
   const isIOSFallback = useSyncExternalStore(
-    isPlaywright ? () => () => {} : subscribeDisplayMode,
-    isPlaywright ? () => false : getIOSFallbackSnapshot,
+    promptSuppressed ? () => () => {} : subscribeDisplayMode,
+    () => getIOSFallbackSnapshot(promptSuppressed),
     () => false
   );
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
-  const [dismissed, setDismissed] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    return localStorage.getItem("pwa-prompt-dismissed") === "true";
-  });
   const [showIOSHelp, setShowIOSHelp] = useState(false);
-  const promptBlockedForRoute = PROMPT_BLOCKED_PATH_PREFIXES.some(
-    (prefix) => pathname != null && (pathname === prefix || pathname.startsWith(`${prefix}/`))
-  );
 
   useEffect(() => {
-    if (isPlaywright) {
-      return;
-    }
-
-    if (dismissed) {
-      return;
-    }
-
-    if (promptBlockedForRoute) {
+    if (promptSuppressed) {
       return;
     }
 
@@ -108,7 +129,7 @@ export function PwaInstallPrompt() {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
-  }, [dismissed, isPlaywright, promptBlockedForRoute]);
+  }, [promptSuppressed]);
 
   const handleInstallClick = async () => {
     if (isIOSFallback) {
@@ -118,24 +139,29 @@ export function PwaInstallPrompt() {
 
     if (!deferredPrompt) return;
 
-    // Show the install prompt
-    await deferredPrompt.prompt();
+    try {
+      // Show the install prompt
+      await deferredPrompt.prompt();
 
-    // Wait for the user to respond to the prompt
-    await deferredPrompt.userChoice;
+      // Wait for the user to respond to the prompt
+      await deferredPrompt.userChoice;
 
-    // We no longer need the prompt. Clear it up
-    setDeferredPrompt(null);
-    setShowPrompt(false);
+      // We no longer need the prompt. Clear it up
+      setDeferredPrompt(null);
+      setShowPrompt(false);
+    } catch {
+      setShowPrompt(true);
+    }
   };
 
   const handleDismiss = () => {
     setShowPrompt(false);
+    setShowIOSHelp(false);
     setDismissed(true);
-    localStorage.setItem("pwa-prompt-dismissed", "true");
+    safeSetLocalStorageItem(DISMISSED_STORAGE_KEY, "true");
   };
 
-  if (isPlaywright || dismissed || promptBlockedForRoute) {
+  if (promptSuppressed) {
     return null;
   }
 

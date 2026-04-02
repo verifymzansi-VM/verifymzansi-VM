@@ -10,6 +10,7 @@ import { UPLOAD_AREAS } from "@/types/enums";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 
 const log = createLogger("MediaUploadUrl");
 
@@ -82,6 +83,8 @@ export async function POST(request: NextRequest) {
       if (originBlock) {
         return originBlock;
       }
+      const csrfBlock = enforceCsrfToken(request, log);
+      if (csrfBlock) return csrfBlock;
     }
 
     // ── Authenticate ─────────────────────────────────────────
@@ -173,12 +176,16 @@ export async function POST(request: NextRequest) {
       bucket,
       key,
       contentType,
-      3600 // 1 hour expiry
+      3600, // 1 hour expiry
+      size
     );
 
-    const publicUrl = process.env.R2_PUBLIC_URL
-      ? `${process.env.R2_PUBLIC_URL}/${key}`
-      : `https://media.verifymzansi.com/${key}`;
+    const r2PublicUrl = process.env.R2_PUBLIC_URL;
+    if (!r2PublicUrl) {
+      log.error("R2_PUBLIC_URL env var is not configured");
+      return NextResponse.json({ error: "Upload service misconfigured" }, { status: 500 });
+    }
+    const publicUrl = `${r2PublicUrl}/${key}`;
 
     log.info("Generated presigned upload URL", {
       userId: user.id,

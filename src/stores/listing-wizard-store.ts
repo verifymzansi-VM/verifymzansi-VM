@@ -27,7 +27,7 @@ interface ListingWizardState {
 
 const STEP_ORDER: WizardStep[] = ["category", "details", "attributes", "images", "review"];
 
-const MAX_WIZARD_IMAGES = 8;
+const MAX_WIZARD_IMAGES = 10;
 
 export const useListingWizardStore = create<ListingWizardState>((set) => ({
   currentStep: "category",

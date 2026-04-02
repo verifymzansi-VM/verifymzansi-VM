@@ -165,13 +165,20 @@ export async function GET(request: NextRequest) {
       ipHashSecret
     );
 
-    await adminClient.from("kyc_evidence_access_logs").insert({
+    const { error: accessLogErr } = await adminClient.from("kyc_evidence_access_logs").insert({
       actor_id: user.id,
       actor_role: role,
       artifact_id: artifact.id,
       user_id: artifact.user_id,
       ip_hash: ipHash,
     });
+    if (accessLogErr) {
+      log.error("Failed to log evidence access (POPIA compliance gap)", {
+        error: accessLogErr.message,
+        actorId: user.id,
+        artifactId: artifact.id,
+      });
+    }
 
     // Check for dev:// keys (development mode)
     if (artifact.r2_key.startsWith("dev://")) {
@@ -225,7 +232,8 @@ export async function GET(request: NextRequest) {
         .select("id, r2_key, created_at")
         .eq("user_id", artifact.user_id)
         .eq("step_type", artifact.step_type)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(20);
 
       const sameStepCandidates = (fallbackQueryError ? [] : fallbackArtifacts || []).filter(
         (candidate) => candidate.id !== artifact.id

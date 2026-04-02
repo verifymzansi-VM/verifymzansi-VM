@@ -190,7 +190,11 @@ function CreateBusinessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, profile, isLoading } = useAuth();
-  const initialType = (searchParams.get("type") as BusinessType) || "";
+  const rawType = searchParams.get("type");
+  const initialType =
+    rawType && BUSINESS_TYPE_OPTIONS.some((o) => o.value === rawType)
+      ? (rawType as BusinessType)
+      : "";
   const [step, setStep] = useState(0);
   const [businessType, setBusinessType] = useState<BusinessType | "">(initialType);
   const [businessDetails, setBusinessDetails] = useState<BusinessDetails | null>(

@@ -61,13 +61,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (status === "valid") {
-      return NextResponse.json({
-        result: "valid" as const,
-        buyerInfo: {
-          displayName: data.first_name_initial?.trim() || "Buyer",
-          verifiedAt: data.issued_at,
+      return NextResponse.json(
+        {
+          result: "valid" as const,
+          buyerInfo: {
+            displayName: data.first_name_initial?.trim() || "Buyer",
+            verifiedAt: data.issued_at,
+          },
         },
-      });
+        {
+          headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },
+        }
+      );
     }
 
     return NextResponse.json({ result: "not_found" as const });

@@ -411,6 +411,7 @@ export function KycQueueTable({
                                 variant="ghost"
                                 className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
                                 onClick={() => openReview(step, "approved")}
+                                disabled={loading}
                                 title="Approve"
                               >
                                 <CheckCircle className="h-4 w-4 mr-1" />
@@ -421,6 +422,7 @@ export function KycQueueTable({
                                 variant="ghost"
                                 className="h-8 text-destructive hover:bg-destructive/10"
                                 onClick={() => openReview(step, "rejected")}
+                                disabled={loading}
                                 title="Reject"
                               >
                                 <XCircle className="h-4 w-4 mr-1" />
@@ -431,6 +433,7 @@ export function KycQueueTable({
                                 variant="ghost"
                                 className="h-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
                                 onClick={() => openReview(step, "needs_resubmission")}
+                                disabled={loading}
                                 title="Resubmit"
                               >
                                 <RotateCcw className="h-4 w-4 mr-1" />

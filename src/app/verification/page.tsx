@@ -624,8 +624,9 @@ export default function VerificationPage() {
             setVerificationUnavailable(true);
           }
         }
-      } catch {
+      } catch (err) {
         // Session start failed — fall back to legacy
+        console.warn("[Verification] v2 session init failed", err);
       } finally {
         const statusSnapshot = await syncVerificationStatus();
 

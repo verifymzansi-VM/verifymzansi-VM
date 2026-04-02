@@ -22,7 +22,7 @@ const _LOCKOUT_MS = 15 * 60 * 1000;
 const OTP_PBKDF2_ITERATIONS = 100000;
 
 // Re-exported from shared module
-import { ensureAccountProfile, getDefaultDisplayName } from "@/lib/account/ensure-profile";
+import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 
 /** Convert a hex string to Uint8Array */
 function fromHex(hex: string): Uint8Array {
@@ -93,86 +93,22 @@ async function finalizePhoneVerification(
     };
   }
 
-  let { data: profile } = await supabase
+  const { data: profile } = await supabase
     .from(ACCOUNT_PROFILE_WRITE_TABLE)
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!profile) {
-    profile = { id: ensuredProfile.id };
-  }
+  // Use the user-client profile ID if visible, otherwise fall back to the
+  // admin-ensured ID (covers RLS-restricted scenarios).
+  const profileId = profile?.id ?? ensuredProfile.id;
 
-  if (!profile) {
-    const { data: createdProfile, error: createProfileError } = await supabase
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .upsert(
-        {
-          user_id: user.id,
-          display_name: getDefaultDisplayName(user),
-          ...accountPhoneFields,
-        },
-        { onConflict: "user_id" }
-      )
-      .select("id")
-      .single();
-
-    if (createProfileError) {
-      if (createProfileError.code === "23505") {
-        return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
-      }
-
-      log.warn(
-        "Profile create via user client failed during OTP verification; retrying with admin",
-        {
-          error: createProfileError.message,
-          code: createProfileError.code,
-          userId: user.id,
-        }
-      );
-
-      const { data: adminCreatedProfile, error: adminCreateProfileError } = await adminSupabase
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .upsert(
-          {
-            user_id: user.id,
-            display_name: getDefaultDisplayName(user),
-            ...accountPhoneFields,
-          },
-          { onConflict: "user_id" }
-        )
-        .select("id")
-        .single();
-
-      if (adminCreateProfileError) {
-        if (adminCreateProfileError.code === "23505") {
-          return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
-        }
-
-        log.error("Failed to auto-create account profile during OTP verification", {
-          error: adminCreateProfileError.message,
-          code: adminCreateProfileError.code,
-          userId: user.id,
-        });
-        return {
-          success: false,
-          error: "Failed to save the verified phone number on your account.",
-          status: 500,
-        };
-      }
-
-      profile = adminCreatedProfile;
-    } else {
-      profile = createdProfile;
-    }
-  }
-
-  if (profile) {
+  {
     const { error: profileUpdateError } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       // Promote pending_phone to canonical phone, clear staging, and stamp cooldown.
       .update({ ...accountPhoneFields, pending_phone: null, contact_last_phone_change_at: nowIso })
-      .eq("id", profile.id);
+      .eq("id", profileId);
 
     if (profileUpdateError) {
       if (profileUpdateError.code === "23505") {
@@ -196,7 +132,7 @@ async function finalizePhoneVerification(
           pending_phone: null,
           contact_last_phone_change_at: nowIso,
         })
-        .eq("id", profile.id)
+        .eq("id", profileId)
         .eq("user_id", user.id);
 
       if (adminProfileUpdateError) {
@@ -268,36 +204,36 @@ async function claimOtpChallenge(
   challengeId: string,
   nowIso: string
 ): Promise<boolean> {
-  const updateQuery = adminSupabase
+  const builder = adminSupabase
     .from("otp_challenges")
     .update({ verified_at: nowIso })
     .eq("id", challengeId)
     .is("verified_at", null);
 
-  const selectable = updateQuery as unknown as {
-    select?: (columns: string) => {
-      maybeSingle?: () => Promise<{
-        data: { id: string } | null;
-        error?: { message?: string } | null;
-      }>;
-    };
-  };
-
-  if (typeof selectable.select === "function") {
-    const result = selectable.select("id");
-    if (typeof result.maybeSingle === "function") {
-      const { data, error } = await result.maybeSingle();
-      if (error) {
-        log.warn("Failed to atomically claim OTP challenge", {
-          challengeId,
-          error: error.message,
-        });
-        return false;
-      }
-      return Boolean(data?.id);
+  // PostgREST exposes .select() on update builders at runtime even though
+  // TypeScript's `.is()` return type omits it.  Use it when available to
+  // atomically verify the claimed row; fall back to a plain update otherwise.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const selectFn = (builder as any).select;
+  if (typeof selectFn === "function") {
+     
+    const { data, error } = await selectFn.call(builder, "id").maybeSingle();
+    if (error) {
+      log.warn("Failed to atomically claim OTP challenge", {
+        challengeId,
+        error: error.message,
+      });
+      return false;
     }
+    return Boolean(data?.id);
   }
 
+  // Fallback: if .select() is unavailable, just await the builder directly.
+  const { error } = await builder;
+  if (error) {
+    log.warn("Failed to claim OTP challenge", { challengeId, error: error.message });
+    return false;
+  }
   return true;
 }
 
@@ -308,19 +244,19 @@ async function markSiblingChallengesVerified(
   challengeId: string,
   nowIso: string
 ): Promise<void> {
-  const siblingQuery = adminSupabase
+  const builder = adminSupabase
     .from("otp_challenges")
     .update({ verified_at: nowIso })
     .eq("user_id", userId)
     .eq("phone", phone)
     .is("verified_at", null);
 
-  const withNeq = siblingQuery as unknown as {
-    neq?: (column: string, value: string) => Promise<{ error?: { message?: string } | null }>;
-  };
-
-  if (typeof withNeq.neq === "function") {
-    const { error } = await withNeq.neq("id", challengeId);
+  // PostgREST exposes .neq() at runtime; use it when available to exclude
+  // the already-claimed challenge, otherwise fall back to the plain update.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const neqFn = (builder as any).neq;
+  if (typeof neqFn === "function") {
+    const { error } = await neqFn.call(builder, "id", challengeId);
     if (error) {
       log.warn("Failed to mark sibling OTP challenges verified", {
         userId,
@@ -328,6 +264,18 @@ async function markSiblingChallengesVerified(
         error: error.message,
       });
     }
+    return;
+  }
+
+  // Fallback: update without the .neq() filter — the already-claimed
+  // challenge already has verified_at set so IS NULL excludes it.
+  const { error } = await builder;
+  if (error) {
+    log.warn("Failed to mark sibling OTP challenges verified (fallback)", {
+      userId,
+      challengeId,
+      error: error.message,
+    });
   }
 }
 

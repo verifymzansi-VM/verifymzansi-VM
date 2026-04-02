@@ -17,6 +17,7 @@ import {
 } from "@/lib/account/compat";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { parseAndValidateRouteParams } from "@/lib/utils/api";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
@@ -43,6 +44,9 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   try {
     const originBlock = enforceSameOriginMutation(_request, log);
     if (originBlock) return originBlock;
+
+    const csrfBlock = enforceCsrfToken(_request, log);
+    if (csrfBlock) return csrfBlock;
 
     const parsedParams = parseAndValidateRouteParams(await params, businessBoostParamsSchema, {
       validationErrorMessage: "Invalid business ID",

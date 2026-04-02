@@ -180,21 +180,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to start plan change checkout" }, { status: 500 });
     }
 
-    await logAuditEvent({
-      actorId: user.id,
-      actorRole: "member",
-      action: "checkout_initiated",
-      targetType: "payment",
-      targetId: paymentId,
-      metadata: {
-        change_type: "plan_change",
-        previous_entitlement_id: entitlement.id,
-        previous_tier: entitlement.tier,
-        new_plan_id: newPlan.id,
-        new_tier: newPlan.tier,
-        area: newPlan.area,
-      },
-    });
+    try {
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: "member",
+        action: "checkout_initiated",
+        targetType: "payment",
+        targetId: paymentId,
+        metadata: {
+          change_type: "plan_change",
+          previous_entitlement_id: entitlement.id,
+          previous_tier: entitlement.tier,
+          new_plan_id: newPlan.id,
+          new_tier: newPlan.tier,
+          area: newPlan.area,
+        },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     return NextResponse.json({ success: true, paymentId, checkoutUrl });
   } catch (error) {

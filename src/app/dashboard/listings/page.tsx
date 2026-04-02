@@ -496,7 +496,11 @@ function ListingList({
                 className="h-9 w-9"
                 aria-label={`View ${listing.title}`}
               >
-                <Link href={getViewHref(listing.area, listing.id)} target="_blank">
+                <Link
+                  href={getViewHref(listing.area, listing.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Link>
               </Button>

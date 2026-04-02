@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   ChevronLeft,
@@ -79,26 +79,32 @@ export function ListingDetailClient({
 }: ListingDetailClientProps) {
   const normalizedPhotos = normalizeMediaUrls(photos).filter(Boolean);
   const normalizedVideos = normalizeMediaUrls(videos).filter(Boolean);
-  const sourceOrderedMedia: MediaItem[] =
-    photoCount != null
-      ? [...normalizedPhotos, ...normalizedVideos].map((url, index) => ({
-          url,
-          kind: index < photoCount ? "photo" : "video",
-        }))
-      : [
-          ...normalizedPhotos.map((url) => ({ url, kind: "photo" as const })),
-          ...normalizedVideos.map((url) => ({ url, kind: "video" as const })),
-        ];
-  const orderedMedia = useMemo(
-    () => [
+  const orderedMedia = useMemo(() => {
+    const sourceOrderedMedia: MediaItem[] =
+      photoCount != null
+        ? [...normalizedPhotos, ...normalizedVideos].map((url, index) => ({
+            url,
+            kind: index < photoCount ? "photo" : "video",
+          }))
+        : [
+            ...normalizedPhotos.map((url) => ({ url, kind: "photo" as const })),
+            ...normalizedVideos.map((url) => ({ url, kind: "video" as const })),
+          ];
+    return [
       ...sourceOrderedMedia.filter((item) => item.kind === "video"),
       ...sourceOrderedMedia.filter((item) => item.kind === "photo"),
-    ],
+    ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [normalizedPhotos.length, normalizedVideos.length]
-  );
+  }, [photos, videos, photoCount]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    },
+    []
+  );
 
   /* ---- video controls state ---- */
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -187,7 +193,7 @@ export function ListingDetailClient({
       const url = `${window.location.origin}/listing/${listingId}`;
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       /* ignore */
     }

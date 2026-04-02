@@ -93,21 +93,27 @@ async function sendPaymentStatusEmail(params: {
     });
   }
 
-  await logAuditEvent({
-    actorId: SYSTEM_ACTOR_ID,
-    actorRole: "system",
-    action: result.success ? "communication_email_sent" : "communication_email_failed",
-    targetType: "account_profile",
-    targetId: params.userId,
-    metadata: {
-      template: params.status === "success" ? "payment_receipt" : "payment_failed",
-      channel: "email",
-      error: result.error,
-      owner_user_id: params.userId,
-      payment_id: params.logContext.paymentId,
-      provider_payment_id: params.logContext.providerPaymentId,
-    },
-  });
+  try {
+    await logAuditEvent({
+      actorId: SYSTEM_ACTOR_ID,
+      actorRole: "system",
+      action: result.success ? "communication_email_sent" : "communication_email_failed",
+      targetType: "account_profile",
+      targetId: params.userId,
+      metadata: {
+        template: params.status === "success" ? "payment_receipt" : "payment_failed",
+        channel: "email",
+        error: result.error,
+        owner_user_id: params.userId,
+        payment_id: params.logContext.paymentId,
+        provider_payment_id: params.logContext.providerPaymentId,
+      },
+    });
+  } catch (auditErr) {
+    log.error("Audit log failed (non-fatal)", {
+      error: auditErr instanceof Error ? auditErr.message : "Unknown",
+    });
+  }
 }
 
 /** Non-blocking audit log for completed payments. */
@@ -128,8 +134,8 @@ async function auditPaymentCompleted(payment: {
       metadata: {
         provider: payment.provider,
         amount_cents: payment.amount_cents,
-        provider_payment_id: payment.provider_payment_id ?? undefined,
-        area: payment.area ?? undefined,
+        provider_payment_id: payment.provider_payment_id,
+        area: payment.area,
       },
     });
   } catch (auditErr) {

@@ -106,7 +106,8 @@ export async function getKycOverviewMetrics(periodDays = 30): Promise<KycOvervie
     .from("verification_steps")
     .select("submitted_at, reviewed_at")
     .not("reviewed_at", "is", null)
-    .gte("submitted_at", since);
+    .gte("submitted_at", since)
+    .limit(5000);
 
   let averageReviewHours: number | null = null;
   if (reviewTimeData && reviewTimeData.length > 0) {
@@ -142,7 +143,8 @@ export async function getRejectionBreakdown(periodDays = 30): Promise<RejectionB
     .from("verification_steps")
     .select("override_reason_code")
     .eq("status", "rejected")
-    .gte("submitted_at", since);
+    .gte("submitted_at", since)
+    .limit(5000);
 
   if (!data || data.length === 0) return [];
 

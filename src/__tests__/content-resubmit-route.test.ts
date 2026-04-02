@@ -13,6 +13,7 @@ vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: () => ({ limited: false }),
 }));
+vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: vi.fn().mockReturnValue(null) }));
 
 import { POST } from "@/app/api/content/resubmit/route";
 

@@ -57,7 +57,10 @@ export default async function GovernanceAppealsPage() {
                     <div>
                       <p className="text-sm font-medium">Appeal #{appeal.id.slice(0, 8)}</p>
                       <p className="text-xs text-muted-foreground">
-                        Submitted {new Date(appeal.created_at).toLocaleDateString()}
+                        Submitted{" "}
+                        {new Date(appeal.created_at).toLocaleDateString("en-ZA", {
+                          timeZone: "Africa/Johannesburg",
+                        })}
                       </p>
                       <p className="text-xs text-muted-foreground line-clamp-1">{appeal.reason}</p>
                     </div>

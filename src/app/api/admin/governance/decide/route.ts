@@ -91,32 +91,34 @@ export async function POST(request: Request) {
         .from("decision_records")
         .select("recommender_id, action_category")
         .eq("id", decisionId)
-        .single();
+        .maybeSingle();
 
-      if (decision) {
-        // Four-eyes principle: approver must differ from recommender
-        if (decision.recommender_id === user.id) {
-          return NextResponse.json(
-            { error: "Cannot approve/reject your own recommendation" },
-            { status: 403 }
-          );
-        }
+      if (!decision) {
+        return NextResponse.json({ error: "Decision record not found" }, { status: 404 });
+      }
 
-        // High-stakes categories require a secondary approver
-        if (
-          action === "approve" &&
-          DUAL_APPROVAL_CATEGORIES.has(decision.action_category) &&
-          !secondaryApproverId
-        ) {
-          return NextResponse.json(
-            {
-              error: "Dual approval required",
-              detail:
-                "High-stakes decisions require a secondary approver. Provide secondaryApproverId.",
-            },
-            { status: 422 }
-          );
-        }
+      // Four-eyes principle: approver must differ from recommender
+      if (decision.recommender_id === user.id) {
+        return NextResponse.json(
+          { error: "Cannot approve/reject your own recommendation" },
+          { status: 403 }
+        );
+      }
+
+      // High-stakes categories require a secondary approver
+      if (
+        action === "approve" &&
+        DUAL_APPROVAL_CATEGORIES.has(decision.action_category) &&
+        !secondaryApproverId
+      ) {
+        return NextResponse.json(
+          {
+            error: "Dual approval required",
+            detail:
+              "High-stakes decisions require a secondary approver. Provide secondaryApproverId.",
+          },
+          { status: 422 }
+        );
       }
     }
 

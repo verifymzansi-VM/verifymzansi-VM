@@ -330,7 +330,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Build the promotion row
-    const priceCents = data.price_zar != null ? Math.round(data.price_zar * 100) : null;
+    const priceCents =
+      data.price_zar != null ? Math.round(+(data.price_zar * 100).toPrecision(12)) : null;
     const socialAuthorizationWriteResult = getPromotionSocialAuthorizationWriteResult(
       data.socialAuthorization,
       null
@@ -385,7 +386,17 @@ export async function POST(request: NextRequest) {
     if (insertError || !promotion) {
       log.error("Failed to create promotion", { error: insertError?.message });
       if (!hasPaidPlan && !postingLimitBypassEnabled) {
-        await getAdmin().from("free_posts_used").delete().eq("user_id", user.id).eq("area", AREA);
+        const { error: cleanupErr } = await getAdmin()
+          .from("free_posts_used")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("area", AREA);
+        if (cleanupErr) {
+          log.error("Failed to clean up free_posts_used after promotion insert failure", {
+            error: cleanupErr.message,
+            userId: user.id,
+          });
+        }
       }
       return NextResponse.json({ error: "Failed to create promotion" }, { status: 500 });
     }
@@ -404,7 +415,17 @@ export async function POST(request: NextRequest) {
       const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
 
       if (!postCheck.allowed) {
-        await getAdmin().from("promotions").delete().eq("id", promotion.id);
+        const { error: rollbackErr } = await getAdmin()
+          .from("promotions")
+          .delete()
+          .eq("id", promotion.id);
+        if (rollbackErr) {
+          log.error("Failed to roll back promotion — orphaned record", {
+            promotionId: promotion.id,
+            userId: user.id,
+            error: rollbackErr.message,
+          });
+        }
         log.warn("Rolled back promotion due to concurrent limit breach", {
           promotionId: promotion.id,
           userId: user.id,
@@ -526,10 +547,11 @@ export async function GET(request: NextRequest) {
 
       if (promotionType) {
         const storedTypes = getStoredPromotionTypesForFilter(promotionType);
-        query =
-          storedTypes.length === 1
-            ? query.eq("promotion_type", storedTypes[0])
-            : query.in("promotion_type", storedTypes);
+        if (storedTypes.length === 1) {
+          query = query.eq("promotion_type", storedTypes[0]);
+        } else if (storedTypes.length > 1) {
+          query = query.in("promotion_type", storedTypes);
+        }
       }
       if (businessId) {
         query = query.eq("business_id", businessId);
@@ -544,10 +566,7 @@ export async function GET(request: NextRequest) {
         query = query.eq("location_city", city);
       }
       if (search) {
-        const safeSearch = search
-          .replace(/[,.()\\/]/g, "")
-          .replace(/%/g, "\\%")
-          .replace(/_/g, "\\_");
+        const safeSearch = search.replace(/[^\p{L}\p{N}\s]/gu, "").trim();
         if (safeSearch) {
           query = query.or(`title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
         }

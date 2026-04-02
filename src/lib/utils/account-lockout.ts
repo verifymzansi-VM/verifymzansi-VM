@@ -144,7 +144,7 @@ export async function checkDistributedLockout(
     key: normalizeEmail(email),
     action: "auth:lockout",
     readOnly: true,
-    degradedMode: "local",
+    degradedMode: "block",
   });
   return { locked: result.limited, retryAfter: result.retryAfter };
 }
@@ -159,7 +159,7 @@ export async function recordDistributedFailedLogin(
   const result = await checkRateLimit({
     key: normalizeEmail(email),
     action: "auth:lockout",
-    degradedMode: "local",
+    degradedMode: "block",
   });
   return { locked: result.limited, retryAfter: result.retryAfter };
 }

@@ -30,6 +30,7 @@ import { BusinessGallery } from "@/components/listings/business-gallery";
 import { BusinessPromoVideo } from "@/components/listings/business-promo-video";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { safeExternalHref } from "@/lib/utils/sanitize-html";
 import {
   BUSINESS_CATEGORY_LABELS,
   BUSINESS_TYPE_LABELS,
@@ -204,7 +205,7 @@ function ContactCard({
               <div className="flex gap-2">
                 {socialLinks?.facebook && (
                   <a
-                    href={socialLinks.facebook}
+                    href={safeExternalHref(socialLinks.facebook)}
                     target="_blank"
                     rel="noopener noreferrer nofollow ugc"
                     title="Facebook"
@@ -215,7 +216,7 @@ function ContactCard({
                 )}
                 {socialLinks?.instagram && (
                   <a
-                    href={socialLinks.instagram}
+                    href={safeExternalHref(socialLinks.instagram)}
                     target="_blank"
                     rel="noopener noreferrer nofollow ugc"
                     title="Instagram"
@@ -226,7 +227,7 @@ function ContactCard({
                 )}
                 {socialLinks?.twitter && (
                   <a
-                    href={socialLinks.twitter}
+                    href={safeExternalHref(socialLinks.twitter)}
                     target="_blank"
                     rel="noopener noreferrer nofollow ugc"
                     title="Twitter"
@@ -237,7 +238,7 @@ function ContactCard({
                 )}
                 {socialLinks?.tiktok && (
                   <a
-                    href={socialLinks.tiktok}
+                    href={safeExternalHref(socialLinks.tiktok)}
                     target="_blank"
                     rel="noopener noreferrer nofollow ugc"
                     title="TikTok"
@@ -248,7 +249,7 @@ function ContactCard({
                 )}
                 {business.website && (
                   <a
-                    href={business.website}
+                    href={safeExternalHref(business.website)}
                     target="_blank"
                     rel="noopener noreferrer nofollow ugc"
                     title="Website"

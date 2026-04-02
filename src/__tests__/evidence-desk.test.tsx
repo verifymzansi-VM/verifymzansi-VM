@@ -30,6 +30,10 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
+}));
+
 import { EvidenceDeskClient } from "@/components/admin/evidence-desk";
 
 // ── Mock data ────────────────────────────────────────────────

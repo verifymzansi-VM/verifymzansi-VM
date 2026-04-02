@@ -27,8 +27,12 @@ export async function GET() {
     }
 
     return NextResponse.json({ valid: true }, { status: 200 });
-  } catch {
-    return NextResponse.json({ valid: false }, { status: 200 });
+  } catch (error) {
+    const logger = createLogger("ResetPassword");
+    logger.error("Recovery session check failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 

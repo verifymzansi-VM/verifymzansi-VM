@@ -9,6 +9,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { maskIdNumber } from "@/lib/utils/mask";
 import { getClientIp, checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 
 const log = createLogger("DSAR");
 const dsarSubmitSchema = dsarRequestSchema.extend({
@@ -92,7 +93,11 @@ export async function POST(request: NextRequest) {
         requester_email: email,
         requester_phone: "not_provided",
         identity_verified: false,
-        description: [`Name: ${name}`, maskedId ? `ID: ${maskedId}` : null, details || null]
+        description: [
+          `Name: ${sanitizeUserMessage(name)}`,
+          maskedId ? `ID: ${maskedId}` : null,
+          details ? sanitizeUserMessage(details) : null,
+        ]
           .filter(Boolean)
           .join(" | "),
         status: "submitted",
@@ -101,24 +106,29 @@ export async function POST(request: NextRequest) {
       .select("id")
       .single();
 
-    if (insertError) {
-      log.error("Insert error", { error: insertError?.message });
+    if (insertError || !dsarRecord) {
+      log.error("Insert error", { error: insertError?.message ?? "No data returned" });
       return NextResponse.json({ error: "Failed to submit request" }, { status: 500 });
     }
 
-    // ── Audit log ────────────────────────────────────────────
-    await logAuditEvent({
-      actorId: "00000000-0000-0000-0000-000000000000",
-      actorRole: "system",
-      action: "dsar_requested",
-      targetType: "dsar_case",
-      targetId: dsarRecord.id,
-      metadata: {
-        type,
-        requesterEmail: email,
-        dueBy: dueBy.toISOString(),
-      },
-    });
+    // ── Audit log (best-effort) ────────────────────────────────
+    try {
+      await logAuditEvent({
+        actorId: "00000000-0000-0000-0000-000000000000",
+        actorRole: "system",
+        action: "dsar_requested",
+        targetType: "dsar_case",
+        targetId: dsarRecord.id,
+        metadata: {
+          type,
+          dueBy: dueBy.toISOString(),
+        },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     // Generate a human-readable reference
     const reference = `DSAR-${dsarRecord.id.slice(0, 8).toUpperCase()}`;

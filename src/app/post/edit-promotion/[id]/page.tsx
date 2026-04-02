@@ -28,6 +28,7 @@ import {
 } from "@/components/billing/plan-gate";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
@@ -145,8 +146,8 @@ export default function EditPromotionPage() {
       }
     }
 
-    load();
-    loadBusinesses();
+    void load();
+    void loadBusinesses();
   }, [promotionId]);
 
   useEffect(
@@ -227,6 +228,7 @@ export default function EditPromotionPage() {
               for (const f of newPhotoFiles) uploadData.append("files", f);
               const uploadRes = await fetch("/api/media/upload", {
                 method: "POST",
+                headers: withCsrfHeaders(),
                 body: uploadData,
               });
               if (!uploadRes.ok) throw new Error("Failed to upload photos");
@@ -241,7 +243,7 @@ export default function EditPromotionPage() {
               newVideoFiles.map(async (file) => {
                 const urlRes = await fetch("/api/media/upload-url", {
                   method: "POST",
-                  headers: { "Content-Type": "application/json" },
+                  headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                   body: JSON.stringify({
                     filename: file.name,
                     contentType: file.type,
@@ -292,7 +294,7 @@ export default function EditPromotionPage() {
 
       const res = await fetch(`/api/promotions/${promotionId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(body),
       });
 

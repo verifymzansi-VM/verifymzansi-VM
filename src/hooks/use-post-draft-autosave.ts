@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import {
   saveDraft,
   loadDraft,
@@ -19,7 +20,7 @@ async function saveToServer<T>(flow: DraftFlow, step: number, data: T): Promise<
   try {
     await fetch("/api/drafts", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ flow, step, data }),
     });
   } catch {
@@ -46,7 +47,10 @@ async function loadFromServer<T>(flow: DraftFlow): Promise<DraftEnvelope<T> | nu
 
 async function deleteFromServer(flow: DraftFlow): Promise<void> {
   try {
-    await fetch(`/api/drafts?flow=${encodeURIComponent(flow)}`, { method: "DELETE" });
+    await fetch(`/api/drafts?flow=${encodeURIComponent(flow)}`, {
+      method: "DELETE",
+      headers: withCsrfHeaders(),
+    });
   } catch {
     // Best-effort.
   }

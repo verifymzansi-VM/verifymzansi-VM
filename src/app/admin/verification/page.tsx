@@ -22,7 +22,12 @@ export default async function AdminVerificationPage() {
     redirect("/dashboard");
   }
 
-  const pendingGroups = await getPendingVerificationGroups(100);
+  let pendingGroups: Awaited<ReturnType<typeof getPendingVerificationGroups>> = [];
+  try {
+    pendingGroups = await getPendingVerificationGroups(100);
+  } catch {
+    /* degrade gracefully — show empty queue */
+  }
   const evidenceDeskEnabled = await isFeatureEnabled("kyc_evidence_desk");
   const pendingRequestCount = pendingGroups.reduce((count, group) => count + group.steps.length, 0);
 

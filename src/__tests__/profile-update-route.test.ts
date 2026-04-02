@@ -105,7 +105,7 @@ describe("POST /api/profile/update", () => {
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
-              single: updateSingle,
+              maybeSingle: updateSingle,
             }),
           }),
         }),
@@ -138,7 +138,7 @@ describe("POST /api/profile/update", () => {
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
-            single: updateSingle,
+            maybeSingle: updateSingle,
           }),
         }),
       }),
@@ -201,7 +201,7 @@ describe("POST /api/profile/update", () => {
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
-            single: updateSingle,
+            maybeSingle: updateSingle,
           }),
         }),
       }),
@@ -244,7 +244,7 @@ describe("POST /api/profile/update", () => {
       }),
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({ single: vi.fn() }),
+          select: vi.fn().mockReturnValue({ maybeSingle: vi.fn() }),
         }),
       }),
     });
@@ -266,7 +266,7 @@ describe("POST /api/profile/update", () => {
     const update = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({
+          maybeSingle: vi.fn().mockResolvedValue({
             data: { user_id: "user-1", display_name: "Nomsa" },
             error: null,
           }),
@@ -324,7 +324,7 @@ describe("POST /api/profile/update", () => {
       }),
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({ single: vi.fn() }),
+          select: vi.fn().mockReturnValue({ maybeSingle: vi.fn() }),
         }),
       }),
     });
@@ -354,7 +354,7 @@ describe("POST /api/profile/update", () => {
       maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({ single: updateSingle }),
+          select: vi.fn().mockReturnValue({ maybeSingle: updateSingle }),
         }),
       }),
     });

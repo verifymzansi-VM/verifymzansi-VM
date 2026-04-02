@@ -272,12 +272,24 @@ export async function POST(request: NextRequest) {
     const artifactKind = artifactKindMap[docType];
 
     // ── Guard: prevent re-uploading over already-approved steps ──
-    const { data: existingStep } = await admin
+    const { data: existingStep, error: existingStepErr } = await admin
       .from("verification_steps")
       .select("status, risk_score, risk_level, auto_status")
       .eq("user_id", user.id)
       .eq("step_type", stepType)
       .maybeSingle();
+
+    if (existingStepErr) {
+      log.error("Failed to read existing verification step", {
+        error: existingStepErr.message,
+        userId: user.id,
+        stepType,
+      });
+      return jsonError(
+        { error: "Unable to verify step status. Please try again." },
+        { status: 500 }
+      );
+    }
 
     if (existingStep?.status === "approved") {
       return jsonError(
@@ -439,13 +451,19 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Patch artifact with sha256 and provider_ref ───────────
-    await admin
+    const { error: patchErr } = await admin
       .from("kyc_artifacts")
       .update({
         sha256: engineResult.sha256,
         provider_ref: engineResult.providerRef ?? null,
       })
       .eq("id", artifact.id);
+    if (patchErr) {
+      log.error("Failed to patch artifact with sha256/provider_ref (non-fatal)", {
+        error: patchErr.message,
+        artifactId: artifact.id,
+      });
+    }
 
     // ── Build verification step data ──────────────────────────
     // Auto-approve low-risk steps where the provider approved and no
@@ -597,12 +615,20 @@ export async function POST(request: NextRequest) {
     //
     // Re-read the step after upsert to avoid TOCTOU — a concurrent upload
     // may have written a higher score between our pre-read and now.
-    const { data: currentStep } = await admin
+    const { data: currentStep, error: currentStepErr } = await admin
       .from("verification_steps")
       .select("risk_score, risk_level, auto_status")
       .eq("user_id", user.id)
       .eq("step_type", stepType)
-      .single();
+      .maybeSingle();
+
+    if (currentStepErr) {
+      log.error("Failed to re-read step for risk-score restoration", {
+        error: currentStepErr.message,
+        userId: user.id,
+        stepType,
+      });
+    }
 
     if (
       existingStep &&
@@ -618,7 +644,7 @@ export async function POST(request: NextRequest) {
         currentScore: currentStep.risk_score,
         newScore: engineResult.riskScore,
       });
-      await admin
+      const { error: restoreErr } = await admin
         .from("verification_steps")
         .update({
           risk_score: existingStep.risk_score,
@@ -627,6 +653,13 @@ export async function POST(request: NextRequest) {
         })
         .eq("user_id", user.id)
         .eq("step_type", stepType);
+      if (restoreErr) {
+        log.error("Failed to restore higher risk score (non-fatal)", {
+          error: restoreErr.message,
+          userId: user.id,
+          stepType,
+        });
+      }
     }
 
     // ── Update verification_sessions ──────────────────────────
@@ -657,7 +690,7 @@ export async function POST(request: NextRequest) {
       .from("verification_sessions")
       .select("id_artifact_id, selfie_artifact_id, location_submitted_at, finalized_at")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     // Check phone verification status from verification_steps
     const { data: phoneStep } = await admin
@@ -675,11 +708,17 @@ export async function POST(request: NextRequest) {
       currentSession.location_submitted_at &&
       phoneStep?.phone_verified_at
     ) {
-      await admin
+      const { error: finalizeErr } = await admin
         .from("verification_sessions")
         .update({ finalized_at: new Date().toISOString() })
         .eq("user_id", user.id)
         .is("finalized_at", null); // CAS guard: prevent double finalization
+      if (finalizeErr) {
+        log.error("Failed to finalize verification session (non-fatal)", {
+          error: finalizeErr.message,
+          userId: user.id,
+        });
+      }
     }
 
     // ── Update account verification status based on risk engine result ─
@@ -688,7 +727,7 @@ export async function POST(request: NextRequest) {
     // "pending_review" when all steps have actually been rejected.
     const isHardReject = engineResult.autoStatus === "rejected";
     if (!isHardReject) {
-      const { data: statusUpdated } = await admin
+      const { data: statusUpdated, error: statusErr } = await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_verification_status: "pending_review",
@@ -697,7 +736,12 @@ export async function POST(request: NextRequest) {
         .in("account_verification_status", ["incomplete", "rejected"])
         .select("id");
 
-      if (statusUpdated?.length) {
+      if (statusErr) {
+        log.error("Failed to promote account to pending_review", {
+          error: statusErr.message,
+          profileId: profile.id,
+        });
+      } else if (statusUpdated?.length) {
         log.info("Account verification status promoted to pending_review", {
           profileId: profile.id,
         });
@@ -715,10 +759,17 @@ export async function POST(request: NextRequest) {
     // (phone, id_doc, selfie, location) is now approved. If so, skip
     // the admin queue entirely and promote the account to "verified".
     if (isAutoApproved) {
-      const { data: allSteps } = await admin
+      const { data: allSteps, error: allStepsErr } = await admin
         .from("verification_steps")
         .select("step_type, status")
         .eq("user_id", user.id);
+
+      if (allStepsErr) {
+        log.error("Failed to read verification steps for auto-promote", {
+          error: allStepsErr.message,
+          userId: user.id,
+        });
+      }
 
       const stepMap = new Map((allSteps ?? []).map((s) => [s.step_type, s.status]));
       const allApproved =
@@ -728,14 +779,19 @@ export async function POST(request: NextRequest) {
         stepMap.get("location") === "approved";
 
       if (allApproved) {
-        const { data: promoted } = await admin
+        const { data: promoted, error: promoteErr } = await admin
           .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .update({ account_verification_status: "verified" })
           .eq("id", profile.id)
           .in("account_verification_status", ["incomplete", "pending_review"])
           .select("id");
 
-        if (promoted?.length) {
+        if (promoteErr) {
+          log.error("Failed to auto-promote account to verified (non-fatal)", {
+            error: promoteErr.message,
+            profileId: profile.id,
+          });
+        } else if (promoted?.length) {
           log.info("Account auto-promoted to verified — all steps approved by engine", {
             profileId: profile.id,
             userId: user.id,
@@ -744,22 +800,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Audit log ────────────────────────────────────────────
-    await logAuditEvent({
-      actorId: user.id,
-      actorRole: "member",
-      action: "verification_submitted",
-      targetType: "kyc_artifact",
-      targetId: artifact.id,
-      metadata: {
-        docType,
-        stepType,
-        fileSize: file.size,
-        contentType: file.type,
-        riskLevel: engineResult.riskLevel,
-        riskScore: engineResult.riskScore,
-      },
-    });
+    // ── Audit log (best-effort) ────────────────────────────────
+    try {
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: "member",
+        action: "verification_submitted",
+        targetType: "kyc_artifact",
+        targetId: artifact.id,
+        metadata: {
+          docType,
+          stepType,
+          fileSize: file.size,
+          contentType: file.type,
+          riskLevel: engineResult.riskLevel,
+          riskScore: engineResult.riskScore,
+        },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     return NextResponse.json({
       success: true,

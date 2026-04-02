@@ -249,14 +249,15 @@ export async function GET(request: NextRequest) {
         .from("kyc_risk_signals")
         .select("id, user_id, artifact_id, signal_type, signal_key, score, detail, created_at")
         .eq("user_id", targetUserId)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(50),
       adminClient
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .select(
           "display_name, account_verification_status, account_status, strikes, legal_hold, location_province, location_city"
         )
         .eq("user_id", targetUserId)
-        .single(),
+        .maybeSingle(),
       adminClient
         .from("kyc_evidence_access_logs")
         .select("id, actor_id, actor_role, artifact_id, ip_hash, accessed_at")
@@ -345,20 +346,26 @@ export async function GET(request: NextRequest) {
         }
       : null;
 
-    // Log this evidence view
+    // Log this evidence view (best-effort)
     const auditStartedAt = Date.now();
-    await logAuditEvent({
-      actorId: user.id,
-      actorRole: role,
-      action: "kyc_evidence_viewed",
-      targetType: "verification_step",
-      targetId: stepId || targetUserId,
-      metadata: {
-        viewed_user_id: targetUserId,
-        step_count: steps.length,
-        artifact_count: (artifacts || []).length,
-      },
-    });
+    try {
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: role,
+        action: "kyc_evidence_viewed",
+        targetType: "verification_step",
+        targetId: stepId || targetUserId,
+        metadata: {
+          viewed_user_id: targetUserId,
+          step_count: steps.length,
+          artifact_count: (artifacts || []).length,
+        },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
     auditMs = Date.now() - auditStartedAt;
 
     const totalMs = Date.now() - requestStartedAt;
@@ -390,15 +397,20 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
-      steps,
-      artifacts: artifacts || [],
-      providerResults,
-      riskSignals: activeRiskSignals || [],
-      accountProfile: accountProfilePayload,
-      sellerProfile: accountProfilePayload,
-      accessLog: accessLog || [],
-    });
+    return NextResponse.json(
+      {
+        steps,
+        artifacts: artifacts || [],
+        providerResults,
+        riskSignals: activeRiskSignals || [],
+        accountProfile: accountProfilePayload,
+        sellerProfile: accountProfilePayload,
+        accessLog: accessLog || [],
+      },
+      {
+        headers: { "Cache-Control": "private, no-store" },
+      }
+    );
   } catch (err) {
     responseStatus = 500;
     log.error("Unexpected error", {

@@ -102,7 +102,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
     }
 
-    fetchBadges();
+    void fetchBadges();
   }, []);
 
   const handleSignOut = useCallback(async () => {

@@ -27,6 +27,7 @@ import type { PlanTier } from "@/types/enums";
 import type { BusinessDetails } from "@/types/business-details";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 
@@ -168,6 +169,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const parsedParams = parseAndValidateRouteParams(await params, businessIdParamsSchema, {
       validationErrorMessage: "Invalid business ID",
@@ -393,6 +396,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const originBlock = enforceSameOriginMutation(_request, log);
+    if (originBlock) return originBlock;
+    const csrfBlock = enforceCsrfToken(_request, log);
+    if (csrfBlock) return csrfBlock;
+
     const parsedParams = parseAndValidateRouteParams(await params, businessIdParamsSchema, {
       validationErrorMessage: "Invalid business ID",
       includeValidationDetails: false,

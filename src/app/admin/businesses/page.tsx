@@ -28,15 +28,19 @@ export default async function AdminBusinessesPage() {
     redirect("/dashboard");
   }
 
-  const [pendingVerifications, pendingContent, reports, activity, actionsToday] = await Promise.all(
-    [
-      getPendingVerificationGroups(),
-      getPendingContent("MZANSI_BUSINESS"),
-      getAreaReports("MZANSI_BUSINESS"),
-      getRecentActivity(20, "MZANSI_BUSINESS"),
-      getActionsToday("MZANSI_BUSINESS"),
-    ]
-  );
+  const settled = await Promise.allSettled([
+    getPendingVerificationGroups(),
+    getPendingContent("MZANSI_BUSINESS"),
+    getAreaReports("MZANSI_BUSINESS"),
+    getRecentActivity(20, "MZANSI_BUSINESS"),
+    getActionsToday("MZANSI_BUSINESS"),
+  ]);
+
+  const pendingVerifications = settled[0].status === "fulfilled" ? settled[0].value : [];
+  const pendingContent = settled[1].status === "fulfilled" ? settled[1].value : [];
+  const reports = settled[2].status === "fulfilled" ? settled[2].value : [];
+  const activity = settled[3].status === "fulfilled" ? settled[3].value : [];
+  const actionsToday = settled[4].status === "fulfilled" ? settled[4].value : {};
   const pendingVerificationCount = pendingVerifications.reduce(
     (count, group) => count + group.steps.length,
     0

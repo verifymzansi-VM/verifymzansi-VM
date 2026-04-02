@@ -200,7 +200,7 @@ export async function POST(request: Request) {
             .select("first_name, last_name")
             .eq("user_id", step.user_id)
             .eq("step_type", "id_doc")
-            .single();
+            .maybeSingle();
 
           if (idDocDetail?.first_name && idDocDetail?.last_name) {
             const fullLegalName = `${idDocDetail.first_name} ${idDocDetail.last_name}`;
@@ -217,10 +217,20 @@ export async function POST(request: Request) {
           }
         }
 
-        await admin
+        const { error: profileErr } = await admin
           .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .update(legalNamePatch)
           .eq("user_id", step.user_id);
+        if (profileErr) {
+          log.error("Failed to update account profile after approval", {
+            error: profileErr.message,
+            userId: step.user_id,
+          });
+          return NextResponse.json(
+            { error: "Failed to propagate verification status" },
+            { status: 500 }
+          );
+        }
 
         // Set purge_after = NOW + 30 days on all KYC artifacts for this user
         const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -237,32 +247,44 @@ export async function POST(request: Request) {
             error: purgeErr.message,
           });
         } else {
-          await logAuditEvent({
-            actorId: user.id,
-            actorRole: adminRole,
-            action: "kyc_purge_scheduled",
-            targetType: "account_profile",
-            targetId: step.user_id,
-            metadata: {
-              purge_after: purgeAfter,
-              step_count: approvedSteps.length,
-              owner_user_id: step.user_id,
-            },
-          });
+          try {
+            await logAuditEvent({
+              actorId: user.id,
+              actorRole: adminRole,
+              action: "kyc_purge_scheduled",
+              targetType: "account_profile",
+              targetId: step.user_id,
+              metadata: {
+                purge_after: purgeAfter,
+                step_count: approvedSteps.length,
+                owner_user_id: step.user_id,
+              },
+            });
+          } catch (auditErr) {
+            log.error("Audit log failed (non-fatal)", {
+              error: auditErr instanceof Error ? auditErr.message : "Unknown",
+            });
+          }
         }
       } else {
-        await admin
+        const { error: pendingErr } = await admin
           .from(ACCOUNT_PROFILE_WRITE_TABLE)
           .update({
             account_verification_status: "pending_review",
           })
           .eq("user_id", step.user_id)
           .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
+        if (pendingErr) {
+          log.error("Failed to promote account to pending_review", {
+            error: pendingErr.message,
+            userId: step.user_id,
+          });
+        }
       }
     } else if (decision === "rejected") {
       // Include "verified" so that rejecting a step on a verified account
       // properly downgrades the account status (prevents verified + rejected step desync).
-      await admin
+      const { error: rejectErr } = await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_verification_status: "rejected",
@@ -274,10 +296,20 @@ export async function POST(request: Request) {
           "rejected",
           "verified",
         ]);
+      if (rejectErr) {
+        log.error("Failed to set account status to rejected", {
+          error: rejectErr.message,
+          userId: step.user_id,
+        });
+        return NextResponse.json(
+          { error: "Failed to update account verification status" },
+          { status: 500 }
+        );
+      }
     } else {
       // needs_resubmission — keep as pending_review so the user isn't shown "rejected".
       // Include "verified" so re-review of a step on a verified account is handled.
-      await admin
+      const { error: resubErr } = await admin
         .from(ACCOUNT_PROFILE_WRITE_TABLE)
         .update({
           account_verification_status: "pending_review",
@@ -289,9 +321,15 @@ export async function POST(request: Request) {
           "rejected",
           "verified",
         ]);
+      if (resubErr) {
+        log.error("Failed to set account to pending_review for resubmission", {
+          error: resubErr.message,
+          userId: step.user_id,
+        });
+      }
     }
 
-    // Log audit event
+    // Log audit event (best-effort)
     const auditAction =
       decision === "approved"
         ? "verification_approved"
@@ -299,26 +337,32 @@ export async function POST(request: Request) {
           ? "verification_resubmission_requested"
           : "verification_rejected";
 
-    await logAuditEvent({
-      actorId: user.id,
-      actorRole: adminRole,
-      action: auditAction as
-        | "verification_approved"
-        | "verification_rejected"
-        | "verification_resubmission_requested",
-      targetType: "verification_step",
-      targetId: stepId,
-      metadata: {
-        step_type: step.step_type,
-        decision,
-        reasonCode,
-        reasonNote,
-        overrideReasonCode,
-        risk_level: step.risk_level,
-        risk_score: step.risk_score,
-        owner_user_id: step.user_id,
-      },
-    });
+    try {
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: adminRole,
+        action: auditAction as
+          | "verification_approved"
+          | "verification_rejected"
+          | "verification_resubmission_requested",
+        targetType: "verification_step",
+        targetId: stepId,
+        metadata: {
+          step_type: step.step_type,
+          decision,
+          reasonCode,
+          reasonNote,
+          overrideReasonCode,
+          risk_level: step.risk_level,
+          risk_score: step.risk_score,
+          owner_user_id: step.user_id,
+        },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     // Notify the account holder about the verification decision
     try {

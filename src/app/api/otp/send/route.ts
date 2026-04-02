@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
 
       log.error("Failed to stage pending_phone before OTP send", {
         userId: user.id,
-        phone,
+        phone: phone.slice(0, 4) + "****" + phone.slice(-2),
         error: stagePendingPhoneError.message,
         code: stagePendingPhoneError.code,
       });
@@ -211,12 +211,18 @@ export async function POST(request: NextRequest) {
 
     // Invalidate any prior pending challenges for this user+phone to prevent
     // an accumulation of valid OTPs (replay window).
-    await adminSupabase
+    const { error: invalidateErr } = await adminSupabase
       .from("otp_challenges")
       .update({ expires_at: new Date().toISOString() })
       .eq("user_id", user.id)
       .eq("phone", phone)
       .is("verified_at", null);
+    if (invalidateErr) {
+      log.error("Failed to invalidate prior OTP challenges (non-fatal)", {
+        error: invalidateErr.message,
+        userId: user.id,
+      });
+    }
 
     // Store challenge state in user-bound challenge table
     const { error: challengeError } = await adminSupabase.from("otp_challenges").insert({
@@ -270,7 +276,7 @@ export async function POST(request: NextRequest) {
 
     if (!smsSucceeded) {
       log.warn("SMS failed for OTP challenge", {
-        phone,
+        phone: phone.slice(0, 4) + "****" + phone.slice(-2),
         userId: user.id,
         detail: smsFailureDetail,
       });

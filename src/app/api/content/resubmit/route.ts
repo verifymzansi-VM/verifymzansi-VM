@@ -14,6 +14,7 @@ import {
 } from "@/lib/account/compat";
 
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
 
 const log = createLogger("ContentResubmit");
@@ -58,6 +59,8 @@ export async function POST(request: Request) {
   try {
     const sameOriginFailure = enforceSameOriginMutation(request, log);
     if (sameOriginFailure) return sameOriginFailure;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const supabase = await createClient();
     const {
@@ -164,7 +167,7 @@ export async function POST(request: Request) {
         .from(config.table)
         .select(`id, status, ${ownerCol}`)
         .eq("id", itemId)
-        .single();
+        .maybeSingle();
 
       if (fetchError || !fetchedItem) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
@@ -211,16 +214,22 @@ export async function POST(request: Request) {
       storefront: "storefront_updated",
       promotion: "listing_updated",
     };
-    await logAuditEvent({
-      actorId: user.id,
-      actorRole: "member",
-      action: (actionMap[targetType] || "listing_updated") as Parameters<
-        typeof logAuditEvent
-      >[0]["action"],
-      targetType,
-      targetId: itemId,
-      metadata: { action: "resubmit", area },
-    });
+    try {
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: "member",
+        action: (actionMap[targetType] || "listing_updated") as Parameters<
+          typeof logAuditEvent
+        >[0]["action"],
+        targetType,
+        targetId: itemId,
+        metadata: { action: "resubmit", area },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

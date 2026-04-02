@@ -107,6 +107,7 @@ export async function GET(request: NextRequest) {
     value: token,
     httpOnly: false,
     sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
     path: "/",
   });
 

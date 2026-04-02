@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Share2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -23,7 +23,14 @@ export function ShareButton({
   className,
 }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   async function handleShare() {
     const shareUrl = url || (typeof window !== "undefined" ? window.location.href : "");
@@ -49,7 +56,8 @@ export function ShareButton({
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       toast({ title: "Link copied to clipboard!", variant: "success" });
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast({
         title: "Could not copy link",

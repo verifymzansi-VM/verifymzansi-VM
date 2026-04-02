@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { safeExternalHref } from "@/lib/utils/sanitize-html";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 
 interface BusinessContactSectionProps {
@@ -120,7 +121,7 @@ export function BusinessContactSection({
             <div className="flex gap-2">
               {socialLinks?.facebook && (
                 <a
-                  href={socialLinks.facebook}
+                  href={safeExternalHref(socialLinks.facebook)}
                   target="_blank"
                   rel="noopener noreferrer nofollow ugc"
                   title="Facebook"
@@ -131,7 +132,7 @@ export function BusinessContactSection({
               )}
               {socialLinks?.instagram && (
                 <a
-                  href={socialLinks.instagram}
+                  href={safeExternalHref(socialLinks.instagram)}
                   target="_blank"
                   rel="noopener noreferrer nofollow ugc"
                   title="Instagram"
@@ -142,7 +143,7 @@ export function BusinessContactSection({
               )}
               {socialLinks?.twitter && (
                 <a
-                  href={socialLinks.twitter}
+                  href={safeExternalHref(socialLinks.twitter)}
                   target="_blank"
                   rel="noopener noreferrer nofollow ugc"
                   title="Twitter"
@@ -153,7 +154,7 @@ export function BusinessContactSection({
               )}
               {socialLinks?.tiktok && (
                 <a
-                  href={socialLinks.tiktok}
+                  href={safeExternalHref(socialLinks.tiktok)}
                   target="_blank"
                   rel="noopener noreferrer nofollow ugc"
                   title="TikTok"
@@ -164,7 +165,7 @@ export function BusinessContactSection({
               )}
               {business.website && (
                 <a
-                  href={business.website}
+                  href={safeExternalHref(business.website)}
                   target="_blank"
                   rel="noopener noreferrer nofollow ugc"
                   title="Website"

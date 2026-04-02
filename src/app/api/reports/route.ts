@@ -8,10 +8,14 @@ import crypto from "crypto";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("Reports");
+
+/** Stable per-startup fallback key for dev — avoids regenerating on every request. */
+const DEV_IP_HASH_FALLBACK_KEY = crypto.randomBytes(32).toString("hex");
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,7 +82,7 @@ export async function POST(request: NextRequest) {
       log.warn("IP_HASH_SECRET not set — using random per-startup key (dev only)");
     }
     const ipHash = crypto
-      .createHmac("sha256", hmacKey || crypto.randomBytes(32).toString("hex"))
+      .createHmac("sha256", hmacKey || DEV_IP_HASH_FALLBACK_KEY)
       .update(sourceIp)
       .digest("hex");
 
@@ -90,7 +94,9 @@ export async function POST(request: NextRequest) {
       area,
       category,
       severity: "standard",
-      description: parsedBody.data.description,
+      description: parsedBody.data.description
+        ? sanitizeUserMessage(parsedBody.data.description)
+        : null,
       screenshot_url: parsedBody.data.evidenceUrls?.[0] || null,
       evidence_urls: parsedBody.data.evidenceUrls?.length ? parsedBody.data.evidenceUrls : null,
       status: "open",

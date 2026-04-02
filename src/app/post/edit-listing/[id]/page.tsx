@@ -214,7 +214,7 @@ export default function EditListingPage() {
         }
       }
     }
-    load();
+    void load();
 
     return () => {
       cancelled = true;

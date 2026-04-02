@@ -102,7 +102,9 @@ export default async function GovernanceEnforcementPage() {
                     <p className="text-sm font-medium capitalize">{action.action}</p>
                     <p className="text-xs text-muted-foreground">
                       Target: {action.target_owner_id?.slice(0, 8)}... ·{" "}
-                      {new Date(action.created_at).toLocaleDateString()}
+                      {new Date(action.created_at).toLocaleDateString("en-ZA", {
+                        timeZone: "Africa/Johannesburg",
+                      })}
                     </p>
                     <p className="text-xs text-muted-foreground line-clamp-1">{action.reason}</p>
                   </div>

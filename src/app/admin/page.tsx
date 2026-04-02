@@ -9,6 +9,8 @@ import {
   getDashboardAreaSummary,
   getAreaCardCounts,
   getVerificationStepCounts,
+  type AdminDashboardStats,
+  type VerificationStepCounts,
 } from "@/lib/utils/admin-queries";
 import { calculateSlaState } from "@/lib/utils/sla";
 import type { ReportSeverity } from "@/types/enums";
@@ -52,7 +54,33 @@ export default async function AdminPage() {
   const roleLabel = ROLE_LABELS[role] ?? role;
   const roleBadgeVariant = ROLE_VARIANTS[role] ?? "secondary";
 
-  const [stats, reports, extended, areaSummary, areaCounts, stepCounts] = await Promise.all([
+  const EMPTY_STATS: AdminDashboardStats = {
+    totalAccounts: 0,
+    totalMembers: 0,
+    totalListings: 0,
+    openReports: 0,
+    pendingVerifications: 0,
+    activeSuspensions: 0,
+    pendingModeration: 0,
+  };
+  const EMPTY_STEP_COUNTS: VerificationStepCounts = {
+    phone: 0,
+    id_doc: 0,
+    selfie: 0,
+    location: 0,
+    total: 0,
+  };
+  const EMPTY_AREA = {
+    totalPosted: 0,
+    pendingReview: 0,
+    liveCount: 0,
+    rejectedCount: 0,
+    topCategory: null,
+    categoryBreakdown: [],
+  };
+  const EMPTY_AREA_COUNTS = { pendingFlags: 0, pendingContent: 0 };
+
+  const settled = await Promise.allSettled([
     getAdminDashboardStats(),
     getDashboardReports(10),
     isAdminRole || isGovernance ? getExtendedPlatformStats() : Promise.resolve(null),
@@ -60,6 +88,23 @@ export default async function AdminPage() {
     getAreaCardCounts(),
     getVerificationStepCounts(),
   ]);
+
+  const stats = settled[0].status === "fulfilled" ? settled[0].value : EMPTY_STATS;
+  const reports = settled[1].status === "fulfilled" ? settled[1].value : [];
+  const extended = settled[2].status === "fulfilled" ? settled[2].value : null;
+  const areaSummary =
+    settled[3].status === "fulfilled"
+      ? settled[3].value
+      : { MZANSI_MARKET: EMPTY_AREA, MZANSI_BUSINESS: EMPTY_AREA, PROMOTIONS_EVENTS: EMPTY_AREA };
+  const areaCounts =
+    settled[4].status === "fulfilled"
+      ? settled[4].value
+      : {
+          MZANSI_MARKET: EMPTY_AREA_COUNTS,
+          MZANSI_BUSINESS: EMPTY_AREA_COUNTS,
+          PROMOTIONS_EVENTS: EMPTY_AREA_COUNTS,
+        };
+  const stepCounts = settled[5].status === "fulfilled" ? settled[5].value : EMPTY_STEP_COUNTS;
 
   // ── Compute health status ──────────────────────────────────
   const breachedReports = reports.filter((r) => {

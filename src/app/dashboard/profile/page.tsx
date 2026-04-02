@@ -198,7 +198,11 @@ export default function ProfilePage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("/api/profile/avatar", { method: "POST", body: formData });
+      const res = await fetch("/api/profile/avatar", {
+        method: "POST",
+        headers: withCsrfHeaders(),
+        body: formData,
+      });
       const data = await res.json();
 
       if (!res.ok) {

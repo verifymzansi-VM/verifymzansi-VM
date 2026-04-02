@@ -84,6 +84,7 @@ export function KycComparisonViewer({
   useEffect(() => {
     if (!isOpen || !userId) return;
 
+    let cancelled = false;
     const createdUrls: string[] = [];
 
     async function loadArtifacts() {
@@ -137,6 +138,7 @@ export function KycComparisonViewer({
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
 
+        if (cancelled) return;
         setArtifacts(sorted);
 
         // Preload artifacts in parallel and reuse cached blobs when available.
@@ -268,6 +270,8 @@ export function KycComparisonViewer({
           }
         }
 
+        if (cancelled) return;
+
         if (Object.keys(nextBlobUrls).length > 0) {
           setBlobUrls(nextBlobUrls);
         }
@@ -285,9 +289,10 @@ export function KycComparisonViewer({
       }
     }
 
-    loadArtifacts();
+    void loadArtifacts();
 
     return () => {
+      cancelled = true;
       // Cleanup blob URLs
       createdUrls.forEach((url) => URL.revokeObjectURL(url));
     };

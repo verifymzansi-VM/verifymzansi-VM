@@ -220,7 +220,8 @@ export async function getAreaCardCounts(): Promise<
   const { data: openReports } = await supabase
     .from("reports")
     .select("target_type")
-    .eq("status", "open");
+    .eq("status", "open")
+    .limit(10000);
 
   // Content pending moderation counts
   const [{ count: pendingListings }, { count: pendingMzansiBiz }, { count: pendingPromos }] =

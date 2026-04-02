@@ -432,4 +432,14 @@ describe("KYC Engine - processKycArtifact", () => {
       "HMAC_SECRET is not configured"
     );
   });
+
+  it("rejects low-entropy HMAC_SECRET (fewer than 8 unique chars)", async () => {
+    // "ab" repeated 32 times = 64 chars, only 2 unique characters
+    vi.stubEnv("HMAC_SECRET", "ab".repeat(32));
+    vi.stubEnv("NODE_ENV", "production");
+
+    await expect(processKycArtifact(createInput({ idNumber: "9901015009088" }))).rejects.toThrow(
+      "HMAC_SECRET is not configured"
+    );
+  });
 });

@@ -207,7 +207,9 @@ export default async function GovernanceRolesPage() {
                     </p>
                   </div>
                   <time className="text-xs text-muted-foreground flex-shrink-0">
-                    {new Date(entry.created_at as string).toLocaleDateString()}
+                    {new Date(entry.created_at as string).toLocaleDateString("en-ZA", {
+                      timeZone: "Africa/Johannesburg",
+                    })}
                   </time>
                 </div>
               ))}

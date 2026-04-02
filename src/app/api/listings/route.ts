@@ -328,7 +328,6 @@ export async function GET(request: NextRequest) {
             return NextResponse.json(
               {
                 error: "Marketplace temporarily unavailable",
-                code: error.code,
                 detail:
                   "The marketplace database schema is not available yet. Please retry in a moment.",
               },
@@ -400,7 +399,6 @@ export async function GET(request: NextRequest) {
           return NextResponse.json(
             {
               error: "Marketplace temporarily unavailable",
-              code: error.code,
               detail:
                 "The marketplace database schema is not available yet. Please retry in a moment.",
             },
@@ -446,6 +444,7 @@ export async function GET(request: NextRequest) {
           .from("account_profiles")
           .select("user_id, display_name, account_verification_status")
           .in("user_id", sellerIds)
+          .limit(sellerIds.length)
       : { data: [] as Array<Record<string, unknown>> };
 
     const serializedSellers =
@@ -505,7 +504,7 @@ export async function POST(request: NextRequest) {
     if (rl.limited) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later.", retryAfter: rl.retryAfter },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
       );
     }
 
@@ -669,11 +668,16 @@ export async function POST(request: NextRequest) {
 
       if (ent.maxAllowed !== -1) {
         const admin = getAdmin();
-        const { data: underLimit } = await admin.rpc("check_listing_limit", {
+        const { data: underLimit, error: rpcError } = await admin.rpc("check_listing_limit", {
           p_user_id: user.id,
           p_area: AREA,
           p_max_allowed: ent.maxAllowed,
         });
+
+        if (rpcError) {
+          log.error("check_listing_limit RPC failed", { error: rpcError.message });
+          return NextResponse.json({ error: "Unable to verify listing limit" }, { status: 500 });
+        }
 
         if (!underLimit) {
           const check = canCreateListing(ent.maxAllowed, tier as PlanTier, AREA);
@@ -686,7 +690,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Prepare listing record ───────────────────────────────
-    const priceCents = Math.round(data.price_zar * 100);
+    const priceCents = Math.round(+(data.price_zar * 100).toPrecision(12));
 
     const listingRecord = withOwnerField(
       {
@@ -758,7 +762,7 @@ export async function POST(request: NextRequest) {
       const details =
         insertError.message.includes("schema cache") || insertError.message.includes("logo_url")
           ? "Listing could not be saved right now. Please try again shortly."
-          : insertError.message;
+          : "Listing could not be saved. Please try again shortly.";
       return NextResponse.json({ error: "Failed to create listing", details }, { status: 500 });
     }
 
@@ -800,7 +804,17 @@ export async function POST(request: NextRequest) {
       const postCheck = canCreateListing((postInsertCount ?? 0) - 1, tier as PlanTier, AREA);
       if (!postCheck.allowed) {
         // Over limit due to concurrent insert — roll back
-        await getAdmin().from("listings").delete().eq("id", newListing.id);
+        const { error: rollbackErr } = await getAdmin()
+          .from("listings")
+          .delete()
+          .eq("id", newListing.id);
+        if (rollbackErr) {
+          log.error("Failed to roll back listing — orphaned record", {
+            listingId: newListing.id,
+            userId: user.id,
+            error: rollbackErr.message,
+          });
+        }
         log.warn("Rolled back listing due to concurrent limit breach", {
           listingId: newListing.id,
           userId: user.id,
@@ -813,21 +827,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Audit log ────────────────────────────────────────────
-    await logAuditEvent({
-      actorId: user.id,
-      actorRole: "member",
-      action: "listing_created",
-      targetType: "listing",
-      targetId: newListing.id,
-      area: AREA,
-      metadata: {
-        category: data.category,
-        priceCents,
-        hasPaidPlan,
-        tier,
-      },
-    });
+    // ── Audit log (best-effort) ────────────────────────────────
+    try {
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: "member",
+        action: "listing_created",
+        targetType: "listing",
+        targetId: newListing.id,
+        area: AREA,
+        metadata: {
+          category: data.category,
+          priceCents,
+          hasPaidPlan,
+          tier,
+        },
+      });
+    } catch (auditErr) {
+      log.error("Audit log failed (non-fatal)", {
+        error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
 
     log.info("Listing created", {
       listingId: newListing.id,

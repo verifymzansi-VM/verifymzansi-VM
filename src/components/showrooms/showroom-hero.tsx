@@ -67,6 +67,7 @@ export function ShowroomHero({
   const [fading, setFading] = useState(false);
   const [isActiveVideoPaused, setIsActiveVideoPaused] = useState(false);
   const touchStartX = useRef(0);
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const slides = useMemo<ShowroomSlide[]>(() => {
     if (initialSlides.length === 0) {
@@ -92,8 +93,10 @@ export function ShowroomHero({
   const goTo = useCallback(
     (index: number) => {
       if (index === current) return;
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
       setFading(true);
-      setTimeout(() => {
+      fadeTimerRef.current = setTimeout(() => {
+        fadeTimerRef.current = null;
         setIsActiveVideoPaused(false);
         setCurrent(index);
         setFading(false);
@@ -122,6 +125,13 @@ export function ShowroomHero({
     const id = setInterval(() => nextRef.current(), 8000);
     return () => clearInterval(id);
   }, [isActiveVideoPaused, slides.length]);
+
+  // Clean up fade timer on unmount
+  useEffect(() => {
+    return () => {
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+    };
+  }, []);
 
   const handleTouchStart = useCallback((event: TouchEvent) => {
     touchStartX.current = event.changedTouches[0].clientX;

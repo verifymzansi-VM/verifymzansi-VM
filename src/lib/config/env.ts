@@ -132,12 +132,12 @@ function _createFallbackEnv(): Env {
     R2_PUBLIC_BUCKET: process.env.R2_PUBLIC_BUCKET || "verifymzansi-public",
     R2_PRIVATE_BUCKET: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
     R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
-    // SECURITY: Use clearly-invalid placeholders instead of all-zeros.
-    // These contain non-hex chars and will be rejected at runtime validation,
-    // preventing accidental use of zero-keys in production.
-    KYC_ENCRYPTION_KEY: process.env.KYC_ENCRYPTION_KEY || "cafebabe".repeat(8),
-    ID_ENCRYPTION_KEY: process.env.ID_ENCRYPTION_KEY || "cafebabe".repeat(8),
-    HMAC_SECRET: process.env.HMAC_SECRET || "cafebabe".repeat(8),
+    // SECURITY: Use clearly-invalid placeholders that FAIL runtime Zod
+    // validation.  The "INVALID" substring contains non-hex chars, so the
+    // `.regex(/^[0-9a-fA-F]+$/)` guard rejects them before any crypto path.
+    KYC_ENCRYPTION_KEY: process.env.KYC_ENCRYPTION_KEY || "INVALID_BUILD_PLACEHOLDER_KYC_KEY__",
+    ID_ENCRYPTION_KEY: process.env.ID_ENCRYPTION_KEY || "INVALID_BUILD_PLACEHOLDER_ID_KEY___",
+    HMAC_SECRET: process.env.HMAC_SECRET || "INVALID_BUILD_PLACEHOLDER_HMAC_SEC_",
     IP_HASH_SECRET: process.env.IP_HASH_SECRET,
     GEOCODING_API_URL: process.env.GEOCODING_API_URL || "https://nominatim.openstreetmap.org",
     NOMINATIM_USER_AGENT: process.env.NOMINATIM_USER_AGENT || "verifymzansi/1.0",

@@ -175,7 +175,7 @@ export async function POST(request: Request) {
         .from(table)
         .select(`${ownerField}, ${titleField}`)
         .eq("id", itemId)
-        .single();
+        .maybeSingle();
 
       if (contentItem) {
         const record = contentItem as unknown as Record<string, unknown>;

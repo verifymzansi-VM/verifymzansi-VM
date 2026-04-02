@@ -22,6 +22,9 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn() }),
 }));
+vi.mock("@/lib/utils/csrf", () => ({
+  enforceCsrfToken: vi.fn(() => null),
+}));
 
 function createFormDataRequest(files: File[], headers: Record<string, string> = {}) {
   const formData = new FormData();

@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { useToast } from "@/hooks/use-toast";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface NotificationItem {
   id: string;
@@ -150,7 +151,7 @@ export function CommunicationHub() {
   async function markAllRead() {
     const response = await fetch("/api/notifications", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ all: true }),
     });
 
@@ -169,7 +170,7 @@ export function CommunicationHub() {
   async function clearAll() {
     const response = await fetch("/api/notifications", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ all: true }),
     });
 
@@ -190,16 +191,16 @@ export function CommunicationHub() {
 
     const response = await fetch("/api/communications/preferences", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ [key]: enabled }),
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}) as Record<string, unknown>);
 
     if (!response.ok) {
       toast({
         title: "Unable to update preference",
-        description: data.error || "Please try again.",
+        description: (data.error as string) || "Please try again.",
         variant: "destructive",
       });
       setSavingKey(null);

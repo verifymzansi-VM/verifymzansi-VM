@@ -52,7 +52,7 @@ export const verificationLocationSubmitSchema = z.object({
   latitude: z.number().min(-35).max(-22).optional(),
   longitude: z.number().min(16).max(33).optional(),
   locationMethod: z.enum(["gps", "proof_of_address"]).default("proof_of_address"),
-  gpsAccuracyMeters: z.number().positive().optional(),
+  gpsAccuracyMeters: z.number().positive().finite().optional(),
 });
 
 export const proofOfAddressLineSchema = z

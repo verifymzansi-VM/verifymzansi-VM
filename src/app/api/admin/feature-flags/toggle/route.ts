@@ -93,7 +93,8 @@ export async function POST(request: NextRequest) {
       });
 
       if (!result.success) {
-        return NextResponse.json({ error: result.error }, { status: 500 });
+        log.error("Failed to update feature flag config", { key, error: result.error });
+        return NextResponse.json({ error: "Failed to update feature flag" }, { status: 500 });
       }
 
       await logAuditEvent({
@@ -116,7 +117,8 @@ export async function POST(request: NextRequest) {
       const result = await toggleFeatureFlag(key, enabled);
 
       if (!result.success) {
-        return NextResponse.json({ error: result.error }, { status: 500 });
+        log.error("Failed to toggle feature flag", { key, error: result.error });
+        return NextResponse.json({ error: "Failed to toggle feature flag" }, { status: 500 });
       }
 
       await logAuditEvent({

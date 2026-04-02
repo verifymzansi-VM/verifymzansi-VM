@@ -65,7 +65,7 @@ export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
       }
     }
 
-    loadEvidence();
+    void loadEvidence();
 
     return () => {
       cancelled = true;

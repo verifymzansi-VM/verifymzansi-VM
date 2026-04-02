@@ -111,6 +111,7 @@ export default function PaymentStatusPanel({
       } catch {
         if (attempts >= 8) {
           stopPolling();
+          if (isActive) setStatus("failed");
         }
       }
     };

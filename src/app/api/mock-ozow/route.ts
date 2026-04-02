@@ -137,6 +137,7 @@ export async function GET(request: Request) {
     await fetch(webhookUrl, {
       method: "POST",
       body,
+      signal: AbortSignal.timeout(10_000),
       headers: {
         "Content-Type": "application/json",
         ...(signature

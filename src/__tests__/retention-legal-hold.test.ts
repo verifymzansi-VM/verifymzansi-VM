@@ -151,7 +151,7 @@ describe("Retention & Legal Hold", () => {
                 return {
                   eq: vi.fn().mockReturnValue({
                     eq: vi.fn().mockReturnValue({
-                      single: vi.fn().mockResolvedValue({
+                      maybeSingle: vi.fn().mockResolvedValue({
                         data: { first_name: "Test", last_name: "Member" },
                         error: null,
                       }),
@@ -282,7 +282,7 @@ describe("Retention & Legal Hold", () => {
                 return {
                   eq: vi.fn().mockReturnValue({
                     eq: vi.fn().mockReturnValue({
-                      single: vi.fn().mockResolvedValue({
+                      maybeSingle: vi.fn().mockResolvedValue({
                         data: { first_name: "Test", last_name: "Member" },
                         error: null,
                       }),

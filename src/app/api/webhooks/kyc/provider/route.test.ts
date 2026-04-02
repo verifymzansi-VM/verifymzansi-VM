@@ -98,7 +98,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116" } }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
             }),
           }),
         };
@@ -123,7 +123,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
             }),
           }),
           update: updateMock,
@@ -133,7 +133,9 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: { step_type: "id_doc" }, error: null }),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: { step_type: "id_doc" }, error: null }),
             }),
           }),
         };
@@ -143,7 +145,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
+                maybeSingle: vi.fn().mockResolvedValue({
                   data: pendingStep(),
                   error: null,
                 }),
@@ -190,7 +192,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
             }),
           }),
           update: vi.fn().mockReturnValue({
@@ -202,7 +204,9 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: { step_type: "selfie" }, error: null }),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: { step_type: "selfie" }, error: null }),
             }),
           }),
         };
@@ -212,7 +216,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
+                maybeSingle: vi.fn().mockResolvedValue({
                   data: pendingStep({ risk_score: 20 }),
                   error: null,
                 }),
@@ -254,7 +258,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
             }),
           }),
           update: vi.fn().mockReturnValue({
@@ -266,7 +270,9 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: { step_type: "id_doc" }, error: null }),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: { step_type: "id_doc" }, error: null }),
             }),
           }),
         };
@@ -276,7 +282,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
+                maybeSingle: vi.fn().mockResolvedValue({
                   data: pendingStep({ risk_score: 90 }),
                   error: null,
                 }),
@@ -307,7 +313,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
             }),
           }),
           update: vi.fn().mockReturnValue({
@@ -319,7 +325,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: null, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
             }),
           }),
         };
@@ -349,7 +355,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
             }),
           }),
           update: vi.fn().mockReturnValue({
@@ -361,7 +367,9 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: { step_type: "id_doc" }, error: null }),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: { step_type: "id_doc" }, error: null }),
             }),
           }),
         };
@@ -371,7 +379,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
+                maybeSingle: vi.fn().mockResolvedValue({
                   data: pendingStep({ status: "approved", risk_score: 40 }),
                   error: null,
                 }),
@@ -428,7 +436,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: providerResult, error: null }),
             }),
           }),
           update: vi.fn().mockReturnValue({
@@ -440,7 +448,9 @@ describe("POST /api/webhooks/kyc/provider", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: { step_type: "selfie" }, error: null }),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: { step_type: "selfie" }, error: null }),
             }),
           }),
         };
@@ -450,7 +460,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
+                maybeSingle: vi.fn().mockResolvedValue({
                   data: pendingStep(),
                   error: null,
                 }),

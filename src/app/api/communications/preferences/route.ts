@@ -9,6 +9,7 @@ import {
   parseAndValidateSearchParams,
 } from "@/lib/utils/api";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 import { getConsents, updateConsent, type ConsentPurpose } from "@/lib/services/consent";
 
@@ -78,15 +79,20 @@ export async function GET(request: NextRequest) {
 
     const includeRequired = parsedQuery.data.includeRequired;
 
-    return NextResponse.json({
-      preferences: optionalConsents,
-      required: includeRequired
-        ? {
-            transactional_email: true,
-            data_processing: consentRecord.data_processing,
-          }
-        : undefined,
-    });
+    return NextResponse.json(
+      {
+        preferences: optionalConsents,
+        required: includeRequired
+          ? {
+              transactional_email: true,
+              data_processing: consentRecord.data_processing,
+            }
+          : undefined,
+      },
+      {
+        headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },
+      }
+    );
   } catch (error) {
     logApiError(log, "Failed to fetch communication preferences", error);
     return internalApiError();
@@ -97,6 +103,8 @@ export async function PATCH(request: NextRequest) {
   try {
     const sameOriginBlock = enforceSameOriginMutation(request, log);
     if (sameOriginBlock) return sameOriginBlock;
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const supabase = await createClient();
     const {

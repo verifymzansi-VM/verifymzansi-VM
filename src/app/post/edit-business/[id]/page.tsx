@@ -42,6 +42,7 @@ import {
   uploadRequiredBusinessVideo,
 } from "@/app/post/_lib/business-media-upload";
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import {
   coerceBusinessDetails,
   getNormalizedDeliveryOptions,
@@ -249,7 +250,7 @@ export default function EditBusinessPage() {
       }
     }
 
-    load();
+    void load();
   }, [businessId]);
 
   useEffect(
@@ -518,7 +519,7 @@ export default function EditBusinessPage() {
 
       const res = await fetch(`/api/businesses/${businessId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(body),
       });
 

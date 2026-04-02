@@ -122,8 +122,8 @@ export async function markPaymentFailed(
   supabase: PaymentStoreClient,
   payment: PaymentRow,
   webhookPayload: Record<string, unknown>
-): Promise<void> {
-  await supabase
+): Promise<boolean> {
+  const { error } = await supabase
     .from("payments")
     .update({
       status: "failed",
@@ -144,6 +144,8 @@ export async function markPaymentFailed(
     })
     .eq("id", payment.id)
     .eq("provider", "ozow");
+
+  return !error;
 }
 
 export async function claimPaymentProcessing(

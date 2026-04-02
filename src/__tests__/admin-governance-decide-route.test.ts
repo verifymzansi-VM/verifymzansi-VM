@@ -107,7 +107,7 @@ describe("POST /api/admin/governance/decide", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: { recommender_id: "mod-1", action_category: "report_review" },
                 error: null,
               }),

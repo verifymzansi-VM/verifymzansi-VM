@@ -30,6 +30,7 @@ interface SendSmsResult {
 
 interface SendSmsAttemptResult extends SendSmsResult {
   invalidSenderIdRejected?: boolean;
+  httpStatus?: number;
 }
 
 interface SenderIdValidationResult {
@@ -92,7 +93,8 @@ function isRetryable(error: unknown, statusCode?: number): boolean {
 
 export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
   if (process.env.NODE_ENV === "development" && process.env.SMS_MOCK === "true") {
-    log.info("Mock SMS sent", { to: Array.isArray(params.to) ? params.to[0] : params.to });
+    const rawTo = Array.isArray(params.to) ? params.to[0] : params.to;
+    log.info("Mock SMS sent", { to: rawTo.slice(0, 4) + "****" + rawTo.slice(-2) });
     return {
       success: true,
       messageId: "mock-" + Date.now(),
@@ -170,7 +172,11 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
             "AT 401 — API key is rejected. Regenerate it at https://account.africastalking.com → Settings → API Key"
           );
         }
-        return { success: false, error: `HTTP ${response.status}: ${rawBody}` };
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${rawBody}`,
+          httpStatus: response.status,
+        };
       }
 
       let result: ATSmsResponse;
@@ -269,8 +275,12 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       return await sendAttempt(false);
     }
 
-    // Retry transient failures with exponential backoff
-    if (!firstAttempt.success && !firstAttempt.invalidSenderIdRejected) {
+    // Retry transient failures (5xx only) with exponential backoff
+    if (
+      !firstAttempt.success &&
+      !firstAttempt.invalidSenderIdRejected &&
+      isRetryable(undefined, firstAttempt.httpStatus)
+    ) {
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         const backoff = RETRY_BASE_MS * Math.pow(2, attempt - 1);
         log.warn("Retrying SMS after transient failure", {
@@ -282,7 +292,8 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         const retryResult = await sendAttempt(senderIdResult.valid);
         if (retryResult.success) return retryResult;
         // If the retry also failed with a non-retryable error, stop
-        if (retryResult.invalidSenderIdRejected) return retryResult;
+        if (retryResult.invalidSenderIdRejected || !isRetryable(undefined, retryResult.httpStatus))
+          return retryResult;
       }
     }
 
@@ -305,8 +316,11 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
             : [validatedRetry.to];
           // Minimal inline retry — cannot reuse sendAttempt because it was
           // defined inside the try block for scoping reasons.
-          const apiKey = process.env.AFRICASTALKING_API_KEY!;
-          const username = process.env.AFRICASTALKING_USERNAME!;
+          const apiKey = process.env.AFRICASTALKING_API_KEY;
+          const username = process.env.AFRICASTALKING_USERNAME;
+          if (!apiKey || !username) {
+            return { success: false, error: "Africa's Talking credentials not configured" };
+          }
           const isSandbox = username.toLowerCase() === "sandbox";
           const baseUrl = isSandbox
             ? "https://api.sandbox.africastalking.com"

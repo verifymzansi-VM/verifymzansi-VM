@@ -134,7 +134,7 @@ describe("POST /api/admin/content/decide", () => {
           }),
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   owner_id: "owner-1",
                   title: "Weekend Promo Blast",
@@ -188,7 +188,7 @@ describe("POST /api/admin/content/decide", () => {
           }),
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   owner_id: "owner-2",
                   business_name: "Trusted Plumbing Co",

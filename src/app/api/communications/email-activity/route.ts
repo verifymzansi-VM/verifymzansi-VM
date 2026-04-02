@@ -41,7 +41,12 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: "Failed to load email activity" }, { status: 500 });
     }
 
-    return NextResponse.json({ items: data || [] });
+    return NextResponse.json(
+      { items: data || [] },
+      {
+        headers: { "Cache-Control": "private, no-store" },
+      }
+    );
   } catch (error) {
     logApiError(log, "Unexpected email activity fetch error", error);
     return internalApiError();

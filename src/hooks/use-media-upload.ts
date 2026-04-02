@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 interface UploadState {
   isUploading: boolean;
@@ -190,7 +191,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
 
           const urlResponse = await fetch("/api/media/upload-url", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({
               filename: file.name,
               contentType: file.type,
@@ -243,6 +244,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
 
         const response = await fetch("/api/media/upload", {
           method: "POST",
+          headers: withCsrfHeaders(),
           body: formData,
         });
 

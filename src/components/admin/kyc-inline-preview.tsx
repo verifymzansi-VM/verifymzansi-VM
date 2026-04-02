@@ -194,7 +194,7 @@ export function KycInlinePreview({
       }
     }
 
-    loadThumbnail();
+    void loadThumbnail();
 
     return () => {
       cancelled = true;
