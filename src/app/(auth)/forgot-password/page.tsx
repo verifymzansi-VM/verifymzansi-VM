@@ -13,6 +13,7 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
 import { forgotPasswordSchema, type ForgotPasswordInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
@@ -94,11 +95,15 @@ export default function ForgotPasswordPage() {
     setTurnstileRetryToken((value) => value + 1);
   }, [setValue]);
 
+  useEffect(() => {
+    void ensureCsrfTokenReady();
+  }, []);
+
   async function onSubmit(data: ForgotPasswordInput) {
     try {
       const response = await fetch("/api/auth/forgot-password", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data),
       });
 

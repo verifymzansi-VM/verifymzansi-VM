@@ -150,6 +150,30 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/login?error=profile_creation_failed`);
       }
 
+      // Block login for suspended/banned/deleted accounts
+      if (!isNewOAuthUser) {
+        const adminForStatus = createAdminClient();
+        const { data: statusProfile } = await adminForStatus
+          .from("account_profiles")
+          .select("account_status")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        const accountStatus = statusProfile?.account_status;
+        if (
+          accountStatus === "suspended" ||
+          accountStatus === "banned" ||
+          accountStatus === "deleted"
+        ) {
+          await supabase.auth.signOut();
+          log.warn("OAuth login blocked: account status", {
+            userId: user.id,
+            status: accountStatus,
+          });
+          return NextResponse.redirect(`${origin}/login?error=account_suspended`);
+        }
+      }
+
       // New OAuth users go to complete-profile to add their phone number;
       // returning users go to their requested destination.
       if (isNewOAuthUser) {

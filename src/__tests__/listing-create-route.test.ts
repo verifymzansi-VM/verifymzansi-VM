@@ -172,7 +172,10 @@ describe("POST /api/listings", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
             neq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
           };
         }
         return {
@@ -219,7 +222,10 @@ describe("POST /api/listings", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
             neq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
           };
         }
         return {
@@ -400,7 +406,10 @@ describe("POST /api/listings", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
             neq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
             insert: insertSpy,
           };
         }
@@ -480,9 +489,17 @@ describe("POST /api/listings", () => {
                   limit: vi.fn().mockResolvedValue({ error: null }),
                 };
               }
-              const chain = { eq: vi.fn(), neq: vi.fn() };
+              const chain: Record<string, ReturnType<typeof vi.fn>> = {
+                eq: vi.fn(),
+                gte: vi.fn(),
+                neq: vi.fn(),
+                limit: vi.fn(),
+                maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+              };
               chain.eq.mockReturnValue(chain);
+              chain.gte.mockReturnValue(chain);
               chain.neq.mockReturnValue(chain);
+              chain.limit.mockReturnValue(chain);
               return chain;
             }),
             update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
@@ -553,7 +570,10 @@ describe("POST /api/listings", () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
             neq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
             update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
             insert: insertSpy,
           };
@@ -611,6 +631,15 @@ describe("POST /api/listings", () => {
         if (table === "free_posts_used") {
           return {
             insert: freePostInsertSpy,
+          };
+        }
+        if (table === "listings") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
           };
         }
         return {

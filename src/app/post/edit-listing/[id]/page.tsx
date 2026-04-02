@@ -69,6 +69,7 @@ export default function EditListingPage() {
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [existingVideos, setExistingVideos] = useState<string[]>([]);
   const [existingVideoThumbnail, setExistingVideoThumbnail] = useState<string | null>(null);
+  const [listingUpdatedAt, setListingUpdatedAt] = useState<string | null>(null);
   const [newLogoFile, setNewLogoFile] = useState<File[]>([]);
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newVideoFile, setNewVideoFile] = useState<File[]>([]);
@@ -193,6 +194,9 @@ export default function EditListingPage() {
         );
         setExistingPhotos(Array.isArray(data.photos) ? (data.photos as string[]) : []);
         setExistingVideos(Array.isArray(data.videos) ? (data.videos as string[]) : []);
+        setListingUpdatedAt(
+          ((data as Record<string, unknown>).updated_at as string | null) ?? null
+        );
       } catch (error) {
         log.error("Listing load threw unexpectedly", {
           listingId: id,
@@ -454,6 +458,7 @@ export default function EditListingPage() {
           videoThumbnail,
           logo_url: finalLogoUrl,
           contactMethods,
+          expected_updated_at: listingUpdatedAt,
         }),
       });
 

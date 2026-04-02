@@ -298,7 +298,9 @@ describe("POST /api/webhooks/ozow", () => {
     };
     const completeUpdateChain = {
       eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
       }),
     };
     const paymentsFrom = {
@@ -629,7 +631,9 @@ describe("POST /api/webhooks/ozow", () => {
     };
     const completeUpdateChain = {
       eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
       }),
     };
     const paymentsFrom = {

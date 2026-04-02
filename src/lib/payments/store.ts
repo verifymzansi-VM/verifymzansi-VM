@@ -225,7 +225,8 @@ export async function finalizeCompletedPayment(
       }),
     })
     .eq("id", payment.id)
-    .eq("provider", "ozow");
+    .eq("provider", "ozow")
+    .eq("status", "processing");
 
   return !error;
 }

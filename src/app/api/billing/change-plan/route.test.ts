@@ -108,6 +108,8 @@ describe("POST /api/billing/change-plan", () => {
     from: vi.fn(),
   };
 
+  const CONFIRMED_USER = { id: "user-1", email_confirmed_at: "2026-01-01T00:00:00Z" };
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
@@ -128,7 +130,7 @@ describe("POST /api/billing/change-plan", () => {
   });
 
   it("returns 404 when current entitlement does not exist", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === "entitlements") {
@@ -152,7 +154,7 @@ describe("POST /api/billing/change-plan", () => {
   });
 
   it("returns 400 when changing across different areas", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === "entitlements") {
@@ -197,7 +199,7 @@ describe("POST /api/billing/change-plan", () => {
   });
 
   it("starts checkout for a valid plan change", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === "entitlements") {
@@ -264,7 +266,7 @@ describe("POST /api/billing/change-plan", () => {
     const canonicalPlanId = "db-plan-growth";
     const stablePlanToken = getStablePlanId("MZANSI_MARKET", "growth");
 
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === "entitlements") {
@@ -331,7 +333,7 @@ describe("POST /api/billing/change-plan", () => {
   });
 
   it("returns 409 when entitlement is not active", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === "entitlements") {
@@ -366,7 +368,7 @@ describe("POST /api/billing/change-plan", () => {
   });
 
   it("returns 409 when already on the same tier", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     mockAdmin.from.mockImplementation((table: string) => {
       if (table === "entitlements") {
@@ -413,7 +415,7 @@ describe("POST /api/billing/change-plan", () => {
   });
 
   it("returns 500 when checkout creation fails", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: CONFIRMED_USER } });
 
     vi.mocked(createHostedCheckout).mockRejectedValueOnce(new Error("Provider unavailable"));
 

@@ -40,6 +40,7 @@ type ListingUpdateRow = {
   logo_url?: string | null;
   owner_id?: string | null;
   seller_id?: string | null;
+  updated_at?: string | null;
 };
 
 /**
@@ -113,6 +114,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const data = parsed.data;
+    // Extract optimistic-lock token (outside Zod schema — optional for backward compat)
+    const expectedUpdatedAt =
+      typeof body.expected_updated_at === "string" ? body.expected_updated_at : null;
     const ownerColumn = await getOwnerColumn(supabase, "listings");
 
     // ── Check listing exists and user owns it ────────────────
@@ -121,7 +125,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         .from("listings")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, area, photos, videos, video_thumbnail, logo_url",
+            "id, owner_id, status, area, photos, videos, video_thumbnail, logo_url, updated_at",
             ownerColumn
           )
         )
@@ -240,13 +244,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     );
 
     // ── Update listing ───────────────────────────────────────
-    const updateQuery = applyOwnerFilter(
-      supabase.from("listings").update(updateRecord).eq("id", listingId),
-      ownerColumn,
-      user.id
-    ); // Double-check ownership at DB level
+    let updateBuilder = supabase.from("listings").update(updateRecord).eq("id", listingId);
+    // Optimistic-lock CAS guard: only update if the row hasn't changed since the client loaded it
+    if (expectedUpdatedAt) {
+      updateBuilder = updateBuilder.eq("updated_at", expectedUpdatedAt);
+    }
+    const updateQuery = applyOwnerFilter(updateBuilder, ownerColumn, user.id).select("id"); // Double-check ownership at DB level; select id to detect 0-row updates
 
-    const { error: updateError } = await updateQuery;
+    const { data: updatedRows, error: updateError } = await updateQuery;
 
     if (updateError) {
       log.error("Failed to update listing", {
@@ -257,6 +262,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json(
         { error: "Failed to update listing", details: "Please try again shortly." },
         { status: 500 }
+      );
+    }
+
+    // If CAS guard was active and no rows were updated, listing was modified concurrently
+    if (expectedUpdatedAt && (!updatedRows || updatedRows.length === 0)) {
+      return NextResponse.json(
+        {
+          error: "Conflict",
+          details: "This listing was modified by another session. Please reload and try again.",
+        },
+        { status: 409 }
       );
     }
 

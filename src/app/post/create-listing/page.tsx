@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Camera,
@@ -139,6 +139,7 @@ export default function CreateListingPage() {
   const [videoFile, setVideoFile] = useState<File[]>([]);
   const [videoCoverFile, setVideoCoverFile] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [uploadStatuses, setUploadStatuses] = useState<UploadStatuses>(INITIAL_UPLOAD_STATUSES);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -423,6 +424,9 @@ export default function CreateListingPage() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
+    // Ref-based guard: prevent concurrent/duplicate submissions even across re-renders
+    if (submissionInFlightRef.current) return;
+
     const stepErrors = [0, 1, 2].map((index) => validateStep(index));
     const firstInvalidStep = stepErrors.findIndex((errors) => Object.keys(errors).length > 0);
 
@@ -436,6 +440,7 @@ export default function CreateListingPage() {
 
     clearErrors();
     setIsSubmitting(true);
+    submissionInFlightRef.current = true;
     setSubmitProgress("Uploading media...");
     setUploadStatuses({
       logo: logoFile.length > 0 ? "uploading" : "skipped",
@@ -591,6 +596,7 @@ export default function CreateListingPage() {
       setFormError(normalizeCreatePostRuntimeError(error, "Something went wrong."));
     } finally {
       setIsSubmitting(false);
+      submissionInFlightRef.current = false;
       setSubmitProgress(null);
       setUploadStatuses(INITIAL_UPLOAD_STATUSES);
     }

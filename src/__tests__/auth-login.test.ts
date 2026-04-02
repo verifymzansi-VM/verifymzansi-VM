@@ -8,6 +8,7 @@ const {
   mockVerifyTurnstile,
   mockCheckRateLimit,
   mockGetClientRateLimitIdentity,
+  mockCreateAdminClient,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockVerifyTurnstile: vi.fn(),
@@ -17,9 +18,11 @@ const {
     source: "x-forwarded-for",
     ip: "127.0.0.1",
   }),
+  mockCreateAdminClient: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/utils/turnstile", async () => {
   const actual = await vi.importActual<typeof TurnstileModule>("@/lib/utils/turnstile");
   return {
@@ -83,12 +86,28 @@ function mockAuth(result: {
   error: { message: string; status?: number } | null;
 }) {
   const mockSignIn = vi.fn();
+  const mockGetUser = vi.fn().mockResolvedValue({
+    data: { user: result.data.user },
+  });
   mockCreateClient.mockResolvedValue({
     auth: {
       signInWithPassword: mockSignIn,
+      getUser: mockGetUser,
     },
   });
   mockSignIn.mockResolvedValue(result);
+  // Mock admin client for account_status check
+  mockCreateAdminClient.mockReturnValue({
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { account_status: "active" },
+          }),
+        }),
+      }),
+    }),
+  });
   return { mockSignIn };
 }
 

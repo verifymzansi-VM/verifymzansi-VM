@@ -14,6 +14,7 @@ import {
   recordDistributedFailedLogin,
 } from "@/lib/utils/account-lockout";
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const log = createLogger("Login");
 
@@ -164,6 +165,36 @@ export async function POST(request: NextRequest) {
 
     if (!error) {
       clearLockout(parsedBody.data.email);
+
+      // Block login for suspended/banned/deleted accounts
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const adminClient = createAdminClient();
+        const { data: accountProfile } = await adminClient
+          .from("account_profiles")
+          .select("account_status")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        const accountStatus = accountProfile?.account_status;
+        if (
+          accountStatus === "suspended" ||
+          accountStatus === "banned" ||
+          accountStatus === "deleted"
+        ) {
+          await supabase.auth.signOut();
+          log.warn("Login blocked: account status", {
+            email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
+            status: accountStatus,
+          });
+          return NextResponse.json(
+            { error: "Your account has been suspended. Contact support for assistance." },
+            { status: 403 }
+          );
+        }
+      }
     }
 
     if (error) {

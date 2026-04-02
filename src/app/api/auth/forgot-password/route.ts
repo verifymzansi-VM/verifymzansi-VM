@@ -7,6 +7,7 @@ import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turn
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
+import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("ForgotPassword");
@@ -15,6 +16,9 @@ export async function POST(request: NextRequest) {
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
+
+    const csrfBlock = enforceCsrfToken(request, log);
+    if (csrfBlock) return csrfBlock;
 
     const isPlaywrightTestMode = checkPlaywrightTestMode();
     const turnstileStatus = getTurnstileConfigStatus({ requestHost: request.nextUrl.hostname });

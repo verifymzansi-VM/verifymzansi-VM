@@ -26,6 +26,13 @@ export async function GET() {
       return NextResponse.json({ valid: false }, { status: 200 });
     }
 
+    // Only treat as valid recovery if a reset was recently requested (within 1 hour)
+    const recoverySentAt = user.recovery_sent_at ? new Date(user.recovery_sent_at).getTime() : 0;
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    if (!recoverySentAt || recoverySentAt < oneHourAgo) {
+      return NextResponse.json({ valid: false }, { status: 200 });
+    }
+
     return NextResponse.json({ valid: true }, { status: 200 });
   } catch (error) {
     const logger = createLogger("ResetPassword");

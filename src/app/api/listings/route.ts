@@ -579,6 +579,32 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
+    // ── Idempotency guard: reject duplicate submissions ──────
+    // If the same user submitted a listing with the identical title
+    // within the last 2 minutes, return the existing listing instead
+    // of creating a duplicate (protects against network retries).
+    {
+      const { data: recentDupe } = await applyOwnerFilter(
+        supabase
+          .from("listings")
+          .select("id")
+          .eq("title", data.title)
+          .gte("created_at", new Date(Date.now() - 120_000).toISOString()),
+        ownerColumn,
+        user.id
+      )
+        .limit(1)
+        .maybeSingle();
+
+      if (recentDupe) {
+        log.warn("Duplicate listing submission detected", {
+          userId: user.id,
+          existingId: recentDupe.id,
+        });
+        return NextResponse.json({ id: recentDupe.id, deduplicated: true }, { status: 200 });
+      }
+    }
+
     // ── Check entitlement / plan limits ──────────────────────
     // Check if user has a paid entitlement (not expired)
     const { data: activeEntitlement } = await supabase

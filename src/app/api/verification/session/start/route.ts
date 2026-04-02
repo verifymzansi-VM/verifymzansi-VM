@@ -93,26 +93,30 @@ export async function POST(_request: NextRequest) {
     if (session) {
       const expiresAt = new Date(new Date(session.created_at).getTime() + 24 * 60 * 60 * 1000);
       if (expiresAt < new Date()) {
-        // Check if phone was already verified in verification_steps
-        const { data: phoneStep } = await supabase
+        // Check which steps are already approved to preserve their state
+        const { data: approvedSteps } = await supabase
           .from("verification_steps")
-          .select("phone_verified_at")
+          .select("step_type, phone_verified_at")
           .eq("user_id", user.id)
-          .eq("step_type", "phone")
-          .in("status", ["approved", "pending"])
-          .maybeSingle();
+          .eq("status", "approved");
+
+        const approvedTypes = new Set((approvedSteps || []).map((s) => s.step_type));
+        const phoneStep = (approvedSteps || []).find((s) => s.step_type === "phone");
 
         // Reset the expired session in-place instead of finalize + insert
         // (inserting would violate the UNIQUE(user_id) constraint)
+        // Preserve artifact references for already-approved steps
         const { data: resetSession, error: resetErr } = await supabase
           .from("verification_sessions")
           .update({
             finalized_at: null,
             created_at: new Date().toISOString(),
             phone_verified_at: phoneStep?.phone_verified_at ?? null,
-            id_artifact_id: null,
-            selfie_artifact_id: null,
-            location_submitted_at: null,
+            id_artifact_id: approvedTypes.has("id_doc") ? session.id_artifact_id : null,
+            selfie_artifact_id: approvedTypes.has("selfie") ? session.selfie_artifact_id : null,
+            location_submitted_at: approvedTypes.has("location")
+              ? session.location_submitted_at
+              : null,
           })
           .eq("id", session.id)
           .select()

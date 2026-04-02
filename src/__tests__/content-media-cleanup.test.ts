@@ -224,6 +224,11 @@ describe("content media cleanup queueing", () => {
         };
       }
       if (table === "listings") {
+        const updateChain: Record<string, ReturnType<typeof vi.fn>> = {
+          eq: vi.fn().mockReturnThis(),
+          select: vi.fn().mockResolvedValue({ data: [{ id: VALID_UUID }], error: null }),
+        };
+        (updateChain.eq as ReturnType<typeof vi.fn>).mockReturnValue(updateChain);
         const builder = {
           eq: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn().mockResolvedValue({
@@ -236,11 +241,10 @@ describe("content media cleanup queueing", () => {
               videos: ["https://media.verifymzansi.com/listings/old-video.mp4"],
               video_thumbnail: "https://media.verifymzansi.com/listings/old-thumb.jpg",
               logo_url: "https://media.verifymzansi.com/listings/old-logo.jpg",
+              updated_at: "2026-01-01T00:00:00Z",
             },
           }),
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          }),
+          update: vi.fn().mockReturnValue(updateChain),
         };
         return {
           ...builder,
