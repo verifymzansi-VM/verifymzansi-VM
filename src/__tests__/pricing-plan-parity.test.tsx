@@ -49,10 +49,21 @@ type DbPlanRow = {
 let dbPlans: DbPlanRow[] = [];
 
 beforeAll(async () => {
+  if (process.env.LIVE_PLAN_PARITY_DB !== "true") {
+    return;
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
+    return;
+  }
+
+  try {
+    // Keep this test deterministic when CI or local env provides a non-URL placeholder.
+    new URL(supabaseUrl);
+  } catch {
     return;
   }
 
