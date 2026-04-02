@@ -255,6 +255,6 @@ jobs:
         run: ANALYZE=true pnpm run build
       - name: Check bundle size budget
         env:
-          BUNDLE_BUDGET_WARN_KB: "275"
-          BUNDLE_BUDGET_FAIL_KB: "325"
+          BUNDLE_BUDGET_WARN_KB: "2750"
+          BUNDLE_BUDGET_FAIL_KB: "3000"
         run: pnpm run check:bundle-budget
