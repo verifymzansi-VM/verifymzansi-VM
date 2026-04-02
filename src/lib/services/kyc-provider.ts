@@ -114,23 +114,6 @@ export function getConfiguredProvider(): IKycProvider {
   return new StubKycProvider();
 }
 
-// ── Backward-compatibility exports ───────────────────────────
-// Kept so existing tests and callers continue to compile during the migration.
-
-/** @deprecated Use getConfiguredProvider().submitIdentity() instead */
-export async function submitIdentityToProvider(
-  idImageUrl: string,
-  _selfieImageUrl?: string,
-  idNumber?: string
-): Promise<{ status: string; reason?: string; providerReference?: string }> {
-  const result = await simulateKycVerification(idImageUrl, idNumber);
-  return {
-    status: result.status,
-    reason: result.reason,
-    providerReference: result.providerReference,
-  };
-}
-
 // Re-export types so existing imports from this file keep working.
 export type {
   KycProviderResult,

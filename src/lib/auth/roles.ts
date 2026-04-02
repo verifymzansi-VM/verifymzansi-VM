@@ -194,14 +194,6 @@ export function asStaffRole(role: string | null): StaffRole | null {
 }
 
 /**
- * @deprecated Use `asStaffRole()` instead.
- */
-export function asAdminRole(role: string | null): "admin" | "moderator" | null {
-  if (role === "admin" || role === "moderator") return role;
-  return null;
-}
-
-/**
  * Check whether a user has a specific capability.
  * This is the primary authorization check for the back-office.
  */

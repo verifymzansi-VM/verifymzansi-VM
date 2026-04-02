@@ -17,7 +17,7 @@ interface BusinessLayoutRouterProps {
   promotions?: BusinessPromotionRecord[];
   showPromotions?: boolean;
   showPublicActions?: boolean;
-  /** @deprecated No longer used — single unified layout is always rendered. */
+  /** Kept for backward compat — single unified layout is always rendered (value is ignored). */
   layoutOverride?: LayoutTemplate;
 }
 

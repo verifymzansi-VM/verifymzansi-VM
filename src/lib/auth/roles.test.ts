@@ -5,7 +5,6 @@ import {
   isModeratorOrAdmin,
   isStaff,
   isGovernanceController,
-  asAdminRole,
   asStaffRole,
   hasCapability,
   hasAnyCapability,
@@ -91,13 +90,6 @@ describe("asStaffRole", () => {
     expect(asStaffRole("governance_controller")).toBe("governance_controller"));
   it("returns null for member", () => expect(asStaffRole("member")).toBeNull());
   it("returns null for null", () => expect(asStaffRole(null)).toBeNull());
-});
-
-describe("asAdminRole (deprecated)", () => {
-  it("returns 'admin' for admin", () => expect(asAdminRole("admin")).toBe("admin"));
-  it("returns 'moderator' for moderator", () => expect(asAdminRole("moderator")).toBe("moderator"));
-  it("returns null for other roles", () => expect(asAdminRole("member")).toBeNull());
-  it("returns null for null", () => expect(asAdminRole(null)).toBeNull());
 });
 
 describe("hasCapability", () => {

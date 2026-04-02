@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { submitIdentityToProvider, getConfiguredProvider } from "./kyc-provider";
+import { getConfiguredProvider } from "./kyc-provider";
 
 describe("kyc-provider", () => {
   describe("StubKycProvider via getConfiguredProvider", () => {
@@ -41,13 +41,6 @@ describe("kyc-provider", () => {
       expect(result.status).toBe("needs_manual_review");
       expect(result.reason).toContain("Routed to manual queue");
       expect(result.providerReference).toMatch(/^sim_rev_/);
-    });
-  });
-
-  describe("submitIdentityToProvider (deprecated wrapper)", () => {
-    it("wraps the simulator correctly", async () => {
-      const result = await submitIdentityToProvider("kyc/some-key.jpg", undefined, "123");
-      expect(result.status).toBe("rejected");
     });
   });
 });
