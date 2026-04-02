@@ -15,21 +15,21 @@ import { PromoVideoSlide } from "./promo-video-slide";
 const ENTITY_CONFIG = {
   business: {
     Icon: Building2,
-    badgeColor: "bg-blue-700 text-blue-50 border-blue-600 backdrop-blur-md",
+    badgeColor: "bg-brand-blue/90 text-white border border-white/10 backdrop-blur-md",
     badge: "Mzansi Business",
     href: "/mzansi-business/",
     cta: "View Business",
   },
   promotion: {
     Icon: Megaphone,
-    badgeColor: "bg-orange-700 text-orange-50 border-orange-600 backdrop-blur-md",
+    badgeColor: "bg-amber-500/90 text-amber-950 border border-amber-200/40 backdrop-blur-md",
     badge: "Promotions & Events",
     href: "/promotion/",
     cta: "View Promotion",
   },
   listing: {
     Icon: ShieldCheck,
-    badgeColor: "bg-emerald-700 text-emerald-50 border-emerald-600 backdrop-blur-md",
+    badgeColor: "bg-brand-green text-white border border-white/10 backdrop-blur-md",
     badge: "Mzansi Market",
     href: "/listing/",
     cta: "View Listing",

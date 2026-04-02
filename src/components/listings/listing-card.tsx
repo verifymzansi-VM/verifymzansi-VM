@@ -60,6 +60,7 @@ export const ListingCard = memo(function ListingCard({
   id,
   title,
   price,
+  negotiable,
   imageUrl,
   posterUrl,
   isVideo,
@@ -67,6 +68,7 @@ export const ListingCard = memo(function ListingCard({
   city,
   createdAt,
   ownerTrustLevel = 0,
+  viewCount,
   boosted,
   featured,
   urgent,
@@ -74,6 +76,8 @@ export const ListingCard = memo(function ListingCard({
   videoDuration,
 }: ListingCardProps) {
   const status = getListingStatus(featured, boosted, urgent, createdAt);
+  const priceLabel = price > 0 ? formatZARShort(price) : null;
+  const eyebrow = priceLabel && negotiable ? `${priceLabel} · Neg` : priceLabel;
 
   return (
     <PosterCardShell
@@ -83,8 +87,10 @@ export const ListingCard = memo(function ListingCard({
       posterUrl={posterUrl}
       isVideo={isVideo}
       mediaAlt={title}
-      description={city || null}
-      eyebrow={price > 0 ? formatZARShort(price) : null}
+      location={city || null}
+      createdAt={createdAt}
+      viewCount={viewCount}
+      eyebrow={eyebrow}
       statusLabel={status?.label}
       statusClassName={status?.className}
       accentClassName="hover:border-brand-green/55"

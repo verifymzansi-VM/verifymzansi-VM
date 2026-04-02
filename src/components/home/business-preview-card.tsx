@@ -24,7 +24,8 @@ export function BusinessPreviewCard({
   posterUrl,
   logoUrl,
   title,
-  city: _city,
+  businessType,
+  city,
   provinceCode: _provinceCode,
   boosted: _boosted,
   featured: _featured,
@@ -37,6 +38,8 @@ export function BusinessPreviewCard({
       mediaUrl={imageUrl}
       posterUrl={posterUrl}
       mediaAlt={title}
+      description={businessType || null}
+      location={city || null}
       logoUrl={logoUrl}
       statusLabel={null}
       statusClassName={undefined}

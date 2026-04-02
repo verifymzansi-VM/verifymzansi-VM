@@ -126,13 +126,13 @@ function MuteButton({
       <button
         type="button"
         onClick={onToggle}
-        className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70 sm:h-[2.75rem] sm:w-[2.75rem]"
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70 sm:h-[2.75rem] sm:w-[2.75rem]"
         aria-label={isMuted ? "Unmute" : "Mute"}
       >
         {isMuted ? (
-          <VolumeX className="h-2.5 w-2.5 sm:h-4 sm:w-4" />
+          <VolumeX className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         ) : (
-          <Volume2 className="h-2.5 w-2.5 sm:h-4 sm:w-4" />
+          <Volume2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         )}
       </button>
     </div>

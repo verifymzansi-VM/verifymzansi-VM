@@ -64,7 +64,7 @@ export async function HomeBusinessShowcase() {
           {items.map((b, index) => (
             <div
               key={b.id}
-              className="min-w-[240px] max-w-[264px] sm:min-w-[264px] sm:max-w-[264px]"
+              className="min-w-[280px] max-w-[320px] sm:min-w-[300px] sm:max-w-[320px]"
             >
               <BusinessPreviewCard
                 href={`/mzansi-business/${b.id}`}

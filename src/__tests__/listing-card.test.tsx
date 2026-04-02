@@ -97,6 +97,7 @@ vi.mock("@/lib/utils/format", () => ({
   formatZAR: (cents: number) => `R ${(cents / 100).toFixed(2)}`,
   formatZARShort: (cents: number) => `R${Math.round(cents / 100)}`,
   formatRelativeTime: (_date: string) => "2d ago",
+  timeAgo: (_date: string) => "2h ago",
 }));
 
 vi.mock("@/hooks/use-video-visibility", () => ({

@@ -124,7 +124,7 @@ export async function HomePromotionsShowcase() {
           {promotions.map((promo, index) => (
             <div
               key={promo.id}
-              className="min-w-[240px] max-w-[264px] sm:min-w-[264px] sm:max-w-[264px]"
+              className="min-w-[280px] max-w-[320px] sm:min-w-[300px] sm:max-w-[320px]"
             >
               <PromotionCard
                 id={promo.id}

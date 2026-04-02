@@ -28,7 +28,7 @@ export function MarketPreviewCard({
   posterUrl,
   title,
   price,
-  city: _city,
+  city,
   provinceCode: _provinceCode,
   boosted: _boosted,
   logoUrl,
@@ -42,6 +42,7 @@ export function MarketPreviewCard({
       posterUrl={posterUrl}
       mediaAlt={title}
       eyebrow={price != null && price > 0 ? formatPrice(price) : null}
+      location={city || null}
       statusLabel={null}
       statusClassName="bg-brand-blue/95 text-white border border-white/10"
       accentClassName="hover:border-brand-green/55"

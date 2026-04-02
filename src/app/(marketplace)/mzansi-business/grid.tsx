@@ -236,7 +236,7 @@ export function MzansiBusinessGrid() {
         </p>
       </div>
 
-      <div className="-mx-4 sm:mx-0 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:grid-cols-4 xl:gap-6">
         {businesses.map((business, index) => (
           <div
             key={business.id}

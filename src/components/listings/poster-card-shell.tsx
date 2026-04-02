@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   VideoCardPlayer,
@@ -10,9 +11,22 @@ import {
 } from "@/components/ui/video-card-player";
 import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { timeAgo } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
 import type { ReactNode } from "react";
+
+/* ── Compact view-count formatter ────────────────────────────────── */
+
+function formatViewCount(count: number): string {
+  if (count < 1000) return `${count} views`;
+  if (count < 1_000_000) {
+    const k = count / 1000;
+    return `${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}K views`;
+  }
+  const m = count / 1_000_000;
+  return `${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M views`;
+}
 
 interface PosterCardShellProps {
   href: string;
@@ -38,6 +52,12 @@ interface PosterCardShellProps {
   logoUrl?: string | null;
   /** Short description — 1-line clamp below title */
   description?: string | null;
+  /** Location text (city name) — shown with MapPin icon below description */
+  location?: string | null;
+  /** ISO date string — shown as compact relative time ("2h ago") */
+  createdAt?: string | null;
+  /** View count — shown as "1.2K views" next to timestamp */
+  viewCount?: number | null;
   /** Fit strategy for media in constrained frames. */
   fitStrategy?: MediaFitStrategy;
   /** Load the first-visible card's images eagerly for faster above-the-fold paint. */
@@ -66,6 +86,9 @@ export function PosterCardShell({
   fallback,
   logoUrl,
   description,
+  location,
+  createdAt,
+  viewCount,
   fitStrategy: _fitStrategy = "smart",
   priority = false,
   videoDuration,
@@ -79,13 +102,13 @@ export function PosterCardShell({
     <Link href={href} className={cn("group block", className)}>
       <Card
         className={cn(
-          "overflow-hidden border-transparent bg-warm-100 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-8px_rgba(15,23,42,0.28)] rounded-none sm:rounded-xl",
+          "overflow-hidden border-transparent bg-warm-100 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-8px_rgba(15,23,42,0.28)] rounded-xl",
           accentClassName
         )}
         trustLevel={trustLevel}
       >
         {/* ── 16:9 video/image thumbnail ─────────────────────────── */}
-        <div className="relative aspect-video w-full overflow-hidden bg-slate-900 sm:rounded-xl">
+        <div className="relative aspect-video w-full overflow-hidden bg-slate-900 rounded-t-xl">
           {normalizedMediaUrl ? (
             <VideoCardPlayer
               src={normalizedMediaUrl}
@@ -151,18 +174,35 @@ export function PosterCardShell({
               {title}
             </h3>
             {description ? (
-              <p className="text-xs leading-snug text-slate-500 line-clamp-1 dark:text-slate-400 sm:text-sm sm:line-clamp-2">
+              <p className="text-xs leading-snug text-slate-500 line-clamp-1 dark:text-slate-400 sm:text-sm">
                 {description}
               </p>
             ) : null}
-            {eyebrow ? (
+            {location ? (
+              <p className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">{location}</span>
+              </p>
+            ) : null}
+            {/* Eyebrow + meta row (price · views · time) */}
+            {eyebrow || viewCount || createdAt ? (
               <p
                 className={cn(
-                  "text-xs font-semibold text-slate-500 dark:text-slate-400",
+                  "flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400",
                   eyebrowClassName
                 )}
               >
-                {eyebrow}
+                {eyebrow ? <span className="font-semibold">{eyebrow}</span> : null}
+                {eyebrow && (viewCount || createdAt) ? (
+                  <span className="text-slate-300 dark:text-slate-600">·</span>
+                ) : null}
+                {viewCount != null && viewCount > 0 ? (
+                  <span>{formatViewCount(viewCount)}</span>
+                ) : null}
+                {viewCount != null && viewCount > 0 && createdAt ? (
+                  <span className="text-slate-300 dark:text-slate-600">·</span>
+                ) : null}
+                {createdAt ? <span>{timeAgo(createdAt)}</span> : null}
               </p>
             ) : null}
           </div>

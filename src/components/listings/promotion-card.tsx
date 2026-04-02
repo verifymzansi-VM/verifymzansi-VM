@@ -123,12 +123,12 @@ export const PromotionCard = memo(function PromotionCard({
   imageUrl,
   posterUrl,
   province: _province,
-  city: _city,
+  city,
   promotionType,
-  createdAt: _createdAt,
+  createdAt,
   ownerTrustLevel = 0,
   ownerName: _ownerName,
-  viewCount: _viewCount,
+  viewCount,
   categoryLabel: _categoryLabel,
   boosted,
   featured,
@@ -154,6 +154,9 @@ export const PromotionCard = memo(function PromotionCard({
       mediaAlt={title}
       eyebrow={eyebrow}
       description={description}
+      location={city || null}
+      createdAt={createdAt}
+      viewCount={viewCount}
       logoUrl={logoUrl}
       eyebrowClassName={
         price != null && price > 0

@@ -83,7 +83,7 @@ export const ListingCardList = memo(function ListingCardList({
   return (
     <Link href={`/listing/${id}`} className="group block">
       <Card
-        className="overflow-hidden rounded-[1.5rem] border-white/10 bg-card transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-green/45 hover:shadow-xl"
+        className="overflow-hidden rounded-xl border-white/10 bg-warm-100 transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-green/45 hover:shadow-xl"
         trustLevel={ownerTrustLevel}
       >
         <div className="flex min-h-[188px]">

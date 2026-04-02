@@ -38,9 +38,7 @@ function getBusinessStatus(
   return null;
 }
 
-function buildBusinessDescription(description?: string, city?: string): string | null {
-  if (description && city) return `${city} · ${description}`;
-  if (city) return city;
+function buildBusinessDescription(description?: string): string | null {
   if (description) return description;
   return null;
 }
@@ -67,13 +65,14 @@ export function BusinessCard({
     (galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos[0] : null);
   const posterUrl = videoThumbnail || coverPhoto || galleryPhotos?.[0] || undefined;
   const status = getBusinessStatus(boostUntil, featuredUntil);
-  const cardDescription = buildBusinessDescription(description, city);
+  const cardDescription = buildBusinessDescription(description);
 
   return (
     <PosterCardShell
       href={`/mzansi-business/${id}`}
       title={businessName}
       description={cardDescription}
+      location={city || null}
       mediaUrl={displayCover}
       posterUrl={posterUrl}
       mediaAlt={businessName}

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Megaphone } from "lucide-react";
 import { PageHeader } from "@/components/layout";
@@ -11,7 +10,6 @@ import { PromotionFilterPanel } from "@/components/listings/promotion-filter-pan
 import { PromotionFilterDrawer } from "@/components/listings/promotion-filter-drawer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { parsePromotionFilterType, type PromotionFilterType } from "@/lib/promotions/type-taxonomy";
 import {
@@ -29,9 +27,8 @@ import {
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import { formatZAR } from "@/lib/utils/format";
 import { triggerHaptic } from "@/lib/utils/haptics";
-import { VideoCardPlayer } from "@/components/ui/video-card-player";
+import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
 import { cn } from "@/lib/utils";
 
 interface PromotionRow {
@@ -369,16 +366,39 @@ export function PromotionsExplorer() {
         </aside>
 
         <div className="min-w-0 flex-1 space-y-5">
-          {/* ── Featured Hero Card ── */}
+          {/* ── Featured ShowroomHero ── */}
           {featuredPromotion && !loading && (
             <div>
-              <FeaturedHeroCard
-                promotion={featuredPromotion}
-                businessName={
-                  featuredPromotion.business_id
-                    ? businessMap.get(featuredPromotion.business_id)
-                    : undefined
-                }
+              <ShowroomHero
+                slides={[
+                  {
+                    id: featuredPromotion.id,
+                    type: "listing" as const,
+                    title: featuredPromotion.title,
+                    description: featuredPromotion.business_id
+                      ? (businessMap.get(featuredPromotion.business_id) ?? "")
+                      : "",
+                    location: `${featuredPromotion.location_city}, ${featuredPromotion.location_province}`,
+                    mediaUrl: normalizeMediaUrl(
+                      featuredPromotion.videos?.[0] ||
+                        featuredPromotion.photos?.[0] ||
+                        "/images/fallbacks/hero-shop.svg"
+                    ),
+                    posterUrl:
+                      featuredPromotion.video_thumbnail ||
+                      featuredPromotion.photos?.[0] ||
+                      undefined,
+                    price:
+                      featuredPromotion.price_cents != null
+                        ? featuredPromotion.price_cents / 100
+                        : null,
+                    hrefOverride: `/promotion/${featuredPromotion.id}`,
+                    ctaLabelOverride: "View Promotion",
+                    badgeLabelOverride: getStoredPromotionTypePresentation(
+                      featuredPromotion.promotion_type
+                    ).label,
+                  } satisfies ShowroomSlide,
+                ]}
               />
             </div>
           )}
@@ -405,12 +425,9 @@ export function PromotionsExplorer() {
 
           {/* ── Grid / Loading / Error / Empty ── */}
           {loading ? (
-            <div className="-mx-4 sm:mx-0 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:grid-cols-4 xl:gap-6">
               {Array.from({ length: 8 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="aspect-[5/4] sm:rounded-[1.75rem] bg-muted animate-pulse"
-                />
+                <div key={index} className="aspect-[5/4] rounded-xl bg-muted animate-pulse" />
               ))}
             </div>
           ) : error ? (
@@ -438,7 +455,7 @@ export function PromotionsExplorer() {
             </Card>
           ) : (
             <>
-              <div className="-mx-4 sm:mx-0 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:grid-cols-4 xl:gap-6">
                 {gridPromotions.map((promotion, index) => {
                   const accountProfile = accountProfileMap.get(promotion.owner_id);
                   const businessName = promotion.business_id
@@ -558,71 +575,6 @@ export function PromotionsExplorer() {
         </div>
       </div>
     </div>
-  );
-}
-
-/* ── Featured Hero Card ─────────────────────────────────── */
-function FeaturedHeroCard({
-  promotion,
-  businessName,
-}: {
-  promotion: PromotionRow;
-  businessName?: string;
-}) {
-  const mediaUrl = promotion.videos?.[0] || promotion.photos?.[0];
-  const posterUrl = promotion.video_thumbnail || promotion.photos?.[0] || undefined;
-  const typePresentation = getStoredPromotionTypePresentation(promotion.promotion_type);
-
-  return (
-    <Link href={`/promotion/${promotion.id}`} className="group block">
-      <div className="relative overflow-hidden rounded-[1.75rem] bg-warm-100 dark:bg-warm-800 aspect-[9/12] sm:aspect-[16/7]">
-        {mediaUrl ? (
-          <VideoCardPlayer
-            src={mediaUrl}
-            posterUrl={posterUrl}
-            alt={promotion.title}
-            sizes="100vw"
-            mode="ambient"
-            priority
-            mediaClassName="transition-transform duration-700 group-hover:scale-[1.03]"
-          />
-        ) : (
-          <Image
-            src={normalizeMediaUrl("/images/fallbacks/hero-shop.svg")}
-            alt={promotion.title}
-            fill
-            className="object-cover"
-            sizes="100vw"
-            priority
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/24 to-black/8" />
-        <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
-          <div className="max-w-lg space-y-2 sm:space-y-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge className={cn("text-xs shadow-sm", typePresentation.cardBadgeClassName)}>
-                {typePresentation.label}
-              </Badge>
-            </div>
-            <h2 className="font-display text-xl sm:text-2xl md:text-3xl font-bold text-white line-clamp-2 drop-shadow-lg">
-              {promotion.title}
-            </h2>
-            {promotion.price_cents != null && promotion.price_cents > 0 && (
-              <p className="text-lg sm:text-xl font-bold text-white drop-shadow-md">
-                {formatZAR(promotion.price_cents)}
-              </p>
-            )}
-            <div className="flex items-center gap-3 text-sm text-white/70">
-              <span className="flex items-center gap-1">
-                <Megaphone className="h-3.5 w-3.5" />
-                {promotion.location_city}, {promotion.location_province}
-              </span>
-              {businessName ? <span>by {businessName}</span> : null}
-            </div>
-          </div>
-        </div>
-      </div>
-    </Link>
   );
 }
 
