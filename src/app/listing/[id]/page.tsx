@@ -29,6 +29,7 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
     .from("listings")
     .select("title, description")
     .eq("id", id)
+    .eq("status", "live")
     .single();
 
   if (!listing) {

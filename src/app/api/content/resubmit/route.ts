@@ -45,7 +45,33 @@ type NonCompatibleFetchedItem = {
   status: string;
   owner_id?: string | null;
   seller_id?: string | null;
+  updated_at?: string | null;
 };
+type AdminClient = Awaited<ReturnType<typeof createAdminClient>>;
+
+/**
+ * Returns true if the item was edited after the most recent admin rejection.
+ * Uses audit_logs to find the last rejection decision timestamp and compares
+ * it against the item's updated_at. If no rejection log exists we allow the
+ * resubmit (legacy items predating the audit system). Fails open on query error.
+ */
+async function wasEditedAfterRejection(
+  admin: AdminClient,
+  itemId: string,
+  itemUpdatedAt: string | null | undefined
+): Promise<boolean> {
+  if (!itemUpdatedAt) return true; // can't tell — allow
+  const { data: lastRejection, error } = await admin
+    .from("audit_logs")
+    .select("created_at")
+    .eq("target_id", itemId)
+    .filter("metadata->>decision", "eq", "reject")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !lastRejection) return true; // no rejection log found — allow
+  return new Date(itemUpdatedAt).getTime() > new Date(lastRejection.created_at).getTime();
+}
 
 function isOwnerCompatibleTable(table: TableConfig["table"]): table is CompatibleTable {
   return table === "listings" || table === "businesses" || table === "promotions";
@@ -101,6 +127,7 @@ export async function POST(request: Request) {
       status: string;
       owner_id?: string | null;
       seller_id?: string | null;
+      updated_at?: string | null;
     } | null = null;
     let updateErrorMessage: string | null = null;
 
@@ -109,7 +136,7 @@ export async function POST(request: Request) {
       const { data: fetchedItem, error: fetchError } = await applyOwnerFilter(
         supabase
           .from(config.table)
-          .select(withOwnerColumn("id, status, owner_id", ownerColumn))
+          .select(withOwnerColumn("id, status, owner_id, updated_at", ownerColumn))
           .eq("id", itemId),
         ownerColumn,
         user.id
@@ -120,6 +147,7 @@ export async function POST(request: Request) {
       }
 
       const compatibleItem = fetchedItem as unknown as {
+        updated_at?: string | null;
         id: string;
         status: string;
         owner_id?: string | null;
@@ -134,6 +162,16 @@ export async function POST(request: Request) {
       if (compatibleItem.status !== "rejected") {
         return NextResponse.json(
           { error: "Only rejected content can be resubmitted" },
+          { status: 400 }
+        );
+      }
+
+      // Verify the account holder edited the content since the last rejection.
+      const auditAdmin = createAdminClient();
+      const edited = await wasEditedAfterRejection(auditAdmin, itemId, compatibleItem.updated_at);
+      if (!edited) {
+        return NextResponse.json(
+          { error: "No changes detected. Update your content before resubmitting." },
           { status: 400 }
         );
       }
@@ -165,7 +203,7 @@ export async function POST(request: Request) {
 
       const { data: fetchedItem, error: fetchError } = await admin
         .from(config.table)
-        .select(`id, status, ${ownerCol}`)
+        .select(`id, status, ${ownerCol}, updated_at`)
         .eq("id", itemId)
         .maybeSingle();
 
@@ -175,7 +213,12 @@ export async function POST(request: Request) {
 
       const normalizedItem = fetchedItem as unknown as NonCompatibleFetchedItem;
       const fetchedOwner = readOwnerId(normalizedItem);
-      item = { id: normalizedItem.id, status: normalizedItem.status, owner_id: fetchedOwner };
+      item = {
+        id: normalizedItem.id,
+        status: normalizedItem.status,
+        owner_id: fetchedOwner,
+        updated_at: normalizedItem.updated_at,
+      };
 
       if (!item || fetchedOwner !== user.id) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -184,6 +227,15 @@ export async function POST(request: Request) {
       if (item.status !== "rejected") {
         return NextResponse.json(
           { error: "Only rejected content can be resubmitted" },
+          { status: 400 }
+        );
+      }
+
+      // Verify the account holder edited the content since the last rejection.
+      const edited = await wasEditedAfterRejection(admin, itemId, normalizedItem.updated_at);
+      if (!edited) {
+        return NextResponse.json(
+          { error: "No changes detected. Update your content before resubmitting." },
           { status: 400 }
         );
       }

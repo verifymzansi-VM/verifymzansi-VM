@@ -91,6 +91,19 @@ export function PwaInstallPrompt() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [showIOSHelp, setShowIOSHelp] = useState(false);
 
+  // Reset visible/deferred state whenever suppression becomes active so stale
+  // UI never remains after a route change, dismissal, or Playwright mode flip.
+  useEffect(() => {
+    if (!promptSuppressed) {
+      return;
+    }
+    queueMicrotask(() => {
+      setShowPrompt(false);
+      setShowIOSHelp(false);
+      setDeferredPrompt(null);
+    });
+  }, [promptSuppressed]);
+
   useEffect(() => {
     if (promptSuppressed) {
       return;
@@ -143,10 +156,14 @@ export function PwaInstallPrompt() {
       // Show the install prompt
       await deferredPrompt.prompt();
 
-      // Wait for the user to respond to the prompt
-      await deferredPrompt.userChoice;
+      // Guard against browsers that reject userChoice; keep the prompt usable.
+      const choice = await deferredPrompt.userChoice.catch(() => null);
+      if (!choice) {
+        setShowPrompt(true);
+        return;
+      }
 
-      // We no longer need the prompt. Clear it up
+      // We no longer need the prompt. Clear it up.
       setDeferredPrompt(null);
       setShowPrompt(false);
     } catch {
