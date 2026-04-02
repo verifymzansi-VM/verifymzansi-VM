@@ -329,4 +329,143 @@ describe("POST /api/billing/change-plan", () => {
       })
     );
   });
+
+  it("returns 409 when entitlement is not active", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: "ent-1",
+              user_id: "user-1",
+              area: "MZANSI_MARKET",
+              tier: "growth",
+              status: "cancelled",
+            },
+            error: null,
+          }),
+        };
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    const res = await changePlanRoute(
+      createMockRequest({
+        currentEntitlementId: "550e8400-e29b-41d4-a716-446655440000",
+        newPlanId: "550e8400-e29b-41d4-a716-446655440001",
+      })
+    );
+
+    expect(res.status).toBe(409);
+    const data = await res.json();
+    expect(data.error).toContain("active");
+  });
+
+  it("returns 409 when already on the same tier", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: "ent-1",
+              user_id: "user-1",
+              area: "MZANSI_MARKET",
+              tier: "growth",
+              status: "active",
+            },
+            error: null,
+          }),
+        };
+      }
+      if (table === "plans") {
+        return createPlansTableMock([
+          {
+            id: "550e8400-e29b-41d4-a716-446655440001",
+            name: "Market Growth",
+            area: "MZANSI_MARKET",
+            tier: "growth",
+            price_cents: 25000,
+            active: true,
+          },
+        ]);
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    const res = await changePlanRoute(
+      createMockRequest({
+        currentEntitlementId: "550e8400-e29b-41d4-a716-446655440000",
+        newPlanId: "550e8400-e29b-41d4-a716-446655440001",
+      })
+    );
+
+    expect(res.status).toBe(409);
+    const data = await res.json();
+    expect(data.error).toContain("already on this plan");
+  });
+
+  it("returns 500 when checkout creation fails", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    vi.mocked(createHostedCheckout).mockRejectedValueOnce(new Error("Provider unavailable"));
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: "ent-1",
+              user_id: "user-1",
+              area: "MZANSI_MARKET",
+              tier: "starter",
+              status: "active",
+            },
+            error: null,
+          }),
+        };
+      }
+      if (table === "plans") {
+        return createPlansTableMock([
+          {
+            id: "550e8400-e29b-41d4-a716-446655440001",
+            name: "Market Growth",
+            area: "MZANSI_MARKET",
+            tier: "growth",
+            price_cents: 25000,
+            active: true,
+          },
+        ]);
+      }
+      if (table === "payments") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    const res = await changePlanRoute(
+      createMockRequest({
+        currentEntitlementId: "550e8400-e29b-41d4-a716-446655440000",
+        newPlanId: "550e8400-e29b-41d4-a716-446655440001",
+      })
+    );
+
+    expect(res.status).toBe(500);
+    const data = await res.json();
+    expect(data.error).toContain("Failed to start plan change checkout");
+  });
 });

@@ -256,4 +256,31 @@ describe("createHostedCheckout", () => {
       })
     );
   });
+
+  it("throws a descriptive error when the inflight unique constraint is violated", async () => {
+    const mock = createMockAdminClient({
+      insertResult: {
+        data: null,
+        error: {
+          message: "duplicate key value violates unique constraint",
+          code: "23505",
+        } as never,
+      },
+    });
+
+    await expect(
+      createHostedCheckout({
+        admin: mock.client as never,
+        userId: "user-1",
+        area: "MZANSI_MARKET",
+        amountCents: 25000,
+        itemName: "Growth Plan",
+        returnUrl: "https://verifymzansi.com/billing/success?payment=__PAYMENT_ID__",
+        cancelUrl: "https://verifymzansi.com/billing/cancel?payment=__PAYMENT_ID__",
+        providerData: { type: "subscription", plan_id: "plan-1" },
+      })
+    ).rejects.toThrow("A checkout for this area is already in progress");
+
+    expect(vi.mocked(createOzowHostedPayment)).not.toHaveBeenCalled();
+  });
 });

@@ -22,6 +22,7 @@ const log = createLogger("GpsVerification");
 import {
   GPS_ACCURACY_WARN_METERS,
   GPS_ACCURACY_REJECT_METERS,
+  GPS_MAX_AGE_MS,
   GPS_PROVINCE_MISMATCH_RISK,
   GPS_CITY_MISMATCH_RISK,
 } from "@/lib/constants/verification";
@@ -140,14 +141,8 @@ export async function POST(request: NextRequest) {
       return bodyResult.response;
     }
 
-    const {
-      latitude,
-      longitude,
-      accuracy,
-      timestamp: _timestamp,
-      declaredProvince,
-      declaredCity,
-    } = bodyResult.data;
+    const { latitude, longitude, accuracy, timestamp, declaredProvince, declaredCity } =
+      bodyResult.data;
     const isConfirmationMode = !!declaredProvince;
 
     // Reject extremely poor accuracy
@@ -274,6 +269,19 @@ export async function POST(request: NextRequest) {
         value_json: {
           accuracy_meters: accuracy,
           threshold: GPS_ACCURACY_WARN_METERS,
+        },
+      });
+    }
+
+    // Stale GPS reading — timestamp too far in the past
+    const gpsAge = Date.now() - timestamp;
+    if (gpsAge > GPS_MAX_AGE_MS) {
+      signals.push({
+        signal_code: "gps_stale_reading",
+        severity: "warn",
+        value_json: {
+          age_ms: gpsAge,
+          threshold_ms: GPS_MAX_AGE_MS,
         },
       });
     }

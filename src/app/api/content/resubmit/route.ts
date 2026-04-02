@@ -47,7 +47,8 @@ type NonCompatibleFetchedItem = {
   seller_id?: string | null;
   updated_at?: string | null;
 };
-type AdminClient = Awaited<ReturnType<typeof createAdminClient>>;
+
+type AdminClient = ReturnType<typeof createAdminClient>;
 
 /**
  * Returns true if the item was edited after the most recent admin rejection.

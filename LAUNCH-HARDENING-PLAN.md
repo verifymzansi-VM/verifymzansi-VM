@@ -207,7 +207,7 @@ verification-first marketplace. Buy and sell with people you can trust."
 The platform should treat advertising/promotions as equal to the three
 marketplace areas. The mental model:
 
-```
+```text
 VerifyMzansi
 ├── Mzansi Market (Buy & Sell)
 ├── Mall Shops (Digital Storefronts)
@@ -233,7 +233,7 @@ VerifyMzansi
 
 ### Build & Deploy Strategy
 
-```
+```text
 Development:  Windows 11 + pnpm dev (works fine)
 Testing:      Windows 11 + pnpm test (works fine)
 Building:     Ubuntu/WSL + pnpm build:cloudflare (required for Cloudflare)
@@ -322,13 +322,13 @@ Add a prominent CTA section at the top of the page, after the PageHeader:
 
 Change line 21-23 from:
 
-```
+```text
 South Africa's verification-first marketplace. Buy and sell with people you can trust.
 ```
 
 To:
 
-```
+```text
 South Africa's verification-first marketplace and advertising platform. Buy, sell, and promote with people you can trust.
 ```
 

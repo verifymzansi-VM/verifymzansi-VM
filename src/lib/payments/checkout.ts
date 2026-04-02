@@ -18,7 +18,7 @@ export interface PaymentCheckoutInput {
         select: (columns: string) => {
           single: () => Promise<{
             data: { id: string } | null;
-            error: { message?: string } | null;
+            error: { message?: string; code?: string } | null;
           }>;
         };
       };
@@ -88,6 +88,12 @@ export async function createHostedCheckout(
     .single();
 
   if (insertError || !payment) {
+    // Unique constraint on (user_id, area) WHERE status IN ('pending','processing')
+    // catches the TOCTOU race where two concurrent checkouts both pass the
+    // application-level "no pending payment" check.
+    if (insertError?.code === "23505") {
+      throw new Error("A checkout for this area is already in progress");
+    }
     log.error("Failed to create pending payment", { error: insertError?.message });
     throw new Error("Failed to create payment");
   }

@@ -9,6 +9,7 @@ import {
 } from "@/lib/supabase/playwright-session";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { ensureCsrfCookie, CSRF_HEADER_NAME } from "@/lib/utils/csrf";
+import { env } from "@/lib/config/env";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 
@@ -48,8 +49,8 @@ function buildCsp(
   nonce: string | null,
   options?: { allowDevWebSocket?: boolean; enforceHttps?: boolean }
 ): string {
-  const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const cdnOrigin = process.env.R2_PUBLIC_URL ?? "";
+  const supabaseOrigin = env("NEXT_PUBLIC_SUPABASE_URL") ?? "";
+  const cdnOrigin = env("R2_PUBLIC_URL") ?? "";
   const connectSrcValues = [
     "'self'",
     ...(supabaseOrigin ? [supabaseOrigin] : []),

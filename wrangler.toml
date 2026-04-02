@@ -44,6 +44,9 @@ NEXT_PUBLIC_CF_IMAGE_RESIZING = "false"
 # OTP Rate Limiter Worker URL
 OTP_RATE_LIMITER_URL = "https://verifymzansi-rate-limiter.verifymzansi.workers.dev"
 OTP_RATE_LIMITER_TIMEOUT_MS = "2500"
+# Fail-closed env validation — crash the worker at startup if any env var
+# is missing or malformed.  See LAUNCH-CHECKLIST.md §8.
+STRICT_ENV_STARTUP_BLOCK = "1"
 # ⚠️ TEST_PHONE_NUMBERS and ENABLE_TEST_POSTING_BYPASS removed — these
 # weaken security and must NEVER be set in production. Use them only in
 # local .env for development/testing.

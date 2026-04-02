@@ -32,6 +32,10 @@ const envSchema = z.object({
   R2_PRIVATE_BUCKET: z.string().default("verifymzansi-private"),
   R2_PUBLIC_URL: z.string().optional(),
 
+  // ── Media CDN ─────────────────────────────────────────────
+  NEXT_PUBLIC_MEDIA_URL: z.string().url().optional(),
+  NEXT_PUBLIC_CF_IMAGE_RESIZING: z.enum(["true", "false"]).default("false"),
+
   // ── KYC Encryption (required for POPIA compliance) ────────
   KYC_ENCRYPTION_KEY: z
     .string()
@@ -132,6 +136,9 @@ function _createFallbackEnv(): Env {
     R2_PUBLIC_BUCKET: process.env.R2_PUBLIC_BUCKET || "verifymzansi-public",
     R2_PRIVATE_BUCKET: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
     R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
+    NEXT_PUBLIC_MEDIA_URL: process.env.NEXT_PUBLIC_MEDIA_URL,
+    NEXT_PUBLIC_CF_IMAGE_RESIZING:
+      (process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING as "true" | "false") || "false",
     // SECURITY: Use clearly-invalid placeholders that FAIL runtime Zod
     // validation.  The "INVALID" substring contains non-hex chars, so the
     // `.regex(/^[0-9a-fA-F]+$/)` guard rejects them before any crypto path.

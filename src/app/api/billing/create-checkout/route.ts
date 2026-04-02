@@ -209,6 +209,18 @@ export async function POST(request: NextRequest) {
       checkoutUrl = checkout.checkoutUrl;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create checkout session";
+
+      // Race-condition duplicate caught by DB unique index
+      if (message === "A checkout for this area is already in progress") {
+        return NextResponse.json(
+          {
+            error:
+              "You already have a pending payment for this area. Please wait for it to complete or cancel it.",
+          },
+          { status: 409 }
+        );
+      }
+
       const errorCode =
         error instanceof OzowConfigurationError
           ? error.code

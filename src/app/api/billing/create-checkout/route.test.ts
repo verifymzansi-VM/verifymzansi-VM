@@ -482,4 +482,138 @@ describe("POST /api/billing/create-checkout", () => {
       "Payment provider is temporarily unavailable. Please try again in a few minutes."
     );
   });
+
+  it("returns 429 when rate-limited", async () => {
+    const { checkRateLimit } = await import("@/lib/utils/rate-limit");
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({
+      limited: true,
+      degraded: false,
+      retryAfter: 30,
+    });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    const res = await createCheckout(
+      createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
+    );
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("30");
+  });
+
+  it("returns 503 when rate limiter is degraded", async () => {
+    const { checkRateLimit } = await import("@/lib/utils/rate-limit");
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({
+      limited: true,
+      degraded: true,
+      retryAfter: 60,
+    });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    const res = await createCheckout(
+      createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
+    );
+
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 400 when user already has an active entitlement for the area", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "profile-1", display_name: "Test Account" },
+          }),
+        };
+      }
+      if (table === "plans") {
+        return createPlansTableMock([
+          {
+            id: "550e8400-e29b-41d4-a716-446655440000",
+            name: "Mzansi Market Growth",
+            area: "MZANSI_MARKET",
+            tier: "growth",
+            price_cents: 25000,
+            active: true,
+          },
+        ]);
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { id: "ent-active" } }),
+        };
+      }
+    });
+
+    const res = await createCheckout(
+      createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data.error).toContain("already have an active subscription");
+  });
+
+  it("returns 409 when a pending payment already exists for the area", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "profile-1", display_name: "Test Account" },
+          }),
+        };
+      }
+      if (table === "plans") {
+        return createPlansTableMock([
+          {
+            id: "550e8400-e29b-41d4-a716-446655440000",
+            name: "Mzansi Market Growth",
+            area: "MZANSI_MARKET",
+            tier: "growth",
+            price_cents: 25000,
+            active: true,
+          },
+        ]);
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        };
+      }
+      if (table === "payments") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: { id: "pay-pending" } }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+    });
+
+    const res = await createCheckout(
+      createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(data.error).toContain("pending payment");
+  });
 });

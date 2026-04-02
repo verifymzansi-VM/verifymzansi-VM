@@ -13,7 +13,7 @@ export const RISK_THRESHOLDS = {
 
 /* ── GPS / Location ──────────────────────────────────────── */
 export const GPS_ACCURACY_WARN_METERS = 1000;
-export const GPS_ACCURACY_REJECT_METERS = 5000;
+export const GPS_ACCURACY_REJECT_METERS = 3000;
 export const GPS_REQUEST_TIMEOUT_MS = 15_000;
 export const GPS_MAX_AGE_MS = 60_000;
 
