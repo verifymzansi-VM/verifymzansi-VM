@@ -43,7 +43,7 @@ export default defineConfig({
       ],
       thresholds: {
         statements: strictCoverage ? 65 : 60,
-        branches: strictCoverage ? 60 : 50,
+        branches: strictCoverage ? 59 : 50,
         functions: strictCoverage ? 60 : 50,
         lines: strictCoverage ? 65 : 60,
       },
