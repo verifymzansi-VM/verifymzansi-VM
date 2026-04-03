@@ -53,7 +53,7 @@ const mallStoreDetailsSchema = z.object({
         message: "Mall photos must be hosted on the VerifyMzansi platform",
       })
     )
-    .max(5, "Maximum 5 mall photos")
+    .max(10, "Maximum 10 mall photos")
     .optional()
     .default([]),
   floor_or_wing: optionalText(80),
@@ -185,7 +185,7 @@ export const businessSchema = z
           message: "Gallery photos must be hosted on the VerifyMzansi platform",
         })
       )
-      .max(5, "Maximum 5 gallery photos")
+      .max(10, "Maximum 10 gallery photos")
       .optional()
       .default([]),
 

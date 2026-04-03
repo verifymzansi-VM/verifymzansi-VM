@@ -1107,10 +1107,10 @@ export default function EditBusinessPage() {
                     <MediaUpload
                       label={
                         removeMallPhotos || existingMallPhotos.length === 0
-                          ? "Mall Photos (up to 5)"
-                          : "Replace Mall Photos (up to 5)"
+                          ? "Mall Photos (up to 10)"
+                          : "Replace Mall Photos (up to 10)"
                       }
-                      maxFiles={5}
+                      maxFiles={10}
                       files={newMallPhotoFiles}
                       onChange={setNewMallPhotoFiles}
                       accept="image/*"

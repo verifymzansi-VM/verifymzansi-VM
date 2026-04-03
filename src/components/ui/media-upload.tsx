@@ -34,7 +34,7 @@ interface PreviewItem {
 
 export function MediaUpload({
   label = "Photos & Videos",
-  maxFiles = 8,
+  maxFiles = 10,
   files,
   onChange,
   accept,

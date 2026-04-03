@@ -652,7 +652,7 @@ describe("POST /api/listings", () => {
 
     // Submit with too many images to trigger 422 from media validation
     const tooManyImages = Array.from(
-      { length: 10 },
+      { length: 11 },
       (_, i) => `https://media.verifymzansi.com/img${i}.jpg`
     );
     const res = await POST(createRequest({ ...VALID_BODY, images: tooManyImages }));

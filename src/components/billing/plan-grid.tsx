@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, Crown, Sparkles, X } from "lucide-react";
+import { ArrowRight, Check, Crown, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -108,7 +108,7 @@ export function BillingPlanGrid({ plans }: { plans: PlanDefinition[] }) {
           }`}
         >
           <PlanBadge plan={plan} />
-          <CardHeader className="pb-6 pt-6 text-center">
+          <CardHeader className="pb-4 pt-4 text-center">
             <CardTitle className="font-display text-xl font-medium text-muted-foreground">
               {plan.name}
             </CardTitle>
@@ -121,24 +121,11 @@ export function BillingPlanGrid({ plans }: { plans: PlanDefinition[] }) {
           </CardHeader>
 
           <CardContent className="flex flex-1 flex-col">
-            <ul className="mb-6 flex-1 space-y-4">
-              {getPlanFeatureItems(plan, { includeDisabled: true }).map((feature) => (
+            <ul className="mb-6 flex-1 space-y-2">
+              {getPlanFeatureItems(plan).map((feature) => (
                 <li key={feature.text} className="flex items-start gap-3 text-sm">
-                  {feature.included ? (
-                    <Check aria-hidden="true" className="h-5 w-5 flex-shrink-0 text-brand-green" />
-                  ) : (
-                    <X
-                      aria-hidden="true"
-                      className="h-5 w-5 flex-shrink-0 text-muted-foreground/30"
-                    />
-                  )}
-                  <span
-                    className={
-                      feature.included ? "font-medium text-foreground" : "text-muted-foreground"
-                    }
-                  >
-                    {feature.text}
-                  </span>
+                  <Check aria-hidden="true" className="h-5 w-5 flex-shrink-0 text-brand-green" />
+                  <span className="font-medium text-foreground">{feature.text}</span>
                 </li>
               ))}
             </ul>

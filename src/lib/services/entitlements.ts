@@ -23,7 +23,7 @@ export interface Entitlements {
 
 const FREE_ENTITLEMENTS: Entitlements = {
   maxAllowed: 1,
-  maxPhotos: 5,
+  maxPhotos: 10,
   maxVideos: 1,
   maxPostsPerMonth: 1,
   videoAllowed: true,

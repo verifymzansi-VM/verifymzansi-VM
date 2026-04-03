@@ -1569,8 +1569,8 @@ function CreateBusinessContent() {
                     {businessType === "mall_store" && (
                       <div className="space-y-2 rounded-lg">
                         <MediaUpload
-                          label="Mall photos (optional, up to 5)"
-                          maxFiles={5}
+                          label="Mall photos (optional, up to 10)"
+                          maxFiles={10}
                           files={mallPhotoFiles}
                           onChange={setMallPhotoFiles}
                           accept="image/*"

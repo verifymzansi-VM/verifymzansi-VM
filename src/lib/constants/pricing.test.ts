@@ -89,7 +89,7 @@ describe("pricing constants", () => {
 
   it("defines free post config", () => {
     expect(FREE_POST_CONFIG.durationDays).toBe(30);
-    expect(FREE_POST_CONFIG.maxPhotos).toBe(5);
+    expect(FREE_POST_CONFIG.maxPhotos).toBe(10);
     expect(FREE_POST_CONFIG.maxVideos).toBe(1);
     expect(FREE_POST_CONFIG.videoAllowed).toBe(true);
     expect(FREE_POST_CONFIG.maxAllowed).toBe(1);

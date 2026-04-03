@@ -42,7 +42,7 @@ describe("entitlements service", () => {
       // @ts-expect-error testing non-existent
       const ent = getEntitlements("enterprise", "MZANSI_MARKET");
       expect(ent.maxAllowed).toBe(1);
-      expect(ent.maxPhotos).toBe(5);
+      expect(ent.maxPhotos).toBe(10);
     });
 
     it("works for all three marketplace areas", () => {

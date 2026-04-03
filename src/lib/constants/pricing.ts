@@ -78,7 +78,7 @@ export const PLANS: PlanDefinition[] = [
     billingFrequency: "30_days",
     features: {
       maxListings: 1,
-      maxPhotos: 5,
+      maxPhotos: 10,
       maxPostsPerMonth: 1,
       videoAllowed: false,
       boostAllowed: false,
@@ -95,7 +95,7 @@ export const PLANS: PlanDefinition[] = [
     billingFrequency: "30_days",
     features: {
       maxListings: 5,
-      maxPhotos: 5,
+      maxPhotos: 10,
       maxPostsPerMonth: 5,
       videoAllowed: true,
       maxVideos: 1,
@@ -150,7 +150,7 @@ export const PLANS: PlanDefinition[] = [
     billingFrequency: "30_days",
     features: {
       maxBusinesses: 1,
-      maxPhotos: 5,
+      maxPhotos: 10,
       maxPostsPerMonth: 5,
       videoAllowed: true,
       maxVideos: 1,
@@ -205,7 +205,7 @@ export const PLANS: PlanDefinition[] = [
     billingFrequency: "30_days",
     features: {
       maxPromotions: 1,
-      maxPhotos: 5,
+      maxPhotos: 10,
       maxPostsPerMonth: 1,
       videoAllowed: false,
       boostAllowed: false,
@@ -222,7 +222,7 @@ export const PLANS: PlanDefinition[] = [
     billingFrequency: "30_days",
     features: {
       maxPromotions: 5,
-      maxPhotos: 5,
+      maxPhotos: 10,
       maxPostsPerMonth: 5,
       videoAllowed: true,
       maxVideos: 1,
@@ -281,7 +281,7 @@ export const PLANS: PlanDefinition[] = [
     billingFrequency: "30_days",
     features: {
       maxStorefronts: 1,
-      maxPhotos: 5,
+      maxPhotos: 10,
       maxPostsPerMonth: 5,
       videoAllowed: true,
       maxVideos: 1,
@@ -340,7 +340,7 @@ export const PLANS: PlanDefinition[] = [
     billingFrequency: "30_days",
     features: {
       maxProfiles: 1,
-      maxPhotos: 5,
+      maxPhotos: 10,
       maxPostsPerMonth: 5,
       videoAllowed: true,
       maxVideos: 1,
@@ -429,7 +429,7 @@ export const TRIAL_CONFIG = {
  */
 export const FREE_POST_CONFIG = {
   durationDays: 30,
-  maxPhotos: 5,
+  maxPhotos: 10,
   maxVideos: 1,
   videoAllowed: true,
   maxAllowed: 1, // 1 post per area
