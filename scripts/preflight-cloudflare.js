@@ -26,6 +26,7 @@ const validateOnly = args.has("--validate-only");
 const repoRoot = path.join(__dirname, "..");
 const wranglerTomlPath = path.join(repoRoot, "wrangler.toml");
 const openNextEntryPath = path.join(repoRoot, "workers", "open-next-entry.mjs");
+const nextConfigPath = path.join(repoRoot, "next.config.js");
 const envLocalPath = path.join(repoRoot, ".env.local");
 const envProductionLocalPath = path.join(repoRoot, ".env.production.local");
 const legacyProxyPath = path.join(repoRoot, "src", "proxy.ts");
@@ -58,6 +59,7 @@ function readText(filePath) {
 
 function validateCloudflareConfig() {
   const errors = [];
+  const warnings = [];
 
   const wranglerToml = readText(wranglerTomlPath);
   if (!wranglerToml) {
@@ -67,6 +69,19 @@ function validateCloudflareConfig() {
   const openNextEntry = readText(openNextEntryPath);
   if (!openNextEntry) {
     errors.push(`Missing required Cloudflare worker entrypoint: ${openNextEntryPath}`);
+  }
+
+  const nextConfig = readText(nextConfigPath);
+  if (!nextConfig) {
+    warnings.push(`Could not read ${nextConfigPath}; unable to validate sharp externalization.`);
+  } else {
+    const hasServerExternalPackages = /serverExternalPackages\s*:/.test(nextConfig);
+    const hasSharpExternal = /["']sharp["']/.test(nextConfig);
+    if (!hasServerExternalPackages || !hasSharpExternal) {
+      warnings.push(
+        "next.config.js does not clearly externalize sharp via serverExternalPackages; Cloudflare OpenNext bundling may fail with unresolved sharp-hash modules."
+      );
+    }
   }
 
   if (wranglerToml) {
@@ -102,7 +117,7 @@ function validateCloudflareConfig() {
     }
   }
 
-  return errors;
+  return { errors, warnings };
 }
 
 function writeProductionEnvOverride() {
@@ -158,7 +173,13 @@ function isWSL() {
 }
 
 const platform = os.platform();
-const validationErrors = validateCloudflareConfig();
+const { errors: validationErrors, warnings: validationWarnings } = validateCloudflareConfig();
+
+if (validationWarnings.length > 0) {
+  for (const warning of validationWarnings) {
+    console.warn(`⚠ ${warning}`);
+  }
+}
 
 if (validationErrors.length > 0) {
   console.error("\nCloudflare config validation failed:\n");

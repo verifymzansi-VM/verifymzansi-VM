@@ -10,9 +10,23 @@ const clientEnv = Object.fromEntries(
   }).filter(([, value]) => typeof value === "string" && value.length > 0)
 );
 
+const sharpServerExternalPackages = [
+  "sharp",
+  "@img/sharp-linux-x64",
+  "@img/sharp-linuxmusl-x64",
+  "@img/sharp-linux-arm64",
+  "@img/sharp-linuxmusl-arm64",
+  "@img/sharp-win32-x64",
+  "@img/sharp-darwin-x64",
+  "@img/sharp-darwin-arm64",
+];
+
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Keep native sharp packages external so OpenNext/esbuild does not
+  // attempt to resolve hashed sharp bundle specifiers on Cloudflare.
+  serverExternalPackages: sharpServerExternalPackages,
   // Disable the Next.js devtools indicator so localhost matches production
   // without the floating `N` badge and bottom drawer dimming the page.
   devIndicators: false,
