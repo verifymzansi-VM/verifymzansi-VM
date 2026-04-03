@@ -97,6 +97,8 @@ export const fileUploadSchema = z.object({
   firstName: z.string().trim().max(100).optional(),
   /** Surname as printed on the ID document (required for id_document uploads). */
   lastName: z.string().trim().max(100).optional(),
+  /** How the image was captured: camera (getUserMedia) or file upload. */
+  captureMethod: z.enum(["camera", "file_upload"]).optional(),
 });
 
 /**

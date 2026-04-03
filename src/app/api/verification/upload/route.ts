@@ -8,7 +8,11 @@ import { processKycArtifact } from "@/lib/services/kyc-engine";
 import { createLogger } from "@/lib/utils/logger";
 import { isStrictLocalDevelopmentRequest } from "@/lib/utils/local-dev";
 import { stripExifFromJpeg, stripMetadataFromPng } from "@/lib/utils/exif-strip";
+import { inspectJpegExif, type ExifSignals } from "@/lib/utils/exif-inspect";
+import { getImageDimensions } from "@/lib/utils/image-dimensions";
+import { decodeImageToPixels, computeLaplacianVariance } from "@/lib/utils/blur-detection";
 import { scanForMalware } from "@/lib/utils/malware-scan";
+import { MIN_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION } from "@/lib/constants/verification";
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import {
   buildPendingVerificationStep,
@@ -186,7 +190,7 @@ export async function POST(request: NextRequest) {
       return metaParsed.response;
     }
 
-    const { docType, idNumber } = metaParsed.data;
+    const { docType, idNumber, captureMethod } = metaParsed.data;
     const firstName = metaParsed.data.firstName?.trim() || undefined;
     const lastName = metaParsed.data.lastName?.trim() || undefined;
 
@@ -255,6 +259,21 @@ export async function POST(request: NextRequest) {
         },
         { status: 403 }
       );
+    }
+
+    // ── Check if phone is linked to a rejected/flagged account ──
+    let phoneFlaggedUserId: string | null = null;
+    {
+      const { data: flaggedRows } = await admin
+        .from("account_profiles")
+        .select("id")
+        .eq("phone", profile.phone)
+        .neq("id", profile.id)
+        .eq("account_verification_status", "rejected")
+        .limit(1);
+      if (flaggedRows && flaggedRows.length > 0) {
+        phoneFlaggedUserId = flaggedRows[0].id;
+      }
     }
 
     // ── Map docType → verification step_type / artifact_kind ─
@@ -337,6 +356,53 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    // ── Inspect EXIF metadata for fraud signals (before stripping) ──
+    let exifSignals: ExifSignals | null = null;
+    if (file.type === "image/jpeg" || integrity.detectedMime === "image/jpeg") {
+      exifSignals = inspectJpegExif(fileBuffer);
+    }
+
+    // ── Image dimension validation ───────────────────────────
+    const isImageFile = file.type.startsWith("image/");
+    if (isImageFile) {
+      const dims = getImageDimensions(fileBuffer);
+      if (dims) {
+        const shortest = Math.min(dims.width, dims.height);
+        const longest = Math.max(dims.width, dims.height);
+        if (shortest < MIN_IMAGE_DIMENSION) {
+          return NextResponse.json(
+            {
+              error: `Image is too small (${dims.width}×${dims.height}). Minimum ${MIN_IMAGE_DIMENSION}px on shortest side.`,
+              requestId,
+            },
+            { status: 400 }
+          );
+        }
+        if (longest > MAX_IMAGE_DIMENSION) {
+          return NextResponse.json(
+            {
+              error: `Image is too large (${dims.width}×${dims.height}). Maximum ${MAX_IMAGE_DIMENSION}px on longest side.`,
+              requestId,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // ── Blur detection (best-effort, requires sharp) ─────────
+    let blurScore: number | null = null;
+    if (isImageFile) {
+      try {
+        const pixels = await decodeImageToPixels(fileBuffer, file.type);
+        if (pixels) {
+          blurScore = computeLaplacianVariance(pixels.data, pixels.width, pixels.height);
+        }
+      } catch {
+        // Blur detection is best-effort — skip on failure
+      }
     }
 
     // ── Strip EXIF metadata from JPEG files (POPIA data minimization) ──
@@ -439,6 +505,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // ── Phone linked to flagged/rejected account signal ──────
+    if (phoneFlaggedUserId) {
+      log.warn("Phone linked to flagged account", {
+        userId: user.id,
+        flaggedProfileId: phoneFlaggedUserId,
+      });
+      await admin.from("kyc_risk_signals").insert({
+        user_id: user.id,
+        artifact_id: artifact.id,
+        signal_code: "phone_linked_to_flagged_account",
+        severity: "block",
+        value_json: { flaggedProfileId: phoneFlaggedUserId },
+      });
+    }
+
     // ── Risk engine: SHA-256, velocity, ID reuse, provider ───
     const engineResult = await processKycArtifact({
       artifactId: artifact.id,
@@ -448,6 +529,10 @@ export async function POST(request: NextRequest) {
       r2Key: uploadResult.key,
       idNumber,
       adminClient: admin,
+      captureMethod: captureMethod ?? undefined,
+      exifSignals,
+      blurScore,
+      phoneFlagged: !!phoneFlaggedUserId,
     });
 
     // ── Patch artifact with sha256 and provider_ref ───────────

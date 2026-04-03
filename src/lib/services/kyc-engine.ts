@@ -4,6 +4,8 @@ import { env } from "@/lib/config/env";
 import { getConfiguredProvider } from "./kyc-provider";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RiskLevel } from "@/types/enums";
+import type { ExifSignals } from "@/lib/utils/exif-inspect";
+import { BLUR_VARIANCE_THRESHOLD } from "@/lib/constants/verification";
 
 const log = createLogger("KycEngine");
 
@@ -30,6 +32,11 @@ export interface KycEngineInput {
   r2Key: string;
   idNumber?: string;
   adminClient: SupabaseClient;
+  captureMethod?: "camera" | "file_upload";
+  exifSignals?: ExifSignals | null;
+  blurScore?: number | null;
+  /** Pre-computed: phone is linked to a rejected account (block signal) */
+  phoneFlagged?: boolean;
 }
 
 export interface KycEngineOutput {
@@ -53,7 +60,19 @@ export interface KycEngineOutput {
  * kyc_artifacts rows by the caller.
  */
 export async function processKycArtifact(input: KycEngineInput): Promise<KycEngineOutput> {
-  const { artifactId, userId, stepType, fileBuffer, r2Key, idNumber, adminClient } = input;
+  const {
+    artifactId,
+    userId,
+    stepType,
+    fileBuffer,
+    r2Key,
+    idNumber,
+    adminClient,
+    captureMethod,
+    exifSignals,
+    blurScore,
+    phoneFlagged,
+  } = input;
   let signalScore = 0;
 
   // ── 1. SHA-256 deduplication ──────────────────────────────
@@ -244,7 +263,121 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
     autoStatus = "needs_manual_review";
   }
 
-  // ── 5. Aggregate risk score ───────────────────────────────
+  // ── 5. EXIF-based fraud signals (file_upload only) ─────────
+  if (exifSignals && captureMethod === "file_upload") {
+    if (!exifSignals.hasExif) {
+      log.warn("File-uploaded image has no EXIF data", { userId, stepType });
+      await writeSignal(adminClient, {
+        userId,
+        artifactId,
+        signalCode: "no_camera_exif",
+        severity: "warn",
+        valueJson: { captureMethod },
+      });
+      signalScore += SEVERITY_WEIGHT.warn;
+    }
+
+    if (exifSignals.software) {
+      const editorPatterns = /photoshop|gimp|paint|snapseed|lightroom|canva|pixlr|affinity/i;
+      if (editorPatterns.test(exifSignals.software)) {
+        log.warn("EXIF software indicates image editor", {
+          software: exifSignals.software,
+          userId,
+        });
+        await writeSignal(adminClient, {
+          userId,
+          artifactId,
+          signalCode: "software_edited",
+          severity: "warn",
+          valueJson: { software: exifSignals.software },
+        });
+        signalScore += SEVERITY_WEIGHT.warn;
+      }
+    }
+  }
+
+  // Stale photo check (regardless of capture method)
+  if (exifSignals?.dateTime) {
+    try {
+      // EXIF date format: "YYYY:MM:DD HH:MM:SS"
+      const exifDate = new Date(
+        exifSignals.dateTime.replace(/^(\d{4}):(\d{2}):(\d{2})/, "$1-$2-$3")
+      );
+      const ageMs = Date.now() - exifDate.getTime();
+      if (!isNaN(ageMs) && ageMs > 24 * 60 * 60 * 1000) {
+        await writeSignal(adminClient, {
+          userId,
+          artifactId,
+          signalCode: "stale_photo",
+          severity: "info",
+          valueJson: { dateTime: exifSignals.dateTime, ageHours: Math.round(ageMs / 3600000) },
+        });
+        // info = 0 pts, no score change
+      }
+    } catch {
+      // Invalid date — skip
+    }
+  }
+
+  // ── 6. Selfie not captured via camera signal ──────────────
+  if (stepType === "selfie" && captureMethod === "file_upload") {
+    log.warn("Selfie uploaded via file instead of camera", { userId });
+    await writeSignal(adminClient, {
+      userId,
+      artifactId,
+      signalCode: "selfie_not_camera_captured",
+      severity: "warn",
+      valueJson: { captureMethod },
+    });
+    signalScore += SEVERITY_WEIGHT.warn;
+  }
+
+  // ── 7. Blur detection signal ──────────────────────────────
+  if (typeof blurScore === "number" && blurScore < BLUR_VARIANCE_THRESHOLD) {
+    log.warn("Blurry image detected", { userId, blurScore });
+    await writeSignal(adminClient, {
+      userId,
+      artifactId,
+      signalCode: "blurry_image",
+      severity: "warn",
+      valueJson: { blurScore, threshold: BLUR_VARIANCE_THRESHOLD },
+    });
+    signalScore += SEVERITY_WEIGHT.warn;
+  }
+
+  // ── 8. Rapid step completion (phone → upload < 30s) ───────
+  {
+    const { data: session } = await adminClient
+      .from("verification_sessions")
+      .select("phone_verified_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (session?.phone_verified_at) {
+      const phoneVerifiedAt = new Date(session.phone_verified_at).getTime();
+      const elapsed = Date.now() - phoneVerifiedAt;
+      if (!isNaN(elapsed) && elapsed < 30_000) {
+        log.warn("Rapid step completion detected", { userId, elapsedMs: elapsed });
+        await writeSignal(adminClient, {
+          userId,
+          artifactId,
+          signalCode: "rapid_step_completion",
+          severity: "warn",
+          valueJson: { elapsedMs: elapsed },
+        });
+        signalScore += SEVERITY_WEIGHT.warn;
+      }
+    }
+  }
+
+  // ── 8b. Phone linked to flagged account ────────────────────
+  if (phoneFlagged) {
+    signalScore += SEVERITY_WEIGHT.block;
+  }
+
+  // ── 9. Aggregate risk score ───────────────────────────────
   const riskScore = Math.min(signalScore, 100);
   const riskLevel = deriveRiskLevel(riskScore);
 

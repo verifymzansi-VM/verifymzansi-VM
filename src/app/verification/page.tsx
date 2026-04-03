@@ -47,6 +47,8 @@ import {
   isVerificationEmailConfirmationRequired,
 } from "@/lib/constants/verification-email-confirmation";
 import { LocationSelector } from "@/components/ui/location-selector";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { CameraCapture } from "@/components/ui/camera-capture";
 import { isValidSaPhone, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 
 type WizardStep = "phone" | "id_doc" | "selfie" | "location" | "complete";
@@ -103,7 +105,7 @@ type OtpSendResponse = VerificationApiResponse;
 const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
   phone: "Enter your SA mobile number. We'll send an OTP via SMS.",
   id_doc: "Enter your 13-digit SA ID and upload a clear photo or PDF of your ID. Max 5 MB.",
-  selfie: "Upload a clear selfie showing your full face. Max 5 MB.",
+  selfie: "Take a live selfie using your camera. Max 5 MB.",
   location:
     "Select your province and city, then use GPS to verify your address. Your address is approved instantly — no admin review needed.",
 };
@@ -362,6 +364,10 @@ export default function VerificationPage() {
   const [lastName, setLastName] = useState("");
   const [idFile, setIdFile] = useState<File | null>(null);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
+  const [idCaptureMethod, setIdCaptureMethod] = useState<"camera" | "file_upload">("file_upload");
+  const [selfieCaptureMethod, setSelfieCaptureMethod] = useState<"camera" | "file_upload">(
+    "camera"
+  );
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [locationTown, setLocationTown] = useState("");
@@ -1138,6 +1144,7 @@ export default function VerificationPage() {
       fd.append("firstName", normalizedFirstName);
       fd.append("lastName", normalizedLastName);
       fd.append("idDocumentType", "sa_id");
+      fd.append("captureMethod", idCaptureMethod);
       return fd;
     }, "ID document");
 
@@ -1160,6 +1167,7 @@ export default function VerificationPage() {
       const fd = new FormData();
       fd.append("file", selfieFile);
       fd.append("docType", "selfie");
+      fd.append("captureMethod", selfieCaptureMethod);
       return fd;
     }, "selfie");
 
@@ -1706,18 +1714,39 @@ export default function VerificationPage() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="idFile">ID file (image/PDF)</Label>
-                    <Input
-                      id="idFile"
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,.pdf,application/pdf"
-                      disabled={verificationSubmissionBlocked}
-                      onChange={(e) => {
-                        setIdFile(e.target.files?.[0] ?? null);
-                        setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                        clearStepCompletion("id_doc");
-                      }}
-                    />
+                    <Label>ID file (image/PDF)</Label>
+                    <Tabs defaultValue="upload" className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="upload">Upload File</TabsTrigger>
+                        <TabsTrigger value="camera">Use Camera</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="upload" className="mt-3">
+                        <Input
+                          id="idFile"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,.pdf,application/pdf"
+                          disabled={verificationSubmissionBlocked}
+                          onChange={(e) => {
+                            setIdFile(e.target.files?.[0] ?? null);
+                            setIdCaptureMethod("file_upload");
+                            setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                            clearStepCompletion("id_doc");
+                          }}
+                        />
+                      </TabsContent>
+                      <TabsContent value="camera" className="mt-3">
+                        <CameraCapture
+                          facingMode="environment"
+                          disabled={verificationSubmissionBlocked}
+                          onCapture={(file) => {
+                            setIdFile(file);
+                            setIdCaptureMethod("camera");
+                            setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                            clearStepCompletion("id_doc");
+                          }}
+                        />
+                      </TabsContent>
+                    </Tabs>
                     {idFileError && idFile && <p className="inline-form-error">{idFileError}</p>}
                   </div>
 
@@ -1801,18 +1830,17 @@ export default function VerificationPage() {
                   )}
 
                   <div className="space-y-2">
-                    <Label htmlFor="selfieFile">Selfie image</Label>
-                    <Input
-                      id="selfieFile"
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      capture="user"
+                    <Label>Selfie image</Label>
+                    <CameraCapture
+                      facingMode="user"
                       disabled={verificationSubmissionBlocked}
-                      onChange={(e) => {
-                        setSelfieFile(e.target.files?.[0] ?? null);
+                      onCapture={(file) => {
+                        setSelfieFile(file);
+                        setSelfieCaptureMethod("camera");
                         setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
                         clearStepCompletion("selfie");
                       }}
+                      onFallback={() => setSelfieCaptureMethod("file_upload")}
                     />
                     {selfieFileError && selfieFile && (
                       <p className="inline-form-error">{selfieFileError}</p>

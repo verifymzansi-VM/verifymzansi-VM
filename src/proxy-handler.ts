@@ -97,16 +97,20 @@ function buildCsp(
   return directives.join("; ");
 }
 
+const DEFAULT_PERMISSIONS_POLICY =
+  "camera=(), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()";
+
 /** Attach all standard security headers to a response. */
-function applySecurityHeaders(response: NextResponse, csp: string): void {
+function applySecurityHeaders(
+  response: NextResponse,
+  csp: string,
+  permissionsPolicy: string = DEFAULT_PERMISSIONS_POLICY
+): void {
   response.headers.set("Content-Security-Policy", csp);
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  response.headers.set(
-    "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()"
-  );
+  response.headers.set("Permissions-Policy", permissionsPolicy);
   response.headers.set(
     "Report-To",
     JSON.stringify({
@@ -245,7 +249,12 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
     response.headers.set(headerName, headerValue);
   }
 
-  applySecurityHeaders(response, csp);
+  const isVerificationPage = request.nextUrl.pathname.startsWith("/verification");
+  const permissionsPolicy = isVerificationPage
+    ? "camera=(self), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()"
+    : DEFAULT_PERMISSIONS_POLICY;
+
+  applySecurityHeaders(response, csp, permissionsPolicy);
   if (nonce) {
     response.headers.set("x-nonce", nonce);
   }

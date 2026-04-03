@@ -27,6 +27,11 @@ export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"] as const;
 
+/* ── Image Quality Requirements ──────────────────────────── */
+export const MIN_IMAGE_DIMENSION = 320;
+export const MAX_IMAGE_DIMENSION = 8000;
+export const BLUR_VARIANCE_THRESHOLD = 100;
+
 /* ── Retention ───────────────────────────────────────────── */
 export const APPROVED_ARTIFACT_RETENTION_DAYS = 30;
 

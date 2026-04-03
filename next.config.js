@@ -80,6 +80,13 @@ const nextConfig = {
         ],
       },
       {
+        // Allow camera access on the verification page for selfie / ID capture
+        source: "/verification",
+        headers: [
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self)" },
+        ],
+      },
+      {
         // Media proxy serves R2 objects with long-lived immutable headers;
         // exclude it from the generic no-cache rule so browsers and CDN can
         // cache video responses served through the proxy.
