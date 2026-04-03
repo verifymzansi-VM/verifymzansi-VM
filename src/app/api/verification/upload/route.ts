@@ -654,7 +654,8 @@ export async function POST(request: NextRequest) {
             userId: user.id,
             existingUserId: existingHmac.user_id,
           });
-          await deleteFromR2(uploadResult.key).catch(() => {});
+          const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+          await deleteFromR2(privateBucket, uploadResult.key).catch(() => {});
           return NextResponse.json(
             {
               error: "This ID number is already linked to another account.",
