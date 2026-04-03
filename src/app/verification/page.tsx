@@ -30,6 +30,7 @@ import {
   validateSaIdChecksum,
   extractDobFromSaId,
   extractGenderFromSaId,
+  isUnder18FromSaId,
 } from "@/lib/utils/sa-id-validation";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
@@ -47,7 +48,6 @@ import {
   isVerificationEmailConfirmationRequired,
 } from "@/lib/constants/verification-email-confirmation";
 import { LocationSelector } from "@/components/ui/location-selector";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CameraCapture } from "@/components/ui/camera-capture";
 import { isValidSaPhone, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 
@@ -104,7 +104,7 @@ type OtpSendResponse = VerificationApiResponse;
 
 const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
   phone: "Enter your SA mobile number. We'll send an OTP via SMS.",
-  id_doc: "Enter your 13-digit SA ID and upload a clear photo or PDF of your ID. Max 5 MB.",
+  id_doc: "Enter your 13-digit SA ID and take a clear photo of your ID. Max 5 MB.",
   selfie: "Take a live selfie using your camera. Max 5 MB.",
   location:
     "Select your province and city, then use GPS to verify your address. Your address is approved instantly — no admin review needed.",
@@ -364,7 +364,7 @@ export default function VerificationPage() {
   const [lastName, setLastName] = useState("");
   const [idFile, setIdFile] = useState<File | null>(null);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
-  const [idCaptureMethod, setIdCaptureMethod] = useState<"camera" | "file_upload">("file_upload");
+  const [idCaptureMethod, setIdCaptureMethod] = useState<"camera" | "file_upload">("camera");
   const [selfieCaptureMethod, setSelfieCaptureMethod] = useState<"camera" | "file_upload">(
     "camera"
   );
@@ -401,6 +401,7 @@ export default function VerificationPage() {
   const [idDob, setIdDob] = useState<string | null>(null);
   const [idGender, setIdGender] = useState<string | null>(null);
   const [idChecksumValid, setIdChecksumValid] = useState<boolean | null>(null);
+  const [idAgeError, setIdAgeError] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
@@ -420,7 +421,7 @@ export default function VerificationPage() {
     [searchParams]
   );
 
-  const idFileError = validateFile(idFile, true);
+  const idFileError = validateFile(idFile, false);
   const selfieFileError = validateFile(selfieFile);
   const normalizedFirstName = firstName.trim();
   const normalizedLastName = lastName.trim();
@@ -441,6 +442,7 @@ export default function VerificationPage() {
   const isIdReady =
     /^\d{13}$/.test(idNumber) &&
     !idFileError &&
+    !idAgeError &&
     idChecksumValid !== false &&
     !firstNameError &&
     !lastNameError;
@@ -678,14 +680,23 @@ export default function VerificationPage() {
             : null
         );
         setIdGender(gender);
+        // Age gate: must be 18+
+        const under18 = isUnder18FromSaId(idNumber);
+        if (under18 === true) {
+          setIdAgeError("You must be at least 18 years old to register.");
+        } else {
+          setIdAgeError(null);
+        }
       } else {
         setIdDob(null);
         setIdGender(null);
+        setIdAgeError(null);
       }
     } else {
       setIdChecksumValid(null);
       setIdDob(null);
       setIdGender(null);
+      setIdAgeError(null);
     }
   }, [idNumber]);
 
@@ -1703,6 +1714,12 @@ export default function VerificationPage() {
                             </div>
                             {idDob && <p>Date of birth: {idDob}</p>}
                             {idGender && <p>Gender: {idGender}</p>}
+                            {idAgeError && (
+                              <div className="flex items-center gap-1 text-red-600 font-medium">
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                {idAgeError}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="flex items-center gap-1">
@@ -1714,39 +1731,17 @@ export default function VerificationPage() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="idFile">ID file (image/PDF)</Label>
-                    <Tabs defaultValue="upload" className="w-full">
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="upload">Upload File</TabsTrigger>
-                        <TabsTrigger value="camera">Use Camera</TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="upload" className="mt-3">
-                        <Input
-                          id="idFile"
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,.pdf,application/pdf"
-                          disabled={verificationSubmissionBlocked}
-                          onChange={(e) => {
-                            setIdFile(e.target.files?.[0] ?? null);
-                            setIdCaptureMethod("file_upload");
-                            setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                            clearStepCompletion("id_doc");
-                          }}
-                        />
-                      </TabsContent>
-                      <TabsContent value="camera" className="mt-3">
-                        <CameraCapture
-                          facingMode="environment"
-                          disabled={verificationSubmissionBlocked}
-                          onCapture={(file) => {
-                            setIdFile(file);
-                            setIdCaptureMethod("camera");
-                            setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                            clearStepCompletion("id_doc");
-                          }}
-                        />
-                      </TabsContent>
-                    </Tabs>
+                    <Label>ID document photo</Label>
+                    <CameraCapture
+                      facingMode="environment"
+                      disabled={verificationSubmissionBlocked}
+                      onCapture={(file) => {
+                        setIdFile(file);
+                        setIdCaptureMethod("camera");
+                        setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                        clearStepCompletion("id_doc");
+                      }}
+                    />
                     {idFileError && idFile && <p className="inline-form-error">{idFileError}</p>}
                   </div>
 

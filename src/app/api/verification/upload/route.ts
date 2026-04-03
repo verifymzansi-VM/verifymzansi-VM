@@ -28,6 +28,7 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { parseAndValidateFormData } from "@/lib/utils/api";
 import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
+import { extractDobFromSaId, calculateAgeFromDob } from "@/lib/utils/sa-id-validation";
 
 const log = createLogger("VerificationUpload");
 
@@ -201,6 +202,20 @@ export async function POST(request: NextRequest) {
         { error: "First name and surname as shown on your ID are required." },
         { status: 400 }
       );
+    }
+
+    // ── Age gate: must be 18+ ────────────────────────────────
+    if (docType === "id_document" && idNumber) {
+      const dob = extractDobFromSaId(idNumber);
+      if (dob) {
+        const age = calculateAgeFromDob(dob);
+        if (age < 18) {
+          return jsonError(
+            { error: "You must be at least 18 years old to register." },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     // ── Validate file type and size ──────────────────────────
@@ -622,6 +637,33 @@ export async function POST(request: NextRequest) {
 
       if (engineResult.idNumberHmac) {
         stepData.id_number_hmac = engineResult.idNumberHmac;
+
+        // Hard-block: reject if another user already has this ID number
+        const { data: existingHmac } = await admin
+          .from("verification_steps")
+          .select("user_id")
+          .eq("step_type", "id_doc")
+          .eq("id_number_hmac", engineResult.idNumberHmac)
+          .neq("user_id", user.id)
+          .in("status", ["approved", "pending"])
+          .limit(1)
+          .maybeSingle();
+
+        if (existingHmac) {
+          log.warn("ID number already linked to another account", {
+            userId: user.id,
+            existingUserId: existingHmac.user_id,
+          });
+          await deleteFromR2(uploadResult.key).catch(() => {});
+          return NextResponse.json(
+            {
+              error: "This ID number is already linked to another account.",
+              code: "id_number_duplicate",
+              requestId,
+            },
+            { status: 409 }
+          );
+        }
       }
 
       // Persist legal name from ID document for later propagation on approval

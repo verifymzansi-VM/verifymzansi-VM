@@ -53,6 +53,30 @@ export function extractDobFromSaId(idNumber: string): Date | null {
 }
 
 /**
+ * Calculate age in whole years from a date of birth.
+ * Uses UTC to avoid timezone shifts.
+ */
+export function calculateAgeFromDob(dob: Date): number {
+  const today = new Date();
+  let age = today.getUTCFullYear() - dob.getUTCFullYear();
+  const monthDiff = today.getUTCMonth() - dob.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getUTCDate() < dob.getUTCDate())) {
+    age--;
+  }
+  return age;
+}
+
+/**
+ * Check if a South African ID number belongs to someone under 18.
+ * Returns true if under 18, false if 18+, null if DOB cannot be extracted.
+ */
+export function isUnder18FromSaId(idNumber: string): boolean | null {
+  const dob = extractDobFromSaId(idNumber);
+  if (!dob) return null;
+  return calculateAgeFromDob(dob) < 18;
+}
+
+/**
  * Extract gender from a South African ID number.
  * Digits 7-10 (0-indexed 6-9): 0000–4999 = female, 5000–9999 = male.
  */
