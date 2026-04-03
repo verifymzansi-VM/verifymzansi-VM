@@ -160,28 +160,18 @@ function mapUploadFailureMessage(label: string, error: unknown, code?: string): 
 
 /** Map rejection reason codes to human-readable guidance. */
 const REJECTION_GUIDANCE: Record<string, string> = {
-  blurry_image:
-    "Your image is too blurry. Please retake the photo in good lighting, hold your device steady, and make sure the text is sharp.",
-  mismatch:
-    "The details on your document don't match the information you provided. Please double-check your name and ID number, then resubmit.",
-  expired_document:
-    "Your document appears to be expired. Please upload a valid, unexpired document.",
-  incomplete_info:
-    "Some required information is missing or cut off. Please retake the photo showing the full document with all edges visible.",
-  fraudulent:
-    "Your submission could not be verified. If you believe this is an error, please contact support.",
-  wrong_document_type:
-    "The uploaded file is not the correct document type. Please upload a South African ID document, card, or passport.",
-  not_sa_document:
-    "Only South African identity documents are accepted. Please upload a valid SA ID book, smart ID card, or passport.",
-  location_mismatch:
-    "Your GPS location doesn't match the province you selected. Please verify your location or update your province selection.",
-  high_risk_override:
-    "Your submission was flagged for additional review. An admin will review your case — no action needed from you.",
-  other:
-    "Your submission needs attention. Please review the admin note above for specific instructions.",
+  blurry_image: "Image too blurry. Retake in good lighting with a steady hand.",
+  mismatch: "Details don't match your document. Check your name and ID number.",
+  expired_document: "Document expired. Upload a valid, unexpired document.",
+  incomplete_info: "Document cut off. Retake showing all edges clearly.",
+  fraudulent: "Submission could not be verified. Contact support if this is an error.",
+  wrong_document_type: "Wrong document type. Upload an SA ID card, book, or passport.",
+  not_sa_document: "Only SA documents accepted. Upload an SA ID book, card, or passport.",
+  location_mismatch: "GPS doesn't match your province. Verify your location.",
+  high_risk_override: "Flagged for admin review. No action needed from you.",
+  other: "Needs attention. See the admin note above for instructions.",
   insufficient_face_visibility:
-    "Your face isn't clearly visible in the selfie. Please retake it in good lighting, facing the camera directly, without sunglasses or a hat.",
+    "Face not visible. Retake without sunglasses or hats, facing camera.",
 };
 
 function formatReasonCode(reasonCode: string | null | undefined): string | null {

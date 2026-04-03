@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useGlobalMute } from "@/hooks/use-global-mute";
 import {
   Building2,
   Calendar,
@@ -25,6 +26,7 @@ import { TrustBadge } from "@/components/trust/trust-badge";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { formatZAR } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { cn } from "@/lib/utils";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 import {
   PROMOTION_TYPE_LABELS,
@@ -203,7 +205,7 @@ export function PromotionDetailContent({
   const manager = useVideoPlaybackManager();
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const activeMedia = mediaItems[activeMediaIndex] ?? null;
-  const [isMuted, setIsMuted] = useState(true);
+  const { isMuted, toggleMute } = useGlobalMute(videoRef);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -305,7 +307,6 @@ export function PromotionDetailContent({
                 <video
                   ref={videoRef}
                   src={normalizeMediaUrl(activeMedia.url)}
-                  poster={activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined}
                   autoPlay
                   muted
                   loop
@@ -317,6 +318,20 @@ export function PromotionDetailContent({
                 >
                   <track kind="captions" />
                 </video>
+
+                {/* Poster overlay — fades in when paused */}
+                {activeMedia.poster && (
+                  <Image
+                    src={normalizeMediaUrl(activeMedia.poster)}
+                    alt={`${promotion.title} cover`}
+                    fill
+                    className={cn(
+                      "absolute inset-0 z-[2] object-cover transition-opacity duration-300 pointer-events-none",
+                      isPlaying ? "opacity-0" : "opacity-100"
+                    )}
+                    sizes="100vw"
+                  />
+                )}
 
                 {/* Play overlay */}
                 {!isPlaying && (
@@ -339,12 +354,7 @@ export function PromotionDetailContent({
                 <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (videoRef.current) {
-                        videoRef.current.muted = !videoRef.current.muted;
-                        setIsMuted(videoRef.current.muted);
-                      }
-                    }}
+                    onClick={() => toggleMute()}
                     className="rounded-full bg-black/60 p-2.5 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
                     aria-label={isMuted ? "Unmute" : "Mute"}
                   >

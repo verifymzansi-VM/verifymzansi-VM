@@ -31,92 +31,88 @@ const REJECTIONS: RejectionEntry[] = [
   {
     code: "blurry_image",
     title: "Blurry Image",
-    description:
-      "The photo you uploaded is too blurry to read. Our system needs crisp, clear text to verify your identity.",
+    description: "Image too blurry to read. Clear text is required for verification.",
     tips: [
       "Use natural daylight or a well-lit room — avoid flash.",
       "Hold your device steady; rest your elbows on a table if possible.",
-      "Make sure the camera focuses on the document before capturing.",
+      "Make sure the camera focuses before capturing.",
     ],
   },
   {
     code: "mismatch",
     title: "Details Don't Match",
-    description:
-      "The name or ID number on your document doesn't match what you entered during registration.",
+    description: "Name or ID number doesn't match your registration details.",
     tips: [
-      "Double-check that your full legal name matches the document exactly.",
-      "Verify your 13-digit SA ID number — even one digit off will cause a mismatch.",
-      "If you recently changed your name, upload the updated document.",
+      "Check that your full legal name matches the document exactly.",
+      "Verify your 13-digit SA ID number — one digit off causes a mismatch.",
+      "If you changed your name, upload the updated document.",
     ],
   },
   {
     code: "expired_document",
     title: "Expired Document",
-    description: "The uploaded identity document is past its expiry date.",
+    description: "Document is past its expiry date.",
     tips: [
       "Apply for a renewal at your nearest Home Affairs office.",
-      "You can use your SA Smart ID card, green ID book, or passport — whichever is still valid.",
+      "Use your SA Smart ID card, green ID book, or passport — whichever is still valid.",
     ],
   },
   {
     code: "incomplete_info",
     title: "Incomplete / Cut-off Document",
-    description:
-      "Part of the document was missing or cut off in the photo, so we couldn't read all the required fields.",
+    description: "Part of the document is missing or cut off in the photo.",
     tips: [
       "Photograph the entire document from corner to corner.",
-      "Place the document on a flat, contrasting surface (e.g., a dark table for a light card).",
+      "Place it on a flat, contrasting surface.",
       "Avoid cropping the image before uploading.",
     ],
   },
   {
     code: "wrong_document_type",
     title: "Wrong Document Type",
-    description: "The file you uploaded isn't a recognised South African identity document.",
+    description: "Uploaded file isn't a recognised SA identity document.",
     tips: [
       "We accept: SA Smart ID Card, SA Green ID Book, or SA Passport.",
-      "Driver's licences and bank statements are not accepted for identity verification.",
+      "Driver's licences and bank statements are not accepted.",
     ],
   },
   {
     code: "not_sa_document",
     title: "Non-South-African Document",
-    description: "Only South African identity documents can be verified on this platform.",
+    description: "Only SA identity documents are accepted.",
     tips: [
       "Upload your SA ID book, SA Smart ID card, or SA passport.",
-      "Foreign passports and permits are not supported at this time.",
+      "Foreign passports and permits are not supported.",
     ],
   },
   {
     code: "insufficient_face_visibility",
     title: "Face Not Clearly Visible (Selfie)",
-    description: "Your selfie didn't show your face clearly enough for our matching system.",
+    description: "Selfie didn't show your face clearly enough.",
     tips: [
       "Face the camera directly — avoid angles.",
       "Remove sunglasses, hats, and anything covering your face.",
-      "Use good lighting so your features are evenly lit without harsh shadows.",
+      "Use good lighting with even illumination.",
     ],
   },
   {
     code: "location_mismatch",
     title: "Location Mismatch",
-    description: "Your GPS coordinates don't correspond to the province you selected.",
+    description: "GPS coordinates don't match your selected province.",
     tips: [
-      "Enable location services on your device before verifying.",
-      "Make sure you're physically in the province you selected.",
-      "If you recently moved, update your province selection to match.",
+      "Enable location services before verifying.",
+      "Make sure you're in the province you selected.",
+      "If you moved, update your province selection.",
     ],
   },
   {
     code: "high_risk_override",
     title: "Flagged for Additional Review",
-    description:
-      "Your submission was automatically flagged for closer inspection. This is not necessarily a rejection — an admin will review it.",
+    description: "Flagged for closer inspection. Not necessarily a rejection — admin will review.",
     tips: [
-      "No action is needed from you right now.",
-      "Wait for the admin review, which typically takes 1-2 business days.",
-      "You'll receive a notification once the review is complete.",
+      "No action needed from you right now.",
+      "Wait for admin review, typically 1-2 business days.",
+      "You'll receive a notification once complete.",
     ],
   },
 ];

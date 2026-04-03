@@ -134,7 +134,7 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
           <Package className="mb-2 h-8 w-8 text-muted-foreground/30" />
           <p className="text-sm font-medium text-muted-foreground">No posts yet</p>
           <p className="mt-0.5 text-xs text-muted-foreground/70">
-            Create your first listing to start getting leads
+            Create a listing to start getting leads
           </p>
           <Button asChild size="sm" className="mt-4">
             <Link href="/post/create">Create Post</Link>

@@ -9,6 +9,7 @@ import { useHoverCapability } from "@/hooks/use-hover-capability";
 import { useVideoVisibility } from "@/hooks/use-video-visibility";
 import { useVideoHover } from "@/hooks/use-video-hover";
 import { useVideoFeed } from "@/hooks/use-video-feed";
+import { useGlobalMute } from "@/hooks/use-global-mute";
 
 const DEFAULT_MEDIA_FIT = "object-cover";
 const DEFAULT_CONTAINER_ASPECT_RATIO = 5 / 4;
@@ -355,8 +356,13 @@ function VideoCardPlayerInner({
     isVideo ? normalizedSrc : undefined,
     shouldAutoplay
   );
-  const [isMuted, setIsMuted] = useState(true);
+  const {
+    isMuted,
+    toggleMute: globalToggleMute,
+    setMuted: globalSetMuted,
+  } = useGlobalMute(videoRef);
   const [videoReady, setVideoReady] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
@@ -388,7 +394,11 @@ function VideoCardPlayerInner({
     if (!el) return;
 
     const onPlaying = () => setVideoReady(true);
-    const onPlay = () => setHasActivatedPlayback(true);
+    const onPlay = () => {
+      setHasActivatedPlayback(true);
+      setIsPlaying(true);
+    };
+    const onPause = () => setIsPlaying(false);
     const onLoadedMetadata = () => {
       if (el.videoWidth > 0 && el.videoHeight > 0) {
         setMediaAspectRatio(el.videoWidth / el.videoHeight);
@@ -397,10 +407,12 @@ function VideoCardPlayerInner({
 
     el.addEventListener("playing", onPlaying);
     el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
     el.addEventListener("loadedmetadata", onLoadedMetadata);
     return () => {
       el.removeEventListener("playing", onPlaying);
       el.removeEventListener("play", onPlay);
+      el.removeEventListener("pause", onPause);
       el.removeEventListener("loadedmetadata", onLoadedMetadata);
     };
   }, [videoRef]);
@@ -450,7 +462,7 @@ function VideoCardPlayerInner({
       }
 
       videoRef.current.muted = false;
-      setIsMuted(false);
+      globalSetMuted(false);
 
       try {
         if (videoRef.current.requestFullscreen) {
@@ -467,7 +479,7 @@ function VideoCardPlayerInner({
         /* fullscreen not supported */
       }
     },
-    [videoRef]
+    [videoRef, globalSetMuted]
   );
 
   const handleVideoKeyDown = useCallback(
@@ -483,15 +495,9 @@ function VideoCardPlayerInner({
     (e: React.SyntheticEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      setIsMuted((current) => {
-        const nextMuted = !current;
-        if (videoRef.current) {
-          videoRef.current.muted = nextMuted;
-        }
-        return nextMuted;
-      });
+      globalToggleMute();
     },
-    [videoRef]
+    [globalToggleMute]
   );
 
   const togglePlayback = useCallback(
@@ -607,7 +613,9 @@ function VideoCardPlayerInner({
             className={cn(
               "absolute inset-0 z-[2] transition-opacity duration-300",
               foregroundMediaClassName,
-              videoReady && !hasError && canDisplayVideo ? "opacity-0" : "opacity-100"
+              videoReady && !hasError && canDisplayVideo && !isPlaybackPaused
+                ? "opacity-0"
+                : "opacity-100"
             )}
             sizes={sizes}
             priority={priority}
@@ -624,14 +632,16 @@ function VideoCardPlayerInner({
           ref={videoRef}
           preload="none"
           loop
-          muted={isMuted}
+          muted
           playsInline
           aria-label={alt ? `${alt} video` : "Video preview"}
           onError={handleError}
           className={cn(
             "relative z-[3] h-full w-full transition-opacity duration-300",
             foregroundMediaClassName,
-            hasError || !videoReady || !canDisplayVideo ? "opacity-0" : "opacity-100"
+            hasError || !videoReady || !canDisplayVideo || isPlaybackPaused
+              ? "opacity-0"
+              : "opacity-100"
           )}
           data-media-fit={usesSmartFit ? "smart" : "cover"}
         />
@@ -674,7 +684,7 @@ function VideoCardPlayerInner({
           className={cn(
             "absolute inset-0 z-[2] transition-opacity duration-300",
             foregroundMediaClassName,
-            videoReady && !hasError ? "opacity-0" : "opacity-100"
+            videoReady && !hasError && isPlaying ? "opacity-0" : "opacity-100"
           )}
           sizes={sizes}
           priority={priority}
@@ -683,7 +693,7 @@ function VideoCardPlayerInner({
           data-media-fit={usesSmartFit ? "smart" : "cover"}
           unoptimized={posterNeedsUnoptimized ? true : undefined}
         />
-      ) : !videoReady || hasError ? (
+      ) : !videoReady || hasError || !isPlaying ? (
         <div className="absolute inset-0 z-[2] flex items-center justify-center skeleton-shimmer">
           <Play className="h-10 w-10 text-white/60" />
         </div>
@@ -693,14 +703,14 @@ function VideoCardPlayerInner({
         ref={videoRef}
         preload="none"
         loop
-        muted={isMuted}
+        muted
         playsInline
         aria-label={alt ? `${alt} video` : "Video preview"}
         onError={handleError}
         className={cn(
           "relative z-[3] h-full w-full transition-opacity duration-300",
           foregroundMediaClassName,
-          !videoReady || hasError ? "opacity-0" : "opacity-100"
+          !videoReady || hasError || !isPlaying ? "opacity-0" : "opacity-100"
         )}
         data-media-fit={usesSmartFit ? "smart" : "cover"}
       />
@@ -830,10 +840,10 @@ function HoverVideoPlayer({
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
 
   const { videoRef, containerRef, reducedMotion, isHovering } = useVideoHover(normalizedSrc);
+  const { isMuted, toggleMute: globalToggleMute } = useGlobalMute(videoRef);
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
   const [hoverProgress, setHoverProgress] = useState(0);
 
@@ -909,15 +919,9 @@ function HoverVideoPlayer({
     (e: React.SyntheticEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      setIsMuted((current) => {
-        const nextMuted = !current;
-        if (videoRef.current) {
-          videoRef.current.muted = nextMuted;
-        }
-        return nextMuted;
-      });
+      globalToggleMute();
     },
-    [videoRef]
+    [globalToggleMute]
   );
 
   if (!normalizedSrc) {
@@ -999,7 +1003,7 @@ function HoverVideoPlayer({
         ref={videoRef}
         preload="none"
         loop
-        muted={isMuted}
+        muted
         playsInline
         aria-label={alt ? `${alt} video` : "Video preview"}
         onError={handleError}
@@ -1092,12 +1096,11 @@ function FeedVideoPlayer({
   const posterNeedsUnoptimized =
     normalizedPoster?.startsWith("blob:") || normalizedPoster?.startsWith("data:");
 
-  const { videoRef, isPlaying, isPausedByUser, togglePlayback, reducedMotion } =
-    useVideoFeed(normalizedSrc);
+  const { videoRef, isPlaying, togglePlayback, reducedMotion } = useVideoFeed(normalizedSrc);
+  const { isMuted, toggleMute: globalToggleMute } = useGlobalMute(videoRef);
   const [videoReady, setVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [posterError, setPosterError] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
   const [tapIndicator, setTapIndicator] = useState<{
     key: number;
@@ -1118,8 +1121,8 @@ function FeedVideoPlayer({
     !reducedMotion &&
     muteControlVisibility === "always";
 
-  // Show poster when user has tapped pause (not when manager arbitrates away)
-  const showPoster = isPausedByUser || !videoReady || hasError;
+  // Show poster when video is not actively playing (includes user pause AND manager arbitration)
+  const showPoster = !isPlaying || !videoReady || hasError;
 
   useEffect(() => {
     const el = videoRef.current;
@@ -1159,15 +1162,9 @@ function FeedVideoPlayer({
     (e: React.SyntheticEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      setIsMuted((current) => {
-        const nextMuted = !current;
-        if (videoRef.current) {
-          videoRef.current.muted = nextMuted;
-        }
-        return nextMuted;
-      });
+      globalToggleMute();
     },
-    [videoRef]
+    [globalToggleMute]
   );
 
   const handleTap = useCallback(
@@ -1245,7 +1242,7 @@ function FeedVideoPlayer({
         ref={videoRef}
         preload="none"
         loop
-        muted={isMuted}
+        muted
         playsInline
         aria-label={alt ? `${alt} video` : "Video preview"}
         onError={handleError}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { useGlobalMute } from "@/hooks/use-global-mute";
 import {
   ChevronLeft,
   ChevronRight,
@@ -78,7 +79,7 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
   /* ---- video state ---- */
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const { isMuted, toggleMute } = useGlobalMute(videoRef);
 
   /* ---- navigation ---- */
   const canPrev = index > 0;
@@ -92,7 +93,6 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
         setScale(1);
         setTranslate({ x: 0, y: 0 });
         setIsPlaying(false);
-        setIsMuted(true);
       }
     },
     [isZoomed, total]
@@ -319,13 +319,6 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
     }
   }, []);
 
-  const toggleMute = useCallback(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.muted = !v.muted;
-    setIsMuted(v.muted);
-  }, []);
-
   const enterFullscreen = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -449,7 +442,6 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
                     ref={videoRef}
                     key={normalizedUrl}
                     src={normalizedUrl}
-                    poster={normalizedPoster}
                     autoPlay
                     muted
                     loop
@@ -461,6 +453,20 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
                   >
                     <track kind="captions" />
                   </video>
+
+                  {/* Poster overlay — fades in when paused */}
+                  {normalizedPoster && (
+                    <Image
+                      src={normalizedPoster}
+                      alt={`Video ${index + 1} cover`}
+                      fill
+                      className={cn(
+                        "absolute inset-0 z-[2] rounded-xl object-contain bg-black transition-opacity duration-300 pointer-events-none",
+                        isPlaying ? "opacity-0" : "opacity-100"
+                      )}
+                      sizes="100vw"
+                    />
+                  )}
 
                   {/* video controls overlay */}
                   <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">

@@ -49,12 +49,12 @@ export async function HomeBusinessShowcase() {
               Mzansi Business
             </h2>
             <p className="text-muted-foreground text-sm sm:text-base max-w-2xl">
-              Verified SA businesses — shops, services & more.
+              Trusted local businesses, verified.
             </p>
           </div>
           <Link href="/mzansi-business" className="shrink-0">
             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-blue hover:text-brand-blue/80 transition-colors">
-              Browse All Businesses
+              View All Businesses
               <ArrowRight className="h-4 w-4" />
             </span>
           </Link>

@@ -270,4 +270,45 @@ describe("PwaInstallPrompt", () => {
       expect(screen.queryByText("Install App")).toBeNull();
     });
   });
+
+  it("closes iOS help dialog when Escape key is pressed", async () => {
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+    });
+
+    render(<PwaInstallPrompt />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "How To Install" }));
+    expect(await screen.findByRole("dialog", { name: "Install on iPhone" })).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Install on iPhone" })).toBeNull();
+    });
+  });
+
+  it("closes iOS help dialog when backdrop is clicked", async () => {
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+    });
+
+    render(<PwaInstallPrompt />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "How To Install" }));
+    const dialog = await screen.findByRole("dialog", { name: "Install on iPhone" });
+    expect(dialog).toBeTruthy();
+
+    // Click on the backdrop (presentation wrapper behind the dialog)
+    const backdrop = dialog.parentElement!;
+    fireEvent.click(backdrop);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Install on iPhone" })).toBeNull();
+    });
+  });
 });

@@ -42,7 +42,7 @@ describe("AdvertisePage", () => {
       screen.getByRole("heading", { level: 1, name: "Advertise on VerifyMzansi" })
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /View pricing/i })).toHaveAttribute("href", "/pricing");
-    expect(screen.getByRole("link", { name: /Create your account/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Create Account/i })).toHaveAttribute(
       "href",
       "/register"
     );

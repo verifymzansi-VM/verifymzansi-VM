@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrls } from "@/lib/utils/media-url";
+import { useGlobalMute } from "@/hooks/use-global-mute";
 
 interface ListingDetailClientProps {
   photos: string[];
@@ -109,7 +110,7 @@ export function ListingDetailClient({
   /* ---- video controls state ---- */
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const { isMuted, toggleMute } = useGlobalMute(videoRef);
   const [videoError, setVideoError] = useState(false);
   const [videoRetries, setVideoRetries] = useState(0);
 
@@ -141,13 +142,6 @@ export function ListingDetailClient({
     } else {
       v.pause();
     }
-  }, []);
-
-  const toggleMute = useCallback(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.muted = !v.muted;
-    setIsMuted(v.muted);
   }, []);
 
   const enterFullscreen = useCallback(() => {
@@ -248,7 +242,6 @@ export function ListingDetailClient({
                 ref={videoRef}
                 key={`${activeUrl}-${videoRetries}`}
                 src={activeUrl}
-                poster={firstPhotoUrl}
                 autoPlay
                 muted
                 loop
@@ -261,6 +254,21 @@ export function ListingDetailClient({
               >
                 <track kind="captions" />
               </video>
+
+              {/* Poster overlay — fades in when paused */}
+              {firstPhotoUrl && (
+                <Image
+                  src={firstPhotoUrl}
+                  alt={`${title} cover`}
+                  fill
+                  className={cn(
+                    "absolute inset-0 z-[2] rounded-xl object-contain bg-black transition-opacity duration-300 pointer-events-none",
+                    isPlaying ? "opacity-0" : "opacity-100"
+                  )}
+                  sizes="(max-width: 1024px) 100vw, 66vw"
+                  unoptimized={isBlobOrDataUrl(firstPhotoUrl)}
+                />
+              )}
 
               {/* Play overlay when paused */}
               {!isPlaying && (

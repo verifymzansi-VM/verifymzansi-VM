@@ -19,7 +19,7 @@ export function Footer() {
               <BrandLogo size="sm" />
             </Link>
             <p className="text-xs text-muted-foreground max-w-xs">
-              Promote products, services, and trusted brands with verification-first visibility.
+              Mzansi&apos;s Proudly Trusted Market.
             </p>
           </div>
 

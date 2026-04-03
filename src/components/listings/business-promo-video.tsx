@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import { Play, Volume2, VolumeX } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
+import { useGlobalMute } from "@/hooks/use-global-mute";
 
 interface BusinessPromoVideoProps {
   videoUrl: string;
@@ -17,7 +18,7 @@ export function BusinessPromoVideo({
   businessName,
 }: BusinessPromoVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isMuted, setIsMuted] = useState(true);
+  const { isMuted, toggleMute } = useGlobalMute(videoRef);
   const [isPlaying, setIsPlaying] = useState(false);
   const manager = useVideoPlaybackManager();
 
@@ -47,13 +48,6 @@ export function BusinessPromoVideo({
       manager.unregister(el);
     };
   }, [manager]);
-
-  function toggleMute() {
-    if (videoRef.current) {
-      videoRef.current.muted = !videoRef.current.muted;
-      setIsMuted(videoRef.current.muted);
-    }
-  }
 
   function handlePlay() {
     if (videoRef.current) {

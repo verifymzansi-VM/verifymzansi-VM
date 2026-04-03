@@ -73,8 +73,8 @@ export function MyRecentPosts({ posts }: MyRecentPostsProps) {
         <CardContent>
           <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
             <Package className="h-8 w-8 mb-2 opacity-20" />
-            <p className="text-sm font-medium">You haven&apos;t posted anything yet</p>
-            <p className="text-xs mt-0.5">Create your first listing to start getting leads</p>
+            <p className="text-sm font-medium">No posts yet</p>
+            <p className="text-xs mt-0.5">Create a listing to start getting leads</p>
             <Button asChild size="sm" className="mt-4">
               <Link href="/post/create">Post Your First Ad</Link>
             </Button>

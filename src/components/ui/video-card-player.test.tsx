@@ -4,13 +4,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
-const { useVideoVisibilityMock, useVideoHoverMock, useHoverCapabilityMock, useVideoFeedMock } =
-  vi.hoisted(() => ({
-    useVideoVisibilityMock: vi.fn(),
-    useVideoHoverMock: vi.fn(),
-    useHoverCapabilityMock: vi.fn(),
-    useVideoFeedMock: vi.fn(),
-  }));
+const {
+  useVideoVisibilityMock,
+  useVideoHoverMock,
+  useHoverCapabilityMock,
+  useVideoFeedMock,
+  useGlobalMuteMock,
+} = vi.hoisted(() => ({
+  useVideoVisibilityMock: vi.fn(),
+  useVideoHoverMock: vi.fn(),
+  useHoverCapabilityMock: vi.fn(),
+  useVideoFeedMock: vi.fn(),
+  useGlobalMuteMock: vi.fn(),
+}));
 
 vi.mock("next/image", () => ({
   default: ({
@@ -42,6 +48,10 @@ vi.mock("@/hooks/use-video-feed", () => ({
   useVideoFeed: useVideoFeedMock,
 }));
 
+vi.mock("@/hooks/use-global-mute", () => ({
+  useGlobalMute: useGlobalMuteMock,
+}));
+
 const { VideoCardPlayer } = await import("./video-card-player");
 
 describe("VideoCardPlayer", () => {
@@ -65,6 +75,11 @@ describe("VideoCardPlayer", () => {
       isPausedByUser: false,
       togglePlayback: vi.fn(),
       reducedMotion: false,
+    });
+    useGlobalMuteMock.mockReturnValue({
+      isMuted: true,
+      toggleMute: vi.fn(),
+      setMuted: vi.fn(),
     });
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
@@ -261,5 +276,63 @@ describe("VideoCardPlayer", () => {
     );
 
     expect(screen.getByRole("button", { name: /play video/i })).toBeTruthy();
+  });
+
+  it("calls the global toggleMute when the mute button is clicked", () => {
+    const toggleMute = vi.fn();
+    useGlobalMuteMock.mockReturnValue({
+      isMuted: true,
+      toggleMute,
+      setMuted: vi.fn(),
+    });
+
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        muteControlVisibility="always"
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /unmute/i }));
+    expect(toggleMute).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows unmuted icon when global mute state is false", () => {
+    useGlobalMuteMock.mockReturnValue({
+      isMuted: false,
+      toggleMute: vi.fn(),
+      setMuted: vi.fn(),
+    });
+
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        muteControlVisibility="always"
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /^mute$/i })).toBeTruthy();
+  });
+
+  it("shows poster overlay when ambient video is not playing", () => {
+    render(
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        showPlaybackControl
+      />
+    );
+
+    // Video starts paused — poster should be visible (opacity-100)
+    const poster = screen.getByAltText("Clip");
+    expect(poster.className).toContain("opacity-100");
   });
 });

@@ -55,7 +55,7 @@ export async function HomeMzansiMarketShowcase() {
               Latest on Mzansi Market
             </h2>
             <p className="text-muted-foreground text-sm sm:text-base max-w-2xl">
-              Deals on vehicles, property, electronics & more from verified sellers.
+              Verified sellers. Real products. Video & photos.
             </p>
           </div>
           <Link href="/mzansi-market" className="shrink-0">

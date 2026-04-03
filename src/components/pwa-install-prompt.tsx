@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,23 @@ export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [showIOSHelp, setShowIOSHelp] = useState(false);
+  const iosDialogRef = useRef<HTMLDivElement>(null);
+
+  const closeIOSHelp = useCallback(() => setShowIOSHelp(false), []);
+
+  // Focus the dialog when it opens and handle Escape key
+  useEffect(() => {
+    if (!showIOSHelp) return;
+    iosDialogRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closeIOSHelp();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showIOSHelp, closeIOSHelp]);
 
   // Reset visible/deferred state whenever suppression becomes active so stale
   // UI never remains after a route change, dismissal, or Playwright mode flip.
@@ -227,16 +244,24 @@ export function PwaInstallPrompt() {
       {showIOSHelp && (
         <div
           className="fixed inset-0 z-[120] bg-black/70 px-4 py-6 flex items-end md:items-center justify-center"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Install on iPhone"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeIOSHelp();
+          }}
         >
-          <div className="w-full max-w-md rounded-2xl border bg-background p-5 shadow-2xl safe-area-inset-bottom">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Install on iPhone"
+            ref={iosDialogRef}
+            tabIndex={-1}
+            className="w-full max-w-md rounded-2xl border bg-background p-5 shadow-2xl safe-area-inset-bottom"
+          >
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-base font-semibold">Install on iPhone</h3>
               <button
                 type="button"
-                onClick={() => setShowIOSHelp(false)}
+                onClick={closeIOSHelp}
                 className="rounded-full p-1 text-muted-foreground hover:bg-muted/50"
                 aria-label="Close install instructions"
               >
@@ -249,7 +274,7 @@ export function PwaInstallPrompt() {
               <li>Tap Add to finish installation.</li>
             </ol>
             <div className="mt-4 flex justify-end">
-              <Button size="sm" onClick={() => setShowIOSHelp(false)}>
+              <Button size="sm" onClick={closeIOSHelp}>
                 Got it
               </Button>
             </div>

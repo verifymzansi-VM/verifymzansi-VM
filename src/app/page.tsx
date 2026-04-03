@@ -16,13 +16,13 @@ import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { getOfficialSocialSameAs } from "@/lib/official-social-links";
 
 export const metadata: Metadata = {
-  title: "VerifyMzansi — Business Promotion With Trust",
+  title: "VerifyMzansi — Mzansi's Proudly Trusted Market",
   description:
-    "Promote your business, showcase products and services, and build customer confidence through verification-first visibility across South Africa.",
+    "South Africa's verified marketplace. Post products, services & promotions with photos and videos. Request social media promotion across our channels.",
   openGraph: {
-    title: "VerifyMzansi — Business Promotion With Trust",
+    title: "VerifyMzansi — Mzansi's Proudly Trusted Market",
     description:
-      "Promote your business, showcase products and services, and build customer confidence through verification-first visibility across South Africa.",
+      "South Africa's verified marketplace. Post products, services & promotions with photos and videos. Request social media promotion across our channels.",
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "VerifyMzansi" }],
   },
 };
@@ -37,7 +37,7 @@ export default async function HomePage() {
   const onboardingDestinations = [
     {
       title: "Mzansi Market",
-      description: "Showcase products, listings, and everyday offers with trusted visibility.",
+      description: "Products and listings from verified sellers.",
       href: "/mzansi-market",
       icon: ShoppingBag,
       accentClass: "text-brand-green",
@@ -45,7 +45,7 @@ export default async function HomePage() {
     },
     {
       title: "Mzansi Business",
-      description: "Build a business presence that helps customers discover and trust your brand.",
+      description: "Verified local businesses you can trust.",
       href: "/mzansi-business",
       icon: Building2,
       accentClass: "text-brand-blue",
@@ -53,7 +53,7 @@ export default async function HomePage() {
     },
     {
       title: "Promotions & Events",
-      description: "Promote products, services, launches, and campaigns that need immediate reach.",
+      description: "Deals, launches, and events near you.",
       href: "/promotions",
       icon: Megaphone,
       accentClass: "text-red-400",
@@ -69,7 +69,7 @@ export default async function HomePage() {
         name: "VerifyMzansi",
         url,
         description:
-          "South African platform for business promotion, trusted visibility, and verification-first discovery.",
+          "South Africa's verified marketplace for products, services, and promotions with photos and videos.",
         potentialAction: {
           "@type": "SearchAction",
           target: {
@@ -129,18 +129,17 @@ export default async function HomePage() {
                 <div className="space-y-5">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-brand-green-300 text-xs font-medium">
                     <span className="h-2 w-2 rounded-full bg-brand-green-400" />
-                    New to VerifyMzansi?
+                    Get Started
                   </div>
 
                   <div className="space-y-3">
                     <h2 className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-white leading-[1.1]">
-                      Promote, discover, and build trust on{" "}
-                      <span className="text-white">VerifyMzansi</span>
+                      Mzansi&apos;s Proudly Trusted Market.
                     </h2>
 
                     <p className="text-warm-100 text-base sm:text-lg max-w-2xl">
-                      Market products, showcase your brand, and reach more customers with
-                      verification-first visibility.
+                      Verified sellers post with photos and videos. Request promotion across our
+                      social media channels.
                     </p>
                   </div>
 
@@ -159,9 +158,8 @@ export default async function HomePage() {
                           detail: "Verify with phone, ID, and location to build customer trust.",
                         },
                         {
-                          title: "Choose the surface that fits your goal",
-                          detail:
-                            "Promote products, build your business, or launch campaigns with stronger visibility.",
+                          title: "Choose your channel",
+                          detail: "Products, business profiles, or promotions — one platform.",
                         },
                       ].map((step, index) => (
                         <li key={step.title} className="flex items-start gap-3 text-warm-100">
@@ -184,7 +182,7 @@ export default async function HomePage() {
                       className="w-full sm:w-auto h-12 px-8 text-base bg-brand-green hover:bg-brand-green-600 text-white transition-all gap-2 rounded-full font-semibold"
                     >
                       <Link href="/advertise">
-                        Start advertising
+                        Start for Free
                         <ArrowRight className="h-5 w-5" />
                       </Link>
                     </Button>
@@ -194,7 +192,7 @@ export default async function HomePage() {
                       variant="outline"
                       className="w-full sm:w-auto h-12 px-8 text-base rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10"
                     >
-                      <Link href="/register">Create your account</Link>
+                      <Link href="/register">Create Account</Link>
                     </Button>
                   </div>
 
@@ -203,14 +201,14 @@ export default async function HomePage() {
                       href="/advertise"
                       className="inline-flex items-center gap-2 text-sm font-medium text-brand-green-300 transition-colors hover:text-brand-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-warm-950 rounded-full"
                     >
-                      Explore advertiser solutions
+                      Advertise
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                     <Link
                       href="/pricing"
                       className="inline-flex items-center gap-2 text-sm font-medium text-warm-100 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-warm-950 rounded-full"
                     >
-                      See pricing and growth plans
+                      Pricing
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </div>

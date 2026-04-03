@@ -21,20 +21,17 @@ export default function AdvertisePage() {
   const pillars = [
     {
       title: "Promote what matters now",
-      description:
-        "Launch products, spotlight services, and push seasonal campaigns from one trusted platform.",
+      description: "Launch products and push campaigns from one trusted platform.",
       icon: Megaphone,
     },
     {
       title: "Build customer confidence",
-      description:
-        "Verification signals and trust badges help serious buyers feel more comfortable engaging with your brand.",
+      description: "Trust badges help buyers engage with confidence.",
       icon: ShieldCheck,
     },
     {
       title: "Grow your business presence",
-      description:
-        "Create a stronger storefront for your business, campaigns, and featured offers across VerifyMzansi surfaces.",
+      description: "A stronger storefront for your business and campaigns.",
       icon: Store,
     },
   ];
@@ -77,15 +74,11 @@ export default function AdvertisePage() {
             </PageHeader>
 
             <div className="max-w-3xl space-y-4 text-sm text-muted-foreground sm:text-base">
-              <p>
-                VerifyMzansi is built for businesses, sellers, and campaign owners who need reach
-                without losing trust. Use the platform to improve visibility, reinforce credibility,
-                and connect with customers across South Africa.
-              </p>
+              <p>Reach verified buyers with video-powered listings.</p>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="gap-2">
                   <Link href="/register">
-                    Create your account
+                    Create Account
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -100,37 +93,12 @@ export default function AdvertisePage() {
         <TrustStrip variant="green" />
 
         <section className="container-page py-8 space-y-6 sm:py-10">
-          <Card className="border-brand-green/20 bg-brand-green-50/60">
-            <CardHeader className="space-y-2">
-              <CardTitle className="text-base sm:text-lg">
-                External social distribution authorization
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>
-                You can create promotions on VerifyMzansi without authorizing external social
-                distribution.
-              </p>
-              <p>
-                If you choose to authorize VerifyMzansi social posting, you must confirm that you
-                own the promotion or are authorized to market it, and that VerifyMzansi may publish,
-                adapt, and distribute it on VerifyMzansi-owned social channels.
-              </p>
-              <p>
-                Monetization from VerifyMzansi-owned social channels or posts belongs to
-                VerifyMzansi unless a separate written agreement says otherwise. No revenue share is
-                implied by default.
-              </p>
-            </CardContent>
-          </Card>
-
           <div className="max-w-2xl space-y-2">
             <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
               Why advertise here
             </h2>
             <p className="text-sm text-muted-foreground sm:text-base">
-              The platform combines promotion tools with verification signals so customers can act
-              with more confidence.
+              Trust signals that turn browsers into buyers.
             </p>
           </div>
 

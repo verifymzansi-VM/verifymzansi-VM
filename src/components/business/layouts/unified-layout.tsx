@@ -6,8 +6,10 @@ import { MapPin, Maximize2, Play, Store, Volume2, VolumeX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { cn } from "@/lib/utils";
 import { CATEGORY_CTA_CONFIG } from "@/lib/business/category-layout-map";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
+import { useGlobalMute } from "@/hooks/use-global-mute";
 import {
   BUSINESS_CATEGORY_LABELS,
   BUSINESS_TYPE_LABELS,
@@ -57,7 +59,7 @@ export function UnifiedLayout({
   const hasVideo = Boolean(business.cover_video);
   const ctaConfig = CATEGORY_CTA_CONFIG[business.category as BusinessCategory];
   const opHours = business.operating_hours;
-  const [isMuted, setIsMuted] = useState(true);
+  const { isMuted, toggleMute } = useGlobalMute(videoRef);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isAboutExpanded, setIsAboutExpanded] = useState(false);
   const [activeHero, setActiveHero] = useState<"video" | "cover-photo" | "gallery-photo">(
@@ -113,13 +115,6 @@ export function UnifiedLayout({
       ? business.cover_photo
       : galleryPhotos[activePhotoIndex] || business.cover_photo;
 
-  function toggleMute() {
-    if (videoRef.current) {
-      videoRef.current.muted = !videoRef.current.muted;
-      setIsMuted(videoRef.current.muted);
-    }
-  }
-
   function handlePlay() {
     if (videoRef.current) {
       videoRef.current.play();
@@ -140,13 +135,6 @@ export function UnifiedLayout({
               <video
                 ref={videoRef}
                 src={normalizeMediaUrl(business.cover_video!)}
-                poster={
-                  business.video_thumbnail
-                    ? normalizeMediaUrl(business.video_thumbnail)
-                    : business.cover_photo
-                      ? normalizeMediaUrl(business.cover_photo)
-                      : undefined
-                }
                 autoPlay
                 muted
                 loop
@@ -156,6 +144,19 @@ export function UnifiedLayout({
                 className="absolute inset-0 h-full w-full object-cover"
                 aria-label={`${business.business_name} promo video`}
               />
+              {/* Poster overlay — fades in when video paused */}
+              {(business.video_thumbnail || business.cover_photo) && (
+                <Image
+                  src={normalizeMediaUrl((business.video_thumbnail || business.cover_photo)!)}
+                  alt={`${business.business_name} cover`}
+                  fill
+                  className={cn(
+                    "absolute inset-0 z-[2] object-cover transition-opacity duration-300 pointer-events-none",
+                    isPlaying ? "opacity-0" : "opacity-100"
+                  )}
+                  sizes="100vw"
+                />
+              )}
               {!isPlaying && (
                 <button
                   type="button"

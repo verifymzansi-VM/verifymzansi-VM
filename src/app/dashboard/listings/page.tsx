@@ -321,7 +321,7 @@ export default async function ListingsPage({
           <ListingList
             listings={filteredActive}
             planTiers={planTiers}
-            emptyStateLabel="No posts yet. Create your first post to get started."
+            emptyStateLabel="No posts yet."
           />
         </TabsContent>
         <TabsContent value="pending" className="mt-4">
@@ -351,7 +351,7 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
     return (
       <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
         <XCircle className="h-8 w-8 opacity-30" />
-        <p>No rejected listings — keep up the good work!</p>
+        <p>No rejected listings.</p>
       </div>
     );
   }

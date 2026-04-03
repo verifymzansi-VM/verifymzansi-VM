@@ -80,9 +80,7 @@ export async function HomePromotionsShowcase() {
           </div>
           <div className="rounded-2xl border border-dashed border-warm-300 dark:border-warm-700 bg-warm-50 dark:bg-warm-900 p-8 text-center space-y-3">
             <Megaphone className="h-10 w-10 text-red-400/50 mx-auto" />
-            <p className="text-muted-foreground text-sm">
-              No promotions yet. Be the first to post a promotion or event.
-            </p>
+            <p className="text-muted-foreground text-sm">No promotions yet.</p>
             <Button
               asChild
               size="sm"
