@@ -216,7 +216,6 @@ async function claimOtpChallenge(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const selectFn = (builder as any).select;
   if (typeof selectFn === "function") {
-     
     const { data, error } = await selectFn.call(builder, "id").maybeSingle();
     if (error) {
       log.warn("Failed to atomically claim OTP challenge", {
