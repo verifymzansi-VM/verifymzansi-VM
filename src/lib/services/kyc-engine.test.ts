@@ -90,6 +90,20 @@ function setupDefaultMocks() {
       };
     }
 
+    if (table === "verification_sessions") {
+      return {
+        select: () => ({
+          eq: () => ({
+            order: () => ({
+              limit: () => ({
+                maybeSingle: () => Promise.resolve({ data: null, error: null }),
+              }),
+            }),
+          }),
+        }),
+      };
+    }
+
     if (table === "kyc_risk_signals") {
       return {
         insert: () => Promise.resolve({ error: null }),
@@ -233,6 +247,17 @@ describe("KYC Engine - processKycArtifact", () => {
       if (table === "kyc_provider_results") {
         return { insert: () => Promise.resolve({ error: null }) };
       }
+      if (table === "verification_sessions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+              }),
+            }),
+          }),
+        };
+      }
       return {};
     });
 
@@ -290,6 +315,17 @@ describe("KYC Engine - processKycArtifact", () => {
       }
       if (table === "kyc_provider_results") {
         return { insert: () => Promise.resolve({ error: null }) };
+      }
+      if (table === "verification_sessions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+              }),
+            }),
+          }),
+        };
       }
       return {};
     });
@@ -359,6 +395,17 @@ describe("KYC Engine - processKycArtifact", () => {
       if (table === "kyc_provider_results") {
         return { insert: () => Promise.resolve({ error: null }) };
       }
+      if (table === "verification_sessions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+              }),
+            }),
+          }),
+        };
+      }
       return {};
     });
 
@@ -412,6 +459,17 @@ describe("KYC Engine - processKycArtifact", () => {
       }
       if (table === "kyc_provider_results") {
         return { insert: () => Promise.resolve({ error: null }) };
+      }
+      if (table === "verification_sessions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+              }),
+            }),
+          }),
+        };
       }
       return {};
     });
