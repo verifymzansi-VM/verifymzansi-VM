@@ -38,19 +38,55 @@ export function CameraCapture({
   }, []);
 
   const startCamera = useCallback(async () => {
+    // Guard: mediaDevices API requires a secure context (HTTPS)
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setErrorMessage(
+        "Camera is not available. Please make sure you are using HTTPS and a modern browser, or use the file upload below."
+      );
+      setState("error");
+      return;
+    }
+
     try {
       setState("idle");
       setErrorMessage("");
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
+
+      // Try with full constraints first, then progressively relax
+      let stream: MediaStream | null = null;
+      const constraintSets: MediaStreamConstraints[] = [
+        { video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } } },
+        { video: { facingMode } },
+        { video: true },
+      ];
+
+      for (const constraints of constraintSets) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          break;
+        } catch (innerErr) {
+          const innerName = innerErr instanceof Error ? innerErr.name : "";
+          // Only retry on constraint-related failures
+          if (innerName !== "OverconstrainedError" && innerName !== "ConstraintNotSatisfiedError") {
+            throw innerErr;
+          }
+          // Continue to next (relaxed) constraint set
+        }
+      }
+
+      if (!stream) {
+        throw new DOMException("No compatible camera configuration found.", "NotFoundError");
+      }
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Explicit play() — mobile browsers often ignore autoPlay attribute
+        try {
+          await videoRef.current.play();
+        } catch {
+          // AbortError / NotAllowedError from play() is non-fatal if
+          // autoPlay eventually kicks in; we proceed to streaming state.
+        }
       }
       setState("streaming");
     } catch (err) {
@@ -60,8 +96,18 @@ export function CameraCapture({
         setErrorMessage(
           "Camera access was denied. Please allow camera access in your browser settings, or use the file upload below."
         );
+      } else if (name === "SecurityError") {
+        setErrorMessage(
+          "Camera access requires a secure connection (HTTPS). Please use the file upload below."
+        );
       } else if (name === "NotFoundError" || name === "NotReadableError") {
         setErrorMessage("No camera found on this device. Please use the file upload below.");
+      } else if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+        setErrorMessage(
+          "Your camera does not support the required settings. Please use the file upload below."
+        );
+      } else if (name === "AbortError") {
+        setErrorMessage("Camera was interrupted. Please try again or use the file upload below.");
       } else {
         setErrorMessage("Could not start camera. Please use the file upload below.");
       }
