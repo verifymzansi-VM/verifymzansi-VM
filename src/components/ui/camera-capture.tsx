@@ -122,6 +122,16 @@ export function CameraCapture({
     };
   }, [stopStream]);
 
+  // Attach the stream to the <video> element once it mounts.
+  // The video element is conditionally rendered (only when state === "streaming"),
+  // so srcObject must be set after the re-render, not inline in startCamera().
+  useEffect(() => {
+    if (state === "streaming" && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [state]);
+
   const takePhoto = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
