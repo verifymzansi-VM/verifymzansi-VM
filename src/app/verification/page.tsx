@@ -1714,7 +1714,7 @@ export default function VerificationPage() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>ID file (image/PDF)</Label>
+                    <Label htmlFor="idFile">ID file (image/PDF)</Label>
                     <Tabs defaultValue="upload" className="w-full">
                       <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="upload">Upload File</TabsTrigger>

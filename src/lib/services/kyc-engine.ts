@@ -5,7 +5,12 @@ import { getConfiguredProvider } from "./kyc-provider";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RiskLevel } from "@/types/enums";
 import type { ExifSignals } from "@/lib/utils/exif-inspect";
-import { BLUR_VARIANCE_THRESHOLD } from "@/lib/constants/verification";
+import {
+  BLUR_VARIANCE_THRESHOLD,
+  FACE_MATCH_THRESHOLD,
+  LIVENESS_THRESHOLD,
+} from "@/lib/constants/verification";
+import { hammingDistance, PHASH_SIMILARITY_THRESHOLD } from "@/lib/utils/perceptual-hash";
 
 const log = createLogger("KycEngine");
 
@@ -35,12 +40,15 @@ export interface KycEngineInput {
   captureMethod?: "camera" | "file_upload";
   exifSignals?: ExifSignals | null;
   blurScore?: number | null;
+  /** Pre-computed perceptual hash (dHash, 16-char hex) for near-duplicate detection */
+  phash?: string | null;
   /** Pre-computed: phone is linked to a rejected account (block signal) */
   phoneFlagged?: boolean;
 }
 
 export interface KycEngineOutput {
   sha256: string;
+  phash: string | null;
   riskScore: number;
   riskLevel: RiskLevel;
   providerRef: string | undefined;
@@ -71,6 +79,7 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
     captureMethod,
     exifSignals,
     blurScore,
+    phash,
     phoneFlagged,
   } = input;
   let signalScore = 0;
@@ -108,6 +117,45 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
       valueJson: { matchingArtifactId: dupRows[0].id },
     });
     signalScore += SEVERITY_WEIGHT.block;
+  }
+
+  // ── 1b. Perceptual hash near-duplicate detection ──────────
+  if (phash) {
+    // Query recent artifacts from OTHER users that have a phash stored
+    const { data: phashRows, error: phashErr } = await adminClient
+      .from("kyc_artifacts")
+      .select("id, user_id, phash")
+      .neq("user_id", userId)
+      .not("phash", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (phashErr) {
+      log.error("Perceptual hash query failed", { error: phashErr.message });
+    } else if (phashRows) {
+      for (const row of phashRows) {
+        if (row.phash && hammingDistance(phash, row.phash) <= PHASH_SIMILARITY_THRESHOLD) {
+          log.warn("Near-duplicate image detected via perceptual hash", {
+            phash: phash.slice(0, 8) + "...",
+            otherUserId: row.user_id,
+            otherArtifactId: row.id,
+            distance: hammingDistance(phash, row.phash),
+          });
+          await writeSignal(adminClient, {
+            userId,
+            artifactId,
+            signalCode: "near_duplicate_phash",
+            severity: "warn",
+            valueJson: {
+              matchingArtifactId: row.id,
+              distance: hammingDistance(phash, row.phash),
+            },
+          });
+          signalScore += SEVERITY_WEIGHT.warn;
+          break; // one match is enough
+        }
+      }
+    }
   }
 
   // ── 2. Velocity check (atomic, race-safe via DB advisory lock) ──
@@ -239,6 +287,62 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
             : "needs_manual_review";
     }
 
+    // ── Passive liveness / face-match policies ──────────────
+    // When the provider returns real scores, enforce thresholds
+    // to auto-escalate or auto-reject weak biometrics.
+    const { faceMatchScore, livenessScore } = providerResult.scores;
+
+    if (typeof livenessScore === "number" && livenessScore < LIVENESS_THRESHOLD) {
+      log.warn("Low liveness score — escalating to manual review", {
+        livenessScore,
+        threshold: LIVENESS_THRESHOLD,
+        userId,
+      });
+      await writeSignal(adminClient, {
+        userId,
+        artifactId,
+        signalCode: "low_liveness_score",
+        severity: "warn",
+        valueJson: { livenessScore, threshold: LIVENESS_THRESHOLD },
+      });
+      signalScore += SEVERITY_WEIGHT.warn;
+
+      if (typeof faceMatchScore === "number" && faceMatchScore < FACE_MATCH_THRESHOLD) {
+        // Both biometrics failed — auto-reject
+        log.warn("Low liveness AND face-match — auto-rejecting", {
+          livenessScore,
+          faceMatchScore,
+          userId,
+        });
+        await writeSignal(adminClient, {
+          userId,
+          artifactId,
+          signalCode: "low_face_match_score",
+          severity: "warn",
+          valueJson: { faceMatchScore, threshold: FACE_MATCH_THRESHOLD },
+        });
+        signalScore += SEVERITY_WEIGHT.warn;
+        autoStatus = "rejected";
+      } else {
+        autoStatus = "needs_manual_review";
+      }
+    } else if (typeof faceMatchScore === "number" && faceMatchScore < FACE_MATCH_THRESHOLD) {
+      log.warn("Low face-match score — escalating to manual review", {
+        faceMatchScore,
+        threshold: FACE_MATCH_THRESHOLD,
+        userId,
+      });
+      await writeSignal(adminClient, {
+        userId,
+        artifactId,
+        signalCode: "low_face_match_score",
+        severity: "warn",
+        valueJson: { faceMatchScore, threshold: FACE_MATCH_THRESHOLD },
+      });
+      signalScore += SEVERITY_WEIGHT.warn;
+      autoStatus = "needs_manual_review";
+    }
+
     // Persist provider result
     const { error: prError } = await adminClient.from("kyc_provider_results").insert({
       artifact_id: artifactId,
@@ -319,6 +423,18 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
     }
   }
 
+  // EXIF orientation signal (informational)
+  if (exifSignals?.orientation != null && exifSignals.orientation !== 1) {
+    await writeSignal(adminClient, {
+      userId,
+      artifactId,
+      signalCode: "non_standard_orientation",
+      severity: "info",
+      valueJson: { orientation: exifSignals.orientation },
+    });
+    // info = 0 pts, no score change — useful for admin review context
+  }
+
   // ── 6. Selfie not captured via camera signal ──────────────
   if (stepType === "selfie" && captureMethod === "file_upload") {
     log.warn("Selfie uploaded via file instead of camera", { userId });
@@ -383,7 +499,15 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
 
   log.info("KYC engine complete", { artifactId, riskScore, riskLevel, autoStatus });
 
-  return { sha256, riskScore, riskLevel, providerRef, autoStatus, idNumberHmac };
+  return {
+    sha256,
+    phash: phash ?? null,
+    riskScore,
+    riskLevel,
+    providerRef,
+    autoStatus,
+    idNumberHmac,
+  };
 }
 
 // ── Internal helper ───────────────────────────────────────────

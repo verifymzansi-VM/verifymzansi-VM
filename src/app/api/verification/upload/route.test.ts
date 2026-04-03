@@ -164,14 +164,19 @@ function mockAuth(
 function setupDefaultAdminMocks() {
   mockFrom.mockImplementation((table: string) => {
     if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+      const fluentChain = (): Record<string, ReturnType<typeof vi.fn>> => {
+        const chain: Record<string, ReturnType<typeof vi.fn>> = {
+          eq: vi.fn().mockImplementation(() => fluentChain()),
+          neq: vi.fn().mockImplementation(() => fluentChain()),
+          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+          maybeSingle: vi
+            .fn()
+            .mockResolvedValue({ data: { id: "profile-1", phone: "+27123456789" }, error: null }),
+        };
+        return chain;
+      };
       return {
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi
-              .fn()
-              .mockResolvedValue({ data: { id: "profile-1", phone: "+27123456789" }, error: null }),
-          }),
-        }),
+        select: vi.fn().mockImplementation(() => fluentChain()),
         update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
           if (payload.account_verification_status || payload.account_verification_status) {
             return {
@@ -603,12 +608,14 @@ describe("POST /api/verification/upload", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        const profileChain = (): Record<string, ReturnType<typeof vi.fn>> => ({
+          eq: vi.fn().mockImplementation(() => profileChain()),
+          neq: vi.fn().mockImplementation(() => profileChain()),
+          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        });
         return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-            }),
-          }),
+          select: vi.fn().mockImplementation(() => profileChain()),
           upsert: upsertMock,
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
             if (payload.account_verification_status || payload.account_verification_status) {
@@ -726,15 +733,17 @@ describe("POST /api/verification/upload", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: "profile-1", phone: "+27123456789" },
-                error: null,
-              }),
-            }),
+        const profileChain = (): Record<string, ReturnType<typeof vi.fn>> => ({
+          eq: vi.fn().mockImplementation(() => profileChain()),
+          neq: vi.fn().mockImplementation(() => profileChain()),
+          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "profile-1", phone: "+27123456789" },
+            error: null,
           }),
+        });
+        return {
+          select: vi.fn().mockImplementation(() => profileChain()),
         };
       }
       if (table === "kyc_artifacts") {
@@ -787,15 +796,17 @@ describe("POST /api/verification/upload", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: "profile-1", phone: "+27123456789" },
-                error: null,
-              }),
-            }),
+        const profileChain = (): Record<string, ReturnType<typeof vi.fn>> => ({
+          eq: vi.fn().mockImplementation(() => profileChain()),
+          neq: vi.fn().mockImplementation(() => profileChain()),
+          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "profile-1", phone: "+27123456789" },
+            error: null,
           }),
+        });
+        return {
+          select: vi.fn().mockImplementation(() => profileChain()),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
             if (payload.account_verification_status || payload.account_verification_status) {
               return {
@@ -945,15 +956,17 @@ describe("POST /api/verification/upload", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: "profile-1", phone: "+27123456789" },
-                error: null,
-              }),
-            }),
+        const profileChain = (): Record<string, ReturnType<typeof vi.fn>> => ({
+          eq: vi.fn().mockImplementation(() => profileChain()),
+          neq: vi.fn().mockImplementation(() => profileChain()),
+          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "profile-1", phone: "+27123456789" },
+            error: null,
           }),
+        });
+        return {
+          select: vi.fn().mockImplementation(() => profileChain()),
           update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
             if (payload.account_verification_status || payload.account_verification_status) {
               return {

@@ -56,7 +56,9 @@ describe("CameraCapture", () => {
   });
 
   it("shows error message when camera access is denied", async () => {
-    mockGetUserMedia.mockRejectedValueOnce(new DOMException("denied", "NotAllowedError"));
+    const err = new Error("denied");
+    err.name = "NotAllowedError";
+    mockGetUserMedia.mockRejectedValueOnce(err);
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
     fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
@@ -67,7 +69,9 @@ describe("CameraCapture", () => {
   });
 
   it("shows error message when no camera found", async () => {
-    mockGetUserMedia.mockRejectedValueOnce(new DOMException("not found", "NotFoundError"));
+    const err = new Error("not found");
+    err.name = "NotFoundError";
+    mockGetUserMedia.mockRejectedValueOnce(err);
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="environment" />);
     fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
@@ -78,21 +82,23 @@ describe("CameraCapture", () => {
   });
 
   it("shows file upload fallback on camera error", async () => {
-    mockGetUserMedia.mockRejectedValueOnce(new DOMException("denied", "NotAllowedError"));
+    const err = new Error("denied");
+    err.name = "NotAllowedError";
+    mockGetUserMedia.mockRejectedValueOnce(err);
 
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
     fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("textbox", { hidden: true }).closest("input[type='file']") ??
-          screen.getByDisplayValue("")
-      ).toBeDefined();
+      const input = document.querySelector("input[type='file']");
+      expect(input).toBeTruthy();
     });
   });
 
   it("calls onFallback when file input is used after camera error", async () => {
-    mockGetUserMedia.mockRejectedValueOnce(new DOMException("denied", "NotAllowedError"));
+    const err = new Error("denied");
+    err.name = "NotAllowedError";
+    mockGetUserMedia.mockRejectedValueOnce(err);
     const onCapture = vi.fn();
     const onFallback = vi.fn();
 

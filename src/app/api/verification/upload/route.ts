@@ -11,6 +11,7 @@ import { stripExifFromJpeg, stripMetadataFromPng } from "@/lib/utils/exif-strip"
 import { inspectJpegExif, type ExifSignals } from "@/lib/utils/exif-inspect";
 import { getImageDimensions } from "@/lib/utils/image-dimensions";
 import { decodeImageToPixels, computeLaplacianVariance } from "@/lib/utils/blur-detection";
+import { computePerceptualHash } from "@/lib/utils/perceptual-hash";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 import { MIN_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION } from "@/lib/constants/verification";
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
@@ -405,6 +406,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── Perceptual hash (best-effort, requires sharp) ────────
+    let phash: string | null = null;
+    if (isImageFile) {
+      try {
+        phash = await computePerceptualHash(fileBuffer);
+      } catch {
+        // Perceptual hash is best-effort — skip on failure
+      }
+    }
+
     // ── Strip EXIF metadata from JPEG files (POPIA data minimization) ──
     if (file.type === "image/jpeg" || integrity.detectedMime === "image/jpeg") {
       fileBuffer = Buffer.from(stripExifFromJpeg(fileBuffer));
@@ -532,6 +543,7 @@ export async function POST(request: NextRequest) {
       captureMethod: captureMethod ?? undefined,
       exifSignals,
       blurScore,
+      phash,
       phoneFlagged: !!phoneFlaggedUserId,
     });
 
@@ -540,6 +552,7 @@ export async function POST(request: NextRequest) {
       .from("kyc_artifacts")
       .update({
         sha256: engineResult.sha256,
+        phash: engineResult.phash,
         provider_ref: engineResult.providerRef ?? null,
       })
       .eq("id", artifact.id);
@@ -900,6 +913,13 @@ export async function POST(request: NextRequest) {
           contentType: file.type,
           riskLevel: engineResult.riskLevel,
           riskScore: engineResult.riskScore,
+          // Browser hints for fraud correlation
+          userAgent: request.headers.get("user-agent") ?? undefined,
+          secChUa: request.headers.get("sec-ch-ua") ?? undefined,
+          secChUaPlatform: request.headers.get("sec-ch-ua-platform") ?? undefined,
+          secChUaMobile: request.headers.get("sec-ch-ua-mobile") ?? undefined,
+          acceptLanguage: request.headers.get("accept-language") ?? undefined,
+          captureMethod: captureMethod ?? undefined,
         },
       });
     } catch (auditErr) {

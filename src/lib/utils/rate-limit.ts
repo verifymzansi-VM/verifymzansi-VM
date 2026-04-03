@@ -16,8 +16,8 @@ interface LocalBucket {
   expiresAt: number;
 }
 const LOCAL_BUCKETS = new Map<string, LocalBucket>();
-const LOCAL_WINDOW_MS = 60_000; // 1 minute window
-const LOCAL_MAX_REQUESTS = 20; // generous fallback limit
+const LOCAL_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000;
+const LOCAL_MAX_REQUESTS = Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 20;
 const LOCAL_MAX_BUCKETS = 5000; // cap memory usage
 
 /** Periodically purge expired buckets to prevent memory bloat. */
