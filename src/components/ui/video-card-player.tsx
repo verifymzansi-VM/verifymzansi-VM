@@ -619,7 +619,7 @@ function VideoCardPlayerInner({
           aria-label={alt ? `${alt} video` : "Video preview"}
           onError={handleError}
           className={cn(
-            "relative z-[3] h-full w-full transition-opacity duration-300",
+            "absolute inset-0 z-[3] transition-opacity duration-300",
             foregroundMediaClassName,
             hasError || !videoReady || !canDisplayVideo || isPlaybackPaused
               ? "opacity-0"
@@ -702,7 +702,7 @@ function VideoCardPlayerInner({
         aria-label={alt ? `${alt} video` : "Video preview"}
         onError={handleError}
         className={cn(
-          "relative z-[3] h-full w-full transition-opacity duration-300",
+          "absolute inset-0 z-[3] transition-opacity duration-300",
           foregroundMediaClassName,
           !videoReady || hasError || !isPlaying ? "opacity-0" : "opacity-100"
         )}
@@ -974,7 +974,7 @@ function HoverVideoPlayer({
         aria-label={alt ? `${alt} video` : "Video preview"}
         onError={handleError}
         className={cn(
-          "relative z-[3] h-full w-full transition-opacity duration-300",
+          "absolute inset-0 z-[3] transition-opacity duration-300",
           usesSmartFit ? foregroundMediaClassName : animatedMediaClassName,
           hasError || reducedMotion || !videoReady || !isHovering ? "opacity-0" : "opacity-100"
         )}
@@ -1213,7 +1213,7 @@ function FeedVideoPlayer({
         aria-label={alt ? `${alt} video` : "Video preview"}
         onError={handleError}
         className={cn(
-          "relative z-[3] h-full w-full transition-opacity duration-300",
+          "absolute inset-0 z-[3] transition-opacity duration-300",
           foregroundMediaClassName,
           hasError || !videoReady ? "opacity-0" : "opacity-100"
         )}
