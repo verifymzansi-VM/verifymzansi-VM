@@ -17,6 +17,7 @@ import {
   Phone,
   Plus,
   Store,
+  Truck,
   Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,10 @@ import {
 } from "@/components/billing/plan-gate";
 import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
+import {
+  getCategoryDetailFields,
+  getDefaultCategoryDetails,
+} from "@/lib/forms/business-category-details";
 import type { BusinessCategory, BusinessType } from "@/types/enums";
 import { cn } from "@/lib/utils";
 import {
@@ -205,6 +210,8 @@ function CreateBusinessContent() {
   const [slugManual, setSlugManual] = useState(false);
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<BusinessCategory | "">("");
+  const [subcategory, setSubcategory] = useState("");
+  const [categoryDetails, setCategoryDetails] = useState<Record<string, unknown>>({});
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [locationTown, setLocationTown] = useState("");
@@ -380,6 +387,12 @@ function CreateBusinessContent() {
     setSlugManual(Boolean(restoredData.slugManual));
     setDescription(restoredData.description ?? "");
     setCategory((restoredData.category as BusinessCategory | "") ?? "");
+    setSubcategory(typeof restoredData.subcategory === "string" ? restoredData.subcategory : "");
+    setCategoryDetails(
+      restoredData.categoryDetails && typeof restoredData.categoryDetails === "object"
+        ? (restoredData.categoryDetails as Record<string, unknown>)
+        : {}
+    );
     setProvince(restoredData.province ?? "");
     setCity(restoredData.city ?? "");
     setLocationTown(restoredData.locationTown ?? "");
@@ -445,6 +458,8 @@ function CreateBusinessContent() {
       slugManual,
       description,
       category,
+      subcategory,
+      categoryDetails,
       province,
       city,
       locationTown,
@@ -484,6 +499,8 @@ function CreateBusinessContent() {
     slugManual,
     description,
     category,
+    subcategory,
+    categoryDetails,
     province,
     city,
     locationTown,
@@ -630,8 +647,10 @@ function CreateBusinessContent() {
       }
     }
     if (targetStep === 1) {
-      if (!province) errors.location_province = "Select a province.";
-      if (!city) errors.location_city = "Select a city.";
+      if (businessType !== "online_only") {
+        if (!province) errors.location_province = "Select a province.";
+        if (!city) errors.location_city = "Select a city.";
+      }
       for (const field of STEP_CONTACT_FIELDS) {
         if (businessValidationErrors[field]) {
           errors[field] = businessValidationErrors[field];
@@ -759,12 +778,31 @@ function CreateBusinessContent() {
       if (socialTwitter) socialLinks.twitter = socialTwitter;
       if (socialTiktok) socialLinks.tiktok = socialTiktok;
       const operatingHours: Record<string, string> = {};
-      const monFriVal = formatHoursValue(hoursMonFri.open, hoursMonFri.close, hoursMonFri.closed);
-      const satVal = formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed);
-      const sunVal = formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed);
-      if (monFriVal) operatingHours.Mon_Fri = monFriVal;
-      if (satVal) operatingHours.Sat = satVal;
-      if (sunVal) operatingHours.Sun = sunVal;
+      if (businessType === "market_stall") {
+        const td = (businessDetails as unknown as Record<string, unknown>).trading_days as
+          | string[]
+          | undefined;
+        const th = (businessDetails as unknown as Record<string, unknown>).trading_hours as
+          | string
+          | undefined;
+        if (td && th) {
+          const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+          const hasWeekday = td.some((d) => WEEKDAYS.includes(d));
+          const hasSat = td.includes("Saturday");
+          const hasSun = td.includes("Sunday");
+          if (hasWeekday) operatingHours.Mon_Fri = th;
+          else operatingHours.Mon_Fri = "Closed";
+          operatingHours.Sat = hasSat ? th : "Closed";
+          operatingHours.Sun = hasSun ? th : "Closed";
+        }
+      } else {
+        const monFriVal = formatHoursValue(hoursMonFri.open, hoursMonFri.close, hoursMonFri.closed);
+        const satVal = formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed);
+        const sunVal = formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed);
+        if (monFriVal) operatingHours.Mon_Fri = monFriVal;
+        if (satVal) operatingHours.Sat = satVal;
+        if (sunVal) operatingHours.Sun = sunVal;
+      }
       const serviceAreas =
         businessType === "mobile_service"
           ? {
@@ -787,9 +825,10 @@ function CreateBusinessContent() {
         slug: (slug || generateSlug(businessName)).trim(),
         business_type: businessType,
         category,
+        subcategory: subcategory || undefined,
         description: description.trim(),
-        location_province: province,
-        location_city: city,
+        location_province: province || undefined,
+        location_city: city || undefined,
         location_town: locationTown || undefined,
         location_address: locationAddress || undefined,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
@@ -806,6 +845,7 @@ function CreateBusinessContent() {
         services_offered: services.length > 0 ? services : undefined,
         service_areas: serviceAreas,
         business_details: finalBusinessDetails,
+        category_details: Object.keys(categoryDetails).length > 0 ? categoryDetails : undefined,
         operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
         payment_methods_accepted: paymentMethods.length > 0 ? paymentMethods : undefined,
         delivery_options:
@@ -859,6 +899,8 @@ function CreateBusinessContent() {
     setSlugManual(false);
     setDescription("");
     setCategory("");
+    setSubcategory("");
+    setCategoryDetails({});
     setProvince(profile?.location_province ?? "");
     setCity(profile?.location_city ?? "");
     setLocationTown("");
@@ -1206,36 +1248,179 @@ function CreateBusinessContent() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="category">Category *</Label>
-                      <select
-                        id="category"
-                        aria-label="Category"
-                        className={cn(SELECT_CLASS, fieldErrors.category && "border-destructive")}
-                        value={category}
-                        onChange={(event) => {
-                          setCategory(event.target.value as BusinessCategory);
-                          clearErrors("category");
-                          // Auto-focus description after selecting a category
-                          requestAnimationFrame(() => {
-                            const el = document.getElementById("description");
-                            if (el) {
-                              el.focus();
-                              el.scrollIntoView({ behavior: "smooth", block: "center" });
-                            }
-                          });
-                        }}
-                      >
-                        <option value="">Select a category</option>
-                        {BUSINESS_CATEGORIES.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
+                      <Label>Category *</Label>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {BUSINESS_CATEGORIES.map((item) => {
+                          const Icon = item.icon;
+                          const selected = category === item.value;
+                          return (
+                            <button
+                              key={item.value}
+                              type="button"
+                              onClick={() => {
+                                setCategory(item.value);
+                                setSubcategory("");
+                                setCategoryDetails(getDefaultCategoryDetails(item.value));
+                                clearErrors("category");
+                              }}
+                              className={cn(
+                                "flex flex-col items-center gap-1 rounded-lg border p-3 text-center text-xs transition-colors hover:bg-accent/50",
+                                selected
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                  : "border-border"
+                              )}
+                            >
+                              <Icon className="h-5 w-5 text-muted-foreground" />
+                              <span className="font-medium leading-tight">{item.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                       {fieldErrors.category && (
                         <p className="inline-form-error">{fieldErrors.category}</p>
                       )}
                     </div>
+
+                    {/* Subcategory dropdown */}
+                    {category &&
+                      (() => {
+                        const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
+                        if (!catDef || catDef.subcategories.length === 0) return null;
+                        return (
+                          <div className="space-y-2">
+                            <Label htmlFor="subcategory">Subcategory</Label>
+                            <select
+                              id="subcategory"
+                              aria-label="Subcategory"
+                              className={cn(SELECT_CLASS)}
+                              value={subcategory}
+                              onChange={(event) => setSubcategory(event.target.value)}
+                            >
+                              <option value="">Select a subcategory (optional)</option>
+                              {catDef.subcategories.map((sub) => (
+                                <option key={sub.value} value={sub.value}>
+                                  {sub.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })()}
+
+                    {/* Category-specific extra fields */}
+                    {category &&
+                      (() => {
+                        const fields = getCategoryDetailFields(category as BusinessCategory);
+                        if (fields.length === 0) return null;
+                        return (
+                          <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+                            <p className="text-sm font-medium">
+                              Extra details for{" "}
+                              {BUSINESS_CATEGORIES.find((c) => c.value === category)?.label}
+                            </p>
+                            {fields.map((field) => {
+                              const val = categoryDetails[field.name];
+                              if (field.kind === "checkbox") {
+                                return (
+                                  <label
+                                    key={field.name}
+                                    className="flex items-center gap-2 text-sm"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={!!val}
+                                      onChange={(e) =>
+                                        setCategoryDetails((prev) => ({
+                                          ...prev,
+                                          [field.name]: e.target.checked,
+                                        }))
+                                      }
+                                      className="rounded"
+                                    />
+                                    {field.label}
+                                  </label>
+                                );
+                              }
+                              if (field.kind === "number") {
+                                return (
+                                  <div key={field.name} className="space-y-1">
+                                    <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
+                                    <Input
+                                      id={`cat-${field.name}`}
+                                      type="number"
+                                      min={field.min}
+                                      step={field.step}
+                                      value={val != null ? String(val) : ""}
+                                      onChange={(e) =>
+                                        setCategoryDetails((prev) => ({
+                                          ...prev,
+                                          [field.name]: e.target.value
+                                            ? Number(e.target.value)
+                                            : undefined,
+                                        }))
+                                      }
+                                      placeholder={field.placeholder}
+                                    />
+                                    {field.description && (
+                                      <p className="text-xs text-muted-foreground">
+                                        {field.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              if (field.kind === "list") {
+                                const listVal = Array.isArray(val) ? (val as string[]) : [];
+                                return (
+                                  <div key={field.name} className="space-y-1">
+                                    <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
+                                    <Input
+                                      id={`cat-${field.name}`}
+                                      value={listVal.join(", ")}
+                                      onChange={(e) =>
+                                        setCategoryDetails((prev) => ({
+                                          ...prev,
+                                          [field.name]: e.target.value
+                                            .split(",")
+                                            .map((s) => s.trim())
+                                            .filter(Boolean),
+                                        }))
+                                      }
+                                      placeholder={field.placeholder}
+                                    />
+                                    {field.description && (
+                                      <p className="text-xs text-muted-foreground">
+                                        {field.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div key={field.name} className="space-y-1">
+                                  <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
+                                  <Input
+                                    id={`cat-${field.name}`}
+                                    value={typeof val === "string" ? val : ""}
+                                    onChange={(e) =>
+                                      setCategoryDetails((prev) => ({
+                                        ...prev,
+                                        [field.name]: e.target.value,
+                                      }))
+                                    }
+                                    placeholder={field.placeholder}
+                                  />
+                                  {field.description && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {field.description}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -1253,11 +1438,78 @@ function CreateBusinessContent() {
                         maxLength={3000}
                       />
                     </div>
+
+                    {/* Services Offered (moved from Step 2 optional extras) */}
+                    <div className="space-y-3">
+                      <Label className="flex items-center gap-2">
+                        <Wrench className="h-4 w-4 text-muted-foreground" />
+                        Services Offered
+                      </Label>
+                      {/* Category-based quick-add suggestions */}
+                      {category &&
+                        (() => {
+                          const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
+                          const suggestions = catDef?.serviceSuggestions ?? [];
+                          const unselected = suggestions.filter((s) => !services.includes(s));
+                          if (unselected.length === 0) return null;
+                          return (
+                            <div className="flex flex-wrap gap-1.5">
+                              {unselected.map((sug) => (
+                                <button
+                                  key={sug}
+                                  type="button"
+                                  onClick={() => setServices((prev) => [...prev, sug])}
+                                  className="rounded-full border border-dashed border-primary/40 px-2.5 py-0.5 text-xs text-primary hover:bg-primary/5 transition-colors"
+                                >
+                                  + {sug}
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      <div className="flex gap-2">
+                        <Input
+                          value={servicesInput}
+                          onChange={(event) => setServicesInput(event.target.value)}
+                          placeholder="Type a service and press Add"
+                          maxLength={200}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              addService();
+                            }
+                          }}
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={addService}>
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {services.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {services.map((service, index) => (
+                            <Badge
+                              key={service}
+                              variant="secondary"
+                              className="cursor-pointer gap-1"
+                              onClick={() => removeService(index)}
+                            >
+                              {service}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
                 {step === 1 && (
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
+                    {businessType === "online_only" && (
+                      <p className="text-sm text-muted-foreground">
+                        Location is optional for online-only businesses. Add a province and city if
+                        you want to appear in local search results.
+                      </p>
+                    )}
                     <LocationSelector
                       value={locationValue}
                       onChange={(v) => {
@@ -1269,10 +1521,14 @@ function CreateBusinessContent() {
                       }}
                       showTown
                       showAddress
-                      errors={{
-                        province: fieldErrors.location_province,
-                        city: fieldErrors.location_city,
-                      }}
+                      errors={
+                        businessType === "online_only"
+                          ? {}
+                          : {
+                              province: fieldErrors.location_province,
+                              city: fieldErrors.location_city,
+                            }
+                      }
                     />
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1303,18 +1559,34 @@ function CreateBusinessContent() {
                           <MessageCircle className="h-4 w-4 text-green-600" />
                           WhatsApp
                         </Label>
-                        <Input
-                          id="whatsapp"
-                          inputMode="tel"
-                          autoComplete="tel"
-                          value={whatsapp}
-                          onChange={(event) => {
-                            setWhatsapp(event.target.value);
-                            clearErrors("whatsapp");
-                          }}
-                          placeholder="082 000 0000"
-                          className={cn(fieldErrors.whatsapp && "border-destructive")}
-                        />
+                        <div className="flex gap-2">
+                          <Input
+                            id="whatsapp"
+                            inputMode="tel"
+                            autoComplete="tel"
+                            value={whatsapp}
+                            onChange={(event) => {
+                              setWhatsapp(event.target.value);
+                              clearErrors("whatsapp");
+                            }}
+                            placeholder="082 000 0000"
+                            className={cn(fieldErrors.whatsapp && "border-destructive")}
+                          />
+                          {phone && !whatsapp && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setWhatsapp(phone);
+                                clearErrors("whatsapp");
+                              }}
+                              className="shrink-0 text-xs"
+                            >
+                              Copy from phone
+                            </Button>
+                          )}
+                        </div>
                         {fieldErrors.whatsapp && (
                           <p className="inline-form-error">{fieldErrors.whatsapp}</p>
                         )}
@@ -1365,41 +1637,76 @@ function CreateBusinessContent() {
                       </div>
                     </div>
 
-                    <div className="space-y-3">
-                      <Label className="text-base font-semibold">Operating Hours</Label>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                        <OperatingHoursInput
-                          id="hoursMonFri"
-                          label="Mon - Fri"
-                          open={hoursMonFri.open}
-                          close={hoursMonFri.close}
-                          closed={hoursMonFri.closed}
-                          onOpenChange={(v) => setHoursMonFri((p) => ({ ...p, open: v }))}
-                          onCloseChange={(v) => setHoursMonFri((p) => ({ ...p, close: v }))}
-                          onClosedChange={(v) => setHoursMonFri((p) => ({ ...p, closed: v }))}
-                        />
-                        <OperatingHoursInput
-                          id="hoursSat"
-                          label="Saturday"
-                          open={hoursSat.open}
-                          close={hoursSat.close}
-                          closed={hoursSat.closed}
-                          onOpenChange={(v) => setHoursSat((p) => ({ ...p, open: v }))}
-                          onCloseChange={(v) => setHoursSat((p) => ({ ...p, close: v }))}
-                          onClosedChange={(v) => setHoursSat((p) => ({ ...p, closed: v }))}
-                        />
-                        <OperatingHoursInput
-                          id="hoursSun"
-                          label="Sunday / Public Holidays"
-                          open={hoursSun.open}
-                          close={hoursSun.close}
-                          closed={hoursSun.closed}
-                          onOpenChange={(v) => setHoursSun((p) => ({ ...p, open: v }))}
-                          onCloseChange={(v) => setHoursSun((p) => ({ ...p, close: v }))}
-                          onClosedChange={(v) => setHoursSun((p) => ({ ...p, closed: v }))}
-                        />
+                    {businessType === "market_stall" ? (
+                      <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
+                        <p className="font-medium text-foreground">Operating Hours</p>
+                        <p className="mt-1">
+                          Your operating hours will be set from the trading days and hours you
+                          entered in the previous step.
+                        </p>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <Label className="text-base font-semibold">Operating Hours</Label>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                          <OperatingHoursInput
+                            id="hoursMonFri"
+                            label="Mon - Fri"
+                            open={hoursMonFri.open}
+                            close={hoursMonFri.close}
+                            closed={hoursMonFri.closed}
+                            onOpenChange={(v) => setHoursMonFri((p) => ({ ...p, open: v }))}
+                            onCloseChange={(v) => setHoursMonFri((p) => ({ ...p, close: v }))}
+                            onClosedChange={(v) => setHoursMonFri((p) => ({ ...p, closed: v }))}
+                          />
+                          <OperatingHoursInput
+                            id="hoursSat"
+                            label="Saturday"
+                            open={hoursSat.open}
+                            close={hoursSat.close}
+                            closed={hoursSat.closed}
+                            onOpenChange={(v) => setHoursSat((p) => ({ ...p, open: v }))}
+                            onCloseChange={(v) => setHoursSat((p) => ({ ...p, close: v }))}
+                            onClosedChange={(v) => setHoursSat((p) => ({ ...p, closed: v }))}
+                          />
+                          <OperatingHoursInput
+                            id="hoursSun"
+                            label="Sunday / Public Holidays"
+                            open={hoursSun.open}
+                            close={hoursSun.close}
+                            closed={hoursSun.closed}
+                            onOpenChange={(v) => setHoursSun((p) => ({ ...p, open: v }))}
+                            onCloseChange={(v) => setHoursSun((p) => ({ ...p, close: v }))}
+                            onClosedChange={(v) => setHoursSun((p) => ({ ...p, closed: v }))}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {businessType !== "online_only" && (
+                      <div className="space-y-3">
+                        <Label className="flex items-center gap-2">
+                          <Truck className="h-4 w-4 text-muted-foreground" />
+                          Delivery Service
+                        </Label>
+                        <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
+                          <input
+                            id="delivery-available"
+                            type="checkbox"
+                            aria-label="Delivery available"
+                            checked={deliveryOptions.length > 0}
+                            onChange={(event) => setDeliveryAvailable(event.target.checked)}
+                            className="mt-0.5 rounded"
+                          />
+                          <span className="space-y-1">
+                            <span className="block font-medium">Delivery available</span>
+                            <span className="block text-xs text-muted-foreground">
+                              Indicate whether you offer delivery to customers.
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1692,44 +1999,6 @@ function CreateBusinessContent() {
 
                         <div className="space-y-3">
                           <Label className="flex items-center gap-2">
-                            <Wrench className="h-4 w-4 text-muted-foreground" />
-                            Services Offered
-                          </Label>
-                          <div className="flex gap-2">
-                            <Input
-                              value={servicesInput}
-                              onChange={(event) => setServicesInput(event.target.value)}
-                              placeholder="Type a service and press Add"
-                              maxLength={200}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  addService();
-                                }
-                              }}
-                            />
-                            <Button type="button" variant="outline" size="sm" onClick={addService}>
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          {services.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {services.map((service, index) => (
-                                <Badge
-                                  key={service}
-                                  variant="secondary"
-                                  className="cursor-pointer gap-1"
-                                  onClick={() => removeService(index)}
-                                >
-                                  {service}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-3">
-                          <Label className="flex items-center gap-2">
                             <CreditCard className="h-4 w-4 text-muted-foreground" />
                             Payment Methods Accepted
                           </Label>
@@ -1750,32 +2019,6 @@ function CreateBusinessContent() {
                             ))}
                           </div>
                         </div>
-
-                        {businessType !== "online_only" && (
-                          <div className="space-y-3">
-                            <Label className="flex items-center gap-2">
-                              <Store className="h-4 w-4 text-muted-foreground" />
-                              Delivery Service
-                            </Label>
-                            <div className="flex items-start gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
-                              <input
-                                id="delivery-available"
-                                type="checkbox"
-                                aria-label="Delivery available"
-                                checked={deliveryOptions.length > 0}
-                                onChange={(event) => setDeliveryAvailable(event.target.checked)}
-                                className="mt-0.5 rounded"
-                              />
-                              <span className="space-y-1">
-                                <span className="block font-medium">Delivery available</span>
-                                <span className="block text-xs text-muted-foreground">
-                                  Only indicate whether you offer delivery. No delivery-region or
-                                  shipping-detail fields are required.
-                                </span>
-                              </span>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </details>
 

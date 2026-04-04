@@ -63,6 +63,8 @@ const mallStoreDetailsSchema = z.object({
 
 const standaloneShopDetailsSchema = z.object({
   type: z.literal("standalone_shop"),
+  building_name: optionalText(120),
+  suite_or_unit: optionalText(40),
   street_address: z.string().trim().min(1, "Street address is required.").max(160),
   suburb: z.string().trim().min(1, "Suburb is required.").max(80),
   landmark: optionalText(120),
@@ -138,15 +140,16 @@ export const businessSchema = z
       .regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers and hyphens"),
     business_type: z.enum(BUSINESS_TYPES),
     category: z.enum(BUSINESS_CATEGORIES),
+    subcategory: optionalText(80),
     description: z
       .string()
       .max(3000, "Description cannot exceed 3000 characters")
       .optional()
       .default(""),
 
-    // Location
-    location_province: z.string().min(1, "Province is required").max(50),
-    location_city: z.string().min(1, "City is required").max(80),
+    // Location (optional for online_only)
+    location_province: z.string().max(50).optional().default(""),
+    location_city: z.string().max(80).optional().default(""),
     location_town: z
       .string()
       .trim()
@@ -193,6 +196,7 @@ export const businessSchema = z
     services_offered: z.array(z.string().max(200)).max(30).optional().default([]),
     service_areas: serviceAreasSchema.optional(),
     business_details: businessDetailsSchema.nullable().optional(),
+    category_details: z.record(z.string(), z.unknown()).optional().default({}),
     operating_hours: z.record(z.string().max(20), z.unknown()).optional().default({}),
     payment_methods_accepted: z
       .array(z.enum(["cash", "card", "eft", "snapscan", "capitec_pay", "other"]))
@@ -206,6 +210,24 @@ export const businessSchema = z
     layout_template: z.enum(["cinematic", "showcase", "professional"]).nullable().optional(),
   })
   .superRefine((data, ctx) => {
+    // Province + city required for all types except online_only
+    if (data.business_type !== "online_only") {
+      if (!data.location_province?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Province is required.",
+          path: ["location_province"],
+        });
+      }
+      if (!data.location_city?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "City is required.",
+          path: ["location_city"],
+        });
+      }
+    }
+
     if (data.business_type === "mall_store" && !data.store_number?.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

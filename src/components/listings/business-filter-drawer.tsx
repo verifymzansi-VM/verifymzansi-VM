@@ -41,6 +41,7 @@ export function BusinessFilterDrawer() {
   const activeFilterCount = [
     filters.query,
     filters.businessCategory,
+    filters.businessSubcategory,
     filters.businessType,
     filters.province,
     filters.city,
@@ -72,6 +73,17 @@ export function BusinessFilterDrawer() {
       key: "category",
       label: catLabel,
       onRemove: () => setFilter("businessCategory", undefined),
+    });
+  }
+  if (filters.businessSubcategory) {
+    const catDef = BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory);
+    const subLabel =
+      catDef?.subcategories.find((s) => s.value === filters.businessSubcategory)?.label ||
+      String(filters.businessSubcategory).replace(/_/g, " ");
+    activeChips.push({
+      key: "subcategory",
+      label: subLabel,
+      onRemove: () => setFilter("businessSubcategory", undefined),
     });
   }
   if (filters.businessType) {
@@ -188,6 +200,36 @@ export function BusinessFilterDrawer() {
               ))}
             </select>
           </div>
+
+          {/* Subcategory (cascading from category) */}
+          {filters.businessCategory &&
+            (() => {
+              const catDef = BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory);
+              const subs = catDef?.subcategories ?? [];
+              if (subs.length === 0) return null;
+              return (
+                <div className="space-y-1.5">
+                  <Label htmlFor="drawer-business-subcategory">Subcategory</Label>
+                  <select
+                    id="drawer-business-subcategory"
+                    aria-label="Subcategory"
+                    className={selectClassName}
+                    value={filters.businessSubcategory || ""}
+                    disabled={!isInteractive}
+                    onChange={(event) =>
+                      setFilter("businessSubcategory", event.target.value || undefined)
+                    }
+                  >
+                    <option value="">All subcategories</option>
+                    {subs.map((sub) => (
+                      <option key={sub.value} value={sub.value}>
+                        {sub.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })()}
 
           {/* Business Type */}
           <div className="space-y-1.5">

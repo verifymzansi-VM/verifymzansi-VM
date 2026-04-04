@@ -301,7 +301,12 @@ export function PromotionDetailContent({
       {/* ═══ HERO: Immersive video/photo — portrait on mobile ═══ */}
       {activeMedia && (
         <div className="-mx-4 overflow-hidden rounded-2xl sm:-mx-0">
-          <div className="relative aspect-[4/5] overflow-hidden bg-black sm:aspect-[16/9] md:aspect-[2/1]">
+          <div
+            className={cn(
+              "relative overflow-hidden bg-black",
+              activeMedia.kind === "video" && "aspect-[4/5] sm:aspect-[16/9] md:aspect-[2/1]"
+            )}
+          >
             {activeMedia.kind === "video" ? (
               <>
                 <video
@@ -373,15 +378,16 @@ export function PromotionDetailContent({
             ) : (
               <button
                 type="button"
-                className="relative w-full h-full cursor-zoom-in"
+                className="relative w-full cursor-zoom-in"
                 onClick={() => openLightbox(activeMediaIndex)}
                 aria-label={`View ${promotion.title} photo fullscreen`}
               >
                 <Image
                   src={normalizeMediaUrl(activeMedia.url)}
                   alt={promotion.title}
-                  fill
-                  className="object-cover"
+                  width={0}
+                  height={0}
+                  className="w-full h-auto max-h-[80vh]"
                   sizes="100vw"
                   priority
                 />

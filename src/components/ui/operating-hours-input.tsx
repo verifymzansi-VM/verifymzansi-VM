@@ -80,8 +80,16 @@ export function OperatingHoursInput({
 
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={`${id}-open`} className="text-xs text-muted-foreground">
+      <Label
+        htmlFor={`${id}-open`}
+        className={cn("text-xs text-muted-foreground", closed && "line-through opacity-60")}
+      >
         {label}
+        {closed && (
+          <span className="ml-1.5 no-underline text-xs font-normal text-destructive/70">
+            Closed
+          </span>
+        )}
       </Label>
 
       {!hideClosed && (

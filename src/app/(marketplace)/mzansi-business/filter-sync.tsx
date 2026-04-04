@@ -26,6 +26,7 @@ export function MzansiBusinessFilterSync() {
       {
         query: parsed.query,
         businessCategory: parsed.businessCategory,
+        businessSubcategory: parsed.businessSubcategory,
         businessType: parsed.businessType,
         province: parsed.province,
         city: parsed.city,
@@ -43,6 +44,7 @@ export function MzansiBusinessFilterSync() {
       {
         query: filters.query,
         businessCategory: filters.businessCategory,
+        businessSubcategory: filters.businessSubcategory,
         businessType: filters.businessType,
         province: filters.province,
         city: filters.city,

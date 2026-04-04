@@ -61,6 +61,7 @@ const businessesQuerySchema = z.object({
   mine: createBooleanFlagSchema(false),
   type: optionalTrimmedStringSchema,
   category: optionalTrimmedStringSchema,
+  subcategory: optionalTrimmedStringSchema,
   province: optionalTrimmedStringSchema,
   city: optionalTrimmedStringSchema,
   q: optionalTrimmedStringSchema,
@@ -444,6 +445,7 @@ export async function GET(request: NextRequest) {
     const query = parsedQuery.data;
     const businessType = query.type ? normalizeBusinessTypeParam(query.type) : undefined;
     const category = query.category ? normalizeBusinessCategoryParam(query.category) : undefined;
+    const subcategory = query.subcategory || undefined;
 
     if (query.type && !businessType) {
       return NextResponse.json({ error: "Invalid business type" }, { status: 400 });
@@ -562,35 +564,35 @@ export async function GET(request: NextRequest) {
     const selectAttempts = [
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
+          "id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
           ownerColumn
         ),
         omittedFields: [] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
+          "id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at",
           ownerColumn
         ),
         omittedFields: ["gallery_photos"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
+          "id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
           ownerColumn
         ),
         omittedFields: ["business_details"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
+          "id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at",
           ownerColumn
         ),
         omittedFields: ["gallery_photos", "business_details"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, description, category, logo_url, cover_photo, cover_video, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, created_at",
+          "id, owner_id, business_type, business_name, description, category, subcategory, logo_url, cover_photo, cover_video, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, created_at",
           ownerColumn
         ),
         omittedFields: [
@@ -617,6 +619,9 @@ export async function GET(request: NextRequest) {
       if (category) {
         query = query.eq("category", category);
       }
+      if (subcategory) {
+        query = query.eq("subcategory", subcategory);
+      }
       if (province) {
         query = query.eq("location_province", province);
       }
@@ -634,7 +639,9 @@ export async function GET(request: NextRequest) {
           .replace(/%/g, "\\%")
           .replace(/_/g, "\\_");
         if (safeSearch) {
-          query = query.or(`business_name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
+          query = query.or(
+            `business_name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,subcategory.ilike.%${safeSearch}%`
+          );
         }
       }
 

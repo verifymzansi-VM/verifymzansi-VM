@@ -27,6 +27,7 @@ interface BusinessRow {
   location_province: string;
   location_city: string;
   category: BusinessCategory;
+  subcategory: string | null;
   boost_until: string | null;
   featured_until: string | null;
   service_areas: Record<string, unknown> | null;
@@ -66,6 +67,10 @@ export function MzansiBusinessGrid() {
 
       if (filters.businessCategory) {
         params.set("category", filters.businessCategory);
+      }
+
+      if (filters.businessSubcategory) {
+        params.set("subcategory", filters.businessSubcategory);
       }
 
       if (filters.query) {
@@ -124,6 +129,7 @@ export function MzansiBusinessGrid() {
     },
     [
       filters.businessCategory,
+      filters.businessSubcategory,
       filters.businessType,
       filters.query,
       filters.province,
@@ -141,6 +147,7 @@ export function MzansiBusinessGrid() {
 
   const activeFilterCount = [
     filters.businessCategory,
+    filters.businessSubcategory,
     filters.businessType,
     filters.query,
     filters.province,
@@ -255,6 +262,7 @@ export function MzansiBusinessGrid() {
               province={business.location_province}
               city={business.location_city}
               category={business.category}
+              subcategory={business.subcategory}
               boostUntil={business.boost_until}
               featuredUntil={business.featured_until}
               serviceAreas={business.service_areas}

@@ -87,13 +87,17 @@ describe("BusinessCard", () => {
     render(
       <BusinessCard
         {...defaultProps}
+        category="fashion_accessories"
+        subcategory="clothing_store"
         description="Tailored clothing and occasionwear"
         featuredUntil="2099-01-02T00:00:00.000Z"
       />
     );
 
     expect(screen.getByText("Nomsa Fashion")).toBeTruthy();
-    expect(screen.getByText(/Tailored clothing/i)).toBeTruthy();
+    // Card shows subcategory label + business type label
+    expect(screen.getByText(/Clothing Store/i)).toBeTruthy();
+    expect(screen.getByText(/Own Premises/i)).toBeTruthy();
     expect(screen.getByText(/Johannesburg/i)).toBeTruthy();
     expect(screen.getByText("Featured")).toBeTruthy();
   });

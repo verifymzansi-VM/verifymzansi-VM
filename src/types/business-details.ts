@@ -29,6 +29,8 @@ export interface StandaloneShopBusinessDetails {
   suburb?: string;
   landmark?: string;
   walk_in_policy?: WalkInPolicy;
+  building_name?: string;
+  suite_or_unit?: string;
 }
 
 export interface HomeBusinessDetails {

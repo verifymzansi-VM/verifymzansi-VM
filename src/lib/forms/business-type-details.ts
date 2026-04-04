@@ -146,9 +146,21 @@ export const BUSINESS_DETAILS_SECTIONS: Record<BusinessType, BusinessDetailsSect
     ],
   },
   standalone_shop: {
-    title: "Standalone Shop Details",
+    title: "Own Premises Details",
     description: "Show the exact location and what customers should expect when arriving.",
     fields: [
+      {
+        name: "building_name",
+        label: "Building / complex name",
+        kind: "text",
+        placeholder: "e.g. Braamfontein Centre (leave blank if none)",
+      },
+      {
+        name: "suite_or_unit",
+        label: "Suite / unit number",
+        kind: "text",
+        placeholder: "e.g. Suite 204",
+      },
       {
         name: "street_address",
         label: "Street address",
@@ -315,7 +327,15 @@ export function getDefaultBusinessDetails(type: BusinessType): BusinessDetails {
         parking_notes: "",
       };
     case "standalone_shop":
-      return { type, street_address: "", suburb: "", landmark: "", walk_in_policy: undefined };
+      return {
+        type,
+        building_name: "",
+        suite_or_unit: "",
+        street_address: "",
+        suburb: "",
+        landmark: "",
+        walk_in_policy: undefined,
+      };
     case "home_business":
       return {
         type,

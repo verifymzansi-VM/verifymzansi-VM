@@ -39,7 +39,7 @@ type BusinessDetailOwnerRecord = BusinessDetailRecord & {
 };
 
 const BUSINESS_DETAIL_SELECT = `
-  id, owner_id, business_type, business_name, slug, description, category,
+  id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
   location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
@@ -48,7 +48,7 @@ const BUSINESS_DETAIL_SELECT = `
 `;
 
 const BUSINESS_DETAIL_SELECT_LEGACY = `
-  id, owner_id, business_type, business_name, slug, description, category,
+  id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
   location_city, store_number, map_directions, phone, whatsapp, email, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,

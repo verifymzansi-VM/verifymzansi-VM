@@ -74,6 +74,8 @@ export interface BusinessDraftData {
   slugManual: boolean;
   description: string;
   category: string;
+  subcategory?: string;
+  categoryDetails?: Record<string, unknown>;
   province: string;
   city: string;
   locationTown: string;

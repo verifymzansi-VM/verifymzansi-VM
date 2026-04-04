@@ -145,6 +145,7 @@ export interface MarketFiltersFromParams {
 export interface BusinessFiltersFromParams {
   query?: string;
   businessCategory?: BusinessCategory;
+  businessSubcategory?: string;
   businessType?: BusinessType;
   province?: string;
   city?: string;
@@ -187,6 +188,7 @@ export function parseBusinessFiltersFromSearchParams(
   return {
     query: normalizeMarketplaceQueryParam(searchParams.get("q")),
     businessCategory: normalizeBusinessCategoryParam(searchParams.get("category")),
+    businessSubcategory: normalizeParamValue(searchParams.get("subcategory")),
     businessType: normalizeBusinessTypeParam(searchParams.get("type")),
     province: normalizeParamValue(searchParams.get("province")),
     city: normalizeParamValue(searchParams.get("city")),
@@ -209,6 +211,7 @@ export interface MarketFiltersForUrl {
 export interface BusinessFiltersForUrl {
   query?: string;
   businessCategory?: string;
+  businessSubcategory?: string;
   businessType?: string;
   province?: string;
   city?: string;
@@ -258,6 +261,7 @@ export function serializeBusinessFiltersToSearchParams(
 
   appendIfPresent(params, "q", filters.query);
   appendIfPresent(params, "category", filters.businessCategory);
+  appendIfPresent(params, "subcategory", filters.businessSubcategory);
   appendIfPresent(params, "type", filters.businessType);
   appendIfPresent(params, "province", filters.province);
   appendIfPresent(params, "city", filters.city);

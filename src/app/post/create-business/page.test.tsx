@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreateBusinessPage from "./page";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 
 type MockAuthState = {
   user: { id: string; email?: string | null } | null;
@@ -141,9 +142,9 @@ describe("CreateBusinessPage", () => {
     fireEvent.change(screen.getByLabelText(/URL Slug/i), {
       target: { value: slug },
     });
-    fireEvent.change(screen.getByLabelText("Category"), {
-      target: { value: category },
-    });
+    const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
+    if (!catDef) throw new Error(`Unknown test category: ${category}`);
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(catDef.label, "i") }));
   }
 
   function fillStandaloneStepOneDetails() {
@@ -165,7 +166,7 @@ describe("CreateBusinessPage", () => {
   }
 
   async function completeStandaloneStepOne() {
-    await selectBusinessType(/Standalone Shop/i);
+    await selectBusinessType(/Own Premises/i);
     fillCoreBusinessFields();
     fillStandaloneStepOneDetails();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -189,7 +190,7 @@ describe("CreateBusinessPage", () => {
 
   it.each([
     [/Mall Store/i, /Store Number/i],
-    [/Standalone Shop/i, /Street address/i],
+    [/Own Premises/i, /Street address/i],
     [/Home Business/i, /Service suburb/i],
     [/Mobile Service/i, /Service Areas/i],
     [/Online Only/i, /Primary order channel/i],
@@ -206,7 +207,7 @@ describe("CreateBusinessPage", () => {
   it("switching business types replaces fields and clears stale type-specific errors", async () => {
     render(<CreateBusinessPage />);
 
-    await selectBusinessType(/Standalone Shop/i);
+    await selectBusinessType(/Own Premises/i);
     fillCoreBusinessFields();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 

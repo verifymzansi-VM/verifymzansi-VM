@@ -2,6 +2,7 @@
 
 import { Store } from "lucide-react";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
+import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import type { TrustLevel, BusinessType, BusinessCategory } from "@/types/enums";
 
 interface BusinessCardProps {
@@ -18,6 +19,7 @@ interface BusinessCardProps {
   city: string;
   trustLevel?: TrustLevel;
   category?: BusinessCategory;
+  subcategory?: string | null;
   boostUntil?: string | null;
   featuredUntil?: string | null;
   serviceAreas?: Record<string, unknown> | null;
@@ -38,7 +40,36 @@ function getBusinessStatus(
   return null;
 }
 
-function buildBusinessDescription(description?: string): string | null {
+function buildBusinessDescription(
+  category?: BusinessCategory,
+  subcategory?: string | null,
+  businessType?: BusinessType,
+  description?: string
+): string | null {
+  const parts: string[] = [];
+
+  // Category label
+  if (category) {
+    const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
+    if (catDef) {
+      // If subcategory exists, show subcategory label (more specific); otherwise show category
+      if (subcategory) {
+        const subDef = catDef.subcategories.find((s) => s.value === subcategory);
+        if (subDef) parts.push(subDef.label);
+        else parts.push(catDef.label);
+      } else {
+        parts.push(catDef.label);
+      }
+    }
+  }
+
+  // Business type label
+  if (businessType) {
+    const typeDef = BUSINESS_TYPE_OPTIONS.find((t) => t.value === businessType);
+    if (typeDef) parts.push(typeDef.label);
+  }
+
+  if (parts.length > 0) return parts.join(" · ");
   if (description) return description;
   return null;
 }
@@ -46,7 +77,8 @@ function buildBusinessDescription(description?: string): string | null {
 export function BusinessCard({
   id,
   businessName,
-  description,
+  businessType,
+  description: _description,
   coverPhoto,
   coverVideo,
   videoThumbnail,
@@ -55,6 +87,8 @@ export function BusinessCard({
   province: _province,
   city,
   trustLevel = 0,
+  category,
+  subcategory,
   boostUntil,
   featuredUntil,
   videoDuration,
@@ -65,7 +99,12 @@ export function BusinessCard({
     (galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos[0] : null);
   const posterUrl = videoThumbnail || coverPhoto || galleryPhotos?.[0] || undefined;
   const status = getBusinessStatus(boostUntil, featuredUntil);
-  const cardDescription = buildBusinessDescription(description);
+  const cardDescription = buildBusinessDescription(
+    category,
+    subcategory,
+    businessType,
+    _description
+  );
 
   return (
     <PosterCardShell

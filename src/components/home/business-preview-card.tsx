@@ -2,6 +2,7 @@
 
 import { Store } from "lucide-react";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
+import { BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import type { BusinessType } from "@/types/enums";
 
 interface BusinessPreviewCardProps {
@@ -31,6 +32,9 @@ export function BusinessPreviewCard({
   featured: _featured,
   priority,
 }: BusinessPreviewCardProps) {
+  const typeLabel =
+    BUSINESS_TYPE_OPTIONS.find((t) => t.value === businessType)?.label || businessType;
+
   return (
     <PosterCardShell
       href={href}
@@ -38,7 +42,7 @@ export function BusinessPreviewCard({
       mediaUrl={imageUrl}
       posterUrl={posterUrl}
       mediaAlt={title}
-      description={businessType || null}
+      description={typeLabel || null}
       location={city || null}
       logoUrl={logoUrl}
       statusLabel={null}

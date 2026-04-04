@@ -45,6 +45,8 @@ import {
   PRIMARY_ORDER_CHANNEL_LABELS,
   WALK_IN_POLICY_LABELS,
 } from "@/lib/forms/business-type-details";
+import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import { getCategoryDetailFields } from "@/lib/forms/business-category-details";
 import type { BusinessDetails } from "@/types/business-details";
 
 const zarCurrency = new Intl.NumberFormat("en-ZA", {
@@ -61,6 +63,8 @@ export interface BusinessDetailRecord {
   status: string;
   business_type: string;
   category: string;
+  subcategory: string | null;
+  category_details: Record<string, unknown> | null;
   cover_photo: string | null;
   logo_url: string | null;
   cover_video: string | null;
@@ -601,6 +605,18 @@ export function BusinessDetailContent({
               <Badge variant="secondary" className="text-xs">
                 {BUSINESS_CATEGORY_LABELS[businessCategory]}
               </Badge>
+              {business.subcategory &&
+                (() => {
+                  const catDef = BUSINESS_CATEGORIES.find((c) => c.value === businessCategory);
+                  const subDef = catDef?.subcategories.find(
+                    (s) => s.value === business.subcategory
+                  );
+                  return subDef ? (
+                    <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
+                      {subDef.label}
+                    </Badge>
+                  ) : null;
+                })()}
               {business.store_number && business.store_number !== "N/A" && (
                 <span className="flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1 text-sm text-foreground">
                   <Store className="h-4 w-4 text-brand-blue" />
@@ -692,6 +708,45 @@ export function BusinessDetailContent({
               </CardContent>
             </Card>
           )}
+
+          {business.category_details &&
+            (() => {
+              const fields = getCategoryDetailFields(businessCategory);
+              const details = business.category_details;
+              const entries = fields
+                .map((f) => {
+                  const val = details[f.name];
+                  if (val === undefined || val === null || val === "" || val === false) return null;
+                  if (Array.isArray(val) && val.length === 0) return null;
+                  let display: string;
+                  if (typeof val === "boolean") display = "Yes";
+                  else if (Array.isArray(val)) display = val.join(", ");
+                  else display = String(val);
+                  return { label: f.label, display };
+                })
+                .filter(Boolean) as { label: string; display: string }[];
+              if (entries.length === 0) return null;
+              return (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                      Business Details
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                      {entries.map((e) => (
+                        <div key={e.label}>
+                          <dt className="text-muted-foreground">{e.label}</dt>
+                          <dd className="font-medium">{e.display}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
           {businessType === "mobile_service" && business.service_areas && (
             <Card className="border-brand-blue/30 bg-brand-blue/5">

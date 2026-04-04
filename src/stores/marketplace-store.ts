@@ -20,6 +20,7 @@ export interface MarketplaceFilters {
   /** Mzansi Business specific filters */
   businessType?: BusinessType;
   businessCategory?: BusinessCategory;
+  businessSubcategory?: string;
 }
 
 export function cloneMarketplaceFilters(
@@ -77,6 +78,10 @@ export const useMarketplaceStore = create<MarketplaceState>((set) => ({
       // Clear attribute filters when category changes
       if (key === "category") {
         next.attributes = {};
+      }
+      // Clear subcategory when business category changes
+      if (key === "businessCategory") {
+        next.businessSubcategory = undefined;
       }
       // Clear city when province changes
       if (key === "province") {
