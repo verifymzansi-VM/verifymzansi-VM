@@ -259,7 +259,7 @@ const config: Config = {
 
       /* ── Layout ───────────────────────────────────────── */
       maxWidth: {
-        container: "1440px",
+        container: "1600px",
       },
     },
   },

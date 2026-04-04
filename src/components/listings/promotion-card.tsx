@@ -83,34 +83,36 @@ function formatPromotionEyebrow(
   price: number | null,
   negotiable: boolean | undefined,
   promotionType: PromotionType,
-  startDate?: string | null
+  startDate?: string | null,
+  urgency?: string | null
 ) {
+  const parts: string[] = [];
+
   if (price != null && price > 0) {
     const formatted = formatZARShort(price);
-    return negotiable ? `${formatted} · Neg` : formatted;
-  }
-
-  if (startDate) {
+    parts.push(negotiable ? `${formatted} · Neg` : formatted);
+  } else if (startDate) {
     // "SAT 15 MAR" — includes day-of-week for better scannability
-    return new Intl.DateTimeFormat("en-ZA", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-    })
-      .format(new Date(startDate))
-      .toUpperCase();
+    parts.push(
+      new Intl.DateTimeFormat("en-ZA", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      })
+        .format(new Date(startDate))
+        .toUpperCase()
+    );
   }
 
-  return null;
+  if (urgency) parts.push(urgency);
+
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 /* ── Card description line ──────────────────────────────────────── */
 
-function buildDescription(businessName?: string, urgency?: string | null): string | null {
-  if (businessName && urgency) return `${businessName} · ${urgency}`;
-  if (urgency) return urgency;
-  if (businessName) return businessName;
-  return null;
+function buildDescription(businessName?: string): string | null {
+  return businessName || null;
 }
 
 /* ── Component ──────────────────────────────────────────────────── */
@@ -141,9 +143,9 @@ export const PromotionCard = memo(function PromotionCard({
 }: PromotionCardProps) {
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
   const status = getPromotionStatus(featured, boosted, promotionType);
-  const eyebrow = formatPromotionEyebrow(price, negotiable, promotionType, startDate);
   const urgency = getUrgencyLabel(endDate);
-  const description = buildDescription(businessName, urgency);
+  const eyebrow = formatPromotionEyebrow(price, negotiable, promotionType, startDate, urgency);
+  const description = buildDescription(businessName);
 
   return (
     <PosterCardShell

@@ -169,7 +169,7 @@ export async function HomePromotionsShowcase() {
           {items.map((item, index) => (
             <div
               key={item.kind === "tourism" ? `t-${item.data.id}` : `e-${item.data.id}`}
-              className="min-w-[280px] max-w-[320px] sm:min-w-[300px] sm:max-w-[320px]"
+              className="min-w-[300px] max-w-[380px] sm:min-w-[340px] sm:max-w-[380px]"
             >
               {item.kind === "tourism" ? (
                 <BusinessPreviewCard
