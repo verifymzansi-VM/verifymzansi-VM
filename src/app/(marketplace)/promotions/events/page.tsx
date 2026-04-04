@@ -161,7 +161,7 @@ export default async function EventsPage() {
   const monthGroups = groupByMonth(upcoming);
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-6 max-w-7xl">
+    <div className="container-page py-8 space-y-6">
       <PageHeader
         title="Events"
         description="Upcoming events from verified businesses."

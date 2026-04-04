@@ -134,7 +134,7 @@ export default async function MzansiMarketPage() {
       <TrustStrip variant="green" />
 
       {/* ── Main Content ─────────────────────────────────── */}
-      <div className="container-page py-6 space-y-4">
+      <div className="container-page py-8 space-y-6">
         <PageHeader
           title="Browse Listings"
           description="Verified classifieds from South African sellers, with filters for price, condition, and location."

@@ -317,7 +317,7 @@ export function PromotionsExplorer() {
     : promotions;
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-5 max-w-7xl">
+    <div className="container-page py-8 space-y-6">
       <PageHeader
         title="Promotions & Events"
         description="Deals, promotions, launches, and events from verified South African businesses and members."

@@ -143,7 +143,7 @@ export default async function MzansiBusinessPage() {
       <TrustStrip variant="blue" />
 
       {/* ── Main Content ─────────────────────────────────── */}
-      <div className="container-page py-4 sm:py-6 space-y-4">
+      <div className="container-page py-8 space-y-6">
         <PageHeader
           title="Mzansi Business"
           description="Browse verified South African businesses, build visibility for your brand, and help customers discover trusted services."
