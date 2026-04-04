@@ -55,6 +55,7 @@ const BUSINESS_SELECT_FALLBACK_FIELDS = [
   "published_at",
   "video_thumbnail",
   "slug",
+  "subcategory",
 ] as const;
 const businessesQuerySchema = z.object({
   categories_only: createBooleanFlagSchema(false),
@@ -86,6 +87,7 @@ function normalizeBusinessSelectShape(
     ...business,
     gallery_photos: business.gallery_photos ?? null,
     business_details: business.business_details ?? null,
+    subcategory: business.subcategory ?? null,
   }));
 }
 
@@ -604,6 +606,21 @@ export async function GET(request: NextRequest) {
           "slug",
         ] as const,
       },
+      {
+        select: withOwnerColumn(
+          "id, owner_id, business_type, business_name, description, category, logo_url, cover_photo, cover_video, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, created_at",
+          ownerColumn
+        ),
+        omittedFields: [
+          "gallery_photos",
+          "business_details",
+          "featured_until",
+          "published_at",
+          "video_thumbnail",
+          "slug",
+          "subcategory",
+        ] as const,
+      },
     ] as const;
 
     const buildQuery = (selectClause: string) => {
@@ -619,7 +636,7 @@ export async function GET(request: NextRequest) {
       if (category) {
         query = query.eq("category", category);
       }
-      if (subcategory) {
+      if (subcategory && selectClause.includes("subcategory")) {
         query = query.eq("subcategory", subcategory);
       }
       if (province) {
@@ -639,9 +656,14 @@ export async function GET(request: NextRequest) {
           .replace(/%/g, "\\%")
           .replace(/_/g, "\\_");
         if (safeSearch) {
-          query = query.or(
-            `business_name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,subcategory.ilike.%${safeSearch}%`
-          );
+          const searchFields = [
+            `business_name.ilike.%${safeSearch}%`,
+            `description.ilike.%${safeSearch}%`,
+          ];
+          if (selectClause.includes("subcategory")) {
+            searchFields.push(`subcategory.ilike.%${safeSearch}%`);
+          }
+          query = query.or(searchFields.join(","));
         }
       }
 
