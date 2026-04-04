@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import { Volume2, VolumeX, Maximize2, Play, Pause, AlertTriangle } from "lucide-react";
+import { Volume2, VolumeX, Play, Pause, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useHoverCapability } from "@/hooks/use-hover-capability";
@@ -331,7 +331,7 @@ function VideoCardPlayerInner({
   mediaFitClassName,
   mode,
   priority,
-  canHover,
+  canHover: _canHover,
   fitStrategy,
   containerAspectRatio,
   muteControlVisibility,
@@ -347,16 +347,16 @@ function VideoCardPlayerInner({
     getInitialAmbientPlaybackPaused(mode, showPlaybackControl)
   );
   const [hasActivatedPlayback, setHasActivatedPlayback] = useState(false);
+  const [tapIndicator, setTapIndicator] = useState<{
+    key: number;
+    action: "play" | "pause";
+  } | null>(null);
   const shouldAutoplay = !isPlaybackPaused;
   const { videoRef, reducedMotion } = useVideoVisibility(
     isVideo ? normalizedSrc : undefined,
     shouldAutoplay
   );
-  const {
-    isMuted,
-    toggleMute: globalToggleMute,
-    setMuted: globalSetMuted,
-  } = useGlobalMute(videoRef);
+  const { isMuted, toggleMute: globalToggleMute } = useGlobalMute(videoRef);
   const [videoReady, setVideoReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -455,27 +455,13 @@ function VideoCardPlayerInner({
         videoRef.current.play().catch(() => {
           /* autoplay may still be blocked */
         });
-      }
-
-      videoRef.current.muted = false;
-      globalSetMuted(false);
-
-      try {
-        if (videoRef.current.requestFullscreen) {
-          videoRef.current.requestFullscreen();
-        } else if (
-          (videoRef.current as HTMLVideoElement & { webkitEnterFullscreen?: () => void })
-            .webkitEnterFullscreen
-        ) {
-          (
-            videoRef.current as HTMLVideoElement & { webkitEnterFullscreen?: () => void }
-          ).webkitEnterFullscreen?.();
-        }
-      } catch {
-        /* fullscreen not supported */
+        setTapIndicator({ key: Date.now(), action: "play" });
+      } else {
+        videoRef.current.pause();
+        setTapIndicator({ key: Date.now(), action: "pause" });
       }
     },
-    [videoRef, globalSetMuted]
+    [videoRef]
   );
 
   const handleVideoKeyDown = useCallback(
@@ -644,20 +630,32 @@ function VideoCardPlayerInner({
 
         {showMuteControl ? <MuteButton isMuted={isMuted} onToggle={toggleMute} /> : null}
         {showPlaybackToggle ? (
-          <div className="absolute bottom-3 left-3 z-[8]">
-            <button
-              type="button"
-              onClick={togglePlayback}
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/70"
+          <>
+            <div
+              role="button"
+              tabIndex={0}
+              className="absolute inset-0 z-[8] cursor-pointer"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const nextAction = isPlaybackPaused ? "play" : "pause";
+                togglePlayback(e);
+                setTapIndicator({ key: Date.now(), action: nextAction });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  const nextAction = isPlaybackPaused ? "play" : "pause";
+                  togglePlayback(e);
+                  setTapIndicator({ key: Date.now(), action: nextAction });
+                }
+              }}
               aria-label={isPlaybackPaused ? "Play video" : "Pause video"}
-            >
-              {isPlaybackPaused ? (
-                <Play className="h-4 w-4 fill-white" />
-              ) : (
-                <Pause className="h-4 w-4 fill-white" />
-              )}
-            </button>
-          </div>
+            />
+            {tapIndicator ? (
+              <FeedTapIndicator key={tapIndicator.key} action={tapIndicator.action} />
+            ) : null}
+          </>
         ) : null}
       </div>
     );
@@ -745,59 +743,31 @@ function VideoCardPlayerInner({
       )}
 
       {!hasError && !reducedMotion ? (
-        canHover ? (
-          <div
-            className="absolute inset-0 z-10 hidden cursor-pointer flex-col justify-between bg-black/18 p-2 opacity-0 transition-opacity duration-300 group-hover/video:flex group-hover/video:opacity-100"
-            onClick={handleVideoClick}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                handleVideoClick(e as unknown as React.MouseEvent);
-              }
-            }}
-            role="button"
-            tabIndex={0}
-            aria-label="Toggle video playback"
-          >
-            <div />
-            <div className="flex items-center justify-center flex-1">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110">
-                <Maximize2 className="h-5 w-5" />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="absolute inset-0 z-10 flex flex-col justify-between bg-black/16 p-2">
-            <div />
-            <div className="flex items-center justify-center flex-1">
-              <button
-                type="button"
-                onClick={handleVideoClick}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
-                aria-label="Enter fullscreen"
-              >
-                <Maximize2 className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-        )
+        <div
+          role="button"
+          tabIndex={0}
+          className="absolute inset-0 z-10 cursor-pointer"
+          onClick={handleVideoClick}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleVideoClick(e as unknown as React.MouseEvent);
+            }
+          }}
+          aria-label={isPlaying ? "Pause video" : "Play video"}
+        />
       ) : null}
 
-      {!hasError && !reducedMotion ? (
-        <div
-          className={cn(
-            "pointer-events-none absolute inset-0 z-[5] flex items-center justify-center transition-opacity duration-300",
-            canHover ? "opacity-100 group-hover/video:opacity-0" : "opacity-100"
-          )}
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white shadow-lg backdrop-blur-sm">
-            {canHover ? (
-              <Play className="h-5 w-5 fill-white pr-0.5" />
-            ) : (
-              <Maximize2 className="h-5 w-5" />
-            )}
+      {!hasError && !reducedMotion && !isPlaying ? (
+        <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg backdrop-blur-md">
+            <Play className="h-6 w-6 fill-white pl-0.5" />
           </div>
         </div>
+      ) : null}
+
+      {tapIndicator ? (
+        <FeedTapIndicator key={tapIndicator.key} action={tapIndicator.action} />
       ) : null}
     </div>
   );
