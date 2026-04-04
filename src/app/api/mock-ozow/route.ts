@@ -42,7 +42,11 @@ function isSafeUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     const allowedHosts = ["verifymzansi.com", "www.verifymzansi.com"];
-    if (process.env.NODE_ENV !== "production") {
+    const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
+    const allowLocalE2eHosts =
+      process.env.NODE_ENV !== "production" || runtimeMode === "e2e" || isPlaywrightTestMode();
+
+    if (allowLocalE2eHosts) {
       allowedHosts.push("localhost", "127.0.0.1");
     }
     if (allowedHosts.includes(parsed.hostname)) {

@@ -19,10 +19,16 @@ vi.mock("@/lib/utils/logger", () => ({
 import { POST } from "@/app/api/verify-buyer/route";
 
 function createRequest(body: unknown): NextRequest {
+  const headers = new Headers({
+    origin: "http://localhost:3000",
+    "sec-fetch-site": "same-origin",
+  });
+
   return {
     method: "POST",
     json: async () => body,
-    headers: { get: vi.fn().mockReturnValue(null) },
+    headers,
+    url: "http://localhost:3000/api/verify-buyer",
     nextUrl: new URL("http://localhost:3000/api/verify-buyer"),
   } as unknown as NextRequest;
 }
@@ -128,6 +134,19 @@ describe("POST /api/verify-buyer", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       result: "expired",
+    });
+  });
+
+  it("rejects cross-site verification requests", async () => {
+    const request = createRequest({ token: "00000000-0000-4000-8000-000000000001" });
+    request.headers.set("origin", "https://evil.example");
+    request.headers.set("sec-fetch-site", "cross-site");
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Cross-site requests are not allowed",
     });
   });
 });

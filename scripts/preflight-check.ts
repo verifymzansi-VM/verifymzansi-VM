@@ -18,6 +18,9 @@ type CheckResult = {
 };
 
 const results: CheckResult[] = [];
+const SUPABASE_SCHEMA_TIMEOUT_MS = 12_000;
+const R2_HEAD_BUCKET_TIMEOUT_MS = 10_000;
+const R2_HEAD_BUCKET_MAX_ATTEMPTS = 3;
 
 function parseModeArg(argv: string[]): LaunchValidationMode | undefined {
   const modeArg = argv.find((arg) => arg.startsWith("--mode="));
@@ -45,6 +48,49 @@ function requireEnv(name: string): string {
 
 function optionalEnv(name: string): string | undefined {
   return process.env[name] || undefined;
+}
+
+export async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+}
+
+export async function retryWithBackoff<T>(
+  task: (attempt: number) => Promise<T>,
+  options: { maxAttempts: number; baseDelayMs: number }
+): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= options.maxAttempts; attempt++) {
+    try {
+      return await task(attempt);
+    } catch (error) {
+      lastError = error;
+      if (attempt === options.maxAttempts) {
+        break;
+      }
+      const delayMs = options.baseDelayMs * attempt;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Unknown retry failure");
 }
 
 const SUPABASE_CONNECTIVITY_ERROR_PATTERN =
@@ -121,10 +167,14 @@ export function classifyOzowPreflightCheck({
 
 async function checkSupabaseSchema(mode: LaunchValidationMode): Promise<void> {
   try {
-    const result = await verifySupabaseSchema({
-      url: requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
-      serviceRoleKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    });
+    const result = await withTimeout(
+      verifySupabaseSchema({
+        url: requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
+        serviceRoleKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
+      }),
+      SUPABASE_SCHEMA_TIMEOUT_MS,
+      "Supabase schema verification"
+    );
 
     if (result.ok) {
       addResult("Supabase schema", "pass", "Required public tables are queryable");
@@ -172,10 +222,22 @@ async function checkR2Access(mode: LaunchValidationMode): Promise<void> {
       },
     });
 
-    await client.send(
-      new HeadBucketCommand({
-        Bucket: bucket,
-      })
+    await retryWithBackoff(
+      async () => {
+        await withTimeout(
+          client.send(
+            new HeadBucketCommand({
+              Bucket: bucket,
+            })
+          ),
+          R2_HEAD_BUCKET_TIMEOUT_MS,
+          "R2 head bucket check"
+        );
+      },
+      {
+        maxAttempts: R2_HEAD_BUCKET_MAX_ATTEMPTS,
+        baseDelayMs: 500,
+      }
     );
 
     addResult(

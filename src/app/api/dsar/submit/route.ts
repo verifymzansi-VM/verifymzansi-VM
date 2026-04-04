@@ -10,6 +10,7 @@ import { maskIdNumber } from "@/lib/utils/mask";
 import { getClientIp, checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const log = createLogger("DSAR");
 const dsarSubmitSchema = dsarRequestSchema.extend({
@@ -24,6 +25,11 @@ const dsarSubmitSchema = dsarRequestSchema.extend({
  */
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) {
+      return originBlock;
+    }
+
     const clientIp = getClientIp(request) || "unknown";
     const rl = checkLocalRateLimit(clientIp, "dsar:submit");
     if (rl.limited) {

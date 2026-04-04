@@ -52,4 +52,20 @@ describe("GET /api/mock-ozow", () => {
     expect(localhostRes.headers.get("location")).toBe("http://localhost:3100/billing/success");
     expect(loopbackRes.headers.get("location")).toBe("http://127.0.0.1:3100/billing/success");
   });
+
+  it("accepts loopback return urls in e2e mode even when NODE_ENV=production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERIFYMZANSI_RUNTIME_MODE", "e2e");
+    vi.stubEnv("PLAYWRIGHT_TEST_MODE", "1");
+    vi.stubEnv("NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE", "1");
+    document.documentElement.dataset.playwright = "1";
+
+    const res = await GET(
+      new Request("http://localhost/api/mock-ozow?returnUrl=http://127.0.0.1:3100/billing/success")
+    );
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("http://127.0.0.1:3100/billing/success");
+    delete document.documentElement.dataset.playwright;
+  });
 });

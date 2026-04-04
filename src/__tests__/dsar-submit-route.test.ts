@@ -18,15 +18,16 @@ vi.mock("@/lib/services/email", () => ({
 import { POST } from "@/app/api/dsar/submit/route";
 
 function createRequest(body: unknown) {
+  const headers = new Headers({
+    origin: "http://localhost:3000",
+    "sec-fetch-site": "same-origin",
+  });
+
   return {
     method: "POST",
     json: async () => body,
     url: "http://localhost:3000/api/dsar/submit",
-    headers: {
-      get() {
-        return null;
-      },
-    },
+    headers,
   } as unknown as NextRequest;
 }
 
@@ -84,5 +85,25 @@ describe("POST /api/dsar/submit", () => {
       expect.stringContaining("DSAR-"),
       expect.any(String)
     );
+  });
+
+  it("rejects cross-site DSAR submissions", async () => {
+    const req = createRequest({
+      type: "access",
+      name: "Nomsa Dlamini",
+      email: "nomsa@example.com",
+      details: "Please send me a copy of my stored account data.",
+      turnstileToken: "tok",
+    });
+
+    req.headers.set("origin", "https://evil.example");
+    req.headers.set("sec-fetch-site", "cross-site");
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "Cross-site requests are not allowed",
+    });
   });
 });

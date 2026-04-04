@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   classifyOzowPreflightCheck,
   classifySupabaseSchemaPreflightError,
+  retryWithBackoff,
+  withTimeout,
 } from "../../scripts/preflight-check";
 
 describe("preflight-check", () => {
@@ -62,5 +64,41 @@ describe("preflight-check", () => {
 
     expect(result.status).toBe("pass");
     expect(result.detail).toContain("site-code");
+  });
+
+  it("resolves withTimeout when promise settles before deadline", async () => {
+    await expect(withTimeout(Promise.resolve("ok"), 50, "fast-check")).resolves.toBe("ok");
+  });
+
+  it("rejects withTimeout when promise exceeds deadline", async () => {
+    const never = new Promise<string>(() => {
+      // Intentionally unresolved
+    });
+
+    await expect(withTimeout(never, 20, "slow-check")).rejects.toThrow(
+      "slow-check timed out after 20ms"
+    );
+  });
+
+  it("retries with backoff and eventually succeeds", async () => {
+    const task = vi
+      .fn<(attempt: number) => Promise<string>>()
+      .mockRejectedValueOnce(new Error("attempt-1"))
+      .mockResolvedValueOnce("done");
+
+    await expect(retryWithBackoff(task, { maxAttempts: 2, baseDelayMs: 1 })).resolves.toBe("done");
+    expect(task).toHaveBeenNthCalledWith(1, 1);
+    expect(task).toHaveBeenNthCalledWith(2, 2);
+  });
+
+  it("throws after exhausting retryWithBackoff attempts", async () => {
+    const task = vi
+      .fn<(attempt: number) => Promise<string>>()
+      .mockRejectedValue(new Error("still failing"));
+
+    await expect(retryWithBackoff(task, { maxAttempts: 2, baseDelayMs: 1 })).rejects.toThrow(
+      "still failing"
+    );
+    expect(task).toHaveBeenCalledTimes(2);
   });
 });

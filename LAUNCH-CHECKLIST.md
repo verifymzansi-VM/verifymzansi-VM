@@ -34,6 +34,17 @@ pnpm validate:launch-env
 pnpm preflight:prod
 ```
 
+Failure triage map:
+
+- `pnpm validate:launch-env` failure: fix missing or placeholder secrets first
+  (`KYC_WEBHOOK_SECRET`, `OZOW_*`, `AFRICASTALKING_SENDER_ID`, `RESEND_API_KEY`,
+  Turnstile keys).
+- `pnpm preflight:prod` failure: inspect whether failure is config
+  (`Launch env`, `Production secrets`, `Ozow`) or connectivity
+  (`Supabase schema`, `R2`) before retrying.
+- `pnpm test:launch:flows` failure: prioritize billing roundtrip and DSAR flow
+  regressions before non-critical e2e suites.
+
 ## 2. Production Env Contract
 
 These values must be present and valid in both GitHub Actions secrets and the
@@ -134,6 +145,8 @@ ext4-backed workspace. Native Windows remains unsupported.
       cross-origin requests (403)
 - [ ] POST `/api/businesses/[id]/boost` rejects cross-origin requests (403)
 - [ ] PUT+DELETE `/api/promotions/[id]` reject cross-origin requests (403)
+- [x] POST `/api/dsar/submit` rejects cross-origin requests (403)
+- [x] POST `/api/verify-buyer` rejects cross-origin requests (403)
 - [x] Admin evidence desk fetches artifacts via POST body (not GET query params)
 - [x] Admin Evidence Desk navigation uses clean URL (no stepId/userId query
       params)
@@ -143,7 +156,7 @@ ext4-backed workspace. Native Windows remains unsupported.
       normal flows
 - [ ] Full inventory: `docs/sensitive-calls-inventory.md`
 
-## 6. Release Decision
+## 7. Release Decision
 
 Call the release launch-ready only when:
 
@@ -152,7 +165,7 @@ Call the release launch-ready only when:
 - Any required deep-lane checks for the change set pass
 - The production deploy workflow completes without degraded health output
 
-## 7. Why Startup Fails
+## 8. Why Startup Fails
 
 The most common launch blockers are:
 
@@ -169,13 +182,13 @@ The most common launch blockers are:
   hard-blocks when these are detected — generate real keys with:
   `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
-## 8. Startup Strictness
+## 9. Startup Strictness
 
 By default, production env validation failures are non-fatal (availability-first
 approach). To enable fail-closed startup behavior — blocking the entire worker
 on any env validation error — set:
 
-```
+```bash
 STRICT_ENV_STARTUP_BLOCK=1
 ```
 

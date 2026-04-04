@@ -1,5 +1,31 @@
 # VerifyMzansi — Recent Development Log
 
+## Launch Hardening Continuation (2026-04-04)
+
+- **Launch validation tightened:** `KYC_WEBHOOK_SECRET` is now required in
+  production launch validation and production secret placeholder checks to
+  prevent unsigned KYC webhook operation at deploy time.
+- **Preflight resilience hardening:** Added bounded timeout for Supabase schema
+  probe and retry/backoff for transient R2 head-bucket failures in
+  `scripts/preflight-check.ts`.
+- **DSAR intake CSRF-surface reduction:** Added same-origin mutation enforcement
+  to `POST /api/dsar/submit` while preserving anonymous DSAR submission
+  behavior.
+- **Buyer verification probing reduction:** Added same-origin mutation
+  enforcement to `POST /api/verify-buyer` to block cross-site token probing.
+- **Launch-flow e2e stabilization:** Updated `GET /api/mock-ozow` safe return
+  URL logic to allow loopback hosts in explicit e2e/playwright mode even under
+  production-like runtime flags, and added regression tests for that mode.
+- **Mobile smoke reliability and UX:** Raised floating filter FAB buttons above
+  the fixed mobile bottom navigation in listing, business, and promotion filter
+  drawers to prevent pointer interception and unblock mobile smoke filter
+  interactions.
+- **Tests updated:** Added/extended regression coverage for launch-validation
+  env requirements, preflight timeout/retry helpers, and cross-site DSAR
+  rejection behavior.
+- **Ops docs synced:** Updated cloudflare env template, launch readiness report,
+  and runbook to include `KYC_WEBHOOK_SECRET` deployment/rotation guidance.
+
 ## Admin KYC Queue Grouping and Evidence Reliability (2026-03-27)
 
 - **Queue UX redesign:** Reworked admin KYC queue rendering from per-step cards

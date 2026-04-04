@@ -18,9 +18,17 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 import { POST } from "./route";
 
 function createMockRequest(body: Record<string, unknown>) {
-  const json = JSON.stringify(body);
+  const headers = new Headers({
+    origin: "http://localhost:3000",
+    "sec-fetch-site": "same-origin",
+  });
+
   return {
-    text: async () => json,
+    method: "POST",
+    json: async () => body,
+    headers,
+    url: "http://localhost:3000/api/verify-buyer",
+    nextUrl: new URL("http://localhost:3000/api/verify-buyer"),
   } as unknown as NextRequest;
 }
 

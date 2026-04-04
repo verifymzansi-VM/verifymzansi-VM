@@ -125,7 +125,7 @@ export function BusinessFilterDrawer() {
       <SheetTrigger asChild>
         <button
           type="button"
-          className="fixed bottom-4 right-4 z-40 inline-flex items-center justify-center gap-1 rounded-full bg-amber-400 h-9 w-9 text-foreground shadow-lg transition-colors hover:bg-amber-500 active:bg-amber-600 md:hidden"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-9 w-9 items-center justify-center gap-1 rounded-full bg-amber-400 text-foreground shadow-lg transition-colors hover:bg-amber-500 active:bg-amber-600 md:hidden"
           aria-label="Open business filters"
           disabled={!isInteractive}
         >

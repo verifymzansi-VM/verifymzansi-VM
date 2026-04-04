@@ -24,6 +24,7 @@ const VALID_ENV: Record<string, string> = {
   OZOW_CLIENT_SECRET: "test-client-secret",
   OZOW_SITE_CODE: "test-site-code",
   OZOW_WEBHOOK_SECRET: "test-webhook-secret",
+  KYC_WEBHOOK_SECRET: "test-kyc-webhook-secret",
   RESEND_API_KEY: "re_test_1234567890",
   NEXT_PUBLIC_APP_URL: "http://localhost:3000",
   HMAC_SECRET: "a".repeat(64),

@@ -18,6 +18,7 @@ const BASE_ENV: EnvSource = {
   OZOW_CLIENT_SECRET: "client-secret-value", // secret-scan: allow deterministic fixture
   OZOW_SITE_CODE: "site-code",
   OZOW_WEBHOOK_SECRET: "webhook-secret-value", // secret-scan: allow deterministic fixture
+  KYC_WEBHOOK_SECRET: "kyc-webhook-secret-value", // secret-scan: allow deterministic fixture
   RESEND_API_KEY: "re_test_1234567890",
   R2_ACCOUNT_ID: "cloudflare-account-id",
   R2_ACCESS_KEY_ID: "cloudflare-access-key",
@@ -127,6 +128,24 @@ describe("launch validation", () => {
       expect.objectContaining({
         name: "Ozow base URL",
         detail: "OZOW_API_BASE_URL must use https://one.ozow.com in production",
+      })
+    );
+  });
+
+  it("fails production mode when KYC webhook secret is missing", () => {
+    const summary = validateLaunchConfiguration(
+      {
+        ...BASE_ENV,
+        KYC_WEBHOOK_SECRET: undefined,
+      },
+      { mode: "production" }
+    );
+
+    expect(summary.isValid).toBe(false);
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "Launch env",
+        detail: expect.stringContaining("KYC_WEBHOOK_SECRET"),
       })
     );
   });

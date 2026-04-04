@@ -4,6 +4,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 
 const verifyBuyerSchema = z.object({
   token: z.string().uuid("Enter a valid buyer token"),
@@ -14,6 +15,11 @@ const log = createLogger("VerifyBuyerRoute");
 
 export async function POST(request: NextRequest) {
   try {
+    const originBlock = enforceSameOriginMutation(request, log);
+    if (originBlock) {
+      return originBlock;
+    }
+
     // Rate limit by client IP to prevent token enumeration
     const ip = getClientIp(request);
     const rateCheck = await checkRateLimit({ key: ip, action: "verify-buyer" });
