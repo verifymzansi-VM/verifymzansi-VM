@@ -1741,6 +1741,7 @@ export default function VerificationPage() {
                         setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
                         clearStepCompletion("id_doc");
                       }}
+                      onFallback={() => setIdCaptureMethod("file_upload")}
                     />
                     {idFileError && idFile && <p className="inline-form-error">{idFileError}</p>}
                   </div>

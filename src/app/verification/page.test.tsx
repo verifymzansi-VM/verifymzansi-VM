@@ -436,9 +436,17 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/13-digit SA ID number/i), {
       target: { value: "8001015009087" },
     });
-    fireEvent.change(screen.getByLabelText(/ID file \(image\/PDF\)/i), {
+
+    // CameraCapture starts in idle state; clicking "Open Camera" triggers error in jsdom
+    // (no navigator.mediaDevices) which reveals the fallback file input.
+    fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
+    await waitFor(() => {
+      expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
+    });
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, {
       target: {
-        files: [new File(["fake-pdf"], "id.pdf", { type: "application/pdf" })],
+        files: [new File(["fake-img"], "id.jpg", { type: "image/jpeg" })],
       },
     });
     await waitFor(() => {
@@ -501,9 +509,17 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/13-digit SA ID number/i), {
       target: { value: "8001015009087" },
     });
-    fireEvent.change(screen.getByLabelText(/ID file \(image\/PDF\)/i), {
+
+    // CameraCapture starts in idle state; clicking "Open Camera" triggers error in jsdom
+    // (no navigator.mediaDevices) which reveals the fallback file input.
+    fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
+    await waitFor(() => {
+      expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
+    });
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, {
       target: {
-        files: [new File(["fake-pdf"], "id.pdf", { type: "application/pdf" })],
+        files: [new File(["fake-img"], "id.jpg", { type: "image/jpeg" })],
       },
     });
     await waitFor(() => {
