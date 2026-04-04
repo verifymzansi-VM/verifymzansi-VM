@@ -119,7 +119,7 @@ async function completeMobilePromotionCreate(page: Page) {
   await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Photos \(max/i).setInputFiles(IMAGE_FIXTURE);
-  await completeSubmission(page, PROMOTION_DASHBOARD_URL, /Your Content|Promotions & Events/i);
+  await completeSubmission(page, PROMOTION_DASHBOARD_URL, /Your Content|Tourism & Events/i);
 }
 
 test.describe("Posting flows on mobile Chrome", () => {

@@ -7,20 +7,34 @@ import {
 } from "./type-taxonomy";
 
 describe("promotion type taxonomy", () => {
-  it("normalizes legacy product and service filters into Promotions", () => {
-    expect(parsePromotionFilterType("product")).toBe("promotion");
-    expect(parsePromotionFilterType("service")).toBe("promotion");
-    expect(getStoredPromotionTypesForFilter("promotion")).toEqual(["product", "service"]);
+  it("maps all legacy filter types to event for backward compat", () => {
+    expect(parsePromotionFilterType("product")).toBe("event");
+    expect(parsePromotionFilterType("service")).toBe("event");
+    expect(parsePromotionFilterType("deal")).toBe("event");
+    expect(parsePromotionFilterType("general")).toBe("event");
+    expect(parsePromotionFilterType("ad")).toBe("event");
+    expect(parsePromotionFilterType("promotion")).toBe("event");
   });
 
-  it("normalizes general into Ads", () => {
-    expect(parsePromotionFilterType("general")).toBe("ad");
-    expect(getStoredPromotionTypesForFilter("ad")).toEqual(["general"]);
+  it("parses event filter type", () => {
+    expect(parsePromotionFilterType("event")).toBe("event");
   });
 
-  it("maps stored service records back to the Promotions bucket", () => {
-    expect(getPromotionFilterTypeFromStoredType("service")).toBe("promotion");
-    expect(getStoredPromotionTypeForFilter("promotion", "service")).toBe("service");
-    expect(getStoredPromotionTypeForFilter("promotion", "general")).toBe("product");
+  it("returns null for unknown filter types", () => {
+    expect(parsePromotionFilterType("unknown")).toBeNull();
+    expect(parsePromotionFilterType(null)).toBeNull();
+    expect(parsePromotionFilterType(undefined)).toBeNull();
+  });
+
+  it("always returns event for stored type mapping", () => {
+    expect(getPromotionFilterTypeFromStoredType("service")).toBe("event");
+    expect(getPromotionFilterTypeFromStoredType("deal")).toBe("event");
+    expect(getPromotionFilterTypeFromStoredType("event")).toBe("event");
+    expect(getPromotionFilterTypeFromStoredType("general")).toBe("event");
+  });
+
+  it("always returns event for stored promotion types", () => {
+    expect(getStoredPromotionTypesForFilter("event")).toEqual(["event"]);
+    expect(getStoredPromotionTypeForFilter("event")).toBe("event");
   });
 });

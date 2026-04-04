@@ -24,6 +24,7 @@ const BUSINESS_CATEGORIES = [
   "education_training",
   "events_entertainment",
   "automotive_transport",
+  "tourism_hospitality",
   "general_other",
 ] as const;
 

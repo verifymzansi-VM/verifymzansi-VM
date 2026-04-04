@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Megaphone } from "lucide-react";
+import { ArrowRight, TreePalm, CalendarDays } from "lucide-react";
 import { PageHeader } from "@/components/layout";
+import { BusinessCard } from "@/components/listings/business-card";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { PromotionFilterPanel } from "@/components/listings/promotion-filter-panel";
 import { PromotionFilterDrawer } from "@/components/listings/promotion-filter-drawer";
@@ -14,22 +15,20 @@ import { getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { parsePromotionFilterType, type PromotionFilterType } from "@/lib/promotions/type-taxonomy";
 import {
   type BusinessCategory,
+  type BusinessType,
   type PromotionEventState,
   type PromotionType,
   type TrustLevel,
 } from "@/types/enums";
-import {
-  ALL_PROMOTION_TYPE_PRESENTATION,
-  getPromotionFilterTypePresentation,
-  getStoredPromotionTypePresentation,
-  PROMOTION_FILTER_BAR_ORDER,
-} from "@/lib/promotions/type-presentation";
+import { getStoredPromotionTypePresentation } from "@/lib/promotions/type-presentation";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { ShowroomHero, type ShowroomSlide } from "@/components/showrooms/showroom-hero";
 import { cn } from "@/lib/utils";
+
+type ActiveTab = "tourism" | "events";
 
 interface PromotionRow {
   id: string;
@@ -77,10 +76,52 @@ interface PromotionsResponse {
   error?: string;
 }
 
+interface BusinessRow {
+  id: string;
+  owner_id: string;
+  business_type: BusinessType;
+  business_name: string;
+  description: string | null;
+  category: string | null;
+  subcategory: string | null;
+  logo_url: string | null;
+  cover_photo: string | null;
+  cover_video: string | null;
+  video_thumbnail: string | null;
+  gallery_photos: string[] | null;
+  location_province: string;
+  location_city: string;
+  boost_until: string | null;
+  featured_until: string | null;
+  service_areas: Record<string, unknown> | null;
+}
+
+interface BusinessesResponse {
+  businesses?: BusinessRow[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  error?: string;
+}
+
 export function normalizeValue(value: string | null): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
+
+const TOURISM_SUBCATEGORIES = [
+  { value: "hotel_resort", label: "Hotel / Resort" },
+  { value: "guest_house_bnb", label: "Guest House / B&B" },
+  { value: "lodge_game_lodge", label: "Lodge / Game Lodge" },
+  { value: "backpackers_hostel", label: "Backpackers / Hostel" },
+  { value: "self_catering", label: "Self-Catering" },
+  { value: "tour_operator", label: "Tour Operator" },
+  { value: "travel_agency", label: "Travel Agency" },
+  { value: "safari_wildlife", label: "Safari & Wildlife" },
+  { value: "adventure_activities", label: "Adventure Activities" },
+  { value: "cultural_heritage", label: "Cultural & Heritage" },
+  { value: "car_rental_tourism", label: "Car Rental (Tourism)" },
+] as const;
 
 export function PromotionsExplorer() {
   const router = useRouter();
@@ -88,7 +129,12 @@ export function PromotionsExplorer() {
   const searchParams = useSearchParams();
   const searchParamKey = searchParams.toString();
   const currentSearchParams = useMemo(() => new URLSearchParams(searchParamKey), [searchParamKey]);
-  const [response, setResponse] = useState<PromotionsResponse>({
+
+  /* ── Active tab ── */
+  const activeTab: ActiveTab = currentSearchParams.get("tab") === "events" ? "events" : "tourism";
+
+  /* ── Events state ── */
+  const [eventsResponse, setEventsResponse] = useState<PromotionsResponse>({
     promotions: [],
     accountProfiles: [],
     sellers: [],
@@ -97,6 +143,15 @@ export function PromotionsExplorer() {
     page: 1,
     limit: 24,
   });
+
+  /* ── Tourism state ── */
+  const [tourismResponse, setTourismResponse] = useState<BusinessesResponse>({
+    businesses: [],
+    total: 0,
+    page: 1,
+    limit: 24,
+  });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,6 +166,7 @@ export function PromotionsExplorer() {
       eventState: normalizeValue(currentSearchParams.get("event_state")) as
         | PromotionEventState
         | undefined,
+      subcategory: normalizeValue(currentSearchParams.get("subcategory")),
       page: Math.max(1, parseInt(currentSearchParams.get("page") || "1", 10)),
     }),
     [currentSearchParams]
@@ -120,6 +176,7 @@ export function PromotionsExplorer() {
     (updates: Record<string, string | undefined>, options?: { preservePage?: boolean }) => {
       const next = new URLSearchParams();
       const nextFilters = {
+        tab: activeTab,
         q: filters.query,
         type: filters.type,
         category: filters.category,
@@ -127,6 +184,7 @@ export function PromotionsExplorer() {
         city: filters.city,
         business_id: filters.businessId,
         event_state: filters.eventState,
+        subcategory: (filters as Record<string, unknown>).subcategory as string | undefined,
         page: options?.preservePage ? String(filters.page) : undefined,
         ...updates,
       };
@@ -145,18 +203,7 @@ export function PromotionsExplorer() {
       const nextKey = next.toString();
       router.replace(nextKey ? `${pathname}?${nextKey}` : pathname, { scroll: false });
     },
-    [
-      filters.businessId,
-      filters.category,
-      filters.city,
-      filters.eventState,
-      filters.page,
-      filters.province,
-      filters.query,
-      filters.type,
-      pathname,
-      router,
-    ]
+    [activeTab, filters, pathname, router]
   );
 
   const cities = filters.province ? getCitiesForProvince(filters.province) : [];
@@ -171,7 +218,10 @@ export function PromotionsExplorer() {
 
   const clearAllFilters = () => {
     debouncedUpdateQuery.cancel();
-    router.replace(pathname, { scroll: false });
+    const params = new URLSearchParams();
+    params.set("tab", activeTab);
+    if (activeTab === "events") params.set("type", "event");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const handleTypeChange = useCallback(
@@ -204,108 +254,140 @@ export function PromotionsExplorer() {
     [filters.type, updateFilters]
   );
 
+  const handleSubcategoryChange = useCallback(
+    (value: string | undefined) => {
+      updateFilters({ subcategory: value });
+    },
+    [updateFilters]
+  );
+
+  const switchTab = useCallback(
+    (tab: ActiveTab) => {
+      // Reset filters when switching tabs, but keep location filters
+      const next = new URLSearchParams();
+      next.set("tab", tab);
+      if (tab === "events") next.set("type", "event");
+      if (filters.province) next.set("province", filters.province);
+      if (filters.city) next.set("city", filters.city);
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [filters.province, filters.city, pathname, router]
+  );
+
+  /* ── Data fetching ── */
   useEffect(() => {
     let active = true;
 
-    async function loadPromotions() {
+    async function loadData() {
       setLoading(true);
       setError(null);
 
       try {
         const params = new URLSearchParams();
         if (filters.query) params.set("q", filters.query);
-        if (filters.type) params.set("type", filters.type);
-        if (filters.category) params.set("category", filters.category);
         if (filters.province) params.set("province", filters.province);
         if (filters.city) params.set("city", filters.city);
-        if (filters.businessId) params.set("business_id", filters.businessId);
-        if (filters.eventState) params.set("event_state", filters.eventState);
         params.set("page", String(filters.page));
         params.set("limit", "24");
 
-        const res = await fetch(`/api/promotions?${params.toString()}`, {
-          cache: "no-store",
-        });
-        const payload = (await res.json()) as PromotionsResponse;
+        if (activeTab === "tourism") {
+          params.set("category", "tourism_hospitality");
+          if (filters.subcategory) params.set("subcategory", filters.subcategory);
 
-        if (!active) return;
+          const res = await fetch(`/api/businesses?${params.toString()}`, { cache: "no-store" });
+          const payload = (await res.json()) as BusinessesResponse;
 
-        if (!res.ok) {
-          setError(payload.error || "Failed to load promotions.");
-          setResponse({
-            promotions: [],
-            accountProfiles: [],
-            sellers: [],
-            businesses: [],
-            total: 0,
-            page: 1,
-            limit: 24,
-          });
-          setLoading(false);
-          return;
+          if (!active) return;
+          if (!res.ok) {
+            setError(payload.error || "Failed to load tourism businesses.");
+            setTourismResponse({ businesses: [], total: 0, page: 1, limit: 24 });
+          } else {
+            setTourismResponse(payload);
+          }
+        } else {
+          params.set("type", "event");
+          if (filters.category) params.set("category", filters.category);
+          if (filters.eventState) params.set("event_state", filters.eventState);
+
+          const res = await fetch(`/api/promotions?${params.toString()}`, { cache: "no-store" });
+          const payload = (await res.json()) as PromotionsResponse;
+
+          if (!active) return;
+          if (!res.ok) {
+            setError(payload.error || "Failed to load events.");
+            setEventsResponse({
+              promotions: [],
+              accountProfiles: [],
+              sellers: [],
+              businesses: [],
+              total: 0,
+              page: 1,
+              limit: 24,
+            });
+          } else {
+            setEventsResponse(payload);
+          }
         }
 
-        setResponse(payload);
         setLoading(false);
       } catch (loadError) {
         if (!active) return;
-
-        setError(loadError instanceof Error ? loadError.message : "Failed to load promotions.");
-        setResponse({
-          promotions: [],
-          accountProfiles: [],
-          sellers: [],
-          businesses: [],
-          total: 0,
-          page: 1,
-          limit: 24,
-        });
+        setError(loadError instanceof Error ? loadError.message : "Failed to load data.");
         setLoading(false);
       }
     }
 
-    void loadPromotions();
+    void loadData();
 
     return () => {
       active = false;
     };
-  }, [filters]);
+  }, [activeTab, filters]);
 
+  /* ── Events data maps ── */
   const accountProfileMap = useMemo(
     () =>
       new Map(
-        (response.accountProfiles ?? response.sellers ?? []).map((accountProfile) => [
+        (eventsResponse.accountProfiles ?? eventsResponse.sellers ?? []).map((accountProfile) => [
           accountProfile.user_id,
           accountProfile,
         ])
       ),
-    [response.accountProfiles, response.sellers]
+    [eventsResponse.accountProfiles, eventsResponse.sellers]
   );
   const businessMap = useMemo(
     () =>
-      new Map((response.businesses ?? []).map((business) => [business.id, business.business_name])),
-    [response.businesses]
+      new Map(
+        (eventsResponse.businesses ?? []).map((business) => [business.id, business.business_name])
+      ),
+    [eventsResponse.businesses]
   );
   const businessLogoMap = useMemo(
     () =>
       new Map(
-        (response.businesses ?? []).map((business) => [
+        (eventsResponse.businesses ?? []).map((business) => [
           business.id,
           business.logo_url as string | null,
         ])
       ),
-    [response.businesses]
+    [eventsResponse.businesses]
   );
-  const promotions = response.promotions ?? [];
-  const total = response.total ?? 0;
-  const page = response.page ?? filters.page;
-  const limit = response.limit ?? 24;
+
+  /* ── Pagination ── */
+  const currentResponse = activeTab === "tourism" ? tourismResponse : eventsResponse;
+  const total = currentResponse.total ?? 0;
+  const page = currentResponse.page ?? filters.page;
+  const limit = currentResponse.limit ?? 24;
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
-  // Find featured/boosted promotion for hero (only on page 1, no filters active)
+  /* ── Tourism data ── */
+  const tourismBusinesses = tourismResponse.businesses ?? [];
+
+  /* ── Events data ── */
+  const promotions = eventsResponse.promotions ?? [];
   const now = new Date();
   const featuredPromotion =
-    page === 1
+    activeTab === "events" && page === 1
       ? promotions.find(
           (p) =>
             (p.featured_until && new Date(p.featured_until) > now) ||
@@ -319,19 +401,57 @@ export function PromotionsExplorer() {
   return (
     <div className="container-page py-8 space-y-6">
       <PageHeader
-        title="Promotions & Events"
-        description="Deals, promotions, launches, and events from verified South African businesses and members."
-        breadcrumbs={[{ label: "Home", href: "/" }, { label: "Promotions & Events" }]}
+        title="Tourism & Events"
+        description="Tourism destinations, accommodations, and events from verified South African businesses and members."
+        breadcrumbs={[{ label: "Home", href: "/" }, { label: "Tourism & Events" }]}
       >
         <Button asChild size="sm" className="gap-1">
           <Link href="/post/create-promotion">
-            Create Promotion
+            Create Event
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
       </PageHeader>
 
-      <PromotionTypeBar activeType={filters.type} onTypeChange={handleTypeChange} />
+      {/* ── Tab Switcher ── */}
+      <div
+        role="tablist"
+        aria-label="Tourism & Events sections"
+        className="flex items-center gap-1.5 rounded-[1.25rem] border border-border/70 bg-background/95 p-1.5 shadow-sm"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "tourism"}
+          aria-controls="tab-panel-tourism"
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            activeTab === "tourism"
+              ? "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200"
+              : "border-transparent text-muted-foreground hover:bg-muted/60"
+          )}
+          onClick={() => switchTab("tourism")}
+        >
+          <TreePalm className="h-4 w-4" />
+          Tourism
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "events"}
+          aria-controls="tab-panel-events"
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            activeTab === "events"
+              ? "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200"
+              : "border-transparent text-muted-foreground hover:bg-muted/60"
+          )}
+          onClick={() => switchTab("events")}
+        >
+          <CalendarDays className="h-4 w-4" />
+          Events
+        </button>
+      </div>
 
       {/* Mobile filter drawer (FAB visible < lg only) */}
       <PromotionFilterDrawer
@@ -349,25 +469,65 @@ export function PromotionsExplorer() {
 
       <div className="lg:flex lg:gap-6">
         <aside className="hidden w-72 shrink-0 lg:block">
-          <div className="sticky top-24">
-            <PromotionFilterPanel
-              filters={filters}
-              cities={cities}
-              businessMap={businessMap}
-              onTypeChange={handleTypeChange}
-              onCategoryChange={(value) => updateFilters({ category: value })}
-              onProvinceChange={handleProvinceChange}
-              onCityChange={(value) => updateFilters({ city: value })}
-              onEventStateChange={handleEventStateChange}
-              onClearQuery={clearQueryFilter}
-              onClearAll={clearAllFilters}
-            />
+          <div className="sticky top-24 space-y-4">
+            {activeTab === "tourism" ? (
+              /* ── Tourism sidebar filters ── */
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="subcategory-filter"
+                    className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    Subcategory
+                  </label>
+                  <select
+                    id="subcategory-filter"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={filters.subcategory ?? ""}
+                    onChange={(e) => handleSubcategoryChange(e.target.value || undefined)}
+                  >
+                    <option value="">All subcategories</option>
+                    {TOURISM_SUBCATEGORIES.map((sub) => (
+                      <option key={sub.value} value={sub.value}>
+                        {sub.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <PromotionFilterPanel
+                  filters={filters}
+                  cities={cities}
+                  businessMap={businessMap}
+                  onTypeChange={handleTypeChange}
+                  onCategoryChange={(value) => updateFilters({ category: value })}
+                  onProvinceChange={handleProvinceChange}
+                  onCityChange={(value) => updateFilters({ city: value })}
+                  onEventStateChange={handleEventStateChange}
+                  onClearQuery={clearQueryFilter}
+                  onClearAll={clearAllFilters}
+                />
+              </div>
+            ) : (
+              /* ── Events sidebar filters ── */
+              <PromotionFilterPanel
+                filters={filters}
+                cities={cities}
+                businessMap={businessMap}
+                onTypeChange={handleTypeChange}
+                onCategoryChange={(value) => updateFilters({ category: value })}
+                onProvinceChange={handleProvinceChange}
+                onCityChange={(value) => updateFilters({ city: value })}
+                onEventStateChange={handleEventStateChange}
+                onClearQuery={clearQueryFilter}
+                onClearAll={clearAllFilters}
+              />
+            )}
           </div>
         </aside>
 
         <div className="min-w-0 flex-1 space-y-5">
-          {/* ── Featured ShowroomHero ── */}
-          {featuredPromotion && !loading && (
+          {/* ── Featured ShowroomHero (events tab only) ── */}
+          {activeTab === "events" && featuredPromotion && !loading && (
             <div>
               <ShowroomHero
                 slides={[
@@ -393,7 +553,7 @@ export function PromotionsExplorer() {
                         ? featuredPromotion.price_cents / 100
                         : null,
                     hrefOverride: `/promotion/${featuredPromotion.id}`,
-                    ctaLabelOverride: "View Promotion",
+                    ctaLabelOverride: "View Event",
                     badgeLabelOverride: getStoredPromotionTypePresentation(
                       featuredPromotion.promotion_type
                     ).label,
@@ -407,20 +567,29 @@ export function PromotionsExplorer() {
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
               {loading ? (
-                "Loading promotions..."
+                activeTab === "tourism" ? (
+                  "Loading tourism businesses..."
+                ) : (
+                  "Loading events..."
+                )
               ) : (
                 <>
-                  <span className="font-medium text-foreground">{total}</span> promotion
-                  {total === 1 ? "" : "s"} found
+                  <span className="font-medium text-foreground">{total}</span>{" "}
+                  {activeTab === "tourism"
+                    ? `tourism business${total === 1 ? "" : "es"}`
+                    : `event${total === 1 ? "" : "s"}`}{" "}
+                  found
                 </>
               )}
             </p>
-            <Button asChild variant="outline" size="sm" className="gap-1">
-              <Link href="/post/create-promotion">
-                Create Promotion
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
+            {activeTab === "events" && (
+              <Button asChild variant="outline" size="sm" className="gap-1">
+                <Link href="/post/create-promotion">
+                  Create Event
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
           </div>
 
           {/* ── Grid / Loading / Error / Empty ── */}
@@ -433,29 +602,97 @@ export function PromotionsExplorer() {
           ) : error ? (
             <Card>
               <CardContent className="space-y-3 p-6 text-center">
-                <Megaphone className="mx-auto h-8 w-8 text-muted-foreground" />
-                <h3 className="font-display text-lg font-semibold">Unable to load promotions</h3>
+                <TreePalm className="mx-auto h-8 w-8 text-muted-foreground" />
+                <h3 className="font-display text-lg font-semibold">
+                  {activeTab === "tourism"
+                    ? "Unable to load tourism businesses"
+                    : "Unable to load events"}
+                </h3>
                 <p className="text-sm text-muted-foreground">{error}</p>
               </CardContent>
             </Card>
-          ) : gridPromotions.length === 0 && !featuredPromotion ? (
+          ) : (
+              activeTab === "tourism"
+                ? tourismBusinesses.length === 0
+                : gridPromotions.length === 0 && !featuredPromotion
+            ) ? (
             <Card>
               <CardContent className="space-y-3 p-6 text-center">
-                <Megaphone className="mx-auto h-8 w-8 text-muted-foreground" />
+                {activeTab === "tourism" ? (
+                  <TreePalm className="mx-auto h-8 w-8 text-muted-foreground" />
+                ) : (
+                  <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground" />
+                )}
                 <h3 className="font-display text-lg font-semibold">
-                  No promotions match your filters
+                  {activeTab === "tourism"
+                    ? "No tourism businesses match your filters"
+                    : "No events match your filters"}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Try changing the category, broadening the filters, or clearing a location filter.
+                  Try broadening the filters or clearing a location filter.
                 </p>
                 <Button variant="outline" size="sm" onClick={clearAllFilters}>
                   Clear all filters
                 </Button>
               </CardContent>
             </Card>
-          ) : (
+          ) : activeTab === "tourism" ? (
+            /* ── Tourism Grid ── */
             <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:gap-6">
+              <div
+                id="tab-panel-tourism"
+                role="tabpanel"
+                aria-labelledby="tab-tourism"
+                className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:gap-6"
+              >
+                {tourismBusinesses.map((business, index) => (
+                  <div
+                    key={business.id}
+                    className={`animate-in fade-in fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2 [animation-delay:${Math.min(index * 50, 400)}ms]`}
+                  >
+                    <BusinessCard
+                      id={business.id}
+                      businessName={business.business_name}
+                      businessType={business.business_type}
+                      description={business.description ?? undefined}
+                      coverPhoto={business.cover_photo}
+                      coverVideo={business.cover_video}
+                      videoThumbnail={business.video_thumbnail}
+                      logoUrl={business.logo_url}
+                      galleryPhotos={business.gallery_photos}
+                      province={business.location_province}
+                      city={business.location_city}
+                      category={business.category as BusinessCategory | undefined}
+                      subcategory={business.subcategory}
+                      boostUntil={business.boost_until}
+                      featuredUntil={business.featured_until}
+                      serviceAreas={business.service_areas}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {totalPages > 1 && (
+                <PaginationControls
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChange={(p) => {
+                    triggerHaptic("light");
+                    updateFilters({ page: String(p) }, { preservePage: true });
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                />
+              )}
+            </>
+          ) : (
+            /* ── Events Grid ── */
+            <>
+              <div
+                id="tab-panel-events"
+                role="tabpanel"
+                aria-labelledby="tab-events"
+                className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:gap-6"
+              >
                 {gridPromotions.map((promotion, index) => {
                   const accountProfile = accountProfileMap.get(promotion.owner_id);
                   const businessName = promotion.business_id
@@ -507,68 +744,15 @@ export function PromotionsExplorer() {
               </div>
 
               {totalPages > 1 && (
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    disabled={page <= 1}
-                    onClick={() => {
-                      triggerHaptic("light");
-                      updateFilters({ page: String(page - 1) }, { preservePage: true });
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                  >
-                    Previous
-                  </Button>
-
-                  <span className="sm:hidden text-xs text-muted-foreground">
-                    Page {page} of {totalPages}
-                  </span>
-
-                  <div className="hidden sm:flex items-center gap-1">
-                    {Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {
-                      const pageNumber =
-                        totalPages <= 5
-                          ? index + 1
-                          : page <= 3
-                            ? index + 1
-                            : page >= totalPages - 2
-                              ? totalPages - 4 + index
-                              : page - 2 + index;
-
-                      return (
-                        <Button
-                          key={pageNumber}
-                          variant={pageNumber === page ? "default" : "ghost"}
-                          size="sm"
-                          className={`h-8 w-8 p-0 ${pageNumber === page ? "pointer-events-none" : ""}`}
-                          onClick={() => {
-                            triggerHaptic("light");
-                            updateFilters({ page: String(pageNumber) }, { preservePage: true });
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }}
-                        >
-                          {pageNumber}
-                        </Button>
-                      );
-                    })}
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    disabled={page >= totalPages}
-                    onClick={() => {
-                      triggerHaptic("light");
-                      updateFilters({ page: String(page + 1) }, { preservePage: true });
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                  >
-                    Next
-                  </Button>
-                </div>
+                <PaginationControls
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChange={(p) => {
+                    triggerHaptic("light");
+                    updateFilters({ page: String(p) }, { preservePage: true });
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                />
               )}
             </>
           )}
@@ -578,59 +762,65 @@ export function PromotionsExplorer() {
   );
 }
 
-function PromotionTypeBar({
-  activeType,
-  onTypeChange,
+function PaginationControls({
+  page,
+  totalPages,
+  onPageChange,
 }: {
-  activeType?: PromotionFilterType;
-  onTypeChange: (value: PromotionFilterType | undefined) => void;
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
 }) {
   return (
-    <section className="space-y-2" aria-labelledby="promotion-types-heading">
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-1">
-          <h2
-            id="promotion-types-heading"
-            className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground"
-          >
-            Promotion Types
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Pick a lane fast, then refine by category, location, or event timing.
-          </p>
-        </div>
-      </div>
-
-      <div
-        role="toolbar"
-        aria-label="Promotion types"
-        className="flex flex-wrap items-center gap-1.5 rounded-[1.25rem] border border-border/70 bg-background/95 p-1.5 shadow-sm"
+    <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-4">
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full sm:w-auto"
+        disabled={page <= 1}
+        onClick={() => onPageChange(page - 1)}
       >
-        {PROMOTION_FILTER_BAR_ORDER.map((item) => {
-          const isAll = item === "all";
-          const value = isAll ? undefined : item;
-          const presentation = isAll
-            ? ALL_PROMOTION_TYPE_PRESENTATION
-            : getPromotionFilterTypePresentation(item);
-          const isActive = isAll ? !activeType : activeType === item;
+        Previous
+      </Button>
+
+      <span className="sm:hidden text-xs text-muted-foreground">
+        Page {page} of {totalPages}
+      </span>
+
+      <div className="hidden sm:flex items-center gap-1">
+        {Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {
+          const pageNumber =
+            totalPages <= 5
+              ? index + 1
+              : page <= 3
+                ? index + 1
+                : page >= totalPages - 2
+                  ? totalPages - 4 + index
+                  : page - 2 + index;
 
           return (
-            <button
-              key={item}
-              type="button"
-              data-active={isActive || undefined}
-              aria-label={`${presentation.label}${isActive ? " (selected)" : ""}`}
-              className={cn(
-                "inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                isActive ? presentation.activeClassName : presentation.inactiveClassName
-              )}
-              onClick={() => onTypeChange(value)}
+            <Button
+              key={pageNumber}
+              variant={pageNumber === page ? "default" : "ghost"}
+              size="sm"
+              className={`h-8 w-8 p-0 ${pageNumber === page ? "pointer-events-none" : ""}`}
+              onClick={() => onPageChange(pageNumber)}
             >
-              {presentation.label}
-            </button>
+              {pageNumber}
+            </Button>
           );
         })}
       </div>
-    </section>
+
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full sm:w-auto"
+        disabled={page >= totalPages}
+        onClick={() => onPageChange(page + 1)}
+      >
+        Next
+      </Button>
+    </div>
   );
 }

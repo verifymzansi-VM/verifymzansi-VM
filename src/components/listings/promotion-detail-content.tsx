@@ -28,12 +28,7 @@ import { formatZAR } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
-import {
-  PROMOTION_TYPE_LABELS,
-  type BusinessCategory,
-  type PromotionType,
-  type AccountVerificationStatus,
-} from "@/types/enums";
+import { type BusinessCategory, type AccountVerificationStatus } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { readAccountVerificationStatus } from "@/lib/account/compat";
@@ -271,8 +266,7 @@ export function PromotionDetailContent({
     };
   }, [manager, activeMediaIndex]);
   const contactMethods = promotion.contact_methods ?? [];
-  const isEvent = promotion.promotion_type === "event";
-  const eventState = isEvent ? getEventState(promotion.start_date, promotion.end_date) : null;
+  const eventState = getEventState(promotion.start_date, promotion.end_date);
   const categoryLabel = getPromotionCategoryDisplayLabel(
     promotion.category_key,
     promotion.category
@@ -291,10 +285,9 @@ export function PromotionDetailContent({
   const countdown = useCountdown(countdownTarget);
 
   // Calendar link (Google Calendar)
-  const calendarUrl =
-    isEvent && promotion.start_date
-      ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(promotion.title)}&dates=${promotion.start_date.replace(/[-:]/g, "").split(".")[0]}Z${promotion.end_date ? `/${promotion.end_date.replace(/[-:]/g, "").split(".")[0]}Z` : ""}&details=${encodeURIComponent(promotion.description?.slice(0, 500) ?? "")}&location=${encodeURIComponent([promotion.location_town, promotion.location_city, promotion.location_province].filter(Boolean).join(", "))}`
-      : null;
+  const calendarUrl = promotion.start_date
+    ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(promotion.title)}&dates=${promotion.start_date.replace(/[-:]/g, "").split(".")[0]}Z${promotion.end_date ? `/${promotion.end_date.replace(/[-:]/g, "").split(".")[0]}Z` : ""}&details=${encodeURIComponent(promotion.description?.slice(0, 500) ?? "")}&location=${encodeURIComponent([promotion.location_town, promotion.location_city, promotion.location_province].filter(Boolean).join(", "))}`
+    : null;
 
   return (
     <article className="space-y-4">
@@ -399,10 +392,8 @@ export function PromotionDetailContent({
 
             {/* Overlay badges */}
             <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-              <Badge className="bg-black/50 text-white backdrop-blur-sm border-0">
-                {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] || "Ads"}
-              </Badge>
-              {isEvent && eventState && (
+              <Badge className="bg-black/50 text-white backdrop-blur-sm border-0">Event</Badge>
+              {eventState && (
                 <Badge className={`${EVENT_STATE_BADGE[eventState].className} border-0`}>
                   {EVENT_STATE_BADGE[eventState].label}
                 </Badge>
@@ -419,10 +410,8 @@ export function PromotionDetailContent({
             {promotion.title}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <Badge className="bg-black/70 text-white backdrop-blur-sm border-0">
-              {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] || "Ads"}
-            </Badge>
-            {isEvent && eventState && (
+            <Badge className="bg-black/70 text-white backdrop-blur-sm border-0">Event</Badge>
+            {eventState && (
               <Badge className={`${EVENT_STATE_BADGE[eventState].className} border-0`}>
                 {EVENT_STATE_BADGE[eventState].label}
               </Badge>
@@ -499,7 +488,7 @@ export function PromotionDetailContent({
       )}
 
       {/* ═══ EVENT COUNTDOWN (compact) ═══ */}
-      {isEvent && countdown && (
+      {countdown && (
         <div className="flex items-center justify-between rounded-xl border border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10 px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-medium text-brand-blue">
             <Timer className="h-4 w-4" />
@@ -609,10 +598,7 @@ export function PromotionDetailContent({
           <div className="border-t px-4 py-3">
             <dl className="grid grid-cols-2 gap-y-2.5 text-sm">
               <dt className="text-muted-foreground">Type</dt>
-              <dd className="font-medium">
-                {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] ||
-                  promotion.promotion_type}
-              </dd>
+              <dd className="font-medium">Event</dd>
 
               {categoryLabel && (
                 <>

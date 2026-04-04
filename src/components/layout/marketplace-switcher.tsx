@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { ShoppingBag, Building2, Megaphone } from "lucide-react";
+import { ShoppingBag, Building2, TreePalm } from "lucide-react";
 import type { MarketplaceArea } from "@/types/enums";
 
 interface AreaTab {
@@ -40,13 +40,13 @@ const AREA_TABS: AreaTab[] = [
   },
   {
     area: "PROMOTIONS",
-    label: "Promotions & Events",
-    mobileLabel: "Promos",
+    label: "Tourism & Events",
+    mobileLabel: "Tourism",
     slug: "/promotions",
-    icon: Megaphone,
-    iconColor: "text-red-500",
-    activeClass: "border-red-500 text-red-600 bg-red-50 dark:bg-red-950",
-    hoverClass: "hover:border-red-400/40 hover:bg-red-50/80",
+    icon: TreePalm,
+    iconColor: "text-teal-500",
+    activeClass: "border-teal-500 text-teal-600 bg-teal-50 dark:bg-teal-950",
+    hoverClass: "hover:border-teal-400/40 hover:bg-teal-50/80",
   },
 ];
 

@@ -72,7 +72,7 @@ export default function PricingPage() {
                   value="promotions"
                   className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
                 >
-                  <span className="hidden sm:inline">Promotions & </span>Events
+                  <span className="hidden sm:inline">Tourism & </span>Events
                 </TabsTrigger>
               </TabsList>
             </div>

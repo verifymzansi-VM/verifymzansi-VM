@@ -68,7 +68,7 @@ export default async function AdminModerationPage() {
     ...(pendingPromotions || []).map((p) => ({
       ...p,
       area: "PROMOTIONS_EVENTS" as const,
-      areaLabel: "Promotions & Events",
+      areaLabel: "Tourism & Events",
       itemType: "Promotion",
     })),
   ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());

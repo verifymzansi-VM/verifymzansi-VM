@@ -158,7 +158,7 @@ export function PromotionFilterDrawer({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <SheetHeader className="flex flex-row items-center justify-between pb-3">
-          <SheetTitle>Filter Promotions &amp; Events</SheetTitle>
+          <SheetTitle>Filter Tourism &amp; Events</SheetTitle>
           {activeFilterCount > 0 && (
             <Button
               variant="ghost"

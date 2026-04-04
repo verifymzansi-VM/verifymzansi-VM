@@ -15,8 +15,8 @@ import { calculateSlaState } from "@/lib/utils/sla";
 import { isStaff } from "@/lib/auth/roles";
 
 export const metadata = {
-  title: "Promotions & Events — Admin",
-  description: "Manage promotions and event ads — approve, flag, or remove.",
+  title: "Tourism & Events — Admin",
+  description: "Manage events and tourism content — approve, flag, or remove.",
 };
 
 export default async function AdminPromotionsEventsPage() {
@@ -51,16 +51,16 @@ export default async function AdminPromotionsEventsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Promotions & Events"
-        description="Moderation and reports for Promotions & Events."
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Promotions & Events" }]}
+        title="Tourism & Events"
+        description="Moderation and reports for Tourism & Events."
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Tourism & Events" }]}
       >
         <Badge variant="outline">PROMOTIONS_EVENTS</Badge>
       </PageHeader>
 
       <AreaAdminTabs
         area="PROMOTIONS_EVENTS"
-        areaLabel="Promotions & Events"
+        areaLabel="Tourism & Events"
         pendingVerifications={pendingVerifications}
         pendingContent={pendingContent}
         reports={reports}

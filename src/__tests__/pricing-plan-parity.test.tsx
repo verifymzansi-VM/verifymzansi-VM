@@ -93,7 +93,7 @@ describe("Active-area pricing parity", () => {
 
     expect(tabLabels).toHaveLength(3);
     expect(tabLabels).toEqual(
-      expect.arrayContaining(["Mzansi Market", "Mzansi Business", "Promotions & Events"])
+      expect.arrayContaining(["Mzansi Market", "Mzansi Business", "Tourism & Events"])
     );
     expect(screen.queryByText("Mall Shops")).not.toBeInTheDocument();
     expect(screen.queryByText("Business Ads")).not.toBeInTheDocument();

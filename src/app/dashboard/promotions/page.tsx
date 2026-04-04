@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 
 export const metadata = {
-  title: "Promotions & Events",
-  description: "Manage your promotions, ads, and event listings on VerifyMzansi.",
+  title: "Tourism & Events",
+  description: "Manage your event listings on VerifyMzansi.",
 };
 
 export default function PromotionsPage() {

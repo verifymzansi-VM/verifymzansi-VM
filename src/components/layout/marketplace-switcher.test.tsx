@@ -43,7 +43,7 @@ describe("MarketplaceSwitcher", () => {
       "href",
       "/mzansi-business"
     );
-    expect(screen.getByRole("link", { name: "Promotions & Events" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Tourism & Events" })).toHaveAttribute(
       "href",
       "/promotions"
     );
@@ -59,7 +59,7 @@ describe("MarketplaceSwitcher", () => {
       "page"
     );
     expect(screen.getByRole("link", { name: "Mzansi Market" })).not.toHaveAttribute("aria-current");
-    expect(screen.getByRole("link", { name: "Promotions & Events" })).not.toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Tourism & Events" })).not.toHaveAttribute(
       "aria-current"
     );
   });

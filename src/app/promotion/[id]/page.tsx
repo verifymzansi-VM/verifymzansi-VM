@@ -75,7 +75,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
 
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": promotion.promotion_type === "event" ? "Event" : "Product",
+    "@type": "Event",
     name: promotion.title,
     description: promotion.description?.slice(0, 300),
     ...(promotion.photos?.[0] && { image: promotion.photos[0] }),
@@ -107,7 +107,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
             title={promotion.title}
             breadcrumbs={[
               { label: "Home", href: "/" },
-              { label: "Promotions & Events", href: "/promotions" },
+              { label: "Tourism & Events", href: "/promotions" },
               { label: promotion.title },
             ]}
           />

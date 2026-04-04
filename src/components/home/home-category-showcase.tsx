@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Building2, Megaphone, ShoppingBag, type LucideIcon } from "lucide-react";
+import { ArrowRight, Building2, TreePalm, ShoppingBag, type LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
@@ -21,7 +21,7 @@ export async function HomeCategoryShowcase() {
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
-  const [marketResult, businessResult, promoResult] = await Promise.all([
+  const [marketResult, businessResult, promoResult, tourismResult] = await Promise.all([
     supabase
       .from("listings")
       .select("id, title, description, photos", { count: "exact" })
@@ -40,9 +40,16 @@ export async function HomeCategoryShowcase() {
       .from("promotions")
       .select("id, title, description, photos", { count: "exact" })
       .eq("status", "live")
+      .eq("promotion_type", "event")
       .or(`end_date.is.null,end_date.gte.${nowIso}`)
       .order("created_at", { ascending: false })
       .limit(5),
+    supabase
+      .from("businesses")
+      .select("id", { count: "exact" })
+      .eq("status", "active")
+      .eq("category", "tourism_hospitality")
+      .limit(0),
   ]);
 
   // Find first non-placeholder item thumbnail for each category
@@ -57,6 +64,8 @@ export async function HomeCategoryShowcase() {
   );
   const promoRemovedCount = (promoResult.data ?? []).length - promoItems.length;
   const promoCount = Math.max(0, (promoResult.count ?? promoItems.length) - promoRemovedCount);
+  const tourismCount = tourismResult.count ?? 0;
+  const tourismEventsCount = promoCount + tourismCount;
 
   const marketThumb = marketItems[0]?.photos?.[0];
   const businessThumb = businessItems[0]?.cover_photo;
@@ -84,13 +93,13 @@ export async function HomeCategoryShowcase() {
       thumbnailUrl: marketThumb ? normalizeMediaUrl(marketThumb) : undefined,
     },
     {
-      title: "Promotions & Events",
-      description: "Discover current offers, deals, and events happening near you.",
+      title: "Tourism & Events",
+      description: "Discover tourism destinations, accommodations, and events near you.",
       href: "/promotions",
-      icon: Megaphone,
-      accentColor: "text-red-500",
-      accentBg: "bg-red-500/10",
-      count: promoCount,
+      icon: TreePalm,
+      accentColor: "text-teal-500",
+      accentBg: "bg-teal-500/10",
+      count: tourismEventsCount,
       thumbnailUrl: promoThumb ? normalizeMediaUrl(promoThumb) : undefined,
     },
   ];

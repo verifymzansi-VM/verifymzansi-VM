@@ -50,7 +50,8 @@ vi.mock("@/components/listings/promotion-card", () => ({
   },
 }));
 
-function createSupabaseMock(data: unknown[]) {
+function createSupabaseMock(data: unknown[], tourismData: unknown[] = []) {
+  let businessCallCount = 0;
   return {
     from: vi.fn((table: string) => {
       if (table === "promotions") {
@@ -67,6 +68,18 @@ function createSupabaseMock(data: unknown[]) {
       }
 
       if (table === "businesses") {
+        businessCallCount++;
+        if (businessCallCount === 1) {
+          // Tourism businesses query: .select().eq().eq().order().order().order().limit()
+          const builder = {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({ data: tourismData }),
+          };
+          return builder;
+        }
+        // Business logos query: .select().in()
         const builder = {
           select: vi.fn().mockReturnThis(),
           in: vi.fn().mockResolvedValue({
@@ -136,9 +149,9 @@ describe("HomePromotionsShowcase", () => {
 
     const ui = await HomePromotionsShowcase();
     render(ui as React.ReactElement);
-    expect(screen.getByRole("heading", { name: /Promotions & Events/i })).toBeInTheDocument();
-    expect(screen.getByText("No promotions yet.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Create Promotion/i })).toHaveAttribute(
+    expect(screen.getByRole("heading", { name: /Tourism & Events/i })).toBeInTheDocument();
+    expect(screen.getByText("No events yet.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Create Event/i })).toHaveAttribute(
       "href",
       "/post/create-promotion"
     );

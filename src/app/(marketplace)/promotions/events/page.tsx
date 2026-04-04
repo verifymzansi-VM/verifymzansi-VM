@@ -167,7 +167,7 @@ export default async function EventsPage() {
         description="Upcoming events from verified businesses."
         breadcrumbs={[
           { label: "Home", href: "/" },
-          { label: "Promotions & Events", href: "/promotions" },
+          { label: "Tourism & Events", href: "/promotions" },
           { label: "Events" },
         ]}
       >

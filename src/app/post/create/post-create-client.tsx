@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Building2, Loader2, Megaphone, ShieldAlert, ShoppingBag } from "lucide-react";
+import { ArrowRight, Building2, Loader2, TreePalm, ShieldAlert, ShoppingBag } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,19 +42,19 @@ const POST_OPTIONS = [
     iconBg: "bg-brand-blue/10",
   },
   {
-    title: "Promotions & Events",
-    tagline: "Promote something time-sensitive.",
+    title: "Tourism & Events",
+    tagline: "Create and promote events.",
     bullets: [
-      "Deals, specials & launches",
-      "Event marketing & campaigns",
-      "Opening promotions & product drops",
+      "Market events, concerts & festivals",
+      "Tourism events & experiences",
+      "Community gatherings & workshops",
     ],
-    icon: Megaphone,
+    icon: TreePalm,
     href: "/post/create-promotion",
-    badge: "Promotions & Events",
-    badgeColor: "bg-amber-600 text-white",
-    iconColor: "text-amber-600",
-    iconBg: "bg-amber-600/10",
+    badge: "Tourism & Events",
+    badgeColor: "bg-teal-600 text-white",
+    iconColor: "text-teal-600",
+    iconBg: "bg-teal-600/10",
   },
 ] as const;
 

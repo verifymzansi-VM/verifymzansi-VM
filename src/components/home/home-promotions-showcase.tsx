@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { Megaphone, ArrowRight } from "lucide-react";
+import { TreePalm, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PromotionCard } from "@/components/listings/promotion-card";
+import { BusinessPreviewCard } from "@/components/home/business-preview-card";
 import { createClient } from "@/lib/supabase/server";
 import { AutoScrollRail } from "./auto-scroll-rail";
-import type { BusinessCategory, PromotionType } from "@/types/enums";
+import type { BusinessCategory, BusinessType, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
@@ -36,6 +37,24 @@ interface PromotionRow {
   business_id: string | null;
 }
 
+interface TourismBusinessRow {
+  id: string;
+  business_name: string;
+  business_type: string;
+  cover_photo: string | null;
+  cover_video: string | null;
+  video_thumbnail: string | null;
+  logo_url: string | null;
+  location_province: string;
+  location_city: string;
+  boost_until: string | null;
+  featured_until: string | null;
+}
+
+type ShowcaseItem =
+  | { kind: "event"; data: PromotionRow }
+  | { kind: "tourism"; data: TourismBusinessRow };
+
 export async function HomePromotionsShowcase() {
   const cookieStore = await cookies();
   const hideFixtures = shouldHidePlaywrightFixtures(
@@ -44,20 +63,40 @@ export async function HomePromotionsShowcase() {
   const supabase = await createClient();
   const now = new Date().toISOString();
 
-  const { data } = await supabase
+  // Fetch events
+  const { data: eventData } = await supabase
     .from("promotions")
     .select("*")
     .eq("status", "live")
+    .eq("promotion_type", "event")
     .or(`end_date.is.null,end_date.gte.${now}`)
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(12);
+    .limit(8);
 
-  const promotions = ((data || []) as PromotionRow[])
+  const promotions = ((eventData || []) as PromotionRow[])
     .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
     .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
-    .slice(0, 6);
+    .slice(0, 4);
+
+  // Fetch tourism businesses
+  const { data: tourismData } = await supabase
+    .from("businesses")
+    .select(
+      "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until"
+    )
+    .eq("category", "tourism_hospitality")
+    .eq("status", "active")
+    .order("boost_until", { ascending: false, nullsFirst: false })
+    .order("featured_until", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  const tourismBusinesses = ((tourismData || []) as TourismBusinessRow[])
+    .filter((b) => !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures))
+    .filter((b) => !isPlaceholderMarketplaceContent(b.business_name))
+    .slice(0, 4);
 
   // Fetch business logos for promotions linked to a business
   const businessIds = [
@@ -68,26 +107,34 @@ export async function HomePromotionsShowcase() {
     : { data: [] };
   const logoMap = new Map((businesses ?? []).map((b) => [b.id, b.logo_url as string | null]));
 
-  if (promotions.length === 0) {
+  // Interleave tourism and events
+  const items: ShowcaseItem[] = [];
+  const maxLen = Math.max(tourismBusinesses.length, promotions.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (i < tourismBusinesses.length) items.push({ kind: "tourism", data: tourismBusinesses[i] });
+    if (i < promotions.length) items.push({ kind: "event", data: promotions[i] });
+  }
+
+  if (items.length === 0) {
     return (
-      <section className="py-4 sm:py-6 bg-gradient-to-b from-red-50/30 to-white dark:from-red-950/10 dark:to-warm-950">
+      <section className="py-4 sm:py-6 bg-gradient-to-b from-teal-50/30 to-white dark:from-teal-950/10 dark:to-warm-950">
         <div className="container-page space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Megaphone className="h-6 w-6 text-red-500" />
-              <h2 className="font-display text-xl sm:text-2xl font-bold">Promotions & Events</h2>
+              <TreePalm className="h-6 w-6 text-teal-500" />
+              <h2 className="font-display text-xl sm:text-2xl font-bold">Tourism & Events</h2>
             </div>
           </div>
           <div className="rounded-2xl border border-dashed border-warm-300 dark:border-warm-700 bg-warm-50 dark:bg-warm-900 p-8 text-center space-y-3">
-            <Megaphone className="h-10 w-10 text-red-400/50 mx-auto" />
-            <p className="text-muted-foreground text-sm">No promotions yet.</p>
+            <TreePalm className="h-10 w-10 text-teal-400/50 mx-auto" />
+            <p className="text-muted-foreground text-sm">No events yet.</p>
             <Button
               asChild
               size="sm"
-              className="bg-red-700 hover:bg-red-800 text-white rounded-full"
+              className="bg-teal-700 hover:bg-teal-800 text-white rounded-full"
             >
               <Link href="/post/create-promotion">
-                Create Promotion
+                Create Event
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Link>
             </Button>
@@ -98,18 +145,18 @@ export async function HomePromotionsShowcase() {
   }
 
   return (
-    <section className="py-4 sm:py-6 bg-gradient-to-b from-red-50/30 to-white dark:from-red-950/10 dark:to-warm-950">
+    <section className="py-4 sm:py-6 bg-gradient-to-b from-teal-50/30 to-white dark:from-teal-950/10 dark:to-warm-950">
       <div className="container-page space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Megaphone className="h-6 w-6 text-red-500" />
-            <h2 className="font-display text-xl sm:text-2xl font-bold">Promotions & Events</h2>
+            <TreePalm className="h-6 w-6 text-teal-500" />
+            <h2 className="font-display text-xl sm:text-2xl font-bold">Tourism & Events</h2>
           </div>
           <Button
             asChild
             variant="ghost"
             size="sm"
-            className="gap-1 text-red-600 hover:text-red-700"
+            className="gap-1 text-teal-600 hover:text-teal-700"
           >
             <Link href="/promotions">
               View All
@@ -118,34 +165,63 @@ export async function HomePromotionsShowcase() {
           </Button>
         </div>
 
-        <AutoScrollRail ariaLabel="Promotions and ads">
-          {promotions.map((promo, index) => (
+        <AutoScrollRail ariaLabel="Tourism and events">
+          {items.map((item, index) => (
             <div
-              key={promo.id}
+              key={item.kind === "tourism" ? `t-${item.data.id}` : `e-${item.data.id}`}
               className="min-w-[280px] max-w-[320px] sm:min-w-[300px] sm:max-w-[320px]"
             >
-              <PromotionCard
-                id={promo.id}
-                title={promo.title}
-                price={promo.price_cents}
-                negotiable={promo.price_negotiable}
-                imageUrl={promo.videos?.[0] || promo.photos?.[0]}
-                posterUrl={promo.video_thumbnail || promo.photos?.[0] || undefined}
-                categoryLabel={getPromotionCategoryDisplayLabel(promo.category_key, promo.category)}
-                province={promo.location_province}
-                city={promo.location_city}
-                promotionType={promo.promotion_type as PromotionType}
-                createdAt={promo.created_at}
-                viewCount={promo.view_count}
-                boosted={promo.boost_until ? new Date(promo.boost_until) > new Date(now) : false}
-                featured={
-                  promo.featured_until ? new Date(promo.featured_until) > new Date(now) : false
-                }
-                startDate={promo.start_date}
-                endDate={promo.end_date}
-                logoUrl={promo.business_id ? logoMap.get(promo.business_id) : undefined}
-                priority={index === 0}
-              />
+              {item.kind === "tourism" ? (
+                <BusinessPreviewCard
+                  href={`/mzansi-business/${item.data.id}`}
+                  imageUrl={item.data.cover_photo ?? undefined}
+                  posterUrl={item.data.video_thumbnail ?? undefined}
+                  logoUrl={item.data.logo_url ?? undefined}
+                  title={item.data.business_name}
+                  businessType={item.data.business_type as BusinessType}
+                  city={item.data.location_city}
+                  provinceCode={item.data.location_province}
+                  boosted={
+                    item.data.boost_until ? new Date(item.data.boost_until) > new Date(now) : false
+                  }
+                  featured={
+                    item.data.featured_until
+                      ? new Date(item.data.featured_until) > new Date(now)
+                      : false
+                  }
+                  priority={index === 0}
+                />
+              ) : (
+                <PromotionCard
+                  id={item.data.id}
+                  title={item.data.title}
+                  price={item.data.price_cents}
+                  negotiable={item.data.price_negotiable}
+                  imageUrl={item.data.videos?.[0] || item.data.photos?.[0]}
+                  posterUrl={item.data.video_thumbnail || item.data.photos?.[0] || undefined}
+                  categoryLabel={getPromotionCategoryDisplayLabel(
+                    item.data.category_key,
+                    item.data.category
+                  )}
+                  province={item.data.location_province}
+                  city={item.data.location_city}
+                  promotionType={item.data.promotion_type as PromotionType}
+                  createdAt={item.data.created_at}
+                  viewCount={item.data.view_count}
+                  boosted={
+                    item.data.boost_until ? new Date(item.data.boost_until) > new Date(now) : false
+                  }
+                  featured={
+                    item.data.featured_until
+                      ? new Date(item.data.featured_until) > new Date(now)
+                      : false
+                  }
+                  startDate={item.data.start_date}
+                  endDate={item.data.end_date}
+                  logoUrl={item.data.business_id ? logoMap.get(item.data.business_id) : undefined}
+                  priority={index === 0}
+                />
+              )}
             </div>
           ))}
         </AutoScrollRail>

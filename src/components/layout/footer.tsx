@@ -43,7 +43,7 @@ export function Footer() {
                 href="/promotions"
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                Promotions & Events
+                Tourism & Events
               </Link>
               <Link
                 href="/advertise"

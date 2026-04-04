@@ -409,7 +409,7 @@ describe("content media cleanup queueing", () => {
       createRequest(`http://localhost:3000/api/promotions/${VALID_UUID}`, "PUT", {
         title: "Weekend Promo",
         description: "A valid promotion description that is long enough to pass validation.",
-        promotion_type: "deal",
+        promotion_type: "event",
         province: "Gauteng",
         city: "Johannesburg",
         contact_methods: ["call"],

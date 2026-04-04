@@ -37,7 +37,7 @@ const VALID_BODY = {
   title: "Great Deal on Electronics",
   description:
     "This is a detailed description of our amazing promotion with at least 20 characters.",
-  promotion_type: "deal",
+  promotion_type: "event",
   province: "Gauteng",
   city: "Johannesburg",
   contact_methods: ["call"],

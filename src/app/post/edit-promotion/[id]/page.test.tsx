@@ -143,19 +143,13 @@ describe("EditPromotionPage", () => {
     expect(payload.end_date).toBe("2099-03-12T00:00:00.000Z");
   });
 
-  it("shows the four visible promotion categories on the edit form", async () => {
+  it("does not render a promotion type selector (events only)", async () => {
     render(<EditPromotionPage />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Promotion Type")).toBeInTheDocument();
+      expect(global.fetch).toHaveBeenCalled();
     });
 
-    const typeSelect = screen.getByLabelText("Promotion Type");
-
-    expect(screen.getByRole("option", { name: "Deals" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Events" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Promotions" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Ads" })).toBeInTheDocument();
-    expect(typeSelect).toHaveValue("event");
+    expect(screen.queryByLabelText("Promotion Type")).not.toBeInTheDocument();
   });
 });

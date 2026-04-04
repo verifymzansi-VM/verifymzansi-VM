@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowRight, Building2, Megaphone, ShoppingBag } from "lucide-react";
+import { ArrowRight, Building2, TreePalm, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -52,12 +52,12 @@ export default async function HomePage() {
       iconBgClass: "bg-brand-blue/10",
     },
     {
-      title: "Promotions & Events",
-      description: "Deals, launches, and events near you.",
+      title: "Tourism & Events",
+      description: "Tourism destinations, accommodations, and events near you.",
       href: "/promotions",
-      icon: Megaphone,
-      accentClass: "text-red-400",
-      iconBgClass: "bg-red-500/10",
+      icon: TreePalm,
+      accentClass: "text-teal-400",
+      iconBgClass: "bg-teal-500/10",
     },
   ] as const;
 

@@ -19,6 +19,7 @@ const BUSINESS_CATEGORY_VALUES = [
   "education_training",
   "events_entertainment",
   "automotive_transport",
+  "tourism_hospitality",
   "general_other",
 ] as const satisfies readonly BusinessCategory[];
 
@@ -99,7 +100,7 @@ export const promotionSchema = z
       .string()
       .min(20, "Description must be at least 20 characters")
       .max(5000, "Description cannot exceed 5000 characters"),
-    promotion_type: z.enum(["product", "service", "event", "deal", "general"]),
+    promotion_type: z.literal("event"),
     category: z.string().max(100).optional(),
     category_key: z.enum(BUSINESS_CATEGORY_VALUES).optional(),
     price_zar: priceSchema.optional(),

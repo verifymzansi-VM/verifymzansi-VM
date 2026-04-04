@@ -64,7 +64,7 @@ const AREA_LABELS: Record<MarketplaceArea, string> = {
   MALL_SHOPS: "Mall Shops",
   BUSINESS_ADS: "Business Ads",
   MZANSI_BUSINESS: "Mzansi Business",
-  PROMOTIONS_EVENTS: "Promotions & Events",
+  PROMOTIONS_EVENTS: "Tourism & Events",
 };
 
 const AREA_COLORS: Record<MarketplaceArea, string> = {

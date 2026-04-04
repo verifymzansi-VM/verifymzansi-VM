@@ -333,7 +333,7 @@ describe("POST /api/webhooks/ozow", () => {
       "payer@example.com",
       "Payer One",
       25,
-      "Promotions & Events"
+      "Tourism & Events"
     );
     expect(mockFulfillPayment).toHaveBeenCalledWith(
       expect.anything(),
@@ -483,7 +483,7 @@ describe("POST /api/webhooks/ozow", () => {
       "payer@example.com",
       "Payer One",
       25,
-      "Promotions & Events"
+      "Tourism & Events"
     );
   });
 

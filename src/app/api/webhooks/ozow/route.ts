@@ -28,7 +28,7 @@ function getPlanNameFromArea(area?: string | null): string {
     case "MZANSI_BUSINESS":
       return "Mzansi Business";
     case "PROMOTIONS_EVENTS":
-      return "Promotions & Events";
+      return "Tourism & Events";
     default:
       return "VerifyMzansi Plan";
   }

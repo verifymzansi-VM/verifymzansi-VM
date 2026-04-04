@@ -14,11 +14,6 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { LocationSelector } from "@/components/ui/location-selector";
-import {
-  getPromotionFilterTypeFromStoredType,
-  getStoredPromotionTypeForFilter,
-  PROMOTION_FILTER_TYPE_OPTIONS,
-} from "@/lib/promotions/type-taxonomy";
 import { type BusinessCategory, type PromotionType } from "@/types/enums";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import {
@@ -48,7 +43,7 @@ export default function EditPromotionPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Form state
-  const [promotionType, setPromotionType] = useState<PromotionType>("general");
+  const [promotionType, setPromotionType] = useState<PromotionType>("event");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
@@ -79,7 +74,6 @@ export default function EditPromotionPage() {
   const [businessId, setBusinessId] = useState("");
   const [myBusinesses, setMyBusinesses] = useState<{ id: string; business_name: string }[]>([]);
 
-  const selectedPromotionFilterType = getPromotionFilterTypeFromStoredType(promotionType);
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
@@ -104,7 +98,7 @@ export default function EditPromotionPage() {
         const data = await res.json();
         const p = data.promotion;
 
-        setPromotionType(p.promotion_type || "general");
+        setPromotionType("event");
         setTitle(p.title || "");
         setDescription(p.description || "");
         setCategory(p.category || "");
@@ -343,10 +337,10 @@ export default function EditPromotionPage() {
       <main className="flex-1">
         <div className="container-page py-4 space-y-4 max-w-3xl">
           <PageHeader
-            title="Edit Promotion"
+            title="Edit Event"
             breadcrumbs={[
               { label: "Dashboard", href: "/dashboard" },
-              { label: "Promotions & Events", href: "/dashboard/promotions" },
+              { label: "Tourism & Events", href: "/dashboard/promotions" },
               { label: "Edit" },
             ]}
           />
@@ -360,32 +354,7 @@ export default function EditPromotionPage() {
           <Card>
             <CardContent className="p-5 space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="promotion_type">Promotion Type</Label>
-                <select
-                  id="promotion_type"
-                  aria-label="Promotion Type"
-                  className={selectClass}
-                  value={selectedPromotionFilterType}
-                  onChange={(event) =>
-                    setPromotionType(
-                      getStoredPromotionTypeForFilter(
-                        event.target
-                          .value as (typeof PROMOTION_FILTER_TYPE_OPTIONS)[number]["value"],
-                        promotionType
-                      )
-                    )
-                  }
-                >
-                  {PROMOTION_FILTER_TYPE_OPTIONS.map(({ value, label }) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
+                <Label htmlFor="title">Event Title</Label>
                 <Input
                   id="title"
                   value={title}

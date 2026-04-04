@@ -1,34 +1,18 @@
 import type { PromotionType } from "@/types/enums";
 
-export type PromotionFilterType = "deal" | "event" | "promotion" | "ad";
+export type PromotionFilterType = "event";
 
 export const PROMOTION_FILTER_TYPE_OPTIONS: Array<{
   value: PromotionFilterType;
   label: string;
-}> = [
-  { value: "deal", label: "Deals" },
-  { value: "event", label: "Events" },
-  { value: "promotion", label: "Promotions" },
-  { value: "ad", label: "Ads" },
-];
+}> = [{ value: "event", label: "Events" }];
 
-export function getPromotionFilterTypeLabel(value: PromotionFilterType): string {
-  return PROMOTION_FILTER_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? "Ads";
+export function getPromotionFilterTypeLabel(_value: PromotionFilterType): string {
+  return "Events";
 }
 
-export function getPromotionFilterTypeFromStoredType(value: PromotionType): PromotionFilterType {
-  switch (value) {
-    case "deal":
-      return "deal";
-    case "event":
-      return "event";
-    case "product":
-    case "service":
-      return "promotion";
-    case "general":
-    default:
-      return "ad";
-  }
+export function getPromotionFilterTypeFromStoredType(_value: PromotionType): PromotionFilterType {
+  return "event";
 }
 
 export function parsePromotionFilterType(
@@ -38,51 +22,23 @@ export function parsePromotionFilterType(
   if (!normalized) {
     return null;
   }
-
-  switch (normalized) {
-    case "deal":
-      return "deal";
-    case "event":
-      return "event";
-    case "promotion":
-    case "product":
-    case "service":
-      return "promotion";
-    case "ad":
-    case "general":
-      return "ad";
-    default:
-      return null;
+  if (normalized === "event") {
+    return "event";
   }
+  // Backward compat: map any old filter type to event
+  if (["deal", "promotion", "product", "service", "ad", "general"].includes(normalized)) {
+    return "event";
+  }
+  return null;
 }
 
-export function getStoredPromotionTypesForFilter(value: PromotionFilterType): PromotionType[] {
-  switch (value) {
-    case "deal":
-      return ["deal"];
-    case "event":
-      return ["event"];
-    case "promotion":
-      return ["product", "service"];
-    case "ad":
-    default:
-      return ["general"];
-  }
+export function getStoredPromotionTypesForFilter(_value: PromotionFilterType): PromotionType[] {
+  return ["event"];
 }
 
 export function getStoredPromotionTypeForFilter(
-  value: PromotionFilterType,
-  previousType?: PromotionType
+  _value: PromotionFilterType,
+  _previousType?: PromotionType
 ): PromotionType {
-  switch (value) {
-    case "deal":
-      return "deal";
-    case "event":
-      return "event";
-    case "promotion":
-      return previousType === "service" ? "service" : "product";
-    case "ad":
-    default:
-      return "general";
-  }
+  return "event";
 }

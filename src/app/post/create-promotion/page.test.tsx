@@ -127,37 +127,29 @@ describe("CreatePromotionPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
   }
 
-  it("renders the Promotions & Events area label", async () => {
+  it("renders the Tourism & Events area label", async () => {
     render(<CreatePromotionPage />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
 
-    expect(screen.getAllByText("Promotions & Events").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Tourism & Events").length).toBeGreaterThan(0);
   });
 
-  it("shows the four visible promotion categories", async () => {
+  it("does not render a promotion type selector (events only)", async () => {
     render(<CreatePromotionPage />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
 
-    const typeSelect = screen.getByLabelText("Promotion Type");
-
-    expect(screen.getByRole("option", { name: "Deals" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Events" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Promotions" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Ads" })).toBeInTheDocument();
-    expect(typeSelect).toHaveValue("ad");
+    expect(screen.queryByLabelText("Promotion Type")).not.toBeInTheDocument();
   });
 
-  it("switches the guide text when the type is event", async () => {
+  it("shows event guide text by default", async () => {
     render(<CreatePromotionPage />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-
-    fireEvent.change(screen.getByLabelText("Promotion Type"), { target: { value: "event" } });
 
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "Add the event details, tell people where it happens, and submit it for review."
-      )
-    ).toBeInTheDocument();
+      ).length
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it("shows inline validation on the location step", async () => {
@@ -190,7 +182,6 @@ describe("CreatePromotionPage", () => {
     render(<CreatePromotionPage />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
 
-    fireEvent.change(screen.getByLabelText("Promotion Type"), { target: { value: "event" } });
     completeStepOne();
 
     fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
@@ -248,7 +239,7 @@ describe("CreatePromotionPage", () => {
       });
     });
 
-    it("restores title and promotion type from a saved draft", async () => {
+    it("restores title from a saved draft", async () => {
       seedDraft();
       render(<CreatePromotionPage />);
       await waitFor(() => expect(global.fetch).toHaveBeenCalled());
@@ -256,7 +247,6 @@ describe("CreatePromotionPage", () => {
       await waitFor(() => {
         expect(screen.getByLabelText(/Title/i)).toHaveValue("Saved Music Festival");
       });
-      expect(screen.getByLabelText("Promotion Type")).toHaveValue("event");
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft restored" }));
     });
 

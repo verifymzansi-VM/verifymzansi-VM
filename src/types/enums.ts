@@ -70,6 +70,7 @@ export type BusinessCategory =
   | "education_training"
   | "events_entertainment"
   | "automotive_transport"
+  | "tourism_hospitality"
   | "general_other";
 
 /* ── Promotion Enums ────────────────────────────────────── */
@@ -211,7 +212,7 @@ export type TrustLevel = 0 | 1 | 2 | 3 | 4;
 export const AREA_LABELS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "Mzansi Market",
   MZANSI_BUSINESS: "Mzansi Business",
-  PROMOTIONS_EVENTS: "Promotions & Events",
+  PROMOTIONS_EVENTS: "Tourism & Events",
   BUSINESS_ADS: "Business Ads",
   MALL_SHOPS: "Mall Shops",
 };
@@ -262,6 +263,7 @@ export const BUSINESS_CATEGORY_LABELS: Record<BusinessCategory, string> = {
   education_training: "Education & Training",
   events_entertainment: "Events & Entertainment",
   automotive_transport: "Automotive & Transport",
+  tourism_hospitality: "Tourism & Hospitality",
   general_other: "General & Other",
 };
 

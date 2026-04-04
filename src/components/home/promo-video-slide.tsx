@@ -128,9 +128,9 @@ function MarketplaceShowcase({ noMotion }: { noMotion: boolean }) {
     },
     {
       icon: Briefcase,
-      label: "Promotions & Events",
+      label: "Tourism & Events",
       desc: "Campaigns",
-      color: "bg-brand-blue/20 text-brand-blue-400 border-brand-blue/30",
+      color: "bg-teal-500/20 text-teal-400 border-teal-500/30",
     },
   ];
 

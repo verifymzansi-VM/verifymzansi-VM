@@ -50,12 +50,12 @@ describe("PromotionFilterPanel", () => {
   it("renders active chips and clears all when filters are present", () => {
     const handlers = renderPanel({
       query: "sale",
-      type: "ad",
+      type: "event",
       businessId: "business-1",
     });
 
     expect(screen.getByText("sale")).toBeInTheDocument();
-    expect(screen.getAllByText("Ads").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Events").length).toBeGreaterThan(0);
     expect(screen.getByText(/fix fast/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /clear all/i }));

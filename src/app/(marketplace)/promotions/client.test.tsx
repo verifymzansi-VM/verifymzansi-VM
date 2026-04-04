@@ -117,6 +117,10 @@ vi.mock("@/components/ui/video-card-player", () => ({
   VideoCardPlayer: ({ src }: { src: string }) => <div>{src}</div>,
 }));
 
+vi.mock("@/components/listings/business-card", () => ({
+  BusinessCard: ({ name }: { name: string }) => <div>{name}</div>,
+}));
+
 describe("PromotionsExplorer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -140,30 +144,33 @@ describe("PromotionsExplorer", () => {
     vi.stubGlobal("fetch", fetchMock);
   });
 
-  it("renders the top type bar in the expected order with events last", async () => {
+  it("renders Tourism and Events tabs", async () => {
     render(<PromotionsExplorer />);
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();
     });
 
-    const toolbar = screen.getByRole("toolbar", { name: "Promotion types" });
-    const labels = within(toolbar)
-      .getAllByRole("button")
-      .map((button) => button.textContent?.trim());
+    const tablist = screen.getByRole("tablist");
+    const tabs = within(tablist)
+      .getAllByRole("tab")
+      .map((tab) => tab.textContent?.trim());
 
-    expect(labels).toEqual(["All", "Deals", "Promotions", "Ads", "Events"]);
+    expect(tabs).toEqual(expect.arrayContaining(["Tourism", "Events"]));
   });
 
-  it("updates the query string when a type pill is selected", async () => {
+  it("switches to Events tab and updates the query string", async () => {
     render(<PromotionsExplorer />);
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Deals" }));
+    fireEvent.click(screen.getByRole("tab", { name: /Events/i }));
 
-    expect(replaceMock).toHaveBeenCalledWith("/promotions?type=deal", { scroll: false });
+    expect(replaceMock).toHaveBeenCalledWith(
+      expect.stringContaining("tab=events"),
+      expect.anything()
+    );
   });
 });

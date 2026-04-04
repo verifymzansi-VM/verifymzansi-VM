@@ -7,8 +7,8 @@ import {
 import type { BusinessCategory } from "@/types/enums";
 
 describe("CATEGORY_LAYOUT_MAP", () => {
-  it("maps all 12 categories", () => {
-    expect(Object.keys(CATEGORY_LAYOUT_MAP)).toHaveLength(12);
+  it("maps all 13 categories", () => {
+    expect(Object.keys(CATEGORY_LAYOUT_MAP)).toHaveLength(13);
   });
 
   it("assigns cinematic to visual categories", () => {
@@ -16,6 +16,7 @@ describe("CATEGORY_LAYOUT_MAP", () => {
     expect(CATEGORY_LAYOUT_MAP.health_beauty).toBe("cinematic");
     expect(CATEGORY_LAYOUT_MAP.food_dining).toBe("cinematic");
     expect(CATEGORY_LAYOUT_MAP.events_entertainment).toBe("cinematic");
+    expect(CATEGORY_LAYOUT_MAP.tourism_hospitality).toBe("cinematic");
   });
 
   it("assigns showcase to product categories", () => {

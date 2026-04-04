@@ -39,7 +39,7 @@ const LISTING_DASHBOARD_FALLBACK_FIELDS = ["featured_until", "urgent_until"] as 
 export const metadata = {
   title: "Your Content",
   description:
-    "Manage your marketplace content across Mzansi Market, Mzansi Business, and Promotions & Events.",
+    "Manage your marketplace content across Mzansi Market, Mzansi Business, and Tourism & Events.",
 };
 
 type DashboardItem = {

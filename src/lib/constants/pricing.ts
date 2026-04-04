@@ -196,7 +196,7 @@ export const PLANS: PlanDefinition[] = [
       coverVideoAllowed: true,
     },
   },
-  // Promotions & Events
+  // Tourism & Events
   {
     area: "PROMOTIONS_EVENTS",
     tier: "basic",

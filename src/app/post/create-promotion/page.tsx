@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Building2, Camera, FileText, MapPin, Megaphone } from "lucide-react";
+import { Building2, Camera, FileText, MapPin, TreePalm } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,11 +16,6 @@ import {
   usePlanVideoAllowed,
 } from "@/components/billing/plan-gate";
 import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
-import {
-  getPromotionFilterTypeFromStoredType,
-  getStoredPromotionTypeForFilter,
-  PROMOTION_FILTER_TYPE_OPTIONS,
-} from "@/lib/promotions/type-taxonomy";
 import { type BusinessCategory, type PromotionType } from "@/types/enums";
 import { cn } from "@/lib/utils";
 import {
@@ -96,7 +91,7 @@ function CreatePromotionContent() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
-  const [promotionType, setPromotionType] = useState<PromotionType>("general");
+  const [promotionType, setPromotionType] = useState<PromotionType>("event");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
@@ -136,8 +131,6 @@ function CreatePromotionContent() {
     town: locationTown,
     address: locationAddress,
   };
-  const isEvent = promotionType === "event";
-  const selectedPromotionFilterType = getPromotionFilterTypeFromStoredType(promotionType);
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
@@ -212,7 +205,7 @@ function CreatePromotionContent() {
 
     const restoredData = restored.data;
     setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
-    setPromotionType((restoredData.promotionType as PromotionType) ?? "general");
+    setPromotionType("event");
     setTitle(restoredData.title ?? "");
     setDescription(restoredData.description ?? "");
     setCategory(restoredData.category ?? "");
@@ -245,8 +238,6 @@ function CreatePromotionContent() {
   }, [user?.id, isLoading, submitSucceeded, restoreDraft, searchParams, toast]);
 
   useEffect(() => {
-    if (!isEvent) return;
-
     const defaults = getDefaultEventDates(startDate, endDate);
     if (!startDate) {
       setStartDate(defaults.startDate);
@@ -255,7 +246,7 @@ function CreatePromotionContent() {
     if (!endDate) {
       setEndDate(defaults.endDate);
     }
-  }, [isEvent, startDate, endDate]);
+  }, [startDate, endDate]);
 
   useEffect(() => {
     if (!user?.id || isLoading || isSubmitting || submitSucceeded) return;
@@ -361,10 +352,10 @@ function CreatePromotionContent() {
       socialAuthorization: targetStep === 2 ? socialAuthorization : { granted: false },
     });
     if (targetStep === 0) {
-      if (!title.trim()) errors.title = isEvent ? "Enter an event title." : "Enter a title.";
+      if (!title.trim()) errors.title = "Enter an event title.";
       else if (title.trim().length < 5) errors.title = "Title must be at least 5 characters.";
       if (!description.trim()) {
-        errors.description = isEvent ? "Enter event details." : "Enter a description.";
+        errors.description = "Enter event details.";
       } else if (description.trim().length < 20) {
         errors.description = "Description must be at least 20 characters.";
       }
@@ -529,7 +520,7 @@ function CreatePromotionContent() {
   function handleDiscardDraft() {
     discardDraft();
     setStep(0);
-    setPromotionType("general");
+    setPromotionType("event");
     setTitle("");
     setDescription("");
     setCategory("");
@@ -567,20 +558,16 @@ function CreatePromotionContent() {
           <PlanGate area="PROMOTIONS_EVENTS">
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
-                title={isEvent ? "Create an Event" : "Create a Promotion"}
-                description="Promote your offer or event with the key details people need to act quickly."
+                title="Create an Event"
+                description="Add the event details, tell people where it happens, and submit it for review."
                 breadcrumbs={[
                   { label: "Dashboard", href: "/dashboard" },
                   { label: "Create Post", href: "/post/create" },
-                  { label: "Promotions & Events" },
+                  { label: "Tourism & Events" },
                 ]}
-                badgeLabel="Promotions & Events"
-                badgeClassName="bg-amber-600 text-white"
-                guideDescription={
-                  isEvent
-                    ? "Add the event details, tell people where it happens, and submit it for review."
-                    : "Add the offer details, show where it applies, and submit it for review."
-                }
+                badgeLabel="Tourism & Events"
+                badgeClassName="bg-teal-600 text-white"
+                guideDescription="Add the event details, tell people where it happens, and submit it for review."
                 steps={STEPS}
                 currentStep={step}
                 error={formError}
@@ -649,41 +636,8 @@ function CreatePromotionContent() {
                 {step === 0 && (
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div className="space-y-2">
-                      <Label htmlFor="promotion_type">Promotion Type</Label>
-                      <select
-                        id="promotion_type"
-                        aria-label="Promotion Type"
-                        className={SELECT_CLASS}
-                        value={selectedPromotionFilterType}
-                        onChange={(event) => {
-                          setPromotionType(
-                            getStoredPromotionTypeForFilter(
-                              event.target
-                                .value as (typeof PROMOTION_FILTER_TYPE_OPTIONS)[number]["value"],
-                              promotionType
-                            )
-                          );
-                          // Auto-focus the title field after selecting a promotion type
-                          requestAnimationFrame(() => {
-                            const el = document.getElementById("title");
-                            if (el) {
-                              el.focus();
-                              el.scrollIntoView({ behavior: "smooth", block: "center" });
-                            }
-                          });
-                        }}
-                      >
-                        {PROMOTION_FILTER_TYPE_OPTIONS.map(({ value, label }) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="title">{isEvent ? "Event Title" : "Title"} *</Label>
+                        <Label htmlFor="title">Event Title *</Label>
                         <span className="text-xs text-muted-foreground">{title.length}/120</span>
                       </div>
                       <Input
@@ -693,11 +647,7 @@ function CreatePromotionContent() {
                           setTitle(event.target.value);
                           clearErrors("title");
                         }}
-                        placeholder={
-                          isEvent
-                            ? "e.g. Saturday Night Market in Soweto"
-                            : "e.g. Fresh Produce Delivery in Soweto"
-                        }
+                        placeholder="e.g. Saturday Night Market in Soweto"
                         maxLength={120}
                         className={cn(fieldErrors.title && "border-destructive")}
                       />
@@ -708,9 +658,7 @@ function CreatePromotionContent() {
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="description">
-                          {isEvent ? "Event Details" : "Description"} *
-                        </Label>
+                        <Label htmlFor="description">Event Details *</Label>
                         <span className="text-xs text-muted-foreground">
                           {description.length}/5000
                         </span>
@@ -724,11 +672,7 @@ function CreatePromotionContent() {
                         }}
                         rows={5}
                         maxLength={5000}
-                        placeholder={
-                          isEvent
-                            ? "Tell people what the event is, who it is for, and what they should expect."
-                            : "Tell people what you're offering, why it matters, and how they can get it."
-                        }
+                        placeholder="Tell people what the event is, who it is for, and what they should expect."
                         className={cn(fieldErrors.description && "border-destructive")}
                       />
                       {fieldErrors.description && (
@@ -762,9 +706,7 @@ function CreatePromotionContent() {
                         id="category"
                         value={category}
                         onChange={(event) => setCategory(event.target.value)}
-                        placeholder={
-                          isEvent ? "e.g. Live Music, Community Event" : "e.g. Food & Groceries"
-                        }
+                        placeholder={"e.g. Live Music, Community Event"}
                         maxLength={100}
                       />
                     </div>
@@ -798,9 +740,7 @@ function CreatePromotionContent() {
                   <div className="space-y-5 animate-in fade-in-0 duration-300">
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="price">
-                          {isEvent ? "Ticket / Entry Price (optional)" : "Price (optional)"}
-                        </Label>
+                        <Label htmlFor="price">Ticket / Entry Price (optional)</Label>
                         <Input
                           id="price"
                           type="number"
@@ -827,7 +767,7 @@ function CreatePromotionContent() {
                             onChange={(event) => setNegotiable(event.target.checked)}
                             className="rounded"
                           />
-                          {isEvent ? "Entry price is negotiable" : "Price is negotiable"}
+                          Entry price is negotiable
                         </label>
                       </div>
                     </div>
@@ -879,9 +819,7 @@ function CreatePromotionContent() {
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="start_date">
-                          {isEvent ? "Start Date" : "Start Date (optional)"}
-                        </Label>
+                        <Label htmlFor="start_date">Start Date</Label>
                         <Input
                           id="start_date"
                           type="date"
@@ -897,9 +835,7 @@ function CreatePromotionContent() {
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="end_date">
-                          {isEvent ? "End Date" : "End Date (optional)"}
-                        </Label>
+                        <Label htmlFor="end_date">End Date</Label>
                         <Input
                           id="end_date"
                           type="date"
@@ -976,7 +912,7 @@ function CreatePromotionContent() {
 
                     <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4 text-sm">
                       <div className="mb-3 flex items-center gap-2 font-medium text-muted-foreground">
-                        <Megaphone className="h-4 w-4" />
+                        <TreePalm className="h-4 w-4" />
                         Preview
                       </div>
 

@@ -123,8 +123,8 @@ describe("PromotionCard", () => {
 
     expect(screen.getByText("TUE, 10 MAR")).toBeTruthy();
     expect(screen.getByText("Event")).toBeTruthy();
-    expect(screen.getByText("Event")).toHaveClass("bg-red-500");
-    expect(screen.getByTestId("card")).toHaveClass("hover:border-red-600/60");
+    expect(screen.getByText("Event")).toHaveClass("bg-teal-500");
+    expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
   });
 
   it("hides linked business context in the reduced card", () => {
@@ -137,7 +137,7 @@ describe("PromotionCard", () => {
     render(
       <PromotionCard
         {...defaultProps}
-        promotionType="deal"
+        promotionType="event"
         categoryLabel="Food & Dining"
         endDate="2099-03-12T00:00:00.000Z"
         featured
@@ -146,21 +146,21 @@ describe("PromotionCard", () => {
 
     expect(screen.getByText("Featured")).toBeTruthy();
     expect(screen.queryByText(/Food & Dining/i)).toBeNull();
-    expect(screen.getByTestId("card")).toHaveClass("hover:border-blue-600/60");
+    expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
   });
 
-  it("uses the shared deal styling when no override badge is active", () => {
-    render(<PromotionCard {...defaultProps} promotionType="deal" />);
+  it("uses the event styling when no override badge is active", () => {
+    render(<PromotionCard {...defaultProps} promotionType="event" />);
 
-    expect(screen.getByText("Deal")).toHaveClass("bg-blue-600");
-    expect(screen.getByTestId("card")).toHaveClass("hover:border-blue-600/60");
+    expect(screen.getByText("Event")).toHaveClass("bg-teal-500");
+    expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
   });
 
   it("keeps the type ribbon visible when the card is boosted", () => {
     render(<PromotionCard {...defaultProps} promotionType="event" boosted />);
 
     expect(screen.getByText("Event ★")).toBeTruthy();
-    expect(screen.getByText("Event ★")).toHaveClass("bg-red-500");
+    expect(screen.getByText("Event ★")).toHaveClass("bg-teal-500");
   });
 
   it("renders the linked business logo when provided", () => {

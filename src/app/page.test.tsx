@@ -104,7 +104,7 @@ describe("HomePage", () => {
     ).toHaveAttribute("href", "/mzansi-business");
     expect(
       screen.getByRole("link", {
-        name: /Promotions & Events Deals, launches, and events near you\./i,
+        name: /Tourism & Events/i,
       })
     ).toHaveAttribute("href", "/promotions");
   });

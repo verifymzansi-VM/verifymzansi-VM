@@ -112,6 +112,47 @@ export const CATEGORY_DETAIL_FIELDS: Partial<
       kind: "checkbox",
     },
   ],
+
+  tourism_hospitality: [
+    {
+      name: "star_rating",
+      label: "Star rating",
+      kind: "select",
+      options: [
+        { value: "1", label: "1 Star" },
+        { value: "2", label: "2 Stars" },
+        { value: "3", label: "3 Stars" },
+        { value: "4", label: "4 Stars" },
+        { value: "5", label: "5 Stars" },
+      ],
+    },
+    {
+      name: "number_of_rooms",
+      label: "Number of rooms",
+      kind: "number",
+      min: 0,
+      step: "1",
+      placeholder: "e.g. 20",
+    },
+    {
+      name: "languages_spoken",
+      label: "Languages spoken",
+      kind: "list",
+      placeholder: "e.g. English, Zulu, Afrikaans",
+      description: "Separate languages with commas.",
+    },
+    {
+      name: "booking_url",
+      label: "Booking URL",
+      kind: "url",
+      placeholder: "e.g. https://booking.example.com",
+    },
+    {
+      name: "pets_allowed",
+      label: "Pets allowed",
+      kind: "checkbox",
+    },
+  ],
 };
 
 /** Return the extra fields for a given category, or an empty array. */

@@ -46,6 +46,21 @@ const KEYWORD_MAP: Array<{ key: BusinessCategory; patterns: RegExp[] }> = [
     key: "automotive_transport",
     patterns: [/auto/i, /car/i, /vehicle/i, /transport/i, /logistics/i, /taxi/i, /shuttle/i],
   },
+  {
+    key: "tourism_hospitality",
+    patterns: [
+      /\btour\b/i,
+      /tourism/i,
+      /hotel/i,
+      /lodge/i,
+      /safari/i,
+      /guest\s?house/i,
+      /\bbnb\b/i,
+      /hostel/i,
+      /resort/i,
+      /travel\s?agent/i,
+    ],
+  },
 ];
 
 const EXACT_CATEGORY_MAP = new Map(

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, Megaphone, ShieldCheck, Store } from "lucide-react";
+import { ArrowRight, BadgeCheck, ShieldCheck, Store, TreePalm } from "lucide-react";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { PageHeader } from "@/components/layout/page-header";
@@ -20,9 +20,9 @@ export const metadata: Metadata = {
 export default function AdvertisePage() {
   const pillars = [
     {
-      title: "Promote what matters now",
-      description: "Launch products and push campaigns from one trusted platform.",
-      icon: Megaphone,
+      title: "List your tourism business",
+      description: "Showcase accommodations, tours, and experiences on a trusted platform.",
+      icon: TreePalm,
     },
     {
       title: "Build customer confidence",
@@ -48,8 +48,8 @@ export default function AdvertisePage() {
       href: "/mzansi-business",
     },
     {
-      name: "Promotions & Events",
-      description: "Run launches, campaigns, specials, and event pushes with urgency.",
+      name: "Tourism & Events",
+      description: "Promote your tourism business and events with trusted visibility.",
       href: "/promotions",
     },
   ];

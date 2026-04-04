@@ -58,7 +58,7 @@ const items: ModerationItem[] = [
     created_at: "2026-03-20T10:00:00.000Z",
     owner_id: "user-3",
     area: "PROMOTIONS_EVENTS",
-    areaLabel: "Promotions & Events",
+    areaLabel: "Tourism & Events",
     itemType: "Promotion",
   },
 ];

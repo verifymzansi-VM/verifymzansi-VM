@@ -29,6 +29,8 @@ export const CATEGORY_LAYOUT_MAP: Record<BusinessCategory, LayoutTemplate> = {
   professional_services: "professional",
   education_training: "professional",
   general_other: "professional",
+
+  tourism_hospitality: "cinematic",
 };
 
 /**
@@ -102,6 +104,11 @@ export const CATEGORY_CTA_CONFIG: Record<
     primaryCta: "Contact Us",
     servicesHeading: "Services Offered",
     galleryHeading: "Photos",
+  },
+  tourism_hospitality: {
+    primaryCta: "Book Now",
+    servicesHeading: "What We Offer",
+    galleryHeading: "Photo Gallery",
   },
 };
 

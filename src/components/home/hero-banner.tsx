@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Building2, Megaphone, ArrowRight, ShieldCheck } from "lucide-react";
+import { MapPin, Building2, TreePalm, ArrowRight, ShieldCheck } from "lucide-react";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import { buttonVariants } from "@/components/ui/button";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
@@ -21,11 +21,11 @@ const ENTITY_CONFIG = {
     cta: "View Business",
   },
   promotion: {
-    Icon: Megaphone,
-    badgeColor: "bg-amber-500/90 text-amber-950 border border-amber-200/40 backdrop-blur-md",
-    badge: "Promotions & Events",
+    Icon: TreePalm,
+    badgeColor: "bg-teal-500/90 text-white border border-white/10 backdrop-blur-md",
+    badge: "Tourism & Events",
     href: "/promotion/",
-    cta: "View Promotion",
+    cta: "View Event",
   },
   listing: {
     Icon: ShieldCheck,

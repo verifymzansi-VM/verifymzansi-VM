@@ -313,7 +313,7 @@ export async function POST(request: NextRequest) {
             {
               error: "Free post already used",
               reason:
-                "You have already used your free post for Promotions & Events. Subscribe to a plan to post more.",
+                "You have already used your free post for Tourism & Events. Subscribe to a plan to post more.",
               upgradeUrl: "/billing",
             },
             { status: 403 }
@@ -515,7 +515,7 @@ export async function GET(request: NextRequest) {
     }
 
     const query = parsedQuery.data;
-    const promotionType = query.type ? parsePromotionFilterType(query.type) : null;
+    const promotionType = query.type ? parsePromotionFilterType(query.type) : "event";
     if (query.type && !promotionType) {
       return NextResponse.json({ error: "Invalid promotion type" }, { status: 400 });
     }

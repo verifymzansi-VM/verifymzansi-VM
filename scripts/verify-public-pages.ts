@@ -147,7 +147,7 @@ async function assertMobileFooter(page: Page) {
   const marketplaceTabs = page.getByRole("navigation", { name: "Marketplace areas" });
   const marketTab = marketplaceTabs.getByRole("link", { name: "Mzansi Market" });
   const businessTab = marketplaceTabs.getByRole("link", { name: "Mzansi Business" });
-  const promotionsTab = marketplaceTabs.getByRole("link", { name: "Promotions & Events" });
+  const promotionsTab = marketplaceTabs.getByRole("link", { name: "Tourism & Events" });
 
   await marketTab.waitFor({ state: "visible", timeout: 15_000 });
   await businessTab.waitFor({ state: "visible", timeout: 15_000 });

@@ -8,7 +8,7 @@ const VALID_INPUT = {
   title: "Great Deal on Electronics",
   description:
     "This is a detailed description of our amazing promotion with at least 20 characters.",
-  promotion_type: "deal" as const,
+  promotion_type: "event" as const,
   province: "Gauteng",
   city: "Johannesburg",
   contact_methods: ["call" as const],
@@ -21,10 +21,13 @@ describe("promotionSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("accepts all promotion types", () => {
-    for (const type of ["product", "service", "event", "deal", "general"]) {
-      const result = promotionSchema.safeParse({ ...VALID_INPUT, promotion_type: type });
-      expect(result.success).toBe(true);
+  it("only accepts event promotion type", () => {
+    const result = promotionSchema.safeParse({ ...VALID_INPUT, promotion_type: "event" });
+    expect(result.success).toBe(true);
+
+    for (const type of ["product", "service", "deal", "general"]) {
+      const rejected = promotionSchema.safeParse({ ...VALID_INPUT, promotion_type: type });
+      expect(rejected.success).toBe(false);
     }
   });
 

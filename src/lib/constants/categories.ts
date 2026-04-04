@@ -23,6 +23,7 @@ import {
   MapPin,
   Globe,
   ShoppingBag,
+  TreePalm,
   type LucideIcon,
 } from "lucide-react";
 
@@ -703,6 +704,37 @@ export const BUSINESS_CATEGORIES: BusinessCategoryDefinition[] = [
       { value: "other", label: "Other" },
     ],
     serviceSuggestions: [],
+  },
+  {
+    value: "tourism_hospitality",
+    label: BUSINESS_CATEGORY_LABELS.tourism_hospitality,
+    icon: TreePalm,
+    description: "Hotels, lodges, guest houses, tour operators, safaris, and travel services.",
+    subcategories: [
+      { value: "hotel_resort", label: "Hotel / Resort" },
+      { value: "guest_house_bnb", label: "Guest House / B&B" },
+      { value: "lodge_game_lodge", label: "Lodge / Game Lodge" },
+      { value: "backpackers_hostel", label: "Backpackers / Hostel" },
+      { value: "self_catering", label: "Self-Catering" },
+      { value: "tour_operator", label: "Tour Operator" },
+      { value: "travel_agency", label: "Travel Agency" },
+      { value: "safari_wildlife", label: "Safari & Wildlife" },
+      { value: "adventure_activities", label: "Adventure Activities" },
+      { value: "cultural_heritage", label: "Cultural & Heritage" },
+      { value: "car_rental_tourism", label: "Car Rental (Tourism)" },
+    ],
+    serviceSuggestions: [
+      "Airport transfers",
+      "Game drives",
+      "Guided tours",
+      "Conference facilities",
+      "Wedding venue",
+      "Spa & wellness",
+      "Swimming pool",
+      "Free Wi-Fi",
+      "Breakfast included",
+      "Pet-friendly",
+    ],
   },
 ];
 

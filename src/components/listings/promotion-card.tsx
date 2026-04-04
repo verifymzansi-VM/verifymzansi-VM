@@ -90,7 +90,7 @@ function formatPromotionEyebrow(
     return negotiable ? `${formatted} · Neg` : formatted;
   }
 
-  if (promotionType === "event" && startDate) {
+  if (startDate) {
     // "SAT 15 MAR" — includes day-of-week for better scannability
     return new Intl.DateTimeFormat("en-ZA", {
       weekday: "short",

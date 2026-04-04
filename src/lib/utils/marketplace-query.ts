@@ -36,6 +36,7 @@ const VALID_BUSINESS_CATEGORIES = new Set<BusinessCategory>([
   "education_training",
   "events_entertainment",
   "automotive_transport",
+  "tourism_hospitality",
   "general_other",
 ]);
 
