@@ -127,13 +127,12 @@ export function PromotionFilterDrawer({
         <SheetTrigger asChild>
           <button
             type="button"
-            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-5 h-11 text-sm font-semibold text-foreground shadow-lg transition-colors hover:bg-amber-500 active:bg-amber-600 md:hidden"
+            className="fixed bottom-4 right-4 z-40 inline-flex items-center justify-center gap-1 rounded-full bg-amber-400 h-9 w-9 text-foreground shadow-lg transition-colors hover:bg-amber-500 active:bg-amber-600 md:hidden"
             aria-label="Open promotion filters"
           >
-            <SlidersHorizontal className="h-4 w-4 shrink-0" />
-            <span>Filters</span>
+            <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
             {activeFilterCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-foreground px-1.5 text-[10px] font-bold text-amber-400">
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-amber-400">
                 {activeFilterCount}
               </span>
             )}
@@ -142,12 +141,11 @@ export function PromotionFilterDrawer({
       ) : (
         <button
           type="button"
-          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-5 h-11 text-sm font-semibold text-foreground shadow-lg opacity-50 md:hidden"
+          className="fixed bottom-4 right-4 z-40 inline-flex items-center justify-center rounded-full bg-amber-400 h-9 w-9 text-foreground shadow-lg opacity-50 md:hidden"
           aria-label="Open promotion filters"
           disabled
         >
-          <SlidersHorizontal className="h-4 w-4 shrink-0" />
-          <span>Filters</span>
+          <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
         </button>
       )}
 
