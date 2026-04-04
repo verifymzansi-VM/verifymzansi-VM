@@ -367,7 +367,7 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
               <div className="flex-1 min-w-0">
                 <h3 className="font-medium text-sm truncate">{listing.title}</h3>
                 <p className="text-sm font-bold text-brand-green">{getDisplayPrice(listing)}</p>
-                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1 text-xs text-muted-foreground">
                   <span>{listing.category || AREA_LABELS[listing.area]}</span>
                   <span>&middot;</span>
                   <span>{formatRelativeTime(listing.created_at || new Date().toISOString())}</span>
@@ -457,27 +457,29 @@ function ListingList({
     <div className="space-y-3">
       {listings.map((listing) => (
         <Card key={listing.id}>
-          <CardContent className="flex items-center gap-4 py-4">
-            <Thumbnail item={listing} />
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <Thumbnail item={listing} />
 
-            <div className="flex-1 min-w-0">
-              <h3 className="font-medium text-sm truncate">{listing.title}</h3>
-              <p className="text-sm font-bold text-brand-green">{getDisplayPrice(listing)}</p>
-              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                <span>{listing.category || AREA_LABELS[listing.area]}</span>
-                <span>·</span>
-                <span>{formatRelativeTime(listing.created_at || new Date().toISOString())}</span>
-                <span>·</span>
-                <Badge variant="default" className="text-[10px]">
-                  {AREA_LABELS[listing.area]}
-                </Badge>
-                {listing.area === "PROMOTIONS_EVENTS" &&
-                  listing.promotion_type &&
-                  PROMOTION_TYPE_LABELS[listing.promotion_type as PromotionType] && (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {PROMOTION_TYPE_LABELS[listing.promotion_type as PromotionType]}
-                    </Badge>
-                  )}
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium text-sm truncate">{listing.title}</h3>
+                <p className="text-sm font-bold text-brand-green">{getDisplayPrice(listing)}</p>
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1 text-xs text-muted-foreground">
+                  <span>{listing.category || AREA_LABELS[listing.area]}</span>
+                  <span>·</span>
+                  <span>{formatRelativeTime(listing.created_at || new Date().toISOString())}</span>
+                  <span>·</span>
+                  <Badge variant="default" className="text-[10px]">
+                    {AREA_LABELS[listing.area]}
+                  </Badge>
+                  {listing.area === "PROMOTIONS_EVENTS" &&
+                    listing.promotion_type &&
+                    PROMOTION_TYPE_LABELS[listing.promotion_type as PromotionType] && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {PROMOTION_TYPE_LABELS[listing.promotion_type as PromotionType]}
+                      </Badge>
+                    )}
+                </div>
               </div>
             </div>
 
