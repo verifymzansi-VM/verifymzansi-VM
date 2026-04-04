@@ -491,35 +491,6 @@ function ListingList({
             </div>
 
             <div className="flex items-center gap-1 flex-wrap">
-              <Button
-                asChild
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9"
-                aria-label={`View ${listing.title}`}
-              >
-                <Link
-                  href={getViewHref(listing.area, listing.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-              {listing.area === "MZANSI_BUSINESS" &&
-                (listing.status === "active" || listing.status === "live") && (
-                  <Button
-                    asChild
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9"
-                    aria-label={`Promote ${listing.title}`}
-                  >
-                    <Link href={`/post/create-promotion?business_id=${listing.id}`}>
-                      <Megaphone className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                )}
               <BoostButton
                 listingId={listing.id}
                 isBoosted={listing.boost_until ? new Date(listing.boost_until) > new Date() : false}
@@ -549,15 +520,34 @@ function ListingList({
                   checkCanUrgent(planTiers[listing.area], listing.area).allowed
                 }
               />
-              <Button
-                asChild
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9"
-                aria-label={`Edit ${listing.title}`}
-              >
+              {listing.area === "MZANSI_BUSINESS" &&
+                (listing.status === "active" || listing.status === "live") && (
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9"
+                    aria-label={`Promote ${listing.title}`}
+                  >
+                    <Link href={`/post/create-promotion?business_id=${listing.id}`}>
+                      <Megaphone className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                )}
+              <Button asChild variant="ghost" size="sm" className="gap-1.5">
+                <Link
+                  href={getViewHref(listing.area, listing.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View
+                </Link>
+              </Button>
+              <Button asChild variant="ghost" size="sm" className="gap-1.5">
                 <Link href={getEditHref(listing.area, listing.id)}>
                   <Pencil className="h-3.5 w-3.5" />
+                  Edit
                 </Link>
               </Button>
               <DeletePostButton itemId={listing.id} area={listing.area} />
