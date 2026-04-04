@@ -149,7 +149,6 @@ export default async function MzansiBusinessPage() {
           description="Browse verified South African businesses, build visibility for your brand, and help customers discover trusted services."
           breadcrumbs={[{ label: "Mzansi Business" }]}
           className="hidden lg:flex"
-          centered
         >
           <Button asChild size="sm" className="gap-2">
             <Link href="/post/create-business">

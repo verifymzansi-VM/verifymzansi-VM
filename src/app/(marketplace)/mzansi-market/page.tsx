@@ -140,7 +140,6 @@ export default async function MzansiMarketPage() {
           description="Verified classifieds from South African sellers, with filters for price, condition, and location."
           breadcrumbs={[{ label: "Mzansi Market" }]}
           className="hidden lg:flex"
-          centered
         >
           <Button asChild size="sm" className="gap-1">
             <Link href="/post/create-listing">
