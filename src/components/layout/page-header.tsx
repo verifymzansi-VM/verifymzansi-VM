@@ -7,6 +7,8 @@ interface PageHeaderProps {
   breadcrumbs?: BreadcrumbItem[];
   children?: React.ReactNode;
   className?: string;
+  /** Center-align the header with stacked layout — ideal for marketplace pages */
+  centered?: boolean;
 }
 
 export function PageHeader({
@@ -15,7 +17,31 @@ export function PageHeader({
   breadcrumbs,
   children,
   className,
+  centered,
 }: PageHeaderProps) {
+  if (centered) {
+    return (
+      <div className={cn("space-y-4 border-b pb-6", className)}>
+        {breadcrumbs && (
+          <div className="flex justify-center">
+            <Breadcrumbs items={breadcrumbs} />
+          </div>
+        )}
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="space-y-2">
+            <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
+            {description && (
+              <p className="text-muted-foreground text-sm sm:text-base max-w-xl mx-auto">
+                {description}
+              </p>
+            )}
+          </div>
+          {children && <div className="flex items-center gap-2 pt-2">{children}</div>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={cn("space-y-4", className)}>
       {breadcrumbs && <Breadcrumbs items={breadcrumbs} />}
