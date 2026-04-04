@@ -12,7 +12,7 @@ export function TrustStrip({ variant = "green" }: TrustStripProps) {
   const iconClass = isGreen ? "text-brand-green" : "text-brand-blue";
 
   return (
-    <section className={`border-b ${bgClass}`}>
+    <section className={`hidden sm:block border-b ${bgClass}`}>
       <div className="container-page py-3">
         <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs sm:text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
