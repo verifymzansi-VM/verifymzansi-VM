@@ -99,10 +99,10 @@ export function PosterCardShell({
   const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
 
   return (
-    <Link href={href} className={cn("group block", className)}>
+    <Link href={href} className={cn("group block h-full", className)}>
       <Card
         className={cn(
-          "overflow-hidden border-transparent bg-warm-100 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-8px_rgba(15,23,42,0.28)] rounded-xl",
+          "h-full flex flex-col overflow-hidden border-transparent bg-warm-100 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-8px_rgba(15,23,42,0.28)] rounded-xl",
           accentClassName
         )}
         trustLevel={trustLevel}
@@ -148,7 +148,7 @@ export function PosterCardShell({
         </div>
 
         {/* ── YouTube-style metadata row beneath thumbnail ────────── */}
-        <div className={cn("flex gap-3 px-3 py-2.5 sm:px-3 sm:py-3", contentClassName)}>
+        <div className={cn("flex flex-1 gap-3 px-3 py-2.5 sm:px-3 sm:py-3", contentClassName)}>
           {/* Channel avatar / logo */}
           <div className="mt-0.5 shrink-0">
             {normalizedLogoUrl ? (
@@ -169,7 +169,7 @@ export function PosterCardShell({
           </div>
 
           {/* Text meta */}
-          <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="min-w-0 flex-1 space-y-0.5 min-h-[5.5rem]">
             <h3 className="font-display text-sm font-semibold leading-snug text-slate-900 line-clamp-2 dark:text-white sm:text-base">
               {title}
             </h3>
