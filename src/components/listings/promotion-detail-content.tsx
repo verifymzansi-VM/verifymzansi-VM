@@ -397,12 +397,9 @@ export function PromotionDetailContent({
               </button>
             )}
 
-            {/* Gradient for legibility */}
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-
             {/* Overlay badges */}
             <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-              <Badge className="bg-black/70 text-white backdrop-blur-sm border-0">
+              <Badge className="bg-black/50 text-white backdrop-blur-sm border-0">
                 {PROMOTION_TYPE_LABELS[promotion.promotion_type as PromotionType] || "Ads"}
               </Badge>
               {isEvent && eventState && (
@@ -410,29 +407,6 @@ export function PromotionDetailContent({
                   {EVENT_STATE_BADGE[eventState].label}
                 </Badge>
               )}
-            </div>
-
-            {/* Price + title overlay at bottom */}
-            <div className="absolute inset-x-0 bottom-0 z-10 px-4 pb-4">
-              <h1 className="font-display text-xl font-bold leading-tight text-white drop-shadow-lg sm:text-2xl">
-                {promotion.title}
-              </h1>
-              <div className="mt-1.5 flex items-center gap-3">
-                <span className="flex items-center gap-1 text-xs text-white/80">
-                  <MapPin className="h-3 w-3" />
-                  {[promotion.location_town, promotion.location_city, promotion.location_province]
-                    .filter(Boolean)
-                    .join(", ")}
-                </span>
-                {promotion.price_cents != null && promotion.price_cents > 0 && (
-                  <span className="rounded-lg bg-white/20 px-3 py-1 text-sm font-bold text-white backdrop-blur-sm">
-                    {formatZAR(promotion.price_cents)}
-                    {promotion.price_negotiable && (
-                      <span className="ml-1 text-xs font-normal text-brand-green">Neg</span>
-                    )}
-                  </span>
-                )}
-              </div>
             </div>
           </div>
         </div>
