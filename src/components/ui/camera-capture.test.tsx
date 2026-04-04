@@ -139,4 +139,29 @@ describe("CameraCapture", () => {
     render(<CameraCapture onCapture={vi.fn()} facingMode="user" disabled />);
     expect(screen.getByRole("button", { name: /open camera/i })).toBeDisabled();
   });
+
+  it("shows Try Again button on camera error and retries on click", async () => {
+    const err = new Error("denied");
+    err.name = "NotAllowedError";
+    mockGetUserMedia.mockRejectedValueOnce(err);
+
+    render(<CameraCapture onCapture={vi.fn()} facingMode="user" />);
+    fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
+    });
+
+    const retryBtn = screen.getByRole("button", { name: /try again/i });
+    expect(retryBtn).toBeInTheDocument();
+
+    // Second attempt succeeds
+    const stream = createMockStream();
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => {
+      expect(mockGetUserMedia).toHaveBeenCalledTimes(2);
+    });
+  });
 });

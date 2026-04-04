@@ -201,6 +201,16 @@ export function CameraCapture({
           <VideoOff className="h-4 w-4 shrink-0" />
           <p>{errorMessage}</p>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={startCamera}
+          disabled={disabled}
+          className="w-full gap-2"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Try Again
+        </Button>
         <div className="space-y-2">
           <Input
             type="file"
