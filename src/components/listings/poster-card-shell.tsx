@@ -148,7 +148,7 @@ export function PosterCardShell({
         </div>
 
         {/* ── YouTube-style metadata row beneath thumbnail ────────── */}
-        <div className={cn("flex flex-1 gap-3 px-3 py-2.5 sm:px-3 sm:py-3", contentClassName)}>
+        <div className={cn("flex flex-1 gap-2.5 px-3 py-2 sm:py-2.5", contentClassName)}>
           {/* Channel avatar / logo */}
           <div className="mt-0.5 shrink-0">
             {normalizedLogoUrl ? (
@@ -169,17 +169,17 @@ export function PosterCardShell({
           </div>
 
           {/* Text meta */}
-          <div className="min-w-0 flex-1 space-y-0.5 min-h-[5.5rem]">
-            <h3 className="font-display text-sm font-semibold leading-snug text-slate-900 line-clamp-2 dark:text-white sm:text-base">
+          <div className="min-w-0 flex-1 space-y-0.5 min-h-[4.75rem]">
+            <h3 className="font-display text-sm font-semibold leading-tight text-slate-900 line-clamp-2 dark:text-white sm:text-[15px]">
               {title}
             </h3>
             {description ? (
-              <p className="text-xs leading-snug text-slate-600 line-clamp-1 dark:text-slate-300 sm:text-sm">
+              <p className="text-xs leading-tight text-slate-600 line-clamp-1 dark:text-slate-300 sm:text-[13px]">
                 {description}
               </p>
             ) : null}
             {location ? (
-              <p className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
+              <p className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-300 sm:text-xs">
                 <MapPin className="h-3 w-3 shrink-0" />
                 <span className="truncate">{location}</span>
               </p>
@@ -188,7 +188,7 @@ export function PosterCardShell({
             {eyebrow || viewCount || createdAt ? (
               <p
                 className={cn(
-                  "flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300",
+                  "flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-300 sm:text-xs",
                   eyebrowClassName
                 )}
               >
