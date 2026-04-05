@@ -9,8 +9,6 @@ import {
   Play,
   Copy,
   Check,
-  Volume2,
-  VolumeX,
   RotateCcw,
   AlertTriangle,
 } from "lucide-react";
@@ -18,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrls } from "@/lib/utils/media-url";
-import { useGlobalMute } from "@/hooks/use-global-mute";
+import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 
 interface ListingDetailClientProps {
   photos: string[];
@@ -109,8 +107,6 @@ export function ListingDetailClient({
 
   /* ---- video controls state ---- */
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const { isMuted, toggleMute } = useGlobalMute(videoRef);
   const [videoError, setVideoError] = useState(false);
   const [videoRetries, setVideoRetries] = useState(0);
 
@@ -133,32 +129,6 @@ export function ListingDetailClient({
       videoRef.current.play().catch(() => {});
     }
   }, [activeIndex, orderedMedia]);
-
-  const togglePlay = useCallback(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (v.paused) {
-      v.play().catch(() => {});
-    } else {
-      v.pause();
-    }
-  }, []);
-
-  const enterFullscreen = useCallback(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    try {
-      if (v.requestFullscreen) {
-        v.requestFullscreen();
-      } else if (
-        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen
-      ) {
-        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen?.();
-      }
-    } catch {
-      /* fullscreen not supported */
-    }
-  }, []);
 
   const handleVideoRetry = useCallback(() => {
     setVideoError(false);
@@ -238,71 +208,16 @@ export function ListingDetailClient({
           ) : isVideo ? (
             /* ---- Autoplay video with custom controls ---- */
             <>
-              <video
+              <ProfileVideoPlayer
                 ref={videoRef}
                 key={`${activeUrl}-${videoRetries}`}
                 src={activeUrl}
-                autoPlay
-                muted
-                loop
-                playsInline
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
+                poster={firstPhotoUrl}
+                title={title}
                 onError={() => setVideoError(true)}
-                className="absolute inset-0 h-full w-full object-contain bg-black rounded-xl"
-                aria-label={`${title} video`}
-              >
-                <track kind="captions" />
-              </video>
-
-              {/* Poster overlay — fades in when paused */}
-              {firstPhotoUrl && (
-                <Image
-                  src={firstPhotoUrl}
-                  alt={`${title} cover`}
-                  fill
-                  className={cn(
-                    "absolute inset-0 z-[2] rounded-xl object-contain bg-black transition-opacity duration-300 pointer-events-none",
-                    isPlaying ? "opacity-0" : "opacity-100"
-                  )}
-                  sizes="(max-width: 1024px) 100vw, 66vw"
-                  unoptimized={isBlobOrDataUrl(firstPhotoUrl)}
-                />
-              )}
-
-              {/* Play overlay when paused */}
-              {!isPlaying && (
-                <button
-                  type="button"
-                  onClick={togglePlay}
-                  className="absolute inset-0 z-10 flex items-center justify-center bg-black/20"
-                  aria-label="Play video"
-                >
-                  <div className="rounded-full bg-white/90 p-4 shadow-xl backdrop-blur-sm">
-                    <Play className="h-8 w-8 text-black fill-black" />
-                  </div>
-                </button>
-              )}
-
-              {/* Video controls */}
-              <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={toggleMute}
-                  className="rounded-full bg-black/60 p-2 text-white transition-colors hover:bg-black/80"
-                  aria-label={isMuted ? "Unmute" : "Mute"}
-                >
-                  {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={enterFullscreen}
-                  className="rounded-full bg-black/60 p-2 text-white transition-colors hover:bg-black/80"
-                  aria-label="Fullscreen"
-                >
-                  <Maximize2 className="h-4 w-4" />
-                </button>
-              </div>
+                videoClassName="rounded-xl object-contain"
+                skipSeconds={10}
+              />
             </>
           ) : (
             /* ---- Photo with click-to-lightbox ---- */
@@ -354,7 +269,7 @@ export function ListingDetailClient({
 
           {/* Image counter */}
           {orderedMedia.length > 1 && (
-            <div className="absolute bottom-3 right-3 bg-black/50 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm">
+            <div className="absolute right-3 top-3 bg-black/50 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm">
               {activeIndex + 1} / {orderedMedia.length}
             </div>
           )}

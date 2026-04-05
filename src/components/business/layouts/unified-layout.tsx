@@ -2,14 +2,12 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
-import { MapPin, Maximize2, Play, Store, Volume2, VolumeX } from "lucide-react";
+import { MapPin, Maximize2, Play, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import { cn } from "@/lib/utils";
 import { CATEGORY_CTA_CONFIG } from "@/lib/business/category-layout-map";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
-import { useGlobalMute } from "@/hooks/use-global-mute";
 import {
   BUSINESS_CATEGORY_LABELS,
   BUSINESS_TYPE_LABELS,
@@ -27,6 +25,7 @@ import { StickyContactBar } from "@/components/business/shared/sticky-contact-ba
 import { ManagedByCard, ShareReportRow } from "@/components/business/shared/business-sidebar-cards";
 import { BusinessDetailsAccordion } from "@/components/business/shared/business-details-accordion";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
+import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 
 interface UnifiedLayoutProps {
   business: BusinessDetailRecord;
@@ -57,10 +56,9 @@ export function UnifiedLayout({
 }: UnifiedLayoutProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasVideo = Boolean(business.cover_video);
+  const hasQuickContact = Boolean(business.phone || business.whatsapp);
   const ctaConfig = CATEGORY_CTA_CONFIG[business.category as BusinessCategory];
   const opHours = business.operating_hours;
-  const { isMuted, toggleMute } = useGlobalMute(videoRef);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [isAboutExpanded, setIsAboutExpanded] = useState(false);
   const [activeHero, setActiveHero] = useState<"video" | "cover-photo" | "gallery-photo">(
     hasVideo ? "video" : business.cover_photo ? "cover-photo" : "gallery-photo"
@@ -94,33 +92,10 @@ export function UnifiedLayout({
     }
   }
 
-  function enterFullscreen() {
-    const v = videoRef.current;
-    if (!v) return;
-    try {
-      if (v.requestFullscreen) {
-        v.requestFullscreen();
-      } else if (
-        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen
-      ) {
-        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen?.();
-      }
-    } catch {
-      /* fullscreen not supported */
-    }
-  }
-
   const activePhotoUrl =
     activeHero === "cover-photo"
       ? business.cover_photo
       : galleryPhotos[activePhotoIndex] || business.cover_photo;
-
-  function handlePlay() {
-    if (videoRef.current) {
-      videoRef.current.play();
-      setIsPlaying(true);
-    }
-  }
 
   const businessType = business.business_type as BusinessType;
   const businessCategory = business.category as BusinessCategory;
@@ -129,63 +104,21 @@ export function UnifiedLayout({
     <>
       {/* ═══ HERO: Full-bleed video/cover ═══ */}
       <div className="relative overflow-hidden rounded-2xl">
-        <div className="relative aspect-[4/5] overflow-hidden bg-black sm:aspect-[16/9]">
+        <div className="relative aspect-video overflow-hidden bg-black">
           {activeHero === "video" && hasVideo ? (
-            <>
-              <video
-                ref={videoRef}
-                src={normalizeMediaUrl(business.cover_video!)}
-                autoPlay
-                muted
-                loop
-                playsInline
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                className="absolute inset-0 h-full w-full object-cover"
-                aria-label={`${business.business_name} promo video`}
-              />
-              {/* Poster overlay — fades in when video paused */}
-              {(business.video_thumbnail || business.cover_photo) && (
-                <Image
-                  src={normalizeMediaUrl((business.video_thumbnail || business.cover_photo)!)}
-                  alt={`${business.business_name} cover`}
-                  fill
-                  className={cn(
-                    "absolute inset-0 z-[2] object-cover transition-opacity duration-300 pointer-events-none",
-                    isPlaying ? "opacity-0" : "opacity-100"
-                  )}
-                  sizes="100vw"
-                />
-              )}
-              {!isPlaying && (
-                <button
-                  type="button"
-                  onClick={handlePlay}
-                  className="absolute inset-0 z-10 flex items-center justify-center bg-black/20"
-                  aria-label="Play video"
-                >
-                  <div className="rounded-full bg-white/90 p-4 shadow-xl backdrop-blur-sm">
-                    <Play className="h-8 w-8 fill-black text-black" />
-                  </div>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={toggleMute}
-                className="absolute bottom-4 right-4 z-20 rounded-full bg-black/60 p-2.5 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
-                aria-label={isMuted ? "Unmute" : "Mute"}
-              >
-                {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-              </button>
-              <button
-                type="button"
-                onClick={enterFullscreen}
-                className="absolute bottom-4 right-16 z-20 rounded-full bg-black/60 p-2.5 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
-                aria-label="Fullscreen"
-              >
-                <Maximize2 className="h-5 w-5" />
-              </button>
-            </>
+            <ProfileVideoPlayer
+              ref={videoRef}
+              src={normalizeMediaUrl(business.cover_video!)}
+              poster={
+                business.video_thumbnail || business.cover_photo
+                  ? normalizeMediaUrl((business.video_thumbnail || business.cover_photo)!)
+                  : undefined
+              }
+              title={business.business_name}
+              videoClassName="object-cover"
+              skipSeconds={10}
+              showErrorState
+            />
           ) : activePhotoUrl ? (
             <button
               type="button"
@@ -398,6 +331,9 @@ export function UnifiedLayout({
       </div>
 
       {/* ═══ STICKY MOBILE CONTACT BAR ═══ */}
+      {showPublicActions && hasQuickContact && (
+        <div className="h-24 lg:hidden" aria-hidden="true" />
+      )}
       {showPublicActions && (
         <StickyContactBar business={business} ctaLabel={ctaConfig?.primaryCta} />
       )}

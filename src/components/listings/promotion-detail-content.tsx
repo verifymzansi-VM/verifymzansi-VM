@@ -3,19 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useGlobalMute } from "@/hooks/use-global-mute";
 import {
   Building2,
   Calendar,
   CalendarPlus,
   ChevronDown,
   Eye,
+  Phone,
   MapPin,
   Maximize2,
+  MessageCircle,
   Play,
   Timer,
-  Volume2,
-  VolumeX,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +31,7 @@ import { type BusinessCategory, type AccountVerificationStatus } from "@/types/e
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { readAccountVerificationStatus } from "@/lib/account/compat";
+import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 
 export interface PromotionDetailRecord {
   id: string;
@@ -200,10 +200,9 @@ export function PromotionDetailContent({
   const manager = useVideoPlaybackManager();
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const activeMedia = mediaItems[activeMediaIndex] ?? null;
-  const { isMuted, toggleMute } = useGlobalMute(videoRef);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [showStickyContact, setShowStickyContact] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxStart, setLightboxStart] = useState(0);
   const wasPlayingRef = useRef(false);
@@ -220,22 +219,6 @@ export function PromotionDetailContent({
     setLightboxOpen(false);
     if (videoRef.current && wasPlayingRef.current) {
       videoRef.current.play().catch(() => {});
-    }
-  };
-
-  const enterFullscreen = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    try {
-      if (v.requestFullscreen) {
-        v.requestFullscreen();
-      } else if (
-        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen
-      ) {
-        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen?.();
-      }
-    } catch {
-      /* fullscreen not supported */
     }
   };
 
@@ -266,6 +249,13 @@ export function PromotionDetailContent({
     };
   }, [manager, activeMediaIndex]);
   const contactMethods = promotion.contact_methods ?? [];
+  const canCall =
+    showContactActions &&
+    contactMethods.includes("call") &&
+    Boolean(advertiserProfile?.masked_phone_public);
+  const canWhatsapp =
+    showContactActions && contactMethods.includes("whatsapp") && Boolean(advertiserProfile?.phone);
+  const showStickyBar = canCall || canWhatsapp;
   const eventState = getEventState(promotion.start_date, promotion.end_date);
   const categoryLabel = getPromotionCategoryDisplayLabel(
     promotion.category_key,
@@ -290,84 +280,21 @@ export function PromotionDetailContent({
     : null;
 
   return (
-    <article className="space-y-4">
+    <article className={cn("space-y-4", showStickyBar ? "pb-24 lg:pb-0" : "")}>
       {/* ═══ HERO: Immersive video/photo — portrait on mobile ═══ */}
       {activeMedia && (
-        <div className="-mx-4 overflow-hidden rounded-2xl sm:-mx-0">
-          <div
-            className={cn(
-              "relative overflow-hidden bg-black",
-              activeMedia.kind === "video" && "aspect-[4/5] sm:aspect-[16/9] md:aspect-[2/1]"
-            )}
-          >
+        <div className="overflow-hidden rounded-2xl">
+          <div className={cn("relative aspect-video overflow-hidden bg-black")}>
             {activeMedia.kind === "video" ? (
-              <>
-                <video
-                  ref={videoRef}
-                  src={normalizeMediaUrl(activeMedia.url)}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  onPlay={() => setIsPlaying(true)}
-                  onPause={() => setIsPlaying(false)}
-                  className="absolute inset-0 h-full w-full object-cover"
-                  aria-label={`${promotion.title} video`}
-                >
-                  <track kind="captions" />
-                </video>
-
-                {/* Poster overlay — fades in when paused */}
-                {activeMedia.poster && (
-                  <Image
-                    src={normalizeMediaUrl(activeMedia.poster)}
-                    alt={`${promotion.title} cover`}
-                    fill
-                    className={cn(
-                      "absolute inset-0 z-[2] object-cover transition-opacity duration-300 pointer-events-none",
-                      isPlaying ? "opacity-0" : "opacity-100"
-                    )}
-                    sizes="100vw"
-                  />
-                )}
-
-                {/* Play overlay */}
-                {!isPlaying && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      videoRef.current?.play();
-                      setIsPlaying(true);
-                    }}
-                    className="absolute inset-0 z-10 flex items-center justify-center bg-black/20"
-                    aria-label="Play video"
-                  >
-                    <div className="rounded-full bg-white/90 p-4 shadow-xl backdrop-blur-sm">
-                      <Play className="h-8 w-8 text-black fill-black" />
-                    </div>
-                  </button>
-                )}
-
-                {/* Mute toggle + fullscreen */}
-                <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => toggleMute()}
-                    className="rounded-full bg-black/60 p-2.5 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
-                    aria-label={isMuted ? "Unmute" : "Mute"}
-                  >
-                    {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={enterFullscreen}
-                    className="rounded-full bg-black/60 p-2.5 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
-                    aria-label="Fullscreen"
-                  >
-                    <Maximize2 className="h-5 w-5" />
-                  </button>
-                </div>
-              </>
+              <ProfileVideoPlayer
+                ref={videoRef}
+                src={normalizeMediaUrl(activeMedia.url)}
+                poster={activeMedia.poster ? normalizeMediaUrl(activeMedia.poster) : undefined}
+                title={promotion.title}
+                videoClassName="object-cover"
+                skipSeconds={10}
+                showErrorState
+              />
             ) : (
               <button
                 type="button"
@@ -809,6 +736,39 @@ export function PromotionDetailContent({
         isOpen={lightboxOpen}
         onClose={closeLightbox}
       />
+
+      {showStickyBar && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur-md lg:hidden">
+          <div className="mx-auto flex max-w-lg gap-3">
+            {canCall && (
+              <Button
+                type="button"
+                className="flex-1 gap-2"
+                size="lg"
+                onClick={() => setShowStickyContact(true)}
+              >
+                <Phone className="h-4 w-4" />
+                {showStickyContact && advertiserProfile?.masked_phone_public
+                  ? advertiserProfile.masked_phone_public
+                  : "Show Contact"}
+              </Button>
+            )}
+
+            {canWhatsapp && (showStickyContact || !canCall) && advertiserProfile?.phone && (
+              <Button variant="outline" className="flex-1 gap-2" size="lg" asChild>
+                <a
+                  href={`https://wa.me/${advertiserProfile.phone.replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow ugc"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp
+                </a>
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </article>
   );
 }

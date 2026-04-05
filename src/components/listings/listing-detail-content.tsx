@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Calendar, Eye, MapPin } from "lucide-react";
+import { Calendar, Eye, MapPin, MessageSquare, Phone } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { ListingCard } from "@/components/listings/listing-card";
@@ -98,10 +100,26 @@ export function ListingDetailContent({
     year: "numeric",
   });
   const sellerInitial = seller?.display_name?.charAt(0)?.toUpperCase() || "S";
+  const [showStickyContact, setShowStickyContact] = useState(false);
+  const canCall =
+    showContactActions &&
+    Boolean(seller?.masked_phone_public) &&
+    Boolean(listing.contact_methods?.includes("call"));
+  const canWhatsapp =
+    showContactActions &&
+    Boolean(seller?.phone) &&
+    Boolean(listing.contact_methods?.includes("whatsapp"));
+  const showStickyBar = canCall || canWhatsapp;
 
   return (
     <>
-      <article className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <article
+        className={
+          showStickyBar
+            ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-3 lg:pb-0"
+            : "grid grid-cols-1 gap-6 lg:grid-cols-3"
+        }
+      >
         <div className="space-y-6 lg:col-span-2">
           <ErrorBoundary
             label="ListingDetailClient"
@@ -302,8 +320,44 @@ export function ListingDetailContent({
         </div>
       </article>
 
+      {showStickyBar && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur-md lg:hidden">
+          <div className="mx-auto flex max-w-lg gap-3">
+            {canCall && (
+              <Button
+                type="button"
+                className="flex-1 gap-2"
+                size="lg"
+                onClick={() => setShowStickyContact(true)}
+              >
+                <Phone className="h-4 w-4" />
+                {showStickyContact && seller?.masked_phone_public
+                  ? seller.masked_phone_public
+                  : "Show Contact"}
+              </Button>
+            )}
+
+            {canWhatsapp && (showStickyContact || !canCall) && seller?.phone && (
+              <Button variant="outline" className="flex-1 gap-2" size="lg" asChild>
+                <a
+                  href={`https://wa.me/${seller.phone.replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow ugc"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  WhatsApp
+                </a>
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {showSimilarListings && similarItems.length > 0 && (
-        <section aria-label="Similar listings" className="space-y-4 pt-4">
+        <section
+          aria-label="Similar listings"
+          className={showStickyBar ? "space-y-4 pt-4 pb-24 lg:pb-0" : "space-y-4 pt-4"}
+        >
           <Separator />
           <div className="flex items-center justify-between">
             <h2 className="font-display text-xl font-semibold">Similar Listings</h2>
