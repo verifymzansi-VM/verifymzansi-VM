@@ -62,7 +62,7 @@ export function checkLocalRateLimit(
     LOCAL_BUCKETS.delete(bucketKey);
     LOCAL_BUCKETS.set(bucketKey, existing);
     if (existing.count > maxRequests) {
-      const retryAfter = Math.ceil((existing.expiresAt - now) / 1000);
+      const retryAfter = Math.max(1, Math.ceil((existing.expiresAt - now) / 1000));
       return { limited: true, retryAfter };
     }
     return { limited: false };
@@ -171,6 +171,11 @@ export function getClientRateLimitIdentity(request: Request): ClientRateLimitIde
     return { key: fingerprint, source: "fingerprint" };
   }
 
+  if (typeof console !== "undefined") {
+    console.warn(
+      "[RateLimit] No client identity available — falling back to shared 'unknown' bucket"
+    );
+  }
   return { key: "unknown", source: "unknown" };
 }
 

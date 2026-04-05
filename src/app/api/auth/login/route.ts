@@ -17,6 +17,31 @@ import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const log = createLogger("Login");
+const emittedE2eAuthWarnings = new Set<string>();
+
+function isE2eLoggingContext(): boolean {
+  const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
+  return (
+    runtimeMode === "e2e" ||
+    runtimeMode === "playwright" ||
+    runtimeMode === "test" ||
+    process.env.PLAYWRIGHT_E2E_AUTH === "1"
+  );
+}
+
+function logAuthProtectionWarning(message: string, meta: Record<string, unknown>): void {
+  if (!isE2eLoggingContext()) {
+    log.warn(message, meta);
+    return;
+  }
+
+  const signature = `${message}:${String(meta.ip ?? "unknown")}:${String(meta.rateLimitKeySource ?? "")}:${String(meta.email ?? "")}:${String(meta.degraded ?? "")}`;
+  if (emittedE2eAuthWarnings.has(signature)) {
+    return;
+  }
+  emittedE2eAuthWarnings.add(signature);
+  log.info(message, meta);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,7 +72,7 @@ export async function POST(request: NextRequest) {
       degradedMode: "block",
     });
     if (rateCheck.limited) {
-      log.warn("Login rate limit triggered", {
+      logAuthProtectionWarning("Login rate limit triggered", {
         ip,
         rateLimitKeySource: clientIdentity.source,
         degraded: rateCheck.degraded ?? false,
@@ -80,7 +105,7 @@ export async function POST(request: NextRequest) {
     // Check in-memory lockout first (fast, single-isolate)
     const lockout = checkAccountLockout(parsedBody.data.email);
     if (lockout.locked) {
-      log.warn("Account locked due to too many failed attempts", {
+      logAuthProtectionWarning("Account locked due to too many failed attempts", {
         email: parsedBody.data.email,
         ip,
       });
@@ -96,7 +121,7 @@ export async function POST(request: NextRequest) {
     // Cross-isolate distributed lockout (survives worker restarts)
     const distLockout = await checkDistributedLockout(parsedBody.data.email);
     if (distLockout.locked) {
-      log.warn("Account locked (distributed) due to too many failed attempts", {
+      logAuthProtectionWarning("Account locked (distributed) due to too many failed attempts", {
         email: parsedBody.data.email,
         ip,
       });
@@ -122,7 +147,7 @@ export async function POST(request: NextRequest) {
           degradedMode: "block",
         });
         if (strictCheck.limited) {
-          log.warn("Login no-CAPTCHA rate limit triggered", {
+          logAuthProtectionWarning("Login no-CAPTCHA rate limit triggered", {
             ip,
             rateLimitKeySource: clientIdentity.source,
             degraded: strictCheck.degraded ?? false,

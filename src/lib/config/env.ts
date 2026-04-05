@@ -110,6 +110,14 @@ const envSchema = z.object({
 
   // ── Optional Monitoring ───────────────────────────────────
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
+
+  // ── Runtime / E2E bypass flags (always optional) ──────────
+  PLAYWRIGHT_E2E_AUTH: z.enum(["0", "1"]).optional(),
+  VERIFYMZANSI_RUNTIME_MODE: z
+    .enum(["development", "e2e", "playwright", "test", "production"])
+    .optional(),
+  VERIFYMZANSI_VALIDATION_MODE: z.string().optional(),
+  STRICT_ENV_STARTUP_BLOCK: z.enum(["0", "1"]).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -120,6 +128,7 @@ export interface ValidateEnvOptions {
 }
 
 let _cachedEnv: Env | null = null;
+const _emittedLaunchWarnings = new Set<string>();
 
 /**
  * Create a fallback env object with safe defaults for build/CI.
@@ -170,6 +179,16 @@ function _createFallbackEnv(): Env {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
     NODE_ENV: (process.env.NODE_ENV as "development" | "production" | "test") || "development",
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+    PLAYWRIGHT_E2E_AUTH: process.env.PLAYWRIGHT_E2E_AUTH as "0" | "1" | undefined,
+    VERIFYMZANSI_RUNTIME_MODE: process.env.VERIFYMZANSI_RUNTIME_MODE as
+      | "development"
+      | "e2e"
+      | "playwright"
+      | "test"
+      | "production"
+      | undefined,
+    VERIFYMZANSI_VALIDATION_MODE: process.env.VERIFYMZANSI_VALIDATION_MODE,
+    STRICT_ENV_STARTUP_BLOCK: process.env.STRICT_ENV_STARTUP_BLOCK as "0" | "1" | undefined,
   } as Env;
 }
 
@@ -361,7 +380,30 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
   }
 
   for (const warning of launchSummary.warnings) {
-    console.warn(`[ENV] WARNING: ${warning.name}: ${warning.detail}`);
+    const signature = `${warning.name}:${warning.detail}`;
+    if (_emittedLaunchWarnings.has(signature)) {
+      continue;
+    }
+    _emittedLaunchWarnings.add(signature);
+
+    const runtimeMode = (result.data.VERIFYMZANSI_RUNTIME_MODE ?? "").toLowerCase();
+    const isE2eRuntime =
+      runtimeMode === "e2e" ||
+      runtimeMode === "playwright" ||
+      runtimeMode === "test" ||
+      result.data.PLAYWRIGHT_E2E_AUTH === "1";
+
+    const prefix = isE2eRuntime ? "[ENV] INFO" : "[ENV] WARNING";
+
+    if (
+      isE2eRuntime &&
+      warning.name === "Dangerous env vars" &&
+      warning.detail.includes("PLAYWRIGHT_E2E_AUTH")
+    ) {
+      continue;
+    }
+
+    console.warn(`${prefix}: ${warning.name}: ${warning.detail}`);
   }
 
   _cachedEnv = result.data;
@@ -395,6 +437,7 @@ export function env<K extends keyof Env>(key: K): Env[K] {
  */
 export function _resetEnvCacheForTesting(): void {
   _cachedEnv = null;
+  _emittedLaunchWarnings.clear();
 }
 
 /**

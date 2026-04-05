@@ -76,7 +76,7 @@ const ALLOWED_DOC_TYPES = [...ALLOWED_IMAGE_TYPES, "application/pdf"];
 const OTP_RESEND_COOLDOWN_SECONDS = 30;
 const OTP_EXPIRY_SECONDS = 300; // 5 minutes
 const EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION =
-  "Check your inbox for the confirmation link, then return here to continue with document and location verification.";
+  "Check your inbox for the confirmation link, then return here to continue. You can still verify your phone while waiting.";
 const VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION =
   "Verification is temporarily unavailable right now. Please try again later.";
 
@@ -103,11 +103,11 @@ type VerificationApiResponse = {
 type OtpSendResponse = VerificationApiResponse;
 
 const STEP_COPY: Record<Exclude<WizardStep, "complete">, string> = {
-  phone: "Enter your SA mobile number. We'll send an OTP via SMS.",
+  phone: "Enter your SA mobile number. We'll send a verification code via SMS.",
   id_doc: "Enter your 13-digit SA ID and take a clear photo of your ID. Max 5 MB.",
   selfie: "Take a live selfie using your camera. Max 5 MB.",
   location:
-    "Select your province and city, then use GPS to verify your address. Your address is approved instantly — no admin review needed.",
+    "Select your province and city, then use GPS to verify your address. Your address is verified instantly — no admin review needed.",
 };
 
 class SubmissionError extends Error {
@@ -192,7 +192,7 @@ function formatStatusLabel(status: VerificationStatus): string {
     case "approved":
       return "Approved";
     case "pending":
-      return "Pending review";
+      return "Pending Review";
     case "rejected":
       return "Rejected";
     case "needs_resubmission":
@@ -332,8 +332,8 @@ function buildOtpSupportMessage(
 ): string {
   if (payload.code === "hourly_limit_reached" || payload.code === "rate_limited") {
     return retryAfterSeconds > 0
-      ? `Too many OTP requests were made for this number. Wait ${formatCountdown(retryAfterSeconds)} before resending.`
-      : "Too many OTP requests were made for this number. Please wait before resending.";
+      ? `Too many code requests were made for this number. Wait ${formatCountdown(retryAfterSeconds)} before resending.`
+      : "Too many code requests were made for this number. Please wait before resending.";
   }
 
   if (payload.code === "sms_delivery_failed") {
@@ -341,7 +341,7 @@ function buildOtpSupportMessage(
   }
 
   if (payload.code === "unauthorized") {
-    return "Your session expired before the OTP request completed. Sign in again, then retry.";
+    return "Your session expired before the code request completed. Sign in again, then retry.";
   }
 
   return `SMS delivery can take up to 60 seconds. If nothing arrives, confirm ${formattedPhone} and resend once the timer ends.`;
@@ -945,13 +945,13 @@ export default function VerificationPage() {
       setOtpExpirySeconds(OTP_EXPIRY_SECONDS);
       setOtpSupportMessage(buildOtpSupportMessage({}, OTP_RESEND_COOLDOWN_SECONDS, formattedPhone));
       toast({
-        title: otpSent ? "OTP resent" : "OTP sent",
+        title: otpSent ? "Code resent" : "Code sent",
         description: `Check ${formattedPhone} for the 6-digit code. Delivery can take up to 60 seconds.`,
         variant: "success",
       });
     } catch (err) {
       toast({
-        title: "Failed to send OTP",
+        title: "Failed to send code",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
@@ -1295,7 +1295,7 @@ export default function VerificationPage() {
     if (!isLocationReady) {
       toast({
         title: "Save your address first",
-        description: "Please select your province and city before final submit.",
+        description: "Please select your province and city before submitting.",
         variant: "destructive",
       });
       return;
@@ -1407,9 +1407,9 @@ export default function VerificationPage() {
               <CardContent className="space-y-3 p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">Verification progress</p>
-                  {step !== "complete" && (
-                    <Badge variant="secondary">Step {currentStepNumber} of 4</Badge>
-                  )}
+                  <Badge variant="secondary">
+                    {step === "complete" ? "Complete ✓" : `Step ${currentStepNumber} of 4`}
+                  </Badge>
                 </div>
                 <VerificationProgress steps={progressSteps} />
                 <p className="text-xs text-muted-foreground">
@@ -1569,7 +1569,7 @@ export default function VerificationPage() {
                         </div>
                       )}
                       <div className="space-y-2">
-                        <Label htmlFor="otp">6-digit OTP</Label>
+                        <Label htmlFor="otp">6-digit code</Label>
                         <Input
                           id="otp"
                           maxLength={6}
@@ -2075,8 +2075,8 @@ export default function VerificationPage() {
                             <Navigation className="h-4 w-4" />
                           )}
                           {locationVerified
-                            ? `Address verified by GPS (accuracy: ${Math.round(gpsCoords.accuracy)}m)`
-                            : `GPS checked the saved address (accuracy: ${Math.round(gpsCoords.accuracy)}m)`}
+                            ? `Address verified by GPS (accuracy: within ${Math.round(gpsCoords.accuracy)} metres)`
+                            : `GPS checked the saved address (accuracy: within ${Math.round(gpsCoords.accuracy)} metres)`}
                         </div>
                         {gpsMismatch?.province && (
                           <div className="rounded-md border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
@@ -2131,7 +2131,7 @@ export default function VerificationPage() {
                         ) : (
                           <ShieldCheck className="h-4 w-4" />
                         )}
-                        Final Submit
+                        Submit Verification
                       </Button>
                     </div>
                   </CardContent>
@@ -2164,7 +2164,9 @@ export default function VerificationPage() {
                           Uploaded at {formatUploadedTime(uploadReceipts.id_doc.uploadedAtIso)}
                         </p>
                       ) : (
-                        <p className="mt-1 text-muted-foreground">Not yet uploaded</p>
+                        <p className="mt-1 text-muted-foreground">
+                          Not yet uploaded — go to the ID step above to upload your document
+                        </p>
                       )}
                       {idChecksumValid && idDob && (
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -2181,7 +2183,9 @@ export default function VerificationPage() {
                           Uploaded at {formatUploadedTime(uploadReceipts.selfie.uploadedAtIso)}
                         </p>
                       ) : (
-                        <p className="mt-1 text-muted-foreground">Not yet uploaded</p>
+                        <p className="mt-1 text-muted-foreground">
+                          Not yet uploaded — go to the Selfie step above to take your photo
+                        </p>
                       )}
                     </div>
 

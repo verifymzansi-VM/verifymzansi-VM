@@ -218,6 +218,89 @@ describe("POST /api/webhooks/ozow", () => {
     expect(mockFulfillPayment).not.toHaveBeenCalled();
   });
 
+  it("returns duplicate when a concurrent webhook completes payment after claim", async () => {
+    const body = {
+      eventType: "transaction.complete",
+      data: {
+        merchantReference: "payment-1",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: 25, currency: "ZAR" },
+      },
+    };
+
+    const paymentRecord = {
+      id: "payment-1",
+      area: "PROMOTIONS_EVENTS",
+      status: "pending",
+      provider: "ozow",
+      provider_payment_id: null,
+      provider_reference: "payment-1",
+      provider_data: {
+        type: "featured_promotion",
+        promotion_id: "00000000-0000-0000-0000-000000000001",
+        feature_days: 7,
+      },
+      amount_cents: 2500,
+      user_id: "user-1",
+    };
+
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValueOnce({ data: paymentRecord })
+      .mockResolvedValueOnce({
+        data: {
+          ...paymentRecord,
+          status: "complete",
+          provider_payment_id: "ozow-tx-1",
+          provider_data: {
+            ...paymentRecord.provider_data,
+            fulfillment_completed_at: "2026-03-17T10:00:05.000Z",
+          },
+        },
+      });
+
+    const paymentsSelect = {
+      eq: vi.fn().mockReturnValue({
+        maybeSingle,
+      }),
+    };
+
+    const claimSelect = vi.fn().mockResolvedValue({ data: [{ id: "payment-1" }] });
+    const claimUpdateChain = {
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          neq: vi.fn().mockReturnValue({
+            neq: vi.fn().mockReturnValue({
+              select: claimSelect,
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const paymentsFrom = {
+      select: vi.fn().mockReturnValue(paymentsSelect),
+      update: vi.fn().mockReturnValueOnce(claimUpdateChain),
+    };
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "payments") {
+          return paymentsFrom;
+        }
+        throw new Error(`Unexpected table ${table}`);
+      }),
+      auth: { admin: { getUserById: mockGetUserById } },
+    });
+
+    const response = await POST(createSignedRequest(body));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ success: true, duplicate: true });
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  });
+
   it("passes promotion payment area and metadata into fulfillment after a verified completion webhook", async () => {
     const body = {
       eventType: "transaction.complete",

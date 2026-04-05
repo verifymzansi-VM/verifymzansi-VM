@@ -127,11 +127,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Check account verification status
-    const { data: accountProfile } = await admin
+    const { data: accountProfile, error: accountProfileErr } = await admin
       .from("account_profiles")
       .select("account_verification_status, display_name")
       .eq("user_id", targetOwnerId)
       .maybeSingle();
+
+    if (accountProfileErr) {
+      log.warn("Failed to fetch account profile for contact event (non-fatal)", {
+        targetOwnerId,
+        error: accountProfileErr.message,
+      });
+    }
 
     const ownerVerified = readAccountVerificationStatus(accountProfile) === "verified";
 

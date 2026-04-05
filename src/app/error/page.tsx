@@ -53,7 +53,7 @@ export default async function ErrorPage({
           href="/"
           className="inline-flex items-center justify-center rounded-md border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
         >
-          Go home
+          Go to homepage
         </Link>
       </div>
     </main>

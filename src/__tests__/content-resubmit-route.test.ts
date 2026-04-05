@@ -46,6 +46,23 @@ function makeAuditLogChain(maybeSingleResult: { data: unknown; error: unknown })
   return chain;
 }
 
+/**
+ * Build a mock `.eq()` fn that returns a self-referencing chainable+thenable
+ * object.  This supports `.eq("id", id).eq("status", "rejected")` chains and
+ * resolves to `result` when awaited.
+ */
+function makeChainableEq(result: { error: unknown; count?: number }) {
+  const eq = vi.fn();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chain: any = {
+    eq,
+    then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
+      Promise.resolve(result).then(resolve, reject),
+  };
+  eq.mockReturnValue(chain);
+  return eq;
+}
+
 function makeAuditAdminMock(auditChain: ReturnType<typeof makeAuditLogChain>) {
   return {
     from: vi.fn((table: string) => {
@@ -65,7 +82,7 @@ describe("POST /api/content/resubmit", () => {
   // ── Existing: compat-table happy path ─────────────────────────────────
 
   it("resubmits MZANSI_BUSINESS items using owner-column compatibility", async () => {
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = makeChainableEq({ error: null });
     const from = vi.fn((table: string) => {
       if (table === "businesses") {
         return {
@@ -166,7 +183,7 @@ describe("POST /api/content/resubmit", () => {
           },
           error: null,
         }),
-        update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        update: vi.fn().mockReturnValue({ eq: makeChainableEq({ error: null }) }),
       }),
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-2" } } }) },
     });
@@ -186,7 +203,7 @@ describe("POST /api/content/resubmit", () => {
     const rejectedAt = "2026-01-01T10:01:00.000Z";
     const editedAt = "2026-01-01T10:03:00.000Z";
 
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = makeChainableEq({ error: null });
     mockCreateClient.mockResolvedValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
@@ -216,7 +233,7 @@ describe("POST /api/content/resubmit", () => {
   });
 
   it("allows resubmit when audit_logs has no rejection entry (legacy items, fail open)", async () => {
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = makeChainableEq({ error: null });
     mockCreateClient.mockResolvedValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
@@ -245,7 +262,7 @@ describe("POST /api/content/resubmit", () => {
   });
 
   it("allows resubmit when audit_logs query itself errors (fail open)", async () => {
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const updateEq = makeChainableEq({ error: null });
     mockCreateClient.mockResolvedValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
@@ -301,5 +318,40 @@ describe("POST /api/content/resubmit", () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(body.error).toMatch(/only rejected content/i);
+  });
+
+  // ── C2 regression: CAS guard returns 409 when status changed between check and update ──
+
+  it("returns 409 when status changed between check and update (CAS guard)", async () => {
+    // The item appears rejected at fetch time, but the update matched 0 rows
+    // because another request changed the status concurrently.
+    const updateEq = makeChainableEq({ error: null, count: 0 });
+    mockCreateClient.mockResolvedValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "listing-race",
+            status: "rejected",
+            seller_id: "user-7",
+            updated_at: "2026-01-01T12:00:00.000Z",
+          },
+          error: null,
+        }),
+        update: vi.fn().mockReturnValue({ eq: updateEq }),
+      }),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-7" } } }) },
+    });
+    // No prior rejection log → wasEditedAfterRejection returns true
+    mockCreateAdminClient.mockReturnValue(
+      makeAuditAdminMock(makeAuditLogChain({ data: null, error: null }))
+    );
+
+    const response = await POST(createRequest({ itemId: ITEM_UUID, area: "MZANSI_MARKET" }));
+
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.error).toMatch(/status changed/i);
   });
 });

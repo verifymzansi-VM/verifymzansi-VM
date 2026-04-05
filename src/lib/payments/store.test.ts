@@ -50,4 +50,39 @@ describe("markPaymentFailed", () => {
     );
     expect(result).toBe(false);
   });
+
+  it("persists failure_reason, failure_message, and failed_at into provider_data", async () => {
+    const mock = createMockClient({ error: null });
+    await markPaymentFailed({ from: mock.from } as unknown as PaymentStoreClient, basePayment, {
+      status: "Error",
+      statusMessage: "Card declined",
+      event: "failed",
+    });
+
+    const updateArg = mock.update.mock.calls[0][0] as {
+      status: string;
+      provider_data: Record<string, unknown>;
+    };
+
+    expect(updateArg.status).toBe("failed");
+    expect(updateArg.provider_data.failure_reason).toBe("error");
+    expect(updateArg.provider_data.failure_message).toBe("Card declined");
+    expect(updateArg.provider_data.failed_at).toBeDefined();
+    // failed_at should be a valid ISO timestamp
+    expect(new Date(updateArg.provider_data.failed_at as string).getTime()).not.toBeNaN();
+  });
+
+  it("omits failure_message when webhook has no statusMessage", async () => {
+    const mock = createMockClient({ error: null });
+    await markPaymentFailed({ from: mock.from } as unknown as PaymentStoreClient, basePayment, {
+      status: "Cancelled",
+    });
+
+    const updateArg = mock.update.mock.calls[0][0] as {
+      provider_data: Record<string, unknown>;
+    };
+
+    expect(updateArg.provider_data.failure_reason).toBe("cancelled");
+    expect(updateArg.provider_data).not.toHaveProperty("failure_message");
+  });
 });

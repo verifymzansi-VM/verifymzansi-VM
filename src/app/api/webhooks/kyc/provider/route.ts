@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import crypto from "crypto";
 import { createLogger } from "@/lib/utils/logger";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import {
   findProviderResultByRef,
   getArtifactStepType,
@@ -19,6 +20,17 @@ import {
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("KycWebhook");
+
+function isE2eLoggingContext(): boolean {
+  const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
+  return (
+    runtimeMode === "e2e" ||
+    runtimeMode === "playwright" ||
+    runtimeMode === "test" ||
+    process.env.PLAYWRIGHT_E2E_AUTH === "1" ||
+    process.env.PLAYWRIGHT_TEST_MODE === "1"
+  );
+}
 
 /**
  * Expected webhook payload shape (provider-agnostic).
@@ -99,6 +111,20 @@ function isExplicitLocalUnsignedWebhookBypass(request: NextRequest): boolean {
 
 export async function POST(request: NextRequest) {
   try {
+    // ── Rate limiting ─────────────────────────────────────────
+    const ip = getClientIp(request);
+    const rateCheck = await checkRateLimit({
+      key: ip,
+      action: "webhook:kyc",
+      degradedMode: "local",
+    });
+    if (rateCheck.limited) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+      );
+    }
+
     const isPlaywrightTestMode = checkPlaywrightTestMode();
     const allowUnsignedWebhook =
       isExplicitLocalUnsignedWebhookBypass(request) || isPlaywrightTestMode;
@@ -205,7 +231,11 @@ export async function POST(request: NextRequest) {
     );
 
     if (!providerResult) {
-      log.warn("No provider result found for ref", { providerRef: payloadData.provider_ref });
+      if (isE2eLoggingContext()) {
+        log.info("No provider result found for ref", { providerRef: payloadData.provider_ref });
+      } else {
+        log.warn("No provider result found for ref", { providerRef: payloadData.provider_ref });
+      }
       // Return 200 anyway to prevent webhook retries for unknown refs
       return NextResponse.json({
         acknowledged: true,

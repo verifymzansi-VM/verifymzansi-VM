@@ -226,6 +226,17 @@ export function enforceCsrfToken(
   const headerValid = isValidToken(headerToken);
   const tokensMatch = cookieToken === headerToken;
 
+  const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
+  const isE2eRuntime =
+    runtimeMode === "e2e" ||
+    runtimeMode === "playwright" ||
+    runtimeMode === "test" ||
+    process.env.PLAYWRIGHT_E2E_AUTH === "1";
+
+  if (isE2eRuntime) {
+    return NextResponse.json({ error: "Invalid CSRF token" }, { status: 403 });
+  }
+
   log?.warn("Rejected request with invalid CSRF token", {
     path: request.nextUrl?.pathname ?? new URL(request.url).pathname,
     hasCookie: Boolean(cookieToken),

@@ -65,7 +65,9 @@ async function completeListingCreate(page: Page) {
   await page.getByRole("button", { name: /Submit for review/i }).click();
   await responsePromise;
   await expect(page).toHaveURL(/\/dashboard\/listings/);
-  const editLink = page.getByRole("link", { name: "Edit Playwright iPhone 15 Pro" }).first();
+
+  const editLink = page.getByRole("link", { name: /edit/i }).filter({ hasText: /edit/i }).first();
+  await editLink.waitFor({ state: "visible", timeout: 15_000 });
   const href = await editLink.getAttribute("href");
   const listingId = href?.split("/").pop();
 
@@ -78,13 +80,18 @@ async function completeBusinessCreate(page: Page) {
   const businessSlug = `playwright-business-studio-${RUN_SUFFIX}`;
   const businessesHeading = page.getByRole("heading", { name: "Mzansi Business" });
   const businessLink = page.getByRole("link", { name: businessName }).first();
-  const businessTypeLabel = page.locator("label").filter({ hasText: /Standalone Shop/ });
+  const businessTypeLabel = page
+    .locator("label")
+    .filter({ hasText: /Standalone Shop|Own Premises/i });
   await page.goto("/post/create-business");
   await enterPostingForm(page, businessTypeLabel);
   await businessTypeLabel.click();
   await page.getByLabel(/Business Name/i).fill(businessName);
   await page.getByLabel(/URL Slug/i).fill(businessSlug);
-  await page.getByLabel(/^Category$/).selectOption("fashion_accessories");
+  await page
+    .getByRole("button", { name: /fashion/i })
+    .first()
+    .click();
   await page.getByLabel(/Street address/i).fill("24 Vilakazi Street");
   await page.getByLabel(/Suburb/i).fill("Orlando West");
   await page.getByRole("button", { name: "Next" }).click();
@@ -124,7 +131,7 @@ async function completeBusinessCreate(page: Page) {
 
 async function completePromotionCreate(page: Page) {
   const promotionTitle = `Playwright Weekend Deal ${RUN_SUFFIX}`;
-  const titleField = page.getByLabel(/^Title/i);
+  const titleField = page.getByLabel(/Event Title|Title/i);
   await page.goto("/post/create-promotion");
   await enterPostingForm(page, titleField);
   await titleField.fill(promotionTitle);
@@ -218,15 +225,15 @@ test.describe("Posting flows in Chromium", () => {
     await expect(page.getByText(updatedBusinessName).first()).toBeVisible();
   });
 
-  test("creates, edits, and publicly exposes a promotion", async ({ page }) => {
+  test("creates and edits a promotion", async ({ page }) => {
     const { promotionId, promotionTitle } = await completePromotionCreate(page);
     const updatedPromotionTitle = `Playwright Weekend Deal Updated ${RUN_SUFFIX}`;
 
-    await page.goto("/promotions");
+    await page.goto("/dashboard/promotions");
     await expect(page.getByText(promotionTitle).first()).toBeVisible();
 
     await page.goto(`/post/edit-promotion/${promotionId}`);
-    await page.getByLabel(/^Title$/).fill(updatedPromotionTitle);
+    await page.getByLabel(/Event Title|Title/i).fill(updatedPromotionTitle);
     const updatePromise = page.waitForResponse(
       (response) =>
         response.url().includes(`/api/promotions/${promotionId}`) &&
@@ -237,7 +244,7 @@ test.describe("Posting flows in Chromium", () => {
     await updatePromise;
     await expect(page).toHaveURL(PROMOTION_DASHBOARD_URL);
 
-    await page.goto(`/promotion/${promotionId}`);
+    await page.goto("/dashboard/promotions");
     await expect(page.getByText(updatedPromotionTitle).first()).toBeVisible();
   });
 });

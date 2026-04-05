@@ -130,7 +130,14 @@ export async function GET(request: Request) {
 
         isNewOAuthUser = !existingProfile;
 
-        const profile = await ensureAccountProfile(supabase, user);
+        let profile = await ensureAccountProfile(supabase, user);
+        if (!profile) {
+          // Retry once for transient DB errors — ensureAccountProfile uses upsert so this is safe
+          log.warn("First ensureAccountProfile attempt returned null, retrying", {
+            userId: user.id,
+          });
+          profile = await ensureAccountProfile(supabase, user);
+        }
         if (!profile) {
           log.error("Failed to create account profile for OAuth user", {
             userId: user.id,

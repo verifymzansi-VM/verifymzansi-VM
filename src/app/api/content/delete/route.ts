@@ -7,7 +7,13 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import {
+  internalApiError,
+  logApiError,
+  parseAndValidateJsonRequest,
+  unauthorizedResponse,
+  forbiddenResponse,
+} from "@/lib/utils/api";
 import {
   applyOwnerFilter,
   getOwnerColumn,
@@ -62,7 +68,7 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const rl = checkLocalRateLimit(user.id, "content:delete");
@@ -121,7 +127,7 @@ export async function POST(request: Request) {
       item = compatibleItem;
 
       if (readOwnerId(compatibleItem) !== user.id) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return forbiddenResponse();
       }
 
       const deleteQuery = applyOwnerFilter(
@@ -165,7 +171,7 @@ export async function POST(request: Request) {
       };
 
       if (item.owner_id !== user.id) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return forbiddenResponse();
       }
 
       const deleteResult = await admin

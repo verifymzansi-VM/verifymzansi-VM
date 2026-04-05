@@ -36,6 +36,7 @@ export interface ListingDetailRecord {
   location_suburb: string | null;
   location_address: string | null;
   contact_methods: string[] | null;
+  view_count?: number | null;
   created_at: string;
 }
 
@@ -106,7 +107,7 @@ export function ListingDetailContent({
             label="ListingDetailClient"
             fallback={
               <div className="aspect-video rounded-xl bg-muted flex items-center justify-center">
-                <p className="text-sm text-muted-foreground">Media preview failed to render</p>
+                <p className="text-sm text-muted-foreground">Image failed to load</p>
               </div>
             }
           >
@@ -138,7 +139,7 @@ export function ListingDetailContent({
               </span>
               <span className="flex items-center gap-1">
                 <Eye className="h-4 w-4" />
-                Views
+                {listing.view_count ?? 0} {(listing.view_count ?? 0) === 1 ? "view" : "views"}
               </span>
             </div>
           </div>
@@ -287,7 +288,9 @@ export function ListingDetailContent({
                 </div>
               ) : (
                 <div className="space-y-2 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">Creator preview</p>
+                  <p className="font-medium text-foreground">
+                    Your preview — only you can see this
+                  </p>
                   <p>
                     Public contact buttons appear after approval. This preview still shows the saved
                     contact methods above.

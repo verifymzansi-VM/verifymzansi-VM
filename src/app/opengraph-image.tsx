@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 import { ImageResponse } from "next/og";
 import type { CSSProperties } from "react";
 
@@ -52,6 +51,26 @@ const brandRowStyle: CSSProperties = {
   gap: 28,
 };
 
+const shieldBadgeStyle: CSSProperties = {
+  display: "flex",
+  width: 128,
+  height: 128,
+  borderRadius: 28,
+  alignItems: "center",
+  justifyContent: "center",
+  background: "linear-gradient(145deg, #0f3d2f 0%, #00833e 58%, #00a14b 100%)",
+  border: "2px solid rgba(255, 255, 255, 0.28)",
+  boxShadow: "0 14px 30px rgba(0, 0, 0, 0.35)",
+};
+
+const shieldTextStyle: CSSProperties = {
+  fontSize: 48,
+  fontWeight: 800,
+  letterSpacing: "-0.04em",
+  color: "#fffaf5",
+  lineHeight: 1,
+};
+
 const brandTextStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -103,9 +122,6 @@ const subheadStyle: CSSProperties = {
 };
 
 export default function OpenGraphImage() {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
-  const shieldSrc = `${baseUrl}/icons/icon-192.png?v=9`;
-
   return new ImageResponse(
     <div style={containerStyle}>
       <div style={frameStyle} />
@@ -113,7 +129,9 @@ export default function OpenGraphImage() {
 
       <div style={contentStyle}>
         <div style={brandRowStyle}>
-          <img src={shieldSrc} width={128} height={128} alt="VerifyMzansi shield" />
+          <div style={shieldBadgeStyle}>
+            <div style={shieldTextStyle}>VM</div>
+          </div>
 
           <div style={brandTextStyle}>
             <div style={eyebrowStyle}>Promote With Trust</div>

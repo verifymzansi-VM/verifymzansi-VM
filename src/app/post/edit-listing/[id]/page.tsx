@@ -464,6 +464,12 @@ export default function EditListingPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (res.status === 409) {
+          setFormError(
+            "This listing was modified in another tab or session. Please reload the page and try again."
+          );
+          return;
+        }
         const normalized = normalizeCreatePostError(data, "Something went wrong");
         setFieldErrors(normalized.fieldErrors);
         setFormError(normalized.formError);
@@ -701,6 +707,7 @@ export default function EditListingPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
+                              if (!window.confirm("Remove the logo?")) return;
                               setExistingLogo(null);
                               setNewLogoFile([]);
                             }}
@@ -745,6 +752,7 @@ export default function EditListingPage() {
                               type="button"
                               title="Remove photo"
                               onClick={() => {
+                                if (!window.confirm("Remove this photo?")) return;
                                 setExistingPhotos((prev) => prev.filter((_, idx) => idx !== i));
                                 clearErrors("images");
                               }}
@@ -790,6 +798,7 @@ export default function EditListingPage() {
                               type="button"
                               title="Remove video"
                               onClick={() => {
+                                if (!window.confirm("Remove this video?")) return;
                                 setExistingVideos((prev) => prev.filter((_, idx) => idx !== i));
                                 clearErrors("videos");
                               }}

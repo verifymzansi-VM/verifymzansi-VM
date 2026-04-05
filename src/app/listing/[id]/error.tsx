@@ -33,7 +33,7 @@ export default function ListingError({
           <Button variant="outline" onClick={() => (window.location.href = "/mzansi-market")}>
             Browse Listings
           </Button>
-          <Button onClick={() => reset()}>Retry</Button>
+          <Button onClick={() => reset()}>Try again</Button>
         </div>
       </main>
       <Footer />

@@ -13,6 +13,7 @@ import { getOwnerColumn, withOwnerColumn } from "@/lib/account/compat";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { BusinessDiscoveryBar } from "./discovery-bar";
 import { BusinessFilterDrawer } from "@/components/listings/business-filter-drawer";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -163,7 +164,7 @@ export default async function MzansiBusinessPage() {
           <h1 className="font-display text-lg font-bold tracking-tight">Mzansi Business</h1>
           <Button asChild size="sm" className="gap-1">
             <Link href="/post/create-business">
-              List
+              New Listing
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
@@ -175,7 +176,18 @@ export default async function MzansiBusinessPage() {
         <div className="flex gap-6">
           <aside className="hidden w-72 shrink-0 lg:block">
             <div className="sticky top-24">
-              <BusinessDiscoveryBar />
+              <Suspense
+                fallback={
+                  <div className="space-y-3">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-6 w-1/2" />
+                    <Skeleton className="h-6 w-2/3" />
+                  </div>
+                }
+              >
+                <BusinessDiscoveryBar />
+              </Suspense>
             </div>
           </aside>
 

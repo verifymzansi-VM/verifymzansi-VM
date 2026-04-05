@@ -1,9 +1,10 @@
 /* eslint-disable no-console */
+import { pathToFileURL } from "node:url";
 import { loadEnvConfig } from "@next/env";
 
 loadEnvConfig(process.cwd());
 
-type SmokeCheck = {
+export type SmokeCheck = {
   name: string;
   path: string;
   method?: "GET" | "POST";
@@ -16,7 +17,7 @@ type SmokeCheck = {
 const baseUrl =
   process.env.SMOKE_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-const checks: SmokeCheck[] = [
+export const checks: SmokeCheck[] = [
   {
     name: "Homepage",
     path: "/",
@@ -25,7 +26,8 @@ const checks: SmokeCheck[] = [
   {
     name: "Health endpoint",
     path: "/api/health",
-    expectStatuses: [200],
+    // Health returns 503 when launch checks are degraded.
+    expectStatuses: [200, 503],
     validateJsonStatusKey: true,
   },
   {
@@ -69,10 +71,18 @@ const checks: SmokeCheck[] = [
   },
 ];
 
-async function runCheck(check: SmokeCheck): Promise<void> {
-  const url = `${baseUrl}${check.path}`;
+export async function runCheck(
+  check: SmokeCheck,
+  options?: {
+    baseUrl?: string;
+    fetchImpl?: typeof fetch;
+  }
+): Promise<void> {
+  const resolvedBaseUrl = options?.baseUrl ?? baseUrl;
+  const fetchImpl = options?.fetchImpl ?? fetch;
+  const url = `${resolvedBaseUrl}${check.path}`;
   const method = check.method ?? "GET";
-  const response = await fetch(url, {
+  const response = await fetchImpl(url, {
     method,
     headers: check.headers,
     body:
@@ -110,7 +120,15 @@ async function main(): Promise<void> {
   console.log("Smoke checks passed.");
 }
 
-main().catch((error) => {
-  console.error("Smoke checks failed:", error);
-  process.exit(1);
-});
+const isMainModule =
+  typeof process !== "undefined" &&
+  Array.isArray(process.argv) &&
+  process.argv.length > 1 &&
+  import.meta.url === pathToFileURL(process.argv[1]!).href;
+
+if (isMainModule) {
+  main().catch((error) => {
+    console.error("Smoke checks failed:", error);
+    process.exit(1);
+  });
+}

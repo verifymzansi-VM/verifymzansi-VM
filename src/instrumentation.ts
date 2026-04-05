@@ -1,3 +1,5 @@
+import * as Sentry from "@sentry/nextjs";
+
 let hasLoggedBootstrapValidationFailure = false;
 
 function isExplicitE2eRuntime(): boolean {
@@ -57,6 +59,22 @@ function assertNoDevBypassesInProduction(): string[] {
 }
 
 export async function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    Sentry.init({
+      dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
+      tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+    });
+  }
+
+  if (process.env.NEXT_RUNTIME === "edge") {
+    Sentry.init({
+      dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
+      tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+    });
+  }
+
   const [{ validateEnv }, { createLogger }] = await Promise.all([
     import("./lib/config/env"),
     import("./lib/utils/logger"),
@@ -132,3 +150,5 @@ export async function register() {
 export function _resetInstrumentationForTesting() {
   hasLoggedBootstrapValidationFailure = false;
 }
+
+export const onRequestError = Sentry.captureRequestError;

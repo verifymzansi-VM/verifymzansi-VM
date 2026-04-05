@@ -101,14 +101,14 @@ export const promotionSchema = z
       .min(20, "Description must be at least 20 characters")
       .max(5000, "Description cannot exceed 5000 characters"),
     promotion_type: z.literal("event"),
-    category: z.string().max(100).optional(),
+    category: z.string().trim().min(1).max(100).optional(),
     category_key: z.enum(BUSINESS_CATEGORY_VALUES).optional(),
     price_zar: priceSchema.optional(),
     negotiable: z.boolean().default(false),
     province: z.string().min(1, "Province is required").max(50),
     city: z.string().min(1, "City is required").max(80),
-    location_town: z.string().trim().max(120).optional(),
-    location_address: z.string().trim().max(300).optional(),
+    location_town: z.string().trim().min(1).max(120).optional(),
+    location_address: z.string().trim().min(1).max(300).optional(),
     contact_methods: z
       .array(z.enum(["call", "whatsapp", "form"]))
       .min(1, "At least one contact method is required"),

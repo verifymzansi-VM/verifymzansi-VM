@@ -37,7 +37,7 @@ export default function PostError({
           <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
             Dashboard
           </Button>
-          <Button onClick={() => reset()}>Retry</Button>
+          <Button onClick={() => reset()}>Try again</Button>
         </div>
       </main>
     </div>

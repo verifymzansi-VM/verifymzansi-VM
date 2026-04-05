@@ -98,11 +98,19 @@ export async function POST(request: NextRequest) {
     };
 
     // ── Get account profile ──────────────────────────────────
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from(ACCOUNT_PROFILE_TABLE)
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
+
+    if (profileError) {
+      log.error("Failed to fetch account profile", {
+        userId: user.id,
+        error: profileError.message,
+      });
+      return NextResponse.json({ error: "Unable to verify account" }, { status: 500 });
+    }
 
     if (!profile) {
       const autoProfile = await ensureAccountProfile(getAdmin(), user);

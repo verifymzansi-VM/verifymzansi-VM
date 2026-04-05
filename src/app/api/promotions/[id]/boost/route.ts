@@ -91,11 +91,19 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const ownerColumn = await getOwnerColumn(supabase, "promotions");
 
     // Check account profile
-    const { data: profile } = await admin
+    const { data: profile, error: profileError } = await admin
       .from("account_profiles")
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
+
+    if (profileError) {
+      log.error("Failed to fetch account profile", {
+        userId: user.id,
+        error: profileError.message,
+      });
+      return NextResponse.json({ error: "Unable to verify account" }, { status: 500 });
+    }
 
     if (!profile) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
@@ -126,13 +134,22 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     // ── Prevent duplicate in-flight payments ─────────────────
-    const { data: pendingPmt } = await admin
+    const { data: pendingPmt, error: pendingError } = await admin
       .from("payments")
       .select("id")
       .eq("user_id", user.id)
       .in("status", ["pending", "processing"])
       .contains("provider_data", { type: "boost_promotion", promotion_id: promotionId })
       .maybeSingle();
+
+    if (pendingError) {
+      log.error("Failed to check pending payments", {
+        userId: user.id,
+        error: pendingError.message,
+      });
+      return NextResponse.json({ error: "Unable to verify payment status" }, { status: 503 });
+    }
+
     if (pendingPmt) {
       return NextResponse.json(
         { error: "A boost payment is already in progress for this promotion" },

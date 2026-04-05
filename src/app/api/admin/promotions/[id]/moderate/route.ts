@@ -89,11 +89,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const admin = createAdminClient();
 
     // Fetch current promotion
-    const { data: promotion } = await admin
+    const { data: promotion, error: promotionErr } = await admin
       .from("promotions")
       .select("id, status, owner_id, title, published_at")
       .eq("id", promotionId)
       .maybeSingle();
+
+    if (promotionErr) {
+      log.error("Failed to fetch promotion for moderation", {
+        promotionId,
+        error: promotionErr.message,
+      });
+      return NextResponse.json({ error: "Failed to load promotion" }, { status: 500 });
+    }
 
     if (!promotion) {
       return NextResponse.json({ error: "Promotion not found" }, { status: 404 });

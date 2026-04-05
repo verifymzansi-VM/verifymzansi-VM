@@ -17,6 +17,7 @@ export interface MiniListingPost {
   id: string;
   title: string | null;
   status: string;
+  area?: string | null;
   photos?: string[] | null;
   view_count?: number | null;
   created_at: string;
@@ -88,6 +89,21 @@ const TABS: { key: TabKey; label: string; statuses: string[] }[] = [
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
+
+function getEditHref(id: string, area?: string | null): string {
+  switch (area) {
+    case "MZANSI_BUSINESS":
+      return `/post/edit-business/${id}`;
+    case "PROMOTIONS_EVENTS":
+      return `/post/edit-promotion/${id}`;
+    case "BUSINESS_ADS":
+      return `/post/edit-business/${id}`;
+    case "MALL_SHOPS":
+      return `/post/edit-business/${id}`;
+    default:
+      return `/post/edit-listing/${id}`;
+  }
+}
 
 function getRelativeDate(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -265,7 +281,7 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
                     )}
                   >
                     <Link
-                      href={`/post/${post.id}/edit`}
+                      href={getEditHref(post.id, post.area)}
                       aria-label={isRejected ? `Fix ${title}` : `Edit ${title}`}
                     >
                       {isRejected ? (

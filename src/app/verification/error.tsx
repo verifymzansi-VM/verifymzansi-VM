@@ -31,7 +31,7 @@ export default function VerificationError({
         <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
           Back to Dashboard
         </Button>
-        <Button onClick={() => reset()}>Retry</Button>
+        <Button onClick={() => reset()}>Try again</Button>
       </div>
     </div>
   );

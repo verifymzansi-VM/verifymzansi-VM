@@ -20,6 +20,7 @@ export default function ContactPage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileUnavailable, setTurnstileUnavailable] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -187,11 +188,15 @@ export default function ContactPage() {
                         className="min-h-[60px]"
                         placeholder="How can we help?"
                         aria-invalid={fieldErrors.message ? "true" : undefined}
-                        aria-describedby={fieldErrors.message ? "message-error" : undefined}
+                        aria-describedby={fieldErrors.message ? "message-error" : "message-hint"}
                       />
-                      {fieldErrors.message && (
+                      {fieldErrors.message ? (
                         <p id="message-error" role="alert" className="inline-form-error">
                           {fieldErrors.message}
+                        </p>
+                      ) : (
+                        <p id="message-hint" className="text-xs text-muted-foreground">
+                          Please provide at least 10 characters
                         </p>
                       )}
                     </div>
@@ -200,7 +205,14 @@ export default function ContactPage() {
                       onSuccess={handleTurnstileSuccess}
                       onError={() => setTurnstileToken("")}
                       onExpire={() => setTurnstileToken("")}
+                      onUnavailable={() => setTurnstileUnavailable(true)}
                     />
+
+                    {turnstileUnavailable && (
+                      <p className="text-xs text-destructive" role="alert">
+                        Security check failed to load. Refresh the page to try again.
+                      </p>
+                    )}
 
                     <Button
                       type="submit"

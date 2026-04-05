@@ -214,8 +214,8 @@ export default function VerificationHelpPage() {
         <p className="text-sm font-medium mb-1">Still having trouble?</p>
         <p className="text-xs text-muted-foreground">
           Contact us at{" "}
-          <a href="mailto:support@verifymzansi.co.za" className="underline">
-            support@verifymzansi.co.za
+          <a href="mailto:support@verifymzansi.com" className="underline">
+            support@verifymzansi.com
           </a>{" "}
           and include your registered phone number.
         </p>

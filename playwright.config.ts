@@ -4,6 +4,9 @@ const PLAYWRIGHT_PORT = Number(process.env.PLAYWRIGHT_PORT || 3100);
 const PLAYWRIGHT_HOST = process.env.PLAYWRIGHT_HOST || "127.0.0.1";
 const PLAYWRIGHT_BASE_URL =
   process.env.PLAYWRIGHT_BASE_URL || `http://${PLAYWRIGHT_HOST}:${PLAYWRIGHT_PORT}`;
+const PLAYWRIGHT_WEB_SERVER_TIMEOUT_MS = Number(
+  process.env.PLAYWRIGHT_WEB_SERVER_TIMEOUT_MS || 600_000
+);
 
 process.env.PLAYWRIGHT_TEST_MODE ||= "1";
 process.env.PLAYWRIGHT_PORT ||= String(PLAYWRIGHT_PORT);
@@ -50,6 +53,6 @@ export default defineConfig({
     command: "node scripts/start-playwright-server.cjs",
     url: PLAYWRIGHT_BASE_URL,
     reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
-    timeout: 180 * 1000,
+    timeout: PLAYWRIGHT_WEB_SERVER_TIMEOUT_MS,
   },
 });

@@ -23,6 +23,7 @@ import {
   GPS_ACCURACY_WARN_METERS,
   GPS_ACCURACY_REJECT_METERS,
   GPS_MAX_AGE_MS,
+  GPS_REPLAY_REJECT_MS,
   GPS_PROVINCE_MISMATCH_RISK,
   GPS_CITY_MISMATCH_RISK,
 } from "@/lib/constants/verification";
@@ -161,11 +162,18 @@ export async function POST(request: NextRequest) {
     const adminClient = createAdminClient();
 
     // Reject if verification session is already finalized
-    const { data: existingSession } = await adminClient
+    const { data: existingSession, error: sessionFetchErr } = await adminClient
       .from("verification_sessions")
       .select("finalized_at")
       .eq("user_id", user.id)
       .maybeSingle();
+    if (sessionFetchErr) {
+      log.error("Failed to fetch verification session", {
+        userId: user.id,
+        error: sessionFetchErr.message,
+      });
+      return NextResponse.json({ error: "Unable to check verification session" }, { status: 500 });
+    }
     if (existingSession?.finalized_at) {
       return NextResponse.json(
         { error: "Verification session is already finalized" },
@@ -174,11 +182,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Check account profile exists
-    const { data: profile } = await supabase
+    const { data: profile, error: profileErr } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id, account_verification_status")
       .eq("user_id", user.id)
       .maybeSingle();
+
+    if (profileErr) {
+      log.error("Failed to fetch account profile", { userId: user.id, error: profileErr.message });
+      return NextResponse.json({ error: "Unable to verify account" }, { status: 500 });
+    }
 
     if (!profile) {
       return NextResponse.json({ error: ACCOUNT_PROFILE_NOT_FOUND_ERROR }, { status: 404 });
@@ -275,7 +288,17 @@ export async function POST(request: NextRequest) {
 
     // Stale GPS reading — timestamp too far in the past
     const gpsAge = Date.now() - timestamp;
-    if (gpsAge > GPS_MAX_AGE_MS) {
+    if (gpsAge > GPS_REPLAY_REJECT_MS) {
+      // Hard block for extremely stale readings (likely replayed/cached)
+      signals.push({
+        signal_code: "gps_replay_detected",
+        severity: "block",
+        value_json: {
+          age_ms: gpsAge,
+          threshold_ms: GPS_REPLAY_REJECT_MS,
+        },
+      });
+    } else if (gpsAge > GPS_MAX_AGE_MS) {
       signals.push({
         signal_code: "gps_stale_reading",
         severity: "warn",

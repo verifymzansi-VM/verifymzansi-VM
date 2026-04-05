@@ -181,12 +181,20 @@ export async function POST(request: Request) {
         supabase
           .from(config.table)
           .update({ status: "pending_moderation", status_reason: null })
-          .eq("id", itemId),
+          .eq("id", itemId)
+          .eq("status", "rejected"),
         ownerColumn,
         user.id
       );
 
       const updateResult = await updateQuery;
+      // If no rows were updated, the status changed between check and update (race condition)
+      if (!updateResult.error && (updateResult as unknown as { count?: number }).count === 0) {
+        return NextResponse.json(
+          { error: "Content status changed. Please refresh and try again." },
+          { status: 409 }
+        );
+      }
       updateErrorMessage =
         (updateResult.error as unknown as { message?: string | null } | null)?.message ?? null;
     } else {
@@ -244,7 +252,15 @@ export async function POST(request: Request) {
       const updateResult = await admin
         .from(config.table)
         .update({ status: "pending_moderation", status_reason: null })
-        .eq("id", itemId);
+        .eq("id", itemId)
+        .eq("status", "rejected");
+      // If no rows were updated, the status changed between check and update (race condition)
+      if (!updateResult.error && (updateResult as unknown as { count?: number }).count === 0) {
+        return NextResponse.json(
+          { error: "Content status changed. Please refresh and try again." },
+          { status: 409 }
+        );
+      }
       updateErrorMessage =
         (updateResult.error as unknown as { message?: string | null } | null)?.message ?? null;
     }

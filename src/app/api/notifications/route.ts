@@ -7,6 +7,8 @@ import {
   logApiError,
   parseAndValidateJsonRequest,
   parseAndValidateSearchParams,
+  unauthorizedResponse,
+  rateLimitResponse,
 } from "@/lib/utils/api";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
@@ -47,15 +49,12 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const rl = checkLocalRateLimit(user.id, "notifications:read");
     if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
+      return rateLimitResponse(rl.retryAfter ?? 60);
     }
 
     const parsedQuery = parseAndValidateSearchParams(
@@ -133,15 +132,12 @@ export async function PATCH(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const rl = checkLocalRateLimit(user.id, "notifications:update");
     if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
+      return rateLimitResponse(rl.retryAfter ?? 60);
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, notificationMutationSchema, {
@@ -172,25 +168,22 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: true, message: "All notifications marked as read" });
     }
 
-    if ("id" in parsedBody.data) {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ read: true })
-        .eq("id", parsedBody.data.id)
-        .eq("user_id", user.id);
+    // Guaranteed to have parsedBody.data.id here (Zod union validated)
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("id", (parsedBody.data as { id: string }).id)
+      .eq("user_id", user.id);
 
-      if (error) {
-        log.error("Failed to mark notification as read", {
-          error: error.message,
-          userId: user.id,
-        });
-        return NextResponse.json({ error: "Failed to update notifications" }, { status: 500 });
-      }
-
-      return NextResponse.json({ success: true });
+    if (error) {
+      log.error("Failed to mark notification as read", {
+        error: error.message,
+        userId: user.id,
+      });
+      return NextResponse.json({ error: "Failed to update notifications" }, { status: 500 });
     }
 
-    return NextResponse.json({ error: "Must provide 'id' or 'all: true'" }, { status: 400 });
+    return NextResponse.json({ success: true });
   } catch (error) {
     logApiError(log, "Unexpected notifications update error", error);
     return internalApiError();
@@ -218,7 +211,7 @@ export async function DELETE(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const parsedBody = await parseAndValidateJsonRequest(request, notificationMutationSchema, {

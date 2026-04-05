@@ -123,24 +123,38 @@ export async function markPaymentFailed(
   payment: PaymentRow,
   webhookPayload: Record<string, unknown>
 ): Promise<boolean> {
+  // Extract a machine-readable failure reason from the webhook for easier triage.
+  // Ozow sends `status` (e.g. "Error") and may include `statusMessage`.
+  const rawStatus =
+    typeof webhookPayload.status === "string" ? webhookPayload.status.toLowerCase() : "unknown";
+  const statusMessage =
+    typeof webhookPayload.statusMessage === "string" ? webhookPayload.statusMessage : undefined;
+
+  const providerData = appendProviderWebhook(
+    {
+      id: payment.id,
+      user_id: payment.user_id,
+      area: payment.area,
+      amount_cents: payment.amount_cents,
+      status: payment.status,
+      provider: "ozow",
+      provider_payment_id: payment.provider_payment_id,
+      provider_reference: payment.provider_reference,
+      provider_data: payment.provider_data,
+    },
+    webhookPayload
+  );
+
   const { error } = await supabase
     .from("payments")
     .update({
       status: "failed",
-      provider_data: appendProviderWebhook(
-        {
-          id: payment.id,
-          user_id: payment.user_id,
-          area: payment.area,
-          amount_cents: payment.amount_cents,
-          status: payment.status,
-          provider: "ozow",
-          provider_payment_id: payment.provider_payment_id,
-          provider_reference: payment.provider_reference,
-          provider_data: payment.provider_data,
-        },
-        webhookPayload
-      ),
+      provider_data: {
+        ...(providerData ?? {}),
+        failure_reason: rawStatus,
+        ...(statusMessage ? { failure_message: statusMessage } : {}),
+        failed_at: new Date().toISOString(),
+      },
     })
     .eq("id", payment.id)
     .eq("provider", "ozow");

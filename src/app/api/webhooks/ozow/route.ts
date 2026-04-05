@@ -19,6 +19,16 @@ import { sendPaymentFailedEmail, sendPaymentReceiptEmail } from "@/lib/services/
 
 const log = createLogger("OzowWebhook");
 
+function isE2eLoggingContext(): boolean {
+  const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
+  return (
+    runtimeMode === "e2e" ||
+    runtimeMode === "playwright" ||
+    runtimeMode === "test" ||
+    process.env.PLAYWRIGHT_E2E_AUTH === "1"
+  );
+}
+
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
 
 function getPlanNameFromArea(area?: string | null): string {
@@ -205,7 +215,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!verifyOzowWebhookSignature(rawBody, request.headers)) {
-      log.warn("Invalid Ozow webhook signature");
+      if (isE2eLoggingContext()) {
+        log.info("Invalid Ozow webhook signature");
+      } else {
+        log.warn("Invalid Ozow webhook signature");
+      }
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
     }
 
@@ -241,7 +255,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, ignored: true });
     }
 
-    if (payload.currencyCode && payload.currencyCode !== "ZAR") {
+    if (payload.currencyCode && payload.currencyCode.toUpperCase() !== "ZAR") {
       log.error("Ozow currency mismatch", {
         paymentId: payment.id,
         expected: "ZAR",
@@ -328,16 +342,28 @@ export async function POST(request: NextRequest) {
     }
 
     if (!claimed) {
+      log.info("Webhook claim failed — entering recovery path", {
+        paymentId: payment.id,
+        originalStatus: payment.status,
+      });
       const currentPayment = await getPaymentById(supabase, payment.id);
 
+      if (!currentPayment) {
+        log.error("RECOVERY: Payment disappeared after claim failure", { paymentId: payment.id });
+        return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+      }
+
       if (
-        currentPayment?.status === "complete" &&
+        currentPayment.status === "complete" &&
         currentPayment.provider_payment_id === payload.providerPaymentId
       ) {
+        log.info("RECOVERY: Payment already complete — duplicate webhook", {
+          paymentId: payment.id,
+        });
         return NextResponse.json({ success: true, duplicate: true });
       }
 
-      if (currentPayment?.status !== "processing") {
+      if (currentPayment.status !== "processing") {
         return NextResponse.json({ success: true, duplicate: true });
       }
 
@@ -405,7 +431,15 @@ export async function POST(request: NextRequest) {
 
       const marked = await persistFulfillmentCompletion(supabase, currentPayment, payload);
       if (!marked) {
-        return NextResponse.json({ error: "Payment finalization failed" }, { status: 500 });
+        log.error(
+          "CRITICAL: Recovery fulfillment completed but completion marker failed — manual review required",
+          {
+            paymentId: currentPayment.id,
+            userId: currentPayment.user_id,
+            area: currentPayment.area,
+            entitlementsMayBeActive: true,
+          }
+        );
       }
 
       const reloadedPayment = await getPaymentById(supabase, currentPayment.id);
@@ -468,7 +502,18 @@ export async function POST(request: NextRequest) {
 
     const marked = await persistFulfillmentCompletion(supabase, processingPayment, payload);
     if (!marked) {
-      return NextResponse.json({ error: "Payment finalization failed" }, { status: 500 });
+      // Fulfillment already succeeded (entitlements created) but the completion
+      // marker could not be persisted. Log a critical alert for manual reconciliation
+      // and return success so Ozow does not retry — the user has their features.
+      log.error(
+        "CRITICAL: Fulfillment completed but completion marker failed — manual review required",
+        {
+          paymentId: payment.id,
+          userId: payment.user_id,
+          area: payment.area,
+          entitlementsMayBeActive: true,
+        }
+      );
     }
 
     const finalPayment = await getPaymentById(supabase, payment.id);

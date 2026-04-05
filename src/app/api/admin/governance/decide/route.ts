@@ -6,7 +6,14 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import {
+  internalApiError,
+  logApiError,
+  parseAndValidateJsonRequest,
+  unauthorizedResponse,
+  forbiddenResponse,
+  rateLimitResponse,
+} from "@/lib/utils/api";
 import { z } from "zod";
 import { uuidSchema } from "@/lib/validations/shared";
 import { getRoleFromUser } from "@/lib/auth/roles";
@@ -54,21 +61,18 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const capability = "decision:approve";
     const verified = await verifyCapabilityFromDb(user, capability);
     if (!verified) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return forbiddenResponse();
     }
 
     const rl = checkLocalRateLimit(user.id, "admin:governance:decide");
     if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
+      return rateLimitResponse(rl.retryAfter ?? 60);
     }
 
     const bodyResult = await parseAndValidateJsonRequest(request, governanceDecideSchema, {

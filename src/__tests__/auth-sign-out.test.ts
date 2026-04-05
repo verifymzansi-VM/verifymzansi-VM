@@ -39,7 +39,7 @@ describe("POST /api/auth/sign-out", () => {
     mockCreateClient.mockResolvedValue({ auth: { signOut: mockSignOut } });
 
     const res = await POST(createRequest());
-    expect(mockSignOut).toHaveBeenCalled();
+    expect(mockSignOut).toHaveBeenCalledWith({ scope: "global" });
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toContain("/");
     expect(res.cookies.get("x-phone-ok")).toMatchObject({

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { unauthorizedResponse, badRequestResponse, internalApiError } from "@/lib/utils/api";
 
 const logger = createLogger("Drafts");
 
@@ -18,7 +19,7 @@ const MAX_DRAFT_BODY_BYTES = 64 * 1024;
 export async function GET(request: NextRequest) {
   const flow = request.nextUrl.searchParams.get("flow");
   if (!flow || !VALID_FLOWS.has(flow)) {
-    return NextResponse.json({ error: "Invalid flow" }, { status: 400 });
+    return badRequestResponse("Invalid flow");
   }
 
   const supabase = await createClient();
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return unauthorizedResponse();
   }
 
   const { data, error } = await supabase
@@ -84,7 +85,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Invalid step" }, { status: 400 });
   }
   if (!data || typeof data !== "object") {
-    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
+    return badRequestResponse("Invalid data");
   }
 
   const supabase = await createClient();
@@ -92,7 +93,7 @@ export async function PUT(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return unauthorizedResponse();
   }
 
   const { error } = await supabase
@@ -104,7 +105,7 @@ export async function PUT(request: NextRequest) {
 
   if (error) {
     logger.error("Failed to save draft", { error: error.message, flow });
-    return NextResponse.json({ error: "Failed to save draft" }, { status: 500 });
+    return internalApiError("Failed to save draft");
   }
 
   return NextResponse.json({ ok: true });
@@ -122,7 +123,7 @@ export async function DELETE(request: NextRequest) {
 
   const flow = request.nextUrl.searchParams.get("flow");
   if (!flow || !VALID_FLOWS.has(flow)) {
-    return NextResponse.json({ error: "Invalid flow" }, { status: 400 });
+    return badRequestResponse("Invalid flow");
   }
 
   const supabase = await createClient();
@@ -130,7 +131,7 @@ export async function DELETE(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return unauthorizedResponse();
   }
 
   const { error } = await supabase
@@ -141,7 +142,7 @@ export async function DELETE(request: NextRequest) {
 
   if (error) {
     logger.error("Failed to delete draft", { error: error.message, flow });
-    return NextResponse.json({ error: "Failed to delete draft" }, { status: 500 });
+    return internalApiError("Failed to delete draft");
   }
 
   return NextResponse.json({ ok: true });

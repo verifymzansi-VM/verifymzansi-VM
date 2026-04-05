@@ -123,7 +123,7 @@ describe("PromotionCard", () => {
 
     expect(screen.getByText("TUE, 10 MAR")).toBeTruthy();
     expect(screen.getByText("Event")).toBeTruthy();
-    expect(screen.getByText("Event")).toHaveClass("bg-teal-500");
+    expect(screen.getByText("Event")).toHaveClass("bg-teal-800");
     expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
   });
 
@@ -152,7 +152,7 @@ describe("PromotionCard", () => {
   it("uses the event styling when no override badge is active", () => {
     render(<PromotionCard {...defaultProps} promotionType="event" />);
 
-    expect(screen.getByText("Event")).toHaveClass("bg-teal-500");
+    expect(screen.getByText("Event")).toHaveClass("bg-teal-800");
     expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
   });
 
@@ -160,7 +160,7 @@ describe("PromotionCard", () => {
     render(<PromotionCard {...defaultProps} promotionType="event" boosted />);
 
     expect(screen.getByText("Event ★")).toBeTruthy();
-    expect(screen.getByText("Event ★")).toHaveClass("bg-teal-500");
+    expect(screen.getByText("Event ★")).toHaveClass("bg-teal-800");
   });
 
   it("renders the linked business logo when provided", () => {

@@ -134,7 +134,7 @@ export default function RegisterPage() {
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
   const requirements = [
-    { label: "8+ chars", met: password.length >= 8 },
+    { label: "8+ characters", met: password.length >= 8 },
     { label: "Lowercase", met: /[a-z]/.test(password) },
     { label: "Uppercase", met: /[A-Z]/.test(password) },
     { label: "Number", met: /[0-9]/.test(password) },
@@ -206,7 +206,7 @@ export default function RegisterPage() {
       <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="firstName">Name</Label>
+            <Label htmlFor="firstName">First name</Label>
             <Input
               id="firstName"
               placeholder="Thabo"
@@ -224,7 +224,7 @@ export default function RegisterPage() {
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="lastName">Surname</Label>
+            <Label htmlFor="lastName">Last name</Label>
             <Input
               id="lastName"
               placeholder="Mokoena"

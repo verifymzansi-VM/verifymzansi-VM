@@ -2,6 +2,79 @@ const { spawn, spawnSync } = require("node:child_process");
 
 const PLAYWRIGHT_PORT = Number(process.env.PLAYWRIGHT_PORT || 3100);
 const PLAYWRIGHT_HOST = process.env.PLAYWRIGHT_HOST || "127.0.0.1";
+const FILTER_WEB_SERVER_NOISE = process.env.PLAYWRIGHT_FILTER_WEB_SERVER_NOISE !== "0";
+
+function shouldSuppressWebServerLine(line) {
+  const normalized = String(line || "").trim();
+  if (!normalized) {
+    return true;
+  }
+
+  if (normalized.includes("You have defined bindings to the following internal Durable Objects")) {
+    return true;
+  }
+
+  if (normalized.includes("These will not work in local development, but they should work in production")) {
+    return true;
+  }
+
+  if (normalized.includes("For detailed instructions, refer to the Durable Objects section here")) {
+    return true;
+  }
+
+  if (
+    normalized.includes(
+      "If you want to develop these locally, you can define your DO in a separate Worker"
+    )
+  ) {
+    return true;
+  }
+
+  if (normalized.includes("A DurableObjectNamespace in the config referenced the class")) {
+    return true;
+  }
+
+  if (
+    normalized.includes('"name":"NEXT_CACHE_DO_QUEUE"') ||
+    normalized.includes('"name":"NEXT_TAG_CACHE_DO_SHARDED"') ||
+    normalized.includes('"name":"NEXT_CACHE_DO_PURGE"') ||
+    normalized.includes('"name":"RATE_LIMITER_DO"') ||
+    normalized.includes('class "RateLimiterDO"') ||
+    normalized.includes('class "BucketCachePurge"') ||
+    normalized.includes('class "DOShardedTagCache"') ||
+    normalized.includes('class "DOQueueHandler"')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function writeFilteredOutput(text, target) {
+  const chunks = String(text || "").split(/\r?\n/);
+
+  for (const line of chunks) {
+    if (!line) continue;
+    if (FILTER_WEB_SERVER_NOISE && shouldSuppressWebServerLine(line)) {
+      continue;
+    }
+    target.write(`${line}\n`);
+  }
+}
+
+function wireOutputFilters(child) {
+  if (child.stdout) {
+    child.stdout.on("data", (chunk) => {
+      writeFilteredOutput(chunk.toString(), process.stdout);
+    });
+  }
+
+  if (child.stderr) {
+    child.stderr.on("data", (chunk) => {
+      writeFilteredOutput(chunk.toString(), process.stderr);
+    });
+  }
+}
 
 function createDeterministicEnv() {
   const deterministicValues = {
@@ -54,13 +127,13 @@ function spawnPnpmSync(args, env) {
   if (process.platform === "win32") {
     return spawnSync(process.env.ComSpec || "cmd.exe", ["/c", "pnpm", ...args], {
       env,
-      stdio: "inherit",
+      encoding: "utf8",
     });
   }
 
   return spawnSync("pnpm", args, {
     env,
-    stdio: "inherit",
+    encoding: "utf8",
   });
 }
 
@@ -68,18 +141,25 @@ function spawnPnpm(args, env) {
   if (process.platform === "win32") {
     return spawn(process.env.ComSpec || "cmd.exe", ["/c", "pnpm", ...args], {
       env,
-      stdio: "inherit",
+      stdio: ["inherit", "pipe", "pipe"],
     });
   }
 
   return spawn("pnpm", args, {
     env,
-    stdio: "inherit",
+    stdio: ["inherit", "pipe", "pipe"],
   });
 }
 
 function runBuild(env) {
   const result = spawnPnpmSync(["build"], env);
+
+  if (result.stdout) {
+    writeFilteredOutput(result.stdout, process.stdout);
+  }
+  if (result.stderr) {
+    writeFilteredOutput(result.stderr, process.stderr);
+  }
 
   if (result.error) {
     console.error("Failed to start Playwright build:", result.error.message);
@@ -96,6 +176,7 @@ function main() {
   runBuild(env);
 
   const server = spawnPnpm(["start"], env);
+  wireOutputFilters(server);
 
   server.on("error", (error) => {
     console.error("Failed to start Playwright web server:", error.message);

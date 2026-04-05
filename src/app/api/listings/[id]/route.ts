@@ -164,7 +164,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // ── Enforce photo/video limits based on plan ─────────────
     // Check if user has a paid entitlement (not expired)
-    const { data: activeEntitlement } = await supabase
+    const { data: activeEntitlement, error: entitlementError } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -174,6 +174,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (entitlementError) {
+      log.error("Failed to check entitlements", {
+        userId: user.id,
+        error: entitlementError.message,
+      });
+      return NextResponse.json({ error: "Unable to verify subscription status" }, { status: 503 });
+    }
 
     const hasPaidPlan = !!activeEntitlement;
     const activeTier = (activeEntitlement?.tier as string) || null;

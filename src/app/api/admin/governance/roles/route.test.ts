@@ -217,7 +217,7 @@ describe("POST /api/admin/governance/roles", () => {
       const data = await res.json();
 
       expect(res.status).toBe(429);
-      expect(data.error).toBe("Too many requests");
+      expect(data.error).toContain("Too many requests");
       expect(res.headers.get("Retry-After")).toBe("45");
     });
   });

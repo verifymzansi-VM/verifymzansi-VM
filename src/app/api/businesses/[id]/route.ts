@@ -110,7 +110,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     // Fetch linked promotions
-    const { data: promotions } = await supabase
+    const { data: promotions, error: promoError } = await supabase
       .from("promotions")
       .select(
         "id, title, promotion_type, photos, price_cents, start_date, end_date, boost_until, created_at"
@@ -120,6 +120,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       .order("boost_until", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(12);
+
+    if (promoError) {
+      log.warn("Failed to fetch linked promotions", { businessId: id, error: promoError.message });
+    }
 
     // Track view (best-effort — never block the response)
     const admin = createAdminClient();
@@ -229,7 +233,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const data = parsedBody.data;
-    const { data: activeEntitlement } = await supabase
+    const { data: activeEntitlement, error: entitlementError } = await supabase
       .from("entitlements")
       .select("tier")
       .eq("user_id", user.id)
@@ -239,6 +243,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (entitlementError) {
+      log.error("Failed to check entitlements", {
+        userId: user.id,
+        error: entitlementError.message,
+      });
+      return NextResponse.json({ error: "Unable to verify subscription status" }, { status: 503 });
+    }
 
     const hasPaidPlan = !!activeEntitlement;
     const activeTier = (activeEntitlement?.tier as string) || null;
@@ -268,12 +280,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const admin = createAdminClient();
-    const { data: slugConflict } = await admin
+    const { data: slugConflict, error: slugError } = await admin
       .from("businesses")
       .select("id")
       .eq("slug", data.slug)
       .neq("id", id)
       .maybeSingle();
+
+    if (slugError) {
+      log.error("Failed to check slug uniqueness", { slug: data.slug, error: slugError.message });
+      return NextResponse.json({ error: "Unable to validate business URL" }, { status: 500 });
+    }
 
     if (slugConflict) {
       return NextResponse.json(BUSINESS_SLUG_CONFLICT_RESPONSE, { status: 409 });

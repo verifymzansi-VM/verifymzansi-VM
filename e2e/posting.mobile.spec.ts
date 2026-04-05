@@ -86,14 +86,19 @@ async function completeMobileListingCreate(page: Page) {
 async function completeMobileBusinessCreate(page: Page) {
   const businessName = `Mobile Chrome Business ${RUN_SUFFIX}`;
   const businessSlug = `mobile-chrome-business-${RUN_SUFFIX}`;
-  const businessTypeLabel = page.locator("label").filter({ hasText: /Standalone Shop/ });
+  const businessTypeLabel = page
+    .locator("label")
+    .filter({ hasText: /Standalone Shop|Own Premises/i });
 
   await page.goto("/post/create-business");
   await enterPostingForm(page, businessTypeLabel);
   await businessTypeLabel.click();
   await page.getByLabel(/Business Name/i).fill(businessName);
   await page.getByLabel(/URL Slug/i).fill(businessSlug);
-  await page.getByLabel(/^Category$/).selectOption("fashion_accessories");
+  await page
+    .getByRole("button", { name: /fashion/i })
+    .first()
+    .click();
   await page.getByLabel(/Street address/i).fill("12 Bree Street");
   await page.getByLabel(/Suburb/i).fill("CBD");
   await page.getByRole("button", { name: "Next" }).click();
@@ -106,7 +111,7 @@ async function completeMobileBusinessCreate(page: Page) {
 
 async function completeMobilePromotionCreate(page: Page) {
   const promotionTitle = `Mobile Chrome Promotion ${RUN_SUFFIX}`;
-  const titleField = page.getByLabel(/^Title/i);
+  const titleField = page.getByLabel(/Event Title|Title/i);
 
   await page.goto("/post/create-promotion");
   await enterPostingForm(page, titleField);

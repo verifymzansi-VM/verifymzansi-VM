@@ -99,7 +99,7 @@ export function Footer() {
                 href="/dsar"
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                Data Request (POPIA)
+                Data Access Request (POPIA)
               </Link>
             </nav>
           </div>

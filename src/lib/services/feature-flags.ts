@@ -73,11 +73,10 @@ function evaluateFlag(flag: FlagRow, flagKey: string, context?: FlagContext): bo
       const bucketId = context?.bucketKey || context?.userId;
       if (!bucketId) return false; // No identifier — deny
       if (flag.rollout_percent == null) {
-        log.warn(
-          `Flag "${flagKey}" is in percent mode but rollout_percent is null — defaulting to 0`
-        );
+        log.error(`Flag "${flagKey}" is in percent mode but rollout_percent is null — denying`);
+        return false;
       }
-      const percent = flag.rollout_percent ?? 0;
+      const percent = flag.rollout_percent;
       return hashBucket(flagKey, bucketId) < percent;
     }
     case "allowlist": {

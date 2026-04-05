@@ -24,6 +24,7 @@ import {
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { useToast } from "@/hooks/use-toast";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
@@ -36,6 +37,7 @@ export default function EditPromotionPage() {
   const params = useParams<{ id: string }>();
   const promotionId = params.id;
 
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
@@ -165,6 +167,7 @@ export default function EditPromotionPage() {
   }
 
   function removeExistingImage(index: number) {
+    if (!window.confirm("Remove this photo?")) return;
     setExistingImages((prev) => prev.filter((_, i) => i !== index));
   }
 
@@ -302,6 +305,7 @@ export default function EditPromotionPage() {
         return;
       }
 
+      toast({ title: "Promotion updated!", variant: "success" });
       router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&updated=promotion");
     } catch (error: unknown) {
       setError(normalizeCreatePostRuntimeError(error, "Something went wrong. Please try again."));

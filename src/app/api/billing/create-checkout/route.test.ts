@@ -616,4 +616,138 @@ describe("POST /api/billing/create-checkout", () => {
     expect(res.status).toBe(409);
     expect(data.error).toContain("pending payment");
   });
+
+  it("returns 500 when profile fetch encounters a DB error", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: "connection refused", code: "ECONNREFUSED" },
+          }),
+        };
+      }
+    });
+
+    const res = await createCheckout(
+      createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(data.error).toBe("Unable to verify account");
+  });
+
+  it("returns 503 when entitlement check encounters a DB error", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "profile-1", display_name: "Test Account" },
+            error: null,
+          }),
+        };
+      }
+      if (table === "plans") {
+        return createPlansTableMock([
+          {
+            id: "550e8400-e29b-41d4-a716-446655440000",
+            name: "Mzansi Market Growth",
+            area: "MZANSI_MARKET",
+            tier: "growth",
+            price_cents: 25000,
+            active: true,
+          },
+        ]);
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: "RLS policy violation" },
+          }),
+        };
+      }
+    });
+
+    const res = await createCheckout(
+      createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(data.error).toBe("Unable to verify subscription status");
+  });
+
+  it("returns 503 when pending payment check encounters a DB error", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    mockAdmin.from.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "profile-1", display_name: "Test Account" },
+            error: null,
+          }),
+        };
+      }
+      if (table === "plans") {
+        return createPlansTableMock([
+          {
+            id: "550e8400-e29b-41d4-a716-446655440000",
+            name: "Mzansi Market Growth",
+            area: "MZANSI_MARKET",
+            tier: "growth",
+            price_cents: 25000,
+            active: true,
+          },
+        ]);
+      }
+      if (table === "entitlements") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      }
+      if (table === "payments") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: null,
+                    error: { message: "timeout exceeded" },
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+    });
+
+    const res = await createCheckout(
+      createMockRequest({ planId: "550e8400-e29b-41d4-a716-446655440000" })
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(data.error).toBe("Unable to verify payment status");
+  });
 });

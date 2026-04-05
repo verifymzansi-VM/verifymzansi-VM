@@ -120,7 +120,7 @@ describe("Plan-tier entitlement boundaries", () => {
       // Starter MZANSI_MARKET allows 5 listings
       const result = canCreateListing(5, "starter", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("active listings");
+      expect(result.reason).toContain("live listings");
     });
 
     it("blocks creation when count exceeds limit", () => {
@@ -148,10 +148,10 @@ describe("Plan-tier entitlement boundaries", () => {
         expect(bizResult.reason).toContain("profiles");
       }
 
-      // MZANSI_MARKET should say "active listings"
+      // MZANSI_MARKET should say "live listings"
       const mktResult = canCreateListing(100, "starter", "MZANSI_MARKET");
       if (!mktResult.allowed) {
-        expect(mktResult.reason).toContain("active listings");
+        expect(mktResult.reason).toContain("live listings");
       }
     });
   });

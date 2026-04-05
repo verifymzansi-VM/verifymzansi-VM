@@ -16,6 +16,7 @@ export const GPS_ACCURACY_WARN_METERS = 1000;
 export const GPS_ACCURACY_REJECT_METERS = 3000;
 export const GPS_REQUEST_TIMEOUT_MS = 15_000;
 export const GPS_MAX_AGE_MS = 60_000;
+export const GPS_REPLAY_REJECT_MS = 5 * 60_000; // 5 min — hard-reject stale/replayed readings
 
 /* ── Manual Location Risk Scoring ─────────────────────────── */
 export const MANUAL_ONLY_BASELINE_RISK = 20;

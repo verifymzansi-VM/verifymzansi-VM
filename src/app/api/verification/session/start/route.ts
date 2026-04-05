@@ -78,7 +78,7 @@ export async function POST(_request: NextRequest) {
     }
 
     // Fetch the most recent non-finalized verification session
-    const { data: existingSession } = await supabase
+    const { data: existingSession, error: sessionFetchErr } = await supabase
       .from("verification_sessions")
       .select("*")
       .eq("user_id", user.id)
@@ -87,6 +87,14 @@ export async function POST(_request: NextRequest) {
       .limit(1)
       .maybeSingle();
 
+    if (sessionFetchErr) {
+      log.error("Failed to fetch existing verification session", {
+        userId: user.id,
+        error: sessionFetchErr.message,
+      });
+      return NextResponse.json({ error: "Failed to load verification session" }, { status: 500 });
+    }
+
     let session = existingSession;
 
     // If the existing session is expired, reset it for reuse (UNIQUE(user_id) allows only one row)
@@ -94,11 +102,18 @@ export async function POST(_request: NextRequest) {
       const expiresAt = new Date(new Date(session.created_at).getTime() + 24 * 60 * 60 * 1000);
       if (expiresAt < new Date()) {
         // Check which steps are already approved to preserve their state
-        const { data: approvedSteps } = await supabase
+        const { data: approvedSteps, error: approvedStepsErr } = await supabase
           .from("verification_steps")
           .select("step_type, phone_verified_at")
           .eq("user_id", user.id)
           .eq("status", "approved");
+
+        if (approvedStepsErr) {
+          log.warn("Failed to fetch approved steps during session reset (non-fatal)", {
+            userId: user.id,
+            error: approvedStepsErr.message,
+          });
+        }
 
         const approvedTypes = new Set((approvedSteps || []).map((s) => s.step_type));
         const phoneStep = (approvedSteps || []).find((s) => s.step_type === "phone");
@@ -144,13 +159,20 @@ export async function POST(_request: NextRequest) {
 
     if (!session) {
       // Check if phone was already verified in verification_steps
-      const { data: phoneStep } = await supabase
+      const { data: phoneStep, error: phoneStepErr } = await supabase
         .from("verification_steps")
         .select("phone_verified_at")
         .eq("user_id", user.id)
         .eq("step_type", "phone")
         .in("status", ["approved", "pending"])
         .maybeSingle();
+
+      if (phoneStepErr) {
+        log.warn("Failed to fetch phone step (non-fatal)", {
+          userId: user.id,
+          error: phoneStepErr.message,
+        });
+      }
 
       // Use upsert to handle edge case where a finalized row already exists
       const { data: newSession, error: insertErr } = await supabase
@@ -189,10 +211,17 @@ export async function POST(_request: NextRequest) {
     }
 
     // Fetch all existing verification steps for this user
-    const { data: steps } = await supabase
+    const { data: steps, error: stepsErr } = await supabase
       .from("verification_steps")
       .select("step_type, status")
       .eq("user_id", user.id);
+
+    if (stepsErr) {
+      log.warn("Failed to fetch verification steps (non-fatal)", {
+        userId: user.id,
+        error: stepsErr.message,
+      });
+    }
 
     const completedSteps: string[] = [];
     const pendingSteps: string[] = [];

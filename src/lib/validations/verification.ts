@@ -87,19 +87,38 @@ const EXTENSIONS_BY_TYPE: Record<string, readonly string[]> = {
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 /** Zod schema for the KYC file-upload form payload. */
-export const fileUploadSchema = z.object({
-  docType: z.enum(["id_document", "selfie", "proof_of_address"], {
-    error: "Document type is required",
-  }),
-  idNumber: z.string().max(13).optional(),
-  idDocumentType: z.enum(["sa_id"]).optional(),
-  /** First name as printed on the ID document (required for id_document uploads). */
-  firstName: z.string().trim().max(100).optional(),
-  /** Surname as printed on the ID document (required for id_document uploads). */
-  lastName: z.string().trim().max(100).optional(),
-  /** How the image was captured: camera (getUserMedia) or file upload. */
-  captureMethod: z.enum(["camera", "file_upload"]).optional(),
-});
+export const fileUploadSchema = z
+  .object({
+    docType: z.enum(["id_document", "selfie", "proof_of_address"], {
+      error: "Document type is required",
+    }),
+    idNumber: z.string().max(13).optional(),
+    idDocumentType: z.enum(["sa_id"]).optional(),
+    /** First name as printed on the ID document (required for id_document uploads). */
+    firstName: z.string().trim().max(100).optional(),
+    /** Surname as printed on the ID document (required for id_document uploads). */
+    lastName: z.string().trim().max(100).optional(),
+    /** How the image was captured: camera (getUserMedia) or file upload. */
+    captureMethod: z.enum(["camera", "file_upload"]).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.docType === "id_document") {
+      if (!data.firstName?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "First name is required for ID document uploads",
+          path: ["firstName"],
+        });
+      }
+      if (!data.lastName?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Surname is required for ID document uploads",
+          path: ["lastName"],
+        });
+      }
+    }
+  });
 
 /**
  * Validate a file for KYC upload (server-side).

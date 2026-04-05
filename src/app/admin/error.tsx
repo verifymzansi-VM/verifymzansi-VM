@@ -30,7 +30,7 @@ export default function AdminError({
         <div className="space-y-2">
           <h1 className="text-xl font-display font-bold">Admin Panel Error</h1>
           <p className="text-muted-foreground max-w-md">
-            An error occurred in the admin panel. If this persists, check server logs.
+            An error occurred in the admin panel. If this persists, contact the engineering team.
           </p>
           {error.digest && <p className="text-xs text-muted-foreground">Ref: {error.digest}</p>}
         </div>

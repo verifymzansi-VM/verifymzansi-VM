@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import {
+  parseAndValidateJsonRequest,
+  unauthorizedResponse,
+  forbiddenResponse,
+  rateLimitResponse,
+} from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -30,20 +35,17 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const adminRole = await verifyStaffActorRoleFromDb(user);
     if (!adminRole) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return forbiddenResponse();
     }
 
     const rl = checkLocalRateLimit(user.id, "admin:content:decide");
     if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
+      return rateLimitResponse(rl.retryAfter ?? 60);
     }
 
     const bodyResult = await parseAndValidateJsonRequest(request, adminContentDecideSchema, {
@@ -171,11 +173,19 @@ export async function POST(request: Request) {
             : table === "promotions"
               ? "title"
               : "business_name";
-      const { data: contentItem } = await admin
+      const { data: contentItem, error: contentFetchErr } = await admin
         .from(table)
         .select(`${ownerField}, ${titleField}`)
         .eq("id", itemId)
         .maybeSingle();
+
+      if (contentFetchErr) {
+        log.warn("Failed to fetch content item for notification (non-fatal)", {
+          table,
+          itemId,
+          error: contentFetchErr.message,
+        });
+      }
 
       if (contentItem) {
         const record = contentItem as unknown as Record<string, unknown>;

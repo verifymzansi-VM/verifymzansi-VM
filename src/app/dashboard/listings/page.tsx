@@ -293,9 +293,9 @@ export default async function ListingsPage({
       )}
 
       <PageHeader
-        title="Your Content"
+        title="My Posts"
         description="Manage listings, businesses, and promotions from one place."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Your Content" }]}
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "My Posts" }]}
       >
         <Button asChild variant="trust-verified" size="sm" className="gap-2">
           <Link href="/post/create">

@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Current subscription not found" }, { status: 404 });
     }
 
-    if (entitlement.status !== "active") {
+    if (entitlement.status !== "active" && entitlement.status !== "pending_verification") {
       return NextResponse.json(
         { error: "Current subscription must be active to change plans" },
         { status: 409 }
@@ -134,13 +134,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "You are already on this plan tier" }, { status: 409 });
     }
 
-    const { data: pendingPayment } = await admin
+    // Block downgrades — only upgrades are supported via self-service
+    const TIER_RANK: Record<string, number> = { starter: 0, growth: 1, pro: 2 };
+    const currentRank = TIER_RANK[entitlement.tier] ?? -1;
+    const newRank = TIER_RANK[newPlan.tier] ?? -1;
+    if (newRank < currentRank) {
+      return NextResponse.json(
+        { error: "Plan downgrades are not yet supported. Please contact support for assistance." },
+        { status: 400 }
+      );
+    }
+
+    const { data: pendingPayment, error: pendingError } = await admin
       .from("payments")
       .select("id")
       .eq("user_id", user.id)
       .eq("area", entitlement.area)
       .in("status", ["pending", "processing"])
       .maybeSingle();
+
+    if (pendingError) {
+      log.error("Failed to check pending payments", {
+        userId: user.id,
+        error: pendingError.message,
+      });
+      return NextResponse.json({ error: "Unable to verify payment status" }, { status: 503 });
+    }
 
     if (pendingPayment) {
       return NextResponse.json(

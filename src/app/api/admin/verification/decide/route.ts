@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import {
+  parseAndValidateJsonRequest,
+  unauthorizedResponse,
+  forbiddenResponse,
+  rateLimitResponse,
+} from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -37,20 +42,17 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const adminRole = await verifyStaffActorRoleFromDb(user);
     if (!adminRole) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return forbiddenResponse();
     }
 
     const rl = checkLocalRateLimit(user.id, "admin:verification:decide");
     if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
+      return rateLimitResponse(rl.retryAfter ?? 60);
     }
 
     const bodyResult = await parseAndValidateJsonRequest(request, adminVerificationDecideSchema, {
@@ -143,7 +145,7 @@ export async function POST(request: Request) {
           ? "needs_resubmission"
           : "rejected";
 
-    const { data: latestArtifact } = await admin
+    const { data: latestArtifact, error: artifactFetchErr } = await admin
       .from("kyc_artifacts")
       .select("id")
       .eq("user_id", step.user_id)
@@ -152,6 +154,13 @@ export async function POST(request: Request) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (artifactFetchErr) {
+      log.warn("Failed to fetch latest artifact for status sync (non-fatal)", {
+        stepId,
+        error: artifactFetchErr.message,
+      });
+    }
 
     if (latestArtifact) {
       const { error: artifactSyncError } = await admin
@@ -170,10 +179,17 @@ export async function POST(request: Request) {
 
     // If approved, check if all 4 steps are now approved → update the account to verified
     if (decision === "approved") {
-      const { data: allSteps } = await admin
+      const { data: allSteps, error: allStepsErr } = await admin
         .from("verification_steps")
         .select("step_type, status")
         .eq("user_id", step.user_id);
+
+      if (allStepsErr) {
+        log.warn("Failed to fetch all verification steps (non-fatal)", {
+          userId: step.user_id,
+          error: allStepsErr.message,
+        });
+      }
 
       const approvedSteps = (allSteps || []).filter((s) => s.status === "approved");
       // Location is self-service (auto-approved) so it will already be in the

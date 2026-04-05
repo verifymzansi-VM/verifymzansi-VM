@@ -18,10 +18,10 @@ export default function ListingNotFound() {
         </div>
         <div className="flex gap-3">
           <Button asChild variant="outline">
-            <Link href="/">Go Home</Link>
+            <Link href="/">Go to Homepage</Link>
           </Button>
           <Button asChild>
-            <Link href="/mzansi-market">Browse Marketplace</Link>
+            <Link href="/mzansi-market">Browse Listings</Link>
           </Button>
         </div>
       </main>

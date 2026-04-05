@@ -9,7 +9,7 @@ import Link from "next/link";
 import { BillingPlanGrid } from "@/components/billing/plan-grid";
 
 export const metadata = {
-  title: "Pricing & Plans",
+  title: "Pricing",
   description:
     "View your current plan, manage billing, and upgrade your VerifyMzansi subscription.",
 };

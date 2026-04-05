@@ -13,6 +13,26 @@ import {
 } from "@/lib/validations/shared";
 
 const log = createLogger("MockOzow");
+const emittedE2eMockWarnings = new Set<string>();
+
+function isE2eLoggingContext(): boolean {
+  const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
+  return runtimeMode === "e2e" || runtimeMode === "playwright" || runtimeMode === "test";
+}
+
+function logMockActivationWarning(): void {
+  const message = "Mock Ozow payment flow activated - this must not happen in production";
+  if (!isE2eLoggingContext()) {
+    log.warn(message);
+    return;
+  }
+
+  if (emittedE2eMockWarnings.has(message)) {
+    return;
+  }
+  emittedE2eMockWarnings.add(message);
+  log.info(message);
+}
 
 const mockOzowQuerySchema = z.object({
   paymentId: optionalUuidSchema,
@@ -72,7 +92,7 @@ export async function GET(request: Request) {
     return new NextResponse("Not found", { status: 404 });
   }
 
-  log.warn("Mock Ozow payment flow activated — this must not happen in production");
+  logMockActivationWarning();
 
   const url = new URL(request.url);
   const parsedQuery = parseAndValidateSearchParams(url.searchParams, mockOzowQuerySchema, {
@@ -90,11 +110,19 @@ export async function GET(request: Request) {
     // to prevent completing real payments via the mock endpoint
     try {
       const supabase = createAdminClient();
-      const { data: payment } = await supabase
+      const { data: payment, error: paymentErr } = await supabase
         .from("payments")
         .select("id, provider, provider_data")
         .eq("id", paymentId)
         .maybeSingle();
+
+      if (paymentErr) {
+        log.error("Failed to fetch payment for mock verification", {
+          paymentId,
+          error: paymentErr.message,
+        });
+        return new NextResponse("Failed to verify payment", { status: 500 });
+      }
 
       const providerData =
         payment?.provider_data && typeof payment.provider_data === "object"

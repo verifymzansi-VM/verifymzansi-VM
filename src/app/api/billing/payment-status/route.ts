@@ -40,17 +40,42 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: payment } = await supabase
+  const { data: payment, error: paymentError } = await supabase
     .from("payments")
-    .select("status")
+    .select("status, created_at")
     .eq("id", paymentId)
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const status = toPaymentStatusView(payment?.status);
+  if (paymentError) {
+    return NextResponse.json(
+      { error: "Unable to check payment status" },
+      { status: 500, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
+  // Missing payment row — terminal immediately, no point polling
+  if (!payment) {
+    return NextResponse.json(
+      { status: "missing", terminal: true, expired: false },
+      { headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
+  const status = toPaymentStatusView(payment.status);
+  const isTerminal = isTerminalPaymentStatusView(status);
+
+  // Treat payments older than 30 minutes as expired to prevent infinite polling
+  const PAYMENT_EXPIRY_MS = 30 * 60 * 1000;
+  const createdAt = payment.created_at ? new Date(payment.created_at).getTime() : 0;
+  const isExpired = !isTerminal && createdAt > 0 && Date.now() - createdAt > PAYMENT_EXPIRY_MS;
 
   return NextResponse.json(
-    { status, terminal: isTerminalPaymentStatusView(status) },
+    {
+      status: isExpired ? "expired" : status,
+      terminal: isTerminal || isExpired,
+      expired: isExpired,
+    },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

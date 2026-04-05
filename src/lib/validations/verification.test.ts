@@ -148,9 +148,22 @@ describe("buyerVerifySchema", () => {
 
 describe("fileUploadSchema", () => {
   it("accepts valid doc types", () => {
-    for (const t of ["id_document", "selfie", "proof_of_address"]) {
+    // id_document requires firstName + lastName
+    expect(
+      fileUploadSchema.safeParse({ docType: "id_document", firstName: "Jane", lastName: "Doe" })
+        .success
+    ).toBe(true);
+    // selfie and proof_of_address don't require names
+    for (const t of ["selfie", "proof_of_address"]) {
       expect(fileUploadSchema.safeParse({ docType: t }).success).toBe(true);
     }
+  });
+
+  it("rejects id_document without required name fields", () => {
+    expect(fileUploadSchema.safeParse({ docType: "id_document" }).success).toBe(false);
+    expect(fileUploadSchema.safeParse({ docType: "id_document", firstName: "Jane" }).success).toBe(
+      false
+    );
   });
 
   it("rejects invalid doc type", () => {

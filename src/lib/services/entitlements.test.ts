@@ -60,7 +60,7 @@ describe("entitlements service", () => {
     it("blocks when at limit", () => {
       const result = canCreateListing(5, "starter", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("5 active listings");
+      expect(result.reason).toContain("5 live listings");
     });
 
     it("allows for pro under limit", () => {
@@ -71,7 +71,7 @@ describe("entitlements service", () => {
     it("blocks for pro at limit", () => {
       const result = canCreateListing(45, "pro", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("45 active listings");
+      expect(result.reason).toContain("45 live listings");
     });
   });
 

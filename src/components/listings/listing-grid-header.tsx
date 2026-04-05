@@ -98,7 +98,8 @@ export function ListingGridHeader() {
           {filters.category && (
             <Badge variant="secondary" className="gap-1 text-xs px-2 py-0.5 rounded-md">
               {[...CATEGORIES, ...BUSINESS_CATEGORIES].find((c) => c.value === filters.category)
-                ?.label || filters.category.replace(/_/g, " ")}
+                ?.label ||
+                filters.category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
               <button
                 type="button"
                 className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

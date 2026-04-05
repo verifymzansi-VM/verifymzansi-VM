@@ -174,12 +174,12 @@ export function PosterCardShell({
               {title}
             </h3>
             {description ? (
-              <p className="text-xs leading-snug text-slate-500 line-clamp-1 dark:text-slate-400 sm:text-sm">
+              <p className="text-xs leading-snug text-slate-600 line-clamp-1 dark:text-slate-300 sm:text-sm">
                 {description}
               </p>
             ) : null}
             {location ? (
-              <p className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+              <p className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
                 <MapPin className="h-3 w-3 shrink-0" />
                 <span className="truncate">{location}</span>
               </p>
@@ -188,7 +188,7 @@ export function PosterCardShell({
             {eyebrow || viewCount || createdAt ? (
               <p
                 className={cn(
-                  "flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400",
+                  "flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300",
                   eyebrowClassName
                 )}
               >
@@ -202,7 +202,7 @@ export function PosterCardShell({
                 {viewCount != null && viewCount > 0 && createdAt ? (
                   <span className="text-slate-300 dark:text-slate-600">·</span>
                 ) : null}
-                {createdAt ? <span>{timeAgo(createdAt)}</span> : null}
+                {createdAt ? <span suppressHydrationWarning>{timeAgo(createdAt)}</span> : null}
               </p>
             ) : null}
           </div>

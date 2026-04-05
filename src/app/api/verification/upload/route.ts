@@ -280,13 +280,19 @@ export async function POST(request: NextRequest) {
     // ── Check if phone is linked to a rejected/flagged account ──
     let phoneFlaggedUserId: string | null = null;
     {
-      const { data: flaggedRows } = await admin
+      const { data: flaggedRows, error: flaggedErr } = await admin
         .from("account_profiles")
         .select("id")
         .eq("phone", profile.phone)
         .neq("id", profile.id)
         .eq("account_verification_status", "rejected")
         .limit(1);
+      if (flaggedErr) {
+        log.warn("Failed to check flagged accounts (non-fatal)", {
+          error: flaggedErr.message,
+          userId: user.id,
+        });
+      }
       if (flaggedRows && flaggedRows.length > 0) {
         phoneFlaggedUserId = flaggedRows[0].id;
       }
@@ -639,7 +645,7 @@ export async function POST(request: NextRequest) {
         stepData.id_number_hmac = engineResult.idNumberHmac;
 
         // Hard-block: reject if another user already has this ID number
-        const { data: existingHmac } = await admin
+        const { data: existingHmac, error: hmacLookupErr } = await admin
           .from("verification_steps")
           .select("user_id")
           .eq("step_type", "id_doc")
@@ -648,6 +654,17 @@ export async function POST(request: NextRequest) {
           .in("status", ["approved", "pending"])
           .limit(1)
           .maybeSingle();
+
+        if (hmacLookupErr) {
+          log.error("Failed to check ID number uniqueness", {
+            userId: user.id,
+            error: hmacLookupErr.message,
+          });
+          return jsonError(
+            { error: "Unable to verify ID number uniqueness", requestId },
+            { status: 500 }
+          );
+        }
 
         if (existingHmac) {
           log.warn("ID number already linked to another account", {
@@ -827,19 +844,33 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Finalize session when all artifacts are present ───────
-    const { data: currentSession } = await admin
+    const { data: currentSession, error: sessionFetchErr } = await admin
       .from("verification_sessions")
       .select("id_artifact_id, selfie_artifact_id, location_submitted_at, finalized_at")
       .eq("user_id", user.id)
       .maybeSingle();
 
+    if (sessionFetchErr) {
+      log.warn("Failed to fetch session for finalization check (non-fatal)", {
+        userId: user.id,
+        error: sessionFetchErr.message,
+      });
+    }
+
     // Check phone verification status from verification_steps
-    const { data: phoneStep } = await admin
+    const { data: phoneStep, error: phoneFetchErr } = await admin
       .from("verification_steps")
       .select("phone_verified_at")
       .eq("user_id", user.id)
       .eq("step_type", "phone")
       .maybeSingle();
+
+    if (phoneFetchErr) {
+      log.warn("Failed to fetch phone step for finalization check (non-fatal)", {
+        userId: user.id,
+        error: phoneFetchErr.message,
+      });
+    }
 
     if (
       currentSession &&

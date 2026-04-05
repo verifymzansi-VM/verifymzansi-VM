@@ -224,7 +224,7 @@ export default function ForgotPasswordPage() {
           disabled={isSubmitting || captchaUnavailable}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Send Reset Link
+          {isSubmitting ? "Sending..." : "Send Reset Link"}
         </Button>
       </form>
 

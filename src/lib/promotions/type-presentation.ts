@@ -39,7 +39,7 @@ export const PROMOTION_FILTER_TYPE_PRESENTATIONS: Record<
     inactiveClassName:
       "border-teal-300 bg-teal-50 text-teal-700 hover:border-teal-500 hover:bg-teal-100 dark:border-teal-700/70 dark:bg-teal-950/45 dark:text-teal-100 dark:hover:border-teal-500 dark:hover:bg-teal-900/60",
     cardBadgeClassName: "bg-teal-600/95 text-white border border-white/10",
-    cardTagClassName: "bg-teal-500 text-white",
+    cardTagClassName: "bg-teal-800 text-white",
     cardAccentClassName: "hover:border-teal-600/60",
   },
 };

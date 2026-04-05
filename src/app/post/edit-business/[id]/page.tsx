@@ -1212,7 +1212,9 @@ export default function EditBusinessPage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => setRemoveVideo(true)}
+                          onClick={() => {
+                            if (window.confirm("Remove the promo video?")) setRemoveVideo(true);
+                          }}
                           className="text-xs text-destructive hover:underline"
                         >
                           Remove video
@@ -1230,7 +1232,10 @@ export default function EditBusinessPage() {
                         </p>
                         <button
                           type="button"
-                          onClick={() => setRemoveGallery(true)}
+                          onClick={() => {
+                            if (window.confirm("Replace all gallery photos?"))
+                              setRemoveGallery(true);
+                          }}
                           className="text-xs text-destructive hover:underline"
                         >
                           Replace all
@@ -1263,7 +1268,10 @@ export default function EditBusinessPage() {
                           </p>
                           <button
                             type="button"
-                            onClick={() => setRemoveMallPhotos(true)}
+                            onClick={() => {
+                              if (window.confirm("Replace all mall photos?"))
+                                setRemoveMallPhotos(true);
+                            }}
                             className="text-xs text-destructive hover:underline"
                           >
                             Replace all

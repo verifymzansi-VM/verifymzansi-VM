@@ -83,7 +83,7 @@ export default async function DashboardPage() {
     applyOwnerFilter(
       supabase
         .from("listings")
-        .select("id, title, status, photos, view_count, created_at, updated_at")
+        .select("id, title, status, area, photos, view_count, created_at, updated_at")
         .order("updated_at", { ascending: false })
         .limit(10),
       listingOwnerColumn,
@@ -211,6 +211,7 @@ export default async function DashboardPage() {
       id: string;
       title: string | null;
       status: string;
+      area?: string | null;
       photos?: string[] | null;
       view_count?: number | null;
       created_at: string;
@@ -219,6 +220,7 @@ export default async function DashboardPage() {
       id: l.id,
       title: l.title,
       status: l.status,
+      area: l.area,
       photos: l.photos,
       view_count: l.view_count,
       created_at: l.created_at,
@@ -297,7 +299,7 @@ export default async function DashboardPage() {
           <Link href="/post/create">
             <Plus className="h-4 w-4" />
             <span className="hidden xs:inline">Create Post</span>
-            <span className="xs:hidden">Post</span>
+            <span className="xs:hidden">New Post</span>
           </Link>
         </Button>
       </div>

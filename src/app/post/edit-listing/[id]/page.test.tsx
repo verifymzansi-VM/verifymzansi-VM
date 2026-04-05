@@ -107,6 +107,7 @@ describe("EditListingPage", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     mockMaybeSingle.mockResolvedValue({
       data: {
         id: "listing-1",

@@ -199,7 +199,7 @@ describe("VerificationPage", () => {
     expect(
       screen.getByText(/address is verified.*ID and selfie are under admin review/i)
     ).toBeInTheDocument();
-    expect(screen.getAllByText(/Pending review/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Pending Review/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Return to Posting/i })).toHaveAttribute(
       "href",
       "/post/create-business"
@@ -260,7 +260,7 @@ describe("VerificationPage", () => {
 
     await waitFor(() => {
       expect(fetchCalls().some(([input]) => String(input).includes("/api/otp/send"))).toBe(true);
-      expect(screen.getByLabelText(/6-digit OTP/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/6-digit code/i)).toBeInTheDocument();
     });
     expect(screen.getByText(/Code expires in/i)).toBeInTheDocument();
     expect(screen.queryByText(/Dev OTP:/i)).not.toBeInTheDocument();
@@ -315,11 +315,11 @@ describe("VerificationPage", () => {
       expect(fetchCalls().some(([input]) => String(input).includes("/api/otp/send"))).toBe(true);
       expect(screen.getByText(/You can resend a new code in 45s/i)).toBeInTheDocument();
       expect(
-        screen.getByText(/Too many OTP requests were made for this number/i)
+        screen.getByText(/Too many code requests were made for this number/i)
       ).toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: /Send code/i })).toBeDisabled();
-    expect(screen.queryByLabelText(/6-digit OTP/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/6-digit code/i)).not.toBeInTheDocument();
   });
 
   it("falls back to /dashboard when no returnUrl is provided", async () => {
@@ -594,7 +594,7 @@ describe("VerificationPage", () => {
       );
     });
     expect(screen.getByRole("button", { name: /Save Address/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Final Submit/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Submit Verification/i })).toBeDisabled();
   });
 
   it("keeps a saved address visible without a verification tick until GPS succeeds", async () => {

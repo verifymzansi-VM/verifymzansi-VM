@@ -76,4 +76,25 @@ describe("GET /api/billing/payment-status", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({ status: "complete", terminal: true });
   });
+
+  it("returns 500 when the payment query encounters a DB error", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockSupabase.from.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: "connection refused" },
+      }),
+    });
+
+    const res = await GET(
+      createRequest("https://verifymzansi.com/api/billing/payment-status?payment=pay-1")
+    );
+
+    expect(res.status).toBe(500);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const data = await res.json();
+    expect(data.error).toBeDefined();
+  });
 });

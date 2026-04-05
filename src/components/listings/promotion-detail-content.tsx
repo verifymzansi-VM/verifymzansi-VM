@@ -719,7 +719,7 @@ export function PromotionDetailContent({
               />
             ) : (
               <div className="space-y-2 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">Creator preview</p>
+                <p className="font-medium text-foreground">Your preview — only you can see this</p>
                 <p>Public contact actions appear after approval.</p>
               </div>
             )}

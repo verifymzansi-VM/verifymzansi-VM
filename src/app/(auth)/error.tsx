@@ -36,11 +36,11 @@ export default function AuthError({
           )}
         </div>
         <div className="flex flex-col gap-3">
-          <Button onClick={() => reset()}>Try Again</Button>
+          <Button onClick={() => reset()}>Try again</Button>
           <Button variant="outline" asChild>
             <Link href="/">
               <ShieldCheck className="h-4 w-4 mr-2" />
-              Go Home
+              Go to Homepage
             </Link>
           </Button>
         </div>

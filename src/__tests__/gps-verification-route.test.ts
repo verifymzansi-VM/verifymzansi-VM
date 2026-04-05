@@ -60,6 +60,7 @@ vi.mock("@/lib/constants/verification", () => ({
   GPS_ACCURACY_WARN_METERS: 100,
   GPS_ACCURACY_REJECT_METERS: 500,
   GPS_MAX_AGE_MS: 60_000,
+  GPS_REPLAY_REJECT_MS: 5 * 60_000,
   GPS_PROVINCE_MISMATCH_RISK: 50,
   GPS_CITY_MISMATCH_RISK: 25,
 }));
@@ -647,6 +648,115 @@ describe("POST /api/verification/location/gps", () => {
         expect.objectContaining({
           signal_code: "gps_stale_reading",
           severity: "warn",
+        }),
+      ])
+    );
+  });
+
+  it("hard-rejects GPS reading older than GPS_REPLAY_REJECT_MS as gps_replay_detected", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u1", email_confirmed_at: new Date().toISOString() } },
+      error: null,
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+
+    const replayTimestamp = Date.now() - 6 * 60_000; // 6 minutes ago, > 5 min threshold
+    mockParseAndValidateJsonRequest.mockResolvedValue({
+      success: true,
+      data: {
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: replayTimestamp,
+      },
+    });
+    mockReverseGeocode.mockResolvedValue({
+      province: "Gauteng",
+      city: "Johannesburg",
+      source: "nominatim",
+    });
+    mockComputeLocationConfidence.mockReturnValue("high");
+
+    const insertedSignals: unknown[] = [];
+    const upsertVerificationStep = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { id: "step-1" }, error: null }),
+    });
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: "profile-1", account_verification_status: "incomplete" },
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        };
+      }
+      if (table === "verification_sessions") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            }),
+          }),
+          upsert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          upsert: upsertVerificationStep,
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                { step_type: "phone", status: "approved" },
+                { step_type: "id_doc", status: "pending" },
+                { step_type: "selfie", status: "approved" },
+                { step_type: "location", status: "approved" },
+              ],
+            }),
+          }),
+        };
+      }
+      if (table === "kyc_risk_signals") {
+        return {
+          insert: vi.fn((rows: unknown[]) => {
+            insertedSignals.push(...rows);
+            return Promise.resolve({ error: null });
+          }),
+        };
+      }
+      if (table === "kyc_artifacts") {
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const res = await POST(
+      makeRequest({
+        latitude: -26.2041,
+        longitude: 28.0473,
+        accuracy: 12,
+        timestamp: replayTimestamp,
+      })
+    );
+
+    // Should still return 200 but the signal must be recorded as a block
+    expect(res.status).toBe(200);
+    expect(insertedSignals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          signal_code: "gps_replay_detected",
+          severity: "block",
         }),
       ])
     );

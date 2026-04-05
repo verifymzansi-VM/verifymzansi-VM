@@ -20,6 +20,6 @@ describe("App error page", () => {
       "href",
       "/dashboard"
     );
-    expect(screen.getByRole("link", { name: /go home/i })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: /go to homepage/i })).toHaveAttribute("href", "/");
   });
 });

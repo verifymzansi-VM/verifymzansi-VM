@@ -8,7 +8,14 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import {
+  internalApiError,
+  logApiError,
+  parseAndValidateJsonRequest,
+  unauthorizedResponse,
+  forbiddenResponse,
+  rateLimitResponse,
+} from "@/lib/utils/api";
 import { z } from "zod";
 import type { StaffRole } from "@/types/enums";
 
@@ -51,29 +58,26 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     // L3: DB-verified capability check (guards against stale JWTs)
     const verified = await verifyCapabilityFromDb(user, "role:assign");
     if (!verified) {
       log.warn("Role assign rejected: capability check failed", { actorId: user.id });
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return forbiddenResponse();
     }
 
     // L4: Hardcoded admin email allowlist (tamper-proof, not in DB)
     if (!isAllowedAdmin(user.email)) {
       log.warn("Role assign rejected: email not in admin allowlist", { actorId: user.id });
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return forbiddenResponse();
     }
 
     // L5: Tight rate limit — max 5 role changes per minute
     const rl = checkLocalRateLimit(user.id, "admin:role:assign", 5);
     if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
+      return rateLimitResponse(rl.retryAfter ?? 60);
     }
 
     // Parse and validate request body

@@ -102,7 +102,7 @@ describe("ListingsPage", () => {
     render(ui);
 
     // Assertions
-    expect(screen.getByRole("heading", { name: /Your Content/i })).toBeDefined();
+    expect(screen.getByRole("heading", { name: /My Posts/i })).toBeDefined();
     expect(screen.getByText(/Active \(1\)/)).toBeDefined();
     expect(screen.getByText(/Under Review \(1\)/)).toBeDefined();
   });

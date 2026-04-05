@@ -1,266 +1,36 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
-import { summarizeVerification } from "@/lib/account/verification-summary";
-import { isStaff } from "@/lib/auth/roles";
+import { withSecurityHeaders } from "@/lib/middleware/security-headers";
+import { handlePlaywrightStubRouting } from "@/lib/middleware/playwright-stub";
 import {
-  getPlaywrightStubUserFromToken,
-  PLAYWRIGHT_SESSION_COOKIE,
-} from "@/lib/supabase/playwright-session";
-import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
-import { ensureCsrfCookie, CSRF_HEADER_NAME } from "@/lib/utils/csrf";
-import { env } from "@/lib/config/env";
+  checkPhoneGate,
+  checkAdminGate,
+  checkBanEnforcement,
+  checkPostingGate,
+  type CachedProfile,
+} from "@/lib/middleware/auth-gates";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 
 const logger = createLogger("Proxy");
 
-function isPlaywrightStubHost(hostname: string): boolean {
-  const normalized = hostname.trim().toLowerCase();
-  if (!normalized) return false;
+// -- Route classification ----------------------------------------------------
 
-  return (
-    normalized === "localhost" ||
-    normalized === "127.0.0.1" ||
-    normalized === "::1" ||
-    normalized.endsWith(".test")
-  );
-}
+const AUTH_ROUTES = ["/login", "/register"];
 
-function shouldUsePlaywrightStubForRequest(request: NextRequest): boolean {
-  return isPlaywrightSupabaseStubMode() && isPlaywrightStubHost(request.nextUrl.hostname);
-}
-
-// -- Security helpers --------------------------------------------------------
-
-/** Generate a per-request CSP nonce. */
-function generateNonce(): string {
-  // Avoid runtime-specific globals (e.g. btoa) so nonce generation is stable
-  // across Cloudflare/workerd and Node-compatible environments.
-  return crypto.randomUUID().replace(/-/g, "");
-}
-
-function shouldUseStrictNonceCsp(): boolean {
-  return process.env.NODE_ENV === "production";
-}
-
-/** Build a nonce-based Content-Security-Policy string. */
-function buildCsp(
-  nonce: string | null,
-  options?: { allowDevWebSocket?: boolean; enforceHttps?: boolean }
-): string {
-  const supabaseOrigin = env("NEXT_PUBLIC_SUPABASE_URL") ?? "";
-  const cdnOrigin = env("R2_PUBLIC_URL") ?? "";
-  const connectSrcValues = [
-    "'self'",
-    ...(supabaseOrigin ? [supabaseOrigin] : []),
-    "https://*.ingest.us.sentry.io",
-    "https://challenges.cloudflare.com",
-    "https://*.r2.cloudflarestorage.com",
-  ];
-
-  if (options?.allowDevWebSocket) {
-    connectSrcValues.splice(1, 0, "ws:", "wss:");
-  }
-
-  const connectSrc = `connect-src ${connectSrcValues.join(" ")}`;
-  const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com`
-    : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com";
-  const styleSrc = nonce ? `style-src 'self' 'nonce-${nonce}'` : "style-src 'self' 'unsafe-inline'";
-  const directives = [
-    "default-src 'self'",
-    "base-uri 'self'",
-    "frame-ancestors 'none'",
-    "object-src 'none'",
-    scriptSrc,
-    styleSrc,
-    // React/Next components such as next/image emit inline style attributes
-    // for layout-critical positioning. Keep style tags nonce-bound, but allow
-    // style attributes so media and responsive UI render under the production CSP.
-    ...(nonce ? ["style-src-attr 'unsafe-inline'"] : []),
-    `img-src 'self' blob:${supabaseOrigin ? " " + supabaseOrigin : ""}${cdnOrigin ? " " + cdnOrigin : ""} https://*.r2.cloudflarestorage.com https://images.unsplash.com https://storage.googleapis.com`,
-    `media-src 'self' blob:${cdnOrigin ? " " + cdnOrigin : ""} https://*.r2.cloudflarestorage.com https://storage.googleapis.com`,
-    "font-src 'self'",
-    connectSrc,
-    "frame-src https://challenges.cloudflare.com",
-    "form-action 'self'",
-    "worker-src 'self'",
-  ];
-
-  if (options?.enforceHttps) {
-    directives.push("upgrade-insecure-requests");
-  }
-
-  directives.push("report-to csp-endpoint");
-
-  return directives.join("; ");
-}
-
-const DEFAULT_PERMISSIONS_POLICY =
-  "camera=(), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()";
-
-/** Attach all standard security headers to a response. */
-function applySecurityHeaders(
-  response: NextResponse,
-  csp: string,
-  permissionsPolicy: string = DEFAULT_PERMISSIONS_POLICY
-): void {
-  response.headers.set("Content-Security-Policy", csp);
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("X-Frame-Options", "DENY");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  response.headers.set("Permissions-Policy", permissionsPolicy);
-  response.headers.set(
-    "Report-To",
-    JSON.stringify({
-      group: "csp-endpoint",
-      max_age: 86400,
-      endpoints: [{ url: "/api/csp-report" }],
-    })
-  );
-
-  if (process.env.NODE_ENV === "production") {
-    response.headers.set(
-      "Strict-Transport-Security",
-      "max-age=31536000; includeSubDomains; preload"
-    );
-  }
-}
-
-function setPhoneOkCookie(response: NextResponse): void {
-  response.cookies.set("x-phone-ok", "1", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 86400,
-    path: "/",
-  });
-}
-
-function clearPhoneOkCookie(response: NextResponse): void {
-  response.cookies.delete("x-phone-ok");
-}
-
-function clearPlaywrightSessionCookie(response: NextResponse): void {
-  response.cookies.set({
-    name: PLAYWRIGHT_SESSION_COOKIE,
-    value: "",
-    path: "/",
-    maxAge: 0,
-    httpOnly: false,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-}
-
-/**
- * Wrap a proxy result with CSP nonce + security headers.
- * Redirects and error responses get basic security headers only.
- */
-function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse): NextResponse {
-  const shouldClearPlaywrightSession =
-    !shouldUsePlaywrightStubForRequest(request) &&
-    !!request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value;
-
-  if (proxyResponse.headers.has("location") || proxyResponse.status >= 400) {
-    if (shouldClearPlaywrightSession) {
-      clearPlaywrightSessionCookie(proxyResponse);
-    }
-
-    proxyResponse.headers.set("X-Content-Type-Options", "nosniff");
-    proxyResponse.headers.set("X-Frame-Options", "DENY");
-    proxyResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-    return proxyResponse;
-  }
-
-  const nonce = shouldUseStrictNonceCsp() ? generateNonce() : null;
-  const isSecureRequest =
-    request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
-  const csp = buildCsp(nonce, {
-    allowDevWebSocket: process.env.NODE_ENV !== "production",
-    enforceHttps: isSecureRequest,
-  });
-
-  // Inject x-nonce so Server Components can read it via `headers()`
-  const requestHeaders = new Headers(request.headers);
-  if (nonce) {
-    requestHeaders.set("x-nonce", nonce);
-  } else {
-    requestHeaders.delete("x-nonce");
-  }
-  requestHeaders.set("Content-Security-Policy", csp);
-
-  // Build a temporary response to let ensureCsrfCookie resolve the token
-  // (reads existing cookie or generates a new one), then forward the token
-  // as a request header so Server Components can inject it via <meta>.
-  const csrfResponse = NextResponse.next();
-  const csrfToken = ensureCsrfCookie(request, csrfResponse);
-  requestHeaders.set(CSRF_HEADER_NAME, csrfToken);
-
-  const response = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
-
-  // Transfer the CSRF cookie from the temporary response.
-  // CRITICAL: Ensure the cookie is always set, even if extraction from the temporary
-  // response fails (e.g., timing issue with NextResponse.next() finalization).
-  // If extraction succeeds, use the extracted cookie; otherwise, explicitly set
-  // the token we already computed as a cookie with the same settings ensureCsrfCookie would use.
-  const csrfCookie = csrfResponse.cookies.get("vm_csrf");
-  if (csrfCookie) {
-    response.cookies.set(csrfCookie);
-  } else {
-    // Fallback: explicitly set the CSRF token as a cookie if extraction failed.
-    // This ensures the browser always receives the cookie regardless of NextResponse state.
-    const isSecure =
-      request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
-    response.cookies.set({
-      name: "vm_csrf",
-      value: csrfToken,
-      httpOnly: false,
-      sameSite: "lax",
-      secure: isSecure,
-      path: "/",
-      maxAge: 60 * 60 * 12,
-    });
-  }
-
-  // Preserve cookies set during auth (Supabase session refresh, etc.)
-  for (const cookie of proxyResponse.cookies.getAll()) {
-    response.cookies.set(cookie);
-  }
-
-  if (shouldClearPlaywrightSession) {
-    clearPlaywrightSessionCookie(response);
-  }
-
-  // Preserve any non-cookie headers the routing layer already attached.
-  for (const [headerName, headerValue] of proxyResponse.headers.entries()) {
-    const normalizedHeaderName = headerName.toLowerCase();
-    if (
-      normalizedHeaderName === "content-security-policy" ||
-      normalizedHeaderName === "x-nonce" ||
-      normalizedHeaderName === "set-cookie"
-    ) {
-      continue;
-    }
-
-    response.headers.set(headerName, headerValue);
-  }
-
-  const isVerificationPage = request.nextUrl.pathname.startsWith("/verification");
-  const permissionsPolicy = isVerificationPage
-    ? "camera=(self), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()"
-    : DEFAULT_PERMISSIONS_POLICY;
-
-  applySecurityHeaders(response, csp, permissionsPolicy);
-  if (nonce) {
-    response.headers.set("x-nonce", nonce);
-  }
-
-  return response;
-}
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/post",
+  "/billing",
+  "/verification",
+  "/admin",
+  "/api/dashboard",
+  "/api/post",
+  "/api/billing",
+  "/api/verification",
+  "/api/admin",
+  "/api/otp",
+];
 
 // -- Core routing logic (testable without security headers) ------------------
 
@@ -271,21 +41,6 @@ function withSecurityHeaders(request: NextRequest, proxyResponse: NextResponse):
 export async function routeRequest(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
-  const authRoutes = ["/login", "/register"];
-  const protectedPrefixesAll = [
-    "/dashboard",
-    "/post",
-    "/billing",
-    "/verification",
-    "/admin",
-    "/api/dashboard",
-    "/api/post",
-    "/api/billing",
-    "/api/verification",
-    "/api/admin",
-    "/api/otp",
-  ];
-  const protectedPrefixes = protectedPrefixesAll;
 
   // Recover legacy signup links that land on "/?code=..." instead of the
   // dedicated auth callback route. Keep this scoped to the root path so
@@ -303,53 +58,15 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.redirect(callbackUrl);
   }
 
-  if (shouldUsePlaywrightStubForRequest(request)) {
-    const allowStubAuth = process.env.PLAYWRIGHT_E2E_AUTH === "1";
-    const stubUser = allowStubAuth
-      ? getPlaywrightStubUserFromToken(
-          request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value ?? null
-        )
-      : null;
-    const isProtected = protectedPrefixesAll.some((prefix) => pathname.startsWith(prefix));
-    const isAuthRoute = authRoutes.some(
-      (route) => pathname === route || pathname.startsWith(route + "/")
-    );
-
-    if (stubUser && isAuthRoute) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-
-    if (!isProtected || isAuthRoute) {
-      return NextResponse.next();
-    }
-
-    if (stubUser) {
-      if (
-        pathname === "/admin" ||
-        pathname.startsWith("/admin/") ||
-        pathname.startsWith("/api/admin/")
-      ) {
-        if (isApiRoute) {
-          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
-
-      return NextResponse.next();
-    }
-
-    if (isApiRoute) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("returnUrl", pathname);
-    return NextResponse.redirect(loginUrl);
+  // -- Playwright stub mode --------------------------------------------------
+  const playwrightResult = handlePlaywrightStubRouting(request, PROTECTED_PREFIXES, AUTH_ROUTES);
+  if (playwrightResult) {
+    return playwrightResult;
   }
 
   // -- Guard: Supabase not configured ---------------------------------------
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
+    const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
 
     if (isProtected) {
       if (isApiRoute) {
@@ -364,14 +81,11 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.next();
   }
 
-  // -- Supabase client -------------------------------------------------------
+  // -- Early exit for public routes ------------------------------------------
 
-  // Determine early whether this route needs authentication at all.
-  // Public routes (home, marketplace, terms, etc.) skip the Supabase
-  // getUser() call entirely — saving 100-300 ms on mobile networks.
   const needsAuth =
-    protectedPrefixesAll.some((p) => pathname.startsWith(p)) ||
-    authRoutes.some((r) => pathname === r || pathname.startsWith(r + "/"));
+    PROTECTED_PREFIXES.some((p) => pathname.startsWith(p)) ||
+    AUTH_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"));
 
   // Rate-limit public marketplace pages to deter scraping.
   if (!needsAuth && (pathname.startsWith("/listing/") || pathname.startsWith("/marketplace"))) {
@@ -388,6 +102,8 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   if (!needsAuth) {
     return NextResponse.next();
   }
+
+  // -- Supabase client -------------------------------------------------------
 
   let response = NextResponse.next({
     request: { headers: request.headers },
@@ -424,9 +140,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     const { data } = await supabase.auth.getUser();
     user = data.user;
   } catch {
-    // Auth check failed — deny access to protected routes to prevent
-    // unguarded access during Supabase outages.
-    const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
+    const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
     if (isProtected) {
       if (isApiRoute) {
         return NextResponse.json({ error: "Authentication service unavailable" }, { status: 503 });
@@ -438,65 +152,26 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
 
   // -- Auth routes: redirect logged-in (real) users away --------------------
   const isRealUser = user && user.is_anonymous !== true;
-  if (isRealUser && authRoutes.some((r) => pathname === r || pathname.startsWith(r + "/"))) {
+  if (isRealUser && AUTH_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"))) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // -- Consolidated profile query ------------------------------------------------
-  // Phone gate, ban/suspension enforcement, and posting gate all query
-  // account_profiles by user_id.  We consolidate them into a single query
-  // to eliminate redundant DB round-trips on every authenticated request.
-  //
-  // The result is cached in `cachedProfile` and reused by all three gates.
-  let cachedProfile: {
-    phone?: string | null;
-    account_status?: string | null;
-    suspended_until?: string | null;
-    account_verification_status?: string | null;
-  } | null = null;
+  // -- Consolidated profile cache -------------------------------------------
+  let cachedProfile: CachedProfile = null;
 
-  // -- Phone-missing gate: require phone number on profile --------------------
-  // OAuth users may have an account profile without a phone number.
-  // Redirect them to complete-profile so they add one before using the platform.
-  //
-  const phoneGatedPrefixes = ["/dashboard", "/post", "/billing", "/verification"];
-  const isPhoneGatedRoute = phoneGatedPrefixes.some((p) => pathname.startsWith(p));
-  const isCompleteProfileRoute = pathname === "/dashboard/complete-profile";
-
-  if (isRealUser && user && isPhoneGatedRoute && !isCompleteProfileRoute && !isApiRoute) {
-    try {
-      const { data: phoneProfile } = await supabase
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .select("phone, account_status, suspended_until, account_verification_status")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      cachedProfile = phoneProfile;
-
-      if (!phoneProfile?.phone) {
-        const completeProfileUrl = new URL("/dashboard/complete-profile", request.url);
-        completeProfileUrl.searchParams.set("returnUrl", pathname);
-        const redirect = NextResponse.redirect(completeProfileUrl);
-        clearPhoneOkCookie(redirect);
-        return redirect;
-      }
-
-      setPhoneOkCookie(response);
-    } catch (phoneGateErr) {
-      // Fail closed: if we can't verify phone, redirect to error page.
-      logger.error("Phone gate DB check failed — redirecting to error page", {
-        path: pathname,
-        userId: user.id,
-        error: phoneGateErr instanceof Error ? phoneGateErr.message : "Unknown",
-      });
-      return NextResponse.redirect(new URL("/error?reason=unavailable", request.url));
+  // -- Phone-missing gate ---------------------------------------------------
+  if (isRealUser && user) {
+    const phoneResult = await checkPhoneGate(request, response, supabase, user.id, cachedProfile);
+    cachedProfile = phoneResult.profile;
+    if (phoneResult.response) {
+      return phoneResult.response;
     }
   }
 
   // -- Protected routes: require authentication -----------------------------
-  const isProtectedRoute = protectedPrefixes
-    .filter((prefix) => prefix !== "/admin" && prefix !== "/api/admin")
-    .some((p) => pathname.startsWith(p));
+  const isProtectedRoute = PROTECTED_PREFIXES.filter(
+    (prefix) => prefix !== "/admin" && prefix !== "/api/admin"
+  ).some((p) => pathname.startsWith(p));
   const protectedReturnUrl = `${pathname}${request.nextUrl.search}`;
 
   if (!user && isProtectedRoute) {
@@ -518,212 +193,33 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.redirect(loginUrl);
   }
 
-  // -- Admin routes: require admin/moderator role ---------------------------
-  if (
-    pathname === "/admin" ||
-    pathname.startsWith("/admin/") ||
-    pathname.startsWith("/api/admin/")
-  ) {
-    if (!user) {
-      if (isApiRoute) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
+  // -- Admin gate -----------------------------------------------------------
+  const adminResult = checkAdminGate(request, user);
+  if (adminResult) {
+    return adminResult;
+  }
 
-    if (!isStaff(user)) {
-      if (isApiRoute) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+  // -- Ban/suspension enforcement -------------------------------------------
+  if (user) {
+    const banResult = await checkBanEnforcement(
+      request,
+      supabase,
+      user.id,
+      isProtectedRoute,
+      cachedProfile
+    );
+    cachedProfile = banResult.profile;
+    if (banResult.response) {
+      return banResult.response;
     }
   }
 
-  // -- Ban/suspension enforcement: block banned/suspended users from all protected routes --
-  // Also enforce on authenticated mutation API requests (POST/PUT/PATCH/DELETE)
-  // to prevent banned users from creating/modifying content via unprotected API routes.
-  const isMutationRequest = ["POST", "PUT", "PATCH", "DELETE"].includes(request.method);
-  const isBanEnforced = isProtectedRoute || (isApiRoute && isMutationRequest);
-  if (user && isBanEnforced) {
-    // Reuse the consolidated profile query from the phone gate if available;
-    // otherwise fetch the needed columns now (e.g. API routes skip the phone gate).
-    let statusProfile = cachedProfile;
-    if (!statusProfile) {
-      const { data, error: statusError } = await supabase
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .select("account_status, suspended_until, account_verification_status")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!statusError) {
-        statusProfile = data;
-        cachedProfile = data;
-      } else {
-        logger.error("Ban enforcement DB check failed — blocking access", {
-          userId: user.id,
-          error: statusError.message,
-          code: statusError.code,
-          path: pathname,
-        });
-        if (isApiRoute) {
-          return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
-        }
-        return NextResponse.redirect(new URL("/error", request.url));
-      }
-    }
-
-    if (statusProfile) {
-      if (statusProfile.account_status === "banned") {
-        if (isApiRoute) return NextResponse.json({ error: "Banned" }, { status: 403 });
-        return NextResponse.redirect(new URL("/banned", request.url));
-      }
-
-      if (statusProfile.account_status === "suspended") {
-        if (
-          statusProfile.suspended_until &&
-          new Date(statusProfile.suspended_until) <= new Date()
-        ) {
-          try {
-            await supabase
-              .from(ACCOUNT_PROFILE_WRITE_TABLE)
-              .update({ account_status: "active", suspended_until: null })
-              .eq("user_id", user.id);
-          } catch (unsuspendErr) {
-            // Auto-unsuspend failed — still allow the request so the user
-            // isn't permanently locked out; the next request will retry.
-            logger.error("Auto-unsuspend DB update failed — user will retry on next request", {
-              userId: user.id,
-              error: unsuspendErr instanceof Error ? unsuspendErr.message : "Unknown",
-            });
-          }
-        } else {
-          // Avoid redirect loop: if already on /dashboard with ?suspended, let it through
-          if (
-            pathname === "/dashboard" &&
-            request.nextUrl.searchParams.get("suspended") === "true"
-          ) {
-            return response;
-          }
-          if (isApiRoute) return NextResponse.json({ error: "Suspended" }, { status: 403 });
-          const suspendedUrl = new URL("/dashboard", request.url);
-          suspendedUrl.searchParams.set("suspended", "true");
-          if (statusProfile.suspended_until) {
-            suspendedUrl.searchParams.set("until", statusProfile.suspended_until);
-          }
-          return NextResponse.redirect(suspendedUrl);
-        }
-      }
-    }
-  }
-
-  // -- Posting gate: require a verified account for posting -----------------
-  // /post/create is the category-selection page — it handles unverified users
-  // in-client (shows a verification alert + redirects category links to
-  // /verification). Only the actual creation/edit sub-routes need gating.
-  const isPostingRoute =
-    (pathname.startsWith("/post/create") && pathname !== "/post/create") ||
-    pathname.startsWith("/post/edit") ||
-    pathname.startsWith("/api/post/create") ||
-    pathname.startsWith("/api/post/edit");
-  if (isPostingRoute) {
-    if (user) {
-      // Reuse the consolidated profile from phone gate / ban check if available.
-      let profile = cachedProfile;
-      let profileError: { message: string; code?: string } | null = null;
-
-      if (!profile) {
-        const { data, error } = await supabase
-          .from(ACCOUNT_PROFILE_WRITE_TABLE)
-          .select("account_verification_status, account_status, suspended_until")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        profile = data;
-        profileError = error;
-        cachedProfile = data;
-      }
-
-      if (profileError) {
-        logger.error("Account profile lookup failed in posting gate", {
-          path: pathname,
-          userId: user.id,
-          error: profileError.message,
-          code: profileError.code,
-        });
-      }
-
-      if (profile?.account_status === "banned") {
-        if (isApiRoute) return NextResponse.json({ error: "Banned" }, { status: 403 });
-        return NextResponse.redirect(new URL("/banned", request.url));
-      }
-
-      if (profile?.account_status === "suspended") {
-        if (profile.suspended_until && new Date(profile.suspended_until) <= new Date()) {
-          try {
-            await supabase
-              .from(ACCOUNT_PROFILE_WRITE_TABLE)
-              .update({ account_status: "active", suspended_until: null })
-              .eq("user_id", user.id);
-
-            // Content restoration is NOT done here. The previous approach
-            // restored ALL hidden content, which incorrectly un-hid items
-            // hidden by admin moderation for other reasons (e.g. reported
-            // content hidden before/independently of the suspension).
-            // Content is restored via the admin enforcement unban flow
-            // (enforceAction with action="unban"), which scopes restoration
-            // to items hidden after the suspension timestamp.
-          } catch (unsuspendErr2) {
-            // Auto-unsuspend failed — still allow the request so the user
-            // isn't permanently locked out; the next request will retry.
-            logger.error(
-              "Auto-unsuspend DB update failed in posting gate — user will retry on next request",
-              {
-                userId: user.id,
-                error: unsuspendErr2 instanceof Error ? unsuspendErr2.message : "Unknown",
-              }
-            );
-          }
-        } else {
-          if (isApiRoute) return NextResponse.json({ error: "Suspended" }, { status: 403 });
-          const suspendedUrl = new URL("/dashboard", request.url);
-          suspendedUrl.searchParams.set("suspended", "true");
-          if (profile.suspended_until) {
-            suspendedUrl.searchParams.set("until", profile.suspended_until);
-          }
-          return NextResponse.redirect(suspendedUrl);
-        }
-      }
-
-      let canPost = readAccountVerificationStatus(profile) === "verified";
-
-      if (!canPost) {
-        const { data: verificationSteps, error: verificationStepsError } = await supabase
-          .from("verification_steps")
-          .select("step_type, status")
-          .eq("user_id", user.id);
-
-        if (verificationStepsError) {
-          logger.error("Verification step lookup failed in posting gate", {
-            path: pathname,
-            userId: user.id,
-            error: verificationStepsError.message,
-            code: verificationStepsError.code,
-          });
-        }
-
-        canPost =
-          summarizeVerification(profile?.account_verification_status, verificationSteps ?? [])
-            .accountVerificationStatus === "verified";
-      }
-
-      if (!canPost) {
-        if (isApiRoute) {
-          return NextResponse.json({ error: "Verification required" }, { status: 403 });
-        }
-        const verificationUrl = new URL("/verification", request.url);
-        verificationUrl.searchParams.set("returnUrl", pathname);
-        return NextResponse.redirect(verificationUrl);
-      }
+  // -- Posting gate ---------------------------------------------------------
+  if (user) {
+    const postingResult = await checkPostingGate(request, supabase, user.id, cachedProfile);
+    cachedProfile = postingResult.profile;
+    if (postingResult.response) {
+      return postingResult.response;
     }
   }
 

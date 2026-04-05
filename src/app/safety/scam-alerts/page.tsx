@@ -7,6 +7,7 @@ import {
   Eye,
   MessageSquare,
 } from "lucide-react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
@@ -143,7 +144,15 @@ export default function ScamAlertsPage() {
               <li>Meet in public, well-lit places</li>
               <li>Tell someone where you&apos;re going</li>
               <li>Trust your gut — walk away if unsure</li>
-              <li>Report suspicious listings immediately</li>
+              <li>
+                Report suspicious listings immediately —{" "}
+                <Link
+                  href="/contact"
+                  className="text-brand-green underline hover:text-brand-green/80"
+                >
+                  report here
+                </Link>
+              </li>
             </ol>
           </div>
         </div>

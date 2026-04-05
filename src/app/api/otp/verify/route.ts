@@ -334,11 +334,19 @@ export async function POST(request: NextRequest) {
 
     // If a pending_phone exists, OTP verification must target that exact staged value.
     // This prevents verifying a phone number that was not explicitly staged for this user.
-    const { data: profileGuard } = await supabase
+    const { data: profileGuard, error: profileGuardErr } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("pending_phone")
       .eq("user_id", user.id)
       .maybeSingle();
+
+    if (profileGuardErr) {
+      log.error("Failed to fetch profile guard for OTP verification", {
+        userId: user.id,
+        error: profileGuardErr.message,
+      });
+      return NextResponse.json({ error: "Unable to verify account" }, { status: 500 });
+    }
 
     if (profileGuard?.pending_phone && normalizeSaPhone(profileGuard.pending_phone) !== phone) {
       return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 400 });

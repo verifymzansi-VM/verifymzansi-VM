@@ -251,12 +251,16 @@ export function PlanGate({ area, children }: PlanGateProps) {
       return;
     }
 
+    let cancelled = false;
+
     async function checkEntitlements() {
       try {
         const supabase = createClient();
         const {
           data: { user },
         } = await supabase.auth.getUser();
+
+        if (cancelled) return;
 
         if (!user) {
           setError("not_authenticated");
@@ -346,6 +350,8 @@ export function PlanGate({ area, children }: PlanGateProps) {
               ? ent.maxVideos
               : 0;
 
+        if (cancelled) return;
+
         setPlanInfo({
           tier: tier || "free",
           isTrial,
@@ -381,7 +387,10 @@ export function PlanGate({ area, children }: PlanGateProps) {
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [area]);
 
   // Handle subscribe — redirect to checkout

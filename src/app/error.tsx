@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -12,6 +13,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
+    Sentry.captureException(error);
     console.error("[GlobalError]", error.digest ?? error.message);
   }, [error]);
 
@@ -29,7 +31,7 @@ export default function GlobalError({
       </div>
       <div className="flex gap-3">
         <Button variant="outline" onClick={() => (window.location.href = "/")}>
-          Go Home
+          Go to Homepage
         </Button>
         <Button onClick={() => reset()}>Try Again</Button>
       </div>

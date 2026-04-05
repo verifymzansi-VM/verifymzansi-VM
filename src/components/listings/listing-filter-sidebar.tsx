@@ -155,6 +155,13 @@ export function ListingFilterSidebar() {
             }
           />
         </div>
+        {filters.priceMin != null &&
+          filters.priceMax != null &&
+          filters.priceMin > filters.priceMax && (
+            <p className="text-xs text-destructive" role="alert">
+              Min price must be less than max
+            </p>
+          )}
       </div>
 
       {/* ── Condition ──────────────────────────────── */}

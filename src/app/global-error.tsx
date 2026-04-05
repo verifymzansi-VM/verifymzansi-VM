@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 
 /**
  * Global error boundary — catches errors thrown by the root layout itself.
@@ -15,6 +16,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
+    Sentry.captureException(error);
     // Log error with structured data so monitoring tools (Cloudflare, Sentry, etc.) can ingest it.
     // Strip stack traces in production to avoid leaking internal paths in the browser console.
     console.error("[GlobalError]", {

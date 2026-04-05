@@ -114,6 +114,6 @@ describe("ListingDetailContent", () => {
       />
     );
 
-    expect(screen.getByText("Media preview failed to render")).toBeTruthy();
+    expect(screen.getByText("Image failed to load")).toBeTruthy();
   });
 });

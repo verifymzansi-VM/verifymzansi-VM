@@ -500,4 +500,76 @@ describe("KYC Engine - processKycArtifact", () => {
       "HMAC_SECRET is not configured"
     );
   });
+
+  // ── C1 regression: block signals must not be overridden by biometric auto-reject ──
+
+  it("keeps needs_manual_review when block signal present even if both biometrics fail", async () => {
+    // Trigger duplicate SHA-256 → block signal (+40 risk → hasBlockSignal = true)
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "kyc_artifacts") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: () => ({
+              neq: () => ({
+                limit: () =>
+                  Promise.resolve({
+                    data: [{ id: "dup-artifact", user_id: "other-user" }],
+                    error: null,
+                  }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "verification_steps") {
+        return {
+          select: () => ({
+            eq: () => ({
+              neq: () => ({
+                limit: () => Promise.resolve({ data: [], error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "kyc_risk_signals") {
+        return { insert: () => Promise.resolve({ error: null }) };
+      }
+      if (table === "kyc_provider_results") {
+        return { insert: () => Promise.resolve({ error: null }) };
+      }
+      if (table === "verification_sessions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+              }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    // Provider returns low liveness AND low face-match → would auto-reject without guard
+    mockSubmitIdentity.mockResolvedValueOnce({
+      status: "rejected",
+      reason: "Biometric failure",
+      providerReference: "ref-bio-fail",
+      scores: {
+        faceMatchScore: 10,
+        livenessScore: 5,
+        docAuthScore: 50,
+        ocrPayload: {},
+        rawResponse: {},
+      },
+    });
+
+    const result = await processKycArtifact(createInput());
+
+    // Block signal must override biometric auto-reject → needs_manual_review, NOT rejected
+    expect(result.autoStatus).toBe("needs_manual_review");
+    expect(result.riskScore).toBeGreaterThanOrEqual(40);
+  });
 });

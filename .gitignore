@@ -43,6 +43,9 @@ next-env.d.ts
 test_output.txt
 cloudflare-env-vars.txt
 
+# ── Auto-generated types ─────────────────────────────────────
+src/lib/api/v1.d.ts
+
 # lint reports
 eslint_*.txt
 eslint_*.json

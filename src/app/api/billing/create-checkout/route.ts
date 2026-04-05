@@ -91,11 +91,19 @@ export async function POST(request: NextRequest) {
     };
 
     // ── Get account profile ──────────────────────────────────
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
       .select("id, display_name")
       .eq("user_id", user.id)
       .maybeSingle();
+
+    if (profileError) {
+      log.error("Failed to fetch account profile", {
+        userId: user.id,
+        error: profileError.message,
+      });
+      return NextResponse.json({ error: "Unable to verify account" }, { status: 500 });
+    }
 
     if (!profile) {
       return NextResponse.json({ error: "Account profile not found" }, { status: 404 });
@@ -123,7 +131,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Prevent Duplicate Active Entitlements ─────────────
-    const { data: activeEntitlement } = await supabase
+    const { data: activeEntitlement, error: entitlementError } = await supabase
       .from("entitlements")
       .select("id")
       .eq("user_id", user.id)
@@ -132,6 +140,14 @@ export async function POST(request: NextRequest) {
       .eq("status", "active")
       .gt("expires_at", new Date().toISOString())
       .maybeSingle();
+
+    if (entitlementError) {
+      log.error("Failed to check active entitlements", {
+        userId: user.id,
+        error: entitlementError.message,
+      });
+      return NextResponse.json({ error: "Unable to verify subscription status" }, { status: 503 });
+    }
 
     if (activeEntitlement) {
       return NextResponse.json(
@@ -144,13 +160,21 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Prevent duplicate in-flight payments ─────────────
-    const { data: pendingPayment } = await supabase
+    const { data: pendingPayment, error: pendingError } = await supabase
       .from("payments")
       .select("id")
       .eq("user_id", user.id)
       .eq("area", plan.area)
       .in("status", ["pending", "processing"])
       .maybeSingle();
+
+    if (pendingError) {
+      log.error("Failed to check pending payments", {
+        userId: user.id,
+        error: pendingError.message,
+      });
+      return NextResponse.json({ error: "Unable to verify payment status" }, { status: 503 });
+    }
 
     if (pendingPayment) {
       return NextResponse.json(

@@ -3,6 +3,7 @@ import { createLogger } from "@/lib/utils/logger";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
 const log = createLogger("PlanTier");
+const emittedFallbackWarnings = new Set<string>();
 
 type EntitlementTierRow = {
   tier: string | null;
@@ -10,6 +11,16 @@ type EntitlementTierRow = {
 };
 
 const DEFAULT_TIER: PlanTier = "starter";
+
+function isE2eLoggingContext(): boolean {
+  const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
+  return (
+    runtimeMode === "e2e" ||
+    runtimeMode === "playwright" ||
+    runtimeMode === "test" ||
+    process.env.PLAYWRIGHT_E2E_AUTH === "1"
+  );
+}
 
 /**
  * Resolve the active plan tier for a user in a marketplace area.
@@ -24,22 +35,36 @@ export async function getActivePlanTierForArea(
 
   try {
     const supabase = createAdminClient();
+    const nowIso = new Date(now).toISOString();
     const { data, error } = await supabase
       .from("entitlements")
       .select("tier, expires_at")
       .eq("user_id", userId)
       .eq("area", area)
-      .eq("status", "active")
+      .in("status", ["active", "pending_verification"])
+      .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
       .order("started_at", { ascending: false })
       .limit(20);
 
     if (error || !data?.length) {
-      log.warn("No active entitlement found, falling back to default tier", {
-        userId,
-        area,
-        error: error?.message,
-        rowCount: data?.length ?? 0,
-      });
+      const warningSignature = `${userId}:${area}:${error?.message ?? "no-error"}:${data?.length ?? 0}`;
+      if (!emittedFallbackWarnings.has(warningSignature)) {
+        emittedFallbackWarnings.add(warningSignature);
+        const message = "No active entitlement found, falling back to default tier";
+        const meta = {
+          userId,
+          area,
+          error: error?.message,
+          rowCount: data?.length ?? 0,
+        };
+
+        if (isE2eLoggingContext()) {
+          log.info(message, meta);
+        } else {
+          log.warn(message, meta);
+        }
+      }
+
       return DEFAULT_TIER;
     }
 

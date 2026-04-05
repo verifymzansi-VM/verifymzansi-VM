@@ -38,7 +38,7 @@ export default function DashboardError({
           <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
             Reload Dashboard
           </Button>
-          <Button onClick={() => reset()}>Retry</Button>
+          <Button onClick={() => reset()}>Try again</Button>
         </div>
       </main>
     </div>

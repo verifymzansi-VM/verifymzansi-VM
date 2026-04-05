@@ -2,7 +2,7 @@ export const VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE = "email_confirmation
 export const VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE =
   "Please confirm your email address before starting verification";
 export const VERIFICATION_EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION =
-  "Check your inbox for the confirmation link, then return here to continue with document and location verification.";
+  "Check your inbox for the confirmation link, then return here to continue. You can still verify your phone while waiting.";
 
 export interface VerificationEmailConfirmationRequiredPayload extends Record<string, unknown> {
   error: typeof VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE;

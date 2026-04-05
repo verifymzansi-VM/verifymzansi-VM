@@ -112,7 +112,7 @@ export function canCreateListing(
             ? "storefronts"
             : area === "BUSINESS_ADS"
               ? "profiles"
-              : "active listings";
+              : "live listings";
     return {
       allowed: false,
       reason: `Your ${tier} plan allows up to ${ent.maxAllowed} ${itemType}. Upgrade to post more.`,

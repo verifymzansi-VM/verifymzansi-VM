@@ -211,7 +211,7 @@ describe("POST /api/verification/session/start", () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_sessions") {
         return {
-          ...mockSessionSelectChain({ data: null, error: { code: "PGRST116" } }),
+          ...mockSessionSelectChain({ data: null, error: null }),
           upsert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({ data: newSession, error: null }),
@@ -305,7 +305,7 @@ describe("POST /api/verification/session/start", () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_sessions") {
         return {
-          ...mockSessionSelectChain({ data: null, error: { code: "PGRST116" } }),
+          ...mockSessionSelectChain({ data: null, error: null }),
           upsert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({ data: null, error: { message: "DB error" } }),

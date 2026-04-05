@@ -257,4 +257,20 @@ describe("promotionSchema", () => {
       );
     }
   });
+
+  // Regression: empty-string guard on optional trimmed fields
+  it("rejects empty-string category after trimming", () => {
+    const result = promotionSchema.safeParse({ ...VALID_INPUT, category: "  " });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects empty-string location_town after trimming", () => {
+    const result = promotionSchema.safeParse({ ...VALID_INPUT, location_town: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects empty-string location_address after trimming", () => {
+    const result = promotionSchema.safeParse({ ...VALID_INPUT, location_address: "   " });
+    expect(result.success).toBe(false);
+  });
 });

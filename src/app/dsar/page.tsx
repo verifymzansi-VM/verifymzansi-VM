@@ -40,6 +40,7 @@ export default function DsarPage() {
   const [submittedReference, setSubmittedReference] = useState("");
   const [submittedRequestId, setSubmittedRequestId] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileUnavailable, setTurnstileUnavailable] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
@@ -310,7 +311,14 @@ export default function DsarPage() {
                       onSuccess={(token) => setTurnstileToken(token)}
                       onError={() => setTurnstileToken("")}
                       onExpire={() => setTurnstileToken("")}
+                      onUnavailable={() => setTurnstileUnavailable(true)}
                     />
+
+                    {turnstileUnavailable && (
+                      <p className="text-xs text-destructive" role="alert">
+                        Security check failed to load. Refresh the page to try again.
+                      </p>
+                    )}
 
                     <Button
                       type="submit"

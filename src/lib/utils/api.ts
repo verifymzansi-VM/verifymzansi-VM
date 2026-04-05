@@ -206,3 +206,35 @@ export function logApiError(
 export function internalApiError(message = "Internal server error", status = 500): NextResponse {
   return NextResponse.json({ error: message }, { status });
 }
+
+// ── Standardized error response helpers ──────────────────────────────
+
+export function unauthorizedResponse(message = "Unauthorized"): NextResponse {
+  return NextResponse.json({ error: message }, { status: 401 });
+}
+
+export function forbiddenResponse(message = "Forbidden", reason?: string): NextResponse {
+  const body: Record<string, string> = { error: message };
+  if (reason) body.reason = reason;
+  return NextResponse.json(body, { status: 403 });
+}
+
+export function notFoundResponse(message = "Not found"): NextResponse {
+  return NextResponse.json({ error: message }, { status: 404 });
+}
+
+export function badRequestResponse(message = "Bad request", details?: string): NextResponse {
+  const body: Record<string, string> = { error: message };
+  if (details) body.details = details;
+  return NextResponse.json(body, { status: 400 });
+}
+
+export function rateLimitResponse(retryAfter?: number): NextResponse {
+  const body: Record<string, unknown> = {
+    error: "Too many requests. Please try again later.",
+  };
+  if (retryAfter != null) body.retryAfter = retryAfter;
+  const headers: HeadersInit = {};
+  if (retryAfter != null) headers["Retry-After"] = String(retryAfter);
+  return NextResponse.json(body, { status: 429, headers });
+}

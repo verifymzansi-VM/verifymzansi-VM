@@ -115,7 +115,7 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
                 {badges.verificationProgress!.submitted > badges.verificationProgress!.approved && (
                   <p className="text-[10px] text-muted-foreground mt-1">
                     {badges.verificationProgress!.submitted - badges.verificationProgress!.approved}{" "}
-                    pending review
+                    Pending Review
                   </p>
                 )}
               </div>

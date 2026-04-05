@@ -271,8 +271,8 @@ export async function escalateDecision(params: EscalateDecisionParams) {
 
 /* ── Appeals ───────────────────────────────────────────── */
 
-/** Maximum depth of appeal chains to prevent infinite loops. */
-const MAX_APPEAL_DEPTH = 3;
+/** Maximum number of appeals allowed in a chain. */
+const MAX_APPEAL_DEPTH = 2;
 
 /**
  * Submit an appeal against a finalized decision.
@@ -303,7 +303,7 @@ export async function createAppeal(params: CreateAppealParams) {
     parentId = (parent?.parent_decision_id as string | null) ?? null;
   }
 
-  if (depth >= MAX_APPEAL_DEPTH) {
+  if (depth > MAX_APPEAL_DEPTH) {
     throw new Error(
       `Maximum appeal depth of ${MAX_APPEAL_DEPTH} reached. Please contact support for further assistance.`
     );

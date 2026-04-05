@@ -290,6 +290,8 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
     // ── Passive liveness / face-match policies ──────────────
     // When the provider returns real scores, enforce thresholds
     // to auto-escalate or auto-reject weak biometrics.
+    // Block signals (duplicate SHA-256, ID reuse) always force manual
+    // review — biometric auto-reject must not override that.
     const { faceMatchScore, livenessScore } = providerResult.scores;
 
     if (typeof livenessScore === "number" && livenessScore < LIVENESS_THRESHOLD) {
@@ -308,7 +310,7 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
       signalScore += SEVERITY_WEIGHT.warn;
 
       if (typeof faceMatchScore === "number" && faceMatchScore < FACE_MATCH_THRESHOLD) {
-        // Both biometrics failed — auto-reject
+        // Both biometrics failed
         log.warn("Low liveness AND face-match — auto-rejecting", {
           livenessScore,
           faceMatchScore,
@@ -322,7 +324,10 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
           valueJson: { faceMatchScore, threshold: FACE_MATCH_THRESHOLD },
         });
         signalScore += SEVERITY_WEIGHT.warn;
-        autoStatus = "rejected";
+        // Only auto-reject if no block-level signals require manual review
+        if (!hasBlockSignal) {
+          autoStatus = "rejected";
+        }
       } else {
         autoStatus = "needs_manual_review";
       }
