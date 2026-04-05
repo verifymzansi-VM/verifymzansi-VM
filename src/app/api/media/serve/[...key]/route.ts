@@ -107,6 +107,25 @@ function getClient(): S3Client {
   return _client;
 }
 
+function buildPublicMediaUrl(key: string, bucket: string): string | null {
+  const r2PublicBase = process.env.R2_PUBLIC_URL?.replace(/\/+$/, "");
+  if (r2PublicBase) {
+    return `${r2PublicBase}/${key}`;
+  }
+
+  const mediaBase = process.env.NEXT_PUBLIC_MEDIA_URL?.replace(/\/+$/, "");
+  if (mediaBase) {
+    return `${mediaBase}/${key}`;
+  }
+
+  const accountId = process.env.R2_ACCOUNT_ID;
+  if (accountId) {
+    return `https://${bucket}.${accountId}.r2.cloudflarestorage.com/${key}`;
+  }
+
+  return null;
+}
+
 // ── Extension → MIME fallback table ─────────────────────────────────────
 // Note: MOV support added to enable playback of legacy .mov files uploaded
 // before video format hardening (2026-03-28). New uploads accept only mp4/webm.
@@ -317,12 +336,42 @@ export async function GET(
     // ── Try native R2 binding first (in-worker, ~2-5x faster) ─────────
     const r2 = await getR2Binding();
     if (r2) {
-      return await serveViaR2Binding(r2, key, ext, isVideo, ifNoneMatch, rangeHeader);
+      const bindingResponse = await serveViaR2Binding(
+        r2,
+        key,
+        ext,
+        isVideo,
+        ifNoneMatch,
+        rangeHeader
+      );
+      const allowDevFallbackToS3 =
+        bindingResponse.status === 404 && process.env.NODE_ENV !== "production";
+
+      if (!allowDevFallbackToS3) {
+        return bindingResponse;
+      }
     }
 
     // ── Fallback: S3-compatible HTTP API (local dev / no binding) ──────
     const bucket = process.env.R2_PUBLIC_BUCKET || "verifymzansi-public";
-    const client = getClient();
+    let client: S3Client;
+    try {
+      client = getClient();
+    } catch (credentialError: unknown) {
+      if (
+        credentialError instanceof Error &&
+        credentialError.message === "R2 credentials not configured"
+      ) {
+        const publicUrl = buildPublicMediaUrl(key, bucket);
+        if (publicUrl) {
+          return NextResponse.redirect(new URL(publicUrl), { status: 307 });
+        }
+
+        return NextResponse.json({ error: "Media service not configured" }, { status: 503 });
+      }
+
+      throw credentialError;
+    }
 
     // ── Video with Range header → 206 Partial Content ─────────────────
     if (isVideo && rangeHeader) {
@@ -442,7 +491,10 @@ export async function GET(
     if (err instanceof Error && err.name === "NoSuchKey") {
       return new NextResponse(null, { status: 404 });
     }
-    logger.error("Media serve error", { error: err instanceof Error ? err.message : String(err) });
+    logger.error("Media serve error", {
+      key,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return NextResponse.json({ error: "Failed to serve media" }, { status: 500 });
   }
 }

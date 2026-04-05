@@ -32,6 +32,8 @@ describe("GET /api/media/serve/[...key]", () => {
     process.env.R2_ACCESS_KEY_ID = "access";
     process.env.R2_SECRET_ACCESS_KEY = "secret";
     process.env.R2_PUBLIC_BUCKET = "public-bucket";
+    delete process.env.R2_PUBLIC_URL;
+    delete process.env.NEXT_PUBLIC_MEDIA_URL;
   });
 
   it("rejects invalid storage keys", async () => {
@@ -80,5 +82,32 @@ describe("GET /api/media/serve/[...key]", () => {
     expect(res.status).toBe(206);
     expect(res.headers.get("Content-Range")).toBe("bytes 0-99/1024");
     expect(res.headers.get("Accept-Ranges")).toBe("bytes");
+  });
+
+  it("redirects to R2_PUBLIC_URL when credentials are missing", async () => {
+    delete process.env.R2_ACCESS_KEY_ID;
+    delete process.env.R2_SECRET_ACCESS_KEY;
+    process.env.R2_PUBLIC_URL = "https://cdn.example.com";
+
+    const res = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "listing", "abc", "photo.jpg"] }),
+    });
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("https://cdn.example.com/media/listing/abc/photo.jpg");
+  });
+
+  it("returns 503 when credentials and fallback origins are missing", async () => {
+    delete process.env.R2_ACCESS_KEY_ID;
+    delete process.env.R2_SECRET_ACCESS_KEY;
+    delete process.env.R2_PUBLIC_URL;
+    delete process.env.NEXT_PUBLIC_MEDIA_URL;
+    delete process.env.R2_ACCOUNT_ID;
+
+    const res = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "listing", "abc", "photo.jpg"] }),
+    });
+
+    expect(res.status).toBe(503);
   });
 });
