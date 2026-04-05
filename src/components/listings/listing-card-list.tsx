@@ -86,34 +86,27 @@ export const ListingCardList = memo(function ListingCardList({
         className="overflow-hidden rounded-xl border-white/10 bg-warm-100 transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-green/45 hover:shadow-xl"
         trustLevel={ownerTrustLevel}
       >
-        <div className="flex min-h-[188px]">
-          <div className="relative w-36 shrink-0 overflow-hidden bg-warm-100 sm:w-40">
+        <div className="flex min-h-[180px]">
+          <div className="relative w-44 shrink-0 overflow-hidden bg-warm-100 sm:w-52">
             {normalizedImageUrl ? (
-              isVideo ? (
-                <VideoCardPlayer
-                  src={imageUrl}
-                  posterUrl={posterUrl}
-                  alt={title}
-                  sizes="160px"
-                  mode="hover"
-                  mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
-                />
-              ) : (
-                <Image
-                  src={normalizedImageUrl}
-                  alt={title}
-                  fill
-                  className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
-                  sizes="160px"
-                />
-              )
+              <VideoCardPlayer
+                src={imageUrl}
+                isVideo={isVideo}
+                posterUrl={posterUrl}
+                alt={title}
+                sizes="208px"
+                mode={isVideo ? "hover" : "ambient"}
+                fitStrategy="smart"
+                containerAspectRatio={4 / 3}
+                mediaClassName="transition-transform duration-700"
+              />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-warm-300 via-warm-200 to-warm-100 dark:from-warm-800 dark:via-warm-700 dark:to-warm-900" />
             )}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/10" />
           </div>
 
-          <div className="flex flex-1 flex-col justify-end gap-2 p-4 sm:p-5">
+          <div className="flex flex-1 flex-col justify-end gap-1.5 p-3 sm:p-3.5">
             {status ? (
               <div>
                 <span

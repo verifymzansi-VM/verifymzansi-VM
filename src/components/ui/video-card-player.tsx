@@ -13,7 +13,6 @@ import { useGlobalMute } from "@/hooks/use-global-mute";
 
 const DEFAULT_MEDIA_FIT = "object-cover";
 const DEFAULT_CONTAINER_ASPECT_RATIO = 5 / 4;
-const SMART_FIT_CROP_THRESHOLD = 0.2;
 
 export type MediaFitStrategy = "cover" | "smart";
 export type MuteControlVisibility = "auto" | "always" | "hidden";
@@ -33,23 +32,13 @@ export function isVideoUrl(url: string | null | undefined): boolean {
   );
 }
 
-function getCropRatio(mediaAspectRatio: number, containerAspectRatio: number) {
-  if (!mediaAspectRatio || !containerAspectRatio) return 0;
-
-  if (mediaAspectRatio > containerAspectRatio) {
-    return 1 - containerAspectRatio / mediaAspectRatio;
-  }
-
-  return 1 - mediaAspectRatio / containerAspectRatio;
-}
-
 function shouldUseSmartFit(
   fitStrategy: MediaFitStrategy,
   mediaAspectRatio: number | null,
-  containerAspectRatio: number
+  _containerAspectRatio: number
 ) {
   if (fitStrategy !== "smart" || !mediaAspectRatio) return false;
-  return getCropRatio(mediaAspectRatio, containerAspectRatio) > SMART_FIT_CROP_THRESHOLD;
+  return true;
 }
 
 function getForegroundMediaClassName(
