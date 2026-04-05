@@ -15,7 +15,9 @@ const {
   mockLogAuditEvent: vi.fn(),
   mockCheckLocalRateLimit: vi.fn(),
   mockSendDsarCompletedEmail: vi.fn().mockResolvedValue({ success: true }),
-  mockVerifyAdminActorRoleFromDb: vi.fn(async () => "admin"),
+  mockVerifyAdminActorRoleFromDb: vi.fn<(user: unknown) => Promise<string | null>>(
+    async () => "admin"
+  ),
   mockEnforceSameOriginMutation: vi.fn<(request: Request) => Response | null>(() => null),
   mockEnforceCsrfToken: vi.fn<(request: Request) => Response | null>(() => null),
 }));
