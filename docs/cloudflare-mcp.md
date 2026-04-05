@@ -227,6 +227,44 @@ Start with read-only prompts that map directly to this repo.
 Only move on to mutating actions after read-only access is confirmed and the
 required permissions are clear.
 
+## Runtime Posture Check
+
+This repo now includes an automated edge posture probe:
+
+```bash
+pnpm cloudflare:posture
+pnpm cloudflare:posture:strict
+pnpm cloudflare:posture:strict:zone
+pnpm cloudflare:posture:json
+```
+
+What it checks:
+
+- Root availability and cache directives
+- Static asset cache headers (`immutable` / long max-age)
+- `/api/health` status
+- Cloudflare edge trace protocol and TLS version
+- `www` hostname behavior
+- DNS NS resolution and DNSSEC DS presence
+
+Interpretation:
+
+- `FAIL` means immediate action is required before release.
+- `WARN` means degraded or suboptimal posture. Treat `Health endpoint`,
+  `HSTS`, `DNSSEC DS record`, and `www hostname behavior` as launch-sensitive.
+- `PASS` indicates expected baseline behavior.
+
+Strict mode fails the command when runtime-critical warnings are present
+(`Health endpoint`, `HSTS`).
+
+Zone strict mode fails when zone governance warnings are present
+(`DNSSEC DS record`, `www hostname behavior`) in addition to runtime-critical
+warnings.
+
+For the recommended Cloudflare WAF/rate-limit baseline, use:
+
+- `docs/playbooks/cloudflare-edge-hardening-baseline.md`
+
 ## Troubleshooting Order
 
 If the MCP server does not work, isolate the failing layer in this order.

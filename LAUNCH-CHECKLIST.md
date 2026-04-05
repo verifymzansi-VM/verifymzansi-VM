@@ -32,6 +32,12 @@ Run the production-only checks before final production deploy approval:
 ```bash
 pnpm validate:launch-env
 pnpm preflight:prod
+pnpm cloudflare:secrets:check
+pnpm cloudflare:posture
+pnpm cloudflare:posture:strict
+pnpm cloudflare:posture:strict:zone
+# Or run both production checks and strict edge gate in one command:
+pnpm preflight:prod:edge
 ```
 
 Failure triage map:
@@ -42,6 +48,16 @@ Failure triage map:
 - `pnpm preflight:prod` failure: inspect whether failure is config
   (`Launch env`, `Production secrets`, `Ozow`) or connectivity
   (`Supabase schema`, `R2`) before retrying.
+- `pnpm cloudflare:posture` warning/failure: inspect edge posture findings
+  (HSTS, DNSSEC DS, `www` hostname routing, `/api/health` status, HTTP protocol)
+  and close high-risk warnings before launch sign-off.
+- `pnpm cloudflare:posture:strict` failure: treat as launch blocker for
+  runtime-critical checks (health and HSTS).
+- `pnpm cloudflare:posture:strict:zone` failure: resolve zone-governance checks
+  (`www` routing/DNS behavior and DNSSEC DS) before final sign-off.
+- `pnpm cloudflare:secrets:check` failure: add missing Worker secrets (for
+  example `KYC_WEBHOOK_SECRET`) and remove forbidden production bypass secrets
+  before any deploy promotion.
 - `pnpm test:launch:flows` failure: prioritize billing roundtrip and DSAR flow
   regressions before non-critical e2e suites.
 

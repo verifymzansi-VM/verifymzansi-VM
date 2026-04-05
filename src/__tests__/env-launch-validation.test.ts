@@ -127,6 +127,19 @@ describe("launch env validation", () => {
     expect(env.R2_PUBLIC_BUCKET).toBe("verifymzansi-public");
   });
 
+  it("treats empty optional binary flags as unset", () => {
+    applyEnv({
+      ...validProductionEnv,
+      PLAYWRIGHT_E2E_AUTH: "",
+      STRICT_ENV_STARTUP_BLOCK: "",
+    });
+
+    const env = validateEnv({ strict: true, mode: "production" });
+
+    expect(env.PLAYWRIGHT_E2E_AUTH).toBeUndefined();
+    expect(env.STRICT_ENV_STARTUP_BLOCK).toBeUndefined();
+  });
+
   it("accepts production launch validation with native R2 bindings and no S3 credentials", () => {
     const nativeBindingEnv = {
       ...validProductionEnv,

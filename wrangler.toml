@@ -20,6 +20,11 @@ pattern = "verifymzansi.com"
 zone_name = "verifymzansi.com"
 custom_domain = true
 
+[[routes]]
+pattern = "www.verifymzansi.com"
+zone_name = "verifymzansi.com"
+custom_domain = true
+
 # ────────────────────────────────────────────────────────────────────────────
 # Public Environment Variables (safe to commit — these are client-visible)
 #
@@ -107,6 +112,7 @@ bucket_name = "verifymzansi-private"
 #   pnpm wrangler secret put OZOW_CLIENT_SECRET
 #   pnpm wrangler secret put OZOW_SITE_CODE
 #   pnpm wrangler secret put OZOW_WEBHOOK_SECRET
+#   pnpm wrangler secret put KYC_WEBHOOK_SECRET
 #   pnpm wrangler secret put TURNSTILE_SECRET_KEY
 #   pnpm wrangler secret put KYC_ENCRYPTION_KEY
 #   pnpm wrangler secret put ID_ENCRYPTION_KEY
@@ -115,6 +121,11 @@ bucket_name = "verifymzansi-private"
 #   pnpm wrangler secret put R2_ACCESS_KEY_ID
 #   pnpm wrangler secret put R2_SECRET_ACCESS_KEY
 #   pnpm wrangler secret put IP_HASH_SECRET
+#   pnpm wrangler secret put RATE_LIMITER_API_KEY
+#   # NEVER set in production:
+#   # PLAYWRIGHT_E2E_AUTH, PLAYWRIGHT_TEST_MODE, PLAYWRIGHT_SUPABASE_MODE,
+#   # NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE,
+#   # NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE
 #
 # Verify with: pnpm wrangler secret list
 #
