@@ -41,6 +41,7 @@ jobs:
       OZOW_CLIENT_SECRET: ${{ secrets.OZOW_CLIENT_SECRET }}
       OZOW_SITE_CODE: ${{ secrets.OZOW_SITE_CODE }}
       OZOW_WEBHOOK_SECRET: ${{ secrets.OZOW_WEBHOOK_SECRET }}
+      KYC_WEBHOOK_SECRET: ${{ secrets.KYC_WEBHOOK_SECRET }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
