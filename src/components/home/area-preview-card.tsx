@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { MapPin, Play } from "lucide-react";
+import Image from "next/image";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 
@@ -62,19 +63,23 @@ export function AreaPreviewCard({
       className={`group block w-full rounded-xl overflow-hidden border border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-900 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 ${accentBorder[accentColor]}`}
     >
       {/* Thumbnail */}
-      <div className="relative aspect-[5/4] overflow-hidden bg-warm-100 dark:bg-warm-800">
+      <div className="relative aspect-[4/3] overflow-hidden bg-warm-100 dark:bg-warm-800">
         {normalizedImageUrl ? (
-          <VideoCardPlayer
-            src={imageUrl}
-            isVideo={isVideo}
-            posterUrl={posterUrl}
-            alt={title || "Preview image"}
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            mode={isVideo ? "hover" : "ambient"}
-            fitStrategy="smart"
-            containerAspectRatio={5 / 4}
-            mediaClassName="transition-transform duration-500"
-          />
+          isVideo ? (
+            <VideoCardPlayer
+              src={imageUrl}
+              posterUrl={posterUrl}
+              alt={title}
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            />
+          ) : (
+            <Image
+              src={normalizedImageUrl}
+              alt={title || "Preview image"}
+              fill
+              className="object-cover transition-transform duration-500 group-hover:scale-110"
+            />
+          )
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <div className="h-16 w-24 rounded bg-warm-200 dark:bg-warm-700" />
@@ -82,7 +87,7 @@ export function AreaPreviewCard({
         )}
 
         {/* Bottom gradient for text readability */}
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
 
         {/* Price badge */}
         {price != null && price > 0 && (
@@ -113,13 +118,13 @@ export function AreaPreviewCard({
       </div>
 
       {/* Info bar */}
-      <div className="px-3 py-2 space-y-0.5">
+      <div className="px-3 py-2.5 space-y-1">
         <p className="flex items-center gap-1 text-xs text-muted-foreground">
           <MapPin className="h-3 w-3 flex-shrink-0" />
           {city}, {provinceCode}
         </p>
         {description && (
-          <p className="text-xs text-muted-foreground line-clamp-1 leading-relaxed">
+          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
             {description}
           </p>
         )}

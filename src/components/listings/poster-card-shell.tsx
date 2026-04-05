@@ -89,7 +89,7 @@ export function PosterCardShell({
   location,
   createdAt,
   viewCount,
-  fitStrategy = "smart",
+  fitStrategy: _fitStrategy = "smart",
   priority = false,
   videoDuration,
 }: PosterCardShellProps) {
@@ -107,8 +107,8 @@ export function PosterCardShell({
         )}
         trustLevel={trustLevel}
       >
-        {/* ── Media-first thumbnail ──────────────────────────────── */}
-        <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-900 rounded-t-xl">
+        {/* ── 16:9 video/image thumbnail ─────────────────────────── */}
+        <div className="relative aspect-video w-full overflow-hidden bg-slate-900 rounded-t-xl">
           {normalizedMediaUrl ? (
             <VideoCardPlayer
               src={normalizedMediaUrl}
@@ -117,8 +117,8 @@ export function PosterCardShell({
               alt={mediaAlt || title}
               sizes={mediaSizes}
               mode={hasVideo ? "hover" : "ambient"}
-              fitStrategy={fitStrategy}
-              containerAspectRatio={4 / 3}
+              fitStrategy="smart"
+              containerAspectRatio={16 / 9}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
               mediaClassName="transition-transform duration-700 group-hover:scale-[1.03]"
               priority={priority}
@@ -148,33 +148,33 @@ export function PosterCardShell({
         </div>
 
         {/* ── YouTube-style metadata row beneath thumbnail ────────── */}
-        <div className={cn("flex flex-1 gap-2.5 px-3 py-2 sm:px-3 sm:py-2.5", contentClassName)}>
+        <div className={cn("flex flex-1 gap-3 px-3 py-2.5 sm:px-3 sm:py-3", contentClassName)}>
           {/* Channel avatar / logo */}
           <div className="mt-0.5 shrink-0">
             {normalizedLogoUrl ? (
-              <div className="h-8 w-8 overflow-hidden rounded-full border border-black/8 shadow-sm">
+              <div className="h-9 w-9 overflow-hidden rounded-full border border-black/8 shadow-sm">
                 <Image
                   src={normalizedLogoUrl}
                   alt="Business logo"
-                  width={32}
-                  height={32}
+                  width={36}
+                  height={36}
                   className="h-full w-full object-cover"
                 />
               </div>
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-blue/12 text-brand-blue/55">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-blue/12 text-brand-blue/55">
                 <span className="text-xs font-bold uppercase leading-none">{title.charAt(0)}</span>
               </div>
             )}
           </div>
 
           {/* Text meta */}
-          <div className="min-w-0 flex-1 space-y-0.5 min-h-[4.25rem]">
-            <h3 className="font-display text-sm font-semibold leading-snug text-slate-900 line-clamp-2 dark:text-white">
+          <div className="min-w-0 flex-1 space-y-0.5 min-h-[5.5rem]">
+            <h3 className="font-display text-sm font-semibold leading-snug text-slate-900 line-clamp-2 dark:text-white sm:text-base">
               {title}
             </h3>
             {description ? (
-              <p className="text-xs leading-snug text-slate-600 line-clamp-1 dark:text-slate-300">
+              <p className="text-xs leading-snug text-slate-600 line-clamp-1 dark:text-slate-300 sm:text-sm">
                 {description}
               </p>
             ) : null}
