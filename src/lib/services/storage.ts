@@ -301,6 +301,7 @@ function getR2Client(): S3Client {
  */
 export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
   if (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") {
+    assertSafeStorageKey(params.key);
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
     const arrayBuffer = await params.file.arrayBuffer();

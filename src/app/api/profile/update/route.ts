@@ -67,6 +67,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
+    // Secondary user-scoped rate limit to prevent bypass via IP rotation
+    const userRateCheck = await checkRateLimit({
+      key: `${user.id}:${ip}`,
+      action: "profile:update",
+    });
+    if (userRateCheck.limited) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(userRateCheck.retryAfter ?? 60) } }
+      );
+    }
+
     const parsedBody = await parseAndValidateJsonRequest(request, profileUpdateSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",

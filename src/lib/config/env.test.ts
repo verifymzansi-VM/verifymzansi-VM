@@ -383,6 +383,42 @@ describe("env config", () => {
       // cafebabe is only rejected in production — in dev it is allowed to aid local setup
       expect(() => mod.validateEnv()).not.toThrow();
     });
+
+    it("rejects INVALID_BUILD_PLACEHOLDER keys via Zod validation", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("OZOW_ENV", "production");
+      vi.stubEnv("IP_HASH_SECRET", "p".repeat(32));
+      vi.stubEnv("AFRICASTALKING_SENDER_ID", "verifymzansi");
+      vi.stubEnv("KYC_ENCRYPTION_KEY", "INVALID_BUILD_PLACEHOLDER_KYC_KEY__");
+      const mod = await import("./env");
+
+      // Zod schema rejects non-hex placeholder before the hard guard fires
+      expect(() => mod.validateEnv()).toThrow("Environment Configuration Error");
+    });
+
+    it("strict mode re-validates even when cache exists", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) {
+        vi.stubEnv(key, value);
+      }
+      const mod = await import("./env");
+
+      // First call populates cache
+      const first = mod.validateEnv();
+      expect(first.NODE_ENV).toBe("test");
+
+      // Second call with strict should NOT return cached result;
+      // it re-validates (here it succeeds, proving it re-ran)
+      const second = mod.validateEnv({ strict: true });
+      expect(second).not.toBe(first); // different object reference
+      expect(second.NODE_ENV).toBe("test");
+    });
   });
 
   describe("checkCriticalEnvVars", () => {

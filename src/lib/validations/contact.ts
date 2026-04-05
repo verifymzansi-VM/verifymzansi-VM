@@ -53,7 +53,15 @@ export const reportSchema = z.object({
     .string()
     .min(10, "Please describe the issue in at least 10 characters")
     .max(2000, "Description cannot exceed 2000 characters"),
-  evidenceUrls: z.array(z.string().url()).max(5, "Maximum 5 evidence files").optional(),
+  evidenceUrls: z
+    .array(
+      z
+        .string()
+        .url()
+        .refine((u) => /^https?:\/\//i.test(u), "Only http/https URLs are allowed")
+    )
+    .max(5, "Maximum 5 evidence files")
+    .optional(),
   turnstileToken: z.string().min(1, "Complete the CAPTCHA"),
 });
 

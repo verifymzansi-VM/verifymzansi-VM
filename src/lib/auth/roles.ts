@@ -237,5 +237,5 @@ export function requireRole(user: MaybeUser, allowedRoles: ReadonlyArray<string>
     return false;
   }
 
-  return allowedRoles.includes(role);
+  return allowedRoles.some((r) => r.toLowerCase() === role);
 }

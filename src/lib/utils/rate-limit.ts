@@ -245,6 +245,20 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
         return { limited: true, retryAfter: data.retryAfter ?? 60 };
       }
 
+      // Non-429 error responses (5xx, 4xx) should not silently pass — use
+      // the same degraded-mode fallback as network errors so protection
+      // is never accidentally bypassed.
+      if (!res.ok) {
+        logger.error("Rate limiter worker returned error status", {
+          action: opts.action,
+          status: res.status,
+        });
+        if (opts.degradedMode === "block") {
+          return degradedBlockResult();
+        }
+        return { ...checkLocalRateLimit(opts.key, opts.action), degraded: true };
+      }
+
       return { limited: false };
     } finally {
       clearTimeout(timer);

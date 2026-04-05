@@ -157,6 +157,13 @@ describe("requireRole", () => {
   it("false for null user", () => {
     expect(requireRole(null, ["admin"])).toBe(false);
   });
+  it("matches case-insensitively when allowedRoles has uppercase", () => {
+    // User role is normalized to "admin" but allowedRoles contains "Admin"
+    expect(requireRole(makeUser("Admin"), ["Admin", "Moderator"])).toBe(true);
+  });
+  it("matches case-insensitively for governance_controller", () => {
+    expect(requireRole(makeUser("governance_controller"), ["Governance_Controller"])).toBe(true);
+  });
 });
 
 describe("isAllowedAdmin", () => {

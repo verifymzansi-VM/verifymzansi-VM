@@ -365,6 +365,7 @@ export function KycPreviewLightbox({
         <div
           className="flex-1 min-h-0 overflow-auto rounded-md border border-warm-200/70 dark:border-warm-700/70 bg-warm-50 dark:bg-warm-900 evidence-protected"
           onContextMenu={handleContextMenu}
+          role="presentation"
         >
           {loading && (
             <div className="flex items-center justify-center py-8">

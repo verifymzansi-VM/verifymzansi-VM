@@ -207,14 +207,18 @@ export async function POST(request: NextRequest) {
     // ── Age gate: must be 18+ ────────────────────────────────
     if (docType === "id_document" && idNumber) {
       const dob = extractDobFromSaId(idNumber);
-      if (dob) {
-        const age = calculateAgeFromDob(dob);
-        if (age < 18) {
-          return jsonError(
-            { error: "You must be at least 18 years old to register." },
-            { status: 400 }
-          );
-        }
+      if (!dob) {
+        return jsonError(
+          { error: "Invalid SA ID number format. Please check your ID number and try again." },
+          { status: 400 }
+        );
+      }
+      const age = calculateAgeFromDob(dob);
+      if (age < 18) {
+        return jsonError(
+          { error: "You must be at least 18 years old to register." },
+          { status: 400 }
+        );
       }
     }
 
@@ -503,7 +507,18 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (artifactError || !artifact) {
-      log.error("Failed to record artifact", { error: artifactError, requestId });
+      // Unique constraint violation (23505) means a concurrent upload already
+      // inserted a pending artifact for this (user_id, step_type).
+      const isDuplicate = artifactError?.code === "23505";
+      if (isDuplicate) {
+        log.warn("Duplicate pending artifact rejected by DB constraint", {
+          userId: user.id,
+          stepType,
+          requestId,
+        });
+      } else {
+        log.error("Failed to record artifact", { error: artifactError, requestId });
+      }
 
       // Rollback orphaned R2 file only if upload reached R2.
       if (uploadedToR2) {
@@ -513,6 +528,13 @@ export async function POST(request: NextRequest) {
         } catch (cleanupError) {
           log.error("CRITICAL: Failed to clean up orphaned R2 file:", { error: cleanupError });
         }
+      }
+
+      if (isDuplicate) {
+        return jsonError(
+          { error: "Upload already in progress for this step", code: "duplicate_pending_artifact" },
+          { status: 409 }
+        );
       }
 
       return jsonError(
@@ -651,7 +673,7 @@ export async function POST(request: NextRequest) {
           .eq("step_type", "id_doc")
           .eq("id_number_hmac", engineResult.idNumberHmac)
           .neq("user_id", user.id)
-          .in("status", ["approved", "pending"])
+          .in("status", ["approved", "pending", "needs_manual_review"])
           .limit(1)
           .maybeSingle();
 

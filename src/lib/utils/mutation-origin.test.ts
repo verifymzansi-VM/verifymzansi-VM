@@ -60,4 +60,14 @@ describe("mutation-origin", () => {
     });
     expect(warn).toHaveBeenCalled();
   });
+
+  it("rejects when origin header is syntactically invalid", () => {
+    const request = createRequestLike("https://verifymzansi.com/api/update", {
+      origin: "not-a-valid-url",
+    });
+
+    const result = evaluateSameOriginMutation(request);
+    expect(result.allowed).toBe(false);
+    expect(result).toMatchObject({ reason: "invalid-origin" });
+  });
 });

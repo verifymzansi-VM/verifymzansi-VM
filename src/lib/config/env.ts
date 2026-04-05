@@ -5,6 +5,10 @@ import {
   type LaunchValidationMode,
 } from "./launch-validation";
 
+const optionalBinaryFlag = z.union([z.enum(["0", "1"]), z.literal("")]).transform((value) => {
+  return value === "" ? undefined : value;
+});
+
 /**
  * Environment variable validation.
  * Call validateEnv() at application startup to fail fast
@@ -112,12 +116,12 @@ const envSchema = z.object({
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
 
   // ── Runtime / E2E bypass flags (always optional) ──────────
-  PLAYWRIGHT_E2E_AUTH: z.enum(["0", "1"]).optional(),
+  PLAYWRIGHT_E2E_AUTH: optionalBinaryFlag.optional(),
   VERIFYMZANSI_RUNTIME_MODE: z
     .enum(["development", "e2e", "playwright", "test", "production"])
     .optional(),
   VERIFYMZANSI_VALIDATION_MODE: z.string().optional(),
-  STRICT_ENV_STARTUP_BLOCK: z.enum(["0", "1"]).optional(),
+  STRICT_ENV_STARTUP_BLOCK: optionalBinaryFlag.optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -245,7 +249,10 @@ function validateRateLimiterConfig(env: Env): void {
 }
 
 export function validateEnv(options: ValidateEnvOptions = {}): Env {
-  if (_cachedEnv) return _cachedEnv;
+  // When strict mode is requested, always re-validate against the full
+  // schema so that build-phase fallback values are never silently reused
+  // at runtime.
+  if (_cachedEnv && !options.strict) return _cachedEnv;
   const validationMode = options.mode ?? resolveLaunchValidationMode(process.env);
 
   // Skip strict validation when running Next.js build or in CI
@@ -338,12 +345,15 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
   // These are safe build-phase fallbacks that must never reach a live worker.
   if (result.data.NODE_ENV === "production") {
     const CAFEBABE = "cafebabe".repeat(8);
+    const INVALID_PREFIX = "INVALID_BUILD_PLACEHOLDER";
     const placeholderKeys: Array<[keyof Env, string]> = [
       ["KYC_ENCRYPTION_KEY", "KYC_ENCRYPTION_KEY"],
       ["ID_ENCRYPTION_KEY", "ID_ENCRYPTION_KEY"],
       ["HMAC_SECRET", "HMAC_SECRET"],
     ];
-    const insecure = placeholderKeys.filter(([k]) => result.data[k] === CAFEBABE);
+    const insecure = placeholderKeys.filter(
+      ([k]) => result.data[k] === CAFEBABE || String(result.data[k]).startsWith(INVALID_PREFIX)
+    );
     if (insecure.length > 0) {
       const names = insecure.map(([, label]) => label).join(", ");
       throw new Error(

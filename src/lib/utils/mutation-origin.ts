@@ -49,6 +49,17 @@ export function evaluateSameOriginMutation(request: RequestLike): SameOriginDeci
       };
     }
 
+    // Defensive: if canonicalOrigin can't be resolved, fall back to
+    // requestOrigin only.  Never compare null === null.
+    if (!canonicalOrigin && !requestOrigin) {
+      return {
+        allowed: false,
+        status: 403,
+        error: "Unable to resolve application origin",
+        reason: "invalid-origin",
+      };
+    }
+
     if (normalizedOrigin === canonicalOrigin || normalizedOrigin === requestOrigin) {
       return { allowed: true, reason: "same-origin" };
     }

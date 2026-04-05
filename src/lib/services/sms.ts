@@ -164,7 +164,6 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
           username,
           baseUrl,
           hasApiKey: !!apiKey,
-          apiKeyPrefix: apiKey.slice(0, 4) + "...",
           includeSenderId,
         });
         if (response.status === 401) {

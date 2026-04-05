@@ -93,6 +93,28 @@ describe("rate-limit", () => {
       expect(result.degraded).toBe(true);
     });
 
+    it("falls back to local rate limiter on non-429 HTTP errors (e.g. 500)", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ status: 500, ok: false }));
+
+      const result = await checkRateLimit({ key: "test-500", action: "test" });
+      expect(result.limited).toBe(false);
+      expect(result.degraded).toBe(true);
+    });
+
+    it("fails closed on 502 when degradedMode is block", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ status: 502, ok: false }));
+
+      const result = await checkRateLimit({
+        key: "test-502",
+        action: "billing:checkout",
+        degradedMode: "block",
+      });
+
+      expect(result.limited).toBe(true);
+      expect(result.degraded).toBe(true);
+      expect(result.retryAfter).toBe(60);
+    });
+
     it("fails closed on fetch errors when degradedMode is block", async () => {
       vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
 

@@ -170,7 +170,11 @@ export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
         )}
 
         {blobUrl && !loading && !error && (
-          <div className="space-y-3 evidence-protected" onContextMenu={handleContextMenu}>
+          <div
+            className="space-y-3 evidence-protected"
+            onContextMenu={handleContextMenu}
+            role="presentation"
+          >
             {isImage && (
               <div className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

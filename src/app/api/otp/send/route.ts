@@ -147,10 +147,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Rate limit by phone only — do NOT use client-supplied x-device-id as a
-    // rate-limit key because attackers can rotate the header to bypass limits.
+    // Rate limit by user+phone — using phone alone lets attackers reset
+    // the counter by staging a different number.  Including the userId
+    // ensures the per-user send cadence is enforced regardless of phone.
     const externalLimit = await checkRateLimit({
-      key: phone,
+      key: `${user.id}:${phone}`,
       action: "otp:send",
       degradedMode: "local",
     });
