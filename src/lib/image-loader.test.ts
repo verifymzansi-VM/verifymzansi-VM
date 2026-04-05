@@ -23,10 +23,28 @@ describe("cloudflareImageLoader", () => {
     expect(result).toBe("https://images.unsplash.com/photo-example");
   });
 
-  it("transforms relative URLs via /cdn-cgi/image/ when resizing enabled", async () => {
+  it("keeps relative URLs unchanged when resizing is enabled", async () => {
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
     const { default: loader } = await import("./image-loader");
     const result = loader({ src: "/images/hero.jpg", width: 1024 });
-    expect(result).toBe("/cdn-cgi/image/width=1024,quality=75,format=auto/images/hero.jpg");
+    expect(result).toBe("/images/hero.jpg");
+  });
+
+  it("transforms known media host absolute URLs via /cdn-cgi/image/ when resizing enabled", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    const { default: loader } = await import("./image-loader");
+    const result = loader({ src: "https://media.verifymzansi.com/photos/hero.jpg", width: 768 });
+    expect(result).toBe("/cdn-cgi/image/width=768,quality=75,format=auto/photos/hero.jpg");
+  });
+
+  it("transforms known staging media host absolute URLs via /cdn-cgi/image/ when resizing enabled", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    const { default: loader } = await import("./image-loader");
+    const result = loader({
+      src: "https://media-staging.verifymzansi.com/photos/hero.jpg",
+      width: 640,
+      quality: 80,
+    });
+    expect(result).toBe("/cdn-cgi/image/width=640,quality=80,format=auto/photos/hero.jpg");
   });
 });

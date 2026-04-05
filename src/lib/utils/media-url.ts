@@ -16,6 +16,7 @@
 const MEDIA_BASE = process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.com";
 
 const PROXY_PREFIX = "/api/media/serve/";
+const KNOWN_MEDIA_HOSTS = new Set(["media.verifymzansi.com", "media-staging.verifymzansi.com"]);
 
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "mov"]);
 
@@ -55,6 +56,11 @@ function isVideoUrl(url: string): boolean {
  * Returns null if the URL doesn't match any known pattern.
  */
 export function extractMediaStorageKey(url: string): string | null {
+  // Stored raw key (without a URL) from some legacy/seed data paths
+  if (url.startsWith("media/") || url.startsWith("listings/")) {
+    return url;
+  }
+
   // Already using the proxy route — extract key after prefix
   if (url.startsWith(PROXY_PREFIX)) {
     return url.slice(PROXY_PREFIX.length);
@@ -65,10 +71,24 @@ export function extractMediaStorageKey(url: string): string | null {
     return url.slice(MEDIA_BASE.length + 1);
   }
 
-  // R2 S3-compatible URL
-  const r2Match = url.match(/^https?:\/\/[^/]+\.r2\.cloudflarestorage\.com\/(.+)$/);
-  if (r2Match) {
-    return r2Match[1];
+  // Absolute URL handling for app/proxy/media/R2 hosts
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.replace(/^\/+/, "");
+
+    if (parsed.pathname.startsWith(PROXY_PREFIX)) {
+      return parsed.pathname.slice(PROXY_PREFIX.length);
+    }
+
+    if (KNOWN_MEDIA_HOSTS.has(parsed.hostname)) {
+      return pathname || null;
+    }
+
+    if (parsed.hostname.endsWith(".r2.cloudflarestorage.com")) {
+      return pathname || null;
+    }
+  } catch {
+    // Not an absolute URL format we can parse.
   }
 
   return null;

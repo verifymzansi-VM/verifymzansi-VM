@@ -29,12 +29,28 @@ describe("isTrustedPlatformMediaUrl", () => {
 });
 
 describe("extractMediaStorageKey", () => {
+  it("extracts key from raw storage key", () => {
+    expect(extractMediaStorageKey("media/listing/abc.jpg")).toBe("media/listing/abc.jpg");
+  });
+
   it("extracts key from proxy prefix", () => {
     expect(extractMediaStorageKey("/api/media/serve/photos/abc.jpg")).toBe("photos/abc.jpg");
   });
 
+  it("extracts key from absolute app proxy URL", () => {
+    expect(
+      extractMediaStorageKey("https://verifymzansi.com/api/media/serve/media/listing/abc.jpg")
+    ).toBe("media/listing/abc.jpg");
+  });
+
   it("extracts key from media base URL", () => {
     expect(extractMediaStorageKey("https://media.verifymzansi.com/photos/abc.jpg")).toBe(
+      "photos/abc.jpg"
+    );
+  });
+
+  it("extracts key from staging media base URL", () => {
+    expect(extractMediaStorageKey("https://media-staging.verifymzansi.com/photos/abc.jpg")).toBe(
       "photos/abc.jpg"
     );
   });

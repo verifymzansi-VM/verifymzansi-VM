@@ -26,6 +26,7 @@ interface ImageLoaderParams {
 const CF_RESIZING_ENABLED = process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING === "true";
 
 const MEDIA_HOST = "media.verifymzansi.com";
+const STAGING_MEDIA_HOST = "media-staging.verifymzansi.com";
 
 export default function cloudflareImageLoader({ src, width, quality }: ImageLoaderParams): string {
   // If Cloudflare Image Resizing is not available, return the src unchanged
@@ -36,15 +37,22 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
 
   const cfParams = `width=${width},quality=${quality || 75},format=auto`;
 
+  // Keep relative sources (static logos and proxy images) pass-through so
+  // local/staging/prod render reliably even when /cdn-cgi/image is unavailable.
+  if (!src.startsWith("http://") && !src.startsWith("https://")) {
+    return src;
+  }
+
   // Same-origin CDN URLs (media.verifymzansi.com) — extract the pathname
   // so Cloudflare can resize them via the zone's /cdn-cgi/image/ endpoint.
   try {
     const parsed = new URL(src);
-    if (parsed.hostname === MEDIA_HOST) {
+    if (parsed.hostname === MEDIA_HOST || parsed.hostname === STAGING_MEDIA_HOST) {
       return `/cdn-cgi/image/${cfParams}${parsed.pathname}`;
     }
   } catch {
-    // Not a valid absolute URL — fall through to relative path handling
+    // Not a valid absolute URL — return original src as a safe fallback.
+    return src;
   }
 
   // Absolute remote URLs are left untouched. The current production zone can
@@ -54,6 +62,5 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
     return src;
   }
 
-  // Relative URL (local asset) — transform via the same endpoint
-  return `/cdn-cgi/image/${cfParams}${src}`;
+  return src;
 }
