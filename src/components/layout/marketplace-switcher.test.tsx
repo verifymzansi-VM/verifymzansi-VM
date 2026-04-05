@@ -63,4 +63,13 @@ describe("MarketplaceSwitcher", () => {
       "aria-current"
     );
   });
+
+  it("keeps Tourism & Events as a single combined category label", () => {
+    usePathnameMock.mockReturnValue("/");
+
+    render(<MarketplaceSwitcher />);
+
+    expect(screen.getAllByText("Tourism & Events")).toHaveLength(2);
+    expect(screen.queryByText("Tourism")).not.toBeInTheDocument();
+  });
 });

@@ -41,7 +41,7 @@ const AREA_TABS: AreaTab[] = [
   {
     area: "PROMOTIONS",
     label: "Tourism & Events",
-    mobileLabel: "Tourism",
+    mobileLabel: "Tourism & Events",
     slug: "/promotions",
     icon: TreePalm,
     iconColor: "text-teal-500",
@@ -69,7 +69,7 @@ export function MarketplaceSwitcher() {
             aria-label={tab.label}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "inline-flex min-w-[6.5rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium leading-none transition-colors lg:min-w-0 lg:flex-none lg:px-4 lg:py-2 lg:text-sm",
+              "inline-flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-medium leading-tight transition-colors lg:min-w-0 lg:flex-none lg:gap-1.5 lg:px-4 lg:py-2 lg:text-sm lg:leading-none",
               isActive
                 ? tab.activeClass
                 : cn(
@@ -82,7 +82,7 @@ export function MarketplaceSwitcher() {
               aria-hidden="true"
               className={cn("h-3.5 w-3.5 shrink-0 lg:h-4 lg:w-4", !isActive && tab.iconColor)}
             />
-            <span className="truncate lg:hidden">{tab.mobileLabel}</span>
+            <span className="text-center lg:hidden">{tab.mobileLabel}</span>
             <span className="hidden lg:inline">{tab.label}</span>
           </Link>
         );
