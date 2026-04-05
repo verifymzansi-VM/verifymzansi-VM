@@ -127,6 +127,24 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   // ── Promotions management ────────────────────────────
   "promotion:featured": [{ limit: 10, ttl: 60 }],
   "promotion:boost": [{ limit: 10, ttl: 60 }],
+
+  // ── Listings ─────────────────────────────────────────
+  "listing:create": [
+    { limit: 10, ttl: 60 },
+    { limit: 30, ttl: 3600 },
+  ],
+
+  // ── Promotions creation ──────────────────────────────
+  "promotion:create": [
+    { limit: 10, ttl: 60 },
+    { limit: 30, ttl: 3600 },
+  ],
+
+  // ── DSAR (data subject access requests) ──────────────
+  "dsar:request": [
+    { limit: 3, ttl: 3600 }, // 3 per hour
+    { limit: 5, ttl: 86400 }, // 5 per day
+  ],
 };
 
 interface CounterEntry {
@@ -184,6 +202,24 @@ function validationError(message: string): Response {
   return Response.json({ error: message }, { status: 400 });
 }
 
+/** Build standard rate-limit response headers (RFC 6585 + draft-ietf-httpapi-ratelimit-headers). */
+function rateLimitHeaders(
+  limit: number,
+  remaining: number,
+  resetEpochSec: number,
+  retryAfterSec?: number
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    "X-RateLimit-Limit": String(limit),
+    "X-RateLimit-Remaining": String(Math.max(0, remaining)),
+    "X-RateLimit-Reset": String(resetEpochSec),
+  };
+  if (retryAfterSec !== undefined) {
+    headers["Retry-After"] = String(Math.max(1, retryAfterSec));
+  }
+  return headers;
+}
+
 /**
  * Normalize a South African phone number to E.164 format (+27...).
  * Prevents bypass by submitting the same number in different formats.
@@ -227,20 +263,39 @@ export class RateLimiterDO {
     const { checks, readOnly } = parsedPayload.data;
     const now = Date.now();
 
+    // Track the tightest remaining quota across all checks for response headers
+    let tightestLimit = 0;
+    let tightestRemaining = Infinity;
+    let tightestResetEpoch = 0;
+
     // All reads and writes happen within a single DO — fully serialized
     for (const check of checks) {
       const entry = await this.state.storage.get<CounterEntry>(check.key);
       const current = entry && entry.expiresAt > now ? entry.count : 0;
+      const resetEpoch = Math.ceil((entry?.expiresAt ?? now + check.ttl * 1000) / 1000);
 
       if (current >= check.limit) {
         const retryAfter = entry ? Math.ceil((entry.expiresAt - now) / 1000) : check.ttl;
-        return Response.json({ error: "rate_limited", retryAfter }, { status: 429 });
+        return Response.json(
+          { error: "rate_limited", retryAfter },
+          { status: 429, headers: rateLimitHeaders(check.limit, 0, resetEpoch, retryAfter) }
+        );
+      }
+
+      const remaining = check.limit - current;
+      if (remaining < tightestRemaining) {
+        tightestRemaining = remaining;
+        tightestLimit = check.limit;
+        tightestResetEpoch = resetEpoch;
       }
     }
 
     // Skip increment when readOnly is true (check-only mode for lockout queries)
     if (readOnly) {
-      return Response.json({ ok: true });
+      return Response.json(
+        { ok: true },
+        { headers: rateLimitHeaders(tightestLimit, tightestRemaining, tightestResetEpoch) }
+      );
     }
 
     // Atomically increment all counters
@@ -259,7 +314,11 @@ export class RateLimiterDO {
     // Schedule alarm to clean up expired entries (self-gc)
     await this.state.storage.setAlarm(Date.now() + 86_400_000); // 24h
 
-    return Response.json({ ok: true });
+    // After increment, remaining = tightestRemaining - 1
+    return Response.json(
+      { ok: true },
+      { headers: rateLimitHeaders(tightestLimit, tightestRemaining - 1, tightestResetEpoch) }
+    );
   }
 
   /** Periodic cleanup of expired counters. */
@@ -347,17 +406,34 @@ const worker = {
       }
 
       // KV fallback for generic actions
+      let kvTightestLimit = 0;
+      let kvTightestRemaining = Infinity;
+      let kvTightestReset = 0;
+      const kvNow = Date.now();
       for (const c of limits) {
         const k = buildTieredCounterKey(`${action}:${rateKey}`, c.ttl);
         const current = parseInt((await env.OTP_RATE_LIMITS.get(k)) || "0", 10);
+        const resetEpoch = Math.ceil((kvNow + c.ttl * 1000) / 1000);
         if (current >= c.limit) {
-          return Response.json({ error: "rate_limited", retryAfter: c.ttl }, { status: 429 });
+          return Response.json(
+            { error: "rate_limited", retryAfter: c.ttl },
+            { status: 429, headers: rateLimitHeaders(c.limit, 0, resetEpoch, c.ttl) }
+          );
+        }
+        const remaining = c.limit - current - (readOnly ? 0 : 1);
+        if (remaining < kvTightestRemaining) {
+          kvTightestRemaining = remaining;
+          kvTightestLimit = c.limit;
+          kvTightestReset = resetEpoch;
         }
         if (!readOnly) {
           await env.OTP_RATE_LIMITS.put(k, String(current + 1), { expirationTtl: c.ttl });
         }
       }
-      return Response.json({ ok: true });
+      return Response.json(
+        { ok: true },
+        { headers: rateLimitHeaders(kvTightestLimit, kvTightestRemaining, kvTightestReset) }
+      );
     }
 
     // ── OTP-specific rate limiting (default flow) ───────────────────────
@@ -398,11 +474,25 @@ const worker = {
     // KV fallback — kept for backward compatibility during migration.
     // Read-check-increment in a single pass to minimise the TOCTOU window.
     // (True atomicity requires the Durable Object path above.)
+    let otpTightestLimit = 0;
+    let otpTightestRemaining = Infinity;
+    let otpTightestReset = 0;
+    const otpNow = Date.now();
     const kvSnapshots: { check: RateCheck; current: number }[] = [];
     for (const check of checks) {
       const current = parseInt((await env.OTP_RATE_LIMITS.get(check.key)) || "0", 10);
+      const resetEpoch = Math.ceil((otpNow + check.ttl * 1000) / 1000);
       if (current >= check.limit) {
-        return Response.json({ error: "rate_limited", retryAfter: check.ttl }, { status: 429 });
+        return Response.json(
+          { error: "rate_limited", retryAfter: check.ttl },
+          { status: 429, headers: rateLimitHeaders(check.limit, 0, resetEpoch, check.ttl) }
+        );
+      }
+      const remaining = check.limit - current - 1;
+      if (remaining < otpTightestRemaining) {
+        otpTightestRemaining = remaining;
+        otpTightestLimit = check.limit;
+        otpTightestReset = resetEpoch;
       }
       kvSnapshots.push({ check, current });
     }
@@ -414,7 +504,10 @@ const worker = {
       });
     }
 
-    return Response.json({ ok: true });
+    return Response.json(
+      { ok: true },
+      { headers: rateLimitHeaders(otpTightestLimit, otpTightestRemaining, otpTightestReset) }
+    );
   },
 };
 
