@@ -152,6 +152,7 @@ export async function POST(request: NextRequest) {
       owner_id: targetOwnerId,
       member_verified: ownerVerified,
       contact_type: contactType,
+      sender_user_id: user?.id ?? null,
     });
 
     if (contactError) {

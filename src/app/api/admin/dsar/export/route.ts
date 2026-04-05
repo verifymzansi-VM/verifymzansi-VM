@@ -230,7 +230,9 @@ export async function GET(request: NextRequest) {
           .limit(500),
         admin
           .from("contact_events")
-          .select("id, target_id, target_type, member_verified, contact_type, created_at")
+          .select(
+            "id, target_id, target_type, member_verified, contact_type, sender_user_id, created_at"
+          )
           .eq(contactOwnerColumn, matchedUserId)
           .order("created_at", { ascending: false })
           .limit(500),
