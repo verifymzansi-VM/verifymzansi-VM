@@ -90,7 +90,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
     const handleTimeUpdate = useCallback(() => {
       const video = localVideoRef.current;
       if (!video) return;
-      setCurrentTime(video.currentTime);
+      setCurrentTime(Number.isFinite(video.currentTime) ? video.currentTime : 0);
     }, []);
 
     const togglePlay = useCallback(() => {
@@ -284,11 +284,19 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
             />
 
             <div className="flex items-center justify-between gap-2 text-white">
-              <div className="flex items-center gap-1 sm:gap-1.5">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() => skipBy(-skipSeconds)}
+                  className="rounded-full p-2.5 transition-colors hover:bg-white/20 sm:p-2"
+                  aria-label={`Rewind ${skipSeconds} seconds`}
+                >
+                  <SkipBack className="h-5 w-5" />
+                </button>
                 <button
                   type="button"
                   onClick={togglePlay}
-                  className="rounded-full p-2 transition-colors hover:bg-white/20"
+                  className="rounded-full p-2.5 transition-colors hover:bg-white/20 sm:p-2"
                   aria-label={isPlaying ? "Pause" : "Play"}
                 >
                   {isPlaying ? (
@@ -299,16 +307,8 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
                 </button>
                 <button
                   type="button"
-                  onClick={() => skipBy(-skipSeconds)}
-                  className="rounded-full p-2 transition-colors hover:bg-white/20"
-                  aria-label={`Rewind ${skipSeconds} seconds`}
-                >
-                  <SkipBack className="h-5 w-5" />
-                </button>
-                <button
-                  type="button"
                   onClick={() => skipBy(skipSeconds)}
-                  className="rounded-full p-2 transition-colors hover:bg-white/20"
+                  className="rounded-full p-2.5 transition-colors hover:bg-white/20 sm:p-2"
                   aria-label={`Forward ${skipSeconds} seconds`}
                 >
                   <SkipForward className="h-5 w-5" />
@@ -316,7 +316,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
                 <button
                   type="button"
                   onClick={toggleMute}
-                  className="rounded-full p-2 transition-colors hover:bg-white/20"
+                  className="rounded-full p-2.5 transition-colors hover:bg-white/20 sm:p-2"
                   aria-label={isMuted ? "Unmute" : "Mute"}
                 >
                   {isMuted ? (
@@ -345,7 +345,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
               <button
                 type="button"
                 onClick={enterFullscreen}
-                className="rounded-full p-2 transition-colors hover:bg-white/20"
+                className="rounded-full p-2.5 transition-colors hover:bg-white/20 sm:p-2"
                 aria-label="Fullscreen"
               >
                 <Maximize2 className="h-5 w-5" />

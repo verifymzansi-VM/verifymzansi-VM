@@ -102,7 +102,7 @@ export default async function PromotionDetailPage({ params }: PromotionDetailPag
       />
 
       <main className="flex-1">
-        <div className="container-page py-4 space-y-5 max-w-5xl">
+        <div className="container-page py-4 space-y-5">
           <PageHeader
             title={promotion.title}
             breadcrumbs={[
