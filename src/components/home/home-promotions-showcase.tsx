@@ -133,7 +133,7 @@ export async function HomePromotionsShowcase() {
               size="sm"
               className="bg-teal-700 hover:bg-teal-800 text-white rounded-full"
             >
-              <Link href="/post/create-promotion">
+              <Link href="/post/create-promotion" prefetch={false}>
                 Create Event
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Link>
@@ -158,7 +158,7 @@ export async function HomePromotionsShowcase() {
             size="sm"
             className="gap-1 text-teal-600 hover:text-teal-700"
           >
-            <Link href="/promotions">
+            <Link href="/promotions" prefetch={false}>
               View All
               <ArrowRight className="h-4 w-4" />
             </Link>
@@ -166,7 +166,7 @@ export async function HomePromotionsShowcase() {
         </div>
 
         <AutoScrollRail ariaLabel="Tourism and events">
-          {items.map((item, index) => (
+          {items.map((item) => (
             <div
               key={item.kind === "tourism" ? `t-${item.data.id}` : `e-${item.data.id}`}
               className="min-w-[300px] max-w-[380px] sm:min-w-[340px] sm:max-w-[380px] h-full"
@@ -189,7 +189,7 @@ export async function HomePromotionsShowcase() {
                       ? new Date(item.data.featured_until) > new Date(now)
                       : false
                   }
-                  priority={index === 0}
+                  priority={false}
                 />
               ) : (
                 <PromotionCard
@@ -197,7 +197,9 @@ export async function HomePromotionsShowcase() {
                   title={item.data.title}
                   price={item.data.price_cents}
                   negotiable={item.data.price_negotiable}
-                  imageUrl={item.data.videos?.[0] || item.data.photos?.[0]}
+                  imageUrl={
+                    item.data.photos?.[0] || item.data.video_thumbnail || item.data.videos?.[0]
+                  }
                   posterUrl={item.data.video_thumbnail || item.data.photos?.[0] || undefined}
                   categoryLabel={getPromotionCategoryDisplayLabel(
                     item.data.category_key,
@@ -219,7 +221,7 @@ export async function HomePromotionsShowcase() {
                   startDate={item.data.start_date}
                   endDate={item.data.end_date}
                   logoUrl={item.data.business_id ? logoMap.get(item.data.business_id) : undefined}
-                  priority={index === 0}
+                  priority={false}
                 />
               )}
             </div>

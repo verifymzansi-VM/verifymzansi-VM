@@ -86,7 +86,7 @@ export function PosterCardShell({
   const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
 
   return (
-    <Link href={href} className={cn("group block h-full", className)}>
+    <Link href={href} prefetch={false} className={cn("group block h-full", className)}>
       <Card
         className={cn(
           "h-full flex flex-col overflow-hidden border-transparent bg-warm-100 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-8px_rgba(15,23,42,0.28)] rounded-xl",

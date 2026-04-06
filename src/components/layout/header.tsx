@@ -47,7 +47,7 @@ export function Header(props: HeaderProps) {
       fallback={
         <header className="sticky top-0 z-50 w-full border-b bg-background">
           <div className="container-page flex h-16 items-center">
-            <Link href="/" className="text-lg font-bold">
+            <Link href="/" prefetch={false} className="text-lg font-bold">
               VerifyMzansi
             </Link>
           </div>
@@ -119,6 +119,7 @@ function HeaderInner({
       <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
         <Link
           href="/"
+          prefetch={false}
           aria-label="VerifyMzansi — Home"
           className="group flex items-center gap-2 sm:gap-3 lg:justify-self-start"
         >
@@ -156,10 +157,14 @@ function HeaderInner({
                 <TrustBadge level={trustLevelProp || auth.trustLevel} size="sm" />
               )}
               <Button asChild variant="outline" size="sm">
-                <Link href="/advertise">Advertise</Link>
+                <Link href="/advertise" prefetch={false}>
+                  Advertise
+                </Link>
               </Button>
               <Button asChild variant="trust-verified" size="sm">
-                <Link href="/post/create">+ Post</Link>
+                <Link href="/post/create" prefetch={false}>
+                  + Post
+                </Link>
               </Button>
 
               {/* User avatar dropdown */}
@@ -190,20 +195,20 @@ function HeaderInner({
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
                     <DropdownMenuItem asChild>
-                      <Link href="/dashboard" className="cursor-pointer">
+                      <Link href="/dashboard" prefetch={false} className="cursor-pointer">
                         <LayoutDashboard className="mr-2 h-4 w-4" />
                         Dashboard
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <Link href="/dashboard/settings" className="cursor-pointer">
+                      <Link href="/dashboard/settings" prefetch={false} className="cursor-pointer">
                         <Settings className="mr-2 h-4 w-4" />
                         Settings
                       </Link>
                     </DropdownMenuItem>
                     {hasAdminAccess && (
                       <DropdownMenuItem asChild>
-                        <Link href="/admin" className="cursor-pointer">
+                        <Link href="/admin" prefetch={false} className="cursor-pointer">
                           <ShieldAlert className="mr-2 h-4 w-4" />
                           Admin
                         </Link>
@@ -232,7 +237,9 @@ function HeaderInner({
           ) : (
             <>
               <Button asChild variant="outline" size="sm">
-                <Link href="/advertise">Advertise</Link>
+                <Link href="/advertise" prefetch={false}>
+                  Advertise
+                </Link>
               </Button>
               <Button
                 asChild
@@ -240,10 +247,14 @@ function HeaderInner({
                 className="border-brand-green border-2 hover:bg-brand-green/10"
                 size="sm"
               >
-                <Link href="/login">Sign in</Link>
+                <Link href="/login" prefetch={false}>
+                  Sign in
+                </Link>
               </Button>
               <Button asChild variant="trust-verified" size="sm">
-                <Link href="/register">Register</Link>
+                <Link href="/register" prefetch={false}>
+                  Register
+                </Link>
               </Button>
             </>
           )}
@@ -299,6 +310,7 @@ function HeaderInner({
                 </div>
                 <Link
                   href="/dashboard"
+                  prefetch={false}
                   className="flex items-center gap-2 py-2 text-sm font-medium"
                   onClick={() => setMobileOpen(false)}
                 >
@@ -307,6 +319,7 @@ function HeaderInner({
                 </Link>
                 <Link
                   href="/dashboard/settings"
+                  prefetch={false}
                   className="flex items-center gap-2 py-2 text-sm font-medium"
                   onClick={() => setMobileOpen(false)}
                 >
@@ -316,6 +329,7 @@ function HeaderInner({
                 {hasAdminAccess && (
                   <Link
                     href="/admin"
+                    prefetch={false}
                     className="flex items-center gap-2 py-2 text-sm font-medium"
                     onClick={() => setMobileOpen(false)}
                   >
@@ -324,12 +338,12 @@ function HeaderInner({
                   </Link>
                 )}
                 <Button asChild variant="trust-verified" className="w-full">
-                  <Link href="/post/create" onClick={() => setMobileOpen(false)}>
+                  <Link href="/post/create" prefetch={false} onClick={() => setMobileOpen(false)}>
                     + Post
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="w-full">
-                  <Link href="/advertise" onClick={() => setMobileOpen(false)}>
+                  <Link href="/advertise" prefetch={false} onClick={() => setMobileOpen(false)}>
                     Advertise
                   </Link>
                 </Button>
@@ -352,17 +366,17 @@ function HeaderInner({
             ) : (
               <>
                 <Button asChild variant="outline" className="w-full">
-                  <Link href="/advertise" onClick={() => setMobileOpen(false)}>
+                  <Link href="/advertise" prefetch={false} onClick={() => setMobileOpen(false)}>
                     Advertise
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="w-full">
-                  <Link href="/login" onClick={() => setMobileOpen(false)}>
+                  <Link href="/login" prefetch={false} onClick={() => setMobileOpen(false)}>
                     Sign in
                   </Link>
                 </Button>
                 <Button asChild variant="trust-verified" className="w-full">
-                  <Link href="/register" onClick={() => setMobileOpen(false)}>
+                  <Link href="/register" prefetch={false} onClick={() => setMobileOpen(false)}>
                     Register
                   </Link>
                 </Button>

@@ -82,30 +82,10 @@ const nextConfig = {
     ],
   },
   async headers() {
-    // Full CSP with nonce is applied by the Cloudflare Workers proxy
-    // (proxy-handler.ts). The headers below are defense-in-depth: they
-    // protect against direct-origin access (DNS leak, staging, etc.).
+    // Full CSP + security headers are applied by the Cloudflare Workers proxy
+    // (proxy-handler.ts). Keep only cache-specific headers here so live
+    // responses do not emit duplicate security headers from both layers.
     return [
-      {
-        source: "/:path*",
-        headers: [
-          {
-            key: "Strict-Transport-Security",
-            value: "max-age=31536000; includeSubDomains; preload",
-          },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-        ],
-      },
-      {
-        // Allow camera access on the verification page for selfie / ID capture
-        source: "/verification",
-        headers: [
-          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self)" },
-        ],
-      },
       {
         // Media proxy serves R2 objects with long-lived immutable headers;
         // exclude it from the generic no-cache rule so browsers and CDN can

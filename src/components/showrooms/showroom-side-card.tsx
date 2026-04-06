@@ -64,6 +64,7 @@ export function ShowroomSideCard({ items, initialDelayMs = 0 }: ShowroomSideCard
   return (
     <Link
       href={item.href || `/promotion/${item.id}`}
+      prefetch={false}
       className={cn(
         "relative block h-full w-full overflow-hidden rounded-lg border",
         "border-warm-200 bg-warm-100",
@@ -84,7 +85,6 @@ export function ShowroomSideCard({ items, initialDelayMs = 0 }: ShowroomSideCard
           fill
           sizes="(min-width: 1024px) 15vw, 0px"
           className="object-cover"
-          unoptimized
         />
       </div>
     </Link>

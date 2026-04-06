@@ -68,6 +68,7 @@ export function MobileNav() {
             <Link
               key={tab.label}
               href={resolvedHref}
+              prefetch={false}
               onClick={() => triggerHaptic("light")}
               aria-current={isActive ? "page" : undefined}
               className={cn(

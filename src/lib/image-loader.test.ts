@@ -23,11 +23,20 @@ describe("cloudflareImageLoader", () => {
     expect(result).toBe("https://images.unsplash.com/photo-example");
   });
 
-  it("keeps relative URLs unchanged when resizing is enabled", async () => {
+  it("keeps static relative URLs unchanged when resizing is enabled", async () => {
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
     const { default: loader } = await import("./image-loader");
     const result = loader({ src: "/images/hero.jpg", width: 1024 });
     expect(result).toBe("/images/hero.jpg");
+  });
+
+  it("transforms media proxy paths via /cdn-cgi/image/ when resizing is enabled", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    const { default: loader } = await import("./image-loader");
+    const result = loader({ src: "/api/media/serve/media/listing/hero.jpg", width: 512 });
+    expect(result).toBe(
+      "/cdn-cgi/image/width=512,quality=75,format=auto/api/media/serve/media/listing/hero.jpg"
+    );
   });
 
   it("transforms known media host absolute URLs via /cdn-cgi/image/ when resizing enabled", async () => {

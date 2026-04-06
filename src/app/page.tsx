@@ -181,7 +181,7 @@ export default async function HomePage() {
                       size="lg"
                       className="w-full sm:w-auto h-12 px-8 text-base bg-brand-green hover:bg-brand-green-600 text-white transition-all gap-2 rounded-full font-semibold"
                     >
-                      <Link href="/advertise">
+                      <Link href="/advertise" prefetch={false}>
                         Start for Free
                         <ArrowRight className="h-5 w-5" />
                       </Link>
@@ -192,13 +192,16 @@ export default async function HomePage() {
                       variant="outline"
                       className="w-full sm:w-auto h-12 px-8 text-base rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10"
                     >
-                      <Link href="/register">Create Account</Link>
+                      <Link href="/register" prefetch={false}>
+                        Create Account
+                      </Link>
                     </Button>
                   </div>
 
                   <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                     <Link
                       href="/advertise"
+                      prefetch={false}
                       className="inline-flex items-center gap-2 text-sm font-medium text-brand-green-300 transition-colors hover:text-brand-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-warm-950 rounded-full"
                     >
                       Advertise
@@ -206,6 +209,7 @@ export default async function HomePage() {
                     </Link>
                     <Link
                       href="/pricing"
+                      prefetch={false}
                       className="inline-flex items-center gap-2 text-sm font-medium text-warm-100 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-warm-950 rounded-full"
                     >
                       Pricing
@@ -220,6 +224,7 @@ export default async function HomePage() {
                       <Link
                         key={title}
                         href={href}
+                        prefetch={false}
                         className="group rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 transition-all duration-200 hover:border-white/20 hover:bg-white/10 hover:-translate-y-0.5"
                       >
                         <div className="flex items-start gap-4">

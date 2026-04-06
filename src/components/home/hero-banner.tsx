@@ -324,7 +324,6 @@ export function HeroBanner({
                     fill
                     sizes="(max-width: 640px) 72px, (max-width: 768px) 88px, (max-width: 1024px) 120px, (max-width: 1280px) 144px, 168px"
                     className="object-contain"
-                    unoptimized
                   />
                 </div>
               </div>
@@ -406,6 +405,7 @@ export function HeroBanner({
                 </div>
                 <Link
                   href={`${ENTITY_CONFIG[activeSlide.type as keyof typeof ENTITY_CONFIG]?.href}${activeSlide.id}`}
+                  prefetch={false}
                   className={cn(
                     buttonVariants({ size: "sm" }),
                     "shrink-0 h-8 px-3 text-xs bg-brand-green hover:bg-brand-green-600 text-white font-bold gap-1 rounded-full sm:h-10 sm:px-5 sm:text-sm sm:gap-2"

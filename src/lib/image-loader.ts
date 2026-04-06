@@ -27,6 +27,7 @@ const CF_RESIZING_ENABLED = process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING === "true"
 
 const MEDIA_HOST = "media.verifymzansi.com";
 const STAGING_MEDIA_HOST = "media-staging.verifymzansi.com";
+const PROXY_MEDIA_PREFIX = "/api/media/serve/";
 
 export default function cloudflareImageLoader({ src, width, quality }: ImageLoaderParams): string {
   // If Cloudflare Image Resizing is not available, return the src unchanged
@@ -37,7 +38,13 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
 
   const cfParams = `width=${width},quality=${quality || 75},format=auto`;
 
-  // Keep relative sources (static logos and proxy images) pass-through so
+  // Resize same-origin media-proxy paths in production so card thumbnails and
+  // logos do not ship their original upload dimensions to small surfaces.
+  if (src.startsWith(PROXY_MEDIA_PREFIX)) {
+    return `/cdn-cgi/image/${cfParams}${src}`;
+  }
+
+  // Keep other relative sources (static assets, app images) pass-through so
   // local/staging/prod render reliably even when /cdn-cgi/image is unavailable.
   if (!src.startsWith("http://") && !src.startsWith("https://")) {
     return src;

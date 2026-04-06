@@ -58,7 +58,7 @@ export async function HomeMzansiMarketShowcase() {
               Verified sellers. Real products. Video & photos.
             </p>
           </div>
-          <Link href="/mzansi-market" className="shrink-0">
+          <Link href="/mzansi-market" prefetch={false} className="shrink-0">
             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-green hover:text-brand-green/80 transition-colors">
               View All Listings
               <ArrowRight className="h-4 w-4" />
@@ -67,9 +67,8 @@ export async function HomeMzansiMarketShowcase() {
         </div>
 
         <AutoScrollRail ariaLabel="Latest on Mzansi Market">
-          {items.map((l, index) => {
-            const videoUrl = l.videos?.[0];
-            const displayUrl = videoUrl || l.photos?.[0];
+          {items.map((l) => {
+            const displayUrl = l.photos?.[0] || l.video_thumbnail || l.videos?.[0];
             const isBoosted = l.boost_until ? new Date(l.boost_until) > new Date() : false;
             const poster = l.video_thumbnail || l.photos?.[0] || undefined;
             return (
@@ -87,7 +86,7 @@ export async function HomeMzansiMarketShowcase() {
                   provinceCode={provinceCode(l.location_province ?? "ZA")}
                   boosted={isBoosted}
                   logoUrl={l.logo_url}
-                  priority={index === 0}
+                  priority={false}
                 />
               </div>
             );

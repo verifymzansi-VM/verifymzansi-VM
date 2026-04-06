@@ -68,7 +68,7 @@ describe("HomeMzansiMarketShowcase", () => {
     vi.clearAllMocks();
   });
 
-  it("prefers listing video when available and passes it as imageUrl", async () => {
+  it("prefers a lightweight poster image when listing video is available", async () => {
     const { client } = createSupabaseMock({
       data: [
         {
@@ -96,7 +96,7 @@ describe("HomeMzansiMarketShowcase", () => {
       posterUrl: string;
       logoUrl?: string;
     };
-    expect(props.imageUrl).toBe("https://example.com/video.mp4");
+    expect(props.imageUrl).toBe("https://example.com/photo.jpg");
     expect(props.posterUrl).toBe("https://example.com/thumb.jpg");
     expect(props.logoUrl).toBe("https://example.com/logo.jpg");
   });

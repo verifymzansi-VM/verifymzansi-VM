@@ -52,7 +52,7 @@ export async function HomeBusinessShowcase() {
               Trusted local businesses, verified.
             </p>
           </div>
-          <Link href="/mzansi-business" className="shrink-0">
+          <Link href="/mzansi-business" prefetch={false} className="shrink-0">
             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-blue hover:text-brand-blue/80 transition-colors">
               View All Businesses
               <ArrowRight className="h-4 w-4" />
@@ -61,14 +61,14 @@ export async function HomeBusinessShowcase() {
         </div>
 
         <AutoScrollRail ariaLabel="Mzansi Business">
-          {items.map((b, index) => (
+          {items.map((b) => (
             <div
               key={b.id}
               className="min-w-[300px] max-w-[380px] sm:min-w-[340px] sm:max-w-[380px] h-full"
             >
               <BusinessPreviewCard
                 href={`/mzansi-business/${b.id}`}
-                imageUrl={b.cover_video || b.cover_photo}
+                imageUrl={b.cover_photo || b.video_thumbnail || b.cover_video}
                 posterUrl={b.video_thumbnail || b.cover_photo || undefined}
                 logoUrl={b.logo_url}
                 title={b.business_name}
@@ -77,7 +77,7 @@ export async function HomeBusinessShowcase() {
                 provinceCode={provinceCode(b.location_province ?? "ZA")}
                 boosted={b.boost_until ? new Date(b.boost_until) > new Date() : false}
                 featured={b.featured_until ? new Date(b.featured_until) > new Date() : false}
-                priority={index === 0}
+                priority={false}
               />
             </div>
           ))}

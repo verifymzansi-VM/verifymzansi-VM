@@ -66,6 +66,7 @@ export function MarketplaceSwitcher() {
           <Link
             key={tab.area}
             href={tab.slug}
+            prefetch={false}
             aria-label={tab.label}
             aria-current={isActive ? "page" : undefined}
             className={cn(

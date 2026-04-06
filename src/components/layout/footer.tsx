@@ -15,7 +15,7 @@ export function Footer() {
         <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4 lg:grid-cols-5">
           {/* Brand */}
           <div className="space-y-2">
-            <Link href="/" className="flex items-center gap-1.5">
+            <Link href="/" prefetch={false} className="flex items-center gap-1.5">
               <BrandLogo size="sm" />
             </Link>
             <p className="text-xs text-muted-foreground max-w-xs">
@@ -29,24 +29,28 @@ export function Footer() {
             <nav aria-label="Marketplace" className="flex flex-col gap-1.5">
               <Link
                 href="/mzansi-market"
+                prefetch={false}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Mzansi Market
               </Link>
               <Link
                 href="/mzansi-business"
+                prefetch={false}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Mzansi Business
               </Link>
               <Link
                 href="/promotions"
+                prefetch={false}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Tourism & Events
               </Link>
               <Link
                 href="/advertise"
+                prefetch={false}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Advertise
@@ -60,18 +64,21 @@ export function Footer() {
             <nav aria-label="Safety" className="flex flex-col gap-1.5">
               <Link
                 href="/safety/scam-alerts"
+                prefetch={false}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Scam Alerts
               </Link>
               <Link
                 href="/safety/meeting-checklist"
+                prefetch={false}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Meeting Safety
               </Link>
               <Link
                 href="/verify-buyer"
+                prefetch={false}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Verify a Buyer
@@ -85,12 +92,14 @@ export function Footer() {
             <nav aria-label="Legal" className="flex flex-col gap-1.5">
               <Link
                 href="/privacy"
+                prefetch={false}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Privacy Policy
               </Link>
               <Link
                 href="/terms"
+                prefetch={false}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Terms of Service
