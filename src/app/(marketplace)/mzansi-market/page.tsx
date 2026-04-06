@@ -135,20 +135,6 @@ export default async function MzansiMarketPage() {
 
       {/* ── Main Content ─────────────────────────────────── */}
       <div className="container-page py-8 space-y-6">
-        <PageHeader
-          title="Browse Listings"
-          description="Verified classifieds from South African sellers, with filters for price, condition, and location."
-          breadcrumbs={[{ label: "Mzansi Market" }]}
-          className="hidden lg:flex"
-        >
-          <Button asChild size="sm" className="gap-1">
-            <Link href="/post/create-listing">
-              Create a listing
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </PageHeader>
-
         {/* Compact mobile header */}
         <div className="flex items-center justify-between lg:hidden">
           <h1 className="font-display text-lg font-bold tracking-tight">Browse Listings</h1>
@@ -173,7 +159,21 @@ export default async function MzansiMarketPage() {
           </aside>
 
           {/* Main content area */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 space-y-5">
+            <PageHeader
+              title="Browse Listings"
+              description="Verified classifieds from South African sellers, with filters for price, condition, and location."
+              breadcrumbs={[{ label: "Mzansi Market" }]}
+              className="hidden lg:block"
+            >
+              <Button asChild size="sm" className="gap-1">
+                <Link href="/post/create-listing">
+                  Create a listing
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </PageHeader>
+
             {/* Toolbar: location + sort + active chips */}
             <ListingGridHeader />
 

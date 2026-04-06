@@ -145,20 +145,6 @@ export default async function MzansiBusinessPage() {
 
       {/* ── Main Content ─────────────────────────────────── */}
       <div className="container-page py-8 space-y-6">
-        <PageHeader
-          title="Mzansi Business"
-          description="Browse verified South African businesses, build visibility for your brand, and help customers discover trusted services."
-          breadcrumbs={[{ label: "Mzansi Business" }]}
-          className="hidden lg:flex"
-        >
-          <Button asChild size="sm" className="gap-2">
-            <Link href="/post/create-business">
-              List Your Business
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </PageHeader>
-
         {/* Compact mobile header */}
         <div className="flex items-center justify-between lg:hidden">
           <h1 className="font-display text-lg font-bold tracking-tight">Mzansi Business</h1>
@@ -192,6 +178,20 @@ export default async function MzansiBusinessPage() {
           </aside>
 
           <section className="min-w-0 flex-1 space-y-6">
+            <PageHeader
+              title="Mzansi Business"
+              description="Browse verified South African businesses, build visibility for your brand, and help customers discover trusted services."
+              breadcrumbs={[{ label: "Mzansi Business" }]}
+              className="hidden lg:block"
+            >
+              <Button asChild size="sm" className="gap-2">
+                <Link href="/post/create-business">
+                  List Your Business
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </PageHeader>
+
             <Suspense fallback={<ListingGridSkeleton count={6} />}>
               <MzansiBusinessGrid />
             </Suspense>
