@@ -4,7 +4,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
+import {
+  VideoCardPlayer,
+  isVideoUrl,
+  type MediaFitStrategy,
+} from "@/components/ui/video-card-player";
 import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
