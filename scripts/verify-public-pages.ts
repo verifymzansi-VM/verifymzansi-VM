@@ -10,6 +10,7 @@ if (!baseUrl) {
 }
 
 const requireRealTurnstile = process.env.PUBLIC_VERIFY_REQUIRE_TURNSTILE !== "0";
+const allowCloudflareChallenge = process.env.PUBLIC_VERIFY_ALLOW_CLOUDFLARE_CHALLENGE === "1";
 const turnstileTimeoutMs = Number(process.env.PUBLIC_VERIFY_TURNSTILE_TIMEOUT_MS || 30_000);
 const artifactsDir = process.env.PUBLIC_VERIFY_ARTIFACTS_DIR || "test-results/public-verify";
 
@@ -178,6 +179,20 @@ async function openTarget(target: Target) {
   return { browser, context };
 }
 
+async function isCloudflareChallenge(page: Page): Promise<boolean> {
+  const title = (await page.title()).toLowerCase();
+  if (title.includes("just a moment")) {
+    return true;
+  }
+
+  const bodyText = (await page.locator("body").innerText()).toLowerCase();
+  return (
+    bodyText.includes("just a moment") ||
+    bodyText.includes("checking your browser") ||
+    bodyText.includes("challenges.cloudflare.com")
+  );
+}
+
 async function verifyTarget(target: Target) {
   const { browser, context } = await openTarget(target);
   const page = await context.newPage();
@@ -190,6 +205,14 @@ async function verifyTarget(target: Target) {
     });
 
     if (!response || response.status() >= 400) {
+      const status = response?.status() ?? 0;
+      if (allowCloudflareChallenge && status === 403 && (await isCloudflareChallenge(page))) {
+        report(
+          `[WARN] ${target.name}: received Cloudflare challenge (HTTP 403). Skipping strict page assertions for this target.`
+        );
+        return;
+      }
+
       throw new Error(
         `Unexpected status for ${target.path}: ${response?.status() ?? "no response"}`
       );

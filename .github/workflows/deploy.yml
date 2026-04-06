@@ -196,6 +196,7 @@ jobs:
         env:
           PUBLIC_VERIFY_BASE_URL: ${{ secrets.APP_URL }}
           PUBLIC_VERIFY_REQUIRE_TURNSTILE: "1"
+          PUBLIC_VERIFY_ALLOW_CLOUDFLARE_CHALLENGE: "1"
         run: pnpm run test:public-verify
 
       - name: Upload safety gate artifacts (if present)
