@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { chromium, devices, type Page } from "playwright";
+import { chromium, devices, type Page, type Response as PlaywrightResponse } from "playwright";
 
 const baseUrl =
   process.env.PUBLIC_VERIFY_BASE_URL || process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL;
@@ -179,18 +179,40 @@ async function openTarget(target: Target) {
   return { browser, context };
 }
 
-async function isCloudflareChallenge(page: Page): Promise<boolean> {
+async function isCloudflareChallenge(
+  page: Page,
+  response?: PlaywrightResponse | null
+): Promise<boolean> {
+  const currentUrl = page.url().toLowerCase();
+  if (currentUrl.includes("/cdn-cgi/challenge") || currentUrl.includes("challenge-platform")) {
+    return true;
+  }
+
+  const cfMitigated = response?.headers()["cf-mitigated"]?.toLowerCase();
+  if (cfMitigated === "challenge") {
+    return true;
+  }
+
+  const serverHeader = response?.headers()["server"]?.toLowerCase();
+  const isCloudflareEdge = typeof serverHeader === "string" && serverHeader.includes("cloudflare");
+
   const title = (await page.title()).toLowerCase();
   if (title.includes("just a moment")) {
     return true;
   }
 
   const bodyText = (await page.locator("body").innerText()).toLowerCase();
-  return (
+  const hasChallengeCopy =
     bodyText.includes("just a moment") ||
     bodyText.includes("checking your browser") ||
-    bodyText.includes("challenges.cloudflare.com")
-  );
+    bodyText.includes("challenges.cloudflare.com") ||
+    bodyText.includes("ddos protection by cloudflare");
+
+  if (hasChallengeCopy) {
+    return true;
+  }
+
+  return isCloudflareEdge && response?.status() === 403;
 }
 
 async function verifyTarget(target: Target) {
@@ -206,7 +228,11 @@ async function verifyTarget(target: Target) {
 
     if (!response || response.status() >= 400) {
       const status = response?.status() ?? 0;
-      if (allowCloudflareChallenge && status === 403 && (await isCloudflareChallenge(page))) {
+      if (
+        allowCloudflareChallenge &&
+        status === 403 &&
+        (await isCloudflareChallenge(page, response))
+      ) {
         report(
           `[WARN] ${target.name}: received Cloudflare challenge (HTTP 403). Skipping strict page assertions for this target.`
         );
