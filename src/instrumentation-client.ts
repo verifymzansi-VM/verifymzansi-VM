@@ -3,6 +3,9 @@ import * as Sentry from "@sentry/nextjs";
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
+  // Use package version instead of git SHA to avoid leaking commit hashes
+  release: `verifymzansi@${process.env.npm_package_version || "1.0.0"}`,
+
   // Only enable when DSN is configured
   enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
 

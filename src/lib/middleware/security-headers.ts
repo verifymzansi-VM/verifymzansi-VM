@@ -27,6 +27,7 @@ export function buildCsp(
     ...(supabaseOrigin ? [supabaseOrigin] : []),
     "https://*.ingest.us.sentry.io",
     "https://challenges.cloudflare.com",
+    "https://static.cloudflareinsights.com",
     "https://*.r2.cloudflarestorage.com",
   ];
 
@@ -35,9 +36,15 @@ export function buildCsp(
   }
 
   const connectSrc = `connect-src ${connectSrcValues.join(" ")}`;
+  // NOTE: 'strict-dynamic' is intentionally omitted. Cloudflare's edge
+  // auto-injects scripts (Web Analytics beacon, Bot Management challenge-
+  // platform) that cannot receive a nonce. With 'strict-dynamic' those
+  // scripts are blocked because URL allowlists are ignored. Using nonce +
+  // explicit URL allowlists gives strong XSS protection while remaining
+  // compatible with Cloudflare's infrastructure.
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com`
-    : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com";
+    ? `script-src 'self' 'nonce-${nonce}' https://challenges.cloudflare.com https://static.cloudflareinsights.com`
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com";
   const styleSrc = nonce ? `style-src 'self' 'nonce-${nonce}'` : "style-src 'self' 'unsafe-inline'";
   const directives = [
     "default-src 'self'",

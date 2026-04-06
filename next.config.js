@@ -145,6 +145,12 @@ module.exports = withSentryConfig(nextConfig, {
   // Suppress source map upload warnings when SENTRY_AUTH_TOKEN is not set
   silent: !process.env.SENTRY_AUTH_TOKEN,
 
+  // Use package version instead of git commit SHA to avoid leaking
+  // internal build info in the <meta name="baggage"> tag.
+  release: {
+    name: `verifymzansi@${require("./package.json").version}`,
+  },
+
   // Upload source maps for better stack traces
   widenClientFileUpload: true,
 

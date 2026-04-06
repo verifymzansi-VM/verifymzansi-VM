@@ -83,9 +83,12 @@ describe("buildCsp", () => {
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
   });
 
-  it("uses nonce-based strict-dynamic scripts when nonce provided", () => {
+  it("uses nonce-based scripts with explicit URL allowlists when nonce provided", () => {
     const csp = buildCsp("abc123");
-    expect(csp).toContain("script-src 'self' 'nonce-abc123' 'strict-dynamic'");
+    expect(csp).toContain(
+      "script-src 'self' 'nonce-abc123' https://challenges.cloudflare.com https://static.cloudflareinsights.com"
+    );
+    expect(csp).not.toContain("'strict-dynamic'");
     expect(csp).toContain("style-src 'self' 'nonce-abc123'");
     expect(csp).toContain("style-src-attr 'unsafe-inline'");
   });
