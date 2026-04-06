@@ -1,6 +1,6 @@
 /// <reference types="vitest/globals" />
 import "@testing-library/jest-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProfilePage from "./page";
 
@@ -8,6 +8,7 @@ const mockPush = vi.fn();
 const mockRefresh = vi.fn();
 const mockGetUser = vi.fn();
 const mockSignOut = vi.fn();
+const mockSignInWithPassword = vi.fn();
 const mockFrom = vi.fn();
 
 vi.mock("next/navigation", () => ({
@@ -31,6 +32,7 @@ vi.mock("@/lib/supabase/client", () => ({
     auth: {
       getUser: mockGetUser,
       signOut: mockSignOut,
+      signInWithPassword: mockSignInWithPassword,
     },
     from: mockFrom,
   }),
@@ -39,6 +41,7 @@ vi.mock("@/lib/supabase/client", () => ({
 describe("ProfilePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSignInWithPassword.mockResolvedValue({ error: null });
 
     mockGetUser.mockResolvedValue({
       data: { user: { id: "user-1", email: "user@example.com" } },
@@ -165,5 +168,31 @@ describe("ProfilePage", () => {
 
     expect(screen.queryByText("Legal first name")).not.toBeInTheDocument();
     expect(screen.queryByText("Legal surname")).not.toBeInTheDocument();
+  });
+
+  it("requires DELETE text and current password before enabling delete continue", async () => {
+    window.location.hash = "#account";
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "My Profile" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
+
+    const continueButton = screen.getByRole("button", { name: /^Continue$/i });
+    expect(continueButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
+      target: { value: "DELETE" },
+    });
+    expect(continueButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Current password"), {
+      target: { value: "MyPassword123!" },
+    });
+
+    expect(continueButton).toBeEnabled();
+    window.location.hash = "";
   });
 });

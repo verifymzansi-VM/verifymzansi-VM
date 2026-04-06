@@ -95,12 +95,6 @@ export function Footer() {
               >
                 Terms of Service
               </Link>
-              <Link
-                href="/dsar"
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Data Access Request (POPIA)
-              </Link>
             </nav>
           </div>
 

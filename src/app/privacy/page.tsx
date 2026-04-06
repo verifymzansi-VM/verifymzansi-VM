@@ -1,4 +1,4 @@
-import { Mail, ArrowRight } from "lucide-react";
+import { Mail } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import Link from "next/link";
@@ -111,19 +111,11 @@ export default function PrivacyPolicyPage() {
                 </h2>
                 <div className="pl-6 space-y-2">
                   <p className="text-sm text-muted-foreground leading-snug">
-                    To exercise your rights under POPIA, submit an access request or contact our
-                    Information Officer.
+                    To exercise your rights under POPIA, contact our Information Officer first. If
+                    needed, you can continue with the signed-in data rights form.
                   </p>
 
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <Link
-                      href="/dsar"
-                      className="group flex items-center gap-2 px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-sm font-medium w-fit border text-foreground"
-                    >
-                      Submit Data Access Request
-                      <ArrowRight className="h-4 w-4 text-foreground/70 group-hover:translate-x-1 transition-transform" />
-                    </Link>
-
                     <a
                       href="mailto:privacy@verifymzansi.com"
                       className="group flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 text-brand-green transition-colors text-sm font-medium w-fit border border-brand-green/20"
@@ -131,6 +123,13 @@ export default function PrivacyPolicyPage() {
                       <Mail className="h-4 w-4" />
                       privacy@verifymzansi.com
                     </a>
+
+                    <Link
+                      href="/dsar"
+                      className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground w-fit self-center sm:self-auto"
+                    >
+                      Open signed-in data rights form
+                    </Link>
                   </div>
                 </div>
               </section>

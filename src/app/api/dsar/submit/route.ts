@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { logAuditEvent } from "@/lib/services/audit";
 import { sendDsarSubmissionEmail } from "@/lib/services/email";
 import { dsarRequestSchema } from "@/lib/validations/verification";
@@ -21,13 +22,22 @@ const dsarSubmitSchema = dsarRequestSchema.extend({
  * POST /api/dsar/submit
  *
  * Submit a Data Subject Access Request (POPIA Section 23).
- * Accepts requests from both authenticated and anonymous users.
+ * Requires an authenticated account session.
  */
 export async function POST(request: NextRequest) {
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) {
       return originBlock;
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user || user.is_anonymous) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const clientIp = getClientIp(request) || "unknown";
@@ -120,8 +130,8 @@ export async function POST(request: NextRequest) {
     // ── Audit log (best-effort) ────────────────────────────────
     try {
       await logAuditEvent({
-        actorId: "00000000-0000-0000-0000-000000000000",
-        actorRole: "system",
+        actorId: user.id,
+        actorRole: "member",
         action: "dsar_requested",
         targetType: "dsar_case",
         targetId: dsarRecord.id,

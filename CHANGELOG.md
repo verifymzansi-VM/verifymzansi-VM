@@ -2,6 +2,27 @@
 
 ## Launch Hardening Continuation (2026-04-04)
 
+- **DSAR access tightening:** `/dsar` now requires authenticated sessions and
+  `POST /api/dsar/submit` returns `401` for unauthenticated submissions,
+  reducing fraudulent request surface.
+- **Account deletion UX hardening:** Removed direct profile `Delete account`
+  navigation to `/dsar`; deletion now starts from an in-page confirmation flow
+  and manual privacy-officer request path.
+- **DSAR discoverability reduction:** Removed DSAR link from global footer and
+  excluded `/dsar` from sitemap generation while preserving Privacy Policy
+  access to data-rights contact flow.
+- **Privacy CTA de-emphasis:** Updated Privacy Policy data-rights section to
+  prioritize direct Information Officer contact and demote the DSAR form link to
+  a secondary signed-in option.
+- **Crawler exposure reduction:** Added `/dsar` to `robots` disallow rules to
+  reduce search-engine discovery of the route.
+- **Deletion confirmation clarity:** Updated profile delete confirmation dialog
+  wording to state manual review/verification expectations and close the dialog
+  before opening the Information Officer email draft flow.
+- **Deletion re-auth hardening:** Profile delete request flow now requires both
+  typed `DELETE` and current-password verification before the request email
+  draft can be opened.
+
 - **Launch validation tightened:** `KYC_WEBHOOK_SECRET` is now required in
   production launch validation and production secret placeholder checks to
   prevent unsigned KYC webhook operation at deploy time.

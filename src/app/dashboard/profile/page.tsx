@@ -27,6 +27,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
@@ -75,6 +83,10 @@ export default function ProfilePage() {
   const [newEmail, setNewEmail] = useState("");
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [isChangingEmail, setIsChangingEmail] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteCurrentPassword, setDeleteCurrentPassword] = useState("");
+  const [isDeleteVerifying, setIsDeleteVerifying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const router = useRouter();
@@ -407,6 +419,68 @@ export default function ProfilePage() {
     await supabase.auth.signOut();
     router.push("/");
     router.refresh();
+  }
+
+  function handleDeleteDialogOpenChange(open: boolean) {
+    setIsDeleteDialogOpen(open);
+    if (!open) {
+      setDeleteConfirmation("");
+      setDeleteCurrentPassword("");
+      setIsDeleteVerifying(false);
+    }
+  }
+
+  async function handleStartDeleteRequest() {
+    if (!email) {
+      toast({
+        title: "Email unavailable",
+        description: "Please reload the page and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!deleteCurrentPassword) {
+      toast({
+        title: "Current password required",
+        description: "Enter your current password to confirm this request.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDeleteVerifying(true);
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: deleteCurrentPassword,
+    });
+
+    if (signInError) {
+      setIsDeleteVerifying(false);
+      toast({
+        title: "Password verification failed",
+        description: "Please enter your current password to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    handleDeleteDialogOpenChange(false);
+    const subject = encodeURIComponent("Account deletion request");
+    const body = encodeURIComponent(
+      [
+        "Hello Information Officer,",
+        "",
+        "I want to request permanent deletion of my account.",
+        `Account email: ${email || "(enter your account email)"}`,
+        "",
+        "I understand this request may require identity verification and review.",
+        "Please advise next steps.",
+      ].join("\n")
+    );
+    setIsDeleteVerifying(false);
+    window.location.href = `mailto:privacy@verifymzansi.com?subject=${subject}&body=${body}`;
   }
 
   function getVerificationBadge() {
@@ -943,13 +1017,77 @@ export default function ProfilePage() {
                     Permanently delete your account and all personal data. This cannot be undone.
                   </p>
                 </div>
-                <Button variant="destructive" size="sm" asChild className="gap-1.5">
-                  <Link href="/dsar">
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </Link>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setIsDeleteDialogOpen(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
                 </Button>
               </div>
+
+              <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Confirm account deletion request</DialogTitle>
+                    <DialogDescription>
+                      For security, account deletion requests are handled manually. This action will
+                      not open the data access request page, and verification may be required.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Type <strong>DELETE</strong> to continue.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      We will draft an email to the Information Officer to start your request.
+                    </p>
+                    <div className="space-y-1">
+                      <Label htmlFor="deleteCurrentPassword">Current password</Label>
+                      <Input
+                        id="deleteCurrentPassword"
+                        type="password"
+                        autoComplete="current-password"
+                        value={deleteCurrentPassword}
+                        onChange={(e) => setDeleteCurrentPassword(e.target.value)}
+                        placeholder="Enter current password"
+                      />
+                    </div>
+                    <Input
+                      value={deleteConfirmation}
+                      onChange={(e) => setDeleteConfirmation(e.target.value)}
+                      placeholder="Type DELETE"
+                      aria-label="Type DELETE to confirm"
+                    />
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => handleDeleteDialogOpenChange(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleStartDeleteRequest}
+                      disabled={
+                        isDeleteVerifying ||
+                        deleteConfirmation.trim().toUpperCase() !== "DELETE" ||
+                        !deleteCurrentPassword
+                      }
+                      className="gap-1.5"
+                    >
+                      {isDeleteVerifying ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                      {isDeleteVerifying ? "Verifying..." : "Continue"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
         </TabsContent>

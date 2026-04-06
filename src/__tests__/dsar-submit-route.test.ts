@@ -9,7 +9,13 @@ const { mockCreateAdminClient, mockLogAuditEvent, mockSendDsarSubmissionEmail } 
   })
 );
 
+const { mockCreateClient, mockGetUser } = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockGetUser: vi.fn(),
+}));
+
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/services/email", () => ({
   sendDsarSubmissionEmail: mockSendDsarSubmissionEmail,
@@ -35,6 +41,32 @@ describe("POST /api/dsar/submit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.TURNSTILE_SECRET_KEY;
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-123", is_anonymous: false } },
+    });
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: mockGetUser,
+      },
+    });
+  });
+
+  it("returns unauthorized when no authenticated user exists", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const res = await POST(
+      createRequest({
+        type: "access",
+        name: "Nomsa Dlamini",
+        email: "nomsa@example.com",
+        idNumber: "8001015009087",
+        details: "Please send me a copy of my stored account data.",
+        turnstileToken: "tok",
+      })
+    );
+
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({ error: "Unauthorized" });
   });
 
   it("rejects invalid request bodies", async () => {
@@ -75,8 +107,8 @@ describe("POST /api/dsar/submit", () => {
     });
     expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        actorId: "00000000-0000-0000-0000-000000000000",
-        actorRole: "system",
+        actorId: "user-123",
+        actorRole: "member",
         action: "dsar_requested",
       })
     );
