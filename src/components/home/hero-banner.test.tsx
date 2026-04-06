@@ -144,7 +144,7 @@ describe("HeroBanner", () => {
     expect(screen.getByTestId("hero-media")).toHaveAttribute("data-playback-control", "true");
   });
 
-  it("renders the home hero logo tag fallback when no slide logo is provided", () => {
+  it("renders no logo overlay when no slide logo is provided", () => {
     render(
       <HeroBanner
         latestListings={[
@@ -159,7 +159,6 @@ describe("HeroBanner", () => {
       />
     );
 
-    expect(screen.getByTestId("showroom-logo-tag")).toBeInTheDocument();
-    expect(screen.getByAltText("VerifyMzansi logo")).toBeInTheDocument();
+    expect(screen.queryByTestId("showroom-logo-tag")).not.toBeInTheDocument();
   });
 });

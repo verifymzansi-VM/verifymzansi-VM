@@ -60,7 +60,7 @@ function getForegroundMediaClassName(
 ) {
   return cn(
     usesSmartFit ? "object-contain" : baseFitClassName,
-    usesSmartFit && "drop-shadow-[0_20px_50px_rgba(15,23,42,0.4)]",
+    usesSmartFit && "shadow-[0_0_24px_rgba(15,23,42,0.22)]",
     mediaClassName
   );
 }

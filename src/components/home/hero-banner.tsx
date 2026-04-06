@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { MapPin, Building2, TreePalm, ArrowRight, ShieldCheck } from "lucide-react";
-import { BrandLogo } from "@/components/shared/brand-logo";
 import { buttonVariants } from "@/components/ui/button";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { cn } from "@/lib/utils";
@@ -310,7 +309,7 @@ export function HeroBanner({
             </>
           )}
 
-          {activeSlide ? (
+          {activeSlide && activeLogoUrl ? (
             <div
               className={cn(
                 "pointer-events-none absolute bottom-3 right-3 z-20 transition-opacity duration-500 sm:bottom-5 sm:right-5 lg:bottom-6 lg:right-6",
@@ -318,25 +317,16 @@ export function HeroBanner({
               )}
             >
               <div className="flex items-center" data-testid="showroom-logo-tag">
-                {activeLogoUrl ? (
-                  <div className="relative h-8 w-[72px] sm:h-9 sm:w-[88px] md:h-12 md:w-[120px] lg:h-14 lg:w-[144px] xl:h-16 xl:w-[168px]">
-                    <Image
-                      src={activeLogoUrl}
-                      alt={`${activeSlide.title} logo tag`}
-                      fill
-                      sizes="(max-width: 640px) 72px, (max-width: 768px) 88px, (max-width: 1024px) 120px, (max-width: 1280px) 144px, 168px"
-                      className="object-contain"
-                      unoptimized
-                    />
-                  </div>
-                ) : (
-                  <BrandLogo
-                    size="sm"
-                    tone="inverse"
-                    className="w-[92px] sm:w-[108px] md:w-[140px] lg:w-[172px] xl:w-[200px]"
-                    imageClassName="drop-shadow-none"
+                <div className="relative h-8 w-[72px] sm:h-9 sm:w-[88px] md:h-12 md:w-[120px] lg:h-14 lg:w-[144px] xl:h-16 xl:w-[168px]">
+                  <Image
+                    src={activeLogoUrl}
+                    alt={`${activeSlide.title} logo tag`}
+                    fill
+                    sizes="(max-width: 640px) 72px, (max-width: 768px) 88px, (max-width: 1024px) 120px, (max-width: 1280px) 144px, 168px"
+                    className="object-contain"
+                    unoptimized
                   />
-                )}
+                </div>
               </div>
             </div>
           ) : null}

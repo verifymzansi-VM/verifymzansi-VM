@@ -201,6 +201,9 @@ describe("VideoCardPlayer", () => {
 
     expect(screen.getByAltText("Photo")).toHaveAttribute("data-media-fit", "smart");
     expect(screen.getByAltText("Photo")).toHaveClass("object-contain");
+    expect(screen.getByAltText("Photo").className).not.toContain(
+      "drop-shadow-[0_20px_50px_rgba(15,23,42,0.4)]"
+    );
   });
 
   it("applies smart-fit to video posters when the media would crop too aggressively", () => {
@@ -223,6 +226,9 @@ describe("VideoCardPlayer", () => {
 
     expect(screen.getByAltText("Clip")).toHaveAttribute("data-media-fit", "smart");
     expect(screen.getByAltText("Clip")).toHaveClass("object-contain");
+    expect(screen.getByAltText("Clip").className).not.toContain(
+      "drop-shadow-[0_20px_50px_rgba(15,23,42,0.4)]"
+    );
   });
 
   it("applies smart-fit to video elements after metadata establishes an extreme aspect ratio", () => {
@@ -243,6 +249,7 @@ describe("VideoCardPlayer", () => {
 
     expect(video).toHaveAttribute("data-media-fit", "smart");
     expect(video).toHaveClass("object-contain");
+    expect(video.className).not.toContain("drop-shadow-[0_20px_50px_rgba(15,23,42,0.4)]");
   });
 
   it("keeps the playback toggle accessible for reduced-motion users and starts paused", () => {

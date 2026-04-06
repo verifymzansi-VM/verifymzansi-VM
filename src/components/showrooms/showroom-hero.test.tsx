@@ -235,7 +235,7 @@ describe("ShowroomHero", () => {
     );
   });
 
-  it("falls back to the VerifyMzansi logo tag when a slide logo is missing", () => {
+  it("renders no logo overlay when a slide logo is missing", () => {
     render(
       <ShowroomHero
         slides={[
@@ -251,8 +251,7 @@ describe("ShowroomHero", () => {
       />
     );
 
-    expect(screen.getByTestId("showroom-logo-tag")).toBeInTheDocument();
-    expect(screen.getByAltText("VerifyMzansi logo")).toBeInTheDocument();
+    expect(screen.queryByTestId("showroom-logo-tag")).not.toBeInTheDocument();
   });
 
   it("uses shared slide indicators without desktop arrow buttons", async () => {

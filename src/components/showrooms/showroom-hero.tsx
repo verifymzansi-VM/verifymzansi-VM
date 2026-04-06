@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useState, useEffect, useCallback, useRef, useMemo, type TouchEvent } from "react";
 import Link from "next/link";
 import { MapPin, Building2, ArrowRight, ShieldCheck } from "lucide-react";
-import { BrandLogo } from "@/components/shared/brand-logo";
 import { buttonVariants } from "@/components/ui/button";
 import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { cn } from "@/lib/utils";
@@ -195,14 +194,14 @@ export function ShowroomHero({
             />
           </div>
 
-          <div
-            className={cn(
-              "pointer-events-none absolute bottom-3 right-3 z-20 transition-opacity duration-500 sm:bottom-5 sm:right-5 lg:bottom-6 lg:right-6",
-              fading ? "opacity-0" : "opacity-100"
-            )}
-          >
-            <div className="flex items-center" data-testid="showroom-logo-tag">
-              {activeLogoUrl ? (
+          {activeLogoUrl ? (
+            <div
+              className={cn(
+                "pointer-events-none absolute bottom-3 right-3 z-20 transition-opacity duration-500 sm:bottom-5 sm:right-5 lg:bottom-6 lg:right-6",
+                fading ? "opacity-0" : "opacity-100"
+              )}
+            >
+              <div className="flex items-center" data-testid="showroom-logo-tag">
                 <div className="relative h-8 w-[72px] sm:h-9 sm:w-[88px] md:h-12 md:w-[120px] lg:h-14 lg:w-[144px] xl:h-16 xl:w-[168px]">
                   <Image
                     src={activeLogoUrl}
@@ -213,16 +212,9 @@ export function ShowroomHero({
                     unoptimized
                   />
                 </div>
-              ) : (
-                <BrandLogo
-                  size="sm"
-                  tone="inverse"
-                  className="w-[92px] sm:w-[108px] md:w-[140px] lg:w-[172px] xl:w-[200px]"
-                  imageClassName="drop-shadow-none"
-                />
-              )}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {slides.length > 1 ? (
             <div className="absolute bottom-2.5 left-0 right-0 z-20 flex items-center justify-center sm:bottom-5">
