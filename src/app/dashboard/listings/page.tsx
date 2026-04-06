@@ -297,7 +297,7 @@ export default async function ListingsPage({
         description="Manage listings, businesses, and promotions from one place."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "My Posts" }]}
       >
-        <Button asChild variant="trust-verified" size="sm" className="gap-2">
+        <Button asChild variant="trust-verified" size="sm" className="h-11 gap-2">
           <Link href="/post/create">
             <Plus className="h-4 w-4" />
             Create Post
@@ -393,7 +393,7 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-11 w-11"
                   aria-label={`Edit ${listing.title}`}
                 >
                   <Link href={getEditHref(listing.area, listing.id)}>
@@ -445,7 +445,7 @@ function ListingList({
         <Package className="h-8 w-8 opacity-30" />
         <p>{emptyStateLabel}</p>
         <Link href="/post/create">
-          <Button size="sm" variant="outline" className="mt-1">
+          <Button size="sm" variant="outline" className="mt-1 h-11">
             <Plus className="h-4 w-4 mr-1" /> {emptyStateCta}
           </Button>
         </Link>
@@ -526,7 +526,7 @@ function ListingList({
                     asChild
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9"
+                    className="h-11 w-11"
                     aria-label={`Promote ${listing.title}`}
                   >
                     <Link href={`/post/create-promotion?business_id=${listing.id}`}>
@@ -534,7 +534,7 @@ function ListingList({
                     </Link>
                   </Button>
                 )}
-              <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Button asChild variant="ghost" size="sm" className="h-11 gap-1.5 px-3">
                 <Link
                   href={getViewHref(listing.area, listing.id)}
                   target="_blank"
@@ -544,7 +544,7 @@ function ListingList({
                   View
                 </Link>
               </Button>
-              <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Button asChild variant="ghost" size="sm" className="h-11 gap-1.5 px-3">
                 <Link href={getEditHref(listing.area, listing.id)}>
                   <Pencil className="h-3.5 w-3.5" />
                   Edit

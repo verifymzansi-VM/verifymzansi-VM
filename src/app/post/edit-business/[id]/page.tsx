@@ -68,7 +68,7 @@ import {
 } from "@/components/ui/operating-hours-input";
 
 const selectClass =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow";
+  "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
 
 const PAYMENT_METHOD_OPTIONS = [
   { value: "cash", label: "Cash" },
@@ -742,7 +742,13 @@ export default function EditBusinessPage() {
                       }
                     }}
                   />
-                  <Button type="button" variant="outline" size="sm" onClick={addService}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-11 w-11"
+                    onClick={addService}
+                  >
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
@@ -1568,7 +1574,7 @@ export default function EditBusinessPage() {
 
               {/* Actions */}
               <div className="flex justify-between pt-4">
-                <Button variant="outline" asChild className="gap-1">
+                <Button variant="outline" asChild className="h-11 gap-1">
                   <Link href="/dashboard/businesses">
                     <ArrowLeft className="h-4 w-4" />
                     Cancel
@@ -1579,7 +1585,7 @@ export default function EditBusinessPage() {
                   disabled={
                     isSubmitting || businessName.length < 2 || !category || !province || !city
                   }
-                  className="gap-1"
+                  className="h-11 gap-1"
                 >
                   {isSubmitting ? (
                     <>

@@ -136,11 +136,7 @@ export function TurnstileWidget({
   const unavailableReportedRef = useRef(false);
   const bypassReportedRef = useRef(false);
   const errorCountRef = useRef(0);
-  const [prevRetryToken, setPrevRetryToken] = useState(retryToken);
-  const [unavailableState, setUnavailableState] = useState<{
-    active: boolean;
-    retryToken: number | undefined;
-  }>({ active: false, retryToken: undefined });
+  const [unavailableRetryToken, setUnavailableRetryToken] = useState<number | undefined>(undefined);
   const onSuccessRef = useLatestRef(onSuccess);
   const onExpireRef = useLatestRef(onExpire);
   const onErrorRef = useLatestRef(onError);
@@ -158,15 +154,11 @@ export function TurnstileWidget({
       nodeEnv: process.env.NODE_ENV,
     });
   const isBypassMode = mode === "bypass" || shouldBypassConfiguredTurnstile;
-  const terminalUnavailable = unavailableState.active && unavailableState.retryToken === retryToken;
+  const terminalUnavailable =
+    unavailableRetryToken !== undefined && unavailableRetryToken === retryToken;
   const isConfigured =
     mode === "configured" && !shouldBypassConfiguredTurnstile && !terminalUnavailable;
   const isUnavailable = mode === "unavailable" || terminalUnavailable;
-
-  if (prevRetryToken !== retryToken) {
-    setPrevRetryToken(retryToken);
-    setUnavailableState({ active: false, retryToken: undefined });
-  }
 
   useEffect(() => {
     unavailableReportedRef.current = false;
@@ -206,7 +198,7 @@ export function TurnstileWidget({
   const markUnavailable = useCallback(
     (message = TURNSTILE_UNAVAILABLE_MESSAGE) => {
       cleanupWidget();
-      setUnavailableState({ active: true, retryToken });
+      setUnavailableRetryToken(retryToken);
 
       if (!unavailableReportedRef.current) {
         unavailableReportedRef.current = true;
@@ -305,12 +297,12 @@ export function TurnstileWidget({
   ]);
 
   useEffect(() => {
-    if (!shouldBypassConfiguredTurnstile || bypassReportedRef.current) return;
+    if (!isBypassMode || bypassReportedRef.current) return;
 
     cleanupWidget();
     bypassReportedRef.current = true;
     onSuccessRef.current("dev-turnstile-bypass");
-  }, [shouldBypassConfiguredTurnstile, cleanupWidget, onSuccessRef]);
+  }, [isBypassMode, cleanupWidget, onSuccessRef]);
 
   useEffect(() => {
     if (!isConfigured) return;
@@ -321,13 +313,6 @@ export function TurnstileWidget({
       cleanupWidget();
     };
   }, [cleanupWidget, isConfigured, renderWidget, retryToken]);
-
-  useEffect(() => {
-    if (mode === "bypass" && !bypassReportedRef.current) {
-      bypassReportedRef.current = true;
-      onSuccessRef.current("dev-turnstile-bypass");
-    }
-  }, [mode, onSuccessRef]);
 
   useEffect(() => {
     if (mode === "unavailable") {

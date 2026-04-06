@@ -73,6 +73,22 @@ test.describe("Dashboard verification state", () => {
         "/dashboard/leads",
         { timeout: 15_000 }
       );
+
+      await page.goto("/dashboard/profile", { waitUntil: "networkidle" });
+      const profileTab = page.getByRole("tab", { name: /profile/i }).first();
+      await expect(profileTab).toBeVisible();
+      const profileTabBox = await profileTab.boundingBox();
+      expect(profileTabBox).not.toBeNull();
+      expect(profileTabBox!.height).toBeGreaterThanOrEqual(40);
+
+      await page.goto("/dashboard", { waitUntil: "networkidle" });
+
+      const quickLink = page.getByRole("link", { name: /my posts/i }).first();
+      await expect(quickLink).toBeVisible();
+      const quickLinkBox = await quickLink.boundingBox();
+      expect(quickLinkBox).not.toBeNull();
+      expect(quickLinkBox!.height).toBeGreaterThanOrEqual(44);
+
       await expect(page.getByText("Install App")).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Install" })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "How To Install" })).toHaveCount(0);

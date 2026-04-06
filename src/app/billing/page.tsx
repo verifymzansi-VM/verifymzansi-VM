@@ -46,7 +46,7 @@ export default function BillingPage() {
               <Button
                 asChild
                 size="sm"
-                className="bg-brand-green hover:bg-brand-green/90 text-white font-semibold shrink-0"
+                className="h-11 bg-brand-green text-white font-semibold shrink-0 hover:bg-brand-green/90"
               >
                 <Link href="/post/create">
                   Choose Your Free Post <ArrowRight className="ml-1 h-3 w-3" />
@@ -57,22 +57,22 @@ export default function BillingPage() {
 
           <Tabs defaultValue="market" className="max-w-5xl mx-auto">
             <div className="flex justify-center mb-3">
-              <TabsList className="grid w-full max-w-3xl grid-cols-3 p-1 h-9 bg-muted/50 rounded-full">
+              <TabsList className="grid w-full max-w-3xl grid-cols-3 p-1 h-12 bg-muted/50 rounded-full">
                 <TabsTrigger
                   value="market"
-                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
+                  className="h-11 rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
                 >
                   <span className="hidden sm:inline">Mzansi </span>Market
                 </TabsTrigger>
                 <TabsTrigger
                   value="business"
-                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
+                  className="h-11 rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
                 >
                   <span className="hidden sm:inline">Mzansi </span>Business
                 </TabsTrigger>
                 <TabsTrigger
                   value="promotions"
-                  className="rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
+                  className="h-11 rounded-full data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs sm:text-sm"
                 >
                   <span className="hidden sm:inline">Tourism & </span>Events
                 </TabsTrigger>

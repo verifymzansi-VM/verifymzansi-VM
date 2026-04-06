@@ -127,7 +127,7 @@ export function PromotionFilterDrawer({
         <SheetTrigger asChild>
           <button
             type="button"
-            className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-9 w-9 items-center justify-center gap-1 rounded-full bg-amber-400 text-foreground shadow-lg transition-colors hover:bg-amber-500 active:bg-amber-600 md:hidden"
+            className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-11 w-11 items-center justify-center gap-1 rounded-full bg-amber-400 text-foreground shadow-lg transition-colors hover:bg-amber-500 active:bg-amber-600 md:hidden"
             aria-label="Open promotion filters"
           >
             <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
@@ -141,7 +141,7 @@ export function PromotionFilterDrawer({
       ) : (
         <button
           type="button"
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 text-foreground shadow-lg opacity-50 md:hidden"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full bg-amber-400 text-foreground shadow-lg opacity-50 md:hidden"
           aria-label="Open promotion filters"
           disabled
         >

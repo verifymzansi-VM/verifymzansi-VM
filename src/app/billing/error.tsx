@@ -33,11 +33,17 @@ export default function BillingError({
           <p className="text-xs text-muted-foreground">Error reference: {error.digest}</p>
         )}
       </div>
-      <div className="flex gap-3">
-        <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
+      <div className="flex w-full max-w-sm flex-col gap-3 sm:flex-row">
+        <Button
+          variant="outline"
+          className="h-11 w-full sm:w-auto"
+          onClick={() => (window.location.href = "/dashboard")}
+        >
           Back to Dashboard
         </Button>
-        <Button onClick={() => reset()}>Try again</Button>
+        <Button className="h-11 w-full sm:w-auto" onClick={() => reset()}>
+          Try again
+        </Button>
       </div>
     </div>
   );

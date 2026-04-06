@@ -41,6 +41,7 @@ export default function ForgotPasswordPage() {
 
   // Turnstile widget load timeout
   const turnstileState = getTurnstileClientState();
+  const canRetryUnavailableCaptcha = turnstileState.mode === "configured";
   const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;
 
   useEffect(() => {
@@ -202,7 +203,21 @@ export default function ForgotPasswordPage() {
         {errors.turnstileToken && !turnstileError && (
           <p className="inline-form-error">{errors.turnstileToken.message}</p>
         )}
-        {captchaUnavailable && <p className="inline-form-error">{TURNSTILE_UNAVAILABLE_MESSAGE}</p>}
+        {captchaUnavailable && (
+          <div className="flex items-center gap-2">
+            <p className="inline-form-error">{TURNSTILE_UNAVAILABLE_MESSAGE}</p>
+            {canRetryUnavailableCaptcha && (
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="inline-flex items-center gap-1 text-xs font-medium text-brand-green underline hover:text-brand-green/80"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Retry
+              </button>
+            )}
+          </div>
+        )}
         {turnstileError && (
           <div className="flex items-center gap-2">
             <p className="inline-form-error">Security check failed to load. Please try again.</p>

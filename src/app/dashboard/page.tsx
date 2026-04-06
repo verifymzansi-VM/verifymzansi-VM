@@ -278,7 +278,7 @@ export default async function DashboardPage() {
           ) : verStatus === "pending_review" ? (
             <Link
               href="/verification"
-              className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 hover:underline"
+              className="-mx-2 mt-1.5 inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-xs text-amber-600 dark:text-amber-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <ShieldCheck className="h-3.5 w-3.5" />
               Verification under review
@@ -287,7 +287,7 @@ export default async function DashboardPage() {
           ) : (
             <Link
               href="/verification"
-              className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
+              className="-mx-2 mt-1.5 inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <ShieldCheck className="h-3.5 w-3.5" />
               {stepsRemaining > 0
@@ -298,7 +298,7 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        <Button asChild size="sm" className="gap-1.5 flex-shrink-0">
+        <Button asChild size="sm" className="h-11 gap-1.5 flex-shrink-0">
           <Link href="/post/create">
             <Plus className="h-4 w-4" />
             <span className="hidden xs:inline">Create Post</span>

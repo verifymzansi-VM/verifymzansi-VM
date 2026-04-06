@@ -162,7 +162,7 @@ export default function DsarPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-2 mt-2"
+                    className="mt-2 h-11 gap-2"
                     onClick={() => (window.location.href = "/dashboard")}
                   >
                     <ArrowLeft className="h-4 w-4" /> Back to Dashboard
@@ -188,7 +188,7 @@ export default function DsarPage() {
                             key={rt.value}
                             type="button"
                             onClick={() => setRequestType(rt.value)}
-                            className={`rounded-lg border p-2 text-left transition-colors ${
+                            className={`min-h-11 rounded-lg border p-2 text-left transition-colors ${
                               requestType === rt.value
                                 ? "border-brand-green bg-brand-green-50 dark:bg-brand-green-950/30"
                                 : "border-muted hover:border-foreground/20"
@@ -322,7 +322,7 @@ export default function DsarPage() {
 
                     <Button
                       type="submit"
-                      className="w-full gap-2"
+                      className="h-11 w-full gap-2"
                       disabled={isSubmitting || !turnstileToken}
                     >
                       {isSubmitting ? (

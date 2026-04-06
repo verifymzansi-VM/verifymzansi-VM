@@ -340,12 +340,16 @@ export function HeroBanner({
                     key={i}
                     onClick={() => goTo(i)}
                     aria-label={`Go to slide ${i + 1}`}
-                    className={`rounded-full transition-all duration-300 ${
-                      i === current
-                        ? "w-5 h-1.5 sm:w-6 sm:h-2 bg-brand-green-400"
-                        : "w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white/50 hover:bg-white/90"
-                    }`}
-                  />
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full"
+                  >
+                    <span
+                      className={`rounded-full transition-all duration-300 ${
+                        i === current
+                          ? "h-1.5 w-5 bg-brand-green-400 sm:h-2 sm:w-6"
+                          : "h-1.5 w-1.5 bg-white/50 hover:bg-white/90 sm:h-2 sm:w-2"
+                      }`}
+                    />
+                  </button>
                 ))}
               </div>
             </div>

@@ -16,6 +16,21 @@ vi.mock("@/lib/turnstile-mode", () => ({
   shouldBypassTurnstileInNonProduction: mockShouldBypassTurnstileInNonProduction,
 }));
 
+vi.mock("@/hooks/use-hydrated", () => ({
+  useHydrated: () => true,
+}));
+
+vi.mock("@/lib/public-runtime-config", () => ({
+  getPublicRuntimeConfig: () => ({
+    appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com",
+    supabaseUrl: "",
+    supabaseAnonKey: "",
+    turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "",
+    cfImageResizing: false,
+    officialSocialLinks: {},
+  }),
+}));
+
 // Mock the Turnstile script loading
 vi.stubGlobal("turnstile", {
   render: mockTurnstileRender,

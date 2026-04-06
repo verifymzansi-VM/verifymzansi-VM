@@ -225,13 +225,17 @@ export function ShowroomHero({
                     type="button"
                     onClick={() => goTo(index)}
                     aria-label={`Go to slide ${index + 1}`}
-                    className={cn(
-                      "rounded-full transition-all duration-300",
-                      index === current
-                        ? "h-1.5 w-5 bg-brand-green-400 sm:h-2 sm:w-6"
-                        : "h-1.5 w-1.5 bg-white/50 hover:bg-white/90 sm:h-2 sm:w-2"
-                    )}
-                  ></button>
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full"
+                  >
+                    <span
+                      className={cn(
+                        "rounded-full transition-all duration-300",
+                        index === current
+                          ? "h-1.5 w-5 bg-brand-green-400 sm:h-2 sm:w-6"
+                          : "h-1.5 w-1.5 bg-white/50 hover:bg-white/90 sm:h-2 sm:w-2"
+                      )}
+                    />
+                  </button>
                 ))}
               </div>
             </div>

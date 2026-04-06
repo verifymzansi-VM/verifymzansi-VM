@@ -1597,7 +1597,7 @@ export default function VerificationPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-xs text-muted-foreground"
+                        className="h-11 text-sm text-muted-foreground sm:text-xs"
                         disabled={isLoading || isFinalizing}
                         onClick={() => {
                           setPhoneVerified(false);
@@ -1762,7 +1762,11 @@ export default function VerificationPage() {
                   )}
 
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setStep("phone")} className="gap-1">
+                    <Button
+                      variant="outline"
+                      onClick={() => setStep("phone")}
+                      className="h-11 gap-1"
+                    >
                       <ArrowLeft className="h-4 w-4" />
                       Back
                     </Button>
@@ -1770,7 +1774,7 @@ export default function VerificationPage() {
                       onClick={goToSelfieStep}
                       disabled={!isIdReady || isUploadingId || verificationSubmissionBlocked}
                       variant="trust-verified"
-                      className="gap-1"
+                      className="h-11 gap-1"
                     >
                       {isUploadingId ? (
                         <>
@@ -1859,7 +1863,11 @@ export default function VerificationPage() {
                   )}
 
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setStep("id_doc")} className="gap-1">
+                    <Button
+                      variant="outline"
+                      onClick={() => setStep("id_doc")}
+                      className="h-11 gap-1"
+                    >
                       <ArrowLeft className="h-4 w-4" />
                       Back
                     </Button>
@@ -1869,7 +1877,7 @@ export default function VerificationPage() {
                         !isSelfieReady || isUploadingSelfie || verificationSubmissionBlocked
                       }
                       variant="trust-verified"
-                      className="gap-1"
+                      className="h-11 gap-1"
                     >
                       {isUploadingSelfie ? (
                         <>
@@ -1954,7 +1962,7 @@ export default function VerificationPage() {
                           }
                           variant="default"
                           size="sm"
-                          className="gap-2"
+                          className="h-11 gap-2"
                         >
                           {manualSubmitting ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -2003,7 +2011,7 @@ export default function VerificationPage() {
                           <Button
                             onClick={handleRequestGps}
                             variant="outline"
-                            className="gap-2"
+                            className="h-11 gap-2"
                             size="sm"
                             disabled={verificationSubmissionBlocked}
                           >
@@ -2036,7 +2044,7 @@ export default function VerificationPage() {
                               }}
                               variant="ghost"
                               size="sm"
-                              className="gap-2 text-xs"
+                              className="h-11 gap-2 text-sm sm:text-xs"
                             >
                               <Navigation className="h-3.5 w-3.5" />
                               Try Again
@@ -2115,7 +2123,7 @@ export default function VerificationPage() {
                         variant="outline"
                         onClick={() => setStep("selfie")}
                         disabled={isFinalizing}
-                        className="gap-1"
+                        className="h-11 gap-1"
                       >
                         <ArrowLeft className="h-4 w-4" />
                         Back
@@ -2124,7 +2132,7 @@ export default function VerificationPage() {
                         onClick={handleFinalize}
                         disabled={!isLocationReady || isFinalizing || verificationSubmissionBlocked}
                         variant="trust-verified"
-                        className="gap-2"
+                        className="h-11 gap-2"
                       >
                         {isFinalizing ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -2255,7 +2263,7 @@ export default function VerificationPage() {
                       );
                     })}
                   </div>
-                  <Button variant="trust-verified" asChild className="gap-2">
+                  <Button variant="trust-verified" asChild className="h-11 gap-2">
                     <Link href={completionHref}>
                       {getCompletionCtaLabel(completionHref)}
                       <ArrowRight className="h-4 w-4" />

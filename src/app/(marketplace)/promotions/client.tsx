@@ -405,7 +405,7 @@ export function PromotionsExplorer() {
         description="Tourism destinations, accommodations, and events from verified South African businesses and members."
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Tourism & Events" }]}
       >
-        <Button asChild size="sm" className="gap-1">
+        <Button asChild size="sm" className="h-11 gap-1">
           <Link href="/post/create-promotion">
             Create Event
             <ArrowRight className="h-4 w-4" />
@@ -583,7 +583,7 @@ export function PromotionsExplorer() {
               )}
             </p>
             {activeTab === "events" && (
-              <Button asChild variant="outline" size="sm" className="gap-1">
+              <Button asChild variant="outline" size="sm" className="h-11 gap-1">
                 <Link href="/post/create-promotion">
                   Create Event
                   <ArrowRight className="h-4 w-4" />
@@ -631,7 +631,7 @@ export function PromotionsExplorer() {
                 <p className="text-sm text-muted-foreground">
                   Try broadening the filters or clearing a location filter.
                 </p>
-                <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                <Button variant="outline" size="sm" className="h-11" onClick={clearAllFilters}>
                   Clear all filters
                 </Button>
               </CardContent>
@@ -776,7 +776,7 @@ function PaginationControls({
       <Button
         variant="outline"
         size="sm"
-        className="w-full sm:w-auto"
+        className="h-11 w-full sm:h-10 sm:w-auto"
         disabled={page <= 1}
         onClick={() => onPageChange(page - 1)}
       >
@@ -815,7 +815,7 @@ function PaginationControls({
       <Button
         variant="outline"
         size="sm"
-        className="w-full sm:w-auto"
+        className="h-11 w-full sm:h-10 sm:w-auto"
         disabled={page >= totalPages}
         onClick={() => onPageChange(page + 1)}
       >

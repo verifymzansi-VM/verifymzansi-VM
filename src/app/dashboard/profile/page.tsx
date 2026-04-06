@@ -520,16 +520,16 @@ export default function ProfilePage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="w-full grid grid-cols-3">
-          <TabsTrigger value="profile" className="gap-1.5 text-xs sm:text-sm">
+        <TabsList className="grid h-12 w-full grid-cols-3 p-1">
+          <TabsTrigger value="profile" className="h-11 gap-1.5 text-xs sm:text-sm">
             <User className="h-3.5 w-3.5" />
             Profile
           </TabsTrigger>
-          <TabsTrigger value="security" className="gap-1.5 text-xs sm:text-sm">
+          <TabsTrigger value="security" className="h-11 gap-1.5 text-xs sm:text-sm">
             <ShieldCheck className="h-3.5 w-3.5" />
             Security
           </TabsTrigger>
-          <TabsTrigger value="account" className="gap-1.5 text-xs sm:text-sm">
+          <TabsTrigger value="account" className="h-11 gap-1.5 text-xs sm:text-sm">
             <Mail className="h-3.5 w-3.5" />
             Account
           </TabsTrigger>
@@ -705,7 +705,7 @@ export default function ProfilePage() {
                       <select
                         id="province"
                         title="Select province"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         value={province}
                         onChange={(e) => {
                           setProvince(e.target.value);
@@ -725,7 +725,7 @@ export default function ProfilePage() {
                       <select
                         id="city"
                         title="Select city"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         value={city}
                         onChange={(e) => setCity(e.target.value)}
                         disabled={!province}
@@ -741,7 +741,7 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                <Button type="submit" size="sm" className="w-full gap-2" disabled={isSaving}>
+                <Button type="submit" size="sm" className="h-11 w-full gap-2" disabled={isSaving}>
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
@@ -770,7 +770,7 @@ export default function ProfilePage() {
                     variant="outline"
                     size="sm"
                     onClick={() => setShowPasswordForm(true)}
-                    className="gap-1.5"
+                    className="h-11 gap-1.5 px-3"
                   >
                     <KeyRound className="h-3.5 w-3.5" />
                     Change
@@ -807,9 +807,8 @@ export default function ProfilePage() {
                         />
                         <button
                           type="button"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           onClick={() => setShowNewPassword(!showNewPassword)}
-                          tabIndex={-1}
                           aria-label={showNewPassword ? "Hide password" : "Show password"}
                         >
                           {showNewPassword ? (
@@ -850,7 +849,7 @@ export default function ProfilePage() {
                       <Button
                         type="submit"
                         size="sm"
-                        className="flex-1 gap-2"
+                        className="h-11 flex-1 gap-2"
                         disabled={isChangingPassword}
                       >
                         {isChangingPassword ? (
@@ -864,6 +863,7 @@ export default function ProfilePage() {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        className="h-11 px-4"
                         onClick={() => {
                           setShowPasswordForm(false);
                           setCurrentPassword("");
@@ -888,7 +888,7 @@ export default function ProfilePage() {
                     Reset via email if you can&apos;t remember it.
                   </p>
                 </div>
-                <Button asChild variant="outline" size="sm">
+                <Button asChild variant="outline" size="sm" className="h-11">
                   <Link href="/forgot-password">Reset Password</Link>
                 </Button>
               </div>
@@ -923,7 +923,7 @@ export default function ProfilePage() {
                         variant="outline"
                         size="sm"
                         onClick={() => setShowEmailForm(true)}
-                        className="gap-1.5 ml-3 shrink-0"
+                        className="ml-3 h-11 shrink-0 gap-1.5 px-3"
                       >
                         <Mail className="h-3.5 w-3.5" />
                         Change
@@ -944,7 +944,7 @@ export default function ProfilePage() {
                       <Button
                         type="submit"
                         size="sm"
-                        className="flex-1 gap-2"
+                        className="h-11 flex-1 gap-2"
                         disabled={isChangingEmail}
                       >
                         {isChangingEmail ? (
@@ -958,6 +958,7 @@ export default function ProfilePage() {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        className="h-11"
                         onClick={() => {
                           setShowEmailForm(false);
                           setNewEmail("");
@@ -977,7 +978,7 @@ export default function ProfilePage() {
                   <div className="mt-0.5">{getVerificationBadge()}</div>
                 </div>
                 {verificationStatus !== "verified" && (
-                  <Button asChild variant="outline" size="sm">
+                  <Button asChild variant="outline" size="sm" className="h-11">
                     <Link href="/dashboard/verification">Verify</Link>
                   </Button>
                 )}
@@ -996,7 +997,7 @@ export default function ProfilePage() {
                   size="sm"
                   onClick={handleSignOut}
                   disabled={isSigningOut}
-                  className="gap-1.5"
+                  className="h-11 gap-1.5"
                 >
                   {isSigningOut ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1020,7 +1021,7 @@ export default function ProfilePage() {
                 <Button
                   variant="destructive"
                   size="sm"
-                  className="gap-1.5"
+                  className="h-11 gap-1.5"
                   onClick={() => setIsDeleteDialogOpen(true)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -1065,7 +1066,11 @@ export default function ProfilePage() {
                   </div>
 
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => handleDeleteDialogOpenChange(false)}>
+                    <Button
+                      variant="outline"
+                      className="h-11"
+                      onClick={() => handleDeleteDialogOpenChange(false)}
+                    >
                       Cancel
                     </Button>
                     <Button
@@ -1076,7 +1081,7 @@ export default function ProfilePage() {
                         deleteConfirmation.trim().toUpperCase() !== "DELETE" ||
                         !deleteCurrentPassword
                       }
-                      className="gap-1.5"
+                      className="h-11 gap-1.5"
                     >
                       {isDeleteVerifying ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />

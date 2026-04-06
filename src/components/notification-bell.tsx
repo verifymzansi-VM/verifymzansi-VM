@@ -31,6 +31,13 @@ export function NotificationBell({ userId }: { userId?: string }) {
     clearAll,
   } = useNotificationStore();
   const hydratedRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Hydrate from API on mount (re-runs when userId changes)
   useEffect(() => {
@@ -107,6 +114,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ id }),
       }).catch(() => {
+        if (!mountedRef.current) return;
         useNotificationStore.setState({
           notifications: prev.notifications,
           unreadCount: prev.unreadCount,
@@ -124,6 +132,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
       headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ all: true }),
     }).catch(() => {
+      if (!mountedRef.current) return;
       useNotificationStore.setState({
         notifications: prev.notifications,
         unreadCount: prev.unreadCount,
@@ -139,6 +148,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
       headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ all: true }),
     }).catch(() => {
+      if (!mountedRef.current) return;
       useNotificationStore.setState({
         notifications: prev.notifications,
         unreadCount: prev.unreadCount,
@@ -158,7 +168,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
-              {unreadCount > 9 ? "9+" : unreadCount}
+              {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
         </Button>

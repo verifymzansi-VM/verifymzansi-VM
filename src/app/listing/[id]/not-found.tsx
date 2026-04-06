@@ -16,11 +16,11 @@ export default function ListingNotFound() {
             This listing may have been removed, sold, or the link is incorrect.
           </p>
         </div>
-        <div className="flex gap-3">
-          <Button asChild variant="outline">
+        <div className="flex w-full max-w-sm flex-col gap-3 sm:flex-row">
+          <Button asChild variant="outline" className="h-11 w-full sm:w-auto">
             <Link href="/">Go to Homepage</Link>
           </Button>
-          <Button asChild>
+          <Button asChild className="h-11 w-full sm:w-auto">
             <Link href="/mzansi-market">Browse Listings</Link>
           </Button>
         </div>

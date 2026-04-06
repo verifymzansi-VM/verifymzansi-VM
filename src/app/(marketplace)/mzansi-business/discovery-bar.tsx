@@ -84,7 +84,7 @@ export function BusinessDiscoveryBar() {
           <select
             id="business-category"
             aria-label="Category"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
             value={filters.businessCategory || ""}
             disabled={!isInteractive}
             onChange={(event) =>
@@ -110,7 +110,7 @@ export function BusinessDiscoveryBar() {
           <select
             id="business-type"
             aria-label="Business type"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
             value={filters.businessType || ""}
             disabled={!isInteractive}
             onChange={(event) =>
@@ -134,7 +134,7 @@ export function BusinessDiscoveryBar() {
           <select
             id="business-province"
             aria-label="Province"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
             value={filters.province || ""}
             disabled={!isInteractive}
             onChange={(event) => {
@@ -156,7 +156,7 @@ export function BusinessDiscoveryBar() {
           <select
             id="business-city"
             aria-label="City"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
             value={filters.city || ""}
             onChange={(event) => setFilter("city", event.target.value || undefined)}
             disabled={!isInteractive || !filters.province}
@@ -237,7 +237,7 @@ export function BusinessDiscoveryBar() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-xs"
+            className="h-11 px-3 text-sm sm:h-10 sm:text-xs"
             disabled={!isInteractive}
             onClick={clearAllFilters}
           >

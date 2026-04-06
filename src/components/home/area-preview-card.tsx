@@ -103,7 +103,7 @@ export function AreaPreviewCard({
         {/* Video play overlay */}
         {hasVideo && !isVideo && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform group-hover:scale-110">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition-transform group-hover:scale-110">
               <Play className="h-4 w-4 fill-white pr-0.5" />
             </div>
           </div>

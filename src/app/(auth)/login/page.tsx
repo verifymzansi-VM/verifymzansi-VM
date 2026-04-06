@@ -84,6 +84,7 @@ export default function LoginPage() {
   // Skip in dev/test environments where the widget may be slow or unavailable,
   // and in dev mode (dummy keys) since the widget auto-bypasses.
   const turnstileState = getTurnstileClientState();
+  const canRetryUnavailableCaptcha = turnstileState.mode === "configured";
   const skipTurnstileTimeout = turnstileState.mode !== "configured" || captchaUnavailable;
 
   const resetTurnstileChallenge = useCallback(() => {
@@ -408,10 +409,9 @@ export default function LoginPage() {
             />
             <button
               type="button"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={() => setShowPassword(!showPassword)}
               disabled={!isInteractive}
-              tabIndex={-1}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -435,7 +435,21 @@ export default function LoginPage() {
         {errors.turnstileToken && !turnstileError && (
           <p className="inline-form-error">{errors.turnstileToken.message}</p>
         )}
-        {captchaUnavailable && <p className="inline-form-error">{TURNSTILE_UNAVAILABLE_MESSAGE}</p>}
+        {captchaUnavailable && (
+          <div className="flex items-center gap-2">
+            <p className="inline-form-error">{TURNSTILE_UNAVAILABLE_MESSAGE}</p>
+            {canRetryUnavailableCaptcha && (
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="inline-flex items-center gap-1 text-xs font-medium text-brand-green underline hover:text-brand-green/80"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Retry
+              </button>
+            )}
+          </div>
+        )}
         {turnstileError && (
           <div className="flex items-center gap-2">
             <p className="inline-form-error">Security check failed to load. Please try again.</p>

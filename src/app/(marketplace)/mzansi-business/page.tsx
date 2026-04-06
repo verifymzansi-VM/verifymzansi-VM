@@ -148,7 +148,7 @@ export default async function MzansiBusinessPage() {
         {/* Compact mobile header */}
         <div className="flex items-center justify-between lg:hidden">
           <h1 className="font-display text-lg font-bold tracking-tight">Mzansi Business</h1>
-          <Button asChild size="sm" className="gap-1">
+          <Button asChild size="sm" className="h-11 gap-1">
             <Link href="/post/create-business">
               New Listing
               <ArrowRight className="h-4 w-4" />
@@ -184,7 +184,7 @@ export default async function MzansiBusinessPage() {
               breadcrumbs={[{ label: "Mzansi Business" }]}
               className="hidden lg:block"
             >
-              <Button asChild size="sm" className="gap-2">
+              <Button asChild size="sm" className="h-11 gap-2">
                 <Link href="/post/create-business">
                   List Your Business
                   <ArrowRight className="h-4 w-4" />

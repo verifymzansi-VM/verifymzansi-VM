@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
@@ -16,7 +16,16 @@ interface SubscribeButtonProps {
 export function SubscribeButton({ planId, planName, priceCents, isPopular }: SubscribeButtonProps) {
   const [loading, setLoading] = useState(false);
   const pendingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const requestControllerRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      requestControllerRef.current?.abort();
+    };
+  }, []);
 
   async function handleClick() {
     if (priceCents === 0) return; // free plan — no action
@@ -25,11 +34,14 @@ export function SubscribeButton({ planId, planName, priceCents, isPopular }: Sub
     pendingRef.current = true;
 
     setLoading(true);
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     try {
       const res = await fetch("/api/billing/create-checkout", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ planId }),
+        signal: controller.signal,
       });
 
       const data = await res.json();
@@ -52,14 +64,20 @@ export function SubscribeButton({ planId, planName, priceCents, isPopular }: Sub
           variant: "destructive",
         });
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
       toast({
         title: "Something went wrong",
         description: `Could not start checkout for ${planName}. Please try again.`,
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      requestControllerRef.current = null;
+      if (mountedRef.current) {
+        setLoading(false);
+      }
       pendingRef.current = false;
     }
   }

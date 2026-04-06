@@ -106,6 +106,7 @@ export default function ContactPage() {
                   </p>
                   <Button
                     variant="outline"
+                    className="h-11"
                     onClick={() => {
                       setIsSubmitted(false);
                       setName("");
@@ -216,7 +217,7 @@ export default function ContactPage() {
 
                     <Button
                       type="submit"
-                      className="w-full sm:w-auto gap-2"
+                      className="h-11 w-full gap-2 sm:w-auto"
                       disabled={isSubmitting || !turnstileToken}
                     >
                       {isSubmitting ? (

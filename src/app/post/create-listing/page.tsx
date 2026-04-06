@@ -837,7 +837,7 @@ export default function CreateListingPage() {
                       <select
                         id="condition"
                         aria-label="Condition"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
                         value={condition}
                         onChange={(event) => {
                           setCondition(event.target.value as ListingCondition | "");

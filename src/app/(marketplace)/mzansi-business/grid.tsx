@@ -276,7 +276,7 @@ export function MzansiBusinessGrid() {
           <Button
             variant="outline"
             size="sm"
-            className="w-full sm:w-auto"
+            className="h-11 w-full sm:h-10 sm:w-auto"
             disabled={page <= 1}
             onClick={() => {
               triggerHaptic("light");
@@ -323,7 +323,7 @@ export function MzansiBusinessGrid() {
           <Button
             variant="outline"
             size="sm"
-            className="w-full sm:w-auto"
+            className="h-11 w-full sm:h-10 sm:w-auto"
             disabled={page >= totalPages}
             onClick={() => {
               triggerHaptic("light");

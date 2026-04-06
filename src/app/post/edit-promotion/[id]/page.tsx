@@ -30,7 +30,7 @@ import { PromotionDetailContent } from "@/components/listings/promotion-detail-c
 import { SocialAuthorizationFields } from "@/components/promotions/social-authorization-fields";
 import type { PromotionSocialAuthorizationInput } from "@/lib/promotions/social-authorization";
 const selectClass =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow";
+  "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
 
 export default function EditPromotionPage() {
   const router = useRouter();
@@ -644,7 +644,7 @@ export default function EditPromotionPage() {
                   </p>
                 )}
               <div className="flex justify-between">
-                <Button variant="outline" asChild className="gap-1">
+                <Button variant="outline" asChild className="h-11 gap-1">
                   <Link href="/dashboard/promotions">
                     <ArrowLeft className="h-4 w-4" />
                     Cancel
@@ -660,7 +660,7 @@ export default function EditPromotionPage() {
                     !province ||
                     !city
                   }
-                  className="gap-1"
+                  className="h-11 gap-1"
                 >
                   {isSubmitting ? (
                     <>

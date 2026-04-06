@@ -154,13 +154,13 @@ export default function PaymentStatusPanel({
       </Card>
 
       <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <Button asChild className="gap-2">
+        <Button asChild className="h-11 w-full gap-2 sm:w-auto">
           <Link href="/dashboard">
             Go to Dashboard
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="h-11 w-full sm:w-auto">
           <Link href="/billing">View Billing</Link>
         </Button>
       </div>

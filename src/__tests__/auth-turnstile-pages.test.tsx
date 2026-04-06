@@ -87,10 +87,12 @@ vi.mock("@/components/ui/turnstile-widget", () => {
   const MockTurnstileWidget = ({
     onSuccess,
     onError,
+    onUnavailable,
     retryToken,
   }: {
     onSuccess?: (token: string) => void;
     onError?: (message: string) => void;
+    onUnavailable?: (message: string) => void;
     retryToken?: number;
   }) => {
     useEffect(() => {
@@ -109,6 +111,9 @@ vi.mock("@/components/ui/turnstile-widget", () => {
         </button>
         <button type="button" onClick={() => onError?.("mock error")}>
           Trigger Turnstile Error
+        </button>
+        <button type="button" onClick={() => onUnavailable?.("mock unavailable")}>
+          Trigger Turnstile Unavailable
         </button>
       </div>
     );
@@ -183,6 +188,25 @@ describe("auth page Turnstile retry behavior", () => {
 
     expect(await screen.findByRole("button", { name: /retry/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign in/i })).toBeDisabled();
+  });
+
+  it("shows retry action when Turnstile is unavailable on login", async () => {
+    render(<LoginPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Unavailable" }));
+
+    const retryButton = await screen.findByRole("button", { name: /retry/i });
+    expect(
+      screen.getByText(/security verification is temporarily unavailable/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeDisabled();
+
+    fireEvent.click(retryButton);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("mock-turnstile-widget")).toHaveAttribute("data-retry-token", "1");
+    });
+    expect(mockTurnstileRetry).toHaveBeenCalledTimes(1);
   });
 
   it("resets the login Turnstile challenge after a failed submit", async () => {

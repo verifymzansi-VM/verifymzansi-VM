@@ -198,7 +198,7 @@ export function ListingDetailClient({
                 <button
                   type="button"
                   onClick={handleVideoRetry}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm text-white shadow-lg transition-transform hover:scale-110"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm text-white shadow-lg transition-transform hover:scale-110"
                   aria-label="Retry"
                 >
                   <RotateCcw className="h-4 w-4" />
@@ -250,7 +250,7 @@ export function ListingDetailClient({
                 type="button"
                 onClick={() => goTo(activeIndex - 1)}
                 disabled={activeIndex === 0}
-                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0 hover:bg-black/60"
+                className="absolute left-2 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0 hover:bg-black/60 max-lg:opacity-100"
                 aria-label="Previous image"
               >
                 <ChevronLeft className="h-5 w-5" />
@@ -259,7 +259,7 @@ export function ListingDetailClient({
                 type="button"
                 onClick={() => goTo(activeIndex + 1)}
                 disabled={activeIndex === orderedMedia.length - 1}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0 hover:bg-black/60"
+                className="absolute right-2 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-0 hover:bg-black/60 max-lg:opacity-100"
                 aria-label="Next image"
               >
                 <ChevronRight className="h-5 w-5" />
@@ -314,7 +314,12 @@ export function ListingDetailClient({
 
       {/* ── Share Button ─────────────────────────────────── */}
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={copyShareLink}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-11 gap-1.5 text-sm sm:h-10 sm:text-xs"
+          onClick={copyShareLink}
+        >
           {copied ? (
             <>
               <Check className="h-3.5 w-3.5 text-brand-green" />

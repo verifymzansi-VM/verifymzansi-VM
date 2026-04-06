@@ -79,7 +79,7 @@ import {
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 
 const SELECT_CLASS =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
 const STEPS: PostFormStep[] = [
   { label: "Details", icon: FileText, description: "Type, name, category, and overview" },
   { label: "Location & Reach", icon: MapPin, description: "Address, contact, and hours" },
@@ -1480,7 +1480,13 @@ function CreateBusinessContent() {
                             }
                           }}
                         />
-                        <Button type="button" variant="outline" size="sm" onClick={addService}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-11 w-11"
+                          onClick={addService}
+                        >
                           <Plus className="h-4 w-4" />
                         </Button>
                       </div>
@@ -1581,7 +1587,7 @@ function CreateBusinessContent() {
                                 setWhatsapp(phone);
                                 clearErrors("whatsapp");
                               }}
-                              className="shrink-0 text-xs"
+                              className="h-11 shrink-0 text-xs"
                             >
                               Copy from phone
                             </Button>

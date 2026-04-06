@@ -24,12 +24,6 @@ export function ListingFilterSidebar() {
     (value: string) => setFilter("query", value || undefined),
     300
   );
-  const [prevStoreQuery, setPrevStoreQuery] = useState(filters.query);
-  if (filters.query !== prevStoreQuery) {
-    debouncedSetQuery.cancel();
-    setPrevStoreQuery(filters.query);
-    setLocalQuery(filters.query || "");
-  }
 
   const hasActiveFilters =
     filters.category ||

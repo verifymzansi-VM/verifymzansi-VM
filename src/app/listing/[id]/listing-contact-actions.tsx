@@ -221,14 +221,19 @@ export function ListingContactActions({
 
       {/* ── Action Row ─────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={handleShare}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-11 gap-1 px-3 text-sm sm:h-10 sm:text-xs"
+          onClick={handleShare}
+        >
           {copied ? <Check className="h-3 w-3" /> : <Share2 className="h-3 w-3" />}
           {copied ? "Link Copied!" : "Share"}
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1 text-xs text-muted-foreground"
+          className="h-11 gap-1 px-3 text-sm text-muted-foreground sm:h-10 sm:text-xs"
           onClick={() => {
             setRptSent(false);
             setRptError("");
@@ -257,7 +262,7 @@ export function ListingContactActions({
               <p className="font-medium">Message sent!</p>
               <p className="text-sm text-muted-foreground">The member has been notified.</p>
               <DialogClose asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="h-11 px-4 sm:h-10">
                   Close
                 </Button>
               </DialogClose>
@@ -283,7 +288,7 @@ export function ListingContactActions({
 
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" className="h-11 px-4 sm:h-10">
                     Cancel
                   </Button>
                 </DialogClose>
@@ -320,7 +325,7 @@ export function ListingContactActions({
                 Thank you. Our team will review this listing.
               </p>
               <DialogClose asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="h-11 px-4 sm:h-10">
                   Close
                 </Button>
               </DialogClose>
@@ -332,7 +337,7 @@ export function ListingContactActions({
                 <select
                   id="report-reason"
                   title="Report reason"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
                   value={reportReason}
                   onChange={(e) => setReportReason(e.target.value)}
                 >
@@ -367,7 +372,7 @@ export function ListingContactActions({
 
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" className="h-11 px-4 sm:h-10">
                     Cancel
                   </Button>
                 </DialogClose>

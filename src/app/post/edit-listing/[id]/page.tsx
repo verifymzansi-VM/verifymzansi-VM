@@ -568,7 +568,7 @@ export default function EditListingPage() {
                     <select
                       id="condition"
                       aria-label="Condition"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
                       value={condition}
                       onChange={(e) => setCondition(e.target.value as ListingCondition | "")}
                     >
@@ -706,6 +706,7 @@ export default function EditListingPage() {
                             type="button"
                             variant="outline"
                             size="sm"
+                            className="h-11"
                             onClick={() => {
                               if (!window.confirm("Remove the logo?")) return;
                               setExistingLogo(null);
@@ -756,7 +757,7 @@ export default function EditListingPage() {
                                 setExistingPhotos((prev) => prev.filter((_, idx) => idx !== i));
                                 clearErrors("images");
                               }}
-                              className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute right-1 top-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 max-lg:opacity-100"
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -802,7 +803,7 @@ export default function EditListingPage() {
                                 setExistingVideos((prev) => prev.filter((_, idx) => idx !== i));
                                 clearErrors("videos");
                               }}
-                              className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute right-1 top-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 max-lg:opacity-100"
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -938,11 +939,11 @@ export default function EditListingPage() {
                       type="button"
                       variant="outline"
                       onClick={() => router.back()}
-                      className="flex-1"
+                      className="h-11 flex-1"
                     >
                       Cancel
                     </Button>
-                    <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                    <Button type="submit" className="h-11 flex-1" disabled={isSubmitting}>
                       {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       {isSubmitting ? submitProgress || "Saving..." : "Save Changes"}
                     </Button>

@@ -171,7 +171,7 @@ export default async function EventsPage() {
           { label: "Events" },
         ]}
       >
-        <Button asChild size="sm" className="gap-1">
+        <Button asChild size="sm" className="h-11 gap-1">
           <Link href="/post/create-promotion?type=event">Create Event</Link>
         </Button>
       </PageHeader>
@@ -249,7 +249,7 @@ export default async function EventsPage() {
             <p className="mx-auto max-w-md text-sm text-muted-foreground">
               Check back soon for events from verified businesses! Past events may appear below.
             </p>
-            <Button asChild size="sm" className="mx-auto w-fit gap-1">
+            <Button asChild size="sm" className="mx-auto h-11 w-fit gap-1">
               <Link href="/post/create-promotion?type=event">Create Event</Link>
             </Button>
           </CardContent>

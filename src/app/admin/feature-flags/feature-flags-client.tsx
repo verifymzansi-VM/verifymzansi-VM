@@ -210,6 +210,10 @@ function FlagCard({
   const [editRoles, setEditRoles] = useState<string[]>(flag.allowlist_roles ?? []);
   const [reason, setReason] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const modeFieldId = `${flag.id}-rollout-mode`;
+  const percentFieldId = `${flag.id}-rollout-percent`;
+  const allowedRolesLabelId = `${flag.id}-allowed-roles-label`;
+  const reasonFieldId = `${flag.id}-change-reason`;
 
   const modeBadgeColor: Record<FlagMode, string> = {
     off: "secondary",
@@ -268,11 +272,11 @@ function FlagCard({
           <div className="space-y-3 border-t pt-3">
             {/* Mode selector */}
             <div className="space-y-1">
-              <label htmlFor="flag-rollout-mode" className="text-xs font-medium">
+              <label htmlFor={modeFieldId} className="text-xs font-medium">
                 Rollout mode
               </label>
               <select
-                id="flag-rollout-mode"
+                id={modeFieldId}
                 title="Flag rollout mode"
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                 value={editMode}
@@ -289,8 +293,11 @@ function FlagCard({
             {/* Percent slider */}
             {editMode === "percent" && (
               <div className="space-y-1">
-                <label className="text-xs font-medium">Rollout percentage: {editPercent}%</label>
+                <label htmlFor={percentFieldId} className="text-xs font-medium">
+                  Rollout percentage: {editPercent}%
+                </label>
                 <input
+                  id={percentFieldId}
                   type="range"
                   title="Rollout percentage"
                   min={0}
@@ -306,13 +313,12 @@ function FlagCard({
             {/* Role allowlist */}
             {editMode === "allowlist" && (
               <div className="space-y-1">
-                <label htmlFor="flag-allowed-roles" className="text-xs font-medium">
+                <p id={allowedRolesLabelId} className="text-xs font-medium">
                   Allowed roles
-                </label>
+                </p>
                 <div
-                  id="flag-allowed-roles"
                   role="group"
-                  aria-label="Allowed roles"
+                  aria-labelledby={allowedRolesLabelId}
                   className="flex flex-wrap gap-2"
                 >
                   {AVAILABLE_ROLES.map((role) => (
@@ -337,11 +343,11 @@ function FlagCard({
 
             {/* Reason input */}
             <div className="space-y-1">
-              <label htmlFor="flag-change-reason" className="text-xs font-medium">
+              <label htmlFor={reasonFieldId} className="text-xs font-medium">
                 Reason for change (required)
               </label>
               <input
-                id="flag-change-reason"
+                id={reasonFieldId}
                 type="text"
                 placeholder="e.g. Internal testing rollout"
                 value={reason}
