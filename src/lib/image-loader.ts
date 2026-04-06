@@ -38,10 +38,11 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
 
   const cfParams = `width=${width},quality=${quality || 75},format=auto`;
 
-  // Resize same-origin media-proxy paths in production so card thumbnails and
-  // logos do not ship their original upload dimensions to small surfaces.
+  // Do not resize media-proxy API paths. Cloudflare Image Resizing can return
+  // 404 when the source is an app route even if the source URL itself is 200.
+  // Keep these paths direct so media always renders in production.
   if (src.startsWith(PROXY_MEDIA_PREFIX)) {
-    return `/cdn-cgi/image/${cfParams}${src}`;
+    return src;
   }
 
   // Keep other relative sources (static assets, app images) pass-through so
