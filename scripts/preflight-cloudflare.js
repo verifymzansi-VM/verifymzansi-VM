@@ -29,7 +29,6 @@ const openNextEntryPath = path.join(repoRoot, "workers", "open-next-entry.mjs");
 const nextConfigPath = path.join(repoRoot, "next.config.js");
 const envLocalPath = path.join(repoRoot, ".env.local");
 const envProductionLocalPath = path.join(repoRoot, ".env.production.local");
-const legacyProxyPath = path.join(repoRoot, "src", "proxy.ts");
 
 const blockedProductionVars = [
   "BYPASS_OTP_CODE",
@@ -153,13 +152,17 @@ function writeProductionEnvOverride() {
   }
 }
 
-function removeLegacyProxyEntrypoint() {
-  if (!fs.existsSync(legacyProxyPath)) {
+function removeLegacyMiddlewareEntrypoint() {
+  // Next.js 16 uses proxy.ts, not middleware.ts. If both exist the build
+  // fails ("Both middleware file and proxy file are detected"). Remove the
+  // legacy middleware.ts to keep only proxy.ts.
+  const legacyMiddlewarePath = path.join(repoRoot, "src", "middleware.ts");
+  if (!fs.existsSync(legacyMiddlewarePath)) {
     return;
   }
 
-  fs.rmSync(legacyProxyPath, { force: true });
-  console.log("✓ Removed stale src/proxy.ts so Next.js only uses src/middleware.ts.");
+  fs.rmSync(legacyMiddlewarePath, { force: true });
+  console.log("✓ Removed stale src/middleware.ts so Next.js only uses src/proxy.ts.");
 }
 
 function isWSL() {
@@ -195,7 +198,7 @@ if (validateOnly) {
 }
 
 writeProductionEnvOverride();
-removeLegacyProxyEntrypoint();
+removeLegacyMiddlewareEntrypoint();
 
 if (platform === "win32") {
   console.error(`
