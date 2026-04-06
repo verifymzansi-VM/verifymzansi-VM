@@ -4,29 +4,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import {
-  VideoCardPlayer,
-  isVideoUrl,
-  type MediaFitStrategy,
-} from "@/components/ui/video-card-player";
+import { VideoCardPlayer, isVideoUrl } from "@/components/ui/video-card-player";
 import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import { timeAgo } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
 import type { ReactNode } from "react";
-
-/* ── Compact view-count formatter ────────────────────────────────── */
-
-function formatViewCount(count: number): string {
-  if (count < 1000) return `${count} views`;
-  if (count < 1_000_000) {
-    const k = count / 1000;
-    return `${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}K views`;
-  }
-  const m = count / 1_000_000;
-  return `${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M views`;
-}
 
 interface PosterCardShellProps {
   href: string;
@@ -87,8 +70,8 @@ export function PosterCardShell({
   logoUrl,
   description,
   location,
-  createdAt,
-  viewCount,
+  createdAt: _createdAt,
+  viewCount: _viewCount,
   fitStrategy: _fitStrategy = "smart",
   priority = false,
   videoDuration,
@@ -117,7 +100,7 @@ export function PosterCardShell({
               alt={mediaAlt || title}
               sizes={mediaSizes}
               mode={hasVideo ? "hover" : "ambient"}
-              fitStrategy="smart"
+              fitStrategy="contain"
               containerAspectRatio={16 / 9}
               muteControlVisibility={hasVideo ? "always" : "hidden"}
               mediaClassName="transition-transform duration-700 group-hover:scale-[1.03]"
@@ -148,29 +131,29 @@ export function PosterCardShell({
         </div>
 
         {/* ── YouTube-style metadata row beneath thumbnail ────────── */}
-        <div className={cn("flex flex-1 gap-2.5 px-3 py-2 sm:py-2.5", contentClassName)}>
+        <div className={cn("flex flex-1 gap-2 px-2.5 py-1.5", contentClassName)}>
           {/* Channel avatar / logo */}
           <div className="mt-0.5 shrink-0">
             {normalizedLogoUrl ? (
-              <div className="h-9 w-9 overflow-hidden rounded-full border border-black/8 shadow-sm">
+              <div className="h-7 w-7 overflow-hidden rounded-full border border-black/8 shadow-sm">
                 <Image
                   src={normalizedLogoUrl}
                   alt="Business logo"
-                  width={36}
-                  height={36}
+                  width={28}
+                  height={28}
                   className="h-full w-full object-cover"
                 />
               </div>
             ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-blue/12 text-brand-blue/55">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-blue/12 text-brand-blue/55">
                 <span className="text-xs font-bold uppercase leading-none">{title.charAt(0)}</span>
               </div>
             )}
           </div>
 
           {/* Text meta */}
-          <div className="min-w-0 flex-1 space-y-0.5 min-h-[4.75rem]">
-            <h3 className="font-display text-sm font-semibold leading-tight text-slate-900 line-clamp-2 dark:text-white sm:text-[15px]">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-xs font-semibold leading-tight text-slate-900 line-clamp-2 dark:text-white sm:text-sm">
               {title}
             </h3>
             {description ? (
@@ -184,25 +167,15 @@ export function PosterCardShell({
                 <span className="truncate">{location}</span>
               </p>
             ) : null}
-            {/* Eyebrow + meta row (price · views · time) */}
-            {eyebrow || viewCount || createdAt ? (
+            {/* Eyebrow row (price / date) */}
+            {eyebrow ? (
               <p
                 className={cn(
                   "flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-300 sm:text-xs",
                   eyebrowClassName
                 )}
               >
-                {eyebrow ? <span className="font-semibold">{eyebrow}</span> : null}
-                {eyebrow && (viewCount || createdAt) ? (
-                  <span className="text-slate-300 dark:text-slate-600">·</span>
-                ) : null}
-                {viewCount != null && viewCount > 0 ? (
-                  <span>{formatViewCount(viewCount)}</span>
-                ) : null}
-                {viewCount != null && viewCount > 0 && createdAt ? (
-                  <span className="text-slate-300 dark:text-slate-600">·</span>
-                ) : null}
-                {createdAt ? <span suppressHydrationWarning>{timeAgo(createdAt)}</span> : null}
+                <span className="font-semibold">{eyebrow}</span>
               </p>
             ) : null}
           </div>

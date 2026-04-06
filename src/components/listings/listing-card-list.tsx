@@ -86,8 +86,8 @@ export const ListingCardList = memo(function ListingCardList({
         className="overflow-hidden rounded-xl border-white/10 bg-warm-100 transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-green/45 hover:shadow-xl"
         trustLevel={ownerTrustLevel}
       >
-        <div className="flex min-h-[188px]">
-          <div className="relative w-36 shrink-0 overflow-hidden bg-warm-100 sm:w-40">
+        <div className="flex min-h-[140px]">
+          <div className="relative w-36 shrink-0 overflow-hidden bg-slate-900 sm:w-40">
             {normalizedImageUrl ? (
               isVideo ? (
                 <VideoCardPlayer
@@ -96,6 +96,7 @@ export const ListingCardList = memo(function ListingCardList({
                   alt={title}
                   sizes="160px"
                   mode="hover"
+                  fitStrategy="contain"
                   mediaClassName="transition-transform duration-700 group-hover:scale-[1.04]"
                 />
               ) : (
@@ -103,7 +104,7 @@ export const ListingCardList = memo(function ListingCardList({
                   src={normalizedImageUrl}
                   alt={title}
                   fill
-                  className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+                  className="object-contain transition-transform duration-700 group-hover:scale-[1.04]"
                   sizes="160px"
                 />
               )
@@ -113,7 +114,7 @@ export const ListingCardList = memo(function ListingCardList({
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/10" />
           </div>
 
-          <div className="flex flex-1 flex-col justify-end gap-2 p-4 sm:p-5">
+          <div className="flex flex-1 flex-col justify-end gap-1.5 p-3 sm:p-3.5">
             {status ? (
               <div>
                 <span
@@ -128,12 +129,12 @@ export const ListingCardList = memo(function ListingCardList({
             ) : null}
 
             {price > 0 ? (
-              <p className="font-display text-base font-bold tracking-[0.01em] text-foreground">
+              <p className="font-display text-sm font-bold tracking-[0.01em] text-foreground">
                 {formatZARShort(price)}
               </p>
             ) : null}
 
-            <h3 className="font-display text-base font-semibold leading-tight line-clamp-2 group-hover:text-brand-green transition-colors">
+            <h3 className="font-display text-sm font-semibold leading-tight line-clamp-2 group-hover:text-brand-green transition-colors">
               {title}
             </h3>
 

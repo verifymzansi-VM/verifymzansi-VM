@@ -15,7 +15,7 @@ const DEFAULT_MEDIA_FIT = "object-cover";
 const DEFAULT_CONTAINER_ASPECT_RATIO = 5 / 4;
 const SMART_FIT_CROP_THRESHOLD = 0.2;
 
-export type MediaFitStrategy = "cover" | "smart";
+export type MediaFitStrategy = "cover" | "smart" | "contain";
 export type MuteControlVisibility = "auto" | "always" | "hidden";
 
 /* ------------------------------------------------------------------ */
@@ -48,6 +48,7 @@ function shouldUseSmartFit(
   mediaAspectRatio: number | null,
   containerAspectRatio: number
 ) {
+  if (fitStrategy === "contain") return true;
   if (fitStrategy !== "smart" || !mediaAspectRatio) return false;
   return getCropRatio(mediaAspectRatio, containerAspectRatio) > SMART_FIT_CROP_THRESHOLD;
 }
