@@ -457,9 +457,9 @@ export function BusinessDetailsCard({
             )}
             <Button asChild variant="outline" className="w-full gap-2">
               <a
-                href={businessDetails.order_url}
+                href={safeExternalHref(businessDetails.order_url)}
                 target="_blank"
-                rel="noopener noreferrer nofollow"
+                rel="noopener noreferrer nofollow ugc"
               >
                 <Globe className="h-4 w-4" />
                 Order Online
@@ -507,7 +507,11 @@ export function BusinessDetailsCard({
 
         {canShowMapDirections && business.map_directions && (
           <Button asChild variant="outline" className="w-full gap-2">
-            <a href={business.map_directions} target="_blank" rel="noopener noreferrer nofollow">
+            <a
+              href={safeExternalHref(business.map_directions)}
+              target="_blank"
+              rel="noopener noreferrer nofollow ugc"
+            >
               <MapPin className="h-4 w-4" />
               Open Map Directions
             </a>
@@ -722,9 +726,9 @@ export function BusinessDetailContent({
                   if (typeof val === "boolean") display = "Yes";
                   else if (Array.isArray(val)) display = val.join(", ");
                   else display = String(val);
-                  return { label: f.label, display };
+                  return { label: f.label, display, kind: f.kind };
                 })
-                .filter(Boolean) as { label: string; display: string }[];
+                .filter(Boolean) as { label: string; display: string; kind: string }[];
               if (entries.length === 0) return null;
               return (
                 <Card>
@@ -734,15 +738,31 @@ export function BusinessDetailContent({
                       Business Details
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-3">
                     <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                      {entries.map((e) => (
-                        <div key={e.label}>
-                          <dt className="text-muted-foreground">{e.label}</dt>
-                          <dd className="font-medium">{e.display}</dd>
-                        </div>
-                      ))}
+                      {entries
+                        .filter((e) => e.kind !== "url")
+                        .map((e) => (
+                          <div key={e.label}>
+                            <dt className="text-muted-foreground">{e.label}</dt>
+                            <dd className="font-medium">{e.display}</dd>
+                          </div>
+                        ))}
                     </dl>
+                    {entries
+                      .filter((e) => e.kind === "url")
+                      .map((e) => (
+                        <Button key={e.label} asChild variant="outline" className="w-full gap-2">
+                          <a
+                            href={safeExternalHref(e.display)}
+                            target="_blank"
+                            rel="noopener noreferrer nofollow ugc"
+                          >
+                            <Globe className="h-4 w-4" />
+                            {e.label}
+                          </a>
+                        </Button>
+                      ))}
                   </CardContent>
                 </Card>
               );
@@ -799,7 +819,17 @@ export function BusinessDetailContent({
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Badge variant="outline">Available</Badge>
+                    <div className="flex flex-wrap gap-2">
+                      {business.delivery_options && business.delivery_options.length > 0 ? (
+                        business.delivery_options.map((option) => (
+                          <Badge key={option} variant="outline" className="capitalize">
+                            {option.replace(/_/g, " ")}
+                          </Badge>
+                        ))
+                      ) : (
+                        <Badge variant="outline">Available</Badge>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Calendar, Eye, MapPin, MessageSquare, Phone } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -138,6 +139,18 @@ export function ListingDetailContent({
               photoCount={photoCount}
             />
           </ErrorBoundary>
+
+          {listing.logo_url && (
+            <div className="flex items-center gap-3">
+              <Image
+                src={listing.logo_url}
+                alt={`${listing.title} logo`}
+                width={48}
+                height={48}
+                className="rounded-lg object-contain"
+              />
+            </div>
+          )}
 
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div className="flex items-baseline gap-2">
