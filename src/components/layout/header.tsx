@@ -116,21 +116,27 @@ function HeaderInner({
 
   return (
     <header className="sticky top-0 z-[110] isolate w-full border-b bg-background lg:bg-background/95 lg:backdrop-blur lg:supports-[backdrop-filter]:bg-background/60">
-      <div className="container-page grid h-16 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-        {/* Mobile Hamburger */}
-        <button
-          type="button"
-          className="relative z-[120] justify-self-start rounded-md p-2 lg:hidden touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          onClick={() => setMobileOpen((prev) => !prev)}
-          aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          aria-controls="mobile-nav-menu"
-          data-testid="mobile-menu-toggle"
+      <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+        <Link
+          href="/"
+          aria-label="VerifyMzansi — Home"
+          className="group flex items-center gap-2 sm:gap-3 lg:justify-self-start"
         >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+          <BrandLogo
+            size="md"
+            variant="transparent"
+            priority
+            imageClassName="drop-shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-transform duration-200 group-hover:scale-105"
+          />
+        </Link>
 
-        {/* Desktop Left — Auth */}
-        <div className="hidden items-center gap-2 lg:flex lg:justify-self-start">
+        {/* Marketplace Switcher — hidden on mobile, shown lg+ */}
+        <div className="hidden lg:flex lg:justify-self-center">
+          <MarketplaceSwitcher />
+        </div>
+
+        {/* Desktop Right — Auth */}
+        <div className="hidden items-center gap-2 lg:flex lg:justify-self-end">
           {/* Theme toggle */}
           <Button
             variant="ghost"
@@ -170,7 +176,7 @@ function HeaderInner({
                     </Avatar>
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-semibold leading-none">
@@ -243,24 +249,17 @@ function HeaderInner({
           )}
         </div>
 
-        {/* Marketplace Switcher — hidden on mobile, shown lg+ */}
-        <div className="hidden lg:flex lg:justify-self-center">
-          <MarketplaceSwitcher />
-        </div>
-
-        {/* Right — Logo */}
-        <Link
-          href="/"
-          aria-label="VerifyMzansi — Home"
-          className="group flex items-center gap-2 sm:gap-3 justify-self-end"
+        {/* Mobile Hamburger */}
+        <button
+          type="button"
+          className="relative z-[120] justify-self-end rounded-md p-2 lg:hidden touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          onClick={() => setMobileOpen((prev) => !prev)}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          aria-controls="mobile-nav-menu"
+          data-testid="mobile-menu-toggle"
         >
-          <BrandLogo
-            size="md"
-            variant="transparent"
-            priority
-            imageClassName="drop-shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-transform duration-200 group-hover:scale-105"
-          />
-        </Link>
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
       </div>
 
       {/* Mobile Marketplace Tabs — always visible on mobile */}
