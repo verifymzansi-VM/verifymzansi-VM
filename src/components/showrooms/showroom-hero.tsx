@@ -197,18 +197,18 @@ export function ShowroomHero({
 
           <div
             className={cn(
-              "pointer-events-none absolute bottom-3 right-3 z-20 transition-opacity duration-500 sm:bottom-5 sm:right-5",
+              "pointer-events-none absolute bottom-3 right-3 z-20 transition-opacity duration-500 sm:bottom-5 sm:right-5 lg:bottom-6 lg:right-6",
               fading ? "opacity-0" : "opacity-100"
             )}
           >
             <div className="flex items-center" data-testid="showroom-logo-tag">
               {activeLogoUrl ? (
-                <div className="relative h-8 w-[72px] sm:h-9 sm:w-[88px]">
+                <div className="relative h-8 w-[72px] sm:h-9 sm:w-[88px] md:h-12 md:w-[120px] lg:h-14 lg:w-[144px] xl:h-16 xl:w-[168px]">
                   <Image
                     src={activeLogoUrl}
                     alt={`${activeSlide.title} logo tag`}
                     fill
-                    sizes="(max-width: 640px) 72px, 88px"
+                    sizes="(max-width: 640px) 72px, (max-width: 768px) 88px, (max-width: 1024px) 120px, (max-width: 1280px) 144px, 168px"
                     className="object-contain"
                     unoptimized
                   />
@@ -217,7 +217,7 @@ export function ShowroomHero({
                 <BrandLogo
                   size="sm"
                   tone="inverse"
-                  className="w-[92px] sm:w-[108px]"
+                  className="w-[92px] sm:w-[108px] md:w-[140px] lg:w-[172px] xl:w-[200px]"
                   imageClassName="drop-shadow-none"
                 />
               )}
