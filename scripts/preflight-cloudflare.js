@@ -152,17 +152,43 @@ function writeProductionEnvOverride() {
   }
 }
 
-function removeLegacyMiddlewareEntrypoint() {
-  // Next.js 16 uses proxy.ts, not middleware.ts. If both exist the build
-  // fails ("Both middleware file and proxy file are detected"). Remove the
-  // legacy middleware.ts to keep only proxy.ts.
-  const legacyMiddlewarePath = path.join(repoRoot, "src", "middleware.ts");
-  if (!fs.existsSync(legacyMiddlewarePath)) {
+function removeLegacyProxyEntrypoint() {
+  // Next.js 16 proxy.ts forces Node.js runtime, which is incompatible with
+  // Cloudflare Workers (edge). The preflight replaces it with middleware.ts
+  // (edge-compatible) so the OpenNext build succeeds.
+  const legacyProxyPath = path.join(repoRoot, "src", "proxy.ts");
+  if (!fs.existsSync(legacyProxyPath)) {
     return;
   }
 
-  fs.rmSync(legacyMiddlewarePath, { force: true });
-  console.log("✓ Removed stale src/middleware.ts so Next.js only uses src/proxy.ts.");
+  fs.rmSync(legacyProxyPath, { force: true });
+  console.log("✓ Removed src/proxy.ts (Node.js runtime) — src/middleware.ts (edge) will be used for Cloudflare.");
+}
+
+function ensureMiddlewareForCloudflare() {
+  // After removing proxy.ts the build needs middleware.ts so the CSP and
+  // security-header logic actually runs on Cloudflare's edge runtime.
+  const middlewarePath = path.join(repoRoot, "src", "middleware.ts");
+  if (fs.existsSync(middlewarePath)) {
+    return;
+  }
+
+  const content = [
+    'import type { NextRequest } from "next/server";',
+    'import { handleMiddlewareRequest } from "@/proxy-handler";',
+    "",
+    "export async function middleware(request: NextRequest) {",
+    "  return handleMiddlewareRequest(request);",
+    "}",
+    "",
+    "export const config = {",
+    '  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/health|api/webhooks).*)"],',
+    "};",
+    "",
+  ].join("\n");
+
+  fs.writeFileSync(middlewarePath, content, "utf8");
+  console.log("✓ Created src/middleware.ts for Cloudflare edge deployment.");
 }
 
 function isWSL() {
@@ -198,7 +224,8 @@ if (validateOnly) {
 }
 
 writeProductionEnvOverride();
-removeLegacyMiddlewareEntrypoint();
+removeLegacyProxyEntrypoint();
+ensureMiddlewareForCloudflare();
 
 if (platform === "win32") {
   console.error(`
