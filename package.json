@@ -45,6 +45,8 @@
     "check:bundle-budget": "tsx scripts/check-bundle-budget.ts",
     "test:e2e": "playwright test",
     "test:public-verify": "tsx scripts/verify-public-pages.ts",
+    "security:audit:live-load": "tsx scripts/audit-live-load.ts",
+    "security:audit:live-load:strict": "tsx scripts/audit-live-load.ts --strict",
     "bootstrap:operator": "tsx scripts/bootstrap-operator.ts",
     "reset:launch-data": "tsx scripts/reset-launch-data.ts",
     "db:verify-schema": "tsx scripts/check-supabase-schema.ts",

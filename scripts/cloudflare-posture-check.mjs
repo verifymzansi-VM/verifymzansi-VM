@@ -100,6 +100,36 @@ async function tryFetchWithHeaders(url) {
   }
 }
 
+async function hasDsRecordViaDoh(domain) {
+  const providers = [
+    `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=DS`,
+    `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=DS`,
+  ];
+
+  for (const url of providers) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          accept: "application/dns-json, application/json",
+          "user-agent": "verifymzansi-cloudflare-posture-check/1.0",
+        },
+      });
+
+      if (!response.ok) continue;
+      const data = await response.json();
+      const answers = Array.isArray(data?.Answer) ? data.Answer : [];
+      const hasDs = answers.some((record) => Number(record?.type) === 43 || /\bDS\b/i.test(String(record?.data ?? "")));
+      if (hasDs) {
+        return { ok: true, source: url };
+      }
+    } catch {
+      // Try next provider.
+    }
+  }
+
+  return { ok: false, source: "" };
+}
+
 function reportResult(severity, message) {
   const prefix = severity === "fail" ? "FAIL" : severity === "warn" ? "WARN" : "PASS";
   console.log(`${prefix}: ${message}`);
@@ -247,10 +277,17 @@ async function main() {
     const trace = parseTrace(traceText);
 
     const httpVersion = trace.get("http") || "unknown";
+    const altSvc = getHeaderValue(root.headers, "alt-svc").toLowerCase();
+    const hasHttp3Advertisement = /(^|[,\s])h3(=|$)/i.test(altSvc);
     checks.push({
       name: "HTTP protocol",
-      severity: httpVersion === "http/3" ? "pass" : "warn",
-      detail: httpVersion,
+      severity: httpVersion === "http/3" || hasHttp3Advertisement ? "pass" : "warn",
+      detail:
+        httpVersion === "http/3"
+          ? httpVersion
+          : hasHttp3Advertisement
+            ? `${httpVersion} (HTTP/3 advertised via alt-svc)`
+            : httpVersion,
     });
 
     const tlsVersion = trace.get("tls") || "unknown";
@@ -288,11 +325,21 @@ async function main() {
   });
 
   const nslookupDs = await runCommand("nslookup", ["-type=DS", DOMAIN]);
-  const dsHasRecord = /\bDS\b|\tds\s*=|\sDS\s/i.test(nslookupDs.stdout);
+  let dsHasRecord = /\bDS\b|\tds\s*=|\sDS\s/i.test(nslookupDs.stdout);
+  let dsDetail = dsHasRecord ? "DS record found" : "no DS record detected";
+
+  if (!dsHasRecord) {
+    const doh = await hasDsRecordViaDoh(DOMAIN);
+    if (doh.ok) {
+      dsHasRecord = true;
+      dsDetail = `DS record found (DoH fallback: ${doh.source})`;
+    }
+  }
+
   checks.push({
     name: "DNSSEC DS record",
     severity: dsHasRecord ? "pass" : "warn",
-    detail: dsHasRecord ? "DS record found" : "no DS record detected",
+    detail: dsDetail,
   });
 
   const shouldFail = emitOutput(checks);
