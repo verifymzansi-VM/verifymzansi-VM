@@ -167,6 +167,10 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 | `pnpm test:launch:flows`                                                               | Billing + OTP + DSAR launch-confidence bundle        |
 | `pnpm test:deep`                                                                       | Core coverage plus Playwright                        |
 | `pnpm test:all`                                                                        | Full validation shortcut                             |
+| `pnpm payments:audit`                                                                  | Paid-flow security and live posture audit            |
+| `pnpm safety:review`                                                                   | One-command code review and security gate            |
+| `pnpm safety:ci-review`                                                                | CI-safe review gate (preflight is non-blocking)      |
+| `pnpm safety:release`                                                                  | One-command release-readiness gate                   |
 | `pnpm test:e2e`                                                                        | Full Playwright suite                                |
 | `pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome` | Launch-path smoke coverage                           |
 | `pnpm bootstrap:operator`                                                              | Create or update the first live staff account        |
@@ -226,6 +230,39 @@ pnpm test:launch:flows
 That bundle runs the billing payment route/library/worker tests, OTP route and
 verification page tests, DSAR submit/admin/page tests, then finishes with
 Chromium Playwright smoke for the billing round-trip and DSAR browser flow.
+
+For automated safety gates, use:
+
+```bash
+pnpm safety:review
+pnpm safety:ci-review
+pnpm safety:release
+```
+
+Use `-- --dry-run` to preview the command sequence without executing it.
+
+Each run now writes machine-readable evidence artifacts to `tmp/safety-gate`:
+
+- Timestamped JSON and Markdown files per run
+- `latest-review.json` / `latest-review.md`
+- `latest-release.json` / `latest-release.md`
+- `latest.json` / `latest.md`
+- `latest-review-blockers.json` / `latest-review-blockers.txt`
+- `latest-release-blockers.json` / `latest-release-blockers.txt`
+- `latest-blockers.json` / `latest-blockers.txt`
+
+Override output directory with `SAFETY_GATE_REPORT_DIR`.
+
+For the paid-flow specific audit across subscriptions, add-ons, live smoke,
+deployed Cloudflare posture, and local production env readiness, run:
+
+```bash
+pnpm payments:audit
+```
+
+That command writes JSON and Markdown artifacts to `tmp/payment-security-audit`
+and is documented in
+[docs/playbooks/payment-security-audit.md](docs/playbooks/payment-security-audit.md).
 
 Before a production release, also run the production-only validation checks:
 

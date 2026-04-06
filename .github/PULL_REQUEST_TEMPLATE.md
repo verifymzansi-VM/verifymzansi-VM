@@ -1,3 +1,5 @@
+# Pull Request
+
 ## Summary
 
 <!-- What does this PR do? Keep it to 1-3 bullet points. -->
@@ -20,6 +22,9 @@
 - [ ] I have tested this locally
 - [ ] New and existing unit tests pass (`pnpm test`)
 - [ ] Lint and type checks pass (`pnpm lint && pnpm typecheck`)
+- [ ] CI safety gate passes (`safety-gate-snapshot`)
+- [ ] Safety blocker artifact reviewed (`latest-ci-review-blockers.txt` reports
+      `total_blockers=0`)
 - [ ] I have added tests for new functionality (if applicable)
 - [ ] No sensitive data (API keys, secrets) included in this PR
 - [ ] RLS policies updated if database schema changed
@@ -31,6 +36,13 @@
 <!-- How can a reviewer verify this works? -->
 
 -
+
+## Safety evidence
+
+<!-- Paste artifact pointers from the CI upload when available. -->
+
+- latest-ci-review-blockers.txt:
+- latest.json:
 
 ## Screenshots (if UI change)
 

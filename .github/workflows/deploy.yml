@@ -180,3 +180,11 @@ jobs:
           PUBLIC_VERIFY_BASE_URL: ${{ secrets.APP_URL }}
           PUBLIC_VERIFY_REQUIRE_TURNSTILE: "1"
         run: pnpm run test:public-verify
+
+      - name: Upload safety gate artifacts (if present)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-safety-gate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/safety-gate/**
+          if-no-files-found: ignore

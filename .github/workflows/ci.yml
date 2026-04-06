@@ -258,3 +258,27 @@ jobs:
           BUNDLE_BUDGET_WARN_KB: "2750"
           BUNDLE_BUDGET_FAIL_KB: "3000"
         run: pnpm run check:bundle-budget
+
+  safety-gate-snapshot:
+    runs-on: ubuntu-latest
+    needs: lint-type-security
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Run safety gate (CI mode)
+        run: pnpm run safety:ci-review -- --fail-fast
+      - name: Upload safety gate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: safety-gate-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/safety-gate/**
+          if-no-files-found: error
