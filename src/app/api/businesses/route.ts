@@ -45,6 +45,7 @@ import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
+import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
 
 const log = createLogger("BusinessesCRUD");
 const AREA: MarketplaceArea = "MZANSI_BUSINESS";
@@ -417,6 +418,16 @@ export async function POST(request: NextRequest) {
     } catch (auditErr) {
       log.error("Audit log failed (non-fatal)", {
         error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
+
+    if (shouldSendOwnerLifecycleNotifications()) {
+      void createNotification({
+        userId: user.id,
+        type: "info",
+        title: "Business profile submitted",
+        message: `\"${data.business_name}\" was submitted for review.`,
+        href: "/dashboard/businesses",
       });
     }
 

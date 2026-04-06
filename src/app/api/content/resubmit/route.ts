@@ -16,6 +16,7 @@ import {
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
+import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
 
 const log = createLogger("ContentResubmit");
 
@@ -297,6 +298,23 @@ export async function POST(request: Request) {
     } catch (auditErr) {
       log.error("Audit log failed (non-fatal)", {
         error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
+
+    if (shouldSendOwnerLifecycleNotifications()) {
+      const hrefByArea: Record<keyof typeof tableMap, string> = {
+        MZANSI_MARKET: "/dashboard/listings",
+        MZANSI_BUSINESS: "/dashboard/businesses",
+        BUSINESS_ADS: "/dashboard/businesses",
+        MALL_SHOPS: "/dashboard/storefronts",
+        PROMOTIONS_EVENTS: "/dashboard/promotions",
+      };
+      void createNotification({
+        userId: user.id,
+        type: "info",
+        title: "Content resubmitted",
+        message: "Your content has been resubmitted and is pending moderation.",
+        href: hrefByArea[area],
       });
     }
 

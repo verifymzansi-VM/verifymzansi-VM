@@ -24,6 +24,7 @@ import {
 } from "@/lib/account/compat";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
+import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
 
 const log = createLogger("ListingUpdate");
 const listingIdParamsSchema = z.object({
@@ -322,6 +323,21 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       userId: user.id,
       category: data.category,
     });
+
+    if (shouldSendOwnerLifecycleNotifications()) {
+      const movedBackToReview =
+        updateRecord.status === "pending_moderation" &&
+        ["live", "approved"].includes(listing.status);
+      void createNotification({
+        userId: user.id,
+        type: movedBackToReview ? "warning" : "info",
+        title: movedBackToReview ? "Listing moved to review" : "Listing updated",
+        message: movedBackToReview
+          ? `\"${data.title}\" was updated and is now pending moderation.`
+          : `\"${data.title}\" was updated successfully.`,
+        href: "/dashboard/listings",
+      });
+    }
 
     return NextResponse.json({ id: listingId, message: "Listing updated successfully" });
   } catch (err) {

@@ -47,7 +47,7 @@ export async function HomeCategoryShowcase() {
     supabase
       .from("businesses")
       .select("id", { count: "exact" })
-      .eq("status", "active")
+      .in("status", ["live", "active"])
       .eq("category", "tourism_hospitality")
       .limit(0),
   ]);

@@ -15,6 +15,7 @@ import {
   type PromotionType,
 } from "@/types/enums";
 import { inferPromotionCategoryKey } from "@/lib/utils/promotion-category";
+import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
 import {
   getStoredPromotionTypesForFilter,
   parsePromotionFilterType,
@@ -480,6 +481,16 @@ export async function POST(request: NextRequest) {
     } catch (auditErr) {
       log.error("Audit log failed (non-fatal)", {
         error: auditErr instanceof Error ? auditErr.message : "Unknown",
+      });
+    }
+
+    if (shouldSendOwnerLifecycleNotifications()) {
+      void createNotification({
+        userId: user.id,
+        type: "info",
+        title: "Tourism & Event post submitted",
+        message: `\"${data.title}\" was submitted for review.`,
+        href: "/dashboard/promotions",
       });
     }
 

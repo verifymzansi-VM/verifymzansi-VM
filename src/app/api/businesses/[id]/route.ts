@@ -30,6 +30,7 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
+import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
 
 const log = createLogger("BusinessDetail");
 const businessIdParamsSchema = z.object({
@@ -391,6 +392,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       });
     } catch {
       // non-fatal
+    }
+
+    if (shouldSendOwnerLifecycleNotifications()) {
+      const movedBackToReview = existing.status === "live";
+      void createNotification({
+        userId: user.id,
+        type: movedBackToReview ? "warning" : "info",
+        title: movedBackToReview ? "Business profile moved to review" : "Business profile updated",
+        message: movedBackToReview
+          ? `\"${data.business_name}\" was updated and is now pending moderation.`
+          : `\"${data.business_name}\" was updated successfully.`,
+        href: "/dashboard/businesses",
+      });
     }
 
     return NextResponse.json({ success: true });

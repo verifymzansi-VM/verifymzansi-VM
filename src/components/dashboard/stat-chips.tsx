@@ -46,7 +46,7 @@ const defaultChips = (counts: {
     toneClassName: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-100",
   },
   {
-    label: "Promos",
+    label: "Tourism & Events",
     value: counts.activePromos,
     href: "/dashboard/promotions",
     icon: Megaphone,

@@ -44,6 +44,7 @@ import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
+import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
 
 const log = createLogger("ListingCreate");
 const AREA: MarketplaceArea = "MZANSI_MARKET";
@@ -888,6 +889,16 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       category: data.category,
     });
+
+    if (shouldSendOwnerLifecycleNotifications()) {
+      void createNotification({
+        userId: user.id,
+        type: "info",
+        title: "Listing submitted",
+        message: `\"${data.title}\" was submitted for review.`,
+        href: "/dashboard/listings",
+      });
+    }
 
     return NextResponse.json(
       {

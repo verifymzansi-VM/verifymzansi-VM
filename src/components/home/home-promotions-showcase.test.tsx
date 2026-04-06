@@ -70,10 +70,11 @@ function createSupabaseMock(data: unknown[], tourismData: unknown[] = []) {
       if (table === "businesses") {
         businessCallCount++;
         if (businessCallCount === 1) {
-          // Tourism businesses query: .select().eq().eq().order().order().order().limit()
+          // Tourism businesses query: .select().eq().in().order().order().order().limit()
           const builder = {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
             order: vi.fn().mockReturnThis(),
             limit: vi.fn().mockResolvedValue({ data: tourismData }),
           };

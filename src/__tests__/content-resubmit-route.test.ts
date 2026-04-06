@@ -7,6 +7,11 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoiste
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { mockCreateNotification, mockShouldSendOwnerLifecycleNotifications } = vi.hoisted(() => ({
+  mockCreateNotification: vi.fn().mockResolvedValue(true),
+  mockShouldSendOwnerLifecycleNotifications: vi.fn().mockReturnValue(true),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
@@ -14,6 +19,10 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: () => ({ limited: false }),
 }));
 vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: vi.fn().mockReturnValue(null) }));
+vi.mock("@/lib/notifications", () => ({
+  createNotification: mockCreateNotification,
+  shouldSendOwnerLifecycleNotifications: mockShouldSendOwnerLifecycleNotifications,
+}));
 
 import { POST } from "@/app/api/content/resubmit/route";
 
@@ -77,6 +86,7 @@ const ITEM_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
 describe("POST /api/content/resubmit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockShouldSendOwnerLifecycleNotifications.mockReturnValue(true);
   });
 
   // ── Existing: compat-table happy path ─────────────────────────────────

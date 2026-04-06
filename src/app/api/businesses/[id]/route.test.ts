@@ -7,6 +7,11 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoiste
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { mockCreateNotification, mockShouldSendOwnerLifecycleNotifications } = vi.hoisted(() => ({
+  mockCreateNotification: vi.fn().mockResolvedValue(true),
+  mockShouldSendOwnerLifecycleNotifications: vi.fn().mockReturnValue(true),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
@@ -17,6 +22,10 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: vi.fn().mockReturnValue(null),
 }));
 vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: vi.fn().mockReturnValue(null) }));
+vi.mock("@/lib/notifications", () => ({
+  createNotification: mockCreateNotification,
+  shouldSendOwnerLifecycleNotifications: mockShouldSendOwnerLifecycleNotifications,
+}));
 
 import { GET, PATCH } from "./route";
 
@@ -33,6 +42,7 @@ function createRequest(body: unknown): NextRequest {
 describe("PATCH /api/businesses/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockShouldSendOwnerLifecycleNotifications.mockReturnValue(true);
     mockCreateClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
       from: vi.fn((table: string) => {

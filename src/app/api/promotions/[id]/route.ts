@@ -31,6 +31,7 @@ import {
   derivePromotionSocialAuthorizationStatus,
   getPromotionSocialAuthorizationWriteResult,
 } from "@/lib/promotions/social-authorization";
+import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
 
 const log = createLogger("PromotionDetail");
 const promotionIdParamsSchema = z.object({
@@ -433,6 +434,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     } catch {
       // non-fatal
+    }
+
+    if (shouldSendOwnerLifecycleNotifications()) {
+      const movedBackToReview = Boolean(
+        contentChanged && ["live", "approved"].includes(existing.status)
+      );
+      void createNotification({
+        userId: user.id,
+        type: movedBackToReview ? "warning" : "info",
+        title: movedBackToReview
+          ? "Tourism & Event post moved to review"
+          : "Tourism & Event post updated",
+        message: movedBackToReview
+          ? `\"${data.title}\" was updated and is now pending moderation.`
+          : `\"${data.title}\" was updated successfully.`,
+        href: "/dashboard/promotions",
+      });
     }
 
     return NextResponse.json({ success: true });

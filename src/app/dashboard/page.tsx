@@ -69,11 +69,13 @@ export default async function DashboardPage() {
   const sevenDaysFromNow = new Date(nowDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const fortyEightHoursFromNow = new Date(nowDate.getTime() + 48 * 60 * 60 * 1000).toISOString();
 
-  const [listingOwnerColumn, businessOwnerColumn, leadsOwnerColumn] = await Promise.all([
-    safeGetOwnerColumn(supabase, "listings"),
-    safeGetOwnerColumn(supabase, "businesses"),
-    safeGetOwnerColumn(supabase, "leads"),
-  ]);
+  const [listingOwnerColumn, businessOwnerColumn, leadsOwnerColumn, promotionsOwnerColumn] =
+    await Promise.all([
+      safeGetOwnerColumn(supabase, "listings"),
+      safeGetOwnerColumn(supabase, "businesses"),
+      safeGetOwnerColumn(supabase, "leads"),
+      safeGetOwnerColumn(supabase, "promotions"),
+    ]);
 
   // Fetch dashboard data in parallel — allSettled for resilience on slow connections
   const results = await Promise.allSettled([
@@ -103,11 +105,12 @@ export default async function DashboardPage() {
     /* 5 — active promotions count */
     applyOwnerFilter(
       supabase
-        .from("listings")
+        .from("promotions")
         .select("*", { count: "exact", head: true })
         .eq("status", "live")
-        .or(`boost_until.gt.${now},featured_until.gt.${now},urgent_until.gt.${now}`),
-      listingOwnerColumn,
+        .eq("promotion_type", "event")
+        .or(`end_date.is.null,end_date.gte.${now}`),
+      promotionsOwnerColumn,
       user.id
     ),
     /* 6 — rejected listings count */
@@ -142,13 +145,13 @@ export default async function DashboardPage() {
     /* 9 — expiring promotions */
     applyOwnerFilter(
       supabase
-        .from("listings")
+        .from("promotions")
         .select("*", { count: "exact", head: true })
         .eq("status", "live")
-        .or(
-          `and(boost_until.gt.${now},boost_until.lt.${fortyEightHoursFromNow}),and(featured_until.gt.${now},featured_until.lt.${fortyEightHoursFromNow}),and(urgent_until.gt.${now},urgent_until.lt.${fortyEightHoursFromNow})`
-        ),
-      listingOwnerColumn,
+        .eq("promotion_type", "event")
+        .gt("end_date", now)
+        .lt("end_date", fortyEightHoursFromNow),
+      promotionsOwnerColumn,
       user.id
     ),
     /* 10 — business count */

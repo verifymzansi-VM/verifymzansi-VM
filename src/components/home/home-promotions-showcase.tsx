@@ -87,7 +87,7 @@ export async function HomePromotionsShowcase() {
       "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until"
     )
     .eq("category", "tourism_hospitality")
-    .eq("status", "active")
+    .in("status", ["live", "active"])
     .order("boost_until", { ascending: false, nullsFirst: false })
     .order("featured_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })

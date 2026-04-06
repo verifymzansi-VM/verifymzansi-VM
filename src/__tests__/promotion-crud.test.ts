@@ -16,6 +16,11 @@ const { mockHasPhoneNumber } = vi.hoisted(() => ({
   mockHasPhoneNumber: vi.fn(),
 }));
 
+const { mockCreateNotification, mockShouldSendOwnerLifecycleNotifications } = vi.hoisted(() => ({
+  mockCreateNotification: vi.fn().mockResolvedValue(true),
+  mockShouldSendOwnerLifecycleNotifications: vi.fn().mockReturnValue(true),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
@@ -24,6 +29,10 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: mockEnforceCsrfToken }));
 vi.mock("@/lib/account/require-phone", () => ({ hasPhoneNumber: mockHasPhoneNumber }));
+vi.mock("@/lib/notifications", () => ({
+  createNotification: mockCreateNotification,
+  shouldSendOwnerLifecycleNotifications: mockShouldSendOwnerLifecycleNotifications,
+}));
 
 import { POST, GET } from "@/app/api/promotions/route";
 import { GET as GET_DETAIL, PUT, DELETE } from "@/app/api/promotions/[id]/route";
@@ -146,6 +155,7 @@ describe("POST /api/promotions", () => {
     resetOwnerColumnCacheForTesting();
     mockEnforceCsrfToken.mockReturnValue(null);
     mockHasPhoneNumber.mockResolvedValue(true);
+    mockShouldSendOwnerLifecycleNotifications.mockReturnValue(true);
   });
 
   it("rejects requests missing a CSRF token", async () => {
@@ -457,6 +467,13 @@ describe("POST /api/promotions", () => {
     const json = await res.json();
     expect(json.success).toBe(true);
     expect(json.promotion.id).toBe(VALID_UUID);
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        title: "Tourism & Event post submitted",
+        href: "/dashboard/promotions",
+      })
+    );
   });
 
   it("returns 404 when linked business is not owned by the caller", async () => {

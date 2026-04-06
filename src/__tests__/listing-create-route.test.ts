@@ -18,6 +18,11 @@ const { mockHasPhoneNumber } = vi.hoisted(() => ({
   mockHasPhoneNumber: vi.fn(),
 }));
 
+const { mockCreateNotification, mockShouldSendOwnerLifecycleNotifications } = vi.hoisted(() => ({
+  mockCreateNotification: vi.fn().mockResolvedValue(true),
+  mockShouldSendOwnerLifecycleNotifications: vi.fn().mockReturnValue(true),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
@@ -31,6 +36,10 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: mockEnforceCsrfToken }));
 vi.mock("@/lib/account/require-phone", () => ({ hasPhoneNumber: mockHasPhoneNumber }));
+vi.mock("@/lib/notifications", () => ({
+  createNotification: mockCreateNotification,
+  shouldSendOwnerLifecycleNotifications: mockShouldSendOwnerLifecycleNotifications,
+}));
 
 import { GET, POST } from "@/app/api/listings/route";
 
@@ -72,6 +81,7 @@ describe("POST /api/listings", () => {
     resetOwnerColumnCacheForTesting();
     mockEnforceCsrfToken.mockReturnValue(null);
     mockHasPhoneNumber.mockResolvedValue(true);
+    mockShouldSendOwnerLifecycleNotifications.mockReturnValue(true);
     mockCreateClient.mockResolvedValue({
       from: vi.fn((table: string) => {
         const adminClient = mockCreateAdminClient();
@@ -431,6 +441,13 @@ describe("POST /api/listings", () => {
       message: "Listing submitted for review",
       status: "pending_moderation",
     });
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        title: "Listing submitted",
+        href: "/dashboard/listings",
+      })
+    );
   });
 
   it("writes seller_id when listings still use the legacy owner column", async () => {
