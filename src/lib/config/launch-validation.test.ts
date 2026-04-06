@@ -132,11 +132,31 @@ describe("launch validation", () => {
     );
   });
 
-  it("fails production mode when KYC webhook secret is missing", () => {
+  it("allows missing KYC webhook secret when KYC_PROVIDER=stub", () => {
     const summary = validateLaunchConfiguration(
       {
         ...BASE_ENV,
         KYC_WEBHOOK_SECRET: undefined,
+        KYC_PROVIDER: "stub",
+      },
+      { mode: "production" }
+    );
+
+    expect(summary.isValid).toBe(true);
+    expect(summary.checks).toContainEqual(
+      expect.objectContaining({
+        name: "KYC webhook",
+        status: "pass",
+      })
+    );
+  });
+
+  it("fails production mode when non-stub provider is enabled without KYC webhook secret", () => {
+    const summary = validateLaunchConfiguration(
+      {
+        ...BASE_ENV,
+        KYC_WEBHOOK_SECRET: undefined,
+        KYC_PROVIDER: "smileid",
       },
       { mode: "production" }
     );
@@ -146,6 +166,11 @@ describe("launch validation", () => {
       expect.objectContaining({
         name: "Launch env",
         detail: expect.stringContaining("KYC_WEBHOOK_SECRET"),
+      })
+    );
+    expect(summary.errors).toContainEqual(
+      expect.objectContaining({
+        name: "KYC webhook",
       })
     );
   });

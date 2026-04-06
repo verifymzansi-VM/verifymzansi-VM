@@ -90,7 +90,7 @@ deployed Cloudflare/Wrangler runtime secrets:
 - `OZOW_WEBHOOK_SECRET`
 - Optional `OZOW_API_BASE_URL` only when explicitly required. In production, it
   must be `https://one.ozow.com`.
-- `KYC_WEBHOOK_SECRET`
+- `KYC_WEBHOOK_SECRET` when `KYC_PROVIDER` is set to a non-`stub` provider
 
 Failing any of the above should block deploy.
 

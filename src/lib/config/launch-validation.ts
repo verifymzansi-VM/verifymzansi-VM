@@ -29,6 +29,14 @@ const DEV_ONLY_FLAGS = [
   "ENABLE_DEV_TURNSTILE_BYPASS",
 ] as const;
 
+function getConfiguredKycProvider(env: EnvSource): string {
+  return hasValue(env.KYC_PROVIDER) ? env.KYC_PROVIDER.trim().toLowerCase() : "stub";
+}
+
+function requiresKycWebhookSecret(mode: LaunchValidationMode, env: EnvSource): boolean {
+  return mode === "production" && getConfiguredKycProvider(env) !== "stub";
+}
+
 /**
  * Environment variables that must NOT be set in production.
  * Unlike DEV_ONLY_FLAGS (which are boolean toggles), these carry
@@ -89,7 +97,6 @@ const REQUIRED_BY_MODE: Record<LaunchValidationMode, readonly string[]> = {
     "OZOW_CLIENT_SECRET",
     "OZOW_SITE_CODE",
     "OZOW_WEBHOOK_SECRET",
-    "KYC_WEBHOOK_SECRET",
     "RESEND_API_KEY",
     "KYC_ENCRYPTION_KEY",
     "ID_ENCRYPTION_KEY",
@@ -109,7 +116,6 @@ const PRODUCTION_SECRET_KEYS = [
   "AFRICASTALKING_API_KEY",
   "OZOW_CLIENT_SECRET",
   "OZOW_WEBHOOK_SECRET",
-  "KYC_WEBHOOK_SECRET",
   "RESEND_API_KEY",
   "TURNSTILE_SECRET_KEY",
 ] as const;
@@ -201,8 +207,15 @@ function addCheck(
   checks.push({ name, status, detail });
 }
 
-export function getRequiredLaunchEnvKeys(mode: LaunchValidationMode): string[] {
-  return [...REQUIRED_BY_MODE[mode]];
+export function getRequiredLaunchEnvKeys(
+  mode: LaunchValidationMode,
+  env: EnvSource = process.env
+): string[] {
+  const required = [...REQUIRED_BY_MODE[mode]];
+  if (requiresKycWebhookSecret(mode, env)) {
+    required.push("KYC_WEBHOOK_SECRET");
+  }
+  return required;
 }
 
 export function resolveLaunchValidationMode(env: EnvSource = process.env): LaunchValidationMode {
@@ -225,14 +238,15 @@ export function validateLaunchConfiguration(
 ): LaunchValidationSummary {
   const mode = options.mode ?? resolveLaunchValidationMode(env);
   const checks: LaunchValidationCheck[] = [];
-  const missingRequired = getRequiredLaunchEnvKeys(mode).filter((key) => !hasValue(env[key]));
+  const requiredKeys = getRequiredLaunchEnvKeys(mode, env);
+  const missingRequired = requiredKeys.filter((key) => !hasValue(env[key]));
 
   if (missingRequired.length === 0) {
     addCheck(
       checks,
       "Launch env",
       "pass",
-      `All ${getRequiredLaunchEnvKeys(mode).length} required ${mode} variables are present`
+      `All ${requiredKeys.length} required ${mode} variables are present`
     );
   } else {
     addCheck(checks, "Launch env", "fail", `Missing: ${missingRequired.join(", ")}`);
@@ -341,6 +355,8 @@ export function validateLaunchConfiguration(
   const ozowSiteCode = env.OZOW_SITE_CODE;
   const ozowWebhookSecret = env.OZOW_WEBHOOK_SECRET;
   const ozowApiBaseUrl = env.OZOW_API_BASE_URL;
+  const kycWebhookSecretRequired = requiresKycWebhookSecret(mode, env);
+  const kycProvider = getConfiguredKycProvider(env);
   if (mode === "production") {
     if (
       !hasValue(ozowEnv) ||
@@ -402,6 +418,48 @@ export function validateLaunchConfiguration(
       "warn",
       "Ozow credentials are optional locally but required before production launch"
     );
+  }
+
+  const kycWebhookSecret = env.KYC_WEBHOOK_SECRET;
+  if (mode === "production") {
+    if (kycWebhookSecretRequired) {
+      if (!hasValue(kycWebhookSecret)) {
+        addCheck(
+          checks,
+          "KYC webhook",
+          "fail",
+          `KYC_WEBHOOK_SECRET is required when KYC_PROVIDER=${kycProvider}`
+        );
+      } else if (isPlaceholderValue(kycWebhookSecret)) {
+        addCheck(
+          checks,
+          "KYC webhook",
+          "fail",
+          "KYC_WEBHOOK_SECRET still contains a placeholder value"
+        );
+      } else {
+        addCheck(
+          checks,
+          "KYC webhook",
+          "pass",
+          `Signed callbacks enabled (provider=${kycProvider})`
+        );
+      }
+    } else if (hasValue(kycWebhookSecret)) {
+      addCheck(
+        checks,
+        "KYC webhook",
+        "pass",
+        `Secret configured while KYC_PROVIDER=${kycProvider}`
+      );
+    } else {
+      addCheck(
+        checks,
+        "KYC webhook",
+        "pass",
+        "KYC_PROVIDER=stub, signed provider callbacks are not enabled"
+      );
+    }
   }
 
   const hasNativeR2 = hasNativeR2BindingConfig(env);
@@ -532,7 +590,10 @@ export function validateLaunchConfiguration(
   }
 
   if (mode === "production") {
-    const placeholderSecrets = PRODUCTION_SECRET_KEYS.filter((key) => isPlaceholderValue(env[key]));
+    const secretKeys = kycWebhookSecretRequired
+      ? ([...PRODUCTION_SECRET_KEYS, "KYC_WEBHOOK_SECRET"] as const)
+      : PRODUCTION_SECRET_KEYS;
+    const placeholderSecrets = secretKeys.filter((key) => isPlaceholderValue(env[key]));
     if (placeholderSecrets.length > 0) {
       addCheck(
         checks,
