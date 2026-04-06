@@ -82,6 +82,10 @@ export const DEFAULT_PERMISSIONS_POLICY =
 
 // -- Header application -----------------------------------------------------
 
+function isCacheableAssetRequest(pathname: string): boolean {
+  return pathname.startsWith("/api/media/serve/") || pathname.startsWith("/images/");
+}
+
 /** Attach all standard security headers to a response. */
 export function applySecurityHeaders(
   response: NextResponse,
@@ -132,6 +136,7 @@ export function withSecurityHeaders(
   request: NextRequest,
   proxyResponse: NextResponse
 ): NextResponse {
+  const pathname = request.nextUrl.pathname;
   const shouldClearPlaywrightSession =
     !shouldUsePlaywrightStubForRequest(request) &&
     !!request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value;
@@ -154,6 +159,27 @@ export function withSecurityHeaders(
     allowDevWebSocket: process.env.NODE_ENV !== "production",
     enforceHttps: isSecureRequest,
   });
+
+  // Cacheable asset routes should not receive a CSRF bootstrap cookie from middleware.
+  // A Set-Cookie on media/image responses forces browsers and CDNs to treat them as
+  // private, overriding the immutable cache policy these routes are meant to serve.
+  if (isCacheableAssetRequest(pathname)) {
+    if (shouldClearPlaywrightSession) {
+      clearPlaywrightSessionCookie(proxyResponse);
+    }
+
+    const isVerificationPage = pathname.startsWith("/verification");
+    const permissionsPolicy = isVerificationPage
+      ? "camera=(self), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()"
+      : DEFAULT_PERMISSIONS_POLICY;
+
+    applySecurityHeaders(proxyResponse, csp, permissionsPolicy);
+    if (nonce) {
+      proxyResponse.headers.set("x-nonce", nonce);
+    }
+
+    return proxyResponse;
+  }
 
   // Inject x-nonce so Server Components can read it via `headers()`
   const requestHeaders = new Headers(request.headers);

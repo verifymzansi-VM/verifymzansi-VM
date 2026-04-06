@@ -176,6 +176,24 @@ describe("middleware security headers", () => {
     expect(setCookie).toBeTruthy();
   });
 
+  it("does not set a CSRF cookie on cacheable media proxy requests", async () => {
+    const res = await proxy(
+      createMockRequest("/api/media/serve/media/listing/example/photo.jpg", {
+        hostname: "verifymzansi.com",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("does not set a CSRF cookie on cacheable public image requests", async () => {
+    const res = await proxy(createMockRequest("/images/logo-transparent.png"));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
   it("clears stale Playwright session cookies outside stub mode", async () => {
     const res = await proxy(
       createMockRequest("/", { cookieHeader: "vmz_pw_session=persona%3Aold" })
