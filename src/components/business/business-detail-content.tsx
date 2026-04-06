@@ -455,16 +455,18 @@ export function BusinessDetailsCard({
                 </span>
               </div>
             )}
-            <Button asChild variant="outline" className="w-full gap-2">
-              <a
-                href={safeExternalHref(businessDetails.order_url)}
-                target="_blank"
-                rel="noopener noreferrer nofollow ugc"
-              >
-                <Globe className="h-4 w-4" />
-                Order Online
-              </a>
-            </Button>
+            {businessDetails.order_url && (
+              <Button asChild variant="outline" className="w-full gap-2">
+                <a
+                  href={safeExternalHref(businessDetails.order_url)}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow ugc"
+                >
+                  <Globe className="h-4 w-4" />
+                  Order Online
+                </a>
+              </Button>
+            )}
             {businessDetails.support_response_time && (
               <div className="flex items-start justify-between gap-4">
                 <span className="text-muted-foreground">Support response time</span>
