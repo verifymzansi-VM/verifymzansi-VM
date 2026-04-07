@@ -103,9 +103,13 @@ export async function POST(request: NextRequest) {
 
     if (turnstileStatus.configured) {
       if (parsedBody.data.turnstileToken === "turnstile-unavailable") {
+        log.warn("Register request submitted with turnstile-unavailable token", {
+          ip,
+          rateLimitKeySource: clientIdentity.source,
+        });
         return NextResponse.json(
           { error: "Security verification is temporarily unavailable. Please retry." },
-          { status: 503 }
+          { status: 503, headers: { "Retry-After": "60" } }
         );
       }
 
@@ -115,6 +119,20 @@ export async function POST(request: NextRequest) {
       });
 
       if (!captcha.success) {
+        if (captcha.temporary) {
+          log.warn("Returning temporary Turnstile outage for register", {
+            ip,
+            rateLimitKeySource: clientIdentity.source,
+          });
+          return NextResponse.json(
+            {
+              error:
+                captcha.error || "Security verification is temporarily unavailable. Please retry.",
+            },
+            { status: 503, headers: { "Retry-After": "60" } }
+          );
+        }
+
         return NextResponse.json(
           { error: captcha.error || "CAPTCHA verification failed" },
           { status: 400 }

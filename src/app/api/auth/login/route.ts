@@ -172,6 +172,21 @@ export async function POST(request: NextRequest) {
         });
 
         if (!captcha.success) {
+          if (captcha.temporary) {
+            log.warn("Returning temporary Turnstile outage for login", {
+              ip,
+              rateLimitKeySource: clientIdentity.source,
+            });
+            return NextResponse.json(
+              {
+                error:
+                  captcha.error ||
+                  "Security verification is temporarily unavailable. Please retry.",
+              },
+              { status: 503, headers: { "Retry-After": "60" } }
+            );
+          }
+
           return NextResponse.json(
             { error: captcha.error || "CAPTCHA verification failed" },
             { status: 400 }

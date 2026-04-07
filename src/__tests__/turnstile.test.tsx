@@ -96,7 +96,7 @@ describe("TurnstileWidget", () => {
     expect(mockTurnstileRender).not.toHaveBeenCalled();
   });
 
-  it("escalates terminal Cloudflare widget errors into an unavailable state", async () => {
+  it("does not immediately escalate first terminal Cloudflare widget error to unavailable", async () => {
     const onUnavailable = vi.fn();
     const onError = vi.fn();
 
@@ -115,10 +115,34 @@ describe("TurnstileWidget", () => {
       options["error-callback"]("Cloudflare Turnstile Error: 110200");
     });
 
+    expect(onUnavailable).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("escalates repeated terminal Cloudflare widget errors into unavailable state", async () => {
+    const onUnavailable = vi.fn();
+    const onError = vi.fn();
+
+    render(<TurnstileWidget onSuccess={vi.fn()} onUnavailable={onUnavailable} onError={onError} />);
+
     await waitFor(() => {
-      expect(onUnavailable).toHaveBeenCalled();
+      expect(mockTurnstileRender).toHaveBeenCalled();
     });
-    expect(onError).not.toHaveBeenCalled();
+
+    const [, options] = mockTurnstileRender.mock.calls[0] as unknown as [
+      HTMLElement,
+      { "error-callback": (error: string) => void },
+    ];
+
+    await act(async () => {
+      options["error-callback"]("Cloudflare Turnstile Error: 110200");
+      options["error-callback"]("Cloudflare Turnstile Error: 110200");
+    });
+
+    await waitFor(() => {
+      expect(onUnavailable).toHaveBeenCalledTimes(1);
+    });
+    expect(onError).toHaveBeenCalledTimes(1);
   });
 
   it("does not recreate the widget when parent callbacks change", async () => {

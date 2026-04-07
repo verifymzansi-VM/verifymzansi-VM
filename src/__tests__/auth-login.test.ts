@@ -221,6 +221,30 @@ describe("POST /api/auth/login", () => {
     );
   });
 
+  it("returns 503 with Retry-After when Turnstile verification is temporarily unavailable", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "secret";
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "site-key";
+    mockVerifyTurnstile.mockResolvedValue({
+      success: false,
+      temporary: true,
+      error: "Security verification timed out. Please retry.",
+    });
+
+    const res = await POST(
+      createRequest({
+        email: "test@example.com",
+        password: "validPass123",
+        turnstileToken: "tok-valid",
+      })
+    );
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBe("60");
+    await expect(res.json()).resolves.toEqual({
+      error: "Security verification timed out. Please retry.",
+    });
+  });
+
   it("fails closed in production when Turnstile is partially configured", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");

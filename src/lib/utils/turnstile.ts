@@ -6,6 +6,7 @@
  */
 
 import { createLogger } from "@/lib/utils/logger";
+import { TURNSTILE_VERIFY_REQUEST_TIMEOUT_MS } from "@/lib/turnstile-constants";
 import { shouldBypassTurnstileInNonProduction } from "@/lib/turnstile-mode";
 
 const log = createLogger("Turnstile");
@@ -20,6 +21,7 @@ interface TurnstileVerifyResult {
   error?: string;
   challengeTimestamp?: string;
   hostname?: string;
+  temporary?: boolean;
 }
 
 export type TurnstileConfigStatus =
@@ -133,12 +135,25 @@ export async function verifyTurnstileToken(
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: form.toString(),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(TURNSTILE_VERIFY_REQUEST_TIMEOUT_MS),
     });
 
     if (!response.ok) {
       const text = await readResponseBody(response);
       log.error("Turnstile API returned non-OK status", { status: response.status, body: text });
+
+      if (response.status >= 500) {
+        log.warn("Turnstile upstream temporarily unavailable", {
+          category: "upstream_5xx",
+          status: response.status,
+        });
+        return {
+          success: false,
+          temporary: true,
+          error: "Security verification service is temporarily unavailable. Please retry.",
+        };
+      }
+
       return {
         success: false,
         error: `Turnstile verification request failed (HTTP ${response.status})`,
@@ -149,6 +164,10 @@ export async function verifyTurnstileToken(
 
     if (!data.success) {
       const errorCodes = data["error-codes"] || [];
+      log.warn("Turnstile token verification failed", {
+        category: "invalid_token",
+        errorCodes,
+      });
       return {
         success: false,
         error: errorCodes.join(", ") || "CAPTCHA verification failed",
@@ -161,9 +180,25 @@ export async function verifyTurnstileToken(
       hostname: data.hostname,
     };
   } catch (error) {
+    const isTimeoutError = error instanceof DOMException && error.name === "TimeoutError";
+    const isAbortError = error instanceof DOMException && error.name === "AbortError";
+
     log.error("Verification error", {
       error: error instanceof Error ? error.message : "unknown error",
+      temporary: isTimeoutError || isAbortError,
     });
+
+    if (isTimeoutError || isAbortError) {
+      log.warn("Turnstile verification request timed out", {
+        category: "request_timeout",
+      });
+      return {
+        success: false,
+        temporary: true,
+        error: "Security verification timed out. Please retry.",
+      };
+    }
+
     return {
       success: false,
       error: error instanceof Error ? error.message : "Verification failed",

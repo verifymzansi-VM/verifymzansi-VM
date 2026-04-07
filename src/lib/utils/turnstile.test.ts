@@ -57,7 +57,8 @@ describe("turnstile verification", () => {
 
       const result = await verifyTurnstileToken({ token: "test" });
       expect(result.success).toBe(false);
-      expect(result.error).toContain("HTTP 500");
+      expect(result.temporary).toBe(true);
+      expect(result.error).toContain("temporarily unavailable");
     });
 
     it("handles fetch exceptions", async () => {
@@ -66,6 +67,19 @@ describe("turnstile verification", () => {
       const result = await verifyTurnstileToken({ token: "test" });
       expect(result.success).toBe(false);
       expect(result.error).toBe("Network error");
+    });
+
+    it("marks timeout failures as temporary", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockRejectedValue(new DOMException("Request timed out", "TimeoutError"))
+      );
+
+      const result = await verifyTurnstileToken({ token: "test" });
+
+      expect(result.success).toBe(false);
+      expect(result.temporary).toBe(true);
+      expect(result.error).toContain("timed out");
     });
 
     it("allows bypass in development mode with placeholder token", async () => {

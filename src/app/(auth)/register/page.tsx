@@ -16,8 +16,12 @@ import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
+import { TURNSTILE_AUTH_PAGE_LOAD_TIMEOUT_MS } from "@/lib/turnstile-constants";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("AuthRegisterPage");
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -68,13 +72,17 @@ export default function RegisterPage() {
       return;
     }
 
+    log.info("Resetting Turnstile challenge", {
+      currentRetryToken: turnstileRetryToken,
+    });
+
     setTurnstileError(null);
     setTurnstileLoaded(false);
     setCaptchaUnavailable(false);
     setValue("turnstileToken", "", { shouldValidate: false });
     TurnstileWidget.retry();
     setTurnstileRetryToken((value) => value + 1);
-  }, [setValue, turnstileState.mode]);
+  }, [setValue, turnstileRetryToken, turnstileState.mode]);
 
   useEffect(() => {
     if (skipTurnstileTimeout || turnstileLoaded) return;
@@ -82,7 +90,7 @@ export default function RegisterPage() {
       setTurnstileError("Security check failed to load. Please try again.");
       setTurnstileLoaded(false);
       setValue("turnstileToken", "", { shouldValidate: true });
-    }, 15000);
+    }, TURNSTILE_AUTH_PAGE_LOAD_TIMEOUT_MS);
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
@@ -109,6 +117,7 @@ export default function RegisterPage() {
   }, []);
 
   const handleTurnstileError = useCallback(() => {
+    log.warn("Register Turnstile reported error callback");
     setCaptchaUnavailable(false);
     setTurnstileError("Security check failed to load. Please try again.");
     setTurnstileLoaded(false);
@@ -122,6 +131,7 @@ export default function RegisterPage() {
   }, [setValue]);
 
   const handleTurnstileUnavailable = useCallback(() => {
+    log.warn("Register Turnstile reported unavailable state");
     setCaptchaUnavailable(true);
     setTurnstileLoaded(false);
     setTurnstileError(TURNSTILE_UNAVAILABLE_MESSAGE);

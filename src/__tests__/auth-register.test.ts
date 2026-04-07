@@ -275,10 +275,29 @@ describe("POST /api/auth/register", () => {
     );
 
     expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBe("60");
     await expect(res.json()).resolves.toMatchObject({
       error: expect.stringMatching(/temporarily unavailable/i),
     });
     expect(mockVerifyTurnstile).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 with Retry-After when Turnstile verification is temporarily unavailable", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "secret");
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key");
+    mockVerifyTurnstile.mockResolvedValue({
+      success: false,
+      temporary: true,
+      error: "Security verification timed out. Please retry.",
+    });
+
+    const res = await POST(createRequest(validBody));
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBe("60");
+    await expect(res.json()).resolves.toEqual({
+      error: "Security verification timed out. Please retry.",
+    });
   });
 
   it("fails closed in production when the Turnstile site key is missing", async () => {

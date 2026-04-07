@@ -15,9 +15,13 @@ import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
+import { TURNSTILE_AUTH_PAGE_LOAD_TIMEOUT_MS } from "@/lib/turnstile-constants";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("AuthLoginPage");
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -92,13 +96,17 @@ export default function LoginPage() {
       return;
     }
 
+    log.info("Resetting Turnstile challenge", {
+      currentRetryToken: turnstileRetryToken,
+    });
+
     setTurnstileLoaded(false);
     setTurnstileError(false);
     setCaptchaUnavailable(false);
     setValue("turnstileToken", "", { shouldValidate: false });
     TurnstileWidget.retry();
     setTurnstileRetryToken((value) => value + 1);
-  }, [setValue, turnstileState.mode]);
+  }, [setValue, turnstileRetryToken, turnstileState.mode]);
 
   useEffect(() => {
     if (skipTurnstileTimeout || turnstileLoaded) return;
@@ -106,7 +114,7 @@ export default function LoginPage() {
       setTurnstileLoaded(false);
       setTurnstileError(true);
       setValue("turnstileToken", "", { shouldValidate: true });
-    }, 15000);
+    }, TURNSTILE_AUTH_PAGE_LOAD_TIMEOUT_MS);
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
@@ -133,6 +141,7 @@ export default function LoginPage() {
   }, []);
 
   const handleTurnstileError = useCallback(() => {
+    log.warn("Login Turnstile reported error callback");
     setCaptchaUnavailable(false);
     setTurnstileLoaded(false);
     setTurnstileError(true);
@@ -147,6 +156,7 @@ export default function LoginPage() {
   }, [setValue]);
 
   const handleTurnstileUnavailable = useCallback(() => {
+    log.warn("Login Turnstile reported unavailable state");
     setCaptchaUnavailable(true);
     setTurnstileLoaded(false);
     setTurnstileError(false);

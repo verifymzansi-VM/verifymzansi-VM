@@ -3,8 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
 import { TURNSTILE_UNAVAILABLE_MESSAGE, getTurnstileClientState } from "@/lib/turnstile-client";
+import {
+  TURNSTILE_SCRIPT_MAX_RETRIES,
+  TURNSTILE_SCRIPT_RETRY_BASE_DELAY_MS,
+  TURNSTILE_WIDGET_RENDER_TIMEOUT_MS,
+} from "@/lib/turnstile-constants";
 import { shouldBypassTurnstileInNonProduction } from "@/lib/turnstile-mode";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { createLogger } from "@/lib/utils/logger";
 
 /**
  * Cloudflare Turnstile CAPTCHA widget.
@@ -53,6 +59,7 @@ let scriptLoading = false;
 let scriptFailed = false;
 const loadCallbacks: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
 const TERMINAL_TURNSTILE_ERROR_CODES = new Set(["110200"]);
+const log = createLogger("TurnstileWidget");
 
 function extractTurnstileErrorCode(error: unknown): string | null {
   const message =
@@ -66,6 +73,10 @@ function extractTurnstileErrorCode(error: unknown): string | null {
 
   const match = /\b(\d{6})\b/.exec(message);
   return match ? match[1] : null;
+}
+
+function waitFor(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function loadTurnstileScript(): Promise<void> {
@@ -136,6 +147,7 @@ export function TurnstileWidget({
   const unavailableReportedRef = useRef(false);
   const bypassReportedRef = useRef(false);
   const errorCountRef = useRef(0);
+  const terminalErrorCountRef = useRef(0);
   const [unavailableRetryToken, setUnavailableRetryToken] = useState<number | undefined>(undefined);
   const onSuccessRef = useLatestRef(onSuccess);
   const onExpireRef = useLatestRef(onExpire);
@@ -164,6 +176,7 @@ export function TurnstileWidget({
     unavailableReportedRef.current = false;
     bypassReportedRef.current = false;
     errorCountRef.current = 0;
+    terminalErrorCountRef.current = 0;
   }, [retryToken]);
 
   const clearRenderTimeout = useCallback(() => {
@@ -200,6 +213,11 @@ export function TurnstileWidget({
       cleanupWidget();
       setUnavailableRetryToken(retryToken);
 
+      log.warn("Marking Turnstile as unavailable", {
+        reason: message,
+        retryToken,
+      });
+
       if (!unavailableReportedRef.current) {
         unavailableReportedRef.current = true;
         onUnavailableRef.current?.(message);
@@ -216,12 +234,33 @@ export function TurnstileWidget({
     const attemptId = renderAttemptRef.current + 1;
     renderAttemptRef.current = attemptId;
     errorCountRef.current = 0;
+    terminalErrorCountRef.current = 0;
     const container = containerRef.current;
 
-    try {
-      await loadTurnstileScript();
-    } catch {
-      onErrorRef.current?.("Turnstile script failed to load");
+    let loaded = false;
+    for (let attempt = 0; attempt <= TURNSTILE_SCRIPT_MAX_RETRIES; attempt += 1) {
+      try {
+        await loadTurnstileScript();
+        loaded = true;
+        break;
+      } catch {
+        log.warn("Turnstile script load attempt failed", {
+          attempt: attempt + 1,
+          maxAttempts: TURNSTILE_SCRIPT_MAX_RETRIES + 1,
+        });
+
+        if (attempt >= TURNSTILE_SCRIPT_MAX_RETRIES) {
+          markUnavailable(
+            "Security verification is temporarily unavailable. Please try again later."
+          );
+          return;
+        }
+
+        await waitFor(TURNSTILE_SCRIPT_RETRY_BASE_DELAY_MS * (attempt + 1));
+      }
+    }
+
+    if (!loaded) {
       return;
     }
 
@@ -263,10 +302,29 @@ export function TurnstileWidget({
         clearRenderTimeout();
         errorCountRef.current += 1;
 
-        if (
-          TERMINAL_TURNSTILE_ERROR_CODES.has(extractTurnstileErrorCode(err) ?? "") ||
-          errorCountRef.current >= 2
-        ) {
+        const turnstileErrorCode = extractTurnstileErrorCode(err) ?? "";
+        const isTerminalError = TERMINAL_TURNSTILE_ERROR_CODES.has(turnstileErrorCode);
+
+        log.warn("Turnstile challenge callback error", {
+          errorCode: turnstileErrorCode || "unknown",
+          isTerminalError,
+          errorCount: errorCountRef.current,
+          terminalErrorCount: terminalErrorCountRef.current,
+        });
+
+        if (isTerminalError) {
+          terminalErrorCountRef.current += 1;
+
+          if (terminalErrorCountRef.current >= 2) {
+            markUnavailable();
+            return;
+          }
+
+          onErrorRef.current?.(err);
+          return;
+        }
+
+        if (errorCountRef.current >= 2) {
           markUnavailable();
           return;
         }
@@ -280,9 +338,13 @@ export function TurnstileWidget({
     renderTimeoutRef.current = setTimeout(() => {
       renderTimeoutRef.current = null;
       if (renderAttemptRef.current === attemptId) {
+        log.warn("Turnstile render timed out", {
+          timeoutMs: TURNSTILE_WIDGET_RENDER_TIMEOUT_MS,
+          attemptId,
+        });
         markUnavailable();
       }
-    }, 15_000);
+    }, TURNSTILE_WIDGET_RENDER_TIMEOUT_MS);
   }, [
     siteKey,
     theme,
@@ -301,15 +363,25 @@ export function TurnstileWidget({
 
     cleanupWidget();
     bypassReportedRef.current = true;
+    log.info("Using Turnstile bypass mode on client", {
+      mode,
+      shouldBypassConfiguredTurnstile,
+    });
     onSuccessRef.current("dev-turnstile-bypass");
-  }, [isBypassMode, cleanupWidget, onSuccessRef]);
+  }, [cleanupWidget, isBypassMode, mode, onSuccessRef, shouldBypassConfiguredTurnstile]);
 
   useEffect(() => {
     if (!isConfigured) return;
 
-    renderWidget();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void renderWidget();
+      }
+    });
 
     return () => {
+      cancelled = true;
       cleanupWidget();
     };
   }, [cleanupWidget, isConfigured, renderWidget, retryToken]);
