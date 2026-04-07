@@ -1161,4 +1161,96 @@ describe("POST /api/verification/upload", () => {
     );
     expect(mockDeleteFromR2).toHaveBeenCalled();
   });
+
+  it("returns 500 when ID uniqueness lookup fails", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+    setupDefaultAdminMocks();
+
+    const baseFromImpl = mockFrom.getMockImplementation();
+    if (!baseFromImpl) {
+      throw new Error("Expected default admin mock implementation");
+    }
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockImplementation((...args: unknown[]) => {
+            if (args[0] === "user_id") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    neq: vi.fn().mockReturnValue({
+                      eq: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockReturnValue({
+                          maybeSingle: vi.fn().mockResolvedValue({
+                            data: null,
+                            error: { message: "db query failed" },
+                          }),
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  single: vi.fn().mockResolvedValue({ data: { risk_score: 0 }, error: null }),
+                }),
+              }),
+            };
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockReturnValue({
+                    maybeSingle: vi
+                      .fn()
+                      .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi
+                .fn()
+                .mockResolvedValue({ data: { id: "step-1", risk_score: 0 }, error: null }),
+            }),
+          }),
+        };
+      }
+
+      return baseFromImpl(table);
+    });
+
+    mockProcessKycArtifact.mockResolvedValue({
+      sha256: "abc123",
+      riskScore: 0,
+      riskLevel: "low",
+      providerRef: "sim_ref_1",
+      autoStatus: "needs_manual_review",
+      idNumberHmac: "dup-hmac-2",
+    });
+
+    const response = await POST(
+      createFormDataRequest({
+        file: createTestFile(),
+        docType: "id_document",
+        idNumber: "9001015009087",
+      })
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: "Unable to verify ID number uniqueness",
+      })
+    );
+  });
 });

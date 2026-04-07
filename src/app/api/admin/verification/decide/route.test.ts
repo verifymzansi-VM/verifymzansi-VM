@@ -850,6 +850,56 @@ describe("POST /api/admin/verification/decide", () => {
     });
   });
 
+  it("returns 500 when ID ownership validation query fails", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+
+    const idDocStep = {
+      ...baseStep,
+      id_number_hmac: "hmac-err-1",
+    };
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockImplementation((...args: unknown[]) => {
+            if (args[0] === "*") {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: idDocStep, error: null }),
+                }),
+              };
+            }
+
+            return {
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    neq: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockReturnValue({
+                        maybeSingle: vi
+                          .fn()
+                          .mockResolvedValue({ data: null, error: { message: "db down" } }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }),
+          update: vi.fn(),
+        };
+      }
+
+      return {};
+    });
+
+    const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "Failed to validate ID ownership",
+    });
+  });
+
   it("sends verification approved email when an account becomes fully approved", async () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 
