@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("ServiceWorker");
-const SERVICE_WORKER_VERSION = "20260312-logo-refresh";
+const SERVICE_WORKER_VERSION = "20260407-lead-alert-clicks";
 const DEV_SW_CLEANUP_SESSION_KEY = "vm-dev-sw-cleanup-v1";
 
 type CleanupDeps = {

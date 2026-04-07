@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Search, PlusCircle, MessageSquare, User } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNotificationStore } from "@/stores/notification-store";
 import { useAuth } from "@/hooks/use-auth";
+import { useLeadsUnread } from "@/hooks/use-leads-unread";
 import { triggerHaptic } from "@/lib/utils/haptics";
 
 interface TabDef {
@@ -41,7 +41,7 @@ const BROWSE_PREFIXES = ["/mzansi-market", "/mzansi-business", "/promotions"];
 
 export function MobileNav() {
   const pathname = usePathname();
-  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const { unreadCount: unreadLeads } = useLeadsUnread();
   const { isAuthenticated } = useAuth();
 
   // Resolve the Browse tab href to the user's current marketplace area
@@ -62,7 +62,7 @@ export function MobileNav() {
               : href;
           const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
           const Icon = tab.icon;
-          const showRedDot = tab.dotSource === "leads" && unreadCount > 0;
+          const showLeadBadge = tab.dotSource === "leads" && unreadLeads > 0;
 
           return (
             <Link
@@ -78,8 +78,10 @@ export function MobileNav() {
             >
               <span className="relative">
                 <Icon className={cn("h-5 w-5", tab.label === "Post" && "h-6 w-6")} />
-                {showRedDot && (
-                  <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-destructive border-2 border-background" />
+                {showLeadBadge && (
+                  <span className="absolute -top-2 -right-2 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground border border-background">
+                    {unreadLeads > 99 ? "99+" : unreadLeads}
+                  </span>
                 )}
               </span>
               <span className="text-xs font-medium">{tab.label}</span>

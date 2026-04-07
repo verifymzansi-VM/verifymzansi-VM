@@ -1,22 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { MessageSquare } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { formatRelativeTime } from "@/lib/utils/format";
 import { ACCOUNT_PROFILE_TABLE, applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
-
-interface LeadRow {
-  id: string;
-  target_type: string;
-  message: string;
-  status: string;
-  buyer_name: string | null;
-  buyer_email: string | null;
-  created_at: string;
-  listings: { title: string } | null;
-}
+import { LeadsFeed, type LeadRow } from "@/components/dashboard/leads-feed";
 
 export const metadata = {
   title: "Leads",
@@ -70,46 +56,11 @@ export default async function LeadsPage() {
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Leads" }]}
       />
 
-      {!leads?.length ? (
-        <div className="text-center py-6 space-y-3">
-          <MessageSquare className="h-8 w-8 mx-auto text-muted-foreground" />
-          <p className="text-lg font-medium">No leads yet</p>
-          <p className="text-sm text-muted-foreground">
-            Leads will appear here when buyers contact you about a listing.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {(leads as unknown as LeadRow[]).map((lead) => (
-            <Card key={lead.id}>
-              <CardContent className="py-4 space-y-2">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">
-                      Re: {lead.listings?.title || "Listing"}
-                    </p>
-                    <Badge variant="outline" className="text-xs mt-1">
-                      {lead.status === "new"
-                        ? "New"
-                        : lead.status === "contacted"
-                          ? "Contacted"
-                          : lead.status === "closed"
-                            ? "Closed"
-                            : lead.status}
-                    </Badge>
-                  </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {formatRelativeTime(lead.created_at)}
-                  </span>
-                </div>
-                {lead.message && (
-                  <p className="text-sm text-muted-foreground line-clamp-3">{lead.message}</p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <LeadsFeed
+        initialLeads={(leads as unknown as LeadRow[]) ?? []}
+        ownerColumn={leadsOwnerColumn}
+        ownerId={user.id}
+      />
     </div>
   );
 }

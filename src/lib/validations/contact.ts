@@ -7,7 +7,7 @@ export const contactAccountHolderSchema = z
     promotionId: z.string().uuid("Invalid promotion").optional(),
     message: z
       .string()
-      .min(5, "Message must be at least 5 characters")
+      .min(10, "Message must be at least 10 characters")
       .max(1000, "Message cannot exceed 1000 characters"),
     contactMethod: z.enum(["call", "whatsapp", "form", "in_app"]).default("form"),
     turnstileToken: z.string().min(1, "Complete the CAPTCHA"),

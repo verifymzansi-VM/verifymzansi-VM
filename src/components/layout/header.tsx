@@ -28,6 +28,8 @@ import {
 import { BrandLogo } from "../shared/brand-logo";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { NotificationBell } from "@/components/notification-bell";
+import { LiveLeadNotifier } from "@/components/notifications/live-lead-notifier";
+import { LeadNotificationPermissionPrompt } from "@/components/notifications/lead-notification-permission-prompt";
 import { MarketplaceSwitcher } from "./marketplace-switcher";
 import { useAuth } from "@/hooks/use-auth";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
@@ -116,6 +118,13 @@ function HeaderInner({
 
   return (
     <header className="sticky top-0 z-[110] isolate w-full border-b bg-background lg:bg-background/95 lg:backdrop-blur lg:supports-[backdrop-filter]:bg-background/60">
+      {isAuthenticated ? (
+        <>
+          <LiveLeadNotifier userId={auth.user?.id} />
+          <LeadNotificationPermissionPrompt enabled={isAuthenticated} />
+        </>
+      ) : null}
+
       <div className="container-page grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
         <Link
           href="/"

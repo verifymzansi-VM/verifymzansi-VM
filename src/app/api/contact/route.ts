@@ -176,7 +176,8 @@ export async function POST(request: NextRequest) {
       });
 
       if (leadsError) {
-        log.error("Leads insert failed (non-fatal)", { error: leadsError.message });
+        log.error("Leads insert failed", { error: leadsError.message });
+        return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
       }
     }
 

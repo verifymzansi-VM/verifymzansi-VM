@@ -14,6 +14,9 @@ const OFFLINE_URL = "/offline";
 
 const PRECACHE_URLS = ["/", "/offline", "/manifest.json"];
 
+const DEFAULT_NOTIFICATION_ICON = "/icons/icon-192.png?v=10";
+const DEFAULT_NOTIFICATION_TAG = "verifymzansi-notification";
+
 // @ts-ignore - ServiceWorkerGlobalScope
 
 // ── Install: precache critical assets ────────────────────
@@ -143,3 +146,77 @@ async function networkOnlyWithOffline(request) {
     );
   }
 }
+
+// ── Push notifications: show alerts when app is backgrounded/offline ──
+self.addEventListener("push", (event) => {
+  let payload = {
+    title: "VerifyMzansi",
+    body: "You have a new update.",
+    url: "/dashboard",
+    icon: DEFAULT_NOTIFICATION_ICON,
+    tag: DEFAULT_NOTIFICATION_TAG,
+  };
+
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      payload = {
+        title:
+          typeof parsed?.title === "string" && parsed.title.length > 0
+            ? parsed.title
+            : payload.title,
+        body:
+          typeof parsed?.body === "string" && parsed.body.length > 0 ? parsed.body : payload.body,
+        url: typeof parsed?.url === "string" && parsed.url.startsWith("/") ? parsed.url : payload.url,
+        icon:
+          typeof parsed?.icon === "string" && parsed.icon.length > 0
+            ? parsed.icon
+            : payload.icon,
+        tag:
+          typeof parsed?.tag === "string" && parsed.tag.length > 0 ? parsed.tag : payload.tag,
+      };
+    } catch {
+      // Fall back to defaults if the payload isn't valid JSON.
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: payload.icon,
+      tag: payload.tag,
+      data: { url: payload.url },
+      renotify: true,
+    })
+  );
+});
+
+// ── Notification click: focus/open the target route ───────────────────
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetPath =
+    event.notification?.data && typeof event.notification.data.url === "string"
+      ? event.notification.data.url
+      : "/dashboard";
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        const targetUrl = new URL(targetPath, self.location.origin).href;
+
+        for (const client of clients) {
+          if (client.url === targetUrl && "focus" in client) {
+            return client.focus();
+          }
+        }
+
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(targetPath);
+        }
+
+        return undefined;
+      })
+  );
+});

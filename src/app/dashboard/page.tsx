@@ -12,14 +12,13 @@ import {
 } from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import { NeedsAttention } from "@/components/dashboard/needs-attention";
 import { EmailConfirmedToast } from "@/components/dashboard/email-confirmed-toast";
-import { StatChips, defaultChips } from "@/components/dashboard/stat-chips";
 import {
   ListingManagerMini,
   type MiniListingPost,
 } from "@/components/dashboard/listing-manager-mini";
 import { QuickLinks } from "@/components/dashboard/quick-links";
+import { DashboardLiveLeadAlerts } from "@/components/dashboard/dashboard-live-lead-alerts";
 
 /** Safely resolve owner column — fall back to "owner_id" on error. */
 async function safeGetOwnerColumn(
@@ -231,14 +230,6 @@ export default async function DashboardPage() {
     })
   );
 
-  // Stat chips
-  const chips = defaultChips({
-    liveListings: activeListings,
-    unreadLeads: unreadLeadCount,
-    businesses: businessCount,
-    activePromos: activePromos,
-  });
-
   // Plan tier label for quick links
   const activeEntitlements = entitlementsResult.data ?? [];
   const topTier =
@@ -307,12 +298,11 @@ export default async function DashboardPage() {
         </Button>
       </div>
 
-      {/* ───── Stat chips row ───── */}
-      <StatChips chips={chips} />
-
-      {/* ───── Needs attention (compact banner, hidden when all clear) ───── */}
-      <NeedsAttention
-        unreadLeadCount={unreadLeadCount}
+      <DashboardLiveLeadAlerts
+        liveListings={activeListings}
+        businesses={businessCount}
+        activePromos={activePromos}
+        initialUnreadLeadCount={unreadLeadCount}
         rejectedListingCount={rejectedListingCount}
         pendingModerationCount={pendingModerationCount}
         expiringListingCount={expiringListingCount}

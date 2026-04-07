@@ -70,6 +70,14 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
   const [scale, setScale] = useState(1);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
   const isZoomed = scale > 1.05;
+  const mediaTransformRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = mediaTransformRef.current;
+    if (!node) return;
+
+    node.style.transform = `scale(${scale}) translate(${translate.x / scale}px, ${translate.y / scale}px)`;
+  }, [scale, translate]);
 
   const resetZoom = useCallback(() => {
     setScale(1);
@@ -426,15 +434,13 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
 
             {/* media container */}
             <div
+              ref={mediaTransformRef}
               className={cn(
                 "relative w-full max-w-5xl mx-4 select-none",
                 item.kind === "photo" ? "aspect-[3/4] sm:aspect-video" : "aspect-video",
                 transitionClass,
                 isZoomed && "cursor-grab active:cursor-grabbing"
               )}
-              style={{
-                transform: `scale(${scale}) translate(${translate.x / scale}px, ${translate.y / scale}px)`,
-              }}
             >
               {item.kind === "video" ? (
                 <>

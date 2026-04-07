@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
@@ -11,10 +11,19 @@ import {
   type DashboardSidebarBadges,
 } from "@/components/dashboard/dashboard-sidebar";
 import { createClient } from "@/lib/supabase/client";
+import { useLeadsUnread } from "@/hooks/use-leads-unread";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [badges, setBadges] = useState<DashboardSidebarBadges>({});
+  const { unreadCount: unreadLeads } = useLeadsUnread();
+  const sidebarBadges = useMemo(
+    () => ({
+      ...badges,
+      unreadLeads,
+    }),
+    [badges, unreadLeads]
+  );
 
   // Fetch sidebar badge counts client-side (lightweight)
   useEffect(() => {
@@ -117,7 +126,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Header isAuthenticated />
 
       <div className="flex flex-1">
-        <DashboardSidebar badges={badges} onSignOut={handleSignOut} />
+        <DashboardSidebar badges={sidebarBadges} onSignOut={handleSignOut} />
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">

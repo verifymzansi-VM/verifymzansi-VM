@@ -354,4 +354,75 @@ describe("POST /api/contact", () => {
       "Launch Week Promo"
     );
   });
+
+  it("returns 500 when lead persistence fails", async () => {
+    const ownerId = "11111111-1111-4111-8111-111111111111";
+    const listingId = "22222222-2222-4222-8222-222222222222";
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "listings") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: listingId,
+                  owner_id: ownerId,
+                  title: "Vintage Couch",
+                  status: "live",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === ACCOUNT_PROFILE_WRITE_TABLE || table === "account_profiles") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  account_verification_status: "verified",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "contact_events") {
+        return {
+          insert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+
+      if (table === "leads") {
+        return {
+          insert: vi.fn().mockResolvedValue({
+            error: { message: "new row violates check constraint leads_message_check" },
+          }),
+        };
+      }
+
+      return {};
+    });
+
+    const response = await POST(
+      createMockRequest({
+        listingId,
+        message: "This message is long enough.",
+        contactMethod: "form",
+        turnstileToken: "token",
+      })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to send message");
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+    expect(mockSendContactFormNotification).not.toHaveBeenCalled();
+  });
 });
