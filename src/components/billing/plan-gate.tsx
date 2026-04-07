@@ -41,6 +41,10 @@ import {
 import { getEntitlements } from "@/lib/services/entitlements";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
 
+const FREE_POST_COUNT = Number(FREE_POST_CONFIG.maxAllowed);
+const FREE_POST_LABEL = FREE_POST_COUNT === 1 ? "post" : "posts";
+const FREE_POST_LABEL_CAP = FREE_POST_COUNT === 1 ? "Post" : "Posts";
+
 interface PlanGateProps {
   area: MarketplaceArea;
   children: ReactNode;
@@ -447,7 +451,7 @@ export function PlanGate({ area, children }: PlanGateProps) {
           <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto" />
           <h2 className="font-display text-xl font-bold">Sign in required</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            Sign in to choose a plan or use your free post on VerifyMzansi.
+            Sign in to choose a plan or use your free posts on VerifyMzansi.
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Button asChild variant="outline">
@@ -513,8 +517,8 @@ export function PlanGate({ area, children }: PlanGateProps) {
             <h2 className="font-display text-base font-bold">Choose Your Plan to Start Posting</h2>
           </div>
           <p className="text-white/80 text-xs max-w-xl">
-            You&apos;ve used your free post for {AREA_LABELS[area]}. Select a plan below to continue
-            posting.
+            You&apos;ve used your free {FREE_POST_LABEL} for {AREA_LABELS[area]}. Select a plan
+            below to continue posting.
           </p>
         </div>
 
@@ -714,13 +718,13 @@ function PlanPickerWithTrial({
                 <p className="text-xs text-amber-200">
                   {planInfo.postingLimitBypassEnabled
                     ? `Posting limits removed for testing — ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                    : `1 Free Post Included — ${FREE_POST_CONFIG.durationDays} days visibility`}
+                    : `${FREE_POST_COUNT} Free ${FREE_POST_LABEL_CAP} Included — ${FREE_POST_CONFIG.durationDays} days visibility`}
                 </p>
               </div>
               <p className="text-white/70 text-xs">
                 {planInfo.postingLimitBypassEnabled
                   ? `Each post still uses free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
-                  : `Post once for free. ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video • ${FREE_POST_CONFIG.durationDays} days • Once per area`}
+                  : `Post up to ${FREE_POST_COUNT} free ${FREE_POST_LABEL}. ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video • ${FREE_POST_CONFIG.durationDays} days • Per area`}
               </p>
             </div>
             <Button
@@ -728,7 +732,7 @@ function PlanPickerWithTrial({
               onClick={() => setShowForm(true)}
             >
               <ArrowRight className="h-4 w-4" />
-              {planInfo.postingLimitBypassEnabled ? "Start Posting" : "Use Your Free Post"}
+              {planInfo.postingLimitBypassEnabled ? "Start Posting" : "Use Your Free Posts"}
             </Button>
           </div>
         </div>

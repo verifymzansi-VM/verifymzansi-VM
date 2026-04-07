@@ -16,6 +16,7 @@ export const metadata = {
 
 export default function BillingPage() {
   const { marketPlans, businessPlans, promotionPlans } = getActivePlansByArea();
+  const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -39,8 +40,9 @@ export default function BillingPage() {
                   <Gift className="w-3 h-3 mr-1 inline-block" /> Free
                 </Badge>
                 <span className="text-xs font-medium">
-                  1 free post per area — {FREE_POST_CONFIG.maxPhotos} photos,{" "}
-                  {FREE_POST_CONFIG.maxVideos} video, {FREE_POST_CONFIG.durationDays} days
+                  {freePostCount} free {freePostCount === 1 ? "post" : "posts"} per area —{" "}
+                  {FREE_POST_CONFIG.maxPhotos} photos, {FREE_POST_CONFIG.maxVideos} video,{" "}
+                  {FREE_POST_CONFIG.durationDays} days
                 </span>
               </div>
               <Button

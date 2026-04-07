@@ -100,7 +100,7 @@ describe("Active-area pricing parity", () => {
     expect(
       screen.getByText(
         new RegExp(
-          `1 free post per area every ${FREE_POST_CONFIG.durationDays} days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video`,
+          `2 free posts per area every ${FREE_POST_CONFIG.durationDays} days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video`,
           "i"
         )
       )

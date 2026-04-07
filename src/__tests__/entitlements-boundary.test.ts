@@ -163,7 +163,7 @@ describe("Plan-tier entitlement boundaries", () => {
       expect(ent.boostAllowed).toBe(false);
       expect(ent.featuredAllowed).toBe(false);
       expect(ent.urgentAllowed).toBe(false);
-      expect(ent.maxAllowed).toBe(1);
+      expect(ent.maxAllowed).toBe(2);
       expect(ent.maxPhotos).toBe(10);
     });
   });

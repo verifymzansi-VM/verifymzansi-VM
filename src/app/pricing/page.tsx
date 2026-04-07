@@ -13,6 +13,7 @@ export const metadata = {
 
 export default function PricingPage() {
   const { marketPlans, businessPlans, promotionPlans } = getActivePlansByArea();
+  const freePostCount = Number(FREE_POST_CONFIG.maxAllowed);
 
   const allPlans = [...marketPlans, ...businessPlans, ...promotionPlans];
   const jsonLd = {
@@ -49,7 +50,7 @@ export default function PricingPage() {
         <div className="container-page py-4 space-y-4">
           <PageHeader
             title="Pricing"
-            description={`1 free post per area every 30 days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} ${FREE_POST_CONFIG.maxVideos === 1 ? "video" : "videos"}. Upgrade for more visibility and trust badges.`}
+            description={`${freePostCount} free ${freePostCount === 1 ? "post" : "posts"} per area every ${FREE_POST_CONFIG.durationDays} days, with ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} ${FREE_POST_CONFIG.maxVideos === 1 ? "video" : "videos"}. Upgrade for more visibility and trust badges.`}
             breadcrumbs={[{ label: "Pricing" }]}
           />
 

@@ -41,7 +41,7 @@ describe("entitlements service", () => {
     it("returns free-tier defaults for unknown plan", () => {
       // @ts-expect-error testing non-existent
       const ent = getEntitlements("enterprise", "MZANSI_MARKET");
-      expect(ent.maxAllowed).toBe(1);
+      expect(ent.maxAllowed).toBe(2);
       expect(ent.maxPhotos).toBe(10);
     });
 

@@ -22,10 +22,10 @@ export interface Entitlements {
 }
 
 const FREE_ENTITLEMENTS: Entitlements = {
-  maxAllowed: 1,
+  maxAllowed: 2,
   maxPhotos: 10,
   maxVideos: 1,
-  maxPostsPerMonth: 1,
+  maxPostsPerMonth: 2,
   videoAllowed: true,
   boostAllowed: false,
   featuredAllowed: false,
